@@ -36,14 +36,11 @@ suite "debug_viewer - Format helpers":
   test "formatBool false":
     check formatBool(false) == "false"
 
-  test "formatOption with some value":
-    check formatOption(some(42)) == "42"
+  test "formatDisplayOption with some value":
+    check formatDisplayOption(some("hello")) == "hello"
 
-  test "formatOption with none":
-    check formatOption(none(int)) == "none"
-
-  test "formatOption with some string":
-    check formatOption(some("hello")) == "hello"
+  test "formatDisplayOption with none":
+    check formatDisplayOption(none(string)) == "none"
 
 suite "debug_viewer - Section and field helpers":
   test "addSection adds empty line and title":
@@ -67,6 +64,15 @@ suite "debug_viewer - Section and field helpers":
     # Format: "  " + name.alignLeft(24) + " : " + value
     check lines[0].startsWith("  x")
     check lines[0].len >= 24 + 2 + 3 + 3 # 2 leading + 24 name + " : " + "val"
+
+  test "addField neutralizes control characters in the value":
+    # A newline or escape in a value would otherwise forge lines.
+    var lines: seq[string] = @[]
+    lines.addField("path", "/tmp/bad\npath\x1b[2J")
+    check lines.len == 1
+    check '\n' notin lines[0]
+    check '\x1b' notin lines[0]
+    check "path" in lines[0]
 
 suite "debug_viewer - Navigation":
   test "moveUp from top does nothing":
@@ -267,6 +273,66 @@ suite "debug_viewer - generateBufferInfo":
         found = true
         break
     check found
+
+  test "shows displayName so a session is distinct from No Name":
+    var lines: seq[string] = @[]
+    generateBufferInfo(
+      lines,
+      BufferId(1),
+      none(string),
+      some("[Terminal: bash]"),
+      false,
+      true,
+      "sh",
+      "utf-8",
+      1,
+      0,
+    )
+    var found = false
+    for line in lines:
+      if "displayName" in line and "[Terminal: bash]" in line:
+        found = true
+        break
+    check found
+
+  test "shows none displayName for plain buffers":
+    var lines: seq[string] = @[]
+    generateBufferInfo(
+      lines,
+      BufferId(1),
+      some("/path/to/file.nim"),
+      none(string),
+      false,
+      false,
+      "nim",
+      "utf-8",
+      10,
+      0,
+    )
+    var found = false
+    for line in lines:
+      if "displayName" in line and "none" in line:
+        found = true
+        break
+    check found
+
+  test "control characters in labels are neutralized":
+    var lines: seq[string] = @[]
+    generateBufferInfo(
+      lines,
+      BufferId(2),
+      some("/tmp/bad\npath"),
+      some("\x1b[2J"),
+      false,
+      false,
+      "sh",
+      "utf-8",
+      1,
+      0,
+    )
+    for line in lines:
+      check '\n' notin line
+      check '\x1b' notin line
 
 suite "debug_viewer - createDebugTextBuffer":
   test "creates buffer from debug lines":

@@ -19,7 +19,8 @@
 
 ## Tests for buffer_manager.nim
 
-import std/[unittest, options]
+import std/[unittest, options, strutils]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/buffer_manager
 
 suite "BufferManagerState - Constructor":
@@ -91,6 +92,127 @@ suite "BufferEntry - initBufferManagerEntries":
     check entries.len == 1
     check entries[0].name == "No Name"
     check entries[0].modified == true
+
+  test "displayName overrides filePath":
+    let bufferInfos = @[
+      BufferInfo(
+        filePath: some("/path/to/file.nim"),
+        displayName: some("[Terminal: bash]"),
+        isModified: false,
+        isActive: true,
+      )
+    ]
+    let entries = initBufferManagerEntries(bufferInfos)
+
+    check entries.len == 1
+    check entries[0].name == "[Terminal: bash]"
+
+  test "filePath is used when displayName is none":
+    let bufferInfos = @[
+      BufferInfo(
+        filePath: some("/path/to/file.nim"),
+        displayName: none(string),
+        isModified: false,
+        isActive: false,
+      )
+    ]
+    let entries = initBufferManagerEntries(bufferInfos)
+
+    check entries.len == 1
+    check entries[0].name == "/path/to/file.nim"
+
+  test "a raw newline in displayName cannot forge a listing line":
+    let bufferInfos = @[
+      BufferInfo(
+        filePath: none(string),
+        displayName: some("[Terminal: bad\nname]"),
+        isModified: false,
+        isActive: false,
+      )
+    ]
+    let entries = initBufferManagerEntries(bufferInfos)
+
+    check entries.len == 1
+    # The model keeps the label raw; only the display line is sanitized.
+    check entries[0].name == "[Terminal: bad\nname]"
+    check '\n' notin formatLine(entries[0])
+    check "[Terminal: bad name]" in formatLine(entries[0])
+
+  test "an escape sequence in displayName is neutralized on display":
+    let bufferInfos = @[
+      BufferInfo(
+        filePath: none(string),
+        displayName: some("\x1b[2J"),
+        isModified: false,
+        isActive: false,
+      )
+    ]
+    let entries = initBufferManagerEntries(bufferInfos)
+
+    check entries.len == 1
+    check entries[0].name == "\x1b[2J"
+    check '\x1b' notin formatLine(entries[0])
+
+suite "TextBuffer.matchRank - :b precedence":
+  test "an authored alias outranks the path":
+    let buf = newTextBuffer()
+    buf.filePath = some("/tmp/bash")
+    buf.matchAliases = @["bash"]
+    check buf.matchRank("bash") == bmrAliasExact
+
+  test "a whole path and its filename rank as the same exact match":
+    let buf = newTextBuffer()
+    buf.filePath = some("/tmp/dir/file.nim")
+    check buf.matchRank("/tmp/dir/file.nim") == bmrPathExact
+    check buf.matchRank("file.nim") == bmrPathExact
+
+  test "a path partial never outranks an alias exact":
+    let aliasExact = newTextBuffer()
+    aliasExact.filePath = some("/tmp/bash_backup")
+    aliasExact.matchAliases = @["bash"]
+    let pathPartial = newTextBuffer()
+    pathPartial.filePath = some("/tmp/bash")
+    check aliasExact.matchRank("bash") > pathPartial.matchRank("bash")
+
+  test "an alias partial outranks a path partial":
+    let buf = newTextBuffer()
+    buf.filePath = some("/tmp/bash_backup.log")
+    buf.matchAliases = @["bash_backup"]
+    check buf.matchRank("bash") == bmrAliasPartial
+
+  test "the display label is never a match key":
+    let buf = newTextBuffer()
+    buf.displayName = some("[Terminal: bash]")
+    buf.matchAliases = @["bash"]
+    # The label's own text and any substring of it are not identity.
+    check buf.matchRank("[Terminal: bash]") == bmrNone
+    check buf.matchRank("Terminal") == bmrNone
+    check buf.matchRank("bash") == bmrAliasExact
+
+  test "rewriting the label leaves the rank unchanged":
+    let buf = newTextBuffer()
+    buf.displayName = some("[Terminal: bash]")
+    buf.matchAliases = @["bash"]
+    let before = buf.matchRank("bash")
+    buf.displayName = some("session-1")
+    check buf.matchRank("bash") == before
+
+  test "an empty argument matches nothing":
+    let buf = newTextBuffer()
+    buf.filePath = some("/tmp/file.nim")
+    buf.matchAliases = @["bash"]
+    check buf.matchRank("") == bmrNone
+
+suite "BufferEntry - number":
+  test "each row carries the number of the buffer it describes":
+    let first = newTextBuffer("/a", some("/tmp/a.nim"))
+    let second = newTextBuffer("/b", some("/tmp/b.nim"))
+    let entries =
+      initBufferManagerEntries(@[first.toBufferInfo(true), second.toBufferInfo(false)])
+
+    check entries.len == 2
+    check entries[0].number == first.id.int
+    check entries[1].number == second.id.int
 
 suite "BufferManagerState - updateEntries":
   test "Update entries from buffer info":

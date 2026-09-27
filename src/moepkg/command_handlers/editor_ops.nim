@@ -31,7 +31,7 @@ import
   ../[
     editor, editor_window_state, editor_window_tab, modes, buffer, logger, types, filer,
     filetree, config_loader, window_manager, log_viewer, syntax_checker, render_utils,
-    motion, viewer_mode, editor_build_jobs,
+    motion, viewer_mode, editor_build_jobs, buffer_manager,
   ]
 
 when not defined(moe.embedded):
@@ -54,18 +54,12 @@ proc trySaveLogViewerBuffer*(e: Editor): string =
   return "Log save failed: " & writeRes.error
 
 proc getBufferInfos*(e: Editor): seq[BufferInfo] =
-  ## Extract buffer information from the buffer list for BufferManager
+  ## Extract buffer information from the buffer list for BufferManager.
+  ## Active means the window's tab, not what an overlay viewer shows.
   result = @[]
-  let currentBuffer = e.activeBuffer()
+  let activeTabId = e.activeWindow.tabBufferId
   for buf in e.buffers:
-    result.add(
-      BufferInfo(
-        number: buf.id.int,
-        filePath: buf.filePath,
-        isModified: buf.isModified,
-        isActive: buf == currentBuffer,
-      )
-    )
+    result.add(buf.toBufferInfo(buf.id == activeTabId))
 
 proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
   ## Update viewport to follow cursor position
@@ -397,6 +391,9 @@ when not defined(moe.embedded):
     let activeWin = e.activeWindow
     result = newTextBuffer("")
     result.displayName = some("[Terminal: " & command & "]")
+    # The command is the session's stable `:b` key; the label is presentation
+    # only, so matching survives label changes.
+    result.matchAliases = @[command]
     # Input goes to the PTY; a window that reaches this buffer in a text mode
     # must not be able to edit, save or preserve it.
     result.readOnly = true

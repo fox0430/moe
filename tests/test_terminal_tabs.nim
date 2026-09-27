@@ -29,8 +29,8 @@ import pkg/celina
 import
   ../src/moepkg/[
     editor, config, types, modes, terminal_mode, editor_window, editor_window_state,
-    handler, key_bindings, viewer_mode, buffer_manager, window_manager,
-    editor_render_views, render_utils,
+    editor_window_tab, handler, key_bindings, viewer_mode, buffer_manager,
+    window_manager, editor_render_views, render_utils, filetree,
   ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/buffer/core
@@ -497,12 +497,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     require not termState.pty.closed
     require e.buffers.len >= 2
 
-    var termIdx = -1
-    for i, buf in e.buffers:
-      if buf.id == termId:
-        termIdx = i
-        break
-    require termIdx >= 0
+    require e.bufferById(termId).isSome
 
     let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termId)
     discard e.processResult(r, textBuf)
@@ -527,12 +522,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     )
     require e.activeWindow.tabBufferId == termId
     require e.activeWindow.modeState.kind == mskBufferManager
-    var termIdx = -1
-    for i, buf in e.buffers:
-      if buf.id == termId:
-        termIdx = i
-        break
-    require termIdx >= 0
+    require e.bufferById(termId).isSome
 
     let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termId)
     discard e.processResult(r, textBuf)
@@ -572,12 +562,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
       vpInPlace,
     )
     require e.activeWindow.tabBufferId == termId
-    var termIdx = -1
-    for i, buf in e.buffers:
-      if buf.id == termId:
-        termIdx = i
-        break
-    require termIdx >= 0
+    require e.bufferById(termId).isSome
 
     let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termId)
     discard e.processResult(r, textBuf)
@@ -1051,3 +1036,290 @@ suite "Terminal tabs - splitting off a session":
     check e.activeWindow.viewerEntry.isNone
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.modeState.terminalSubMode == tsmInput
+
+suite "Terminal tabs - display integration":
+  test "BufferManager names the session and marks its tab active in Normal":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    require e.activeWindow.modeState.terminalSubMode == tsmNormal
+    require e.activeBuffer() != termBuf
+
+    let infos = e.getBufferInfos()
+    require infos.len == 2
+    let termIdx = e.bufferIndexById(termBuf.id)
+    require termIdx >= 0
+    check infos[termIdx].displayName == some("[Terminal: bash]")
+    check infos[termIdx].isActive
+
+    let entries = initBufferManagerEntries(infos)
+    check entries[termIdx].name == "[Terminal: bash]"
+    check entries[termIdx].active
+
+  test ":b matches a session by its command, not by its display label":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    require e.activateBuffer(textBuf.id)
+
+    check e.switchToBuffer("bash")
+    check e.activeWindow.tabBufferId == termBuf.id
+
+    # Presentation is not identity: the label never becomes a `:b` key.
+    require e.activateBuffer(textBuf.id)
+    termBuf.displayName = some("session-1")
+    check not e.switchToBuffer("session-1")
+    check e.activeWindow.tabBufferId == textBuf.id
+
+  test ":b still matches a session by its command after the label is rewritten":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    termBuf.displayName = some("session-1")
+    require e.activateBuffer(textBuf.id)
+
+    check e.switchToBuffer("bash")
+    check e.activeWindow.tabBufferId == termBuf.id
+
+  test ":b matches a file by a substring of its own label":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    textBuf.filePath = some("/tmp/[Terminal: bash].log")
+    require e.activateBuffer(textBuf.id)
+    let termBuf = registerFakeTerminal(e, "bash")
+    require e.activateBuffer(textBuf.id)
+
+    # The label is not a key; only the file's own path contains the argument.
+    check e.switchToBuffer("[Terminal: bash].log")
+    check e.activeWindow.tabBufferId == textBuf.id
+
+  test ":b prefers an exact session name over an exact file name":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    textBuf.filePath = some("/tmp/bash")
+    let termBuf = registerFakeTerminal(e, "bash")
+    require e.activateBuffer(textBuf.id)
+
+    check e.switchToBuffer("bash")
+    check e.activeWindow.tabBufferId == termBuf.id
+
+  test ":b prefers a file exact match over a session partial match":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    textBuf.filePath = some("/tmp/bash")
+    let termBuf = registerFakeTerminal(e, "bash_backup")
+    require e.activateBuffer(termBuf.id)
+
+    check e.switchToBuffer("bash")
+    check e.activeWindow.tabBufferId == textBuf.id
+
+  test ":b prefers a session partial match over a file partial match":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    textBuf.filePath = some("/tmp/bash_backup.log")
+    let termBuf = registerFakeTerminal(e, "bash_backup")
+    require e.activateBuffer(textBuf.id)
+
+    check e.switchToBuffer("bash")
+    check e.activeWindow.tabBufferId == termBuf.id
+
+  test ":b with an empty arg keeps the tab and reports E94":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    discard registerFakeTerminal(e, "bash")
+    require e.activateBuffer(textBuf.id)
+
+    check not e.switchToBuffer("")
+    check e.activeWindow.tabBufferId == textBuf.id
+    check e.state.statusMessage == "E94: No matching buffer for "
+
+  test "only the window tab is marked active":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    require e.activeWindow.modeState.terminalSubMode == tsmNormal
+
+    let infos = e.getBufferInfos()
+    require infos.len == 2
+    var activeCount = 0
+    for info in infos:
+      if info.isActive:
+        inc activeCount
+    check activeCount == 1
+    let termIdx = e.bufferIndexById(termBuf.id)
+    require termIdx >= 0
+    check infos[termIdx].isActive
+
+  test ":b to the tab under an in-place viewer closes the viewer (name)":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    textBuf.filePath = some("/tmp/viewer_covered.txt")
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
+    require e.activeWindow.viewerEntry.isSome
+    require e.activeWindow.tabBufferId == textBuf.id
+
+    check e.switchToBuffer("viewer_covered.txt")
+    check e.activeWindow.viewerEntry.isNone
+    check e.activeWindow.tabBufferId == textBuf.id
+    check e.activeBuffer == textBuf
+
+  test ":b <number> to the tab under an in-place viewer closes the viewer":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
+    require e.activeWindow.viewerEntry.isSome
+    require e.activeWindow.tabBufferId == textBuf.id
+
+    check e.switchToBuffer($textBuf.id.int)
+    check e.activeWindow.viewerEntry.isNone
+    check e.activeWindow.tabBufferId == textBuf.id
+
+  test ":bfirst closes an in-place viewer covering the first tab":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    discard registerFakeTerminal(e, "bash")
+    require e.activateBuffer(textBuf.id)
+    require e.activeWindow.tabBufferId == textBuf.id
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
+    require e.activeWindow.viewerEntry.isSome
+    require e.activeWindow.bufferIds.len == 2
+
+    e.switchToFirstBuffer()
+
+    check e.activeWindow.viewerEntry.isNone
+    check e.activeWindow.tabBufferId == textBuf.id
+
+suite "WindowView - what a window draws":
+  test "a plain window draws its tab":
+    let e = createTestEditor()
+    let win = e.activeWindow
+    let textBuf = e.buffers[0]
+    check e.isShowingTab(win, win.tabBufferId)
+
+    # A window parked on one tab does not present another.
+    discard registerFakeTerminal(e, "bash")
+    let termBuf = e.buffers[^1]
+    require win.tabBufferId == termBuf.id
+    check not e.isShowingTab(win, textBuf.id)
+
+  test "an in-place viewer covers the tab, so the tab is not being shown":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
+    let win = e.activeWindow
+    require win.viewerEntry.isSome
+    # Parked on the tab, yet the tab's own view is not what is on screen.
+    require win.tabBufferId == textBuf.id
+    check not e.isShowingTab(win, textBuf.id)
+
+  test "a split viewer presents its own listing tab":
+    let e = createTestEditor()
+    discard registerFakeTerminal(e, "bash")
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    let listing = bmState.createBufferManagerTextBuffer()
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      listing,
+      vpVSplit,
+    )
+    let win = e.activeWindow
+    require win.viewerEntry.isSome
+    require win.viewerEntry.get.placement == vpVSplit
+    # The listing is the split window's tab, so it is what that window shows.
+    check e.isShowingTab(win, listing.id)
+    check not e.isShowingTab(win, e.buffers[0].id)
+
+  test "a live session is its tab, and so is its scrollback snapshot":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    require e.activateBuffer(termBuf.id)
+    let win = e.activeWindow
+
+    # Live (tsmInput): the grid stands for the tab.
+    require win.modeState.terminalSubMode == tsmInput
+    check e.isShowingTab(win, termBuf.id)
+
+    # Browsing (tsmNormal): still the tab's own content, so re-select keeps it.
+    discard e.enterNormal()
+    require win.modeState.terminalSubMode == tsmNormal
+    check e.isShowingTab(win, termBuf.id)
+
+  test "a foreign mode over its own tab is not showing the tab":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    require e.activateBuffer(termBuf.id)
+    let win = e.activeWindow
+    require win.viewerEntry.isNone
+    require win.tabBufferId == termBuf.id
+
+    # A FileTree pane draws the tree, not the tab underneath it.
+    win.modeState =
+      ModeState(kind: mskFileTree, fileTree: newFileTreeState(getTempDir()))
+    check not e.isShowingTab(win, termBuf.id)
+
+  test ":b at the tab under a foreign mode switches instead of reporting already-there":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    require e.activateBuffer(termBuf.id)
+    require e.activeWindow.tabBufferId == termBuf.id
+    e.activeWindow.modeState =
+      ModeState(kind: mskFileTree, fileTree: newFileTreeState(getTempDir()))
+    require not e.isShowingTab(e.activeWindow, termBuf.id)
+
+    # The tab is not what is drawn, so the command must run and rebuild the mode.
+    check e.switchToBuffer("bash")
+    check e.activeWindow.tabBufferId == termBuf.id
+    check e.activeWindow.modeState.kind != mskFileTree
+
+  test "moveWindowToTab onto a split viewer's own tab leaves the viewer up":
+    let e = createTestEditor()
+    discard registerFakeTerminal(e, "bash")
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    let listing = bmState.createBufferManagerTextBuffer()
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      listing,
+      vpVSplit,
+    )
+    let win = e.activeWindow
+    require win.viewerEntry.isSome
+    require win.viewerEntry.get.bufferId == listing.id
+
+    # Re-selecting the window's own tab must not tear the viewer down.
+    check not e.moveWindowToTab(win, listing)
+
+    check e.activeWindow.viewerEntry.isSome
+    check e.activeWindow.viewerEntry.get.placement == vpVSplit
+    check e.activeWindow.modeState.kind == mskBufferManager

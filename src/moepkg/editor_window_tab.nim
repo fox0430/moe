@@ -63,25 +63,59 @@ proc deriveTabMode*(e: Editor, win: EditorWindow) =
   ## holds the window.
   e.applyTabMode(win, win.tabBufferId)
 
-proc modeMatchesTab(e: Editor, win: EditorWindow, tabId: BufferId): bool =
-  ## True when the mode state matches the tab. A match means the window shows
-  ## the tab itself, so re-moving would only discard its position.
+type WindowView* = enum
+  ## What a window is currently drawing, in terms of the tab it belongs to.
+  ## Naming each case makes a new view kind an exhaustiveness question
+  ## instead of a silent extra branch.
+  wvTabView ## The tab's own content: a text buffer, or a live terminal grid.
+  wvTabSnapshot ## A frozen view of the tab's terminal scrollback (Terminal-Normal).
+  wvSplitViewer
+    ## A viewer's listing hosted in its own split window; the listing is the
+    ## window's tab.
+  wvInPlaceViewer ## A viewer's listing covering a tab's view in place.
+  wvForeignMode ## A non-viewer mode (Filer, Help, ...) over a hidden tab.
+
+proc windowViewOf(e: Editor, win: EditorWindow): WindowView =
+  ## Derive what `win` draws, from `viewerEntry`, `modeState` and
+  ## `terminalStates`. The only place that reads those fields together.
+  if win.viewerEntry.isSome:
+    return
+      if win.viewerEntry.get.placement == vpInPlace: wvInPlaceViewer else: wvSplitViewer
   when defined(moe.embedded):
-    win.modeState.kind == mskNone
+    if win.modeState.kind == mskNone: wvTabView else: wvForeignMode
   else:
-    if e.terminalStates.hasKey(tabId):
-      win.modeState.kind == mskTerminal
+    if e.terminalStates.hasKey(win.tabBufferId):
+      if win.modeState.kind != mskTerminal:
+        wvForeignMode
+      elif win.modeState.terminalSubMode == tsmNormal:
+        wvTabSnapshot
+      else:
+        wvTabView
+    elif win.modeState.kind == mskNone:
+      wvTabView
     else:
-      win.modeState.kind == mskNone
+      wvForeignMode
+
+proc isShowingTab*(e: Editor, win: EditorWindow, tabId: BufferId): bool =
+  ## True when `win` already presents `tabId` itself, so a tab switch would
+  ## only discard its position. The shared "already there" predicate for
+  ## `moveWindowToTab` and the :b/:bfirst/:blast guards.
+  if win.tabBufferId != tabId:
+    return false
+  case e.windowViewOf(win)
+  of wvTabView, wvTabSnapshot:
+    true
+  of wvSplitViewer:
+    win.viewerEntry.get.bufferId == tabId
+  of wvInPlaceViewer, wvForeignMode:
+    false
 
 proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): bool =
   ## Move `win` onto `buf`'s tab and rebuild state owned by the old tab
   ## (Insert session, buffer-swap modes, view position, derived mode).
   ##
-  ## Returns false without moving when already on `buf`'s tab with no mode
-  ## holding a different view.
-  if win.tabBufferId == buf.id and win.viewerEntry.isNone and
-      e.modeMatchesTab(win, buf.id):
+  ## Returns false when the window already shows `buf`'s tab itself.
+  if e.isShowingTab(win, buf.id):
     return false
 
   let isActiveWindow = win == e.activeWindow
