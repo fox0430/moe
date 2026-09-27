@@ -240,7 +240,7 @@ proc renderConfig*(
       )
 
   # Set cursor position and visibility - only visible in edit mode.
-  # Note (M16): Config positions its own screen cursor here, inline with its
+  # Note: Config positions its own screen cursor here, inline with its
   # specialized draw, rather than in advanceLayoutForFrame. This is an idempotent
   # draw-side exception. The screen-cursor write is gated on no overlay/temp
   # message being active, since those own the cursor and are placed earlier in
@@ -294,6 +294,7 @@ when not defined(moe.embedded):
       buffer: var Buffer,
       window: EditorWindow,
       isBottomWindow: bool,
+      isActiveWindow: bool,
       tabLineOffset: int,
   ) =
     ## Render the terminal emulator grid within a window's viewport.
@@ -332,20 +333,17 @@ when not defined(moe.embedded):
         for row in grid.rows ..< maxRows:
           buffer.setString(startX, startY + row, emptyLine, normalStyle())
 
-      # Position cursor at terminal cursor location.
-      # Note (M16): Terminal-Input positions its own screen cursor here from the
-      # grid, inline with its specialized draw, rather than in
-      # advanceLayoutForFrame. This is an idempotent draw-side exception. The
-      # screen-cursor write is gated on no overlay/temp message being active, since
-      # those own the cursor and are placed earlier in advanceLayoutForFrame
-      # (preserving the former draw-order precedence).
-      if grid.cursorVisible and grid.cursorRow < maxRows and grid.cursorCol < maxCols:
-        if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
-          e.state.screenCursor.x = startX + grid.cursorCol
-          e.state.screenCursor.y = startY + grid.cursorRow
-        e.state.cursorVisible = true
-      else:
-        e.state.cursorVisible = false
+      # Only the active window may write the global screen cursor; a later-painted
+      # inactive window must not steal it. Draw-side exception, idempotent and
+      # deferred to overlay/temp messages when active.
+      if isActiveWindow:
+        if grid.cursorVisible and grid.cursorRow < maxRows and grid.cursorCol < maxCols:
+          if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
+            e.state.screenCursor.x = startX + grid.cursorCol
+            e.state.screenCursor.y = startY + grid.cursorRow
+          e.state.cursorVisible = true
+        else:
+          e.state.cursorVisible = false
     of tsmNormal:
       # In Normal sub-mode, rendering is handled by editor_render_views.nim
       # via renderWindow (the snapshot buffer is already set as window.buffer).
