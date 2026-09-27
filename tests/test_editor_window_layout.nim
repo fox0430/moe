@@ -17,13 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils]
+import std/[unittest, strutils, options, posix]
 
 import
   ../src/moepkg/[
     editor, editor_window, editor_window_layout, config, types, buffer, modes,
     render_utils, log_viewer, help_viewer,
   ]
+import ../src/moepkg/terminal/[pty, ansi_parser]
 
 # Helper to create a minimal Editor for testing
 proc createTestEditor(): Editor =
@@ -99,6 +100,153 @@ suite "calculateTerminalAreaDimensions":
     check cols == 80
     # height(2) - steadyBottomAreaHeight()(1) - TabLineHeight(1) = 0, clamped to 1
     check rows == 1
+
+suite "minimumTerminalAreaDimensions":
+  proc fakeTerminalState(): TerminalState =
+    ## Pre-closed PTY: size calculation never touches it.
+    TerminalState(
+      pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
+      grid: newTerminalGrid(80, 24),
+      exitCode: none(int),
+      waitingForCtrlN: false,
+      needsBufferRefresh: false,
+    )
+
+  proc terminalModeState(): ModeState =
+    ModeState(kind: mskTerminal, terminal: fakeTerminalState())
+
+  proc addTerminalWindow(e: Editor, id: BufferId, viewport: ViewPort): EditorWindow =
+    ## Add a window showing session `id`, as applyBufferMode leaves it.
+    result = EditorWindow(
+      viewport: viewport,
+      mode: EditorMode.Terminal,
+      previousMode: EditorMode.Terminal,
+      preferredColumn: -1,
+      tabBufferId: id,
+      modeState: terminalModeState(),
+    )
+    e.windowManager.windows.add(result)
+
+  test "none when no window shows the session":
+    let e = createTestEditor()
+    check e.minimumTerminalAreaDimensions(BufferId(1)).isNone
+
+  test "one window reports its own terminal area":
+    let e = createTestEditor()
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
+    let win = e.activeWindow
+    win.mode = EditorMode.Terminal
+    win.modeState = terminalModeState()
+
+    let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
+    require dimensions.isSome
+    check dimensions.get == e.calculateTerminalAreaDimensions(win)
+    # The default 80x20 window is the bottom one: 20 - steady(1).
+    check dimensions.get == (cols: 80, rows: 19)
+
+  test "columns and rows are each minimized across windows":
+    let e = createTestEditor()
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
+    let win = e.activeWindow
+    win.mode = EditorMode.Terminal
+    win.modeState = terminalModeState()
+
+    # A second, smaller window below: the top window is no longer the bottom
+    # one (20 rows, no reserve), the bottom one gets 12 - steady(1).
+    discard e.addTerminalWindow(
+      win.tabBufferId,
+      ViewPort(topLine: 0, leftColumn: 0, width: 60, height: 12, x: 0, y: 20),
+    )
+
+    let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
+    require dimensions.isSome
+    check dimensions.get == (cols: 60, rows: 11)
+
+  test "columns and rows from different windows are combined":
+    let e = createTestEditor()
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
+    let win = e.activeWindow
+    win.mode = EditorMode.Terminal
+    win.modeState = terminalModeState()
+    win.viewport.width = 50
+    # Narrow but tall on top (full height, no reserve); wide but short
+    # below (8 - steady(1)).
+    discard e.addTerminalWindow(
+      win.tabBufferId,
+      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 8, x: 0, y: 20),
+    )
+
+    # 50x7 matches neither window: a whole-window pick would answer 50x20
+    # or 80x7 here.
+    let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
+    require dimensions.isSome
+    check dimensions.get == (cols: 50, rows: 7)
+
+  test "a window on another tab does not vote":
+    let e = createTestEditor()
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
+    let win = e.activeWindow
+    win.mode = EditorMode.Terminal
+    win.modeState = terminalModeState()
+
+    let otherId = BufferId(999)
+    discard e.addTerminalWindow(
+      otherId, ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 4, x: 0, y: 20)
+    )
+
+    let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
+    require dimensions.isSome
+    # `win` is pushed off the bottom (20 rows); the other tab's 10 columns
+    # must not shrink it.
+    check dimensions.get == (cols: 80, rows: 20)
+    # The other session answers for its own window.
+    check e.minimumTerminalAreaDimensions(otherId).get == (cols: 10, rows: 3)
+
+  test "a window a viewer covers does not vote":
+    let e = createTestEditor()
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
+    let win = e.activeWindow
+    win.mode = EditorMode.Terminal
+    win.modeState = terminalModeState()
+
+    # Same tab, but a viewer holds the view: it no longer shows the grid.
+    let covered = e.addTerminalWindow(
+      win.tabBufferId,
+      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 4, x: 0, y: 20),
+    )
+    covered.mode = EditorMode.Normal
+    covered.modeState = ModeState(kind: mskNone)
+
+    let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
+    require dimensions.isSome
+    # The covered window still takes layout space, but its 10 columns
+    # must not vote.
+    check dimensions.get == (cols: 80, rows: 20)
+
+  test "a browsing window votes, so Ctrl-\\ Ctrl-N does not resize the PTY":
+    let e = createTestEditor()
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
+    let win = e.activeWindow
+    win.mode = EditorMode.Terminal
+    win.modeState = terminalModeState()
+
+    # The smaller window is the one in Terminal-Normal.
+    let browsing = e.addTerminalWindow(
+      win.tabBufferId,
+      ViewPort(topLine: 0, leftColumn: 0, width: 60, height: 12, x: 0, y: 20),
+    )
+    browsing.modeState.scrollbackSnapshot = newTextBuffer("")
+
+    let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
+    require dimensions.isSome
+    # If the browsing window were skipped, the size would jump to 80x20.
+    check dimensions.get == (cols: 60, rows: 11)
 
 suite "calculateReservedLines":
   test "status line enabled, multi status line, bottom window":

@@ -82,6 +82,36 @@ proc addSecondWindow(e: Editor): EditorWindow =
   )
   e.windowManager.windows.add(result)
 
+proc idleTerminalState(): TerminalState =
+  ## Closed PTY without exit code: resizable without I/O, never seen as exited.
+  TerminalState(
+    pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
+    grid: newTerminalGrid(80, 24),
+    exitCode: none(int),
+    waitingForCtrlN: false,
+    needsBufferRefresh: false,
+  )
+
+proc registerIdleTerminalInWindow(
+    e: Editor, window: EditorWindow, command: string
+): TextBuffer =
+  ## Attach an idle session to `window`, as a live tab would look to the poll.
+  result = newTextBuffer("")
+  result.displayName = some("[Terminal: " & command & "]")
+  e.addBuffer(result)
+  window.bufferIds.add(result.id)
+  e.terminalStates[result.id] = idleTerminalState()
+  window.setTab(result)
+  window.modeState = ModeState(kind: mskTerminal, terminal: e.terminalStates[result.id])
+  window.mode = EditorMode.Terminal
+
+proc parkSession(window: EditorWindow, termBuf: TextBuffer, session: TerminalState) =
+  ## Share an already registered session with `window`, as `:b N` does.
+  window.bufferIds.add(termBuf.id)
+  window.setTab(termBuf)
+  window.modeState = ModeState(kind: mskTerminal, terminal: session)
+  window.mode = EditorMode.Terminal
+
 suite "pollTerminalSessions - multi-window regression":
   test "One terminal exit does not skip a second terminal's teardown":
     ## Regression for the `return`-inside-the-loop bug. When two windows are
@@ -178,6 +208,47 @@ suite "pollTerminalSessions - sub-mode round trip":
 
     check not e.terminalStates.hasKey(termBuf.id)
 
+suite "pollTerminalSessions - PTY size":
+  test "the PTY follows the smallest window showing the session":
+    ## Several windows can share one session; the size must fit them all.
+    let e = createTestEditor()
+    e.state.showTabLine = false
+    let w1 = e.windowManager.windows[0]
+    let termBuf = e.registerIdleTerminalInWindow(w1, "bash")
+    let session = e.terminalStates[termBuf.id]
+
+    # Narrower window below: bottom one is 12 - steady(1), w1 keeps 20 rows.
+    let w2 = e.addSecondWindow()
+    w2.viewport.width = 60
+    parkSession(w2, termBuf, session)
+
+    e.pollTerminalSessions()
+
+    check session.grid.cols == 60
+    check session.grid.rows == 11
+
+  test "a browsing window keeps voting, so Ctrl-\\ Ctrl-N sends no SIGWINCH":
+    let e = createTestEditor()
+    e.state.showTabLine = false
+    let w1 = e.windowManager.windows[0]
+    let termBuf = e.registerIdleTerminalInWindow(w1, "bash")
+    let session = e.terminalStates[termBuf.id]
+
+    let w2 = e.addSecondWindow()
+    w2.viewport.width = 60
+    parkSession(w2, termBuf, session)
+
+    e.pollTerminalSessions()
+    check session.grid.cols == 60
+    check session.grid.rows == 11
+
+    # w2 enters Terminal-Normal. Were browsing windows skipped, the size
+    # would jump to 80x20 on every sub-mode round trip.
+    w2.modeState.scrollbackSnapshot = newTextBuffer("")
+    e.pollTerminalSessions()
+    check session.grid.cols == 60
+    check session.grid.rows == 11
+
 suite "pollTerminalSessions - a backgrounded session keeps running":
   proc openTerminalState(): TerminalState =
     ## A session whose PTY looks open but is safe to poll: the fd is /dev/null,
@@ -195,9 +266,8 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
     )
 
   test "a session on a background tab is still drained":
-    ## Regression: the loop walked windows, so a backgrounded session got
-    ## neither `pollOutput` nor the write flush it carries, stranding a queued
-    ## paste and eventually blocking the child in write().
+    ## Backgrounded sessions still need `pollOutput`, or a queued paste
+    ## strands and eventually blocks the child in write().
     let e = createTestEditor()
     let w = e.windowManager.windows[0]
 
@@ -231,7 +301,6 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
 
     e.pollTerminalSessions()
 
-    # The backgrounded session was drained: the queue moved.
     check session.pty.pendingWriteBytes < pendingBefore
 
   test "a backgrounded session that exited keeps its tab until it is visited":
@@ -252,3 +321,40 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
     check e.activateBuffer(termBufId)
     e.pollTerminalSessions()
     check not e.terminalStates.hasKey(termBufId)
+
+  test "a backgrounded session is not resized":
+    ## No window shows the session, so the grid must stay as it was.
+    let e = createTestEditor()
+    let w = e.windowManager.windows[0]
+
+    let termBuf = newTextBuffer("")
+    termBuf.displayName = some("[Terminal: bash]")
+    e.addBuffer(termBuf)
+    w.bufferIds.add(termBuf.id)
+    let session = TerminalState(
+      pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
+      grid: newTerminalGrid(80, 24),
+      exitCode: none(int),
+      waitingForCtrlN: false,
+      needsBufferRefresh: false,
+    )
+    e.terminalStates[termBuf.id] = session
+    w.setTab(termBuf)
+    w.modeState = ModeState(kind: mskTerminal, terminal: session)
+    w.mode = EditorMode.Terminal
+    e.state.mode = EditorMode.Terminal
+    e.syncActiveWindow()
+
+    # Move the window to another tab; the session stays alive in the map.
+    let other = newTextBuffer("")
+    e.addBuffer(other)
+    e.addBufferToWindowList(other)
+    check e.activateBuffer(other.id)
+    check e.terminalStates.hasKey(termBuf.id)
+    check w.mode != EditorMode.Terminal
+
+    e.pollTerminalSessions()
+
+    check e.terminalStates.hasKey(termBuf.id)
+    check session.grid.cols == 80
+    check session.grid.rows == 24
