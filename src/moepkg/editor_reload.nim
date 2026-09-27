@@ -185,8 +185,9 @@ proc actOnExternalChange(e: Editor, buf: TextBuffer, filePath: string) =
   ## Handle a detected external change on `buf`: a buffer with unsaved changes
   ## is never overwritten, only warned about once; anything else is reloaded.
   ##
-  ## No `BufReadPost`, unlike `:e!`: a read hook that rewrites its file would
-  ## retrigger itself, indistinguishable from another program's change.
+  ## The reload is announced as `roExternal`, which fires no `BufReadPost`:
+  ## unlike `:e!`, a read hook that rewrites its file would retrigger itself,
+  ## indistinguishable from another program's change.
   if buf.isModified:
     if not buf.externalModWarned:
       e.reportExternalChange(
@@ -209,6 +210,7 @@ proc actOnExternalChange(e: Editor, buf: TextBuffer, filePath: string) =
     return
 
   e.finishReload(buf, filePath, announce = buf == e.activeBuffer())
+  e.noteBufferRead(buf, roExternal)
 
 proc checkBufferForExternalChange(e: Editor, buf: TextBuffer) =
   ## One buffer's half of the poll sweep: detect, then either owe the reload
@@ -265,9 +267,10 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
     if not buf.reloadDeferred:
       e.checkBufferForExternalChange(buf)
 
-proc reloadCurrentFile*(e: Editor, announce = true): Result[void, string] =
-  ## Reload the current buffer from disk (for :e! command). `announce = false`
-  ## leaves the status line untouched, for a reload the user did not ask for.
+proc reloadCurrentFile*(e: Editor, origin: ReadOrigin = roUser): Result[void, string] =
+  ## Reload the current buffer from disk (for :e! command). `roUser` is a
+  ## reload the user asked for, which announces itself on the status line and
+  ## fires `BufReadPost`; any other origin reloads quietly.
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     return err("No file name")
@@ -277,10 +280,8 @@ proc reloadCurrentFile*(e: Editor, announce = true): Result[void, string] =
   if reloadResult.isErr:
     return err(reloadResult.error)
 
-  e.finishReload(activeBuffer, filePath, announce)
-  # Only a reload the user asked for counts as a read.
-  if announce:
-    e.queueHooks(heBufReadPost, activeBuffer)
+  e.finishReload(activeBuffer, filePath, announce = origin == roUser)
+  e.noteBufferRead(activeBuffer, origin)
   return ok()
 
 proc maybeUpdateConflicts*(e: Editor) =

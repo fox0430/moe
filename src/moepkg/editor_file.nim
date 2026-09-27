@@ -135,7 +135,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # This path reads into the existing buffer instead of going through
   # `initLoadedBuffer`, so it announces the read itself.
-  e.queueHooks(heBufReadPost, e.activeBuffer)
+  e.noteBufferRead(e.activeBuffer, roUser)
 
   ok(())
 

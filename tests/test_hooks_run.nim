@@ -1121,6 +1121,26 @@ suite "Hooks - reading a file back":
     # The buffer now holds what the file holds, which is what the event says.
     check editor.hookJobs.mapIt(it.label) == @["BufReadPost hook (true)"]
 
+  test "The read origin decides in one place whether the event fires":
+    # `noteBufferRead` is where the policy lives; the situations that do not
+    # fire are named there rather than suppressed by a flag at each call site.
+    let dir = testDir("readorigin")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    let editor = newEditor(newEditorConfig())
+    editor.openInEditor(path, "x\n")
+    editor.config.hooks.entries =
+      @[HookEntry(event: heBufReadPost, command: "true", timeout: 5)]
+
+    let buf = editor.activeBuffer
+    editor.noteBufferRead(buf, roInternal)
+    editor.noteBufferRead(buf, roExternal)
+    check editor.hookJobs.len == 0
+
+    editor.noteBufferRead(buf, roUser)
+    check editor.hookJobs.mapIt(it.label) == @["BufReadPost hook (true)"]
+
   test "BufReadPost fires when a backup is restored into the buffer":
     let dir = testDir("restore")
     defer:
@@ -1168,7 +1188,7 @@ suite "Hooks - reading a file back":
       @[HookEntry(event: heBufReadPost, command: "true", timeout: 5)]
 
     writeFile(path, "z\n")
-    check editor.reloadCurrentFile(announce = false).isOk
+    check editor.reloadCurrentFile(origin = roInternal).isOk
     check editor.hookJobs.len == 0
 
 suite "Hooks - a file changed on disk":

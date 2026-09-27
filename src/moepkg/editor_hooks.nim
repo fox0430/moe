@@ -236,3 +236,21 @@ proc queueHooks*(e: Editor, event: HookEvent, buf: TextBuffer) =
     return
   if buf.filePath.isSome:
     e.queueHooks(event, buf.filePath.get, buf.language)
+
+type ReadOrigin* = enum
+  ## Why a buffer was read from disk. `noteBufferRead` is the one place this
+  ## is turned into a `BufReadPost`, so a read path names the situation rather
+  ## than deciding for itself.
+  roUser
+    ## The user asked for the file: an open, a split, `:e!`, a restored backup.
+  roInternal
+    ## The editor read it on its own account, not a keystroke's asking: an LSP
+    ## rename's background copy, a reload made without the user asking.
+  roExternal
+    ## A change on disk was picked up and reloaded. A read hook that rewrites
+    ## its file would retrigger itself, so this is not a read.
+
+proc noteBufferRead*(e: Editor, buf: TextBuffer, origin: ReadOrigin) =
+  ## The one way a read announces itself, whatever path performed it.
+  if origin == roUser:
+    e.queueHooks(heBufReadPost, buf)

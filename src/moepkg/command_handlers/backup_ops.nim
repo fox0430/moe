@@ -221,7 +221,7 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
             # Refresh the restored buffer's git-diff gutter and conflicts.
             e.refreshBufferGitAndConflicts(srcBuf)
             # The buffer holds what its file holds again.
-            e.queueHooks(heBufReadPost, srcBuf)
+            e.noteBufferRead(srcBuf, roUser)
             # Restore screen notification (controlled by config)
             if e.config.notification.screenNotifications and
                 e.config.notification.restoreScreenNotify:
