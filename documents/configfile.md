@@ -1425,6 +1425,7 @@ workingDir = "~/src/api"
 |:---|:---|:---|:---|
 | enable | bool | true | Run hooks at all |
 | onAutoSave | bool | false | Run BufWritePost for auto saves too |
+| exitWaitTimeout | integer | 10 | Seconds a quit waits for the BufWritePost hooks in total. 0 waits without a bound |
 <!-- AUTO-GEN:end Hook -->
 
 `event` and `command` are required; an entry missing either is reported and
@@ -1468,12 +1469,13 @@ the middle of typing. Set `onAutoSave = true` if you want it anyway.
 A quit waits for the `BufWritePost` hooks it owes: those of the write `:wq`,
 `:x`, `ZZ`, `:wqa` and `:xa` make, and those of an earlier write still running.
 The screen stays up with a message while they run, one after another, each
-within its own `timeout`. Ctrl-C quits at once and stops them. A hook that
-fails meanwhile is reported on standard error once the screen is gone, not on
-the status line, which keeps saying how to stop waiting; so is each one Ctrl-C
-stopped or kept from starting, and the output of a `showOutput` hook. moe's
-exit status stays that of the quit, since a hook observes the write rather
-than vetting it.
+within its own `timeout`, and the wait as a whole is capped by
+`exitWaitTimeout` — ten seconds by default, `0` lifts the cap. Ctrl-C quits at
+once and stops them, as the cap running out does. A hook that fails meanwhile
+is reported on standard error once the screen is gone, not on the status line,
+which keeps saying how to stop waiting; so is each one stopped that way or kept
+from starting, and the output of a `showOutput` hook. moe's exit status stays
+that of the quit, since a hook observes the write rather than vetting it.
 `BufReadPost` hooks are not waited for but stopped: a read is moot once the
 user leaves.
 

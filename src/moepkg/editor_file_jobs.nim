@@ -20,7 +20,7 @@
 ## The external commands the editor has started: listing them for `:jobs`,
 ## stopping them for `:jobs!`, and what a quit waits for.
 
-import std/monotimes
+import std/[monotimes, options]
 
 from std/times import inSeconds
 
@@ -97,16 +97,40 @@ proc stopRunningCommands*(e: Editor): int =
   let fromLanes = e.stopEverything().len
   e.runningBackgroundProcesses.len + e.runningQuickRunProcesses.len + fromLanes
 
+proc beginExitWait*(e: Editor) =
+  ## Stamp the start of the quit's wait, once: `exitWaitTimeout` is measured
+  ## from the quit, not from the first frame that notices the wait.
+  if e.state.exitWaitStartedAt.isNone:
+    e.state.exitWaitStartedAt = some(getMonoTime())
+
+proc exitWaitTimedOut*(e: Editor): bool =
+  ## Whether the quit has waited for owed work past `exitWaitTimeout`. A
+  ## non-positive bound means time alone never ends the wait.
+  if e.config.hooks.exitWaitTimeout <= 0 or e.state.exitWaitStartedAt.isNone:
+    return false
+  (getMonoTime() - e.state.exitWaitStartedAt.get).inSeconds >=
+    e.config.hooks.exitWaitTimeout
+
 proc readyToExit*(e: Editor): bool =
-  ## Whether the user quit and nothing the quit is owed waits or runs.
-  e.state.quitDecided and e.jobLanes.owedIdle
+  ## Whether the user quit and nothing the quit is owed waits or runs, or the
+  ## wait has outlasted `exitWaitTimeout`, when what is left is given up on.
+  e.state.quitDecided and (e.jobLanes.owedIdle or e.exitWaitTimedOut())
 
 proc abandonExitWait*(e: Editor) =
   ## Stop everything, owed work included, for a session ending without waiting
-  ## (Ctrl-C, a signal, a crash). Owed jobs are recorded for stderr, as a
-  ## `$EDITOR` caller may rely on them; each once, however many paths call this.
-  for job in e.stopEverything():
+  ## (Ctrl-C, a signal, a crash, or a wait past `exitWaitTimeout`). Owed jobs
+  ## are recorded for stderr, as a `$EDITOR` caller may rely on them; each
+  ## once, however many paths call this.
+  let jobs = e.stopEverything()
+  var notedTimeout = false
+  for job in jobs:
     if job.owed:
+      if not notedTimeout:
+        notedTimeout = true
+        if e.exitWaitTimedOut():
+          e.state.exitReports.add(
+            "Hook wait timed out after " & $e.config.hooks.exitWaitTimeout & "s"
+          )
       var report =
         (if job.state == jsWaiting: "Not run: " else: "Stopped before finishing: ") &
         job.label

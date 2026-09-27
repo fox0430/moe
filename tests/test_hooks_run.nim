@@ -20,7 +20,9 @@
 ## End-to-end tests for user hooks: from an event through the file's lane to
 ## the command's effect on disk and on the buffer.
 
-import std/[unittest, options, os, sequtils, strutils, json]
+import std/[unittest, options, os, sequtils, strutils, json, monotimes]
+
+from std/times import initDuration
 
 import pkg/chronos
 
@@ -1358,6 +1360,90 @@ suite "Hooks - quitting":
 
     check editor.readyToExit()
     check Moment.now() - start < 2.seconds
+
+  test "A quit stops waiting once exitWaitTimeout passes":
+    # The bound is on the wait as a whole, not on a hook: one command with no
+    # timeout of its own cannot hold the session open past it.
+    let dir = testDir("quittimeout")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    let editor = newEditor(newEditorConfig())
+    editor.openInEditor(path, "x\n")
+    editor.config.hooks.exitWaitTimeout = 1
+    editor.config.hooks.entries =
+      @[HookEntry(event: heBufWritePost, command: "sleep 60", timeout: 0)]
+
+    editor.queueHooks(heBufWritePost, path, SourceLanguage.langNim)
+    check not editor.noteQuit(false)
+    # The quit itself starts the clock; the backdating below only shortens it.
+    check editor.state.exitWaitStartedAt.isSome
+    turn()
+    check editor.hookJobs.mapIt(it.state) == @[jsRunning]
+    check not editor.readyToExit()
+    check not editor.exitWaitTimedOut()
+
+    # Backdated rather than slept through: the wait's start is what the bound
+    # counts from.
+    editor.state.exitWaitStartedAt =
+      some(getMonoTime() - initDuration(seconds = 2))
+    check editor.readyToExit()
+
+    editor.abandonExitWait()
+    check editor.state.exitReports == @[
+      "Hook wait timed out after 1s",
+      "Stopped before finishing: BufWritePost hook (sleep) on " & path,
+    ]
+    editor.drain(
+      proc(): bool =
+        editor.hookJobs.len == 0
+    )
+
+  test "exitWaitTimeout = 0 leaves the wait unbounded":
+    let dir = testDir("quitnobound")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    let editor = newEditor(newEditorConfig())
+    editor.openInEditor(path, "x\n")
+    editor.config.hooks.exitWaitTimeout = 0
+    editor.config.hooks.entries =
+      @[HookEntry(event: heBufWritePost, command: "sleep 60", timeout: 0)]
+
+    editor.queueHooks(heBufWritePost, path, SourceLanguage.langNim)
+    check not editor.noteQuit(false)
+    turn()
+    editor.state.exitWaitStartedAt =
+      some(getMonoTime() - initDuration(seconds = 2))
+    check not editor.exitWaitTimedOut()
+    check not editor.readyToExit()
+
+    # No timeout to report: the wait was abandoned for another reason.
+    editor.abandonExitWait()
+    check editor.state.exitReports ==
+      @["Stopped before finishing: BufWritePost hook (sleep) on " & path]
+
+  test "The wait message names the bound when one is set":
+    let dir = testDir("quitboundmsg")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    let editor = newEditor(newEditorConfig())
+    editor.openInEditor(path, "x\n")
+    editor.config.hooks.exitWaitTimeout = 3
+    editor.config.hooks.entries =
+      @[HookEntry(event: heBufWritePost, command: "sleep 60", timeout: 0)]
+
+    editor.queueHooks(heBufWritePost, path, SourceLanguage.langNim)
+    check not editor.noteQuit(false)
+    check "up to 3s" in editor.state.statusMessage
+
+    editor.config.hooks.exitWaitTimeout = 0
+    editor.showExitWait()
+    check "up to" notin editor.state.statusMessage
+    check "Ctrl-C" in editor.state.statusMessage
+
+    editor.abandonExitWait()
 
   test "Ctrl-C stops the hooks the quit waits for and says so":
     let dir = testDir("quitctrlc")

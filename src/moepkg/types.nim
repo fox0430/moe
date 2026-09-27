@@ -983,6 +983,9 @@ type
     exitReports*: seq[string]
       # What went wrong while the quit waited, written to stderr once the
       # screen is gone.
+    exitWaitStartedAt*: Option[MonoTime]
+      # When the quit began waiting for the hooks it owes, so `exitWaitTimeout`
+      # measures the wait rather than the frames that notice it.
     commandOutputBufferId*: BufferId
       # Buffer a background command last wrote its output into; reused while a
       # window shows it, so frequent runs do not add a split each time.

@@ -40,6 +40,11 @@ const DefaultHookTimeout* = 60
   ## Default wait for a hook command; `timeout = 0` opts out.
   ## Lives here so `cfgDocDefault` can name it.
 
+const DefaultHookExitWaitTimeout* = 10
+  ## Default cap on the whole wait a quit does for the hooks it owes;
+  ## `exitWaitTimeout = 0` opts out.
+  ## Lives here so `cfgDocDefault` can name it.
+
 const DefaultBackupDir* = "~/.cache/moe/backups"
   ## Effective default for `AutoBackupConfig.backupDir` when the field is
   ## `none`. Lives here (not in `backup.nim`) so it can be referenced by
@@ -832,6 +837,15 @@ type
     enable* {.cfg, cfgDocDescription: "Run hooks at all".}: bool = true
     onAutoSave* {.cfg, cfgDocDescription: "Run BufWritePost for auto saves too".}: bool
       ## Off: timer-driven auto save would run them mid-typing.
+    exitWaitTimeout* {.
+      cfg,
+      cfgMin: 0,
+      cfgDocDefault: DefaultHookExitWaitTimeout,
+      cfgDocDescription:
+        "Seconds a quit waits for the BufWritePost hooks in total. 0 waits without a bound"
+    .}: int = DefaultHookExitWaitTimeout
+      ## A cap on the wait as a whole, not on one command: `timeout` bounds
+      ## each hook, and this bounds how long the session stays open for them.
     entries* {.cfgArrayOfTables: "entries", cfgEntryRules: checkHookEntry.}:
       seq[HookEntry]
 

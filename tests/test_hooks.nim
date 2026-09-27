@@ -231,6 +231,7 @@ suite "Hooks - config loading":
     check not vr.hasErrors
     check config.hooks.enable
     check not config.hooks.onAutoSave
+    check config.hooks.exitWaitTimeout == DefaultHookExitWaitTimeout
     check config.hooks.entries.len == 0
 
   test "A full entry":
@@ -239,6 +240,7 @@ suite "Hooks - config loading":
 [Hook]
 enable = true
 onAutoSave = true
+exitWaitTimeout = 3
 
 [[Hook.entries]]
 event = "BufWritePost"
@@ -252,6 +254,7 @@ showOutput = true
     )
     check not vr.hasErrors
     check config.hooks.onAutoSave
+    check config.hooks.exitWaitTimeout == 3
     check config.hooks.entries.len == 1
     let entry = config.hooks.entries[0]
     check entry.event == heBufWritePost
@@ -387,6 +390,12 @@ timeout = -1
       "Hook.entries[0].timeout",
     )
 
+  test "Negative exitWaitTimeout":
+    let (config, vr) = loadFromTomlString("[Hook]\nexitWaitTimeout = -1\n")
+    check vr.hasErrors
+    check vr.errors.anyIt(it.name == "Hook.exitWaitTimeout")
+    check config.hooks.exitWaitTimeout == DefaultHookExitWaitTimeout
+
   test "A command line whose first token is empty":
     # `''` parses to an empty program name, which has nothing to exec. Caught
     # here rather than at exec time, where a hook that never fires has nowhere
@@ -464,6 +473,7 @@ suite "Hooks - config round trip":
   test "Saving and reloading preserves every entry":
     var config = newEditorConfig()
     config.hooks.onAutoSave = true
+    config.hooks.exitWaitTimeout = 3
     config.hooks.entries = @[
       HookEntry(
         event: heBufWritePost,
@@ -487,6 +497,7 @@ suite "Hooks - config round trip":
     let (reloaded, vr) = loaded.get
     check not vr.hasErrors
     check reloaded.hooks.onAutoSave
+    check reloaded.hooks.exitWaitTimeout == 3
     check reloaded.hooks.entries == config.hooks.entries
 
 suite "Hooks - unknown events":
@@ -531,7 +542,8 @@ typo = 1
     appendHookToml(lines, config.hooks)
 
     for key in [
-      "event", "command", "filetype", "filter", "workingDir", "timeout", "showOutput"
+      "exitWaitTimeout", "event", "command", "filetype", "filter", "workingDir", "timeout",
+      "showOutput",
     ]:
       check lines.anyIt(it.startsWith(key & " = "))
 

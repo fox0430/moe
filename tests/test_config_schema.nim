@@ -206,6 +206,11 @@ suite "Config schema - context analysis":
     check not ctx.arrayOfTables
     check "entries" notin candidates(ctx).texts
 
+  test "The Hook section offers its scalar keys":
+    let ctx = analyzeLine("exitWait", 8, "Hook")
+    check ctx.kind == cckKey
+    check "exitWaitTimeout" in candidates(ctx).texts
+
   test "A space after the bracket keeps the head aligned with the schema":
     let ctx = analyzeLine("[ Lsp.Compl", 11, "")
     check ctx.kind == cckSection

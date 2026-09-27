@@ -656,10 +656,12 @@ rustAnalyzerDebugSingle = true         # rust-analyzer specific: debug single
 # Run a command when an editor event happens: run a linter, regenerate code,
 # poke a dev server. Each hook is one [[Hook.entries]] table, and they fire in
 # the order they are written. They run in the background, one at a time, and
-# report only a failure; a quit waits for the BufWritePost ones.
+# report only a failure; a quit waits for the BufWritePost ones, up to
+# exitWaitTimeout seconds in total.
 #
-# enable = true       # Run hooks at all
-# onAutoSave = false  # Run BufWritePost for auto saves too
+# enable = true         # Run hooks at all
+# onAutoSave = false    # Run BufWritePost for auto saves too
+# exitWaitTimeout = 10  # Seconds a quit waits for the BufWritePost hooks in total. 0 waits without a bound
 
 # [[Hook.entries]]
 # event       = "BufWritePost"  # BufWritePost | BufReadPost
