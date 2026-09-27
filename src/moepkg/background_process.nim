@@ -22,7 +22,7 @@ import std/[options, strformat, strutils]
 import pkg/[results, chronos]
 import pkg/chronos/asyncproc
 
-import logger, child_process, job_stop
+import child_process, job_stop
 
 import types/background_process_types
 export background_process_types, job_stop
@@ -324,23 +324,34 @@ const OutputDroppedMarker* = "... earlier output dropped"
 
 proc readAllOutput*(
     bp: BackgroundProcess, limit = 0
-): Future[seq[string]] {.async: (raises: []).} =
+): Future[OutputReadResult] {.async: (raises: []).} =
   ## Read all output from the process stdout, split into lines. A positive
   ## `limit` keeps only the whole lines in the last `limit` bytes, after
   ## `OutputDroppedMarker`; the rest is still read so the command never blocks
   ## on a full pipe. A single line longer than `limit` keeps its tail.
   ##
+  ## Output that could not be read to the end is an error, not output: what
+  ## arrived is a prefix of it, and a caller judging the command by a prefix
+  ## judges the wrong bytes. The drain kills the command either way, so the run
+  ## is over once this fails.
+  ##
   ## Split once it is all read rather than with `readLine`, which cannot tell a
   ## last empty line from a read that only found EOF: text after the last
   ## newline is a line, nothing after it is not, however the EOF arrives.
   if bp.process.isNil:
-    return @[]
+    return OutputReadResult.ok(@[])
   let
     sink = DrainSink(limit: limit, policy: if limit > 0: dlpKeepTail else: dlpFail)
     failure = RunFailure()
   await bp.drainBounded(bp.process.stdoutStream(), sink, failure)
   if failure.error.isSome:
-    logError "background_process", failure.error.get.message
+    return OutputReadResult.err failure.error.get
+  if not sink.atEnd:
+    # Something outlived the command and held the pipe open, so the drain was
+    # cut off at its grace with text still on the way.
+    return OutputReadResult.err(
+      filterError(ffReadFailed, "Could not read all of the command output")
+    )
   var text = move sink.text
   let dropped = sink.overflowed
   if dropped:
@@ -356,13 +367,13 @@ proc readAllOutput*(
           text[firstEnd + 1 .. ^1].strip(chars = {'\n'}).len > 0:
         text.delete(0 .. firstEnd)
   if text.len == 0:
-    return @[]
+    return OutputReadResult.ok(@[])
   var lines = text.split('\n')
   if text.endsWith('\n'):
     lines.setLen(lines.len - 1)
   if dropped:
     lines.insert(OutputDroppedMarker, 0)
-  return lines
+  return OutputReadResult.ok(lines)
 
 proc waitForAsync*(
     bp: BackgroundProcess, timeout: Duration, stop: JobStop = nil, outputLimit = 0
@@ -374,11 +385,15 @@ proc waitForAsync*(
   ## This is the bounded form every external command should use: a command that
   ## never exits (a hung compiler, a program reading stdin) is turned into an
   ## error instead of a Future and a child process that live until the editor
-  ## quits. A timeout is always reported as an error, never as empty output.
+  ## quits. A timeout is always reported as an error, never as empty output;
+  ## so is output that could not be read to the end.
   let reader = bp.readAllOutput(outputLimit)
   case await bp.runToCompletion(@[FutureBase(reader)], timeout, stop)
   of proCompleted:
-    return ProcessOutputResult.ok(await reader)
+    let output = await reader
+    if output.isErr:
+      return ProcessOutputResult.err output.error.message
+    return ProcessOutputResult.ok output.get
   of proTimedOut:
     # `$Duration` keeps sub-second timeouts honest; `timeout.seconds` would
     # report "0" for anything shorter than a second.

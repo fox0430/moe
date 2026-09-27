@@ -138,7 +138,7 @@ suite "BackgroundProcess - readAllOutput":
       let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let output = await bp.readAllOutput()
+        let output = (await bp.readAllOutput()).get
         await bp.closeAsync()
         return output
       else:
@@ -159,7 +159,7 @@ suite "BackgroundProcess - readAllOutput":
       let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let output = await bp.readAllOutput()
+        let output = (await bp.readAllOutput()).get
         await bp.closeAsync()
         return output
       else:
@@ -179,7 +179,7 @@ suite "BackgroundProcess - readAllOutput":
       let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let output = await bp.readAllOutput()
+        let output = (await bp.readAllOutput()).get
         await bp.closeAsync()
         return output
       else:
@@ -190,12 +190,35 @@ suite "BackgroundProcess - readAllOutput":
     check output.len == 0 or (output.len == 1 and output[0] == "")
 
   test "readAllOutput with nil process":
-    proc runTest(): Future[seq[string]] {.async.} =
+    proc runTest(): Future[OutputReadResult] {.async.} =
       let bp = BackgroundProcess(process: nil)
       return await bp.readAllOutput()
 
     let output = waitFor runTest()
-    check output.len == 0
+    check output.isOk
+    check output.get.len == 0
+
+  test "A read that was cut off is an error, not a prefix":
+    # `drainBounded` keeps what it read when it is cancelled, and `atEnd` says
+    # the text is not the whole stream: a caller judging the command by a
+    # prefix would judge the wrong bytes.
+    proc runTest(): Future[OutputReadResult] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sh", args: @["-c", "echo first; sleep 5"], workingDir: getTempDir()
+        )
+      ).get
+      let reader = bp.readAllOutput()
+      # Let the first line arrive, then cut the drain off before EOF.
+      await sleepAsync(100.milliseconds)
+      reader.cancel()
+      let output = await reader
+      await bp.closeAsync()
+      return output
+
+    let output = waitFor runTest()
+    check output.isErr
+    check "Could not read all" in output.error.message
 
 proc tailOf(script: string, limit: int): seq[string] =
   ## What `readAllOutput` keeps of `sh -c script` within `limit` bytes.
@@ -205,7 +228,7 @@ proc tailOf(script: string, limit: int): seq[string] =
         cmd: "sh", args: @["-c", script], workingDir: getTempDir()
       )
     ).get
-    let output = await bp.readAllOutput(limit)
+    let output = (await bp.readAllOutput(limit)).get
     await bp.closeAsync()
     return output
 
@@ -390,6 +413,27 @@ suite "BackgroundProcess - waitForAsync":
     let r = waitFor runTest()
     check r.beforeNil == false
     check r.afterNil == true
+
+  test "A read failing midway fails the wait, not only the drain":
+    # The output is a prefix once a read fails, and a caller judging the
+    # command by a prefix would judge the wrong bytes.
+    proc runTest(): Future[ProcessOutputResult] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sh",
+          args: @["-c", "echo first; sleep 0.3; echo second"],
+          workingDir: getTempDir(),
+        )
+      ).get
+      let waiter = bp.waitForAsync(5.seconds)
+      await sleepAsync(100.milliseconds)
+      # The next read raises, once the pending one returns.
+      bp.process.stdoutStream().close()
+      return await waiter
+
+    let output = waitFor runTest()
+    check output.isErr
+    check "Failed to read the command output" in output.error
 
 suite "BackgroundProcess - cancel and kill":
   test "Cancel running process":
