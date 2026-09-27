@@ -41,9 +41,9 @@ type
   BufferManagerResult* = object
     case kind*: BufferManagerResultKind
     of bmrSelectBuffer:
-      bufferIndex*: int
+      bufferNumber*: BufferId
     of bmrDeleteBuffer:
-      deleteBufferIndex*: int
+      deleteBufferNumber*: BufferId
     of bmrError:
       errorMessage*: string
     else:
@@ -75,7 +75,9 @@ proc handleBufferManagerModeKey*(
     # Select and switch to the buffer
     let entry = bmState.getSelectedItem()
     if entry.isSome:
-      return BufferManagerResult(kind: bmrSelectBuffer, bufferIndex: entry.get.index)
+      return BufferManagerResult(
+        kind: bmrSelectBuffer, bufferNumber: BufferId(entry.get.number)
+      )
     return BufferManagerResult(kind: bmrHandled)
   of lvaUnhandled:
     discard # fall through to buffer-manager-specific keys
@@ -86,14 +88,17 @@ proc handleBufferManagerModeKey*(
       # Open the selected buffer (same as Enter for now)
       let entry = bmState.getSelectedItem()
       if entry.isSome:
-        return BufferManagerResult(kind: bmrSelectBuffer, bufferIndex: entry.get.index)
+        return BufferManagerResult(
+          kind: bmrSelectBuffer, bufferNumber: BufferId(entry.get.number)
+        )
       return BufferManagerResult(kind: bmrHandled)
     of "D":
       # Delete the selected buffer
       let entry = bmState.getSelectedItem()
       if entry.isSome:
-        return
-          BufferManagerResult(kind: bmrDeleteBuffer, deleteBufferIndex: entry.get.index)
+        return BufferManagerResult(
+          kind: bmrDeleteBuffer, deleteBufferNumber: BufferId(entry.get.number)
+        )
       return BufferManagerResult(kind: bmrHandled)
     else:
       discard

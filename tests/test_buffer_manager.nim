@@ -35,7 +35,7 @@ suite "BufferEntry - initBufferManagerEntries":
 
     # Should add placeholder entry when empty
     check entries.len == 1
-    check entries[0].index == 0
+    check entries[0].number == 0
     check entries[0].name == "No Name"
     check entries[0].modified == false
     check entries[0].active == true
@@ -47,32 +47,38 @@ suite "BufferEntry - initBufferManagerEntries":
     let entries = initBufferManagerEntries(bufferInfos)
 
     check entries.len == 1
-    check entries[0].index == 0
+    check entries[0].number == 0
     check entries[0].name == "/path/to/file.nim"
     check entries[0].modified == false
     check entries[0].active == true
 
   test "Create entries from multiple buffers":
+    # The numbers are not consecutive on purpose: they are buffer ids, so a
+    # deleted buffer leaves a gap instead of renumbering the rest.
     let bufferInfos = @[
-      BufferInfo(filePath: some("/path/file1.nim"), isModified: false, isActive: false),
-      BufferInfo(filePath: some("/path/file2.nim"), isModified: true, isActive: true),
-      BufferInfo(filePath: none(string), isModified: false, isActive: false),
+      BufferInfo(
+        number: 1, filePath: some("/path/file1.nim"), isModified: false, isActive: false
+      ),
+      BufferInfo(
+        number: 4, filePath: some("/path/file2.nim"), isModified: true, isActive: true
+      ),
+      BufferInfo(number: 7, filePath: none(string), isModified: false, isActive: false),
     ]
     let entries = initBufferManagerEntries(bufferInfos)
 
     check entries.len == 3
 
-    check entries[0].index == 0
+    check entries[0].number == 1
     check entries[0].name == "/path/file1.nim"
     check entries[0].modified == false
     check entries[0].active == false
 
-    check entries[1].index == 1
+    check entries[1].number == 4
     check entries[1].name == "/path/file2.nim"
     check entries[1].modified == true
     check entries[1].active == true
 
-    check entries[2].index == 2
+    check entries[2].number == 7
     check entries[2].name == "No Name"
     check entries[2].modified == false
     check entries[2].active == false
@@ -244,7 +250,7 @@ suite "BufferManagerState - getSelectedItem":
 suite "BufferEntry - formatLine":
   test "Format active unmodified entry":
     let entry =
-      BufferEntry(index: 0, name: "/path/to/file.nim", modified: false, active: true)
+      BufferEntry(number: 0, name: "/path/to/file.nim", modified: false, active: true)
 
     let formatted = formatLine(entry)
 
@@ -252,7 +258,7 @@ suite "BufferEntry - formatLine":
 
   test "Format inactive modified entry":
     let entry =
-      BufferEntry(index: 1, name: "/path/to/file.nim", modified: true, active: false)
+      BufferEntry(number: 1, name: "/path/to/file.nim", modified: true, active: false)
 
     let formatted = formatLine(entry)
 
@@ -260,7 +266,7 @@ suite "BufferEntry - formatLine":
 
   test "Format active modified entry":
     let entry =
-      BufferEntry(index: 2, name: "/path/to/file.nim", modified: true, active: true)
+      BufferEntry(number: 2, name: "/path/to/file.nim", modified: true, active: true)
 
     let formatted = formatLine(entry)
 
@@ -268,14 +274,14 @@ suite "BufferEntry - formatLine":
 
   test "Format inactive unmodified entry":
     let entry =
-      BufferEntry(index: 3, name: "/path/to/file.nim", modified: false, active: false)
+      BufferEntry(number: 3, name: "/path/to/file.nim", modified: false, active: false)
 
     let formatted = formatLine(entry)
 
     check formatted == "  3:     /path/to/file.nim"
 
   test "Format entry with No Name":
-    let entry = BufferEntry(index: 0, name: "No Name", modified: false, active: true)
+    let entry = BufferEntry(number: 0, name: "No Name", modified: false, active: true)
 
     let formatted = formatLine(entry)
 

@@ -60,6 +60,7 @@ proc getBufferInfos*(e: Editor): seq[BufferInfo] =
   for buf in e.buffers:
     result.add(
       BufferInfo(
+        number: buf.id.int,
         filePath: buf.filePath,
         isModified: buf.isModified,
         isActive: buf == currentBuffer,

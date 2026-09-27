@@ -34,11 +34,9 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
   case r.kind
   of hrJumpToBuffer:
     # Handle jump to buffer with position (Ctrl-o/Ctrl-i across files)
-    let targetIdx = e.bufferIndexById(r.jumpBufferId)
     let targetLine = r.jumpLine
     let targetCol = r.jumpColumn
-    if targetIdx >= 0:
-      e.switchToBufferByIndex(targetIdx)
+    if e.activateBuffer(r.jumpBufferId):
       # Update cursor position after buffer switch
       let buf = e.activeBuffer()
       if buf.len > 0:

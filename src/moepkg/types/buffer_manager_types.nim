@@ -30,7 +30,10 @@ export list_viewer_types
 
 type
   BufferEntry* = object ## Represents a buffer entry in the buffer manager list
-    index*: int # Index in the window list
+    number*: int
+      ## Stable buffer number (`BufferId`), what `:b N` takes and what the
+      ## manager's own select/delete act on. Deliberately not a list
+      ## position: the list is rebuilt after every deletion.
     name*: string # Buffer name (file path or "No Name")
     modified*: bool # Whether buffer has unsaved changes
     active*: bool # Whether this is the currently active buffer
@@ -40,6 +43,7 @@ type
     ## items (buffer entries)/selectedIndex/waitingForG are inherited.
 
   BufferInfo* = object ## Information about a buffer for initializing buffer manager
+    number*: int ## Stable buffer number (BufferId)
     filePath*: Option[string]
     isModified*: bool
     isActive*: bool

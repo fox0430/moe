@@ -34,17 +34,20 @@ proc newBufferManagerState*(): BufferManagerState =
 proc initBufferManagerEntries*(bufferInfos: seq[BufferInfo]): seq[BufferEntry] =
   ## Create buffer entries from buffer information
   result = @[]
-  for i, info in bufferInfos:
+  for info in bufferInfos:
     let name = if info.filePath.isSome: info.filePath.get else: "No Name"
     result.add(
       BufferEntry(
-        index: i, name: name, modified: info.isModified, active: info.isActive
+        number: info.number,
+        name: name,
+        modified: info.isModified,
+        active: info.isActive,
       )
     )
 
   # If no buffers, add a placeholder
   if result.len == 0:
-    result.add(BufferEntry(index: 0, name: "No Name", modified: false, active: true))
+    result.add(BufferEntry(number: 0, name: "No Name", modified: false, active: true))
 
 proc updateEntries*(state: BufferManagerState, bufferInfos: seq[BufferInfo]) =
   ## Update the buffer manager entries from buffer information
@@ -58,8 +61,8 @@ proc formatLine*(entry: BufferEntry): string =
   let
     modifiedMark = if entry.modified: "[+] " else: "    "
     activeMark = if entry.active: "* " else: "  "
-    indexStr = $entry.index & ": "
-  result = activeMark & indexStr & modifiedMark & entry.name
+    numberStr = $entry.number & ": "
+  result = activeMark & numberStr & modifiedMark & entry.name
 
 proc createBufferManagerTextBuffer*(state: BufferManagerState): TextBuffer =
   ## Create a TextBuffer from buffer manager entries for rendering via the normal view path
