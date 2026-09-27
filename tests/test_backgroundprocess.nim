@@ -205,12 +205,14 @@ suite "BackgroundProcess - readAllOutput":
     proc runTest(): Future[OutputReadResult] {.async.} =
       let bp = startBackgroundProcess(
         BackgroundProcessCommand(
-          cmd: "sh", args: @["-c", "echo first; sleep 5"], workingDir: getTempDir()
+          cmd: "sh",
+          # Outlives the cut by far, so the drain cannot reach EOF first.
+          args: @["-c", "echo first; sleep 30"],
+          workingDir: getTempDir(),
         )
       ).get
       let reader = bp.readAllOutput()
-      # Let the first line arrive, then cut the drain off before EOF.
-      await sleepAsync(100.milliseconds)
+      # Cut the drain off before EOF: what it has is a prefix of the output.
       reader.cancel()
       let output = await reader
       await bp.closeAsync()
@@ -421,15 +423,16 @@ suite "BackgroundProcess - waitForAsync":
       let bp = startBackgroundProcess(
         BackgroundProcessCommand(
           cmd: "sh",
-          args: @["-c", "echo first; sleep 0.3; echo second"],
+          # Outlives the cut by far: a process that ended first would make the
+          # wait succeed, and this test is about a read failing midway.
+          args: @["-c", "echo first; sleep 30"],
           workingDir: getTempDir(),
         )
       ).get
-      let waiter = bp.waitForAsync(5.seconds)
-      await sleepAsync(100.milliseconds)
-      # The next read raises, once the pending one returns.
+      # Cut the stream before the drain reads it, so the read raises rather
+      # than racing the process's own end.
       bp.process.stdoutStream().close()
-      return await waiter
+      return await bp.waitForAsync(5.seconds)
 
     let output = waitFor runTest()
     check output.isErr
