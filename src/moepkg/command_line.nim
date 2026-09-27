@@ -25,7 +25,8 @@
 ## Sub-modules:
 ##   - types:             CommandLineAction, ParsedCommand, ShellCommandEntry,
 ##                        CommandLineParser, CommandLineResult,
-##                        ArgumentRequiredActions, isNoArgumentAction
+##                        ArgumentRequiredActions, NoArgumentActions,
+##                        isNoArgumentAction
 ##   - substitute_parser: parseSubstituteCommand and extract* helpers
 ##   - parser:            newCommandLineParser, addAlias/removeAlias/
 ##                        clearAliases, parseCommandLine

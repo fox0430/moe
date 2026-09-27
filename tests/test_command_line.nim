@@ -759,6 +759,10 @@ suite "CommandLine - isNoArgumentAction":
   test "Unknown command returns false":
     check parser.isNoArgumentAction("unknown") == false
 
+  test "Every action is in exactly one argument set":
+    for action in CommandLineAction:
+      check (action in NoArgumentActions) != (action in ArgumentRequiredActions)
+
 suite "CommandLine - execute additional commands":
   setup:
     let parser = newCommandLineParser()
