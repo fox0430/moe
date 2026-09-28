@@ -27,7 +27,9 @@
 import std/[tables, options]
 
 import ../[types, modes, command_config]
-import ./registry
+import ./[registry, window_commands]
+
+export window_commands
 
 const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("move-left", "Move cursor left", Motion.Left),
@@ -70,6 +72,13 @@ const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("repeat-find-reverse", "Repeat last f/F/t/T reversed", Motion.RepeatFindReverse),
 ]
 
+func withWindowCommands(
+    commands: seq[tuple[name, desc, commandId: string]]
+): seq[tuple[name, desc, commandId: string]] =
+  result = commands
+  for c in WindowSecondKeyCommands:
+    result.add (c.name, c.desc, c.commandId)
+
 const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("undo", "Undo last change", "edit.undo"),
   ("redo", "Redo last undone change", "edit.redo"),
@@ -101,20 +110,6 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("save", "Save file", "file.save"),
   ("save-and-quit", "Save file and quit", "file.save.and.quit"),
   ("quit-force", "Quit without saving", "file.quit.force"),
-  ("close-window", "Close current window", "window.close"),
-  ("window-next", "Switch to next window", "window.next"),
-  ("window-prev", "Switch to the last accessed window", "window.prev"),
-  ("window-move-left", "Move to the window on the left", "window.move.left"),
-  ("window-move-down", "Move to the window below", "window.move.down"),
-  ("window-move-up", "Move to the window above", "window.move.up"),
-  ("window-move-right", "Move to the window on the right", "window.move.right"),
-  ("window-maximize-height", "Maximize window height", "window.maximize-height"),
-  ("window-increase-height", "Increase window height", "window.increase-height"),
-  ("window-decrease-height", "Decrease window height", "window.decrease-height"),
-  ("window-increase-width", "Increase window width", "window.increase-width"),
-  ("window-decrease-width", "Decrease window width", "window.decrease-width"),
-  ("window-equalize", "Equalize all window sizes", "window.equalize"),
-  ("window-swap", "Swap window with next window", "window.swap"),
   ("macro-record", "Start/stop macro recording", "macro.record"),
   ("file-open", "Open file (enter filer)", "file.open"),
   ("file-new", "Create new empty buffer", "file.new"),
@@ -191,27 +186,7 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
     "visual-paste-end", "Delete selection, paste, and leave cursor after pasted text",
     "visual.paste.end",
   ),
-]
-
-const WindowSecondKeyCommands*: seq[tuple[key, name: string]] = @[
-  ("h", "window-move-left"),
-  ("j", "window-move-down"),
-  ("k", "window-move-up"),
-  ("l", "window-move-right"),
-  ("w", "window-next"),
-  ("p", "window-prev"),
-  ("_", "window-maximize-height"),
-  ("+", "window-increase-height"),
-  ("-", "window-decrease-height"),
-  (">", "window-increase-width"),
-  ("<", "window-decrease-width"),
-  ("=", "window-equalize"),
-  ("x", "window-swap"),
-  ("c", "close-window"),
-]
-  ## Second key of a `C-w <key>` window command and the command name it fires.
-  ## Single source for `normal_bindings` (`C-w <key>` entries) and
-  ## `command_passthrough.windowSecondKeyToHandlerResult` (special-mode `C-w`).
+].withWindowCommands()
 
 func actionCommandId*(name: string): Option[string] =
   ## CommandId for an ActionCommands entry, or none when unknown.

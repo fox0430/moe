@@ -1905,6 +1905,22 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     check r2.kind == nmrPassthrough
     check r2.passthroughKind == ptPrevWindow
 
+  test "window-new (C-w n) returns ptNewWindow":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let cwKey = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
+    let r1 = handler.handleNormalModeKey(buf, state, viewport, cwKey)
+    check r1.kind == nmrHandled
+
+    let nKey = KeyCombo(isSpecial: false, char: "n")
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, nKey)
+    check r2.kind == nmrPassthrough
+    check r2.passthroughKind == ptNewWindow
+
   test "macro recording stops on recordStartKey":
     ## Per-key recording is captured in `handler.handleKeyCombo`; this test
     ## seeds `recordedKeys` and verifies that the Normal handler's stop-key

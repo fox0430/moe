@@ -333,8 +333,10 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   # Save current window state before splitting
   e.saveActiveWindowState()
 
-  let bufferResult =
-    e.windowManager.vsplitWithBuffer(e.activeBuffer, e.viewport, e.cursor, buffer)
+  let origin = e.splitOrigin()
+  let bufferResult = e.windowManager.vsplitWithBuffer(
+    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, buffer
+  )
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -399,8 +401,9 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   # Save current window state before splitting
   e.saveActiveWindowState()
 
+  let origin = e.splitOrigin()
   let bufferResult = e.windowManager.hsplitWithBuffer(
-    e.activeBuffer, e.viewport, e.cursor, e.multiStatusLine, buffer
+    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, e.multiStatusLine, buffer
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
