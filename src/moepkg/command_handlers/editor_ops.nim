@@ -98,6 +98,21 @@ proc quitDiscardsBuffersError*(e: Editor, exclude: TextBuffer): string =
   "No write since last change: " & $count & " other buffer" &
     (if count > 1: "s" else: "") & " modified (add ! to override)"
 
+proc closeLastWindowError*(e: Editor, visible: TextBuffer): string =
+  ## Error for closing the last window, which ends the session, while any
+  ## buffer is modified, or "" when none is. `visible` counts too: `C-w c`
+  ## reaches the close without the check `:q` makes.
+  let others = e.modifiedBufferCountExcept(visible)
+  const hint = " (use :q! to discard)"
+  if visible.isModified:
+    if others == 0:
+      return "No write since last change" & hint
+    return "No write since last change: " & $(others + 1) & " buffers modified" & hint
+  if others == 0:
+    return ""
+  "No write since last change: " & $others & " other buffer" &
+    (if others > 1: "s" else: "") & " modified" & hint
+
 proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
   ## Save and quit: return false on success, true on failure.
   if not r.forceQuitAfterSave:

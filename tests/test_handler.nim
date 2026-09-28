@@ -5039,6 +5039,86 @@ suite "Ctrl-w window commands in special modes":
     check e.state.mode == EditorMode.Filer
     check e.state.statusMessage.contains("No write since last change")
 
+  test "Ctrl-w c on the last window does not quit over the visible modified buffer":
+    let (e, path) = editorOnTempFile("moe_ctrlw_close_last_visible.txt")
+    defer:
+      removeFile(path)
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    check e.windowManager.windows.len == 1
+
+    e.sendWindowCommand("c")
+
+    check e.windowManager.windows.len == 1
+    check e.activeBuffer().isModified
+    check e.state.statusMessage == "No write since last change (use :q! to discard)"
+
+  test "Ctrl-w c on the last window counts the visible and the hidden modified buffers":
+    let (e, path) = editorOnTempFile("moe_ctrlw_close_last_both.txt")
+    let other = getTempDir() / "moe_ctrlw_close_last_both_other.txt"
+    writeFile(other, "other\n")
+    defer:
+      removeFile(path)
+      removeFile(other)
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    check e.activeBuffer().isModified
+    check e.editFile(other).isOk
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    check e.activeBuffer().isModified
+    check e.windowManager.windows.len == 1
+
+    e.sendWindowCommand("c")
+
+    check e.windowManager.windows.len == 1
+    check e.state.statusMessage ==
+      "No write since last change: 2 buffers modified (use :q! to discard)"
+
+  test "Ctrl-w c on the last window quits when nothing is modified":
+    let (e, path) = editorOnTempFile("moe_ctrlw_close_last_clean.txt")
+    defer:
+      removeFile(path)
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl}))
+    check not e.handleKeyCombo(KeyCombo(isSpecial: false, char: "c", modifiers: {}))
+
+  test "Forced close of the last window quits over a modified buffer":
+    let (e, path) = editorOnTempFile("moe_ctrlw_close_last_force.txt")
+    defer:
+      removeFile(path)
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    check not e.processResult(
+      HandlerResult(kind: hrCloseWindow, forceClose: true), e.activeBuffer()
+    )
+
+  test ":q! quits with a modified visible buffer":
+    let (e, path) = editorOnTempFile("moe_q_force_modified.txt")
+    defer:
+      removeFile(path)
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    check e.activeBuffer().isModified
+    e.state.enterCommandOverlay()
+    e.state.input.commandText = ":q!"
+
+    check not handleCommandModeEvent(e, makeEnterEvent())
+
+  test "Ctrl-w c closes a split on a modified buffer and keeps the buffer":
+    let (e, path) = editorOnTempFile("moe_ctrlw_close_split_a.txt")
+    let other = getTempDir() / "moe_ctrlw_close_split_b.txt"
+    writeFile(other, "other\n")
+    defer:
+      removeFile(path)
+      removeFile(other)
+    check e.vsplit().isOk
+    check e.editFile(other).isOk
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    let modifiedId = e.activeBuffer().id
+
+    e.sendWindowCommand("c")
+
+    check e.windowManager.windows.len == 1
+    check e.activeBuffer().id != modifiedId
+    let idx = e.bufferIndexById(modifiedId)
+    check idx >= 0
+    check e.buffers[idx].isModified
+
 suite "Ctrl-C in Terminal mode":
   proc fakeTerminalState(): TerminalState =
     TerminalState(
