@@ -64,7 +64,7 @@ proc buildTabText(buf: TextBuffer): string =
 
 proc renderTabLine*(
     buffers: seq[TextBuffer],
-    activeBuffer: TextBuffer,
+    current: Option[BufferId],
     mode: EditorMode,
     displayBuffer: var Buffer,
     tabLineY: int,
@@ -77,7 +77,9 @@ proc renderTabLine*(
   ##
   ## Parameters:
   ## - buffers: List of all open buffers to display as tabs
-  ## - activeBuffer: The currently active buffer (will be highlighted)
+  ## - current: The tab to highlight; none while the window shows something
+  ##   that is not a tab (a viewer's listing), as Vim marks no listed buffer
+  ##   current over an unlisted one
   ## - mode: Current editor mode
   ## - displayBuffer: The screen buffer to render to
   ## - tabLineY: Y coordinate for the tab line
@@ -99,7 +101,7 @@ proc renderTabLine*(
   # First, render all tabs (visible content)
   for buf in buffers:
     let
-      isActive = buf.id == activeBuffer.id
+      isActive = current == some(buf.id)
       style = if isActive: currentTabStyle else: tabStyle
       tabText = buildTabText(buf)
       tabWidth = displayWidth(tabText)
@@ -140,7 +142,7 @@ proc hitTestTabLine*(
 
 proc renderWindowTabLine*(
     buffers: seq[TextBuffer],
-    windowActiveBuffer: TextBuffer,
+    current: Option[BufferId],
     mode: EditorMode,
     displayBuffer: var Buffer,
     windowY: int,
@@ -150,11 +152,10 @@ proc renderWindowTabLine*(
     isActiveWindow: bool,
 ) =
   ## Render tab line for a specific window (split view)
-  ## The window's buffer will be highlighted as active
   ##
   ## Parameters:
   ## - buffers: List of all open buffers to display as tabs
-  ## - windowActiveBuffer: The buffer displayed in this window (will be highlighted)
+  ## - current: The window's tab to highlight (see `renderTabLine`)
   ## - mode: Current editor mode
   ## - displayBuffer: The screen buffer to render to
   ## - windowY: Y coordinate of the window (tab line will be at this position)
@@ -164,28 +165,6 @@ proc renderWindowTabLine*(
   ## - isActiveWindow: Whether this window is the active window
 
   renderTabLine(
-    buffers, windowActiveBuffer, mode, displayBuffer, windowY, windowX, windowWidth,
-    showTabLine, isActiveWindow,
-  )
-
-proc renderSingleViewTabLine*(
-    buffers: seq[TextBuffer],
-    activeBuffer: TextBuffer,
-    mode: EditorMode,
-    displayBuffer: var Buffer,
-    showTabLine: bool,
-) =
-  ## Render tab line for single view mode
-  ## Renders at y=0 across the full width
-  ##
-  ## Parameters:
-  ## - buffers: List of all open buffers to display as tabs
-  ## - activeBuffer: The currently active buffer (will be highlighted)
-  ## - mode: Current editor mode
-  ## - displayBuffer: The screen buffer to render to
-  ## - showTabLine: Whether the tab line should be shown
-
-  renderTabLine(
-    buffers, activeBuffer, mode, displayBuffer, displayBuffer.area.y,
-    displayBuffer.area.x, displayBuffer.area.width, showTabLine,
+    buffers, current, mode, displayBuffer, windowY, windowX, windowWidth, showTabLine,
+    isActiveWindow,
   )

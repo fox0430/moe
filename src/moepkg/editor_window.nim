@@ -31,10 +31,12 @@ import
   highlight_config,
   editor_window_layout,
   editor_window_tab,
+  editor_window_state,
   editor_lsp,
   git_cache,
   git_conflict,
   window_manager,
+  motion,
   buffer
 
 # Window state management procedures
@@ -61,7 +63,11 @@ proc syncActiveWindow*(e: Editor) =
   # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that
   # window-switch / split / close paths automatically refresh the Jump List
   # anchor without each call site having to remember to update it.
-  e.state.windowDisplay.currentBufferId = e.activeWindow.tabBufferId
+  # A viewer's positions are in its listing, which no buffer id resolves to, so
+  # a jump taken there cannot land in the tab it covers.
+  let win = e.activeWindow
+  e.state.windowDisplay.currentBufferId =
+    if win.viewerEntry.isSome: win.buffer.id else: win.tabBufferId
 
 proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   ## Calculate and set screen cursor position for the active window
@@ -193,6 +199,98 @@ proc loadSplitBuffer(e: Editor, path: string): Result[TextBuffer, string] =
   e.initLoadedBuffer(buf)
   ok(buf)
 
+proc viewerOrigin*(
+    e: Editor, entry: ViewerEntry, buf: TextBuffer, mode: EditorMode
+): tuple[cursor: BufferPosition, topLine: int] =
+  ## The view `entry` covered, moved inside `buf` for `mode`: `buf` may have
+  ## shrunk while the viewer was up.
+  let clamped = e.motionController.cursorManager.clampPosition(
+    CursorPosition(x: entry.originCursor.column, y: entry.originCursor.line),
+    buf,
+    some(mode),
+  )
+  (
+    BufferPosition(line: clamped.y, column: clamped.x),
+    min(entry.originTopLine, max(0, buf.len - 1)),
+  )
+
+proc splitOrigin(e: Editor): tuple[viewport: ViewPort, cursor: BufferPosition] =
+  ## Where a split of the active window's tab starts. A viewer's own position
+  ## is in its listing; the tab's is in its entry while the window is still on
+  ## that tab.
+  let win = e.activeWindow
+  if win.viewerEntry.isNone:
+    return (win.viewport, win.cursor)
+  let entry = win.viewerEntry.get
+  if win.tabBufferId != entry.returnTab:
+    return (ViewPort(), BufferPosition(line: 0, column: 0))
+  # A split starts in Normal.
+  let origin = e.viewerOrigin(entry, e.tabBuffer(win), EditorMode.Normal)
+  (ViewPort(topLine: origin.topLine, leftColumn: entry.originLeftColumn), origin.cursor)
+
+const MinNewWindowWidth* = 10
+  ## Minimum width (in columns) required when spawning a new split window.
+
+proc sidebarTarget*(e: Editor): int =
+  ## Index of the window the FileTree sidebar opens files in: the one last
+  ## focused, as Vim's `wincmd p`, else the first other one; -1 when the sidebar
+  ## is alone.
+  let prev = e.windowManager.previousWindow
+  if prev != nil and not prev.isSidebar:
+    let i = e.windowManager.windows.find(prev)
+    if i >= 0:
+      return i
+  for i, win in e.windowManager.windows:
+    if not win.isSidebar:
+      return i
+  -1
+
+proc roomBesideSidebar*(e: Editor): Result[int, string] =
+  ## Width of a window opened right of the active sidebar. Measured to the
+  ## screen's edge: a resize shrinks a lone sidebar to its fixed width.
+  let side = e.activeWindow
+  if not side.isSidebar:
+    return err("active window is not the FileTree sidebar")
+  let width =
+    e.screenSize.width - side.viewport.x - side.fixedWidth.get - WindowSeparatorWidth
+  if width < MinNewWindowWidth:
+    return err("not enough space to open a new window")
+  ok(width)
+
+proc openWindowBesideSidebar*(e: Editor, buf: TextBuffer): Result[void, string] =
+  ## Open a window on `buf`'s tab right of the active sidebar and focus it, for
+  ## when the sidebar is the only window.
+  let width = ?e.roomBesideSidebar()
+  let side = e.activeWindow
+  let sideWidth = side.fixedWidth.get
+  side.viewport.width = sideWidth
+  e.windowManager.deactivateAllWindows()
+
+  let win = EditorWindow(
+    viewBuffer: buf,
+    tabBufferId: buf.id,
+    bufferIds: @[buf.id],
+    viewport: ViewPort(
+      width: width,
+      height: side.viewport.height,
+      x: side.viewport.x + sideWidth + WindowSeparatorWidth,
+      y: side.viewport.y,
+    ),
+    active: true,
+    mode: EditorMode.Normal,
+    wrapCountCache: WrapCountCache(),
+  )
+  let sideIndex = e.windowManager.activeWindowIndex
+  e.windowManager.previousWindow = side
+  e.windowManager.windows.insert(win, sideIndex + 1)
+  e.windowManager.activeWindowIndex = sideIndex + 1
+
+  e.syncActiveWindow()
+  e.deriveTabMode(win)
+  e.state.previousMode = EditorMode.Normal
+  e.setActiveWindowScreenCursor(win)
+  ok()
+
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a vertical split window, showing `filename` when one is given and
   ## the current buffer otherwise.
@@ -206,8 +304,9 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   e.saveActiveWindowState()
 
   # Split the tab, not a mode-swapped view.
+  let origin = e.splitOrigin()
   let bufferResult =
-    e.windowManager.vsplit(e.tabBuffer(e.activeWindow), e.viewport, e.cursor)
+    e.windowManager.vsplit(e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor)
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -270,8 +369,9 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   e.saveActiveWindowState()
 
   # Split the tab, not a mode-swapped view.
+  let origin = e.splitOrigin()
   let bufferResult = e.windowManager.hsplit(
-    e.tabBuffer(e.activeWindow), e.viewport, e.cursor, e.multiStatusLine
+    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, e.multiStatusLine
   )
   if bufferResult.isErr:
     return err(bufferResult.error)

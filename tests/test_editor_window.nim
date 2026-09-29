@@ -543,7 +543,6 @@ suite "enew - additional cases":
     # including `:`, errors out with "Filer state not initialized".
     let e = createTestEditor()
     let listing = newTextBuffer("listing")
-    e.activeWindow.saveOriginalBuffer()
     e.activeWindow.setView(listing)
     e.activeWindow.modeState =
       ModeState(kind: mskFiler, filer: newFilerState(getTempDir()))
@@ -554,38 +553,31 @@ suite "enew - additional cases":
     check e.activeWindow.modeState.kind == mskNone
     check e.activeWindow.mode == EditorMode.Normal
 
-  test "drops a viewer entry owned by a suspended mode":
+  test "drops the backup manager's viewer entry from under a diff":
     # Regression: `clearModeState` only drops the entry belonging to the mode
-    # it tears down, so the DiffViewer-over-BackupManager overlay left the
+    # it tears down, so the DiffViewer over the BackupManager left the
     # BackupManager's entry on a window that now holds an empty buffer. A
     # later `:backup` then focused this window and showed nothing, and the
     # next in-place viewer replayed the stale entry's undo.
     let e = createTestEditor()
-    let listing = newTextBuffer("backups")
-    e.activeWindow.saveOriginalBuffer()
-    e.activeWindow.setView(listing)
+    e.activeWindow.setView(newTextBuffer("diff"))
     e.activeWindow.viewerEntry = some(
       ViewerEntry(
         mode: EditorMode.BackupManager,
         placement: vpInPlace,
         returnMode: EditorMode.Normal,
-        bufferId: listing.id,
       )
     )
-    e.activeWindow.modeState =
-      ModeState(kind: mskBackupManager, backupManager: newBackupManagerState())
-    e.setMode(EditorMode.BackupManager)
-    # The diff overlays the listing: mode and modeState are suspended, the
-    # viewer entry stays behind on the window.
-    e.activeWindow.suspendMode()
-    e.activeWindow.modeState =
-      ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
+    e.activeWindow.modeState = ModeState(
+      kind: mskDiffViewer,
+      diffViewer: newDiffViewerState(),
+      diffReturn: newBackupManagerState(),
+    )
     e.setMode(EditorMode.DiffViewer)
 
     let result = e.enew()
     check result.isOk
     check e.activeWindow.viewerEntry.isNone
-    check e.activeWindow.suspendedMode.isNone
     check e.activeWindow.modeState.kind == mskNone
     check e.activeWindow.mode == EditorMode.Normal
 

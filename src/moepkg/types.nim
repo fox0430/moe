@@ -103,7 +103,6 @@ type
   WindowDisplayState* = object
     ## Editor-wide window/buffer display & redraw bookkeeping.
     currentBufferId*: BufferId # BufferId of the current buffer (for jump list)
-    debugBuffer*: TextBuffer # Debug buffer for auto-refresh (nil if none)
     viewportReservedLines*: int = -1
       ## Reserved rows outside text area. `-1` is unset; `0` is valid. Use `motionReservedLines`.
     scrollAnimation*: ScrollAnimation # Current scroll animation state
@@ -161,7 +160,11 @@ type
     of mskBookmarkManager: bookmarkManager*: BookmarkManagerState
     of mskBackupManager: backupManager*: BackupManagerState
     of mskRecoveryManager: recoveryManager*: RecoveryManagerState
-    of mskDiffViewer: diffViewer*: DiffViewerState
+    of mskDiffViewer:
+      diffViewer*: DiffViewerState
+      diffReturn*: BackupManagerState
+        ## The backup manager the diff was opened from, resumed on quit. Held
+        ## here so tearing down the window's state drops it too.
     of mskDebug: debug*: DebugViewerState
     of mskConfig: config*: ConfigModeState
     of mskReferences: references*: ReferencesViewerState
@@ -178,8 +181,9 @@ type
           ## keys go to the session. Leaving the tab drops it with the variant.
 
   ViewerPlacement* = enum
-    ## Placement chosen on viewer entry and reversed on exit.
-    vpInPlace ## Swapped the active window's buffer for the listing
+    ## Where a viewer's listing goes. Either way it covers a window's tab in
+    ## place; a split opens that window for it and closes it on exit.
+    vpInPlace ## Covered the active window
     vpVSplit
     vpHSplit
 
@@ -191,25 +195,15 @@ type
     returnMode*: EditorMode
     returnState*: ModeState
       ## `returnMode`'s variant (a Terminal session, a FileTree), taken with it
-      ## so the two resume as one unit.
+      ## so the two resume as one unit. The view is derived from it and the
+      ## tab on exit, so no buffer the viewer covered is kept here.
     returnTab*: BufferId
-      ## The tab an in-place viewer covered. What it covered resumes only while
-      ## the window is still on it.
-    bufferId*: BufferId
-      ## Listing buffer to delete on exit. Refreshing viewers swap in an
-      ## unregistered buffer, so this must not key off the window.
+      ## The tab the viewer covered. What it covered resumes only while the
+      ## window is still on it.
     originCursor*: BufferPosition
     originTopLine*: int
     originTopWrapOffset*: int
     originLeftColumn*: int
-
-  SuspendedMode* = object
-    ## The (mode, modeState) a window held before a transient overlay (the
-    ## DiffViewer opened from the BackupManager) replaced it. Captured on
-    ## overlay entry and restored as one consistent unit on exit, so the
-    ## restored mode and its variant can never desync.
-    mode*: EditorMode
-    modeState*: ModeState
 
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport
@@ -230,16 +224,8 @@ type
     preferredColumn*: int # Preferred column for vertical movement (vim's $ behavior)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
     modeState*: ModeState # Per-window mode-specific state (variant)
-    originalBuffer*: TextBuffer
-      # Saved buffer for modes that swap the window buffer (Filer,
-      # BufferManager, ...). Set on mode entry, restored and cleared on exit.
-      # Undo data only — identity is `tabBufferId`.
     viewerEntry*: Option[ViewerEntry]
       # Set by enterViewerMode, consumed by leaveViewerMode.
-    suspendedMode*: Option[SuspendedMode]
-      # The mode suspended by a transient overlay opened from another mode
-      # (DiffViewer opened from BackupManager). Set on overlay entry, restored
-      # and cleared on overlay exit. `none` when no overlay is active.
     fixedWidth*: Option[int] # Fixed width for sidebar windows (skips equalize)
     wrapCountCache*: WrapCountCache
 

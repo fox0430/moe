@@ -17,34 +17,19 @@
 #                                                                              #
 #[############################################################################]#
 
-## Per-window mode state lifecycle.
-## Restores the original buffer for modes that swap the window buffer
-## (Filer, BufferManager, ...) and resets the `modeState` variant on
-## `EditorWindow` back to `mskNone`.
-##
-## `originalBuffer` is undo data only; the tab a window is on is
-## `EditorWindow.tabBufferId`.
+## Per-window mode state lifecycle: resets the `modeState` variant on
+## `EditorWindow` back to `mskNone`. Viewers keep what they covered in their
+## `ViewerEntry`, and the DiffViewer the backup manager it came from in its
+## own variant.
 
 import std/options
 
-import types/editor_types, message_log
+import types/editor_types
 
-proc saveOriginalBuffer*(win: EditorWindow) =
-  ## Stash the current buffer as `originalBuffer` so a later mode exit can
-  ## restore it. Logs a warning if a previous save is still live — that
-  ## means an upstream mode transition skipped `clearModeState` and the
-  ## prior original is about to be lost.
-  if win.originalBuffer != nil:
-    addMessageLog(
-      "saveOriginalBuffer: overwriting existing originalBuffer " & "(modeState.kind=" &
-        $win.modeState.kind & ") — missing clearModeState upstream?"
-    )
-  win.originalBuffer = win.buffer
-
-proc restoreOriginalBufferUnchecked(win: EditorWindow) =
-  if win.originalBuffer != nil:
-    win.setView(win.originalBuffer)
-    win.originalBuffer = nil
+proc isSidebar*(win: EditorWindow): bool =
+  ## The FileTree pane. Its width is what marks it: a mode switch over it
+  ## changes `mode` and `modeState` but not that. It has no tab of its own.
+  win.fixedWidth.isSome
 
 proc takeViewerEntry*(win: EditorWindow): Option[ViewerEntry] =
   ## Remove and return the viewer entry, whichever mode it belongs to.
@@ -59,66 +44,30 @@ proc takeViewerEntry*(win: EditorWindow, mode: EditorMode): Option[ViewerEntry] 
   else:
     none(ViewerEntry)
 
-proc suspendMode*(win: EditorWindow) =
-  ## Suspend the current (mode, modeState) so a transient overlay (the
-  ## DiffViewer opened from the BackupManager) can resume it on exit. The
-  ## mode-state analogue of `saveOriginalBuffer`; mode and variant are
-  ## captured together so they can never be resumed out of sync.
-  if win.suspendedMode.isSome:
-    addMessageLog(
-      "suspendMode: overwriting existing suspension (mode=" & $win.suspendedMode.get.mode &
-        ") — missing resumeMode upstream?"
-    )
-  win.suspendedMode = some(SuspendedMode(mode: win.mode, modeState: win.modeState))
-
-proc takeSuspendedMode*(win: EditorWindow): Option[SuspendedMode] =
-  ## Remove and return the suspended (mode, modeState), if any. The overlay
-  ## exit path takes the suspension *before* `clearModeState` (which clears any
-  ## leftover suspension as part of teardown) and re-installs it afterward, so
-  ## the live-variant reset can never strand a suspension on the window.
-  result = win.suspendedMode
-  win.suspendedMode = none(SuspendedMode)
-
-proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
-  ## Restore the saved buffer (if any) for modes that replace the window
-  ## buffer on entry. No-op when the live ModeState variant does not match
-  ## `mode` (defensive against unmatched callers) or when no buffer was
-  ## saved (modes that open their own split window — Help, LogViewer,
-  ## BackupManager, Debug, Config, RecentFile, FileTree).
-  if win.modeState.kind != modeStateKind(mode):
-    return
-  win.restoreOriginalBufferUnchecked()
-
-proc clearModeState*(win: EditorWindow, mode: EditorMode) =
-  ## Restore the original buffer (if any), run mode-specific cleanup, reset the
-  ## `modeState` variant back to `mskNone`, and drop any overlay suspension.
-  ## All side effects are gated on the variant actually matching `mode`, so
-  ## callers that clear an unrelated mode do not disturb whatever state happens
-  ## to be live on the window.
+proc dropModeState*(win: EditorWindow) =
+  ## Run the live variant's cleanup and reset it back to `mskNone`, whatever
+  ## mode the window claims: a mode switch over a viewer flips only the mode.
+  ## For the owner of the window's state (a viewer ending, a tab switch).
   ##
   ## Not for Terminal: `mskTerminal`'s PTY is owned by `Editor.terminalStates`,
   ## not by the window. Terminal teardown must go through `closeTerminalBuffer`
-  ## so the map entry, PTY, and window state are dropped together — calling
-  ## this proc with `EditorMode.Terminal` would strand the `terminalStates`
-  ## entry (and, before it was removed, would have double-freed the PTY).
+  ## so the map entry, PTY, and window state are dropped together.
+  if win.modeState.kind == mskFileTree:
+    win.fixedWidth = none(int)
+  win.modeState = ModeState(kind: mskNone)
+
+proc clearModeState*(win: EditorWindow, mode: EditorMode) =
+  ## `dropModeState` plus `mode`'s viewer entry, gated on the variant actually
+  ## matching `mode` so callers that clear an unrelated mode do not disturb
+  ## whatever state happens to be live on the window. Not for Terminal either
+  ## (see `dropModeState`).
   if win.modeState.kind != modeStateKind(mode):
     return
 
-  win.restoreOriginalBufferUnchecked()
+  win.dropModeState()
 
-  if win.modeState.kind == mskFileTree:
-    win.fixedWidth = none(int)
-
-  win.modeState = ModeState(kind: mskNone)
-
-  # Drop any overlay suspension belonging to the mode being torn down so it
-  # can't strand on the window. The overlay-exit path takes the suspension
-  # beforehand (takeSuspendedMode), so this only fires for non-resume exits
-  # (window close, buffer/tab switch, ...).
-  win.suspendedMode = none(SuspendedMode)
-
-  # Same for the viewer entry — leaveViewerMode takes it beforehand. Gated on
-  # ownership so an overlay teardown (DiffViewer over BackupManager) does not
-  # strip the suspended viewer's record.
+  # Drop the viewer entry too; leaveViewerMode takes it beforehand. Gated on
+  # ownership so a DiffViewer teardown does not strip the backup manager's
+  # record.
   if win.viewerEntry.isSome and win.viewerEntry.get.mode == mode:
     win.viewerEntry = none(ViewerEntry)

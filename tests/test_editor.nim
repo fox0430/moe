@@ -1940,11 +1940,7 @@ suite "Editor - openFileInNewRightWindow":
     ## Set up an editor where the FileTree is the only window.
     let config = newEditorConfig()
     let e = newEditor(config, newValidationResult())
-
-    let viewportHeight = termHeight - steadyBottomAreaHeight()
-    let win = e.activeWindow
-    win.viewport.width = termWidth
-    win.viewport.height = viewportHeight
+    e.applyStartUpScreenSize(termWidth, termHeight)
 
     # Open fileTree (creates [FileTree, editor])
     e.toggleFileTree(none(string), e.activeBuffer())
@@ -2520,6 +2516,7 @@ suite "Editor - BackupManager <-> DiffViewer round-trip":
     win.cursor.column = 3
     win.viewport.topLine = 40
     win.viewport.leftColumn = 5
+    let diffView = win.buffer
 
     # Quit the diff: must land back on the *same* backup manager state. The
     # selectedIndex carried by that state is what places the cursor at render
@@ -2531,54 +2528,9 @@ suite "Editor - BackupManager <-> DiffViewer round-trip":
     check win.mode == EditorMode.BackupManager
     check win.modeState.kind == mskBackupManager
     check win.modeState.backupManager == bkState
-    check win.suspendedMode.isNone
+    check win.buffer != diffView
     check win.viewport.topLine == 0
     check win.viewport.leftColumn == 0
-
-  test "hrDiffViewerQuit resumes any suspended mode, not just BackupManager":
-    # Manually set up a DiffViewer overlay that suspended Filer mode.
-    let e = createTestEditor()
-    let win = e.activeWindow
-    let origBuf = newTextBuffer("original")
-    let diffBuf = newTextBuffer("diff")
-    win.setView(diffBuf)
-    win.originalBuffer = origBuf
-    win.mode = EditorMode.DiffViewer
-    e.setMode(EditorMode.DiffViewer)
-    win.modeState = ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
-    win.suspendedMode = some(
-      SuspendedMode(
-        mode: EditorMode.Filer,
-        modeState: ModeState(kind: mskFiler, filer: FilerState()),
-      )
-    )
-
-    discard e.processResult(HandlerResult(kind: hrDiffViewerQuit), e.activeBuffer())
-
-    check win.mode == EditorMode.Filer
-    check win.modeState.kind == mskFiler
-    check win.buffer == origBuf
-    check win.suspendedMode.isNone
-
-  test "hrDiffViewerQuit falls back to Normal when nothing was suspended":
-    # When no mode was suspended, the quit must land on a stateless mode whose
-    # modeState is mskNone. It must NOT borrow `previousMode` (a stateful mode
-    # there would leave mode and modeState desynced, reviving the original bug).
-    let e = createTestEditor()
-    let win = e.activeWindow
-    let diffBuf = newTextBuffer("diff")
-    win.setTab(diffBuf)
-    win.mode = EditorMode.DiffViewer
-    e.setMode(EditorMode.DiffViewer)
-    win.modeState = ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
-    win.suspendedMode = none(SuspendedMode)
-    e.state.previousMode = EditorMode.BufferManager
-
-    discard e.processResult(HandlerResult(kind: hrDiffViewerQuit), e.activeBuffer())
-
-    check win.mode == EditorMode.Normal
-    check win.modeState.kind == mskNone
-    check win.suspendedMode.isNone
 
 suite "Editor - BackupManager restore failure":
   test "refuses a clean restore when the current file cannot be snapshotted":
@@ -3544,7 +3496,7 @@ suite "processResult - viewer split window teardown":
   ## hrHelpViewerQuit and its siblings share one teardown path; these cover it
   ## through processResult rather than re-implementing the sequence.
 
-  test "hrHelpViewerQuit closes the split window and discards its buffer":
+  test "hrHelpViewerQuit closes the split window and leaves no buffer behind":
     let e = createTestEditor()
     let origBuffer = e.activeBuffer
     let initialBufferCount = e.buffers.len
@@ -3565,32 +3517,19 @@ suite "processResult - viewer split window teardown":
     check e.activeWindow.mode == EditorMode.Normal
     check e.activeWindow.buffer == origBuffer
 
-  test "hrHelpViewerQuit on a single window swaps in a usable buffer":
+  test "hrHelpViewerQuit on the only window returns to the covered buffer":
     let e = createTestEditor()
+    let origBuffer = e.activeBuffer
     let initialBufferCount = e.buffers.len
 
-    # Hand-built single-window Help: a split placement recorded on the only
-    # window, so the teardown has nothing to fall back to.
-    let helpState = newHelpViewerState()
-    let activeWin = e.activeWindow
-    e.setMode(EditorMode.Help)
-    activeWin.mode = EditorMode.Help
-    activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
-    activeWin.viewerEntry = some(
-      ViewerEntry(
-        mode: EditorMode.Help,
-        placement: vpHSplit,
-        returnMode: EditorMode.Normal,
-        bufferId: activeWin.buffer.id,
-      )
-    )
+    discard e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer)
+    discard e.processResult(HandlerResult(kind: hrOnlyWindow), e.activeBuffer)
+    require e.windowManager.windows.len == 1
 
     check e.processResult(HandlerResult(kind: hrHelpViewerQuit), e.activeBuffer) == true
 
-    # No window to fall back to, so the listing is replaced with a fresh empty
-    # buffer instead of leaving the user stranded on a read-only view.
     check e.windowManager.windows.len == 1
     check e.buffers.len == initialBufferCount
     check e.state.mode == EditorMode.Normal
     check e.activeWindow.modeState.kind == mskNone
-    check e.activeWindow.buffer != nil
+    check e.activeWindow.buffer == origBuffer

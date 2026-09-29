@@ -376,8 +376,7 @@ suite "Terminal tabs - Terminal-Normal browses an unregistered snapshot":
 
 suite "Terminal tabs - a session takes the window over":
   test "The viewer bookkeeping the window was carrying is dropped":
-    # A viewer entry would undo its placement on top of the live session, and a
-    # suspended mode would resume into it.
+    # A viewer entry would undo its placement on top of the live session.
     let e = createTestEditor()
     let originBuf = e.activeWindow.buffer
     e.activeWindow.viewerEntry = some(
@@ -385,15 +384,12 @@ suite "Terminal tabs - a session takes the window over":
         mode: EditorMode.BufferManager,
         placement: vpInPlace,
         returnMode: EditorMode.Normal,
-        bufferId: originBuf.id,
       )
     )
-    e.activeWindow.suspendMode()
 
     discard registerFakeTerminal(e, "bash")
 
     check e.activeWindow.viewerEntry.isNone
-    check e.activeWindow.suspendedMode.isNone
     check e.activeWindow.mode == EditorMode.Terminal
 
 suite "Terminal tabs - the view is derived from the sub-mode":
@@ -458,34 +454,34 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.buffer == termBuf
 
-  test "closing the only Terminal tab drops viewerEntry and suspendedMode":
+  test "closing the only Terminal tab under a viewer leaves it on the survivor":
+    # Only-tab case: after prune the window has no sibling to switch to. The
+    # viewer stays up, and leaving it must not resume the deleted tab.
     let e = createTestEditor()
+    let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
     let termId = termBuf.id
-    # Only-tab case: after prune the window has no sibling to switch to.
     e.activeWindow.bufferIds = @[termId]
-    e.activeWindow.setTab(termBuf)
-    e.activeWindow.viewerEntry = some(
-      ViewerEntry(
-        mode: EditorMode.BufferManager,
-        placement: vpInPlace,
-        returnMode: EditorMode.Normal,
-        bufferId: termId,
-        originCursor: BufferPosition(line: 0, column: 0),
-        originTopLine: 0,
-        originTopWrapOffset: 0,
-        originLeftColumn: 0,
-      )
+    let bmState = newBufferManagerState()
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
     )
-    e.activeWindow.suspendedMode =
-      some(SuspendedMode(mode: EditorMode.Filer, modeState: ModeState(kind: mskNone)))
+    require e.activeWindow.tabBufferId == termId
 
     e.closeTerminalBuffer(termId)
 
-    check e.activeWindow.viewerEntry.isNone
-    check e.activeWindow.suspendedMode.isNone
-    check e.state.mode == EditorMode.Normal
     check not e.terminalStates.hasKey(termId)
+    check e.activeWindow.viewerEntry.isSome
+    check e.activeWindow.tabBufferId == textBuf.id
+
+    e.leaveViewerMode(EditorMode.BufferManager)
+
+    check e.activeWindow.viewerEntry.isNone
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.buffer == textBuf
 
   test "BufferManager delete of a Terminal tears down the PTY session":
     let e = createTestEditor()
@@ -817,32 +813,66 @@ suite "Terminal tabs - the window's mode follows its tab":
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.buffer == termBuf
 
-  test ":bd in a split viewer onto a Terminal successor ends the viewer":
+  test ":bd in a split viewer over a session closes it and keeps the session":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let origWin = e.activeWindow
+    let windowCount = e.windowManager.windows.len
+    discard e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer)
+    let helpWin = e.activeWindow
+    require helpWin.viewerEntry.isSome
+    require helpWin.tabBufferId == termBuf.id
+
+    check e.deleteCurrentBuffer().isOk
+
+    check helpWin notin e.windowManager.windows
+    check e.windowManager.windows.len == windowCount
+    check e.terminalStates.hasKey(termBuf.id)
+    checkOnSession(e, origWin, termBuf)
+
+  test ":bd in a split viewer as the only window resumes the session":
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")
     discard e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer)
     let helpWin = e.activeWindow
-    require helpWin.viewerEntry.isSome
+    discard e.processResult(HandlerResult(kind: hrOnlyWindow), e.activeBuffer)
+    require e.windowManager.windows.len == 1
 
     check e.deleteCurrentBuffer().isOk
 
-    check helpWin.viewerEntry.isNone
-    checkOnSession(e, helpWin, termBuf)
-    check not e.focusExistingViewerWindow(EditorMode.Help)
-
-    # A leftover split entry would close this window instead.
-    let windowCount = e.windowManager.windows.len
-    let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
-    discard e.enterViewerMode(
-      EditorMode.BufferManager,
-      ModeState(kind: mskBufferManager, bufferManager: bmState),
-      bmState.createBufferManagerTextBuffer(),
-      vpInPlace,
-    )
-
-    check e.windowManager.windows.len == windowCount
     check e.activeWindow == helpWin
+    check helpWin.viewerEntry.isNone
+    check e.terminalStates.hasKey(termBuf.id)
+    checkOnSession(e, helpWin, termBuf)
+
+  test "a split viewer whose only tab is the session survives the shell exiting":
+    # The split lists only the session, so its close takes the no-tabs path.
+    for viewerActive in [false, true]:
+      let e = createTestEditor()
+      let termBuf = registerFakeTerminal(e, "bash")
+      let origWin = e.activeWindow
+      discard e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer)
+      let helpWin = e.activeWindow
+      let listing = helpWin.buffer
+      require helpWin.bufferIds == @[termBuf.id]
+      if not viewerActive:
+        e.focusWindow(origWin)
+
+      e.closeTerminalBuffer(termBuf.id)
+
+      check helpWin.viewerEntry.isSome
+      check helpWin.mode == EditorMode.Help
+      check helpWin.buffer == listing
+      check helpWin.tabBufferId != termBuf.id
+      check helpWin.tabBufferId in helpWin.bufferIds
+
+      # Ending it as the only window lands on the tab it was moved to.
+      e.focusWindow(helpWin)
+      discard e.processResult(HandlerResult(kind: hrOnlyWindow), e.activeBuffer)
+      discard e.processResult(HandlerResult(kind: hrHelpViewerQuit), e.activeBuffer)
+      check helpWin.viewerEntry.isNone
+      check helpWin.mode == EditorMode.Normal
+      check helpWin.buffer == e.tabBuffer(helpWin)
 
 suite "Terminal tabs - browsing belongs to the window":
   test "browsing in one window leaves another window on the session live":
@@ -1240,24 +1270,23 @@ suite "WindowView - what a window draws":
     require win.tabBufferId == textBuf.id
     check not e.isShowingTab(win, textBuf.id)
 
-  test "a split viewer presents its own listing tab":
+  test "a split viewer covers its tab as an in-place one does":
     let e = createTestEditor()
-    discard registerFakeTerminal(e, "bash")
+    let termBuf = registerFakeTerminal(e, "bash")
     let bmState = newBufferManagerState()
     bmState.updateEntries(e.getBufferInfos())
-    let listing = bmState.createBufferManagerTextBuffer()
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
-      listing,
+      bmState.createBufferManagerTextBuffer(),
       vpVSplit,
     )
     let win = e.activeWindow
     require win.viewerEntry.isSome
     require win.viewerEntry.get.placement == vpVSplit
-    # The listing is the split window's tab, so it is what that window shows.
-    check e.isShowingTab(win, listing.id)
-    check not e.isShowingTab(win, e.buffers[0].id)
+    # The split is on the session's tab, but the listing is what is on screen.
+    require win.tabBufferId == termBuf.id
+    check not e.isShowingTab(win, termBuf.id)
 
   test "a live session is its tab, and so is its scrollback snapshot":
     let e = createTestEditor()
@@ -1301,25 +1330,24 @@ suite "WindowView - what a window draws":
     check e.activeWindow.tabBufferId == termBuf.id
     check e.activeWindow.modeState.kind != mskFileTree
 
-  test "moveWindowToTab onto a split viewer's own tab leaves the viewer up":
+  test "moveWindowToTab onto the tab a split viewer covers ends the viewer":
     let e = createTestEditor()
-    discard registerFakeTerminal(e, "bash")
+    let termBuf = registerFakeTerminal(e, "bash")
     let bmState = newBufferManagerState()
     bmState.updateEntries(e.getBufferInfos())
-    let listing = bmState.createBufferManagerTextBuffer()
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
-      listing,
+      bmState.createBufferManagerTextBuffer(),
       vpVSplit,
     )
     let win = e.activeWindow
     require win.viewerEntry.isSome
-    require win.viewerEntry.get.bufferId == listing.id
+    require win.tabBufferId == termBuf.id
 
-    # Re-selecting the window's own tab must not tear the viewer down.
-    check not e.moveWindowToTab(win, listing)
+    # The session is covered, not drawn, so the move runs as it would in place.
+    check e.moveWindowToTab(win, termBuf)
 
-    check e.activeWindow.viewerEntry.isSome
-    check e.activeWindow.viewerEntry.get.placement == vpVSplit
-    check e.activeWindow.modeState.kind == mskBufferManager
+    check win.viewerEntry.isNone
+    check win.mode == EditorMode.Terminal
+    check win.modeState.kind == mskTerminal

@@ -1115,7 +1115,7 @@ suite "updateForFrame - split buffer re-parse budget":
     var debugBuf = newTextBuffer()
     debugBuf.readOnly = true
     e.activeWindow.setView(debugBuf)
-    e.state.windowDisplay.debugBuffer = debugBuf
+    e.activeWindow.modeState = ModeState(kind: mskDebug, debug: DebugViewerState())
     e.state.timing.lastDebugUpdate = getMonoTime()
     e.state.timing.debugUpdateInterval = 60 * 60 * 1000
     check e.activeBuffer() == debugBuf

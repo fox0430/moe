@@ -195,17 +195,15 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     e.leaveViewerMode(EditorMode.RecoveryManager)
     return true
   of hrDiffViewerQuit:
-    # Resume the suspended mode; clearModeState already restored the swapped
-    # buffer, and syncSelectionCursor re-places the cursor on the next render.
+    # Resume the backup manager the diff came from; syncSelectionCursor
+    # re-places the cursor on the next render.
     let activeWin = e.activeWindow
-    let suspended = activeWin.takeSuspendedMode()
-    activeWin.clearModeState(EditorMode.DiffViewer)
-    if suspended.isSome:
-      activeWin.mode = suspended.get.mode
-      activeWin.modeState = suspended.get.modeState
-    else:
-      # Nothing was suspended: fall back to Normal so mode/modeState match.
-      activeWin.mode = EditorMode.Normal
+    if activeWin.modeState.kind != mskDiffViewer:
+      return true
+    let bkState = activeWin.modeState.diffReturn
+    activeWin.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+    activeWin.setView(bkState.createBackupManagerTextBuffer())
+    e.setMode(EditorMode.BackupManager)
     # Reset to the top so a stale off-screen viewport can't survive the swap.
     activeWin.cursor = BufferPosition(line: 0, column: 0)
     activeWin.viewport.resetViewportTop()
@@ -240,14 +238,16 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
             "Diff: word highlight off"
     return true
   of hrEnterFiler:
+    # Resolve startPath in the window the filer will cover, not the sidebar.
+    let routed = e.leaveSidebar()
+    if routed.isErr:
+      e.state.statusMessage = "Failed to open filer: " & routed.error
+      return true
     # Tear down the viewer so startPath resolves from the underlying file.
     e.closeLiveViewer()
-    let win = e.activeWindow
-    let originBuffer =
-      if win.viewerEntry.isSome and win.originalBuffer != nil:
-        win.originalBuffer
-      else:
-        win.buffer
+    # The tab, not the view: the focus may land on a neighbour still running a
+    # viewer, whose covered buffer may since have been deleted.
+    let originBuffer = e.tabBuffer(e.activeWindow)
     let startPath =
       if r.enterFilerPath.isSome:
         r.enterFilerPath.get
@@ -327,30 +327,36 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
   of hrEnterBufferManager:
     let bmState = newBufferManagerState()
     bmState.updateEntries(e.getBufferInfos())
-    discard e.enterViewerMode(
+    let entered = e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
       bmState.createBufferManagerTextBuffer(),
       vpInPlace,
     )
+    if entered.isErr:
+      e.state.statusMessage = "Failed to open buffer manager: " & entered.error
     return true
   of hrEnterBookmarkManager:
     let bkmState = newBookmarkManagerState()
     bkmState.updateEntries(e.buffers)
-    discard e.enterViewerMode(
+    let entered = e.enterViewerMode(
       EditorMode.BookmarkManager,
       ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState),
       bkmState.createBookmarkManagerTextBuffer(),
       vpInPlace,
     )
+    if entered.isErr:
+      e.state.statusMessage = "Failed to open bookmark manager: " & entered.error
     return true
   of hrEnterBackupManager:
     if e.focusExistingViewerWindow(EditorMode.BackupManager):
       return true
     let baseBackupDir = e.config.autoBackup.getBaseBackupDir()
+    # The tab, not the view: typed inside a viewer, it is about the file below.
+    let source = e.commandTab()
     var sourceFilePath = ""
-    if e.activeBuffer.filePath.isSome:
-      sourceFilePath = absolutePath(e.activeBuffer.filePath.get)
+    if source.filePath.isSome:
+      sourceFilePath = absolutePath(source.filePath.get)
     let bkState = initBackupManagerState(baseBackupDir, sourceFilePath)
     let enterResult = e.enterViewerMode(
       EditorMode.BackupManager,
@@ -371,9 +377,11 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     let fromRecoveryViewer =
       e.activeWindow.viewerEntry.isSome and
       e.activeWindow.viewerEntry.get.mode == EditorMode.RecoveryManager
+    # The tab, not the view, as for `:backup`.
+    let source = e.commandTab()
     var sourceFilePath = ""
-    if not r.allRecovery and not fromRecoveryViewer and e.activeBuffer.filePath.isSome:
-      sourceFilePath = absolutePath(e.activeBuffer.filePath.get)
+    if not r.allRecovery and not fromRecoveryViewer and source.filePath.isSome:
+      sourceFilePath = absolutePath(source.filePath.get)
     if e.focusExistingViewerWindow(EditorMode.RecoveryManager):
       # Re-scope, not just focus: focusing alone would make `:recover!` a
       # no-op, leaving the unnamed copies it exists to reach unreachable.

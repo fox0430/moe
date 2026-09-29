@@ -57,7 +57,7 @@ proc getBufferInfos*(e: Editor): seq[BufferInfo] =
   ## Extract buffer information from the buffer list for BufferManager.
   ## Active means the window's tab, not what an overlay viewer shows.
   result = @[]
-  let activeTabId = e.activeWindow.tabBufferId
+  let activeTabId = e.commandTab().id
   for buf in e.buffers:
     result.add(buf.toBufferInfo(buf.id == activeTabId))
 
@@ -297,12 +297,14 @@ proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffe
 
 proc enterFilerInActiveWindow*(e: Editor, path: string) =
   let filerState = newFilerState(path)
-  discard e.enterViewerMode(
+  let entered = e.enterViewerMode(
     EditorMode.Filer,
     ModeState(kind: mskFiler, filer: filerState),
     filerState.createFilerTextBuffer(e.config.filer.showIcons),
     vpInPlace,
   )
+  if entered.isErr:
+    e.state.statusMessage = "Failed to open filer: " & entered.error
 
 proc focusFileTreeWindow*(e: Editor): bool =
   ## Focus the fileTree sidebar, or return false if none is open. Unlike

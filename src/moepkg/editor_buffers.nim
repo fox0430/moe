@@ -33,6 +33,7 @@ import
   editor_mode,
   editor_window,
   editor_window_tab,
+  viewer_mode,
   git_cache,
   editorconfig_helper,
   highlight,
@@ -209,40 +210,25 @@ when not defined(moe.embedded):
             fu.tabIdx
           else:
             w.bufferIds.len - 1
-        # Overlay owns the view: retab only. Leaving the viewer sees the tab
-        # moved and starts over on `target`.
-        if w.viewerEntry.isSome:
-          let targetId = w.bufferIds[newIdx]
-          let targetOpt = e.bufferById(targetId)
-          if targetOpt.isSome:
-            w.retabTo(targetOpt.get)
-          else:
-            w.bufferIds.delete(newIdx)
-        elif fu.winIdx == prevActive:
+        let target = e.bufferById(w.bufferIds[newIdx])
+        if w.viewerEntry.isNone and fu.winIdx == prevActive:
           # Shared transition finalizes Insert and reapplies forceInsertMode.
           e.switchToWindowBuffer(newIdx)
+        elif target.isSome:
+          e.moveTabUnder(w, target.get)
         else:
-          # Shared transition skips the Insert session a background window lacks.
-          let targetId = w.bufferIds[newIdx]
-          let targetOpt = e.bufferById(targetId)
-          if targetOpt.isSome:
-            discard e.moveWindowToTab(w, targetOpt.get)
-          else:
-            w.bufferIds.delete(newIdx)
+          w.bufferIds.delete(newIdx)
       else:
         # No tabs left: adopt a global survivor, else a blank.
-        if e.buffers.len > 0:
-          let survivor = e.buffers[min(max(bidx, 0), e.buffers.len - 1)]
-          if survivor.id notin w.bufferIds:
-            w.bufferIds.add(survivor.id)
-          # Shared transition drops overlay undo and re-derives the mode.
-          discard e.moveWindowToTab(w, survivor)
-        else:
-          let blank = newTextBuffer("")
-          e.addBuffer(blank)
-          if blank.id notin w.bufferIds:
-            w.bufferIds.add(blank.id)
-          discard e.moveWindowToTab(w, blank)
+        let target =
+          if e.buffers.len > 0:
+            e.buffers[min(max(bidx, 0), e.buffers.len - 1)]
+          else:
+            let blank = newTextBuffer("")
+            e.addBuffer(blank)
+            blank
+        w.bufferIds.add(target.id)
+        e.moveTabUnder(w, target)
     # Re-anchor to the active window and refresh its cursor.
     e.syncActiveWindow()
     e.setActiveWindowScreenCursor(e.activeWindow)
@@ -429,38 +415,14 @@ proc removeBufferAt*(e: Editor, idx: int): TextBuffer =
 proc redirectWindowsFromBuffer*(
     e: Editor, deletedBuffer: TextBuffer, newBuf: TextBuffer
 ) =
-  ## Move every window that was parked on `deletedBuffer`, or showing it, to
-  ## `newBuf`; register `newBuf.id` in those windows' tab lists. Tab and view
-  ## move separately: a window running a viewer only moves its tab.
+  ## Move every window parked on `deletedBuffer` to `newBuf` and register
+  ## `newBuf.id` in its tab list. Only tabs move: a view other than the tab is
+  ## never a registered buffer (a listing, a Terminal snapshot), and a viewer
+  ## derives the tab's view again when it ends.
   for window in e.windowManager.windows:
-    let
-      tabDeleted = window.tabBufferId == deletedBuffer.id
-      viewDeleted = window.buffer == deletedBuffer
-    if not tabDeleted and not viewDeleted:
+    if window.tabBufferId != deletedBuffer.id:
       continue
-
-    # Undo data pointing at the deleted buffer would restore an unreachable one.
-    if window.originalBuffer == deletedBuffer:
-      window.originalBuffer = newBuf
-
-    if viewDeleted:
-      # Only the active window uses the global Insert tracking; non-active
-      # windows keep their own mode in `window.mode`.
-      if window == e.activeWindow:
-        e.finalizeInsertSessionForBufferSwitch(window.buffer)
-      # A window whose view is deleted while it sits on another tab keeps that
-      # tab: only the view moves.
-      if tabDeleted:
-        # Viewer ends with its listing; otherwise use the shared transition.
-        discard e.moveWindowToTab(window, newBuf)
-      else:
-        window.setView(newBuf)
-      window.cursor = BufferPosition(line: 0, column: 0)
-      window.viewport.resetViewportTop()
-      window.viewport.leftColumn = 0
-    else:
-      window.retabTo(newBuf)
-
+    e.moveTabUnder(window, newBuf)
     if newBuf.id notin window.bufferIds:
       window.bufferIds.add(newBuf.id)
 
@@ -555,13 +517,18 @@ proc deleteCurrentBuffer*(e: Editor, force: bool = false): Result[(), string] =
   ##
   ## Refusals come back as `err`, not a status message, so an embedding caller
   ## can tell a refusal from a deletion.
-  let target = e.tabBuffer(e.activeWindow)
+  ##
+  ## A split viewer's window exists for its listing, so there the listing goes
+  ## and the window with it, as Vim closes the windows on a deleted buffer; the
+  ## last window instead goes back to the tab it covered.
+  let win = e.activeWindow
+  if win.viewerEntry.isSome and win.viewerEntry.get.placement != vpInPlace:
+    e.closeLiveViewer()
+    return ok(())
+  let target = e.tabBuffer(win)
   if force:
     return e.deleteBufferById(target.id)
   e.closeBuffer(target.id)
-
-const MinNewWindowWidth* = 10
-  ## Minimum width (in columns) required when spawning a new split window.
 
 proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
   ## Return the buffer for `path`: reuse an existing one from the global
@@ -633,63 +600,12 @@ proc openFileInNewRightWindow*(e: Editor, path: string): Result[(), string] =
   ## Create a new editor window to the right of the currently active FileTree
   ## window and load the given file into it. Used when FileTree is the only
   ## window open.
-
-  let ftWindow = e.activeWindow
-  if ftWindow.mode != EditorMode.FileTree:
-    return err("active window is not FileTree")
-
-  let
-    origWidth = ftWindow.viewport.width
-    origX = ftWindow.viewport.x
-    origY = ftWindow.viewport.y
-    origHeight = ftWindow.viewport.height
-    ftWidth =
-      if ftWindow.fixedWidth.isSome:
-        ftWindow.fixedWidth.get
-      else:
-        origWidth div 2
-    newWidth = origWidth - ftWidth - WindowSeparatorWidth
-
-  if newWidth < MinNewWindowWidth:
-    return err("not enough space to open a new window")
-
+  # Check the room first so a refused open loads nothing.
+  discard ?e.roomBesideSidebar()
   let bufferResult = e.loadOrCreateBuffer(path)
   if bufferResult.isErr:
     return err(bufferResult.error)
-  let newBuffer = bufferResult.get
-
-  # Shrink FileTree back to its fixed width and place the new window on its right
-  ftWindow.viewport.width = ftWidth
-
-  let newX = origX + ftWidth + WindowSeparatorWidth
-
-  e.windowManager.deactivateAllWindows()
-
-  let newWindow = EditorWindow(
-    viewBuffer: newBuffer,
-    tabBufferId: newBuffer.id,
-    bufferIds: @[newBuffer.id],
-    viewport: ViewPort(
-      topLine: 0, leftColumn: 0, width: newWidth, height: origHeight, x: newX, y: origY
-    ),
-    cursor: BufferPosition(line: 0, column: 0),
-    active: true,
-    mode: EditorMode.Normal,
-    wrapCountCache: WrapCountCache(),
-  )
-
-  let ftIndex = e.windowManager.activeWindowIndex
-  e.windowManager.previousWindow = e.windowManager.windows[ftIndex]
-  e.windowManager.windows.insert(newWindow, ftIndex + 1)
-  e.windowManager.activeWindowIndex = ftIndex + 1
-
-  e.syncActiveWindow()
-  e.setMode(EditorMode.Normal)
-  e.state.previousMode = EditorMode.Normal
-
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.setActiveWindowScreenCursor(e.activeWindow)
-
+  ?e.openWindowBesideSidebar(bufferResult.get)
   ok(())
 
 proc openAdditionalStartupFiles*(

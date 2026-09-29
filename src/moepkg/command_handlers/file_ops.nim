@@ -77,13 +77,9 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
         logInfo("filer", "Opened file in hsplit: " & r.filerFilePath)
     return true
   of hrFileTreeOpenFile:
-    # Open in the first non-FileTree window; if the FileTree is alone,
-    # open the file in a new window to its right.
-    var targetWinIdx = -1
-    for i, win in e.windowManager.windows:
-      if win.mode != EditorMode.FileTree:
-        targetWinIdx = i
-        break
+    # Open in the window the sidebar serves; if it is alone, in a new window
+    # to its right.
+    let targetWinIdx = e.sidebarTarget()
 
     # Reveal the opened file in the file tree
     for win in e.windowManager.windows:
@@ -178,6 +174,11 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
         e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
     return true
   of hrVSplit:
+    if r.vsplitFilename.isNone and e.activeWindow.viewerEntry.isSome:
+      let splitResult = e.splitViewer(vpVSplit)
+      if splitResult.isErr:
+        e.state.statusMessage = "Error: " & splitResult.error
+      return true
     let expandedVsplit =
       if r.vsplitFilename.isSome:
         some(expandTilde(r.vsplitFilename.get))
@@ -201,6 +202,11 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
       e.enterFilerInActiveWindow(filerPath.get)
     return true
   of hrHSplit:
+    if r.hsplitFilename.isNone and e.activeWindow.viewerEntry.isSome:
+      let splitResult = e.splitViewer(vpHSplit)
+      if splitResult.isErr:
+        e.state.statusMessage = "Error: " & splitResult.error
+      return true
     let expandedHsplit =
       if r.hsplitFilename.isSome:
         some(expandTilde(r.hsplitFilename.get))

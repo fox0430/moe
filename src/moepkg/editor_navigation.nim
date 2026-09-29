@@ -292,12 +292,16 @@ proc handleLspLocations*(
     # Enter References mode
     let refState = newReferencesViewerState(items, title)
     refState.openWindowOnJump = openWindow
-    discard e.enterViewerMode(
+    let entered = e.enterViewerMode(
       EditorMode.References,
       ModeState(kind: mskReferences, references: refState),
       refState.createReferencesTextBuffer(),
       vpInPlace,
     )
+    if entered.isErr:
+      e.state.statusMessage =
+        "Failed to open " & title.toLowerAscii() & ": " & entered.error
+      return false
     e.state.statusMessage = $items.len & " " & title.toLowerAscii() & " found"
     return true
 
