@@ -403,7 +403,11 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
 
   let origin = e.splitOrigin()
   let bufferResult = e.windowManager.hsplitWithBuffer(
-    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, e.multiStatusLine, buffer
+    e.tabBuffer(e.activeWindow),
+    origin.viewport,
+    origin.cursor,
+    e.multiStatusLine,
+    buffer,
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
