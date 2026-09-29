@@ -127,14 +127,12 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
       e.state.statusMessage = "Failed to open debug: " & enterResult.error
     else:
       e.state.statusMessage = "Debug info (auto-refresh)"
-      e.state.windowDisplay.debugBuffer = debugBuffer
       e.state.timing.lastDebugUpdate = getMonoTime()
       if e.state.timing.debugUpdateInterval == 0:
         e.state.timing.debugUpdateInterval = 500
     return true
   of hrDebugViewerQuit:
     e.leaveViewerMode(EditorMode.Debug)
-    e.state.windowDisplay.debugBuffer = nil
     return true
   else:
     return true # Not the debug kind; caller misrouted (defensive)

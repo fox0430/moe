@@ -24,7 +24,8 @@
 ## exit replays it.
 ##
 ## Not covered: Terminal (owned by `Editor.terminalStates`), FileTree (toggled
-## sidebar) and DiffViewer (uses `suspendMode`).
+## sidebar) and DiffViewer (opened over the backup manager, which it holds in
+## its own variant).
 
 import std/options
 
@@ -34,61 +35,74 @@ import
   types/editor_types,
   editor_window,
   editor_window_state,
-  editor_buffers,
   editor_window_tab,
-  git_cache,
   buffer,
   window_manager
 
-proc closeViewerSplit(e: Editor, entry: ViewerEntry) =
-  ## Discard the scratch buffer and close the split. When it is the only window,
-  ## open an empty buffer instead so the user is not stranded on a read-only
-  ## listing. The buffer id comes from the entry because refreshing viewers
-  ## (log, backup, debug) may have swapped in an unregistered buffer.
-  let singleWindow = e.windowManager.windows.len <= 1
-  let idx = e.bufferIndexById(entry.bufferId)
-  if idx >= 0:
-    e.state.git.evictGitCacheForBuffer(e.buffers[idx])
-    e.deleteBufferAt(idx)
-    e.pruneBufferIdFromAllWindows(entry.bufferId)
-  if singleWindow:
-    discard e.enew()
+proc mainWindowCount(e: Editor): int =
+  for win in e.windowManager.windows:
+    if not win.isSidebar:
+      inc result
+
+proc tabBesideLoneSidebar(e: Editor): Option[TextBuffer] =
+  ## What a window opened beside a lone sidebar shows: the last opened buffer.
+  if e.buffers.len > 0:
+    some(e.buffers[^1])
   else:
-    discard e.closeWindow()
+    none(TextBuffer)
+
+proc commandTab*(e: Editor): TextBuffer =
+  ## The tab a command typed in the active window is about. The FileTree
+  ## sidebar has none; from it, the tab of the window `leaveSidebar` goes to.
+  let win = e.activeWindow
+  if not win.isSidebar:
+    return e.tabBuffer(win)
+  let target = e.sidebarTarget()
+  if target >= 0:
+    return e.tabBuffer(e.windowManager.windows[target])
+  e.tabBesideLoneSidebar().get(e.tabBuffer(win))
+
+proc leaveSidebar*(e: Editor): Result[bool, string] =
+  ## A viewer covers a tab, which the FileTree sidebar does not have. From the
+  ## sidebar, move to the window it opens files in, or open one beside it when
+  ## it is alone; true when it opened one. No-op elsewhere.
+  if not e.activeWindow.isSidebar:
+    return ok(false)
+  let target = e.sidebarTarget()
+  if target >= 0:
+    e.windowManager.activateWindow(target)
+    e.syncActiveWindow()
+    return ok(false)
+  let tab = e.tabBesideLoneSidebar()
+  if tab.isNone:
+    return err("no buffer to open a window on")
+  ?e.openWindowBesideSidebar(tab.get)
+  ok(true)
 
 proc resetViewerViewport(win: EditorWindow) =
   win.cursor = BufferPosition(line: 0, column: 0)
   win.viewport.resetViewportTop()
   win.viewport.leftColumn = 0
 
-proc restoreViewerPosition(win: EditorWindow, entry: ViewerEntry) =
-  ## Clamped since the buffer may have shrunk (external reload, `:e!` from
-  ## inside the viewer).
-  let lastLine = max(0, win.buffer.len - 1)
-  let line = min(entry.originCursor.line, lastLine)
-  let lineLen =
-    if win.buffer.len > 0:
-      win.buffer.getLine(line).charLen
-    else:
-      0
-  win.cursor =
-    BufferPosition(line: line, column: min(entry.originCursor.column, lineLen))
-  win.viewport.restoreViewportTop(
-    min(entry.originTopLine, lastLine), entry.originTopWrapOffset
-  )
+proc restoreViewerPosition(e: Editor, win: EditorWindow, entry: ViewerEntry) =
+  ## Clamped for the resumed mode since the buffer may have shrunk (external
+  ## reload, `:e!` from inside the viewer).
+  let origin = e.viewerOrigin(entry, win.buffer, e.state.mode)
+  win.cursor = origin.cursor
+  win.viewport.restoreViewportTop(origin.topLine, entry.originTopWrapOffset)
   win.viewport.leftColumn = entry.originLeftColumn
 
 proc resumeCoveredMode(
     e: Editor, win: EditorWindow, entry: ViewerEntry, textMode: Option[EditorMode]
 ) =
-  ## Put back the (mode, modeState) the viewer covered, then its position. Once
-  ## the tab has moved (`:bd`, the shell exiting, a split's window reused by
-  ## `enew`) nothing is left to put back, so derive from the new tab instead.
-  if entry.placement != vpInPlace or win.tabBufferId != entry.returnTab:
-    win.setView(e.tabBuffer(win))
+  ## Put back the (mode, modeState) the viewer covered, the view they show, then
+  ## its position. Once the tab has moved (`:bd`, the shell exiting) nothing is
+  ## left to put back, so derive from the new tab instead.
+  if win.tabBufferId != entry.returnTab:
     win.modeState = ModeState(kind: mskNone)
     e.setMode(EditorMode.Normal)
     e.deriveTabMode(win)
+    e.syncTabView(win)
     win.resetViewerViewport()
     return
 
@@ -99,22 +113,25 @@ proc resumeCoveredMode(
     else:
       entry.returnMode
   )
-  when not defined(moe.embedded):
-    # The restored state decides the Terminal view, not `originalBuffer`.
-    e.syncTerminalView(win)
-  win.restoreViewerPosition(entry)
+  e.syncTabView(win)
+  e.restoreViewerPosition(win, entry)
 
 proc undoViewer(
     e: Editor, win: EditorWindow, entry: ViewerEntry, textMode: Option[EditorMode]
 ) =
-  ## Shared exit once the entry is taken. A split placement closes its window;
-  ## the covered mode resumes only if the window survived — a closed split
-  ## leaves a neighbour that was never in the viewer mode.
-  win.clearModeState(entry.mode)
-  if entry.placement != vpInPlace:
-    e.closeViewerSplit(entry)
+  ## Shared exit once the entry is taken. A split placement closes the window it
+  ## opened unless it is the last one; the covered mode resumes only if the
+  ## window survived — a closed split leaves a neighbour that was never in the
+  ## viewer mode.
+  # The window's state is the viewer's while its entry is live, the DiffViewer
+  # opened over it included.
+  win.dropModeState()
+  if entry.placement != vpInPlace and e.mainWindowCount() > 1:
+    discard e.closeWindow()
   if e.activeWindow == win:
     e.resumeCoveredMode(win, entry, textMode)
+    # The view is the tab's again.
+    e.syncActiveWindow()
 
 proc closeLiveViewer*(e: Editor) =
   ## Tear down whichever viewer is live in the active window (no-op if none)
@@ -132,11 +149,19 @@ proc enterViewerMode*(
     buffer: TextBuffer,
     placement: ViewerPlacement,
 ): Result[void, string] =
-  ## Show `buffer` as `mode`'s listing. `vpInPlace` swaps the active window's
-  ## buffer and snapshots the displaced cursor; splits open a new window.
-  ## Re-entering the same mode (CallHierarchy incoming/outgoing) keeps the
-  ## original snapshot; a *different* in-place viewer is torn down first.
-  ## Fails only when a split cannot be created.
+  ## Show `buffer` as `mode`'s listing over the active window's tab, snapshotting
+  ## the displaced cursor. A split placement first opens a window on the same
+  ## tab, as `:split` does, and covers that one. The listing is never registered
+  ## as a buffer. Re-entering the same mode (CallHierarchy incoming/outgoing)
+  ## keeps the original snapshot; a *different* in-place viewer is torn down
+  ## first. From the FileTree sidebar, it goes to a main window
+  ## (`leaveSidebar`). Fails only when no window can be made for it.
+  var placement = placement
+  if ?e.leaveSidebar():
+    # That window is new already: cover it rather than split it again.
+    placement = vpInPlace
+  let originMode = e.state.mode
+  var reentering = false
   if placement == vpInPlace:
     # Peel any foreign viewer off the active window first. A split-placed
     # teardown may shift focus to a survivor also running a viewer, so loop.
@@ -146,56 +171,111 @@ proc enterViewerMode*(
         break
       if active.viewerEntry.get.mode == mode and
           active.modeState.kind == modeStateKind(mode):
+        reentering = true
         break
       e.closeLiveViewer()
+  else:
+    let splitResult =
+      if placement == vpVSplit:
+        e.vsplit()
+      else:
+        e.hsplit()
+    if splitResult.isErr:
+      return err(splitResult.error)
 
-    let win = e.activeWindow
-    let reentering =
-      win.viewerEntry.isSome and win.viewerEntry.get.mode == mode and
-      win.modeState.kind == modeStateKind(mode)
-    if not reentering:
-      win.viewerEntry = some(
-        ViewerEntry(
-          mode: mode,
-          placement: vpInPlace,
-          returnMode: win.mode,
-          returnState: win.modeState,
-          returnTab: win.tabBufferId,
-          bufferId: buffer.id,
-          originCursor: win.cursor,
-          originTopLine: win.viewport.topLine,
-          originTopWrapOffset: win.viewport.topWrapOffset,
-          originLeftColumn: win.viewport.leftColumn,
-        )
-      )
-      win.saveOriginalBuffer()
-    e.state.previousMode = win.viewerEntry.get.returnMode
-    win.setView(buffer)
-    win.resetViewerViewport()
-    win.modeState = modeState
-    e.setMode(mode)
-    return ok()
-
-  # Capture returnMode before the split — the new window starts in Normal.
-  let returnMode = e.state.mode
-  let splitResult =
-    if placement == vpVSplit:
-      e.vsplitWithBuffer(buffer)
-    else:
-      e.hsplitWithBuffer(buffer)
-  if splitResult.isErr:
-    return err(splitResult.error)
-
-  e.state.previousMode = returnMode
   let win = e.activeWindow
-  win.viewerEntry = some(
-    ViewerEntry(
-      mode: mode, placement: placement, returnMode: returnMode, bufferId: buffer.id
+  if not reentering:
+    win.viewerEntry = some(
+      ViewerEntry(
+        mode: mode,
+        placement: placement,
+        returnMode: win.mode,
+        returnState: win.modeState,
+        returnTab: win.tabBufferId,
+        originCursor: win.cursor,
+        originTopLine: win.viewport.topLine,
+        originTopWrapOffset: win.viewport.topWrapOffset,
+        originLeftColumn: win.viewport.leftColumn,
+      )
     )
-  )
+  # A split starts in its tab's mode; what the user left is the origin's.
+  e.state.previousMode =
+    if placement == vpInPlace: win.viewerEntry.get.returnMode else: originMode
+  win.setView(buffer)
   win.resetViewerViewport()
   win.modeState = modeState
   e.setMode(mode)
+  e.syncActiveWindow()
+  ok()
+
+proc splitCopy[T: ref](x: T): T =
+  if x != nil:
+    new(result)
+    result[] = x[]
+
+proc splitCopy(s: ModeState): ModeState =
+  ## Another window's own copy of a viewer's state: Vim gives each window on a
+  ## buffer its own cursor.
+  case s.kind
+  of mskFiler:
+    ModeState(kind: mskFiler, filer: s.filer.splitCopy)
+  of mskLogViewer:
+    ModeState(kind: mskLogViewer, logViewer: s.logViewer.splitCopy)
+  of mskHelp:
+    ModeState(kind: mskHelp, help: s.help.splitCopy)
+  of mskBufferManager:
+    ModeState(kind: mskBufferManager, bufferManager: s.bufferManager.splitCopy)
+  of mskBookmarkManager:
+    ModeState(kind: mskBookmarkManager, bookmarkManager: s.bookmarkManager.splitCopy)
+  of mskBackupManager:
+    ModeState(kind: mskBackupManager, backupManager: s.backupManager.splitCopy)
+  of mskRecoveryManager:
+    ModeState(kind: mskRecoveryManager, recoveryManager: s.recoveryManager.splitCopy)
+  of mskDiffViewer:
+    ModeState(
+      kind: mskDiffViewer,
+      diffViewer: s.diffViewer.splitCopy,
+      diffReturn: s.diffReturn.splitCopy,
+    )
+  of mskDebug:
+    ModeState(kind: mskDebug, debug: s.debug.splitCopy)
+  of mskConfig:
+    ModeState(kind: mskConfig, config: s.config.splitCopy)
+  of mskReferences:
+    ModeState(kind: mskReferences, references: s.references.splitCopy)
+  of mskDocumentSymbol:
+    ModeState(kind: mskDocumentSymbol, documentSymbol: s.documentSymbol.splitCopy)
+  of mskCallHierarchy:
+    ModeState(kind: mskCallHierarchy, callHierarchy: s.callHierarchy.splitCopy)
+  of mskRecentFile:
+    ModeState(kind: mskRecentFile, recentFile: s.recentFile.splitCopy)
+  of mskNone, mskFileTree, mskTerminal:
+    # Not a viewer's state.
+    s
+
+proc splitViewer*(e: Editor, placement: ViewerPlacement): Result[void, string] =
+  ## `:split` / `:vsplit` in a viewer window: show the same viewer in a split
+  ## too, as Vim shows the window's buffer in both. The copy keeps its own
+  ## selection and position, and closing it closes the split.
+  let win = e.activeWindow
+  if win.viewerEntry.isNone:
+    return err("No viewer in the active window")
+  let
+    entryMode = win.viewerEntry.get.mode
+    mode = win.mode
+    state = win.modeState.splitCopy
+    cursor = win.cursor
+    topLine = win.viewport.topLine
+    topWrapOffset = win.viewport.topWrapOffset
+    leftColumn = win.viewport.leftColumn
+  ?e.enterViewerMode(entryMode, state, win.buffer, placement)
+  let copy = e.activeWindow
+  # A DiffViewer over its backup manager: the window is in the diff.
+  e.setMode(mode)
+  copy.cursor = cursor
+  copy.viewport.restoreViewportTop(topLine, topWrapOffset)
+  copy.viewport.leftColumn = leftColumn
+  e.syncActiveWindow()
   ok()
 
 proc focusExistingViewerWindow*(e: Editor, mode: EditorMode): bool =

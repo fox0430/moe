@@ -31,13 +31,13 @@
 import std/[unittest, os, options, json, importutils, tables]
 
 import pkg/results
-from std/strutils import contains, startsWith
+from std/strutils import contains
 
 import
   ../src/moepkg/[
     editor, config, config_loader, types, lsp_service, editor_navigation,
     editor_documentsymbol, editor_callhierarchy, window_manager, editor_window,
-    editor_window_state, editor_buffers, diff_viewer, message_log,
+    editor_window_state, editor_buffers, diff_viewer,
   ]
 import ../src/moepkg/command_handlers/[handler_result, result_processor]
 import ../src/moepkg/buffer/core
@@ -197,13 +197,13 @@ suite "Viewer round-trip - Filer":
       check win.mode == mode
       check win.modeState.kind == stateKind
       check win.buffer != origBuf
-      check win.originalBuffer == origBuf
+      check win.viewerEntry.get.returnTab == origBuf.id
 
       discard e.processResult(HandlerResult(kind: quitResult), e.activeBuffer())
       check win.mode == EditorMode.Normal
       check win.modeState.kind == mskNone
       check win.buffer == origBuf
-      check win.originalBuffer == nil
+      check win.viewerEntry.isNone
       check win.cursor.line == 5
       check win.viewport.leftColumn == 3
 
@@ -462,6 +462,7 @@ suite "Viewer round-trip - References":
     check win.buffer == origBuf
     check win.cursor.line == 3
     check e.state.jumpList.list.len > 0
+    check e.state.jumpList.list[^1].bufferId == origBuf.id
     check e.state.jumpList.list[^1].line == 6
     check e.state.jumpList.list[^1].column == 1
 
@@ -613,7 +614,7 @@ suite "Viewer round-trip - CallHierarchy":
     e.pollLspCallHierarchy()
     check win.modeState.kind == mskCallHierarchy
     check win.modeState.callHierarchy.viewKind == chvkOutgoing
-    check win.originalBuffer == origBuf
+    check win.viewerEntry.get.returnTab == origBuf.id
 
     discard e.processResult(HandlerResult(kind: hrCallHierarchyQuit), e.activeBuffer())
     check win.mode == EditorMode.Normal
@@ -838,7 +839,6 @@ suite "Viewer round-trip - split-window viewers":
     check e.windowManager.windows.len == windowsBefore + 1
     check e.state.mode == EditorMode.Debug
     check e.activeWindow.modeState.kind == mskDebug
-    check e.state.windowDisplay.debugBuffer == e.activeWindow.buffer
     check e.state.timing.debugUpdateInterval > 0
 
 suite "Viewer round-trip - FileTree":
@@ -901,7 +901,6 @@ suite "Viewer round-trip - nested entry":
     let win = e.activeWindow
     let origBuf = win.buffer
     e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
-    clearMessageLog()
 
     discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
     let filerBuf = win.buffer
@@ -909,7 +908,7 @@ suite "Viewer round-trip - nested entry":
 
     discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
     check win.modeState.kind == mskBufferManager
-    check win.originalBuffer == origBuf
+    check win.viewerEntry.get.returnTab == origBuf.id
 
     discard e.processResult(HandlerResult(kind: hrBufferManagerQuit), e.activeBuffer())
     check win.mode == EditorMode.Normal
@@ -920,9 +919,6 @@ suite "Viewer round-trip - nested entry":
     check win.cursor.column == 2
     check win.viewport.topLine == 4
     check win.viewport.leftColumn == 3
-
-    for m in getMessageLog():
-      check not m.startsWith("saveOriginalBuffer: overwriting existing originalBuffer")
 
   test "a split viewer opened from inside one leaves the origin window usable":
     # A split takes a *new* window, so the viewer live in the origin window is
@@ -1002,8 +998,8 @@ suite "Viewer round-trip - nested entry":
     check originWin.modeState.filer.currentPath == parentDir(path)
 
   test "hrEnterTerminal from an in-place viewer tears the viewer down first":
-    # Otherwise the stranded viewerEntry/originalBuffer leak into the next
-    # viewer entry as its origin, losing the file underneath.
+    # Otherwise the stranded viewerEntry leaks into the next viewer entry as
+    # its origin, losing the file underneath.
     let (e, path) = editorOnFile("moe_rt_terminal_over_filer.txt")
     defer:
       removeFile(path)
@@ -1013,21 +1009,19 @@ suite "Viewer round-trip - nested entry":
     discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
     check win.modeState.kind == mskFiler
     check win.viewerEntry.isSome
-    check win.originalBuffer == originBuf
+    check win.viewerEntry.get.returnTab == originBuf.id
 
     discard e.processResult(
       HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: "true"),
       e.activeBuffer(),
     )
     check win.viewerEntry.isNone
-    # nil if PTY failed, terminal buffer if it started — never the file.
-    check (win.originalBuffer == nil or win.originalBuffer != originBuf)
 
 suite "Viewer round-trip - teardown records":
   test "an overlay over a split viewer keeps that viewer's placement record":
-    # The DiffViewer suspends the BackupManager underneath it. Its own teardown
+    # The DiffViewer holds the BackupManager underneath it. Its own teardown
     # must not consume the backup manager's placement record, or the split can
-    # never be closed and its scratch buffer is orphaned.
+    # never be closed.
     let (e, path) = editorOnFile("moe_rt_overlay_record.txt")
     defer:
       removeFile(path)
@@ -1041,14 +1035,14 @@ suite "Viewer round-trip - teardown records":
     let viewerWin = e.activeWindow
     check viewerWin.viewerEntry.isSome
 
-    # Same overlay entry hrBackupManagerOpenDiff performs, without needing a
-    # real backup on disk.
-    viewerWin.saveOriginalBuffer()
-    viewerWin.suspendMode()
+    # Same entry hrBackupManagerOpenDiff performs, without needing a real
+    # backup on disk.
     viewerWin.setView(newTextBuffer("diff"))
-    viewerWin.modeState =
-      ModeState(kind: mskDiffViewer, diffViewer: initDiffViewerState(path, path))
-    viewerWin.mode = EditorMode.DiffViewer
+    viewerWin.modeState = ModeState(
+      kind: mskDiffViewer,
+      diffViewer: initDiffViewerState(path, path),
+      diffReturn: viewerWin.modeState.backupManager,
+    )
     e.setMode(EditorMode.DiffViewer)
 
     discard e.processResult(HandlerResult(kind: hrDiffViewerQuit), e.activeBuffer())
@@ -1061,9 +1055,7 @@ suite "Viewer round-trip - teardown records":
     check e.activeWindow.buffer == origBuf
     check e.buffers.len == buffersBefore
 
-  test "a regenerated listing does not orphan the buffer the split registered":
-    # Refreshing swaps in a buffer that was never registered in Editor.buffers.
-    # Exit must delete the one entry recorded on the way in.
+  test "a split viewer registers no buffer, even across a regenerated listing":
     let (e, path) = editorOnFile("moe_rt_refresh_orphan.txt")
     defer:
       removeFile(path)
@@ -1072,14 +1064,14 @@ suite "Viewer round-trip - teardown records":
 
     discard e.processResult(HandlerResult(kind: hrEnterLogViewer), e.activeBuffer())
     let scratchId = e.activeWindow.buffer.id
-    check e.bufferById(scratchId).isSome
+    check e.bufferById(scratchId).isNone
+    check e.buffers.len == buffersBefore
 
     discard e.processResult(HandlerResult(kind: hrLogViewerRefresh), e.activeBuffer())
     check e.activeWindow.buffer.id != scratchId
 
     discard e.processResult(HandlerResult(kind: hrLogViewerQuit), e.activeBuffer())
     check e.windowManager.windows.len == windowsBefore
-    check e.bufferById(scratchId).isNone
     check e.buffers.len == buffersBefore
 
   test "hrDebugViewerQuit closes the debug split":

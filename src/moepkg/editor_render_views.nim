@@ -365,18 +365,17 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
           buffersToShow.add(bufOpt.get)
       if buffersToShow.len == 0:
         buffersToShow = @[window.buffer]
-      # A swapped-in view (Terminal-Normal's snapshot, Filer's listing) is
-      # unregistered, so the tab to mark current is not `window.buffer`.
+      # A swapped-in view (Terminal-Normal's snapshot) is unregistered, so the
+      # tab to mark current is not `window.buffer`. A viewer's window shows no
+      # tab at all, so none is current.
+      let current =
+        if window.viewerEntry.isSome:
+          none(BufferId)
+        else:
+          some(e.tabBuffer(window).id)
       renderWindowTabLine(
-        buffersToShow,
-        e.tabBuffer(window),
-        window.mode,
-        buffer,
-        window.viewport.y,
-        window.viewport.x,
-        window.viewport.width,
-        e.showTabLine,
-        layout.isActiveWindow,
+        buffersToShow, current, window.mode, buffer, window.viewport.y,
+        window.viewport.x, window.viewport.width, e.showTabLine, layout.isActiveWindow,
       )
 
     # Render based on mode - some special modes support per-window rendering.

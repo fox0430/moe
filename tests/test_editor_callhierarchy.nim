@@ -212,7 +212,7 @@ suite "editor_callhierarchy - overlay guard":
     check not e.state.lspCache.pending.hasKey(lrfCallHierarchyIncoming)
 
 suite "editor_callhierarchy - enterCallHierarchyMode":
-  test "Fresh entry saves originalBuffer and previousMode":
+  test "Fresh entry records the covered tab and previousMode":
     let e = createTestEditor()
     let startMode = e.state.mode
     let items = @[makeCallHierarchyItem("foo", "file:///test.nim", 0, 0)]
@@ -223,23 +223,22 @@ suite "editor_callhierarchy - enterCallHierarchyMode":
     check e.activeWindow.modeState.kind == mskCallHierarchy
     check e.activeWindow.modeState.callHierarchy.viewKind == chvkIncoming
     check e.state.previousMode == startMode
-    check e.activeWindow.originalBuffer != nil
+    check e.activeWindow.viewerEntry.get.returnTab == e.activeWindow.tabBufferId
     check e.state.statusMessage == "1 incoming call found"
 
-  test "Switching Incoming -> Outgoing preserves originalBuffer and previousMode":
+  test "Switching Incoming -> Outgoing preserves the covered view and previousMode":
     let e = createTestEditor()
     let startMode = e.state.mode
     let items = @[makeCallHierarchyItem("foo", "file:///test.nim", 0, 0)]
 
     e.enterCallHierarchyMode(items, chvkIncoming)
-    let savedOriginal = e.activeWindow.originalBuffer
 
     e.enterCallHierarchyMode(items, chvkOutgoing)
 
-    # originalBuffer must NOT be re-saved on the second entry: the previous
-    # CallHierarchy original is still live, and overwriting it would lose the
-    # real buffer (and emit a saveOriginalBuffer warning).
-    check e.activeWindow.originalBuffer == savedOriginal
+    # What the viewer covered must NOT be re-taken on the second entry: that
+    # would record the first listing's mode and lose the real one.
+    check e.activeWindow.viewerEntry.get.returnMode == startMode
+    check e.activeWindow.viewerEntry.get.returnState.kind == mskNone
     check e.state.previousMode == startMode
     check e.activeWindow.modeState.callHierarchy.viewKind == chvkOutgoing
     check e.state.statusMessage == "1 outgoing call found"

@@ -173,7 +173,9 @@ suite "TabLine - renderTabLine":
     let buf1 = createTestTextBuffer("/path/file1.nim")
     let buffers = @[buf1]
 
-    renderTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, false)
+    renderTabLine(
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 0, 0, 80, false
+    )
 
     # Buffer should remain empty (all spaces)
     let line = getBufferLine(displayBuffer, 0)
@@ -184,7 +186,9 @@ suite "TabLine - renderTabLine":
     let buf1 = createTestTextBuffer("/path/file1.nim")
     let buffers = @[buf1]
 
-    renderTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, true)
+    renderTabLine(
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 0, 0, 80, true
+    )
 
     let line = getBufferLine(displayBuffer, 0)
     check " file1.nim " in line
@@ -196,7 +200,9 @@ suite "TabLine - renderTabLine":
     let buf3 = createTestTextBuffer("/path/file3.nim")
     let buffers = @[buf1, buf2, buf3]
 
-    renderTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, true)
+    renderTabLine(
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 0, 0, 80, true
+    )
 
     let line = getBufferLine(displayBuffer, 0)
     check " file1.nim " in line
@@ -208,7 +214,9 @@ suite "TabLine - renderTabLine":
     let buf1 = createTestTextBuffer("/path/file1.nim", modified = true)
     let buffers = @[buf1]
 
-    renderTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, true)
+    renderTabLine(
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 0, 0, 80, true
+    )
 
     let line = getBufferLine(displayBuffer, 0)
     check " file1.nim[+] " in line
@@ -220,7 +228,9 @@ suite "TabLine - renderTabLine":
     for i in 0 ..< 20:
       buffers.add(createTestTextBuffer("/path/verylongfilename" & $i & ".nim"))
 
-    renderTabLine(buffers, buffers[0], EditorMode.Normal, displayBuffer, 0, 0, 40, true)
+    renderTabLine(
+      buffers, some(buffers[0].id), EditorMode.Normal, displayBuffer, 0, 0, 40, true
+    )
 
     # Only some tabs should be rendered due to width limit
     let line = getBufferLine(displayBuffer, 0)
@@ -234,7 +244,9 @@ suite "TabLine - renderTabLine":
     let buf1 = createTestTextBuffer("/path/file1.nim")
     let buffers = @[buf1]
 
-    renderTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, 5, 0, 80, true)
+    renderTabLine(
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 5, 0, 80, true
+    )
 
     # Line 5 should have content
     let line5 = getBufferLine(displayBuffer, 5)
@@ -249,13 +261,28 @@ suite "TabLine - renderTabLine":
     let buf1 = createTestTextBuffer("/path/file1.nim")
     let buffers = @[buf1]
 
-    renderTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, 0, 10, 70, true)
+    renderTabLine(
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 0, 10, 70, true
+    )
 
     let line = getBufferLine(displayBuffer, 0)
     # First 10 characters should be spaces (unchanged)
     check line[0 ..< 10].strip() == ""
     # Tab content should start after X offset
     check " file1.nim " in line
+
+suite "TabLine - current tab":
+  test "Marks no tab current when none is given":
+    require getCurrentTabStyle() != getTabStyle()
+    let buf1 = createTestTextBuffer("/path/file1.nim")
+    var marked = createTestBuffer()
+    var unmarked = createTestBuffer()
+
+    renderTabLine(@[buf1], some(buf1.id), EditorMode.Normal, marked, 0, 0, 80, true)
+    renderTabLine(@[buf1], none(BufferId), EditorMode.Help, unmarked, 0, 0, 80, true)
+
+    check marked[1, 0].style == getCurrentTabStyle()
+    check unmarked[1, 0].style == getTabStyle()
 
 suite "TabLine - renderWindowTabLine":
   test "Renders tab line for window":
@@ -265,7 +292,7 @@ suite "TabLine - renderWindowTabLine":
     let buffers = @[buf1, buf2]
 
     renderWindowTabLine(
-      buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, true, true
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 0, 0, 80, true, true
     )
 
     let line = getBufferLine(displayBuffer, 0)
@@ -278,31 +305,8 @@ suite "TabLine - renderWindowTabLine":
     let buffers = @[buf1]
 
     renderWindowTabLine(
-      buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, false, true
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 0, 0, 80, false, true
     )
-
-    let line = getBufferLine(displayBuffer, 0)
-    check line.strip() == ""
-
-suite "TabLine - renderSingleViewTabLine":
-  test "Renders tab line at y=0 across full width":
-    var displayBuffer = createTestBuffer()
-    let buf1 = createTestTextBuffer("/path/file1.nim")
-    let buf2 = createTestTextBuffer("/path/file2.nim")
-    let buffers = @[buf1, buf2]
-
-    renderSingleViewTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, true)
-
-    let line = getBufferLine(displayBuffer, 0)
-    check " file1.nim " in line
-    check " file2.nim " in line
-
-  test "Does nothing when showTabLine is false":
-    var displayBuffer = createTestBuffer()
-    let buf1 = createTestTextBuffer("/path/file1.nim")
-    let buffers = @[buf1]
-
-    renderSingleViewTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, false)
 
     let line = getBufferLine(displayBuffer, 0)
     check line.strip() == ""
@@ -383,7 +387,15 @@ suite "TabLine - Special mode tab display":
     let buffers = @[buf1, buf2]
 
     renderWindowTabLine(
-      buffers, buf1, EditorMode.BookmarkManager, displayBuffer, 0, 0, 80, true, true
+      buffers,
+      some(buf1.id),
+      EditorMode.BookmarkManager,
+      displayBuffer,
+      0,
+      0,
+      80,
+      true,
+      true,
     )
 
     let line = getBufferLine(displayBuffer, 0)
@@ -398,7 +410,15 @@ suite "TabLine - Special mode tab display":
     let buffers = @[buf1, buf2]
 
     renderWindowTabLine(
-      buffers, buf1, EditorMode.BufferManager, displayBuffer, 0, 0, 80, true, true
+      buffers,
+      some(buf1.id),
+      EditorMode.BufferManager,
+      displayBuffer,
+      0,
+      0,
+      80,
+      true,
+      true,
     )
 
     let line = getBufferLine(displayBuffer, 0)
@@ -459,7 +479,9 @@ suite "TabLine - sanitize control characters":
     let buf1 = createTestTextBuffer("/path/\x1Bfile1\x00.nim")
     let buf2 = createTestTextBuffer("/path/file2\x7F.nim")
     let buffers = @[buf1, buf2]
-    renderTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, true)
+    renderTabLine(
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 0, 0, 80, true
+    )
     let line = getBufferLine(displayBuffer, 0)
     check not hasControl(line)
     check " file1 " in line or "file1" in line
@@ -471,7 +493,7 @@ suite "TabLine - sanitize control characters":
     buf1.displayName = some("[Term\x1B:\x00bash]")
     let buffers = @[buf1]
     renderWindowTabLine(
-      buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, true, true
+      buffers, some(buf1.id), EditorMode.Normal, displayBuffer, 0, 0, 80, true, true
     )
     let line = getBufferLine(displayBuffer, 0)
     check not hasControl(line)

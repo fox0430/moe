@@ -79,13 +79,17 @@ proc pollLspDocumentSymbols*(e: Editor) =
         e.state.statusMessage = "No symbols found"
         return
 
-      discard e.enterViewerMode(
+      let entered = e.enterViewerMode(
         EditorMode.DocumentSymbol,
         ModeState(kind: mskDocumentSymbol, documentSymbol: viewerState),
         viewerState.createDocumentSymbolTextBuffer(),
         vpInPlace,
       )
-      e.state.statusMessage = $symbolCount & " symbols found"
+      e.state.statusMessage =
+        if entered.isErr:
+          "Failed to open document symbols: " & entered.error
+        else:
+          $symbolCount & " symbols found"
     else:
       e.state.statusMessage = "No symbols found"
 

@@ -56,21 +56,13 @@ proc shutdown*(e: Editor) =
   e.lsp.shutdown()
 
 proc maybeUpdateDebugBuffer*(e: Editor) =
-  ## Update debug buffer content periodically if it's displayed in a window
-  ## This provides auto-refresh functionality for the debug viewer
-  if e.state.windowDisplay.debugBuffer == nil:
-    return
-
-  # Check if the debug buffer is still displayed in a window
-  var foundWindow: EditorWindow = nil
+  ## Refresh every Debug viewer's listing periodically (auto-refresh). A
+  ## window is one by its state, so a `:split` copy refreshes too.
+  var debugWindows: seq[EditorWindow]
   for window in e.windowManager.windows:
-    if window.buffer == e.state.windowDisplay.debugBuffer:
-      foundWindow = window
-      break
-
-  if foundWindow == nil:
-    # Debug buffer is no longer displayed, clear the reference
-    e.state.windowDisplay.debugBuffer = nil
+    if window.modeState.kind == mskDebug:
+      debugWindows.add window
+  if debugWindows.len == 0:
     return
 
   # Check if enough time has passed since last update
@@ -172,9 +164,8 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     debugConfig.lsp.enable,
   )
 
-  # Update debug viewer state and create new buffer
-  if foundWindow.modeState.kind == mskDebug:
-    let debugState = foundWindow.modeState.debug
+  for window in debugWindows:
+    let debugState = window.modeState.debug
     debugState.items = debugLines
     # Reclamp the selection after the item set shrinks so syncSelectionCursor
     # does not push cursor.line past the new buffer's last row.
@@ -183,21 +174,16 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     let newDebugBuffer = debugState.createDebugTextBuffer()
 
     # Preserve scroll position
-    let savedTopLine = foundWindow.viewport.topLine
-    let savedLeftColumn = foundWindow.viewport.leftColumn
+    let savedTopLine = window.viewport.topLine
+    let savedLeftColumn = window.viewport.leftColumn
 
     # Replace buffer in the window.
     # Debug windows hold no Insert session, so no finalization is needed.
-    foundWindow.setView(newDebugBuffer)
+    window.setView(newDebugBuffer)
 
     # Restore scroll position (clamped to valid range)
-    foundWindow.viewport.resetViewportTop(
-      min(savedTopLine, max(0, newDebugBuffer.len - 1))
-    )
-    foundWindow.viewport.leftColumn = savedLeftColumn
-
-    # Update the reference in state
-    e.state.windowDisplay.debugBuffer = newDebugBuffer
+    window.viewport.resetViewportTop(min(savedTopLine, max(0, newDebugBuffer.len - 1)))
+    window.viewport.leftColumn = savedLeftColumn
   e.state.timing.lastDebugUpdate = now
 
 proc maybeCleanupTimedOutLspRequests(e: Editor) =
@@ -401,10 +387,8 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
       e.activeWindow.cursor.line = collapsedFold.get.startLine
       e.activeWindow.cursor.column = 0
 
-  # Update highlight state (skip for debug buffer)
-  let isDebugBuffer =
-    e.state.windowDisplay.debugBuffer != nil and
-    e.activeBuffer() == e.state.windowDisplay.debugBuffer
+  # Update highlight state (skip for the debug viewer)
+  let isDebugBuffer = e.activeWindow.modeState.kind == mskDebug
 
   if e.config.highlight.pairOfParen and not isDebugBuffer:
     e.state.matchingParenPos = findMatchingParenPosition(e.activeBuffer(), e.cursor)

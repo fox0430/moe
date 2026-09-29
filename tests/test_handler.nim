@@ -2637,12 +2637,12 @@ suite "enterFilerInActiveWindow":
     check e.activeWindow.viewport.topLine == 0
     check e.activeWindow.viewport.leftColumn == 0
 
-  test "Preserves original buffer in filer state":
+  test "Records the covered tab in the viewer entry":
     let e = createTestEditorWithBuffer("hello")
     let originalBuf = e.activeWindow.buffer
     e.enterFilerInActiveWindow("/tmp")
 
-    check e.activeWindow.originalBuffer == originalBuf
+    check e.activeWindow.viewerEntry.get.returnTab == originalBuf.id
 
   test "Vsplit with directory opens Filer in new split window":
     let e = createTestEditorWithBuffer("hello")
@@ -4928,7 +4928,7 @@ suite "handleRecentFileModeKeyCombo - window cleanup":
     check e.handleRecentFileModeKeyCombo(enterKey) == true
 
     check e.windowManager.windows.len == winCount + 1
-    check e.bufferIndexById(recentBufId) >= 0
+    check e.activeWindow.buffer.id == recentBufId
     check e.state.mode == EditorMode.RecentFile
     check e.state.statusMessage == "File not found: " & missing
 

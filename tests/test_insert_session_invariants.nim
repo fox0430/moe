@@ -179,22 +179,19 @@ let Invariants = @[
     skipFiles: @[],
     match: matchWindowViewReplace,
     allow: @[
-      # The shared tab transition (one `setTab` in `moveWindowToTab`) and the
-      # two `syncTerminalView` arms (Terminal windows hold no Insert session).
-      ("moepkg/editor_window_tab.nim", 3),
-      # The view-only arm of `redirectWindowsFromBuffer` (session finalized
-      # just above, shared with the tab-switch arm).
-      ("moepkg/editor_buffers.nim", 1),
+      # The shared tab transition (one `setTab` in `moveWindowToTab`), the two
+      # `syncTerminalView` arms (Terminal windows hold no Insert session) and
+      # the two `syncTabView` arms (a viewer resuming holds no session).
+      ("moepkg/editor_window_tab.nim", 5),
       ("moepkg/editor_frame.nim", 1),
-      ("moepkg/editor_window_state.nim", 1),
-      # Entry, and the exit onto a tab moved underneath the viewer (a viewer
-      # window holds no Insert session).
-      ("moepkg/viewer_mode.nim", 2),
+      # Entry onto the listing (its exits go through `syncTabView`).
+      ("moepkg/viewer_mode.nim", 1),
       ("moepkg/command_handlers/backup_ops.nim", 4),
       # Recovery viewer list rebuild (read-only viewer, no session).
       ("moepkg/command_handlers/recovery_ops.nim", 1),
-      # One of the five re-scopes an open recovery list (read-only viewer).
-      ("moepkg/command_handlers/viewer_ops.nim", 5),
+      # One of these re-scopes an open recovery list (read-only viewer); one is
+      # the diff viewer's quit back to its backup manager.
+      ("moepkg/command_handlers/viewer_ops.nim", 6),
       # Filer / FileTree listing rebuilds. These were invisible to the old
       # line-based `.buffer =` matcher because the RHS sat on the next line.
       ("moepkg/command_handlers/result_processor.nim", 2),
@@ -210,7 +207,8 @@ let Invariants = @[
     skipFiles: @["window_manager.nim"],
     match: matchActivateWindow,
     allow: @[
-      ("moepkg/viewer_mode.nim", 1),
+      # Onto an open viewer, or off the FileTree sidebar (no session there).
+      ("moepkg/viewer_mode.nim", 2),
       # Handing the focus back to a reused command-output split.
       ("moepkg/editor_command_output.nim", 1),
       ("moepkg/command_handlers/editor_ops.nim", 2),
@@ -226,7 +224,7 @@ let Invariants = @[
     match: matchActiveWindowIndexAssign,
     allow: @[
       ("moepkg/editor.nim", 1), # Initial window setup.
-      ("moepkg/editor_buffers.nim", 1), # The new right window.
+      ("moepkg/editor_window.nim", 1), # The window opened beside a lone sidebar.
       ("moepkg/handler.nim", 1), # Mouse jump to the clicked window.
       ("moepkg/command_handlers/editor_ops.nim", 1), # File tree index fixup.
     ],
@@ -239,10 +237,8 @@ let Invariants = @[
     skipFiles: @[],
     match: matchFinalizeForBufferSwitch,
     allow: @[
-      # The shared tab transition, and redirectWindowsFromBuffer's view-only
-      # arm.
+      # The shared tab transition.
       ("moepkg/editor_window_tab.nim", 1),
-      ("moepkg/editor_buffers.nim", 1),
       ("moepkg/handler.nim", 1),
     ],
   ),

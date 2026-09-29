@@ -294,20 +294,16 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
           bkState.sourceFilePath, entry.fullPath, initialMode,
           e.config.diffViewer.wordHighlight, e.tabStop,
         )
-        # Suspend backup-manager mode and overlay the diff; both the swapped
-        # buffer and the suspended (mode, modeState) must be restored on exit.
-        activeWin.saveOriginalBuffer()
-        activeWin.suspendMode()
         # Size by the text area so the gutter cannot clip the right column.
         let textWidth = e.diffViewerTextWidth(activeWin, dvState)
         activeWin.setView(dvState.refreshDiffTextBuffer(textWidth))
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.resetViewportTop()
         activeWin.viewport.leftColumn = 0
-        activeWin.modeState = ModeState(kind: mskDiffViewer, diffViewer: dvState)
+        activeWin.modeState =
+          ModeState(kind: mskDiffViewer, diffViewer: dvState, diffReturn: bkState)
         e.state.previousMode = e.state.mode
         e.setMode(EditorMode.DiffViewer)
-        activeWin.mode = EditorMode.DiffViewer
         if dvState.errorMessage.len > 0:
           e.state.statusMessage = "Diff error: " & dvState.errorMessage
     return true
