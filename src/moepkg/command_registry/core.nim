@@ -132,7 +132,7 @@ type
 
   ## Context needed to execute commands.
   ## Config sections are pulled live from `state.config` via getters below, so
-  ## `applyConfigSettings`' ref swap is picked up on the next command.
+  ## a reload by `applyConfigSettings` is picked up on the next command.
   CommandContext* = ref object
     buffer*: core.TextBuffer
     state*: EditorState

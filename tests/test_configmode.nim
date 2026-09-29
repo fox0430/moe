@@ -148,13 +148,13 @@ suite "ConfigMode - Bool value manipulation":
 
     check boolIndex >= 0
     state.selectedIndex = boolIndex
-    let originalValue = state.items[boolIndex].boolValue
+    let originalValue = state.items[boolIndex].boolValue(state.config)
 
     state.toggleBoolValue(testEditorState(cfg))
-    check state.items[boolIndex].boolValue == not originalValue
+    check state.items[boolIndex].boolValue(state.config) == not originalValue
 
     state.toggleBoolValue(testEditorState(cfg))
-    check state.items[boolIndex].boolValue == originalValue
+    check state.items[boolIndex].boolValue(state.config) == originalValue
 
   test "toggleBoolValue does nothing for non-bool item":
     let cfg = newEditorConfig()
@@ -187,10 +187,10 @@ suite "ConfigMode - Int value manipulation":
 
     check intIndex >= 0
     state.selectedIndex = intIndex
-    let originalValue = state.items[intIndex].intValue
+    let originalValue = state.items[intIndex].intValue(state.config)
 
     state.incrementIntValue(testEditorState(cfg))
-    check state.items[intIndex].intValue == originalValue + 1
+    check state.items[intIndex].intValue(state.config) == originalValue + 1
 
   test "decrementIntValue decreases int item":
     let cfg = newEditorConfig()
@@ -199,16 +199,16 @@ suite "ConfigMode - Int value manipulation":
     # Find an int item with value > min
     var intIndex = -1
     for i, item in state.items:
-      if item.kind == cvkInt and item.intValue > item.intMin:
+      if item.kind == cvkInt and item.intValue(cfg) > item.intMin:
         intIndex = i
         break
 
     check intIndex >= 0
     state.selectedIndex = intIndex
-    let originalValue = state.items[intIndex].intValue
+    let originalValue = state.items[intIndex].intValue(state.config)
 
     state.decrementIntValue(testEditorState(cfg))
-    check state.items[intIndex].intValue == originalValue - 1
+    check state.items[intIndex].intValue(state.config) == originalValue - 1
 
   test "incrementIntValue respects max boundary":
     let cfg = newEditorConfig()
@@ -223,10 +223,10 @@ suite "ConfigMode - Int value manipulation":
 
     check intIndex >= 0
     state.selectedIndex = intIndex
-    state.items[intIndex].intValue = state.items[intIndex].intMax
+    state.setIntValue(testEditorState(cfg), intIndex, state.items[intIndex].intMax)
 
     state.incrementIntValue(testEditorState(cfg))
-    check state.items[intIndex].intValue == state.items[intIndex].intMax
+    check state.items[intIndex].intValue(state.config) == state.items[intIndex].intMax
 
   test "decrementIntValue respects min boundary":
     let cfg = newEditorConfig()
@@ -241,10 +241,10 @@ suite "ConfigMode - Int value manipulation":
 
     check intIndex >= 0
     state.selectedIndex = intIndex
-    state.items[intIndex].intValue = state.items[intIndex].intMin
+    state.setIntValue(testEditorState(cfg), intIndex, state.items[intIndex].intMin)
 
     state.decrementIntValue(testEditorState(cfg))
-    check state.items[intIndex].intValue == state.items[intIndex].intMin
+    check state.items[intIndex].intValue(state.config) == state.items[intIndex].intMin
 
 suite "ConfigMode - Float value manipulation":
   test "incrementFloatValue increases float item by step":
@@ -260,11 +260,11 @@ suite "ConfigMode - Float value manipulation":
 
     check floatIndex >= 0
     state.selectedIndex = floatIndex
-    let originalValue = state.items[floatIndex].floatValue
+    let originalValue = state.items[floatIndex].floatValue(state.config)
     let step = state.items[floatIndex].floatStep
 
     state.incrementFloatValue(testEditorState(cfg))
-    check state.items[floatIndex].floatValue == originalValue + step
+    check state.items[floatIndex].floatValue(state.config) == originalValue + step
 
   test "decrementFloatValue decreases float item by step":
     let cfg = newEditorConfig()
@@ -273,17 +273,17 @@ suite "ConfigMode - Float value manipulation":
     # Find a float item with value > min + step
     var floatIndex = -1
     for i, item in state.items:
-      if item.kind == cvkFloat and item.floatValue > item.floatMin + item.floatStep:
+      if item.kind == cvkFloat and item.floatValue(cfg) > item.floatMin + item.floatStep:
         floatIndex = i
         break
 
     check floatIndex >= 0
     state.selectedIndex = floatIndex
-    let originalValue = state.items[floatIndex].floatValue
+    let originalValue = state.items[floatIndex].floatValue(state.config)
     let step = state.items[floatIndex].floatStep
 
     state.decrementFloatValue(testEditorState(cfg))
-    check state.items[floatIndex].floatValue == originalValue - step
+    check state.items[floatIndex].floatValue(state.config) == originalValue - step
 
   test "incrementFloatValue respects max boundary":
     let cfg = newEditorConfig()
@@ -298,10 +298,13 @@ suite "ConfigMode - Float value manipulation":
 
     check floatIndex >= 0
     state.selectedIndex = floatIndex
-    state.items[floatIndex].floatValue = state.items[floatIndex].floatMax
+    state.setFloatValue(
+      testEditorState(cfg), floatIndex, state.items[floatIndex].floatMax
+    )
 
     state.incrementFloatValue(testEditorState(cfg))
-    check state.items[floatIndex].floatValue == state.items[floatIndex].floatMax
+    check state.items[floatIndex].floatValue(state.config) ==
+      state.items[floatIndex].floatMax
 
   test "decrementFloatValue respects min boundary":
     let cfg = newEditorConfig()
@@ -316,10 +319,13 @@ suite "ConfigMode - Float value manipulation":
 
     check floatIndex >= 0
     state.selectedIndex = floatIndex
-    state.items[floatIndex].floatValue = state.items[floatIndex].floatMin
+    state.setFloatValue(
+      testEditorState(cfg), floatIndex, state.items[floatIndex].floatMin
+    )
 
     state.decrementFloatValue(testEditorState(cfg))
-    check state.items[floatIndex].floatValue == state.items[floatIndex].floatMin
+    check state.items[floatIndex].floatValue(state.config) ==
+      state.items[floatIndex].floatMin
 
 suite "ConfigMode - Enum value manipulation":
   test "cycleEnumValue forward cycles through options":
@@ -336,11 +342,13 @@ suite "ConfigMode - Enum value manipulation":
     check enumIndex >= 0
     state.selectedIndex = enumIndex
     let item = state.items[enumIndex]
-    let originalIdx = item.enumOptions.find(item.enumValue)
+    let originalIdx = item.enumOptions.find(item.enumValue(cfg))
     let expectedIdx = (originalIdx + 1) mod item.enumOptions.len
 
     state.cycleEnumValue(testEditorState(cfg), forward = true)
-    check state.items[enumIndex].enumValue == item.enumOptions[expectedIdx]
+    check state.items[enumIndex].enumValue(state.config) == item.enumOptions[
+      expectedIdx
+    ]
 
   test "cycleEnumValue backward cycles through options":
     let cfg = newEditorConfig()
@@ -356,11 +364,13 @@ suite "ConfigMode - Enum value manipulation":
     check enumIndex >= 0
     state.selectedIndex = enumIndex
     let item = state.items[enumIndex]
-    let originalIdx = item.enumOptions.find(item.enumValue)
+    let originalIdx = item.enumOptions.find(item.enumValue(cfg))
     let expectedIdx = (originalIdx - 1 + item.enumOptions.len) mod item.enumOptions.len
 
     state.cycleEnumValue(testEditorState(cfg), forward = false)
-    check state.items[enumIndex].enumValue == item.enumOptions[expectedIdx]
+    check state.items[enumIndex].enumValue(state.config) == item.enumOptions[
+      expectedIdx
+    ]
 
   test "cycleEnumValue wraps around at end":
     let cfg = newEditorConfig()
@@ -378,10 +388,11 @@ suite "ConfigMode - Enum value manipulation":
 
     # Set to last option
     let lastOption = state.items[enumIndex].enumOptions[^1]
-    state.items[enumIndex].enumValue = lastOption
+    state.setTextValue(testEditorState(cfg), enumIndex, lastOption)
 
     state.cycleEnumValue(testEditorState(cfg), forward = true)
-    check state.items[enumIndex].enumValue == state.items[enumIndex].enumOptions[0]
+    check state.items[enumIndex].enumValue(state.config) ==
+      state.items[enumIndex].enumOptions[0]
 
 suite "ConfigMode - formatItemForDisplay name padding":
   proc separatorColumn(line: string): int =
@@ -395,28 +406,18 @@ suite "ConfigMode - formatItemForDisplay name padding":
     # pull its value left of the ASCII rows.
     let
       ascii = ConfigItem(
-        kind: cvkBool,
-        displayName: "abcdef",
-        section: "S",
-        depth: 1,
-        descriptorIndex: 1,
-        boolValue: true,
+        kind: cvkBool, displayName: "abcdef", section: "S", depth: 1, descriptorIndex: 1
       )
       multibyte = ConfigItem(
-        kind: cvkBool,
-        displayName: "あい",
-        section: "S",
-        depth: 1,
-        descriptorIndex: 2,
-        boolValue: true,
+        kind: cvkBool, displayName: "あい", section: "S", depth: 1, descriptorIndex: 2
       )
       maxNameWidth = calcMaxNameWidth(@[ascii, multibyte], 80)
 
     # Same byte length, different display width: byte padding would misalign.
     check ascii.displayName.len == multibyte.displayName.len
     check charDisplayWidth(ascii.displayName) != charDisplayWidth(multibyte.displayName)
-    check separatorColumn(formatItemForDisplay(ascii, maxNameWidth)) ==
-      separatorColumn(formatItemForDisplay(multibyte, maxNameWidth))
+    check separatorColumn(itemNamePrefix(ascii, maxNameWidth)) ==
+      separatorColumn(itemNamePrefix(multibyte, maxNameWidth))
 
   test "calcMaxNameWidth budgets the name column in display columns":
     # The cap is a column budget, not a byte count.
@@ -426,7 +427,6 @@ suite "ConfigMode - formatItemForDisplay name padding":
       section: "S",
       depth: 1,
       descriptorIndex: 1,
-      boolValue: true,
     )
     check calcMaxNameWidth(@[wide], 40) == 20
 
@@ -439,24 +439,24 @@ suite "ConfigMode - formatItemForDisplay name padding":
       section: "S",
       depth: 1,
       descriptorIndex: 1,
-      stringValue: "v",
     )
     let maxNameWidth = calcMaxNameWidth(@[item], 20)
     check charDisplayWidth(itemNamePrefix(item, maxNameWidth)) == maxNameWidth + 3
 
   test "A name column too narrow for an ellipsis keeps the leading characters":
     let item = ConfigItem(
-      kind: cvkString,
-      displayName: "abcdef",
-      section: "S",
-      depth: 1,
-      descriptorIndex: 1,
-      stringValue: "v",
+      kind: cvkString, displayName: "abcdef", section: "S", depth: 1, descriptorIndex: 1
     )
     # Budget 4: two columns of indent leave a two-column name.
     check itemNamePrefix(item, 4) == "  ab : "
 
 suite "ConfigMode - formatItemForDisplay":
+  proc firstOfKind(state: ConfigModeState, kind: ConfigValueKind): int =
+    for i, item in state.items:
+      if item.kind == kind:
+        return i
+    -1
+
   test "Section item displays with brackets":
     let item = ConfigItem(
       kind: cvkSection,
@@ -466,70 +466,46 @@ suite "ConfigMode - formatItemForDisplay":
       descriptorIndex: -1,
     )
 
-    let result = formatItemForDisplay(item, 20)
+    let result = formatItemForDisplay(item, newEditorConfig(), 20)
     check result == "[Standard]"
 
-  test "Bool item displays name and value":
-    let item = ConfigItem(
-      kind: cvkBool,
-      displayName: "number",
-      section: "Standard",
-      depth: 1,
-      descriptorIndex: 1,
-      boolValue: true,
+  test "Each kind displays its name and the config's current value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    let es = testEditorState(cfg)
+    let
+      boolIdx = state.firstOfKind(cvkBool)
+      intIdx = state.firstOfKind(cvkInt)
+      floatIdx = state.firstOfKind(cvkFloat)
+      enumIdx = state.firstOfKind(cvkEnum)
+      stringIdx = state.firstOfKind(cvkString)
+    check boolIdx >= 0 and intIdx >= 0 and floatIdx >= 0 and enumIdx >= 0 and
+      stringIdx >= 0
+
+    let boolItem = state.items[boolIdx]
+    state.setBoolValue(es, boolIdx, true)
+    check formatItemForDisplay(boolItem, cfg, 80).endsWith(" : true")
+    state.setBoolValue(es, boolIdx, false)
+    check formatItemForDisplay(boolItem, cfg, 80).endsWith(" : false")
+
+    let intItem = state.items[intIdx]
+    state.setIntValue(es, intIdx, intItem.intMin + 1)
+    check formatItemForDisplay(intItem, cfg, 80).endsWith(" : " & $(intItem.intMin + 1))
+
+    let floatItem = state.items[floatIdx]
+    state.setFloatValue(es, floatIdx, floatItem.floatMax)
+    check formatItemForDisplay(floatItem, cfg, 80).endsWith(" : " & $floatItem.floatMax)
+
+    let enumItem = state.items[enumIdx]
+    state.setTextValue(es, enumIdx, enumItem.enumOptions[^1])
+    check formatItemForDisplay(enumItem, cfg, 80).endsWith(
+      " : " & enumItem.enumOptions[^1]
     )
 
-    let result = formatItemForDisplay(item, 20)
-    check "number" in result
-    check "true" in result
-
-  test "Int item displays name and value":
-    let item = ConfigItem(
-      kind: cvkInt,
-      displayName: "tabStop",
-      section: "Standard",
-      depth: 1,
-      descriptorIndex: 1,
-      intValue: 4,
-      intMin: 1,
-      intMax: 16,
-    )
-
-    let result = formatItemForDisplay(item, 20)
-    check "tabStop" in result
-    check "4" in result
-
-  test "Float item displays name and value":
-    let item = ConfigItem(
-      kind: cvkFloat,
-      displayName: "friction",
-      section: "SmoothScroll",
-      depth: 1,
-      descriptorIndex: 1,
-      floatValue: 100.0,
-      floatMin: 0.0,
-      floatMax: 500.0,
-      floatStep: 10.0,
-    )
-
-    let result = formatItemForDisplay(item, 20)
-    check "friction" in result
-    check "100" in result
-
-  test "Enum item displays name and value":
-    let item = ConfigItem(
-      kind: cvkEnum,
-      displayName: "colorMode",
-      section: "Standard",
-      depth: 1,
-      descriptorIndex: 1,
-      enumValue: "24bit",
-      enumOptions: @["8", "16", "256", "24bit", "none"],
-    )
-
-    let result = formatItemForDisplay(item, 20)
-    check "colorMode" in result
-    check "24bit" in result
+    let stringItem = state.items[stringIdx]
+    state.setTextValue(es, stringIdx, "hello")
+    check formatItemForDisplay(stringItem, cfg, 80).endsWith(" : hello")
+    check stringItem.displayName in formatItemForDisplay(stringItem, cfg, 80)
 
 suite "ConfigMode - Edit mode for Int":
   test "startEdit initializes edit buffer for int":
@@ -548,7 +524,7 @@ suite "ConfigMode - Edit mode for Int":
 
     state.startEdit()
     check state.editMode == true
-    check state.editBuffer == $state.items[intIndex].intValue
+    check state.editBuffer == $state.items[intIndex].intValue(state.config)
     check state.editCursor == state.editBuffer.len
 
   test "cancelEdit resets edit state":
@@ -588,7 +564,7 @@ suite "ConfigMode - Edit mode for Int":
 
     let result = state.confirmEdit(testEditorState(cfg))
     check result == true
-    check state.items[intIndex].intValue == 5
+    check state.items[intIndex].intValue(state.config) == 5
     check state.editMode == false
 
   test "confirmEdit rejects out-of-range int value":
@@ -603,14 +579,14 @@ suite "ConfigMode - Edit mode for Int":
         break
 
     state.selectedIndex = intIndex
-    let originalValue = state.items[intIndex].intValue
+    let originalValue = state.items[intIndex].intValue(state.config)
     state.startEdit()
     state.editBuffer = "99999" # Out of range
 
     let result = state.confirmEdit(testEditorState(cfg))
     check result == false
     # Value unchanged after failed edit
-    check state.items[intIndex].intValue == originalValue
+    check state.items[intIndex].intValue(state.config) == originalValue
 
   test "confirmEdit rejects invalid int input":
     let cfg = newEditorConfig()
@@ -624,13 +600,13 @@ suite "ConfigMode - Edit mode for Int":
         break
 
     state.selectedIndex = intIndex
-    let originalValue = state.items[intIndex].intValue
+    let originalValue = state.items[intIndex].intValue(state.config)
     state.startEdit()
     state.editBuffer = "abc" # Invalid number
 
     let result = state.confirmEdit(testEditorState(cfg))
     check result == false
-    check state.items[intIndex].intValue == originalValue
+    check state.items[intIndex].intValue(state.config) == originalValue
 
 suite "ConfigMode - Edit mode for Float":
   test "startEdit initializes edit buffer for float":
@@ -649,7 +625,7 @@ suite "ConfigMode - Edit mode for Float":
 
     state.startEdit()
     check state.editMode == true
-    check state.editBuffer == $state.items[floatIndex].floatValue
+    check state.editBuffer == $state.items[floatIndex].floatValue(state.config)
     check state.editCursor == state.editBuffer.len
 
   test "confirmEdit applies valid float value":
@@ -670,7 +646,7 @@ suite "ConfigMode - Edit mode for Float":
 
     let result = state.confirmEdit(testEditorState(cfg))
     check result == true
-    check state.items[floatIndex].floatValue == 50.5
+    check state.items[floatIndex].floatValue(state.config) == 50.5
     check state.editMode == false
 
   test "confirmEdit rejects out-of-range float value":
@@ -685,13 +661,13 @@ suite "ConfigMode - Edit mode for Float":
         break
 
     state.selectedIndex = floatIndex
-    let originalValue = state.items[floatIndex].floatValue
+    let originalValue = state.items[floatIndex].floatValue(state.config)
     state.startEdit()
     state.editBuffer = "99999.0" # Out of range
 
     let result = state.confirmEdit(testEditorState(cfg))
     check result == false
-    check state.items[floatIndex].floatValue == originalValue
+    check state.items[floatIndex].floatValue(state.config) == originalValue
 
 suite "ConfigMode - Edit buffer manipulation":
   test "editInsertChar inserts at cursor":
@@ -1032,7 +1008,7 @@ suite "ConfigMode - Undecodable bytes in edit buffer":
         break
     check strIndex >= 0
     result.selectedIndex = strIndex
-    result.items[strIndex].stringValue = value
+    result.setTextValue(testEditorState(cfg), strIndex, value)
     result.startEdit()
 
   test "startEdit puts the cursor at the character length":
@@ -1249,7 +1225,7 @@ suite "ConfigMode - Enum popup":
     let expectedValue = state.items[enumIndex].enumOptions[1]
 
     state.enumPopupConfirm(testEditorState(cfg))
-    check state.items[enumIndex].enumValue == expectedValue
+    check state.items[enumIndex].enumValue(state.config) == expectedValue
     check state.enumPopupOpen == false
 
   test "isEnumPopupOpen returns correct state":
@@ -1291,8 +1267,8 @@ suite "ConfigMode - Enum popup":
     check info.options == state.items[enumIndex].enumOptions
     check info.selectedIndex == 2
 
-suite "ConfigMode - applyChange":
-  test "applyChange updates config for bool":
+suite "ConfigMode - value writes":
+  test "A value op updates config for bool":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
@@ -1310,7 +1286,7 @@ suite "ConfigMode - applyChange":
     state.toggleBoolValue(testEditorState(cfg))
     check cfg.standard.number == not originalValue
 
-  test "applyChange updates config for lineWrap":
+  test "A value op updates config for lineWrap":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
@@ -1331,7 +1307,7 @@ suite "ConfigMode - applyChange":
     state.toggleBoolValue(testEditorState(cfg))
     check cfg.standard.lineWrap == true
 
-  test "applyChange updates config for int":
+  test "A value op updates config for int":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
@@ -1349,7 +1325,7 @@ suite "ConfigMode - applyChange":
     state.incrementIntValue(testEditorState(cfg))
     check cfg.standard.tabStop == originalValue + 1
 
-  test "applyChange updates config for shiftWidth":
+  test "A value op updates config for shiftWidth":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
@@ -1366,7 +1342,7 @@ suite "ConfigMode - applyChange":
     state.incrementIntValue(testEditorState(cfg))
     check cfg.standard.shiftWidth == originalValue + 1
 
-  test "applyChange updates config for softTabStop":
+  test "A value op updates config for softTabStop":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
@@ -1383,7 +1359,7 @@ suite "ConfigMode - applyChange":
     state.incrementIntValue(testEditorState(cfg))
     check cfg.standard.softTabStop == originalValue + 1
 
-  test "applyChange updates config for float":
+  test "A value op updates config for float":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
@@ -1402,7 +1378,7 @@ suite "ConfigMode - applyChange":
     state.incrementFloatValue(testEditorState(cfg))
     check cfg.smoothScroll.friction == originalValue + step
 
-  test "applyChange updates config for enum":
+  test "A value op updates config for enum":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
@@ -1418,9 +1394,9 @@ suite "ConfigMode - applyChange":
 
     state.cycleEnumValue(testEditorState(cfg), forward = true)
     # The value should have changed in the config
-    check $cfg.standard.colorMode == state.items[colorModeIndex].enumValue
+    check $cfg.standard.colorMode == state.items[colorModeIndex].enumValue(state.config)
 
-  test "applyChange re-anchors within same section when edited item is hidden by rebuild":
+  test "A change re-anchors within same section when edited item is hidden by rebuild":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
@@ -1432,10 +1408,8 @@ suite "ConfigMode - applyChange":
     check pathIndex >= 0
 
     cfg.theme.kind = tkDefault
-    state.items[pathIndex].stringValue = "some/new/path"
     state.selectedIndex = pathIndex
-
-    applyChange(state, testEditorState(cfg), pathIndex)
+    state.setTextValue(testEditorState(cfg), pathIndex, "some/new/path")
 
     for item in state.items:
       check not (item.section == "Theme" and item.displayName == "path")
@@ -1497,7 +1471,7 @@ suite "ConfigMode - pendingApply":
     state.moveUp()
     check state.pendingApply == false
 
-  test "applyChange on section item leaves pendingApply false":
+  test "Setting a section item leaves pendingApply false":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
     var sectionIdx = -1
@@ -1506,7 +1480,7 @@ suite "ConfigMode - pendingApply":
         sectionIdx = i
         break
     check sectionIdx >= 0
-    state.applyChange(testEditorState(cfg), sectionIdx)
+    state.setBoolValue(testEditorState(cfg), sectionIdx, true)
     check state.pendingApply == false
 
   test "confirmEdit with unchanged value leaves pendingApply false":
@@ -1523,7 +1497,7 @@ suite "ConfigMode - pendingApply":
     check state.confirmEdit(testEditorState(cfg)) == true
     check state.pendingApply == false
 
-  test "applyColorChange does not set pendingApply":
+  test "setColorValue does not set pendingApply":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
     var colorIdx = -1
@@ -1532,8 +1506,7 @@ suite "ConfigMode - pendingApply":
         colorIdx = i
         break
     check colorIdx >= 0
-    state.items[colorIdx].colorValue = "#ff0000"
-    state.applyColorChange(testEditorState(cfg), colorIdx)
+    state.setColorValue(colorIdx, "#ff0000")
     check state.pendingApply == false
 
 suite "ConfigMode - Item coverage":
@@ -1593,7 +1566,7 @@ suite "ConfigMode - cfgEnumStrings descriptor":
     check state.items[idx].kind == cvkEnum
     check state.items[idx].enumOptions ==
       @["bottomRight", "topRight", "topLeft", "bottomLeft"]
-    check state.items[idx].enumValue == cfg.notification.popupPosition
+    check state.items[idx].enumValue(state.config) == cfg.notification.popupPosition
 
   test "cycling popupPosition writes back to the string field":
     let cfg = newEditorConfig()
@@ -1604,7 +1577,7 @@ suite "ConfigMode - cfgEnumStrings descriptor":
     state.selectedIndex = idx
     state.cycleEnumValue(testEditorState(cfg), forward = true)
     check cfg.notification.popupPosition == "topRight"
-    check state.items[idx].enumValue == "topRight"
+    check state.items[idx].enumValue(state.config) == "topRight"
 
 suite "ConfigMode - Edge cases and guard conditions":
   test "startEdit does nothing for bool item":
@@ -1772,9 +1745,9 @@ suite "ConfigMode - Edge cases and guard conditions":
         break
 
     state.selectedIndex = boolIndex
-    let originalValue = state.items[boolIndex].boolValue
+    let originalValue = state.items[boolIndex].boolValue(state.config)
     state.cycleEnumValue(testEditorState(cfg), forward = true)
-    check state.items[boolIndex].boolValue == originalValue
+    check state.items[boolIndex].boolValue(state.config) == originalValue
 
   test "cycleEnumValue does nothing for invalid index":
     let cfg = newEditorConfig()
@@ -1844,15 +1817,16 @@ suite "ConfigMode - Edge cases and guard conditions":
     # Should not crash
     state.decrementFloatValue(testEditorState(cfg))
 
-  test "applyChange does nothing for invalid index":
+  test "Setters do nothing for invalid index":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
     # Should not crash
-    state.applyChange(testEditorState(cfg), -1)
-    state.applyChange(testEditorState(cfg), state.items.len + 100)
+    state.setBoolValue(testEditorState(cfg), -1, true)
+    state.setIntValue(testEditorState(cfg), state.items.len + 100, 1)
+    check state.pendingApply == false
 
-  test "applyChange does nothing for section item":
+  test "Setters do nothing for section item":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
 
@@ -1864,7 +1838,9 @@ suite "ConfigMode - Edge cases and guard conditions":
         break
 
     # Should not crash
-    state.applyChange(testEditorState(cfg), sectionIndex)
+    state.setTextValue(testEditorState(cfg), sectionIndex, "x")
+    state.setFloatValue(testEditorState(cfg), sectionIndex, 1.0)
+    check state.pendingApply == false
 
   test "enumPopupMoveUp does nothing when popup is closed":
     let cfg = newEditorConfig()
@@ -1896,10 +1872,10 @@ suite "ConfigMode - Edge cases and guard conditions":
         break
 
     state.selectedIndex = enumIndex
-    let originalValue = state.items[enumIndex].enumValue
+    let originalValue = state.items[enumIndex].enumValue(state.config)
     state.enumPopupOpen = false
     state.enumPopupConfirm(testEditorState(cfg))
-    check state.items[enumIndex].enumValue == originalValue
+    check state.items[enumIndex].enumValue(state.config) == originalValue
 
   test "openEnumPopup does nothing for invalid index":
     let cfg = newEditorConfig()
@@ -1968,21 +1944,6 @@ suite "ConfigMode - Edge cases and guard conditions":
     check result == false
     check state.editMode == false
 
-suite "ConfigMode - formatItemForDisplay cvkString":
-  test "String item displays name and value":
-    let item = ConfigItem(
-      kind: cvkString,
-      displayName: "myString",
-      section: "Test",
-      depth: 1,
-      descriptorIndex: 1,
-      stringValue: "hello world",
-    )
-
-    let result = formatItemForDisplay(item, 20)
-    check "myString" in result
-    check "hello world" in result
-
 suite "ConfigMode - Theme section":
   test "Theme section header exists":
     let cfg = newEditorConfig()
@@ -2006,7 +1967,7 @@ suite "ConfigMode - Theme section":
         break
 
     check kindIndex >= 0
-    check state.items[kindIndex].enumValue == $cfg.theme.kind
+    check state.items[kindIndex].enumValue(state.config) == $cfg.theme.kind
     check state.items[kindIndex].enumOptions == @["default", "config", "vscode"]
 
   test "Theme kind enum change applies to config":
@@ -2023,8 +1984,7 @@ suite "ConfigMode - Theme section":
     state.selectedIndex = kindIndex
     # Use "default" (never fails) so this doesn't depend on VSCode being
     # installed. Failure-revert coverage lives in its own test below.
-    state.items[kindIndex].enumValue = "default"
-    state.applyChange(testEditorState(cfg), kindIndex)
+    state.setTextValue(testEditorState(cfg), kindIndex, "default")
     check cfg.theme.kind == tkDefault
 
   test "Theme path string has correct value":
@@ -2039,7 +1999,7 @@ suite "ConfigMode - Theme section":
         break
 
     check pathIndex >= 0
-    check state.items[pathIndex].stringValue == cfg.theme.path
+    check state.items[pathIndex].stringValue(state.config) == cfg.theme.path
 
   test "Theme path string edit applies to config":
     let cfg = newEditorConfig()
@@ -2136,8 +2096,7 @@ suite "ConfigMode - Theme section":
 
     check kindIndex >= 0
     state.selectedIndex = kindIndex
-    state.items[kindIndex].enumValue = "config"
-    state.applyChange(testEditorState(cfg), kindIndex)
+    state.setTextValue(testEditorState(cfg), kindIndex, "config")
 
     # Now path should be visible
     pathFound = false
@@ -2150,7 +2109,7 @@ suite "ConfigMode - Theme section":
 
   test "Theme change reverts on load failure and surfaces status":
     # Point Theme.path at an unwritable location so initTheme's bootstrap
-    # (saveThemeToToml) fails; applyChange must roll cfg.theme back to the
+    # (saveThemeToToml) fails; the write must roll cfg.theme back to the
     # working baseline and reach statusMessage.
     let workingPath = getTempDir() / "moe_configmode_theme_baseline.toml"
     defer:
@@ -2176,8 +2135,7 @@ suite "ConfigMode - Theme section":
     editorState.statusMessage = ""
     state.selectedIndex = pathIndex
     # /proc/1/... is unwritable for non-root — createDir fails, so bootstrap fails.
-    state.items[pathIndex].stringValue = "/proc/1/moe_theme_should_fail.toml"
-    state.applyChange(editorState, pathIndex)
+    state.setTextValue(editorState, pathIndex, "/proc/1/moe_theme_should_fail.toml")
 
     check cfg.theme.path == workingPath
     check editorState.statusMessage.len > 0
@@ -2207,8 +2165,7 @@ suite "ConfigMode - Theme section":
 
     check kindIndex >= 0
     state.selectedIndex = kindIndex
-    state.items[kindIndex].enumValue = "default"
-    state.applyChange(testEditorState(cfg), kindIndex)
+    state.setTextValue(testEditorState(cfg), kindIndex, "default")
 
     # Now path should be hidden
     pathFound = false
@@ -2218,20 +2175,6 @@ suite "ConfigMode - Theme section":
         pathFound = true
         break
     check not pathFound
-
-suite "ConfigMode - Bool value edge case":
-  test "Bool item displays false correctly":
-    let item = ConfigItem(
-      kind: cvkBool,
-      displayName: "testBool",
-      section: "Test",
-      depth: 1,
-      descriptorIndex: 1,
-      boolValue: false,
-    )
-
-    let result = formatItemForDisplay(item, 20)
-    check "false" in result
 
 suite "ConfigMode - descriptor completeness":
   privateAccess ConfigItemDescriptor
@@ -2437,13 +2380,13 @@ suite "ConfigMode - Search":
     let state = newConfigModeState(newEditorConfig())
     let idx = state.firstItemIndex
     let name = state.items[idx].displayName
-    check state.items[idx].matchesSearchQuery(name.toUpperAscii)
-    check state.items[idx].matchesSearchQuery(name.toLowerAscii)
-    check not state.items[idx].matchesSearchQuery("zzz_no_such_field")
+    check state.items[idx].matchesSearchQuery(state.config, name.toUpperAscii)
+    check state.items[idx].matchesSearchQuery(state.config, name.toLowerAscii)
+    check not state.items[idx].matchesSearchQuery(state.config, "zzz_no_such_field")
 
   test "matchesSearchQuery with empty query never matches":
     let state = newConfigModeState(newEditorConfig())
-    check not state.items[0].matchesSearchQuery("")
+    check not state.items[0].matchesSearchQuery(state.config, "")
 
   test "searchItems moves selection to the first match":
     let state = newConfigModeState(newEditorConfig())
@@ -2451,7 +2394,7 @@ suite "ConfigMode - Search":
     let name = state.items[idx].displayName
     let found = state.searchItems(name, 0, true)
     check found.isSome
-    check state.items[found.get].matchesSearchQuery(name)
+    check state.items[found.get].matchesSearchQuery(state.config, name)
     check state.selectedIndex == found.get
 
   test "searchItems returns none when nothing matches":
@@ -2478,7 +2421,7 @@ suite "ConfigMode - Search":
     state.selectedIndex = state.items.high
     let found = state.searchForward()
     check found.isSome
-    check state.items[found.get].matchesSearchQuery(state.searchQuery)
+    check state.items[found.get].matchesSearchQuery(state.config, state.searchQuery)
 
   test "searchBackward wraps around to a match after the cursor":
     let state = newConfigModeState(newEditorConfig())
@@ -2670,10 +2613,10 @@ suite "ConfigMode - Theme Colors":
     cfg.theme.kind = tkConfig
     let state = newConfigModeState(cfg)
     let idx = state.findColorItem("keyword.fg")
-    check state.items[idx].matchesSearchQuery("keyword")
-    check state.items[idx].matchesSearchQuery("ff0000")
+    check state.items[idx].matchesSearchQuery(state.config, "keyword")
+    check state.items[idx].matchesSearchQuery(state.config, "ff0000")
 
-  test "applyColorChange snaps selection to itemIndex when color items become hidden":
+  test "A refresh after a color edit snaps selection near its row when color items become hidden":
     # Regression: if a rebuild hides the edited color item (e.g. the config
     # theme path was cleared out from under it), selection recovery must not
     # leave selectedIndex pointing at whatever unrelated row it held before.
@@ -2687,9 +2630,10 @@ suite "ConfigMode - Theme Colors":
 
     # Force the next rebuild to drop every color item.
     cfg.theme.path = ""
-    state.selectedIndex = 0
+    state.selectedIndex = idx
 
-    state.applyColorChange(testEditorState(cfg), idx)
+    state.setColorValue(idx, "#123456")
+    discard state.refreshItems()
 
     for item in state.items:
       check item.kind != cvkColor

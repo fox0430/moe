@@ -87,9 +87,8 @@ proc setMatterGrammar*(
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor.
-  ## Display/edit flags are pull-read from `e.config`, so the ref swap at the
-  ## bottom of this proc is the only sync step they need. Other runtime state
-  ## (search, timings, LSP, clipboard, notifications) still needs manual apply.
+  ## `newConfig` is copied into `e.config` in place, so all holders stay current.
+  ## Other runtime state still needs manual apply.
 
   if not newConfig.lsp.diagnostics.enable:
     # Diagnostics are server-push; drop applied markers/hover so a disable
@@ -164,9 +163,8 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
     TimeoutPolicy(timeoutlen: newConfig.standard.timeoutlen, enabled: true)
   )
 
-  # Store the new config; state.config aliases the same ref.
-  e.config = newConfig
-  e.state.config = newConfig
+  if newConfig != e.config:
+    e.config[] = newConfig[]
   e.enforceModePolicy()
 
   # Re-apply [Lsp.<lang>] entries so live reload / :lspRestart pick up server
