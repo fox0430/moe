@@ -346,3 +346,29 @@ suite "viewer_mode - tab switch teardown":
     check e.activeWindow.viewerEntry.isNone
     check e.activeWindow.modeState.kind == mskNone
     check e.activeWindow.mode == EditorMode.Normal
+
+suite "viewer_mode - splitting from an in-place viewer":
+  test "a split of the covered tab starts where the tab was, not at the listing's cursor":
+    for (vertical, withFilename) in [
+      (false, false), (false, true), (true, false), (true, true)
+    ]:
+      checkpoint "vertical=" & $vertical & " withFilename=" & $withFilename
+      let (e, path) = editorOnFile("moe_viewer_split_origin.txt")
+      defer:
+        removeFile(path)
+      let fileBuffer = e.activeBuffer
+      e.activeWindow.cursor = BufferPosition(line: 2, column: 1)
+      discard e.enterViewerMode(
+        EditorMode.Help, makeHelpModeState(), newTextBuffer("help 1\nhelp 2"), vpInPlace
+      )
+      e.activeWindow.cursor = BufferPosition(line: 1, column: 5)
+
+      let filename =
+        if withFilename:
+          some(path)
+        else:
+          none(string)
+      check (if vertical: e.vsplit(filename) else: e.hsplit(filename)).isOk
+
+      check e.activeWindow.buffer == fileBuffer
+      check e.activeWindow.cursor == BufferPosition(line: 2, column: 1)

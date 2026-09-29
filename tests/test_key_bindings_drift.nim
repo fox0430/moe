@@ -176,7 +176,7 @@ suite "key bindings — command name drift detection":
 
     var seenKeys: HashSet[string]
     var problems: seq[string]
-    for (key, name) in WindowSecondKeyCommands:
+    for (key, name, _, _) in WindowSecondKeyCommands:
       if key in seenKeys:
         problems.add("duplicate key: " & key)
       seenKeys.incl key

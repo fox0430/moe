@@ -5119,6 +5119,36 @@ suite "Ctrl-w window commands in special modes":
     check idx >= 0
     check e.buffers[idx].isModified
 
+  test "Ctrl-w n opens an empty buffer in a new window above":
+    let (e, path) = editorOnTempFile("moe_ctrlw_new.txt")
+    defer:
+      removeFile(path)
+    let origWin = e.activeWindow
+    let origBufferId = e.activeBuffer().id
+
+    e.sendWindowCommand("n")
+
+    check e.windowManager.windows.len == 2
+    check e.activeWindow != origWin
+    check e.activeWindow.viewport.x == origWin.viewport.x
+    check e.activeWindow.viewport.y < origWin.viewport.y
+    check e.activeBuffer().id != origBufferId
+    check e.activeBuffer().len == 1
+    check e.activeBuffer().getLine(0).len == 0
+    check e.state.mode == EditorMode.Normal
+    check origWin.buffer.id == origBufferId
+
+  test "Ctrl-w n in a special mode opens an empty buffer in Normal mode":
+    let e = createSplitEditorInFileTree()
+    let windowsBefore = e.windowManager.windows.len
+
+    e.sendWindowCommand("n")
+
+    check e.windowManager.windows.len == windowsBefore + 1
+    check e.activeBuffer().len == 1
+    check e.activeBuffer().getLine(0).len == 0
+    check e.state.mode == EditorMode.Normal
+
 suite "Ctrl-C in Terminal mode":
   proc fakeTerminalState(): TerminalState =
     TerminalState(

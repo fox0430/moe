@@ -224,5 +224,5 @@ proc bindNormalMode*(registry: KeyBindingRegistry) =
   ## silently skips entries whose target command name is not yet registered.
   for (key, cmd) in NormalBindings:
     registry.bindKey(EditorMode.Normal, key, cmd)
-  for (key, cmd) in WindowSecondKeyCommands:
-    registry.bindKey(EditorMode.Normal, "C-w " & key, cmd)
+  for c in WindowSecondKeyCommands:
+    registry.bindKey(EditorMode.Normal, "C-w " & c.key, c.name)
