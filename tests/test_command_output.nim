@@ -22,7 +22,7 @@
 
 import std/[unittest]
 
-import ../src/moepkg/[editor, config, editor_window, window_manager]
+import ../src/moepkg/[editor, config]
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/editor_command_output
 

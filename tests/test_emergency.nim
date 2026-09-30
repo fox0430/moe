@@ -24,7 +24,7 @@ import pkg/results
 import
   ../src/moepkg/[
     editor, editor_buffers, editor_window, buffer, backup, config, config_loader,
-    emergency, message_log, recovery_format, recovery_index, recovery_store,
+    emergency, recovery_format, recovery_index, recovery_store,
   ]
 import ../src/moepkg/types/editor_types
 

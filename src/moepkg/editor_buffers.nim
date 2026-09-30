@@ -40,7 +40,6 @@ import
   highlight_config,
   logger,
   buffer,
-  window_manager,
   lsp_integration
 
 when not defined(moe.embedded):

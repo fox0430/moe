@@ -20,7 +20,7 @@
 ## Tests for diff_viewer.nim
 ## This module tests the Diff Viewer data structures and operations.
 
-import std/[unittest, options, os, strutils, unicode]
+import std/[unittest, options, os, strutils]
 
 import pkg/results
 import pkg/celina
