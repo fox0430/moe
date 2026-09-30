@@ -29,7 +29,6 @@ import ../src/moepkg/lsp_integration {.all.}
 import ../src/moepkg/[buffer, message_log, unicode_utils]
 import ../src/moepkg/types
 import ../src/moepkg/lsp_service {.all.}
-import ../src/moepkg/types/config_types
 import ../src/moepkg/buffer_backends/piece_table
 import ../src/moepkg/lsp/protocol/types
 import ../src/moepkg/types/lsp_integration_types {.all.}

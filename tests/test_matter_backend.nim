@@ -1,6 +1,5 @@
-import std/[sequtils, unittest]
-
 when defined(moe.matter) or defined(features.moe.matter):
+  import std/[sequtils, unittest]
   import ../src/moepkg/syntax/[matter_backend, tokenizer]
   import matter_test_grammars
 

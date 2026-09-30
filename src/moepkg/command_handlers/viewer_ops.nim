@@ -27,8 +27,8 @@ import pkg/results
 import
   ../[
     buffer, buffer_manager, bookmark_manager, editor, editor_callhierarchy,
-    editor_window_layout, editor_window_state, help_viewer, log_viewer, logger,
-    lsp_service, message_log, types, viewer_mode,
+    editor_window_layout, help_viewer, log_viewer, logger, lsp_service, message_log,
+    types, viewer_mode,
   ]
 import ../[backup, backup_manager, diff_viewer, recovery_index, recovery_manager]
 

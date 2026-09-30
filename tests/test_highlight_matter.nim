@@ -1,12 +1,9 @@
-import std/[sequtils, unittest]
-
-import pkg/results
-
-import ../src/moepkg/[config, highlight, highlight_config, syntax/tokenizer]
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types/highlight_types
-
 when defined(moe.matter) or defined(features.moe.matter):
+  import std/[sequtils, unittest]
+  import pkg/results
+  import ../src/moepkg/[config, highlight, highlight_config, syntax/tokenizer]
+  import ../src/moepkg/buffer {.all.}
+  import ../src/moepkg/types/highlight_types
   import pkg/celina
   import matter_test_grammars
 

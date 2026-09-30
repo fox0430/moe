@@ -28,9 +28,7 @@ import syntax/tokenizer
 
 # Side-effect-only import: `syntax_nim` registers the Nim lexer. Dropping it
 # still compiles but silently loses Nim highlighting.
-{.push warning[UnusedImport]: off.}
-from syntax/syntax_nim import nil
-{.pop.}
+import syntax/syntax_nim
 
 import lsp/protocol/types
 when defined(moe.matter) or defined(features.moe.matter):

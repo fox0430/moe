@@ -28,9 +28,9 @@ import pkg/celina
 
 import
   ../src/moepkg/[
-    editor, config, types, modes, terminal_mode, editor_window, editor_window_state,
-    editor_window_tab, handler, key_bindings, viewer_mode, buffer_manager,
-    window_manager, editor_render_views, render_utils, filetree,
+    editor, config, types, modes, terminal_mode, editor_window, editor_window_tab,
+    handler, key_bindings, viewer_mode, buffer_manager, window_manager,
+    editor_render_views, render_utils, filetree,
   ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/buffer/core

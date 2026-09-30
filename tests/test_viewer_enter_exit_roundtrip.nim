@@ -37,7 +37,7 @@ import
   ../src/moepkg/[
     editor, config, config_loader, types, lsp_service, editor_navigation,
     editor_documentsymbol, editor_callhierarchy, window_manager, editor_window,
-    editor_window_state, editor_buffers, diff_viewer,
+    editor_buffers, diff_viewer,
   ]
 import ../src/moepkg/command_handlers/[handler_result, result_processor]
 import ../src/moepkg/buffer/core

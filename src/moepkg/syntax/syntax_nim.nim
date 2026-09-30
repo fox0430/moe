@@ -470,4 +470,6 @@ proc nimNextToken*(g: var GeneralTokenizer) =
   g.pos = pos
 
 # Self-register so the dispatcher resolves Nim without importing this module.
+# Importers may need it only for this side effect, so never report it unused.
+{.used.}
 registerLexer(langNim, nimNextToken)

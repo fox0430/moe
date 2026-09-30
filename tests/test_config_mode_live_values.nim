@@ -25,7 +25,7 @@ import std/[unittest, os, strutils]
 import
   ../src/moepkg/[
     editor, config, config_loader, config_mode, color, types, key_bindings,
-    editor_window, setting_options, editor_config_reload,
+    setting_options, editor_config_reload,
   ]
 import ../src/moepkg/command_handlers/[handler_result, result_processor, config_handler]
 

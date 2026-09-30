@@ -25,8 +25,8 @@ import pkg/results
 
 import
   ../[
-    backup, backup_manager, buffer, diff_viewer, editor, editor_window_layout,
-    editor_window_state, logger, types,
+    backup, backup_manager, buffer, diff_viewer, editor, editor_window_layout, logger,
+    types,
   ]
 import ../buffer/atomic_write
 
