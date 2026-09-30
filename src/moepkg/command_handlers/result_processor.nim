@@ -59,7 +59,19 @@ var overlayPlaybackHook*: OverlayPlaybackHook = nil
 
 proc executeCommandOverlay*(e: Editor, commandText: string): bool
 
-proc processResultEpilogue(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
+proc processResultEpilogue(
+  e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
+): bool
+
+proc processResultWithHost(
+  e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
+): bool
+
+proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
+  ## Apply a result unless the host takes ownership of it. Host-handled results
+  ## keep the editor running and skip Moe's effects and mode transitions.
+  var hostHandled: bool
+  e.processResultWithHost(r, activeBuffer, hostHandled)
 
 proc modeSwitchEntry(mode: EditorMode): Option[HandlerResult] =
   ## Entry result for `mode_switch`-able modes that build a listing on entry;
@@ -142,9 +154,15 @@ proc processHistoryResult(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
 
   true
 
-proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
+proc processResultWithHost(
+    e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
+): bool =
   ## Apply the editor-level side effects implied by `r`. Returns true to
   ## continue the main loop, false to quit.
+
+  if e.interceptHostResult(r):
+    hostHandled = true
+    return true
 
   # Process the result
   case r.kind
@@ -264,10 +282,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     )
     discard # Consumed by processReplayedResult; only reaches here defensively.
 
-  return e.processResultEpilogue(r, activeBuffer)
+  return e.processResultEpilogue(r, activeBuffer, hostHandled)
 
 proc processResultEpilogue(
-    e: Editor, r: HandlerResult, activeBuffer: TextBuffer
+    e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
 ): bool =
   ## Post-processing for falling-through arms (hrHandled / hrUnhandled /
   ## hrError / hrExecCommand): overlay and mode transitions, viewer buffer
@@ -318,8 +336,10 @@ proc processResultEpilogue(
       else:
         modeSwitchEntry(newMode)
     if entry.isSome:
-      if not e.processResult(entry.get, activeBuffer):
+      if not e.processResultWithHost(entry.get, activeBuffer, hostHandled):
         return false
+      if hostHandled:
+        return true
     elif not focused:
       e.setMode(newMode)
 
@@ -425,8 +445,9 @@ proc processReplayedResult*(
       state.insertNormalMode = false
       e.setMode(EditorMode.Insert)
     return roContinue
-  let shouldContinue = processResult(e, r, activeBuffer)
-  if r.kind == hrError:
+  var hostHandled: bool
+  let shouldContinue = e.processResultWithHost(r, activeBuffer, hostHandled)
+  if r.kind == hrError and not hostHandled:
     return roAbort
   if not shouldContinue:
     return roQuit
@@ -699,9 +720,17 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
     return true
 
   # 4. side effects
-  let shouldContinue = e.processResult(r, activeBuffer)
+  var hostHandled: bool
+  let shouldContinue = e.processResultWithHost(r, activeBuffer, hostHandled)
   if not shouldContinue:
     return false
+  if hostHandled:
+    # A host-owned result must not quit or re-apply a synthesized mode switch
+    # through the original result's group after its side effects were skipped.
+    e.state.exitOverlay()
+    e.setMode(e.state.mode)
+    e.handleInsertNormalReturn()
+    return true
 
   # 5. teardown
   case r.group

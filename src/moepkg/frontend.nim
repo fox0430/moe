@@ -31,6 +31,11 @@
 
 import
   config, editor, editor_frame, editor_display, editor_buffers, frontend_input, handler
+import command_handlers/handler_result
+from types/editor_types import HostResultFilter, takeHostResultRequest
+
+export handler_result.HandlerResult, handler_result.HandlerResultKind
+export HostResultFilter, takeHostResultRequest
 
 export config.EditorConfig, config.newEditorConfig
 export editor.Editor, editor.newEditor
