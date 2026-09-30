@@ -1,7 +1,7 @@
 import std/[options, os, tempfiles, unittest]
 
 import ../src/moepkg/frontend
-import ../src/moepkg/[editor, editor_window, key_bindings, keybind_config, types]
+import ../src/moepkg/[editor, key_bindings, keybind_config, types]
 import ../src/moepkg/command_handlers/result_processor
 
 proc testEditor(): Editor =
