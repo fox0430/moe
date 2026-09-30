@@ -68,6 +68,14 @@ The `moepkg/frontend` facade exports `HostResultFilter`, `HandlerResult`,
 the command overlay and keeps the engine running so the frontend can manage its
 own lifecycle.
 
+Queuing a host-owned result stops the current macro or mapping replay, including
+typed Ex commands and `@:` repeats. Remaining replay keys are discarded so they
+cannot act on the original buffer before the frontend applies the request.
+Host-owned errors still abort replay; the host only owns their presentation.
+`hostResultRequestCount()` reports the total requests queued, even after they
+are consumed, so dispatch can detect a new request when the filter drains
+earlier requests during the same call.
+
 ## Code formatting
 
 The repository is formatted with [`nph`](https://github.com/arnetheduck/nph). CI fails if `src/` or `tests/` is not formatted:

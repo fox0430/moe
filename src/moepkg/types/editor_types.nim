@@ -100,6 +100,7 @@ type
     hostResultFilter*: HostResultFilter
     xHostCommandRequests: seq[ParsedCommand]
     xHostResultRequests: seq[handler_result_types.HandlerResult]
+    xHostResultRequestCount: int
     when not defined(moe.embedded):
       terminalStates*: Table[BufferId, TerminalState]
         ## Live Terminal sessions keyed by their buffer id. The window's
@@ -323,7 +324,12 @@ proc interceptHostResult*(e: Editor, r: handler_result_types.HandlerResult): boo
   ## Queue a result when the host elects to own its side effects.
   if not e.hostResultFilter.isNil and e.hostResultFilter(e, r):
     e.xHostResultRequests.add(r)
+    inc e.xHostResultRequestCount
     return true
+
+proc hostResultRequestCount*(e: Editor): int =
+  ## Total results queued for the host, including requests already consumed.
+  e.xHostResultRequestCount
 
 proc takeHostResultRequest*(e: Editor): Option[handler_result_types.HandlerResult] =
   ## Consume the oldest host-handled result, or none when the queue is empty.

@@ -25,6 +25,7 @@ suite "Host result interception":
       e.releaseExternalResources()
     let original = e.activeBuffer()
     var calls = 0
+    check e.hostResultRequestCount == 0
     e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
       check host == e
       inc calls
@@ -33,6 +34,7 @@ suite "Host result interception":
     check e.executeCommandOverlay(":vsplit second.txt")
     check e.executeCommandOverlay(":config")
     check calls == 3
+    check e.hostResultRequestCount == 3
     check e.windowManager.windows.len == 1
     check e.activeBuffer() == original
     check e.activeWindow.mode == EditorMode.Normal
@@ -47,6 +49,7 @@ suite "Host result interception":
     check second.get.vsplitFilename == some("second.txt")
     check third.get.kind == hrConfig
     check e.takeHostResultRequest().isNone
+    check e.hostResultRequestCount == 3
     e.hostResultFilter = nil
 
   test "a declining hook runs once and allows the native result":
@@ -58,6 +61,7 @@ suite "Host result interception":
       inc calls
     check e.executeCommandOverlay(":split")
     check calls == 1
+    check e.hostResultRequestCount == 0
     check e.windowManager.windows.len == 2
     check e.takeHostResultRequest().isNone
 
@@ -187,7 +191,7 @@ suite "Host result interception":
     check e.executeCommandOverlay(":split")
     check e.takeHostResultRequest().isSome
 
-  test "a host-owned replay error does not abort the replay":
+  test "a host-owned replay error still aborts the replay":
     let e = testEditor()
     defer:
       e.releaseExternalResources()
@@ -195,8 +199,93 @@ suite "Host result interception":
       r.kind == hrError
     check e.processReplayedResult(
       HandlerResult(kind: hrError, errorMessage: "handled by host"), e.activeBuffer()
-    ) == roContinue
+    ) == roAbort
     check e.state.statusMessage != "handled by host"
     let request = e.takeHostResultRequest()
     require request.isSome
     check request.get.errorMessage == "handled by host"
+
+  test "a mapping stops after a host-owned error before deleting text":
+    let e = testEditor()
+    defer:
+      e.releaseExternalResources()
+    require e.key("i")
+    require e.handleTextInput("original")
+    require e.key("Esc")
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      r.kind == hrError
+    require e.keyBindingRegistry.addRuntimeMappingExpanded(Normal, "C-y", "n x").len == 0
+    require e.key("C-y")
+    check e.activeBuffer().getLine(0) == "original"
+    let request = e.takeHostResultRequest()
+    require request.isSome
+    check request.get.kind == hrError
+
+  test "window keys, repeated Ex commands, and typed Ex commands stop mapping replay":
+    for rhs in ["C-w n i X Esc", "@ : i X Esc", ": s p l i t Space x Enter i X Esc"]:
+      let e = testEditor()
+      defer:
+        e.releaseExternalResources()
+      let original = e.activeBuffer()
+      e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+        r.kind in {hrNew, hrHSplit}
+      if rhs == "@ : i X Esc":
+        require e.executeCommandOverlay(":split x")
+        require e.takeHostResultRequest().isSome
+      require e.keyBindingRegistry.addRuntimeMappingExpanded(Normal, "C-y", rhs).len == 0
+      require e.key("C-y")
+      check original.getLine(0) == ""
+      check e.activeBuffer() == original
+      check e.activeWindow.mode == EditorMode.Normal
+      check not e.state.isCommandOverlay
+      check e.windowManager.windows.len == 1
+      let request = e.takeHostResultRequest()
+      require request.isSome
+      if rhs == "C-w n i X Esc":
+        check request.get.kind == hrNew
+      else:
+        check request.get.kind == hrHSplit
+        check request.get.hsplitFilename == some("x")
+      check e.takeHostResultRequest().isNone
+
+  test "a macro stops before editing after a host-owned window command":
+    let e = testEditor()
+    defer:
+      e.releaseExternalResources()
+    let original = e.activeBuffer()
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      r.kind == hrNew
+    let outcome = e.playbackMacro(@["<C-w>", "n", "i", "X", "<Esc>"])
+    check outcome.kind == hrError
+    check original.getLine(0) == ""
+    check e.activeBuffer() == original
+    check e.activeWindow.mode == EditorMode.Normal
+    check e.windowManager.windows.len == 1
+    let request = e.takeHostResultRequest()
+    require request.isSome
+    check request.get.kind == hrNew
+    check e.takeHostResultRequest().isNone
+
+  test "taking an earlier request in the filter still stops mapping replay":
+    let e = testEditor()
+    defer:
+      e.releaseExternalResources()
+    let original = e.activeBuffer()
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      if r.kind == hrNew:
+        let previous = host.takeHostResultRequest()
+        require previous.isSome
+        check previous.get.kind == hrNextWindow
+      r.kind in {hrNextWindow, hrNew}
+    require e.processResult(HandlerResult(kind: hrNextWindow), original)
+    check e.hostResultRequestCount == 1
+    require e.keyBindingRegistry.addRuntimeMappingExpanded(
+      Normal, "C-y", "C-w n i X Esc"
+    ).len == 0
+    require e.key("C-y")
+    check e.hostResultRequestCount == 2
+    check original.getLine(0) == ""
+    let request = e.takeHostResultRequest()
+    require request.isSome
+    check request.get.kind == hrNew
+    check e.takeHostResultRequest().isNone

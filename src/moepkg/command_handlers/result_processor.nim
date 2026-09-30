@@ -41,11 +41,12 @@ type
     ## Outcome from a single replayed key, after full processResult side effects.
     roContinue
     roQuit ## hrQuit / hrCquit — main loop terminates
-    roAbort ## hrError — statusMessage already set; loop stops, app continues
+    roAbort ## Error or queued host result — loop stops, app continues
 
   OverlayPlaybackHook* = proc(e: Editor, keyCombo: KeyCombo): Option[bool] {.closure.}
     ## Playback overlay dispatch. `none` = no overlay, fall through; `some(true)`
-    ## = handled, continue; `some(false)` = handled, requested app exit. Wired
+    ## = handled, continue unless a host result was queued;
+    ## `some(false)` = handled, requested app exit. Wired
     ## from handler.nim to avoid an import cycle (overlay handlers import here).
 
 const ModesNeedingContext = {
@@ -445,9 +446,9 @@ proc processReplayedResult*(
       state.insertNormalMode = false
       e.setMode(EditorMode.Insert)
     return roContinue
-  var hostHandled: bool
-  let shouldContinue = e.processResultWithHost(r, activeBuffer, hostHandled)
-  if r.kind == hrError and not hostHandled:
+  let queued = e.hostResultRequestCount
+  let shouldContinue = e.processResult(r, activeBuffer)
+  if e.hostResultRequestCount > queued or r.kind == hrError:
     return roAbort
   if not shouldContinue:
     return roQuit
@@ -574,9 +575,12 @@ proc runNestedKeyCombo*(
   # When an overlay is active the live loop routes through the overlay handler;
   # replay must do the same or recorded overlay keys hit the base-mode handler.
   if not overlayPlaybackHook.isNil:
+    let queued = e.hostResultRequestCount
     let overlayResult = overlayPlaybackHook(e, keyCombo)
     if overlayResult.isSome:
-      return if overlayResult.get: roContinue else: roQuit
+      if not overlayResult.get:
+        return roQuit
+      return if e.hostResultRequestCount > queued: roAbort else: roContinue
   if not manager.keyBindingRegistry.isReplayingMapping:
     let expand = checkRuntimeKeySeqMapping(manager, e, keyCombo)
     if expand.isSome:
