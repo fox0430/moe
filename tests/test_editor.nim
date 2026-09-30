@@ -24,8 +24,8 @@ import pkg/results
 import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
-    render_utils, lsp_service, lsp_integration, diff_viewer, setting_options,
-    editor_init, command_config, command_registry, help_viewer, logger, modes,
+    render_utils, lsp_service, lsp_integration, setting_options, editor_init,
+    command_config, command_registry, logger, modes,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
 import

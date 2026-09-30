@@ -19,7 +19,7 @@
 
 ## Tests for config_handler.nim
 
-import std/[unittest, strutils]
+import std/[unittest]
 
 import ../src/moepkg/[types, key_bindings, config_mode, config]
 import ../src/moepkg/command_handlers/config_handler

@@ -21,7 +21,7 @@ import std/[unittest, options, tables, os]
 
 import pkg/results
 
-import ../src/moepkg/[buffer, config, types]
+import ../src/moepkg/[buffer, config]
 
 import ../src/moepkg/editorconfig_helper {.all.}
 

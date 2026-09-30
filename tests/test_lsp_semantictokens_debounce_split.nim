@@ -22,9 +22,7 @@
 
 import std/[options, monotimes, os, tables, times, unittest]
 
-import pkg/results
-
-import ../src/moepkg/[editor, config, types, buffer]
+import ../src/moepkg/[editor, config, types]
 import ../src/moepkg/editor_codelens {.all.}
 
 proc createTestEditor(): Editor =

@@ -26,7 +26,7 @@ import pkg/results
 import
   ../src/moepkg/[
     editor, config, config_loader, viewer_mode, help_viewer, editor_buffers,
-    editor_window_state, window_manager, backup_manager, diff_viewer,
+    window_manager, backup_manager, diff_viewer,
   ]
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/buffer
