@@ -310,7 +310,7 @@ proc focusFileTreeWindow*(e: Editor): bool =
   ## Focus the fileTree sidebar, or return false if none is open. Unlike
   ## `toggleFileTree`, it never closes the sidebar.
   for i, win in e.windowManager.windows:
-    if win.mode == EditorMode.FileTree:
+    if win.isSidebar:
       e.windowManager.activateWindow(i)
       e.syncActiveWindow()
       return true
@@ -320,7 +320,7 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
   ## Toggle the fileTree sidebar (open if absent, close if present).
   var existingIdx = -1
   for i, win in e.windowManager.windows:
-    if win.mode == EditorMode.FileTree:
+    if win.isSidebar:
       existingIdx = i
       break
 

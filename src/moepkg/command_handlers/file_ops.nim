@@ -26,11 +26,82 @@ import pkg/results
 
 import
   ../[
-    buffer, editor, filetree, filer, logger, quick_run_utils, types, uri_utils,
-    viewer_mode, window_manager,
+    buffer, editor, editor_window_state, filetree, filer, logger, quick_run_utils,
+    types, uri_utils, viewer_mode, window_manager,
   ]
 
 import editor_ops, handler_result
+
+proc restoreSidebarFocus(e: Editor, side: EditorWindow) =
+  ## Return focus to the sidebar after a failed split, so the failure does
+  ## not strand the cursor in the target window.
+  for i, win in e.windowManager.windows:
+    if win == side:
+      e.windowManager.activateWindow(i)
+      e.syncActiveWindow()
+      return
+
+proc splitFromSidebar(e: Editor, dir: Option[string], vertical: bool) =
+  ## The sidebar has no tab to split, and its listing must not become one: open
+  ## a window on the tab it serves and browse `dir`, or the tree's root, there,
+  ## as Vim's split of a netrw window shows the listing again.
+  let side = e.activeWindow
+  let path =
+    if dir.isSome:
+      dir.get
+    elif side.modeState.kind == mskFileTree:
+      side.modeState.fileTree.rootPath
+    else:
+      getCurrentDir()
+  let target = e.sidebarTarget()
+  if target >= 0:
+    # Leave the sidebar through the shared primitive. The sidebar holds no
+    # Insert session, so the focus move leaves nothing behind.
+    discard e.leaveSidebar()
+    let splitResult =
+      if vertical:
+        e.vsplitWithBuffer(e.tabBuffer(e.activeWindow))
+      else:
+        e.hsplitWithBuffer(e.tabBuffer(e.activeWindow))
+    if splitResult.isErr:
+      e.state.statusMessage = "Error: " & splitResult.error
+      e.restoreSidebarFocus(side)
+      return
+  else:
+    # The sidebar is alone: the window opened beside it is the split, as a
+    # split-viewer request from a lone sidebar covers its new window in place.
+    let tab = e.sidebarTab()
+    if tab.isNone:
+      e.state.statusMessage = "Error: no buffer to open a window on"
+      return
+    let openResult = e.openWindowBesideSidebar(tab.get)
+    if openResult.isErr:
+      e.state.statusMessage = "Error: " & openResult.error
+      return
+  e.enterFilerInActiveWindow(path)
+
+proc splitFileFromSidebar(e: Editor, path: string, vertical: bool) =
+  ## Open `path` in a split of the window the sidebar serves. Beside a lone
+  ## sidebar there is nothing to split, so open the file beside it directly.
+  let side = e.activeWindow
+  let target = e.sidebarTarget()
+  if target < 0:
+    let openResult = e.openFileInNewRightWindow(path)
+    if openResult.isErr:
+      e.state.statusMessage = "Error: " & openResult.error
+    return
+  # Leave the sidebar through the shared primitive. The sidebar holds no
+  # Insert session, so the focus move leaves nothing behind.
+  discard e.leaveSidebar()
+  let splitResult =
+    if vertical:
+      e.vsplit(some(path))
+    else:
+      e.hsplit(some(path))
+  if splitResult.isErr:
+    logError("handler", "Split failed: " & splitResult.error)
+    e.state.statusMessage = "Error: " & splitResult.error
+    e.restoreSidebarFocus(side)
 
 proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Handle file / buffer open and split kinds. Returns true to continue.
@@ -83,14 +154,14 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
 
     # Reveal the opened file in the file tree
     for win in e.windowManager.windows:
-      if win.mode == EditorMode.FileTree and win.modeState.kind == mskFileTree:
+      if win.isSidebar and win.modeState.kind == mskFileTree:
         win.modeState.fileTree.revealPath(r.fileTreeFilePath)
         break
 
     if targetWinIdx >= 0:
-      # Switch to the target window and open the file (keeps unsaved changes)
-      e.windowManager.activateWindow(targetWinIdx)
-      e.syncActiveWindow()
+      # Leave the sidebar through the shared primitive. The sidebar holds no
+      # Insert session, so the focus move leaves nothing behind.
+      discard e.leaveSidebar()
       let editResult = e.editFile(r.fileTreeFilePath)
       if editResult.isErr:
         e.state.statusMessage = "Error: " & editResult.error
@@ -194,6 +265,12 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
         none(string)
       else:
         expandedVsplit
+    if splitFilename.isNone and e.activeWindow.isSidebar:
+      e.splitFromSidebar(filerPath, vertical = true)
+      return true
+    if e.activeWindow.isSidebar and splitFilename.isSome:
+      e.splitFileFromSidebar(splitFilename.get, vertical = true)
+      return true
     let splitResult = e.vsplit(splitFilename)
     if splitResult.isErr:
       logError("handler", "Vertical split failed: " & splitResult.error)
@@ -222,6 +299,12 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
         none(string)
       else:
         expandedHsplit
+    if splitFilename.isNone and e.activeWindow.isSidebar:
+      e.splitFromSidebar(filerPath, vertical = false)
+      return true
+    if e.activeWindow.isSidebar and splitFilename.isSome:
+      e.splitFileFromSidebar(splitFilename.get, vertical = false)
+      return true
     let splitResult = e.hsplit(splitFilename)
     if splitResult.isErr:
       logError("handler", "Horizontal split failed: " & splitResult.error)

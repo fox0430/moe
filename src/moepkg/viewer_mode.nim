@@ -51,16 +51,21 @@ proc tabBesideLoneSidebar(e: Editor): Option[TextBuffer] =
   else:
     none(TextBuffer)
 
+proc sidebarTab*(e: Editor): Option[TextBuffer] =
+  ## The tab the FileTree sidebar serves: that of the window `leaveSidebar`
+  ## goes to, or what one opened beside a lone sidebar shows.
+  let target = e.sidebarTarget()
+  if target >= 0:
+    return some(e.tabBuffer(e.windowManager.windows[target]))
+  e.tabBesideLoneSidebar()
+
 proc commandTab*(e: Editor): TextBuffer =
   ## The tab a command typed in the active window is about. The FileTree
-  ## sidebar has none; from it, the tab of the window `leaveSidebar` goes to.
+  ## sidebar has none; from it, the tab it serves.
   let win = e.activeWindow
   if not win.isSidebar:
     return e.tabBuffer(win)
-  let target = e.sidebarTarget()
-  if target >= 0:
-    return e.tabBuffer(e.windowManager.windows[target])
-  e.tabBesideLoneSidebar().get(e.tabBuffer(win))
+  e.sidebarTab().get(e.tabBuffer(win))
 
 proc leaveSidebar*(e: Editor): Result[bool, string] =
   ## A viewer covers a tab, which the FileTree sidebar does not have. From the
