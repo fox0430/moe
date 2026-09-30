@@ -29,7 +29,7 @@ import
   ../[
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
     syntax_checker, cursor_util, quick_run_utils, command_completion, key_bindings,
-    key_router, lsp_integration, command_registry, command_line,
+    key_router, lsp_integration, command_registry, command_line, editor_window_state,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -363,7 +363,7 @@ proc processResultEpilogue(
   # FileTree buffer regeneration after state changes (check all windows since
   # the file tree sidebar may not be the active window)
   for win in e.windowManager.windows:
-    if win.mode == EditorMode.FileTree and win.modeState.kind == mskFileTree and
+    if win.isSidebar and win.modeState.kind == mskFileTree and
         win.modeState.fileTree.needsBufferRefresh:
       win.setView(
         win.modeState.fileTree.createFileTreeTextBuffer(e.config.filer.showIcons)

@@ -922,3 +922,239 @@ suite "Split viewer - with the FileTree sidebar":
     discard e.openHelp()
 
     check e.state.previousMode == EditorMode.Normal
+
+suite "Split from the FileTree sidebar":
+  template checkFilerOver(
+      e: Editor, win, tree: EditorWindow, tab: TextBuffer, dir: string
+  ) =
+    ## `win` is a new window browsing `dir` in the Filer over `tab`.
+    check win != tree
+    check win.fixedWidth.isNone
+    check win.mode == EditorMode.Filer
+    check win.modeState.kind == mskFiler
+    check win.modeState.filer.currentPath == dir
+    check win.tabBufferId == tab.id
+
+  for kind in [hrVSplit, hrHSplit]:
+    test $kind & " browses the tree's root over the file window's tab":
+      let (e, path) = editorOnFile("moe_sidebar_split_" & $kind & ".txt")
+      defer:
+        removeFile(path)
+      let fileBuf = e.activeBuffer()
+      let buffersBefore = e.buffers.len
+      let tree = e.openFileTree()
+      let treeView = tree.buffer
+      let treeWidth = tree.fixedWidth.get
+      let treeX = tree.viewport.x
+      let treeY = tree.viewport.y
+      let treeH = tree.viewport.height
+      let root = tree.modeState.fileTree.rootPath
+
+      e.run(HandlerResult(kind: kind))
+
+      let win = e.activeWindow
+      check e.windowManager.windows.len == 3
+      check e.buffers.len == buffersBefore
+      check e.bufferById(treeView.id).isNone
+      e.checkFilerOver(win, tree, fileBuf, root)
+      e.checkSidebar(tree)
+      check tree.buffer == treeView
+      check tree.fixedWidth.get == treeWidth
+      # Regression: the split divides a main window, never the sidebar strip.
+      check tree.viewport.x == treeX
+      check tree.viewport.width == treeWidth
+      check tree.viewport.y == treeY
+      check tree.viewport.height == treeH
+      check win.viewport.x >= tree.viewport.x + tree.viewport.width
+
+      e.run(HandlerResult(kind: hrFilerQuit))
+
+      e.checkOnTab(win, fileBuf)
+      check e.buffers.len == buffersBefore
+
+  test "a directory argument is browsed instead of the root":
+    let (e, path) = editorOnFile("moe_sidebar_split_dir.txt")
+    let dir = getTempDir() / "moe_sidebar_split_dir"
+    createDir(dir)
+    defer:
+      removeFile(path)
+      removeDir(dir)
+    let fileBuf = e.activeBuffer()
+    let buffersBefore = e.buffers.len
+    let tree = e.openFileTree()
+
+    e.run(HandlerResult(kind: hrVSplit, vsplitFilename: some(dir)))
+
+    check e.buffers.len == buffersBefore
+    e.checkFilerOver(e.activeWindow, tree, fileBuf, absolutePath(dir))
+    e.checkSidebar(tree)
+
+  for kind in [hrVSplit, hrHSplit]:
+    test "from a lone sidebar " & $kind & " browses over the last opened buffer":
+      let (e, path) = editorOnFile("moe_sidebar_split_lone_" & $kind & ".txt")
+      defer:
+        removeFile(path)
+      let fileBuf = e.activeBuffer()
+      let buffersBefore = e.buffers.len
+      let tree = e.loneSidebar()
+      let treeX = tree.viewport.x
+
+      e.run(HandlerResult(kind: kind))
+
+      check e.windowManager.windows.len == 2
+      check e.buffers.len == buffersBefore
+      e.checkFilerOver(e.activeWindow, tree, fileBuf, tree.modeState.fileTree.rootPath)
+      e.checkSidebar(tree)
+      # Regression: the new window opens beside the sidebar, never inside it.
+      # The lone sidebar shrinks to its fixed width, as it does when any
+      # window opens beside it.
+      check tree.viewport.x == treeX
+      check tree.viewport.width == tree.fixedWidth.get
+      check e.activeWindow.viewport.x >= tree.viewport.x + tree.viewport.width
+
+  for kind in [hrVSplit, hrHSplit]:
+    test "from a lone sidebar " & $kind & " with no room keeps the sidebar and reports":
+      # The lone-sidebar branch of splitFromSidebar refuses before opening
+      # anything, as the parallel viewer path does.
+      let (e, path) = editorOnFile("moe_sidebar_split_noroom_" & $kind & ".txt")
+      defer:
+        removeFile(path)
+      let buffersBefore = e.buffers.len
+      let tree = e.loneSidebar()
+      tree.fixedWidth = some(tree.viewport.width)
+
+      e.run(HandlerResult(kind: kind))
+
+      check e.windowManager.windows.len == 1
+      check e.activeWindow == tree
+      check "not enough space" in e.state.statusMessage
+      check e.buffers.len == buffersBefore
+      e.checkSidebar(tree)
+
+  for kind in [hrVSplit, hrHSplit]:
+    test $kind & " with a file argument opens the file, registering no listing":
+      let (e, path) = editorOnFile("moe_sidebar_split_file_" & $kind & ".txt")
+      let other = getTempDir() / ("moe_sidebar_split_other_" & $kind & ".txt")
+      writeFile(other, "other\n")
+      defer:
+        removeFile(path)
+        removeFile(other)
+      let buffersBefore = e.buffers.len
+      let tree = e.openFileTree()
+      let treeView = tree.buffer
+      let treeX = tree.viewport.x
+      let treeWidth = tree.viewport.width
+      let treeY = tree.viewport.y
+      let treeH = tree.viewport.height
+
+      if kind == hrVSplit:
+        e.run(HandlerResult(kind: hrVSplit, vsplitFilename: some(other)))
+      else:
+        e.run(HandlerResult(kind: hrHSplit, hsplitFilename: some(other)))
+
+      let win = e.activeWindow
+      check e.buffers.len == buffersBefore + 1
+      check e.bufferById(treeView.id).isNone
+      check win.mode == EditorMode.Normal
+      check win.buffer.filePath == some(other)
+      e.checkSidebar(tree)
+      # Regression: the file opens in a split of a main window, never inside
+      # the sidebar strip.
+      check tree.viewport.x == treeX
+      check tree.viewport.width == treeWidth
+      check tree.viewport.y == treeY
+      check tree.viewport.height == treeH
+      check win.viewport.x >= tree.viewport.x + tree.viewport.width
+
+  for kind in [hrVSplit, hrHSplit]:
+    test $kind & " with a file argument from a lone sidebar opens the file beside it":
+      let (e, path) = editorOnFile("moe_sidebar_split_lone_file_" & $kind & ".txt")
+      let other = getTempDir() / ("moe_sidebar_split_lone_other_" & $kind & ".txt")
+      writeFile(other, "other\n")
+      defer:
+        removeFile(path)
+        removeFile(other)
+      let buffersBefore = e.buffers.len
+      let tree = e.loneSidebar()
+      let treeView = tree.buffer
+      let treeX = tree.viewport.x
+
+      if kind == hrVSplit:
+        e.run(HandlerResult(kind: hrVSplit, vsplitFilename: some(other)))
+      else:
+        e.run(HandlerResult(kind: hrHSplit, hsplitFilename: some(other)))
+
+      let win = e.activeWindow
+      check e.windowManager.windows.len == 2
+      check e.buffers.len == buffersBefore + 1
+      check e.bufferById(treeView.id).isNone
+      check win.mode == EditorMode.Normal
+      check win.buffer.filePath == some(other)
+      e.checkSidebar(tree)
+      # Regression: the file opens beside the sidebar, never inside its strip.
+      check tree.viewport.x == treeX
+      check tree.viewport.width == tree.fixedWidth.get
+      check win.viewport.x >= tree.viewport.x + tree.viewport.width
+
+  for kind in [hrVSplit, hrHSplit]:
+    test $kind &
+      " with a file argument from a lone sidebar and no room keeps the sidebar":
+      # openFileInNewRightWindow checks the room before loading, so a refused
+      # open registers nothing.
+      let (e, path) =
+        editorOnFile("moe_sidebar_split_lone_file_noroom_" & $kind & ".txt")
+      let other =
+        getTempDir() / ("moe_sidebar_split_lone_noroom_other_" & $kind & ".txt")
+      writeFile(other, "other\n")
+      defer:
+        removeFile(path)
+        removeFile(other)
+      let buffersBefore = e.buffers.len
+      let tree = e.loneSidebar()
+      tree.fixedWidth = some(tree.viewport.width)
+
+      if kind == hrVSplit:
+        e.run(HandlerResult(kind: hrVSplit, vsplitFilename: some(other)))
+      else:
+        e.run(HandlerResult(kind: hrHSplit, hsplitFilename: some(other)))
+
+      check e.windowManager.windows.len == 1
+      check e.activeWindow == tree
+      check "not enough space" in e.state.statusMessage
+      check e.buffers.len == buffersBefore
+      e.checkSidebar(tree)
+
+  for kind in [hrVSplit, hrHSplit]:
+    test $kind & " with an unreadable file keeps the focus in the sidebar":
+      when defined(posix):
+        let (e, path) = editorOnFile("moe_sidebar_split_unreadable_" & $kind & ".txt")
+        let other =
+          getTempDir() / ("moe_sidebar_split_unreadable_file_" & $kind & ".txt")
+        writeFile(other, "secret\n")
+        setFilePermissions(other, {})
+        defer:
+          setFilePermissions(other, {fpUserRead, fpUserWrite})
+          removeFile(path)
+          removeFile(other)
+        var canRead = true
+        try:
+          discard readFile(other)
+        except CatchableError:
+          canRead = false
+        if canRead:
+          # Running as root: an unreadable file is still readable, so there is
+          # no way to fail the load here.
+          skip()
+        let buffersBefore = e.buffers.len
+        let tree = e.openFileTree()
+        let windowsBefore = e.windowManager.windows.len
+
+        if kind == hrVSplit:
+          e.run(HandlerResult(kind: hrVSplit, vsplitFilename: some(other)))
+        else:
+          e.run(HandlerResult(kind: hrHSplit, hsplitFilename: some(other)))
+
+        check e.activeWindow == tree
+        check e.windowManager.windows.len == windowsBefore
+        check e.buffers.len == buffersBefore
+        e.checkSidebar(tree)
