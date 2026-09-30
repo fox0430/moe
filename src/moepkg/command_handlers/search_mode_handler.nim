@@ -55,6 +55,7 @@ proc activeConfigState(e: Editor): ConfigModeState =
   if e.state.mode == EditorMode.Config:
     let window = e.activeWindow
     if window.modeState.kind == mskConfig:
+      discard window.modeState.config.refreshItems(e.state)
       return window.modeState.config
   return nil
 

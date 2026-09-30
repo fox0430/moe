@@ -3449,7 +3449,7 @@ suite "Editor - tab/indent setters sync .editorconfig override":
 
 suite "Editor - handler CommandContext sees live config after applyConfigSettings":
   # Regression: handlers used to snapshot Clipboard/SmoothScroll/Notification at
-  # construction, so applyConfigSettings' ref swap never reached them. Now
+  # construction, so applyConfigSettings' reload never reached them. Now
   # CommandContext getters pull from state.config directly.
   test "CommandContext.clipboardConfig reflects post-reload clipboard":
     let e = createTestEditor()

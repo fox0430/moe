@@ -107,7 +107,7 @@ proc renderConfig*(
       editCursorX =
         startX + min(prefixWidth + cursorWidth - scrollWidth, max(0, width - 1))
     else:
-      displayLine = formatItemForDisplay(item, maxNameWidth)
+      displayLine = formatItemForDisplay(item, configState.config, maxNameWidth)
 
     # Truncate in display columns (width <= 0 safe). No ellipsis while editing:
     # those columns are live text the cursor can sit on.
@@ -158,17 +158,17 @@ proc renderConfig*(
     # renders inline color codes (color as background, contrasting foreground).
     # Skipped while editing and for "termDefault" (no concrete color).
     if item.kind == cvkColor and not isBeingEdited:
-      let parsed = parseThemeColor(item.colorValue)
+      let colorValue = item.colorValue
+      let parsed = parseThemeColor(colorValue)
       if parsed.isOk and not parsed.get.isTermDefaultColor:
         # Column from the drawn width, not byte len, so a multibyte displayName
         # can't shift the highlight.
         let
-          formatted = formatItemForDisplay(item, maxNameWidth)
-          valueWidth = charDisplayWidth(item.colorValue)
-          valueX = startX + charDisplayWidth(formatted) - valueWidth
+          valueWidth = charDisplayWidth(colorValue)
+          valueX = startX + charDisplayWidth(itemNamePrefix(item, maxNameWidth))
         if valueX + valueWidth <= startX + width:
           discard buffer.setCharString(
-            valueX, screenY, item.colorValue, colorCodeStyle(parsed.get)
+            valueX, screenY, colorValue, colorCodeStyle(parsed.get)
           )
 
     inc screenY

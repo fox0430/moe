@@ -29,6 +29,7 @@ import
   editor_window_layout,
   editor_render_window,
   editor_render_modes,
+  config_mode,
   render_utils,
   visible_rows,
   status_line,
@@ -258,10 +259,9 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
     # whose modeState isn't a selection list.
     window.syncSelectionCursor()
     if window.modeState.kind == mskConfig:
-      # Config has no backing TextBuffer to walk; its list geometry matches
-      # renderConfig (viewport height minus the steady bottom reserve and tab
-      # line), so scroll the shared viewport directly to keep the selected
-      # item visible.
+      # Config has no TextBuffer; scroll the shared viewport directly.
+      # Refresh rows for live values; a dropped edit is left to the key path.
+      discard window.modeState.config.refreshItems(e.state)
       let
         visible = max(
           1,

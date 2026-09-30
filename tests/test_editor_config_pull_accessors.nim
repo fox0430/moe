@@ -234,7 +234,7 @@ suite "Editor - config pull accessors (Phase 1)":
     check e.bracketSplit == bsmNoIndent
 
 suite "Editor - applyConfigSettings live-reload (S1 regression)":
-  test "lineWrap flip propagates via ref swap":
+  test "lineWrap flip propagates":
     let e = mkEditor()
     e.config.standard.lineWrap = true
     check e.lineWrap == true
@@ -243,10 +243,20 @@ suite "Editor - applyConfigSettings live-reload (S1 regression)":
     newCfg.standard.lineWrap = false
     e.applyConfigSettings(newCfg)
     check e.lineWrap == false
-    check e.config == newCfg
-    check e.state.config == newCfg
 
-  test "showTabLine flip propagates via ref swap":
+  test "the config ref is kept, so its holders see the new values":
+    let e = mkEditor()
+    let held = e.config
+    e.config.standard.tabStop = 4
+
+    let newCfg = newEditorConfig()
+    newCfg.standard.tabStop = 8
+    e.applyConfigSettings(newCfg)
+    check e.config == held
+    check e.state.config == held
+    check held.standard.tabStop == 8
+
+  test "showTabLine flip propagates":
     let e = mkEditor()
     e.config.tabLine.enable = true
     check e.showTabLine == true
@@ -256,7 +266,7 @@ suite "Editor - applyConfigSettings live-reload (S1 regression)":
     e.applyConfigSettings(newCfg)
     check e.showTabLine == false
 
-  test "state-scoped accessor also sees the swapped config":
+  test "state-scoped accessor also sees the new config":
     let e = mkEditor()
     e.config.standard.tabStop = 4
     check e.state.tabStop == 4

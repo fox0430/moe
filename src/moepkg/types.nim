@@ -924,8 +924,7 @@ type
       ## Primary-button gesture currently owned by the editor.
     snippetSession*: SnippetSession # Snippet tabstop cycling state (Insert mode)
     display*: DisplaySettings
-    config*: EditorConfig
-      ## Aliases `Editor.config`; kept in sync on swap in applyConfigSettings.
+    config*: EditorConfig ## Aliases `Editor.config`; never reassigned.
     timing*: TimingState
     git*: GitCacheState # Per-buffer git diff/branch cache (see git_cache.nim)
     lastKeyWasEscape*: bool

@@ -39,33 +39,26 @@ type
     cvkEnum # enumerated value
     cvkSection # section header (not editable)
 
-  ConfigItem* = object ## Represents a single configuration item in the list
+  ConfigItem* = object
+    ## Row position and editing bounds; value is read live from EditorConfig/theme.
     displayName*: string
     section*: string
     depth*: int # Indentation depth (0 for section, 1 for item)
     descriptorIndex*: int # Index into descriptor table (-1 for sections)
     case kind*: ConfigValueKind
-    of cvkBool:
-      boolValue*: bool
     of cvkInt:
-      intValue*: int
       intMin*: int
       intMax*: int
     of cvkFloat:
-      floatValue*: float
       floatMin*: float
       floatMax*: float
       floatStep*: float
-    of cvkString:
-      stringValue*: string
     of cvkEnum:
-      enumValue*: string
       enumOptions*: seq[string]
     of cvkColor:
       colorIndex*: EditorColorPairIndex
       colorIsFg*: bool
-      colorValue*: string # current value as "#rrggbb" or "termDefault"
-    of cvkSection:
+    of cvkBool, cvkString, cvkSection:
       discard
 
   ConfigModeState* = ref object ## State for the configuration mode UI
@@ -78,9 +71,9 @@ type
     enumPopupIndex*: int # Selected index in enum popup
     searchQuery*: string # Active search query ("" when no search)
     searchStartIndex*: int # Selection index when the current search began
-    config*: EditorConfig # Reference to the config being edited
+    config*: EditorConfig # Aliases `Editor.config`; never reassigned.
     waitingForG*: bool # Waiting for second 'g' for 'gg' command
     lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight
     pendingApply*: bool
-      # applyChange writes to EditorConfig; consumed by the
+      # A value was written to EditorConfig; consumed by the
       # main loop to gate applyConfigSettings so cursor movement is cheap

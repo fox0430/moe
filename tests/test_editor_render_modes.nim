@@ -273,8 +273,9 @@ suite "renderConfig - narrow viewport / multibyte":
     var mbIdx = -1
     for i, item in configState.items:
       if item.kind == cvkString:
-        configState.items[i].stringValue =
-          "あいうえおかきくけこさしすせそ"
+        configState.setTextValue(
+          e.state, i, "あいうえおかきくけこさしすせそ"
+        )
         mbIdx = i
         break
     if mbIdx < 0:
@@ -307,8 +308,8 @@ suite "renderConfig - search highlight with multibyte displayName":
     var strIdx = -1
     for i, item in configState.items:
       if item.kind == cvkString:
+        configState.setTextValue(e.state, i, "XY")
         configState.items[i].displayName = "あいう"
-        configState.items[i].stringValue = "XY"
         strIdx = i
         break
 
@@ -334,7 +335,9 @@ suite "renderConfig - search highlight with multibyte displayName":
 
       # Compute the expected screen X of the first highlighted cell using the
       # same display-width-aware conversion the fix applies.
-      let displayedLine = formatItemForDisplay(configState.items[strIdx], maxNameWidth)
+      let displayedLine = formatItemForDisplay(
+        configState.items[strIdx], configState.config, maxNameWidth
+      )
       let byteIdx = displayedLine.find("XY")
       check byteIdx > 0
       let charIdx = displayedLine.byteToCharPos(byteIdx)
@@ -356,8 +359,8 @@ suite "renderConfig - search highlight with multibyte displayName":
     var strIdx = -1
     for i, item in configState.items:
       if item.kind == cvkString:
+        configState.setTextValue(e.state, i, "XY")
         configState.items[i].displayName = "a\u0301\u200Bb"
-        configState.items[i].stringValue = "XY"
         strIdx = i
         break
 
@@ -381,7 +384,9 @@ suite "renderConfig - search highlight with multibyte displayName":
 
       check hlXs.len == 2
 
-      let displayedLine = formatItemForDisplay(configState.items[strIdx], maxNameWidth)
+      let displayedLine = formatItemForDisplay(
+        configState.items[strIdx], configState.config, maxNameWidth
+      )
       let byteIdx = displayedLine.find("XY")
       check byteIdx > 0
       let charIdx = displayedLine.byteToCharPos(byteIdx)
@@ -404,9 +409,12 @@ suite "renderConfig - color value highlight with multibyte displayName":
       depth: 1,
       descriptorIndex: -1,
       colorIsFg: true,
-      colorValue: "#ff0000",
     )
     let colorIdx = configState.items.high
+    var colors = themeColors
+    colors[configState.items[colorIdx].colorIndex].foreground =
+      ThemeColor(rgb: parseThemeColor("#ff0000").get)
+    setThemeColors(colors)
 
     let maxNameWidth = calcMaxNameWidth(configState.items, buffer.area.width)
 
@@ -423,7 +431,9 @@ suite "renderConfig - color value highlight with multibyte displayName":
       if buffer[x, 0].style.bg == swatchBg:
         swatchXs.add x
 
-    let displayedLine = formatItemForDisplay(configState.items[colorIdx], maxNameWidth)
+    let displayedLine = formatItemForDisplay(
+      configState.items[colorIdx], configState.config, maxNameWidth
+    )
     let expectedX = displayWidth(displayedLine) - displayWidth("#ff0000")
     let byteBasedX = displayedLine.len - "#ff0000".len
 
