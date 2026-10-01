@@ -765,7 +765,7 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
         let res = svc.onApplyWorkspaceEdit(edit)
         applied = res.applied
         failureReason = res.failureReason.get("")
-    except TransactionRollbackError as err:
+    except TransactionRollbackError:
       let workerOpt = svc.getWorker(langId)
       if workerOpt.isSome:
         workerOpt.get.sendApplyEditResponse(

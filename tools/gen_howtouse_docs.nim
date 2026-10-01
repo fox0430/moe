@@ -118,7 +118,7 @@ proc regenerateHowtouseDocs*(input: string): string =
   for (name, body) in Sections:
     result = replaceMarkers(result, name, body())
 
-proc main() =
+proc main() {.used.} =
   if not fileExists(DocsPath):
     echo "missing: ", DocsPath
     quit 1

@@ -370,7 +370,7 @@ proc runEditor(
     if lateSignal != 0:
       reraiseAsDeath(lateSignal)
 
-proc main() =
+proc main() {.used.} =
   # Before any thread exists: threads inherit their creator's signal mask.
   discard startSignalWatcher()
 

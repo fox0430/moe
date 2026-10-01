@@ -1571,6 +1571,7 @@ suite "StatusLine - sanitize control characters":
     renderStatusLine(state, tb, buf, 23, cfg)
     let line = getBufferLine(buf, 23)
     check not hasControl(line)
+    check res in line
 
   test "buildGitInfo sanitizes branch name with controls":
     let tb = createTestTextBuffer("/path/to/file.nim", false, "test")
