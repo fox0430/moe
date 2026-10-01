@@ -29,13 +29,13 @@ import pkg/results
 
 import
   ../[
-    editor, editor_window_state, editor_window_tab, modes, buffer, logger, types, filer,
-    filetree, config_loader, window_manager, log_viewer, syntax_checker, render_utils,
-    motion, viewer_mode, editor_build_jobs, buffer_manager,
+    editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
+    config_loader, window_manager, log_viewer, syntax_checker, render_utils, motion,
+    viewer_mode, editor_build_jobs, buffer_manager,
   ]
 
 when not defined(moe.embedded):
-  import ../[editor_window_layout, terminal_mode]
+  import ../[editor_window_layout, editor_window_tab, terminal_mode]
 
 import handler_result
 

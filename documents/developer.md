@@ -50,6 +50,32 @@ Test files live under `tests/` and follow the `test_<module>.nim` naming convent
 
 For async tests, define an inner `proc runTest(): Future[T] {.async.}` and drive it with `waitFor`.
 
+## Embedded host results
+
+Embedded frontends can set `Editor.hostResultFilter` to take ownership of selected
+`HandlerResult` values. Returning `true` queues the result and skips Moe's native
+side effects and mode transitions. Consume requests in order with
+`takeHostResultRequest()` on the editor thread, then apply the frontend's tab,
+pane, or viewer operation before processing further input.
+
+Unlike `hostCommandFilter`, this hook also covers window keys, runtime mappings,
+`mode_switch` viewer entries, and Filer split-open actions. Declining a result
+preserves Moe's normal behavior. The command hook remains available for custom
+commands or interception before command validation.
+
+The `moepkg/frontend` facade exports `HostResultFilter`, `HandlerResult`,
+`HandlerResultKind`, and `takeHostResultRequest`. A host-owned quit result leaves
+the command overlay and keeps the engine running so the frontend can manage its
+own lifecycle.
+
+Queuing a host-owned result stops the current macro or mapping replay, including
+typed Ex commands and `@:` repeats. Remaining replay keys are discarded so they
+cannot act on the original buffer before the frontend applies the request.
+Host-owned errors still abort replay; the host only owns their presentation.
+`hostResultRequestCount()` reports the total requests queued, even after they
+are consumed, so dispatch can detect a new request when the filter drains
+earlier requests during the same call.
+
 ## Code formatting
 
 The repository is formatted with [`nph`](https://github.com/arnetheduck/nph). CI fails if `src/` or `tests/` is not formatted:
