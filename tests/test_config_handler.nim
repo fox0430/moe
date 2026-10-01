@@ -37,7 +37,6 @@ proc createTestEditorState(): EditorState =
 suite "ConfigModeState - Key Sequence Flags":
   test "fresh ConfigModeState has key-sequence flags reset":
     let configState = createTestConfigState()
-    let editorState = createTestEditorState()
 
     check configState.waitingForG == false
     check configState.lastKeyWasEscape == false

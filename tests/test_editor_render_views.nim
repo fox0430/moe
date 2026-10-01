@@ -2127,12 +2127,6 @@ suite "advanceLayoutForFrame - Config view follows the config":
     check e.state.statusMessage == "Setting disappeared; the edit was cancelled"
 
 suite "editor_render_views - sanitize control characters":
-  proc hasControl(s: string): bool =
-    for r in s.runes:
-      if int(r) < 0x20 or int(r) == 0x7F:
-        return true
-    false
-
   test "renderBottomLines sanitizes single-line statusMessage":
     let e = createTestEditor()
     var buffer = createTestBuffer()

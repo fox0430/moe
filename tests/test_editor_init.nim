@@ -144,7 +144,7 @@ suite "editor_init: applyCommandConfig":
     cfg.disabledCommandAliases = @["q"]
     cfg.commandAliases["q"] = UserCommandEntry(command: "quitall")
     var vr = newValidationResult()
-    let (_, _, cmdConfig, cmdLineParser) = newEditorRegistries(cfg, vr)
+    let (_, _, _, cmdLineParser) = newEditorRegistries(cfg, vr)
 
     check cmdLineParser.aliases["q"] == claQuitAll
 

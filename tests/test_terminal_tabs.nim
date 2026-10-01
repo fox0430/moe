@@ -378,7 +378,6 @@ suite "Terminal tabs - a session takes the window over":
   test "The viewer bookkeeping the window was carrying is dropped":
     # A viewer entry would undo its placement on top of the live session.
     let e = createTestEditor()
-    let originBuf = e.activeWindow.buffer
     e.activeWindow.viewerEntry = some(
       ViewerEntry(
         mode: EditorMode.BufferManager,
@@ -1116,7 +1115,7 @@ suite "Terminal tabs - display integration":
     let textBuf = e.buffers[0]
     textBuf.filePath = some("/tmp/[Terminal: bash].log")
     require e.activateBuffer(textBuf.id)
-    let termBuf = registerFakeTerminal(e, "bash")
+    discard registerFakeTerminal(e, "bash")
     require e.activateBuffer(textBuf.id)
 
     # The label is not a key; only the file's own path contains the argument.
