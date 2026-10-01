@@ -595,7 +595,8 @@ proc outcomeToHandlerResult(e: Editor, outcome: ReplayOutcome): HandlerResult =
   ## Fold a ReplayOutcome into the HandlerResult shape test-facing wrappers
   ## return. `roAbort` pulls the diagnostic from `state.statusMessage`, which
   ## the abort site (`playbackMacroImpl`, `replayRuntimeKeySequence`, or
-  ## `processResult`'s hrError arm) has already populated.
+  ## `processResult`'s hrError arm) has already populated. A host-owned
+  ## result sets nothing, so `errorMessage` is stale.
   case outcome
   of roContinue:
     HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
