@@ -4395,6 +4395,63 @@ suite "handleKeyCombo - frontend-neutral input":
     check e.state.input.commandText == ":λx"
     check e.state.input.commandCursor == 2
 
+suite "Insert mode Ctrl-A / Ctrl-@":
+  proc charKey(c: string): KeyCombo =
+    KeyCombo(isSpecial: false, char: c, modifiers: {})
+
+  let
+    escapeKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    ctrlAKey = KeyCombo(isSpecial: false, char: "a", modifiers: {key_bindings.kmCtrl})
+    ctrlAtKey = KeyCombo(isSpecial: false, char: " ", modifiers: {key_bindings.kmCtrl})
+
+  proc typeText(e: Editor, text: string) =
+    for c in text:
+      check e.handleKeyCombo(charKey($c))
+
+  test "Ctrl-A re-inserts the last inserted text at the cursor":
+    let e = createTestEditorWithBuffer("")
+    discard e.handleKeyCombo(charKey("i"))
+    e.typeText("abc")
+    discard e.handleKeyCombo(escapeKey)
+    # Normal mode parks on the last inserted character, so `i` re-enters
+    # before it and Ctrl-A duplicates there.
+    discard e.handleKeyCombo(charKey("i"))
+
+    check e.handleKeyCombo(ctrlAKey)
+
+    check e.state.mode == EditorMode.Insert
+    check $e.activeBuffer.getLine(0) == "ababcc"
+    check e.cursor == BufferPosition(line: 0, column: 5)
+
+  test "Ctrl-@ inserts the last inserted text and leaves Insert mode":
+    let e = createTestEditorWithBuffer("")
+    discard e.handleKeyCombo(charKey("i"))
+    e.typeText("abc")
+    discard e.handleKeyCombo(escapeKey)
+    discard e.handleKeyCombo(charKey("i"))
+
+    check e.handleKeyCombo(ctrlAtKey)
+
+    check e.state.mode == EditorMode.Normal
+    check $e.activeBuffer.getLine(0) == "ababcc"
+    check not e.activeBuffer.inTransaction
+
+  test "Ctrl-@ after `o` records the re-inserted text for `.`":
+    let e = createTestEditorWithBuffer("abc")
+    discard e.handleKeyCombo(charKey("i"))
+    e.typeText("xyz")
+    discard e.handleKeyCombo(escapeKey)
+    discard e.handleKeyCombo(charKey("o"))
+
+    check e.handleKeyCombo(ctrlAtKey)
+
+    check e.state.mode == EditorMode.Normal
+    check $e.activeBuffer.getLine(1) == "xyz"
+    let lastCmd = e.state.editState.lastEditCommand
+    check lastCmd.isSome
+    check lastCmd.get.kind == lecInsertText
+    check lastCmd.get.insertedText == "\nxyz"
+
 suite "forced Insert mode":
   let
     escapeKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})

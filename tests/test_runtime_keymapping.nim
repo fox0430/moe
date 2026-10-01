@@ -364,6 +364,118 @@ suite "addRuntimeMapping - key to command":
     check registry.runtimeMappings[Normal].len == 1
     check registry.runtimeMappings[Normal][0].commandName == "file.quit"
 
+suite "addRuntimeMapping - Insert mode built-in keys":
+  # `handleInsertModeKey` answers C-a / C-p / C-@ before `resolveBuiltin`, so a
+  # command mapping on them would register and then never run.
+  proc registryWithCommand(): KeyBindingRegistry =
+    var registry = newKeyBindingRegistry()
+    registry.registerCommand(
+      Command(
+        name: "insert-backspace",
+        description: "Delete the character before the cursor",
+        count: 1,
+        kind: ctAction,
+        commandId: "insert.backspace",
+      )
+    )
+    registry
+
+  test "C-a on a command target is rejected":
+    let registry = registryWithCommand()
+    let err = registry.addRuntimeMapping(Insert, "C-a", "insert-backspace")
+    check err != ""
+    check "built-in" in err
+    check registry.runtimeMappings.getOrDefault(Insert).len == 0
+
+  test "C-A is rejected case-insensitively":
+    let registry = registryWithCommand()
+    let err = registry.addRuntimeMapping(Insert, "C-A", "insert-backspace")
+    check "built-in" in err
+    check registry.runtimeMappings.getOrDefault(Insert).len == 0
+
+  test "C-p on a command target is rejected":
+    # Regression: C-p became a completion trigger ahead of resolveBuiltin, so a
+    # command mapping on it would be shadowed at dispatch instead of running.
+    let registry = registryWithCommand()
+    let err = registry.addRuntimeMapping(Insert, "C-p", "insert-backspace")
+    check "built-in" in err
+    check registry.runtimeMappings.getOrDefault(Insert).len == 0
+
+  test "C-Space is rejected before the built-in guard":
+    # C-@ arrives as Ctrl-Space, but `parseKeyString` cannot express it, so the
+    # rejection happens at parse time, not in insertBuiltinKeyError.
+    let registry = registryWithCommand()
+    let err = registry.addRuntimeMapping(Insert, "C-Space", "insert-backspace")
+    check "Invalid key" in err
+    check registry.runtimeMappings.getOrDefault(Insert).len == 0
+
+  test "setRuntimeCommandMapping rejects C-a and C-p":
+    let registry = registryWithCommand()
+    let cmd = registry.commandRegistry["insert-backspace"]
+    check registry.setRuntimeCommandMapping(Insert, "C-a", "insert-backspace", cmd) != ""
+    check registry.setRuntimeCommandMapping(Insert, "C-p", "insert-backspace", cmd) != ""
+    check registry.runtimeMappings.getOrDefault(Insert).len == 0
+
+  test "A multi-key trigger starting with a built-in key is rejected too":
+    # The built-in answers the first key, so the whole sequence is unreachable.
+    let registry = registryWithCommand()
+    check registry.addRuntimeMapping(Insert, "C-a x", "insert-backspace") != ""
+    check registry.addRuntimeMapping(Insert, "C-p x", "insert-backspace") != ""
+    check registry.runtimeMappings.getOrDefault(Insert).len == 0
+
+  test "A multi-key trigger with a built-in key after the first key is rejected":
+    # `handleInsertModeKey` answers C-a / C-p before `resolveBuiltin` without
+    # consulting the pending built-in sequence, so `j C-a` would register and
+    # then never dispatch, leaving `j` in `sequenceState.keys`.
+    let registry = registryWithCommand()
+    let errA = registry.addRuntimeMapping(Insert, "j C-a", "insert-backspace")
+    check "built-in" in errA
+    let errP = registry.addRuntimeMapping(Insert, "j C-p", "insert-backspace")
+    check "built-in" in errP
+    check registry.runtimeMappings.getOrDefault(Insert).len == 0
+
+  test "Built-in key check is case-insensitive after the first key":
+    let registry = registryWithCommand()
+    check "built-in" in registry.addRuntimeMapping(Insert, "j C-A", "insert-backspace")
+    check "built-in" in registry.addRuntimeMapping(Insert, "j C-P", "insert-backspace")
+    check registry.runtimeMappings.getOrDefault(Insert).len == 0
+
+  test "setRuntimeCommandMapping rejects a built-in key after the first key":
+    let registry = registryWithCommand()
+    let cmd = registry.commandRegistry["insert-backspace"]
+    check registry.setRuntimeCommandMapping(Insert, "j C-a", "insert-backspace", cmd) !=
+      ""
+    check registry.setRuntimeCommandMapping(Insert, "j C-p", "insert-backspace", cmd) !=
+      ""
+    check registry.runtimeMappings.getOrDefault(Insert).len == 0
+
+  test "Other keys and other modes stay remappable":
+    let registry = registryWithCommand()
+    check registry.addRuntimeMapping(Insert, "C-y", "insert-backspace") == ""
+    check registry.addRuntimeMapping(Normal, "C-a", "insert-backspace") == ""
+    check registry.addRuntimeMapping(Normal, "C-p", "insert-backspace") == ""
+    check registry.runtimeMappings.getOrDefault(Insert).len == 1
+    check registry.runtimeMappings.getOrDefault(Normal).len == 2
+
+  test "Non-builtin second position stays remappable":
+    let registry = registryWithCommand()
+    check registry.addRuntimeMapping(Insert, "j C-y", "insert-backspace") == ""
+    check registry.runtimeMappings.getOrDefault(Insert).len == 1
+
+  test "Built-in second position stays remappable outside Insert mode":
+    let registry = registryWithCommand()
+    check registry.addRuntimeMapping(Normal, "j C-a", "insert-backspace") == ""
+    check registry.addRuntimeMapping(Normal, "j C-p", "insert-backspace") == ""
+    check registry.runtimeMappings.getOrDefault(Normal).len == 2
+
+  test "A key sequence target on C-a / C-p is still accepted":
+    # rmkKeySequence mappings are routed by the KeyRouter before the Insert
+    # mode dispatcher runs, so only the command targets were shadowed.
+    var registry = newKeyBindingRegistry()
+    check registry.addRuntimeMapping(Insert, "C-a", "Escape") == ""
+    check registry.addRuntimeMapping(Insert, "C-p", "Escape") == ""
+    check registry.runtimeMappings[Insert][^1].kind == rmkKeySequence
+
 suite "addRuntimeMapping - key to key sequence":
   test "Map key to Escape":
     var registry = newKeyBindingRegistry()

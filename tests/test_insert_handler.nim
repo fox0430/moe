@@ -1132,6 +1132,183 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     check r.kind == imrHandled
     check buf.getLine(0) == "  hello"
 
+suite "InsertModeHandler - Ctrl+A / Ctrl+@":
+  test "Ctrl+A inserts the previously inserted text":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+    state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecInsertText,
+        insertedText: "bye",
+        insertPosition: BufferPosition(line: 0, column: 0),
+      )
+    )
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check r.getModeTransition.isNone
+    check buf.getLine(0) == "hellobye"
+    check state.cursor == BufferPosition(line: 0, column: 8)
+
+  test "Ctrl+A inserts a multi-line previous insertion":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hi")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+    state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecInsertText,
+        insertedText: "\nabc",
+        insertPosition: BufferPosition(line: 0, column: 0),
+      )
+    )
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check buf.len == 2
+    check buf.getLine(0) == "hi"
+    check buf.getLine(1) == "abc"
+    check state.cursor == BufferPosition(line: 1, column: 3)
+
+  test "Ctrl+A re-inserts a substitute's replacement text":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "x")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 1)
+    state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecSubstitute,
+        substituteText: "yz",
+        substituteCount: 1,
+        substituteKind: SubstituteKind.skChar,
+      )
+    )
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check buf.getLine(0) == "xyz"
+
+  test "Ctrl+A is a no-op without a recorded insertion":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check r.getModeTransition.isNone
+    check buf.getLine(0) == "hello"
+
+  test "Ctrl+A is a no-op after a non-insert edit":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+    state.editState.lastEditCommand =
+      some(LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true))
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check buf.getLine(0) == "hello"
+
+  test "Ctrl+@ inserts the previously inserted text and goes to Normal":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+    state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecInsertText,
+        insertedText: "bye",
+        insertPosition: BufferPosition(line: 0, column: 0),
+      )
+    )
+
+    # Ctrl+@ arrives as NUL, which celina reports as Ctrl+Space.
+    let keyCombo = KeyCombo(isSpecial: false, char: " ", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check r.getModeTransition == some(EditorMode.Normal)
+    check buf.getLine(0) == "hellobye"
+    check state.cursor == BufferPosition(line: 0, column: 8)
+
+  test "Ctrl+@ leaves Insert even without a recorded insertion":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+
+    let keyCombo = KeyCombo(isSpecial: false, char: " ", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check r.getModeTransition == some(EditorMode.Normal)
+
+  test "Ctrl+A tracks paren depth for signature help":
+    # The signature help gate reads parenDepth, so a re-inserted "(" must move
+    # it or the popup never opens for the duplicated call.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "x")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 1)
+    state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecInsertText,
+        insertedText: "f(a",
+        insertPosition: BufferPosition(line: 0, column: 0),
+      )
+    )
+
+    let initialDepth = handler.signatureHelpManager.parenDepth
+    let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check buf.getLine(0) == "xf(a"
+    check handler.signatureHelpManager.parenDepth == initialDepth + 1
+
+  test "Ctrl+A closes an open paren":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "func(x")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecInsertText,
+        insertedText: ")",
+        insertPosition: BufferPosition(line: 0, column: 0),
+      )
+    )
+
+    handler.signatureHelpManager.incrementParenDepth()
+    let initialDepth = handler.signatureHelpManager.parenDepth
+    let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check buf.getLine(0) == "func(x)"
+    check handler.signatureHelpManager.parenDepth == initialDepth - 1
+
 suite "InsertModeHandler - Macro Recording":
   test "Handler does not record macro keys (recording is unified at handleKeyCombo)":
     let buf = newTextBuffer()
@@ -1198,14 +1375,14 @@ suite "InsertModeHandler - Completion":
 
     check r.kind == imrHandled
 
-  test "Ctrl+Space triggers completion":
+  test "Ctrl+P triggers completion":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hel")
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 3)
 
-    let keyCombo = KeyCombo(isSpecial: false, char: " ", modifiers: {kmCtrl})
+    let keyCombo = KeyCombo(isSpecial: false, char: "p", modifiers: {kmCtrl})
     let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
@@ -3444,6 +3621,44 @@ suite "InsertModeHandler - snippet session":
     check state.snippetSession.active
     check state.snippetSession.index == 0
     check state.snippetSession.defaultPending
+
+  test "Ctrl+P keeps the session alive":
+    # Same as Ctrl+N: both are manual completion triggers, so both must leave
+    # the session (and the pending placeholder default) untouched.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let ctrlP = KeyCombo(isSpecial: false, char: "p", modifiers: {kmCtrl})
+    discard handler.handleInsertModeKey(buf, state, ctrlP)
+    check state.snippetSession.active
+    check state.snippetSession.index == 0
+    check state.snippetSession.defaultPending
+
+  test "Tab still jumps to the next stop after Ctrl+P":
+    # The session must survive not just as a flag: the stops stay usable, so
+    # the placeholder navigation Ctrl+P used to break still works.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let ctrlP = KeyCombo(isSpecial: false, char: "p", modifiers: {kmCtrl})
+    discard handler.handleInsertModeKey(buf, state, ctrlP)
+
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check state.snippetSession.active
+    check state.snippetSession.index == 1
+    # End of stop 2's default "size_type n1" (col 27 + len 12).
+    check state.cursor == BufferPosition(line: 0, column: 39)
 
 suite "InsertModeHandler - completion selection invalidation":
   test "Backspace clears the selection so the next keystroke does not commit it":

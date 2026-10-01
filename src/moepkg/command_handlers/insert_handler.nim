@@ -331,6 +331,23 @@ proc handleModeSwitch*(
     kind: imrHandled, modeTransition: some(targetMode), isInterruptExit: isInterruptExit
   )
 
+proc handleInsertLastText(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, exitInsert: bool
+): InsertModeResult =
+  ## Re-insert the previously inserted text (Ctrl-A stays, Ctrl-@ exits to Normal).
+  let insertResult = insertLastText(buffer, state)
+  if insertResult.isErr:
+    return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
+  # Track parens for signature help.
+  for ch in insertResult.get:
+    if ch == '(':
+      handler.signatureHelpManager.incrementParenDepth()
+    elif ch == ')':
+      handler.signatureHelpManager.decrementParenDepth()
+  if exitInsert:
+    return handler.handleModeSwitch(EditorMode.Normal)
+  return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
 proc charOffsetToBufferPos(
     insertText: string, charOffset: int, startLine, startCol: int
 ): BufferPosition =
@@ -976,8 +993,13 @@ proc isCtrlP(keyCombo: KeyCombo): bool =
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
     keyCombo.char.toLowerAscii == "p"
 
-proc isCtrlSpace(keyCombo: KeyCombo): bool =
-  ## Check if key is Ctrl+Space (manual completion trigger)
+proc isCtrlA(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+A
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "a"
+
+proc isCtrlAt(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+@ (arrives as Ctrl+Space).
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == " "
 
 proc isCtrlW(keyCombo: KeyCombo): bool =
@@ -1286,7 +1308,7 @@ proc handleInsertModeKey*(
         session.stops[session.index].len = 0
       return res
 
-    if keyCombo.isCtrlN:
+    if keyCombo.isCtrlN or keyCombo.isCtrlP:
       # Manual completion trigger: keep the session alive, matching the
       # auto-trigger in the typed-char path above — committing the result
       # remaps the stops. (The popup is not open here: open-popup keys are
@@ -1304,8 +1326,8 @@ proc handleInsertModeKey*(
     handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  if keyCombo.isCtrlSpace and not completionActive:
-    # Ctrl+Space - also trigger completion
+  if keyCombo.isCtrlP and not completionActive:
+    # Ctrl+P - trigger completion like Ctrl+N
     # Show buffer completions immediately, LSP will update when ready
     handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
@@ -1387,6 +1409,16 @@ proc handleInsertModeKey*(
   if keyCombo.isCtrlI:
     # Ctrl+I - insert tab
     return handler.handleTab(buffer, state)
+
+  if keyCombo.isCtrlA:
+    # Ctrl+A - insert the previously inserted text and stay in Insert mode
+    handler.completionManager.cancelCompletion()
+    return handler.handleInsertLastText(buffer, state, exitInsert = false)
+
+  if keyCombo.isCtrlAt:
+    # Ctrl+@ - insert the previously inserted text and go to Normal mode
+    handler.completionManager.cancelCompletion()
+    return handler.handleInsertLastText(buffer, state, exitInsert = true)
 
   # Resolve through the shared built-in decode entry (`resolveBuiltin`), the
   # same path Normal/Visual/Replace use. Insert has no built-in sequences, but a
