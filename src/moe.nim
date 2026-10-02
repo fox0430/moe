@@ -230,6 +230,22 @@ proc answerDeadlySignals(
         app, Death(kind: ckSignal, signal: takenSignal()), cmdLineConfig, log
       )
 
+proc windDown(editor: Editor, cmdLineConfig: CmdLineConfig, log: Logger) =
+  ## Tear down after the user quit, then die of a signal that came meanwhile.
+  # Teardown can block on a wedged language server; it is capped by the
+  # watcher's finish deadline, and from here the next signal ends moe.
+  settle()
+
+  editor.releaseExternalResources()
+
+  if cmdLineConfig.debugEnabled:
+    logInfo("moe", "Editor shutting down")
+    log.close()
+
+  let lateSignal = takenSignal()
+  if lateSignal != 0:
+    reraiseAsDeath(lateSignal)
+
 template editorCallback(
     ed: Editor, app: AsyncApp, clc: CmdLineConfig, lg: Logger, body: untyped
 ): untyped =
@@ -355,20 +371,7 @@ proc runEditor(
       let cursorStyle = toCursorStyle(editor.config.standard.defaultCursor)
       app.setCursorStyle(cursorStyle)
 
-    # Teardown can block on a wedged language server; it is capped by the
-    # watcher's finish deadline, and from here the next signal ends moe.
-    settle()
-
-    editor.releaseExternalResources()
-
-    if cmdLineConfig.debugEnabled:
-      # Clean up logger
-      logInfo("moe", "Editor shutting down")
-      log.close()
-
-    let lateSignal = takenSignal()
-    if lateSignal != 0:
-      reraiseAsDeath(lateSignal)
+    editor.windDown(cmdLineConfig, log)
 
 proc main() {.used.} =
   # Before any thread exists: threads inherit their creator's signal mask.
