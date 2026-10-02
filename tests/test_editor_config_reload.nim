@@ -25,17 +25,24 @@ import pkg/results
 
 import
   ../src/moepkg/
-    [editor, config, config_loader, editor_config_reload, lsp_integration, types]
+    [editor, config, config_loader, editor_config_reload, lsp_integration, types, color]
 import ../src/moepkg/types/editor_types
 import config_test_helper
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
+  config.theme.kind = tkDefault
   let vr = newValidationResult()
   result = newEditor(config, vr)
 
 proc pastMonoTime(ms: int64): MonoTime =
   getMonoTime() - initDuration(milliseconds = ms)
+
+proc writeTheme(path, keywordFg: string) =
+  writeFile(path, "[Colors]\nkeyword = { fg = \"" & keywordFg & "\" }\n")
+
+proc keywordFg(): ThemeColor =
+  themeColors[EditorColorPairIndex.keyword].foreground
 
 suite "editor_config_reload - applyConfigSettings":
   test "updates search settings":
@@ -132,10 +139,36 @@ suite "editor_config_reload - applyConfigSettings":
     e.applyConfigSettings(newConfig)
     check e.lsp.isEnabled() == false
 
+  test "reloads the theme when [Theme] changes":
+    let path = getTempDir() / "moe_reload_theme_change.toml"
+    writeTheme(path, "#ff0000")
+    let e = createTestEditor()
+    let newConfig = newEditorConfig()
+    newConfig.theme.kind = tkConfig
+    newConfig.theme.path = path
+
+    e.applyConfigSettings(newConfig)
+    removeFile(path)
+
+    check keywordFg() == ThemeColor(rgb: rgb("#ff0000"))
+
+  test "reloads the theme when [Theme] is changed in place":
+    let path = getTempDir() / "moe_reload_theme_in_place.toml"
+    writeTheme(path, "#ff0000")
+    let e = createTestEditor()
+    e.config.theme.kind = tkConfig
+    e.config.theme.path = path
+
+    e.applyConfigSettings(e.config)
+    removeFile(path)
+
+    check keywordFg() == ThemeColor(rgb: rgb("#ff0000"))
+
 suite "editor_config_reload - maybeReloadConfig":
   test "is a no-op when liveReloadOfConf is disabled":
     var config = newEditorConfig()
     config.standard.liveReloadOfConf = false
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     let e = newEditor(config, vr)
     e.state.timing.lastConfigCheck = pastMonoTime(5000)
@@ -169,3 +202,28 @@ suite "editor_config_reload - maybeReloadConfig":
       e.state.timing.lastConfigCheck = pastMonoTime(3000)
       e.maybeReloadConfig()
       check e.state.statusMessage != "Configuration reloaded"
+
+  test "rereads the theme file even when [Theme] is unchanged":
+    withTempHome(tmpDir):
+      let configDir = tmpDir / ".config" / "moe"
+      createDir(configDir)
+      let themePath = tmpDir / "theme.toml"
+      writeTheme(themePath, "#5fd7ff")
+      writeFile(
+        configDir / "moerc.toml",
+        "[Theme]\nkind = \"config\"\npath = \"" & themePath & "\"\n",
+      )
+      var config = newEditorConfig()
+      config.standard.liveReloadOfConf = true
+      config.theme.kind = tkConfig
+      config.theme.path = themePath
+      let e = newEditor(config, newValidationResult())
+      writeTheme(themePath, "#ff0000")
+      e.state.timing.lastConfigCheck = pastMonoTime(3000)
+      e.state.timing.lastConfigModTime = times.Time()
+
+      e.maybeReloadConfig()
+
+      require e.state.statusMessage == "Configuration reloaded"
+      require e.config.theme.path == themePath
+      check keywordFg() == ThemeColor(rgb: rgb("#ff0000"))
