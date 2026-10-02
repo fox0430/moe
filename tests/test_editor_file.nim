@@ -461,7 +461,7 @@ suite "Editor - multi-file startup (no auto-split)":
     e.openAdditionalStartupFiles(@[fileA, fileB], readonly = true)
     let extraBuffer = e.buffers[e.findBufferByPath(fileB)]
 
-    check e.activateBuffer(extraBuffer.id)
+    check e.tryActivateBuffer(extraBuffer.id).isOk
 
     check e.activeBuffer.readOnly
     check e.state.mode == EditorMode.Normal

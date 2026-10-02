@@ -325,11 +325,9 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
       break
 
   if existingIdx >= 0:
-    # Close existing fileTree window
     e.windowManager.activateWindow(existingIdx)
     e.syncActiveWindow()
-    e.activeWindow.clearModeState(EditorMode.FileTree)
-    discard e.closeWindow()
+    e.closeFileTree()
     return
 
   # Create fileTree window as left-side vsplit (follows vsplit pattern)
@@ -427,6 +425,11 @@ proc enterTerminalInActiveWindow*(e: Editor, command: string) =
     e.state.statusMessage = "Terminal mode is unavailable in embedded builds"
   else:
     ## Open a new Terminal session as a tab in the active window.
+    let switchable = e.activeWindow.checkTabSwitch()
+    if switchable.isErr:
+      # Before the PTY starts.
+      e.state.statusMessage = switchable.error
+      return
     let (cols, rows) = e.calculateTerminalAreaDimensions(e.activeWindow)
     let termResult = newTerminalState(command, cols, rows)
     if termResult.isErr:

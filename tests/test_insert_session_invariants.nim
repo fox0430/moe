@@ -211,6 +211,8 @@ let Invariants = @[
       ("moepkg/viewer_mode.nim", 2),
       # Handing the focus back to a reused command-output split.
       ("moepkg/editor_command_output.nim", 1),
+      # Off a lone FileTree sidebar onto the window that replaces it.
+      ("moepkg/editor_window.nim", 1),
       ("moepkg/command_handlers/editor_ops.nim", 2),
       ("moepkg/command_handlers/file_ops.nim", 1),
     ],

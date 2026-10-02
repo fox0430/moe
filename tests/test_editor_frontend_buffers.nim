@@ -44,7 +44,7 @@ suite "Editor frontend buffers":
     second.changeSeq = 1
     e.addBuffer(second)
     e.addBufferToWindowList(second)
-    check e.activateBuffer(second.id)
+    check e.tryActivateBuffer(second.id).isOk
 
     let buffers = e.activeWindowBuffers()
 
@@ -87,16 +87,26 @@ suite "Editor frontend buffers":
     check buffers[2].id == active.id
     check buffers[2].active
 
-  test "activateBuffer resolves a stable id and registers it in the window":
+  test "tryActivateBuffer resolves a stable id and registers it in the window":
     let
       e = createTestEditor()
       target = newTextBuffer()
     e.addBuffer(target)
 
     check target.id notin e.activeWindow.bufferIds
-    check e.activateBuffer(target.id)
+    check e.tryActivateBuffer(target.id).isOk
     check e.activeBuffer == target
     check target.id in e.activeWindow.bufferIds
+    check e.tryActivateBuffer(BufferId(99999)).isErr
+
+  test "activateBuffer keeps the bool shape `moepkg/frontend` exports":
+    let
+      e = createTestEditor()
+      target = newTextBuffer()
+    e.addBuffer(target)
+
+    check e.activateBuffer(target.id)
+    check e.activeBuffer == target
     check not e.activateBuffer(BufferId(99999))
 
   test "moveBuffer reorders the active window":
@@ -140,7 +150,7 @@ suite "Editor frontend buffers":
     let
       e = createTestEditor()
       target = e.addWindowBuffer("Active")
-    check e.activateBuffer(target.id)
+    check e.tryActivateBuffer(target.id).isOk
 
     check e.closeBuffer(target.id).isOk
     check e.bufferById(target.id).isNone
@@ -151,9 +161,9 @@ suite "Editor frontend buffers":
       e = createTestEditor()
       initial = e.activeBuffer
       target = e.addWindowBuffer("Other window")
-    check e.activateBuffer(target.id)
+    check e.tryActivateBuffer(target.id).isOk
     check e.vsplit().isOk
-    check e.activateBuffer(initial.id)
+    check e.tryActivateBuffer(initial.id).isOk
     check e.activeBuffer == initial
     check e.windowManager.windows.anyIt(it.buffer == target)
 

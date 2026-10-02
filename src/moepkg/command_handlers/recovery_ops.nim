@@ -204,7 +204,10 @@ proc processRecoveryResult*(e: Editor, r: HandlerResult): bool =
     # one `:wa` writes out before the user has seen it.
     let restoredId = target.buffer.id
     discard e.leaveViewerModeForJump(EditorMode.RecoveryManager)
-    discard e.activateBuffer(restoredId)
+    let activated = e.tryActivateBuffer(restoredId)
+    if activated.isErr:
+      e.state.statusMessage = activated.error
+      return true
 
     # How the restore got here decides the message, not the diff: a buffer
     # created or opened for this changed what the user sees even when the text

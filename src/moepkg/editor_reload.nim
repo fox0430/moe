@@ -265,6 +265,9 @@ proc reloadCurrentFile*(e: Editor, announce = true): Result[void, string] =
   ## Reload the current buffer from disk (for :e! command). `announce = false`
   ## leaves the status line untouched, for a reload the user did not ask for.
   let activeBuffer = e.activeBuffer()
+  if activeBuffer.isUtilityBuffer:
+    # Its `filePath` is the directory it lists, not a file to read back.
+    return err("Cannot reload a listing")
   if activeBuffer.filePath.isNone:
     return err("No file name")
 

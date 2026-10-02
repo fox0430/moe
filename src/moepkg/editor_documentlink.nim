@@ -88,14 +88,15 @@ proc jumpToDocumentLink(e: Editor, link: lspTypes.DocumentLink): bool =
       e.state.statusMessage = "Already in this file"
       return true
 
-    # Add current position to jump list before jumping
-    e.addToJumpList()
+    # Recorded once the jump lands: a refused or failed open is no jump.
+    let origin = e.jumpOrigin()
 
     let opened = e.openFileInActiveWindow(path)
     if opened.isErr:
       e.state.statusMessage = "Failed to open file: " & opened.error
       return false
 
+    e.addToJumpList(origin)
     e.state.statusMessage = "Opened: " & path.split('/')[^1]
     return true
   elif target.startsWith("http://") or target.startsWith("https://"):

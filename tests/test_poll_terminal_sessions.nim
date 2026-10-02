@@ -289,7 +289,7 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
     let other = newTextBuffer("")
     e.addBuffer(other)
     e.addBufferToWindowList(other)
-    check e.activateBuffer(other.id)
+    check e.tryActivateBuffer(other.id).isOk
     check e.terminalStates.hasKey(termBuf.id)
     check w.mode != EditorMode.Terminal
 
@@ -312,13 +312,13 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
     let other = newTextBuffer("")
     e.addBuffer(other)
     e.addBufferToWindowList(other)
-    check e.activateBuffer(other.id)
+    check e.tryActivateBuffer(other.id).isOk
 
     e.pollTerminalSessions()
     # Not torn down behind the user's back.
     check e.terminalStates.hasKey(termBufId)
 
-    check e.activateBuffer(termBufId)
+    check e.tryActivateBuffer(termBufId).isOk
     e.pollTerminalSessions()
     check not e.terminalStates.hasKey(termBufId)
 
@@ -349,7 +349,7 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
     let other = newTextBuffer("")
     e.addBuffer(other)
     e.addBufferToWindowList(other)
-    check e.activateBuffer(other.id)
+    check e.tryActivateBuffer(other.id).isOk
     check e.terminalStates.hasKey(termBuf.id)
     check w.mode != EditorMode.Terminal
 
