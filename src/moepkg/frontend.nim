@@ -28,6 +28,10 @@
 ## Hosts with filesystem/Git watchers can select `grmEventDriven` using
 ## `setFrontendGitRefreshMode`, then call `notifyGitRepositoryChanged` on the
 ## editor thread. `frontendGitStatusRevision` changes when results arrive.
+##
+## `activateBuffer` keeps its `bool` shape for hosts already built against it.
+## `tryActivateBuffer` is the same call with the reason it failed — a buffer that
+## no longer exists, or the FileTree sidebar refusing another tab.
 
 import
   config, editor, editor_frame, editor_display, editor_buffers, frontend_input, handler
@@ -49,7 +53,8 @@ export
   editor_display.frontendGitStatusRevision
 export
   editor_buffers.OpenBufferInfo, editor_buffers.activeWindowBuffers,
-  editor_buffers.activateBuffer, editor_buffers.closeBuffer, editor_buffers.moveBuffer,
+  editor_buffers.activateBuffer, editor_buffers.tryActivateBuffer,
+  editor_buffers.closeBuffer, editor_buffers.moveBuffer,
   editor_buffers.deleteCurrentBuffer
 export
   frontend_input.GridRegion, frontend_input.PointerButton, frontend_input.PointerAction,

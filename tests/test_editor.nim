@@ -197,7 +197,7 @@ suite "Editor - switchToBufferByIndex":
     let buf = newTextBuffer("one\ntwo\nthree\n")
     e.addBuffer(buf)
     e.addBufferToWindowList(buf)
-    require e.activateBuffer(buf.id)
+    require e.tryActivateBuffer(buf.id).isOk
     e.activeWindow.cursor = BufferPosition(line: 2, column: 1)
     e.activeWindow.viewport.resetViewportTop(1)
 
@@ -1009,7 +1009,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
     check e.windowBufferIndex() == 1
 
-    e.switchToWindowBuffer(0)
+    check e.switchToWindowBuffer(0)
     check e.windowBufferIndex() == 0
 
   test "switchToWindowBuffer switches within window's bufferIds":
@@ -1021,7 +1021,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
       removeFile(testFile)
 
     discard e.editFile(testFile)
-    e.switchToWindowBuffer(0)
+    check e.switchToWindowBuffer(0)
 
     check e.activeWindow.buffer.id == e.activeWindow.bufferIds[0]
 
@@ -1034,7 +1034,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
       removeFile(testFile)
 
     discard e.editFile(testFile)
-    e.switchToWindowBuffer(0)
+    check e.switchToWindowBuffer(0)
 
     e.switchToNextBuffer()
     check e.windowBufferIndex() == 1
@@ -1150,7 +1150,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer with bufferIds":
       removeFile(testFile)
 
     discard e.editFile(testFile)
-    e.switchToWindowBuffer(0)
+    check e.switchToWindowBuffer(0)
     check e.windowBufferIndex() == 0
 
     e.switchToLastBuffer()

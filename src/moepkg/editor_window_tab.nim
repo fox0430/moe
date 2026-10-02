@@ -27,7 +27,9 @@
 
 import std/options
 
-import types/editor_types, editor_mode, editor_window_state
+import pkg/results
+
+import types/editor_types, editor_mode, editor_window_state, logger
 
 when not defined(moe.embedded):
   import std/tables
@@ -115,13 +117,31 @@ proc isShowingTab*(e: Editor, win: EditorWindow, tabId: BufferId): bool =
   of wvTabView, wvTabSnapshot: true
   of wvViewer, wvForeignMode: false
 
-proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): bool =
+proc checkTabSwitch*(win: EditorWindow): Result[void, string] =
+  ## Whether `win` may show another tab. The FileTree sidebar keeps its
+  ## listing, as Vim's 'winfixbuf' window keeps its buffer. Commands check it
+  ## before they load or create what they would show.
+  if win.isSidebar:
+    return err("E1513: Cannot switch buffer in the file tree")
+  ok()
+
+type TabMove* = enum
+  ## How `moveWindowToTab` ended.
+  tabMoved ## The window now shows the tab.
+  tabAlreadyShown ## It already did; nothing changed.
+  tabSwitchRefused ## The window keeps its own tab; nothing changed.
+
+proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
   ## Move `win` onto `buf`'s tab and rebuild state owned by the old tab
   ## (Insert session, buffer-swap modes, view position, derived mode).
   ##
-  ## Returns false when the window already shows `buf`'s tab itself.
+  ## Callers pass `checkTabSwitch` before they load or create what they would
+  ## show, so a refusal here means a caller skipped it.
+  if win.checkTabSwitch().isErr:
+    logError("editor", "Tab switch reached a window that keeps its tab")
+    return tabSwitchRefused
   if e.isShowingTab(win, buf.id):
-    return false
+    return tabAlreadyShown
 
   let isActiveWindow = win == e.activeWindow
   # Only the active window owns the global Insert session.
@@ -153,7 +173,7 @@ proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): bool =
   if isActiveWindow:
     e.enforceModePolicy()
 
-  true
+  tabMoved
 
 proc moveTabUnder*(e: Editor, win: EditorWindow, buf: TextBuffer) =
   ## Move `win` onto `buf`'s tab when its tab goes away. A viewer keeps its view

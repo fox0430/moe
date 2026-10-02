@@ -128,15 +128,15 @@ proc twoWindowsOnSession(
     e: Editor, textBuf, termBuf: TextBuffer
 ): tuple[first, second: EditorWindow] =
   ## Split, then put both windows on `termBuf`'s session. `second` is active.
-  require e.activateBuffer(textBuf.id)
+  require e.tryActivateBuffer(textBuf.id).isOk
   require e.vsplit().isOk
   result.second = e.activeWindow
   for w in e.windowManager.windows:
     if w != result.second:
       result.first = w
-  require e.activateBuffer(termBuf.id)
+  require e.tryActivateBuffer(termBuf.id).isOk
   e.focusWindow(result.first)
-  require e.activateBuffer(termBuf.id)
+  require e.tryActivateBuffer(termBuf.id).isOk
   e.focusWindow(result.second)
 
 suite "Terminal tabs - moveWindowToTab":
@@ -424,12 +424,12 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     let other = newTextBuffer("")
     e.addBuffer(other)
     e.addBufferToWindowList(other)
-    check e.activateBuffer(other.id)
+    check e.tryActivateBuffer(other.id).isOk
 
     # Leaving the tab ends the browsing session; nothing is carried across.
     check e.activeWindow.modeState.kind == mskNone
 
-    check e.activateBuffer(termBuf.id)
+    check e.tryActivateBuffer(termBuf.id).isOk
     check e.activeWindow.mode == EditorMode.Terminal
     check e.activeWindow.modeState.kind == mskTerminal
     check e.activeWindow.modeState.terminalSubMode == tsmInput
@@ -448,7 +448,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     # The session is still alive, just not on screen.
     check e.terminalStates.hasKey(termBuf.id)
 
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.buffer == termBuf
@@ -594,7 +594,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
     require e.state.mode == EditorMode.Normal
 
     check e.deleteCurrentBuffer().isOk
@@ -603,11 +603,28 @@ suite "Terminal tabs - the window's mode follows its tab":
     checkOnSession(e, e.activeWindow, termBuf)
     check e.state.mode == EditorMode.Terminal
 
+  test "closing a lone FileTree sidebar onto a Terminal tab resumes the session":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let termWin = e.activeWindow
+    e.toggleFileTree(some(getTempDir()), e.activeBuffer())
+    require e.focusFileTreeWindow()
+    let tree = e.activeWindow
+    focusWindow(e, termWin)
+    require not e.closeWindow()
+    require e.activeWindow == tree
+
+    discard e.processResult(HandlerResult(kind: hrFileTreeQuit), e.activeBuffer())
+
+    check e.windowManager.windows.len == 1
+    checkOnSession(e, e.activeWindow, termBuf)
+    check e.state.mode == EditorMode.Terminal
+
   test "leaving a viewer whose tab was deleted underneath it lands on the Terminal successor":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
     let bmState = newBufferManagerState()
     bmState.updateEntries(e.getBufferInfos())
     discard e.enterViewerMode(
@@ -677,7 +694,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     discard e.processResult(r, e.activeBuffer)
     require e.activeWindow.tabBufferId == textBuf.id
 
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.buffer == termBuf
@@ -690,11 +707,11 @@ suite "Terminal tabs - the window's mode follows its tab":
     e.runCommand("ls")
     require e.state.mode == EditorMode.BufferManager
 
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
 
     check e.state.mode == EditorMode.Normal
 
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.buffer == termBuf
@@ -775,16 +792,16 @@ suite "Terminal tabs - the window's mode follows its tab":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
     require e.vsplit().isOk
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
     discard e.enterNormal()
     require e.activeWindow.modeState.terminalSubMode == tsmNormal
 
     require not e.closeWindow()
     require e.activeWindow.tabBufferId == textBuf.id
 
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.buffer == termBuf
@@ -793,9 +810,9 @@ suite "Terminal tabs - the window's mode follows its tab":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
     require e.vsplit().isOk
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
     discard e.enterNormal()
     require e.activeWindow.modeState.terminalSubMode == tsmNormal
     for i, w in e.windowManager.windows:
@@ -807,7 +824,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     discard e.processResult(HandlerResult(kind: hrOnlyWindow), e.activeBuffer)
     require e.windowManager.windows.len == 1
 
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.buffer == termBuf
@@ -885,7 +902,7 @@ suite "Terminal tabs - browsing belongs to the window":
     checkOnSession(e, live, termBuf)
     check live.modeState.terminalSubMode == tsmInput
 
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
     e.focusWindow(live)
 
     checkOnSession(e, live, termBuf)
@@ -899,7 +916,7 @@ suite "Terminal tabs - browsing belongs to the window":
     let snapshot = e.enterNormal()
     e.focusWindow(live)
 
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
 
     checkOnSession(e, browsing, termBuf)
     check browsing.buffer == snapshot
@@ -963,7 +980,7 @@ suite "Terminal tabs - cursor belongs to the active window":
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
     let (inactive, active) = e.twoWindowsOnSession(textBuf, termBuf)
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
     require e.activeWindow == active
     require active.mode == EditorMode.Normal
     require inactive.modeState.terminalSubMode == tsmInput
@@ -1045,7 +1062,7 @@ suite "Terminal tabs - splitting off a session":
     e.activeWindow.cursor = BufferPosition(line: deepLine, column: 0)
     e.activeWindow.viewport.resetViewportTop(deepLine - 2)
 
-    check e.activateBuffer(termBuf.id)
+    check e.tryActivateBuffer(termBuf.id).isOk
 
     check e.activeWindow.tabBufferId == termBuf.id
     check e.activeWindow.modeState.terminalSubMode == tsmNormal
@@ -1060,7 +1077,7 @@ suite "Terminal tabs - splitting off a session":
     e.runCommand("ls")
     require e.state.mode == EditorMode.BufferManager
 
-    check e.activateBuffer(termBuf.id)
+    check e.tryActivateBuffer(termBuf.id).isOk
 
     check e.activeWindow.viewerEntry.isNone
     checkOnSession(e, e.activeWindow, termBuf)
@@ -1089,13 +1106,13 @@ suite "Terminal tabs - display integration":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
 
     check e.switchToBuffer("bash")
     check e.activeWindow.tabBufferId == termBuf.id
 
     # Presentation is not identity: the label never becomes a `:b` key.
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
     termBuf.displayName = some("session-1")
     check not e.switchToBuffer("session-1")
     check e.activeWindow.tabBufferId == textBuf.id
@@ -1105,7 +1122,7 @@ suite "Terminal tabs - display integration":
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
     termBuf.displayName = some("session-1")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
 
     check e.switchToBuffer("bash")
     check e.activeWindow.tabBufferId == termBuf.id
@@ -1114,9 +1131,9 @@ suite "Terminal tabs - display integration":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     textBuf.filePath = some("/tmp/[Terminal: bash].log")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
     discard registerFakeTerminal(e, "bash")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
 
     # The label is not a key; only the file's own path contains the argument.
     check e.switchToBuffer("[Terminal: bash].log")
@@ -1127,7 +1144,7 @@ suite "Terminal tabs - display integration":
     let textBuf = e.buffers[0]
     textBuf.filePath = some("/tmp/bash")
     let termBuf = registerFakeTerminal(e, "bash")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
 
     check e.switchToBuffer("bash")
     check e.activeWindow.tabBufferId == termBuf.id
@@ -1137,7 +1154,7 @@ suite "Terminal tabs - display integration":
     let textBuf = e.buffers[0]
     textBuf.filePath = some("/tmp/bash")
     let termBuf = registerFakeTerminal(e, "bash_backup")
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
 
     check e.switchToBuffer("bash")
     check e.activeWindow.tabBufferId == textBuf.id
@@ -1147,7 +1164,7 @@ suite "Terminal tabs - display integration":
     let textBuf = e.buffers[0]
     textBuf.filePath = some("/tmp/bash_backup.log")
     let termBuf = registerFakeTerminal(e, "bash_backup")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
 
     check e.switchToBuffer("bash")
     check e.activeWindow.tabBufferId == termBuf.id
@@ -1156,7 +1173,7 @@ suite "Terminal tabs - display integration":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     discard registerFakeTerminal(e, "bash")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
 
     check not e.switchToBuffer("")
     check e.activeWindow.tabBufferId == textBuf.id
@@ -1221,7 +1238,7 @@ suite "Terminal tabs - display integration":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     discard registerFakeTerminal(e, "bash")
-    require e.activateBuffer(textBuf.id)
+    require e.tryActivateBuffer(textBuf.id).isOk
     require e.activeWindow.tabBufferId == textBuf.id
     let bmState = newBufferManagerState()
     bmState.updateEntries(e.getBufferInfos())
@@ -1290,7 +1307,7 @@ suite "WindowView - what a window draws":
   test "a live session is its tab, and so is its scrollback snapshot":
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
     let win = e.activeWindow
 
     # Live (tsmInput): the grid stands for the tab.
@@ -1305,7 +1322,7 @@ suite "WindowView - what a window draws":
   test "a foreign mode over its own tab is not showing the tab":
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
     let win = e.activeWindow
     require win.viewerEntry.isNone
     require win.tabBufferId == termBuf.id
@@ -1318,7 +1335,7 @@ suite "WindowView - what a window draws":
   test ":b at the tab under a foreign mode switches instead of reporting already-there":
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")
-    require e.activateBuffer(termBuf.id)
+    require e.tryActivateBuffer(termBuf.id).isOk
     require e.activeWindow.tabBufferId == termBuf.id
     e.activeWindow.modeState =
       ModeState(kind: mskFileTree, fileTree: newFileTreeState(getTempDir()))
@@ -1345,7 +1362,7 @@ suite "WindowView - what a window draws":
     require win.tabBufferId == termBuf.id
 
     # The session is covered, not drawn, so the move runs as it would in place.
-    check e.moveWindowToTab(win, termBuf)
+    check e.moveWindowToTab(win, termBuf) == tabMoved
 
     check win.viewerEntry.isNone
     check win.mode == EditorMode.Terminal

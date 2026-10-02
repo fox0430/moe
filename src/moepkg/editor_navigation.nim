@@ -75,7 +75,7 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
   let targetBuffer = e.buffers[index]
 
   # Shared tab transition; no-op when already on this tab.
-  if not e.moveWindowToTab(e.activeWindow, targetBuffer):
+  if e.moveWindowToTab(e.activeWindow, targetBuffer) != tabMoved:
     return
 
   # Re-sync executor, motion controller, jump-list anchor and per-buffer
@@ -121,6 +121,7 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
   ## files into the *active* window's buffer with identical setup. Unlike the
   ## legacy `e.loadFile`, content is loaded into a freshly registered buffer
   ## rather than mutating the active buffer in place.
+  ?e.activeWindow.checkTabSwitch()
   let existing = e.bufferIndexForFile(path)
   if existing >= 0:
     e.switchToBufferForLsp(existing)
@@ -145,14 +146,16 @@ proc openFileInBackground*(e: Editor, path: string): Result[TextBuffer, string] 
 
   e.loadAndRegisterBuffer(path)
 
-proc addToJumpList*(e: Editor) =
-  ## Add current cursor position to jump list before a jump
-  let jumpPos = JumpPosition(
+proc jumpOrigin*(e: Editor): JumpPosition =
+  ## The cursor position, for a jump list entry once a jump from it lands.
+  JumpPosition(
     bufferId: e.state.windowDisplay.currentBufferId,
     line: e.activeWindow.cursor.line,
     column: e.activeWindow.cursor.column,
   )
 
+proc addToJumpList*(e: Editor, jumpPos: JumpPosition) =
+  ## Add `jumpPos`, where a jump started, to the jump list.
   # Don't add if same as last position (same buffer, line, and column)
   if e.state.jumpList.list.len > 0:
     let lastPos = e.state.jumpList.list[^1]
@@ -195,6 +198,13 @@ proc splitWindowForJump(e: Editor): bool =
   ## Open a new vertical split window (showing the current buffer) so a
   ## subsequent jump lands in the new window instead of the current one.
   ## Returns false (with a status message) if the split fails.
+  let left = e.leaveSidebar()
+  if left.isErr:
+    e.state.statusMessage = "Failed to open window: " & left.error
+    return false
+  if left.get:
+    # That window is new already: jump into it rather than split it again.
+    return true
   let splitResult = e.vsplit()
   if splitResult.isErr:
     e.state.statusMessage = "Failed to open window: " & splitResult.error
@@ -215,13 +225,13 @@ proc jumpToLspLocation*(
     e.state.statusMessage = "Cannot jump to non-file location: " & pathRes.error
     return false
   let path = pathRes.get
-  let activeBuffer = e.activeBuffer()
-
-  # Add current position to jump list before jumping
-  e.addToJumpList()
-
   if openWindow and not e.splitWindowForJump():
     return false
+
+  # Taken after the split, which leaves the FileTree sidebar for the window it
+  # serves. Recorded once the jump lands: a refused or failed open is no jump.
+  let activeBuffer = e.activeBuffer()
+  let origin = e.jumpOrigin()
 
   # Same file (spelling or entity), not merely the same typed path.
   if activeBuffer.bufferHoldsFile(path):
@@ -246,7 +256,7 @@ proc jumpToLspLocation*(
     )
     e.state.statusMessage = resultKind & " in " & path
 
-  # Update viewport to follow cursor
+  e.addToJumpList(origin)
   return true
 
 proc handleLspLocations*(
@@ -312,13 +322,13 @@ proc openFileAndJumpTo*(
   ## the jump happens in a new vertical split window instead of the current one.
   ## Note: column is expected to be LSP UTF-16 code unit offset
   ## Returns true if successful
-  let activeBuffer = e.activeBuffer()
-
-  # Add current position to jump list before jumping
-  e.addToJumpList()
-
   if openWindow and not e.splitWindowForJump():
     return false
+
+  # Taken after the split, which leaves the FileTree sidebar for the window it
+  # serves. Recorded once the jump lands: a refused or failed open is no jump.
+  let activeBuffer = e.activeBuffer()
+  let origin = e.jumpOrigin()
 
   # Same file (spelling or entity), not merely the same typed path.
   if activeBuffer.bufferHoldsFile(path):
@@ -336,7 +346,7 @@ proc openFileAndJumpTo*(
     # Set cursor with boundary checks against the now-active buffer
     e.moveCursorToLspPosition(e.activeBuffer(), line, column)
 
-  # Update viewport to follow cursor
+  e.addToJumpList(origin)
   return true
 
 proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =

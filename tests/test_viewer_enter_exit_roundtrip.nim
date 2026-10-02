@@ -1148,7 +1148,7 @@ suite "Viewer round-trip - tab identity":
     discard e.editFile(pathB)
     let bufB = e.activeBuffer()
     check bufA != bufB
-    check e.activateBuffer(bufA.id)
+    check e.tryActivateBuffer(bufA.id).isOk
     check win.buffer == bufA
 
     discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())

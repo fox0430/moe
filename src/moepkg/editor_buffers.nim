@@ -32,6 +32,7 @@ import
   types/editor_types,
   editor_mode,
   editor_window,
+  editor_window_state,
   editor_window_tab,
   viewer_mode,
   git_cache,
@@ -100,10 +101,11 @@ proc addBufferToWindowList*(e: Editor, buffer: TextBuffer) =
   if buffer.id notin e.activeWindow.bufferIds:
     e.activeWindow.bufferIds.add(buffer.id)
 
-proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer) =
+proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer): TabMove =
   ## Point the active window at `targetBuffer`, resetting viewport/cursor.
   ## No-op when already on this tab (preserves position).
-  if not e.moveWindowToTab(e.activeWindow, targetBuffer):
+  result = e.moveWindowToTab(e.activeWindow, targetBuffer)
+  if result != tabMoved:
     return
 
   # syncActiveWindow also updates state.windowDisplay.currentBufferId for the Jump List anchor.
@@ -118,19 +120,24 @@ proc switchToBufferByIndex*(e: Editor, index: int) =
 
   let targetBuffer = e.buffers[index]
 
-  # Register in window-local tab list regardless (so :b <name> from another tab
-  # makes the buffer show up in this window's tabs).
-  e.addBufferToWindowList(targetBuffer)
+  # Register even when already on it (so :b <name> from another tab makes the
+  # buffer show up in this window's tabs), but not in a window that refused it.
+  if e.activateBufferInWindow(targetBuffer) != tabSwitchRefused:
+    e.addBufferToWindowList(targetBuffer)
 
-  e.activateBufferInWindow(targetBuffer)
-
-proc activateBuffer*(e: Editor, id: BufferId): bool =
+proc tryActivateBuffer*(e: Editor, id: BufferId): Result[void, string] =
   ## Activate a buffer by stable id and register it with the active window.
   let index = e.bufferIndexById(id)
   if index < 0:
-    return false
+    return err("Buffer no longer available")
+  ?e.activeWindow.checkTabSwitch()
   e.switchToBufferByIndex(index)
-  true
+  ok()
+
+proc activateBuffer*(e: Editor, id: BufferId): bool =
+  ## Whether the active window now shows `id`. Kept at `bool` because
+  ## `moepkg/frontend` exports this name; `tryActivateBuffer` reports the reason.
+  tryActivateBuffer(e, id).isOk
 
 proc currentBufferIndex*(e: Editor): int =
   ## Get the position of the active buffer in e.buffers.
@@ -146,20 +153,29 @@ proc windowBufferIndex*(e: Editor): int =
       return i
   return -1
 
-proc switchToWindowBuffer*(e: Editor, windowIndex: int) =
+proc switchToWindowBuffer*(e: Editor, windowIndex: int): bool =
   ## Switch to a buffer in the active window's tab list by tab position.
   ## Silently drops the call if the entry is stale (buffer was deleted).
+  ## Returns false when the window refuses another tab, leaving the refusal
+  ## reason in the status message.
   if windowIndex < 0 or windowIndex >= e.activeWindow.bufferIds.len:
-    return
+    return true
+
+  # A refused window keeps its tab, so its own entry is not stale either.
+  let switchable = e.activeWindow.checkTabSwitch()
+  if switchable.isErr:
+    e.state.statusMessage = switchable.error
+    return false
 
   let id = e.activeWindow.bufferIds[windowIndex]
   let bufOpt = e.bufferById(id)
   if bufOpt.isNone:
     # Stale entry — buffer was bdelete'd; drop it.
     e.activeWindow.bufferIds.delete(windowIndex)
-    return
+    return true
 
-  e.activateBufferInWindow(bufOpt.get)
+  discard e.activateBufferInWindow(bufOpt.get)
+  return true
 
 when not defined(moe.embedded):
   proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
@@ -212,7 +228,7 @@ when not defined(moe.embedded):
         let target = e.bufferById(w.bufferIds[newIdx])
         if w.viewerEntry.isNone and fu.winIdx == prevActive:
           # Shared transition finalizes Insert and reapplies forceInsertMode.
-          e.switchToWindowBuffer(newIdx)
+          discard e.switchToWindowBuffer(newIdx)
         elif target.isSome:
           e.moveTabUnder(w, target.get)
         else:
@@ -265,8 +281,8 @@ proc switchToNextBuffer*(e: Editor) =
       0
     else:
       (curIdx + 1) mod e.activeWindow.bufferIds.len
-  e.switchToWindowBuffer(nextIdx)
-  e.state.statusMessage = ""
+  if e.switchToWindowBuffer(nextIdx):
+    e.state.statusMessage = ""
 
 proc switchToPrevBuffer*(e: Editor) =
   ## Switch to the previous buffer in the active window's tab list (:bprev).
@@ -282,8 +298,8 @@ proc switchToPrevBuffer*(e: Editor) =
       e.activeWindow.bufferIds.len - 1
     else:
       curIdx - 1
-  e.switchToWindowBuffer(prevIdx)
-  e.state.statusMessage = ""
+  if e.switchToWindowBuffer(prevIdx):
+    e.state.statusMessage = ""
 
 proc switchToFirstBuffer*(e: Editor) =
   ## Switch to the first buffer in the active window's tab list (:bfirst).
@@ -295,8 +311,8 @@ proc switchToFirstBuffer*(e: Editor) =
     e.state.statusMessage = "Already at first buffer"
     return
 
-  e.switchToWindowBuffer(0)
-  e.state.statusMessage = ""
+  if e.switchToWindowBuffer(0):
+    e.state.statusMessage = ""
 
 proc switchToLastBuffer*(e: Editor) =
   ## Switch to the last buffer in the active window's tab list (:blast).
@@ -309,8 +325,8 @@ proc switchToLastBuffer*(e: Editor) =
     e.state.statusMessage = "Already at last buffer"
     return
 
-  e.switchToWindowBuffer(lastIdx)
-  e.state.statusMessage = ""
+  if e.switchToWindowBuffer(lastIdx):
+    e.state.statusMessage = ""
 
 proc switchToBuffer*(e: Editor, arg: string): bool =
   ## Switch to a buffer by number or name (:b N or :b name)
@@ -322,6 +338,11 @@ proc switchToBuffer*(e: Editor, arg: string): bool =
   # Log each buffer's path for debugging
   for i, buf in e.buffers:
     logDebug("editor", "  buffer[" & $i & "]: " & buf.canonicalLabel)
+
+  let switchable = e.activeWindow.checkTabSwitch()
+  if switchable.isErr:
+    e.state.statusMessage = switchable.error
+    return false
 
   if arg.len == 0:
     e.state.statusMessage = "E94: No matching buffer for " & arg
@@ -353,7 +374,7 @@ proc switchToBuffer*(e: Editor, arg: string): bool =
 
     # Switch to the buffer
     logDebug("editor", "Switching to buffer id: " & $bufNum)
-    discard e.activateBuffer(targetId)
+    discard e.tryActivateBuffer(targetId)
     e.state.statusMessage = ""
     return true
   except ValueError:
@@ -440,19 +461,9 @@ proc deleteBufferById*(e: Editor, id: BufferId): Result[(), string] =
 
   let newBuf =
     if e.buffers.len == 0:
-      # Last buffer just went away — give the active window a fresh `[No Name]`
-      # buffer. If `enew` fails here we're past the irreversible removal:
-      # windows keep their refs to the deleted buffer alive but it's no longer
-      # reachable via id. Surface the error and bail; subsequent input will
-      # operate on the orphan buffer until the user reloads.
-      let enewResult = e.enew()
-      if enewResult.isErr:
-        logError("editor", "Enew failed after buffer delete: " & enewResult.error)
-        return err(enewResult.error)
-      # `enew` has already pointed the active window at the new buffer, so the
-      # redirect below is a no-op for it but still catches any other windows
-      # that were on the deleted buffer.
-      e.activeBuffer()
+      # Last buffer just went away: the windows on it move to a fresh
+      # `[No Name]` buffer, whichever window is active.
+      e.addEmptyBuffer()
     else:
       # Same index now refers to what used to be the next buffer, clamped.
       e.buffers[min(bufferIndex, e.buffers.len - 1)]
@@ -519,10 +530,14 @@ proc deleteCurrentBuffer*(e: Editor, force: bool = false): Result[(), string] =
   ##
   ## A split viewer's window exists for its listing, so there the listing goes
   ## and the window with it, as Vim closes the windows on a deleted buffer; the
-  ## last window instead goes back to the tab it covered.
+  ## last window instead goes back to the tab it covered. The FileTree
+  ## sidebar's window too: the tree closes, as its `q` does.
   let win = e.activeWindow
   if win.viewerEntry.isSome and win.viewerEntry.get.placement != vpInPlace:
     e.closeLiveViewer()
+    return ok(())
+  if win.isSidebar:
+    e.closeFileTree()
     return ok(())
   let target = e.tabBuffer(win)
   if force:
@@ -586,6 +601,7 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
   logDebug("editor", "editFile called with path: " & path)
   logDebug("editor", "Current buffers.len: " & $e.buffers.len)
 
+  ?e.activeWindow.checkTabSwitch()
   let bufferResult = e.loadOrCreateBuffer(path)
   if bufferResult.isErr:
     return err(bufferResult.error)

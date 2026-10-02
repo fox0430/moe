@@ -257,6 +257,26 @@ proc roomBesideSidebar*(e: Editor): Result[int, string] =
     return err("not enough space to open a new window")
   ok(width)
 
+proc tabBesideLoneSidebar*(e: Editor): Option[TextBuffer] =
+  ## What a window opened beside a lone sidebar, or in its place, shows: the
+  ## last opened buffer.
+  if e.buffers.len > 0:
+    some(e.buffers[^1])
+  else:
+    none(TextBuffer)
+
+proc tabWindow(buf: TextBuffer, viewport: ViewPort): EditorWindow =
+  ## An active window on `buf`'s tab, in Normal mode.
+  EditorWindow(
+    viewBuffer: buf,
+    tabBufferId: buf.id,
+    bufferIds: @[buf.id],
+    viewport: viewport,
+    active: true,
+    mode: EditorMode.Normal,
+    wrapCountCache: WrapCountCache(),
+  )
+
 proc openWindowBesideSidebar*(e: Editor, buf: TextBuffer): Result[void, string] =
   ## Open a window on `buf`'s tab right of the active sidebar and focus it, for
   ## when the sidebar is the only window.
@@ -266,19 +286,14 @@ proc openWindowBesideSidebar*(e: Editor, buf: TextBuffer): Result[void, string] 
   side.viewport.width = sideWidth
   e.windowManager.deactivateAllWindows()
 
-  let win = EditorWindow(
-    viewBuffer: buf,
-    tabBufferId: buf.id,
-    bufferIds: @[buf.id],
-    viewport: ViewPort(
+  let win = tabWindow(
+    buf,
+    ViewPort(
       width: width,
       height: side.viewport.height,
       x: side.viewport.x + sideWidth + WindowSeparatorWidth,
       y: side.viewport.y,
     ),
-    active: true,
-    mode: EditorMode.Normal,
-    wrapCountCache: WrapCountCache(),
   )
   let sideIndex = e.windowManager.activeWindowIndex
   e.windowManager.previousWindow = side
@@ -436,17 +451,20 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
 
   ok(())
 
+proc addEmptyBuffer*(e: Editor): TextBuffer =
+  ## A new empty buffer in the global buffer list, with config-derived
+  ## highlight settings applied.
+  result = newTextBuffer()
+  e.addBuffer(result)
+  applyHighlightConfig(result, e.config)
+
 proc enew*(e: Editor): Result[(), string] =
   ## Create a new empty buffer and add it to the buffer list
-  let newBuffer = newTextBuffer()
-
-  # Add the new buffer to the global buffer list
-  e.addBuffer(newBuffer)
+  ?e.activeWindow.checkTabSwitch()
+  let newBuffer = e.addEmptyBuffer()
   # Register in active window's per-window tab list
   if newBuffer.id notin e.activeWindow.bufferIds:
     e.activeWindow.bufferIds.add(newBuffer.id)
-  # Apply config-derived highlight settings to the new buffer
-  applyHighlightConfig(newBuffer, e.config)
   logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
 
   # Shared tab transition.
@@ -454,6 +472,14 @@ proc enew*(e: Editor): Result[(), string] =
 
   e.syncActiveWindow()
 
+  ok(())
+
+proc newBesideSidebar*(e: Editor): Result[(), string] =
+  ## `:new` / `:vnew` from a lone sidebar: the window opened beside it is the
+  ## split.
+  # Check the room first so a refused open registers nothing.
+  discard ?e.roomBesideSidebar()
+  ?e.openWindowBesideSidebar(e.addEmptyBuffer())
   ok(())
 
 proc new*(e: Editor): Result[(), string] =
@@ -587,3 +613,26 @@ proc closeWindow*(e: Editor): bool =
     e.setActiveWindowScreenCursor(e.activeWindow)
 
   return false
+
+proc closeFileTree*(e: Editor) =
+  ## Close the FileTree sidebar, the active window. When it is the last
+  ## window, a window on the last opened buffer takes its place, as Vim's `:bd`
+  ## shows another buffer rather than a new one.
+  e.activeWindow.clearModeState(EditorMode.FileTree)
+  if not e.closeWindow():
+    return
+  # Replace the sidebar rather than turn it into a file window, which would
+  # keep its width and its listing in the tab list.
+  let tab = e.tabBesideLoneSidebar()
+  let buf =
+    if tab.isSome:
+      tab.get
+    else:
+      e.addEmptyBuffer()
+  let win = tabWindow(buf, ViewPort())
+  e.windowManager.windows.add(win)
+  e.windowManager.activateWindow(e.windowManager.windows.high)
+  e.windowManager.onlyWindow(e.screenSize.width, e.screenSize.height)
+  e.syncActiveWindow()
+  e.deriveTabMode(win)
+  e.setActiveWindowScreenCursor(win)

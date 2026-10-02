@@ -396,7 +396,9 @@ type
       # Stable `:b` keys (e.g. a Terminal's command), independent of the
       # display label. Presentation must never define these.
     readOnly*: bool
-    isUtilityBuffer*: bool # Utility buffers (jumplist, log, etc.) disable decorations
+    isUtilityBuffer*: bool
+      # Rendered listings (filer, file tree, recent files): no decorations, and
+      # never read or written as the file at `filePath`.
     lineEnding*: LineEnding
     encoding*: CharacterEncoding
     hasBom*: bool # BOM stripped on load, re-emitted on save (UTF-8/16/32)

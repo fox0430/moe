@@ -44,13 +44,6 @@ proc mainWindowCount(e: Editor): int =
     if not win.isSidebar:
       inc result
 
-proc tabBesideLoneSidebar(e: Editor): Option[TextBuffer] =
-  ## What a window opened beside a lone sidebar shows: the last opened buffer.
-  if e.buffers.len > 0:
-    some(e.buffers[^1])
-  else:
-    none(TextBuffer)
-
 proc sidebarTab*(e: Editor): Option[TextBuffer] =
   ## The tab the FileTree sidebar serves: that of the window `leaveSidebar`
   ## goes to, or what one opened beside a lone sidebar shows.

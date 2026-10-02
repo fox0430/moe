@@ -140,7 +140,9 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
   of hrBufferManagerSelectBuffer:
     # Select the buffer and switch to it (stable id survives list mutations)
     discard e.leaveViewerModeForJump(EditorMode.BufferManager)
-    discard e.activateBuffer(r.selectBufferId)
+    let activated = e.tryActivateBuffer(r.selectBufferId)
+    if activated.isErr:
+      e.state.statusMessage = activated.error
     return true
   of hrBufferManagerDeleteBuffer:
     # deleteBufferById also tears down a Terminal PTY.
@@ -172,11 +174,14 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     # Resolve BufferId at jump time to survive buffer-list mutations.
     let jumpLine = r.bookmarkJumpLine
     discard e.leaveViewerModeForJump(EditorMode.BookmarkManager)
-    if e.activateBuffer(r.bookmarkJumpBufferId):
-      let buf = e.activeBuffer()
-      let clampedLine = min(jumpLine, max(0, buf.len - 1))
-      e.activeWindow.cursor = BufferPosition(line: clampedLine, column: 0)
-      e.activeWindow.viewport.resetViewportTop(max(0, clampedLine - 5))
+    let activated = e.tryActivateBuffer(r.bookmarkJumpBufferId)
+    if activated.isErr:
+      e.state.statusMessage = activated.error
+      return true
+    let buf = e.activeBuffer()
+    let clampedLine = min(jumpLine, max(0, buf.len - 1))
+    e.activeWindow.cursor = BufferPosition(line: clampedLine, column: 0)
+    e.activeWindow.viewport.resetViewportTop(max(0, clampedLine - 5))
     return true
   of hrBookmarkManagerDelete:
     # Delete the bookmark and refresh

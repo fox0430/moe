@@ -33,6 +33,7 @@ import
   ]
 import ../src/moepkg/command_handlers/[handler_result, result_processor, editor_ops]
 import ../src/moepkg/buffer/edit
+import ../src/moepkg/lsp/protocol/types as lspTypes
 from ../src/moepkg/command_registry/core import recordJump
 
 proc createTestEditor(): Editor =
@@ -98,7 +99,7 @@ suite "Split viewer - covers a split of the active tab":
     for info in e.getBufferInfos():
       check info.number != listing.id.int
     check not e.switchToBuffer($listing.id.int)
-    check not e.activateBuffer(listing.id)
+    check e.tryActivateBuffer(listing.id).isErr
     check origWin.tabBufferId == origTab
 
   test ":vsplit inside the viewer shows the viewer in both, as Vim does":
@@ -1158,3 +1159,453 @@ suite "Split from the FileTree sidebar":
         check e.windowManager.windows.len == windowsBefore
         check e.buffers.len == buffersBefore
         e.checkSidebar(tree)
+
+suite "Tab commands from the FileTree sidebar":
+  ## The sidebar keeps its listing, as Vim's 'winfixbuf' window keeps its
+  ## buffer: a command that would show another buffer there is refused, one
+  ## that opens a window splits the window it serves, and the rest act on the
+  ## listing, which refuses writes and reloads.
+  proc twoFiles(name: string): tuple[e: Editor, first, second: TextBuffer] =
+    let (e, _) = editorOnFile(name & "_a.txt")
+    let first = e.activeBuffer()
+    let other = getTempDir() / (name & "_b.txt")
+    writeFile(other, "other\n")
+    check e.editFile(other).isOk
+    (e, first, e.activeBuffer())
+
+  proc cleanup(name: string) =
+    removeFile(getTempDir() / (name & "_a.txt"))
+    removeFile(getTempDir() / (name & "_b.txt"))
+
+  template checkUntouched(e: Editor, tree: EditorWindow, width: int) =
+    e.checkSidebar(tree)
+    check tree.viewport.x == 0
+    check tree.viewport.width == width
+    check e.bufferById(tree.buffer.id).isNone
+
+  template checkRefused(e: Editor, tree: EditorWindow, width: int) =
+    check e.activeWindow == tree
+    check e.state.statusMessage.contains("E1513")
+    e.checkUntouched(tree, width)
+
+  for lone in [false, true]:
+    let where = if lone: " from a lone sidebar" else: ""
+    test "commands that show another buffer are refused" & where:
+      let name = "moe_sidebar_tab_refuse" & (if lone: "_lone" else: "")
+      let (e, first, _) = twoFiles(name)
+      let third = getTempDir() / (name & "_c.txt")
+      writeFile(third, "third\n")
+      let absent = getTempDir() / (name & "_absent.txt")
+      removeFile(absent)
+      defer:
+        cleanup(name)
+        removeFile(third)
+      let fileWin = e.activeWindow
+      let tabBefore = fileWin.tabBufferId
+      let tree =
+        if lone:
+          e.loneSidebar()
+        else:
+          e.openFileTree()
+      let width = tree.viewport.width
+      let windowsBefore = e.windowManager.windows.len
+      let buffersBefore = e.buffers.len
+      var refused = @[
+        HandlerResult(kind: hrEdit, editFilename: some(third)),
+        HandlerResult(kind: hrEdit, editFilename: some(absent)),
+        HandlerResult(kind: hrBuffer, bufferArg: $first.id),
+        HandlerResult(kind: hrEnew),
+      ]
+      when not defined(moe.embedded):
+        refused.add HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: "true")
+
+      for r in refused:
+        e.state.statusMessage = ""
+        e.run(r)
+
+        check e.windowManager.windows.len == windowsBefore
+        check e.buffers.len == buffersBefore
+        check first.id notin tree.bufferIds
+        e.checkRefused(tree, width)
+      if not lone:
+        check fileWin.tabBufferId == tabBefore
+
+  for (kind, message) in [
+    (hrBufferNext, "E88: There is only one buffer"),
+    (hrBufferPrev, "E88: There is only one buffer"),
+    (hrBufferFirst, "Already at first buffer"),
+    (hrBufferLast, "Already at last buffer"),
+  ]:
+    test $kind & " finds no other tab: the sidebar lists only its listing":
+      let name = "moe_sidebar_tab_cycle_" & $kind
+      let (e, _, _) = twoFiles(name)
+      defer:
+        cleanup(name)
+      let fileWin = e.activeWindow
+      let tabBefore = fileWin.tabBufferId
+      let buffersBefore = e.buffers.len
+      let tree = e.openFileTree()
+      let width = tree.viewport.width
+
+      e.run(HandlerResult(kind: kind))
+
+      check e.state.statusMessage == message
+      check e.activeWindow == tree
+      check fileWin.tabBufferId == tabBefore
+      check e.buffers.len == buffersBefore
+      e.checkUntouched(tree, width)
+
+  for force in [false, true]:
+    test (if force: ":bd!" else: ":bd") & " closes the tree and deletes no buffer":
+      let name = "moe_sidebar_tab_bd" & (if force: "_force" else: "")
+      let (e, _, second) = twoFiles(name)
+      defer:
+        cleanup(name)
+      let fileWin = e.activeWindow
+      discard second.insertText(BufferPosition(line: 0, column: 0), "typed ")
+      let buffersBefore = e.buffers.len
+      let tree = e.openFileTree()
+
+      e.run(HandlerResult(kind: hrBufferDelete, forceBufferDelete: force))
+
+      check tree notin e.windowManager.windows
+      check e.windowManager.windows.len == 1
+      check e.activeWindow == fileWin
+      e.checkOnTab(fileWin, second)
+      check e.buffers.len == buffersBefore
+      check second.getLine(0) == "typed other"
+
+  for r in [
+    HandlerResult(kind: hrBufferDelete, forceBufferDelete: true),
+    HandlerResult(kind: hrFileTreeQuit),
+    HandlerResult(kind: hrEnterFileTree),
+  ]:
+    test "from a lone sidebar, " & $r.kind & " leaves a window on the last opened buffer":
+      let name = "moe_sidebar_tab_close_lone_" & $r.kind
+      let (e, _, second) = twoFiles(name)
+      defer:
+        cleanup(name)
+      discard second.insertText(BufferPosition(line: 0, column: 0), "typed ")
+      let tree = e.loneSidebar()
+      # A resize shrinks the lone sidebar to its fixed width.
+      e.resize(e.screenSize.width + 10, e.screenSize.height)
+      require tree.viewport.width < e.screenSize.width
+      let height = tree.viewport.height
+      let buffersBefore = e.buffers.len
+
+      # Regression: `:bd!` ran on the last opened buffer, in a window opened for
+      # it and closed again, and discarded its unsaved changes unseen; `q` and
+      # `:filetree` left the window in FileTree mode with no tree, and then it
+      # kept the tree's width and listed the listing as a tab. Each close also
+      # added a new empty buffer while the user's file stayed hidden.
+      e.run(r)
+
+      let win = e.activeWindow
+      check e.windowManager.windows.len == 1
+      check win.fixedWidth.isNone
+      check win.mode == EditorMode.Normal
+      check win.modeState.kind == mskNone
+      check e.state.mode == EditorMode.Normal
+      e.checkOnTab(win, second)
+      check win.bufferIds == @[second.id]
+      check win.viewport.x == 0
+      check win.viewport.width == e.screenSize.width
+      check win.viewport.height == height
+      check e.buffers.len == buffersBefore
+      check second.getLine(0) == "typed other"
+
+  for kind in [hrNew, hrVnew]:
+    test $kind & " splits the served window, never the sidebar":
+      let name = "moe_sidebar_tab_" & $kind
+      let (e, _, _) = twoFiles(name)
+      defer:
+        cleanup(name)
+      let fileWin = e.activeWindow
+      let tree = e.openFileTree()
+      let width = tree.viewport.width
+      let height = tree.viewport.height
+
+      e.run(HandlerResult(kind: kind))
+
+      check e.windowManager.windows.len == 3
+      check e.activeWindow notin [tree, fileWin]
+      check e.activeBuffer().filePath.isNone
+      check tree.viewport.height == height
+      e.checkUntouched(tree, width)
+
+    test $kind & " from a lone sidebar opens one window beside it":
+      let name = "moe_sidebar_tab_lone_" & $kind
+      let (e, _, _) = twoFiles(name)
+      defer:
+        cleanup(name)
+      let tree = e.loneSidebar()
+      let buffersBefore = e.buffers.len
+
+      e.run(HandlerResult(kind: kind))
+
+      check e.windowManager.windows.len == 2
+      check e.activeWindow != tree
+      check e.buffers.len == buffersBefore + 1
+      check e.activeBuffer().filePath.isNone
+      e.checkSidebar(tree)
+
+  for lone in [false, true]:
+    for command in [":e", ":e!"]:
+      test command & " is refused" & (if lone: " from a lone sidebar" else: "") &
+        ": the listing is not a file to reload":
+        let name =
+          "moe_sidebar_tab_reload" & (if command == ":e!": "_force" else: "") &
+          (if lone: "_lone" else: "")
+        let (e, _, second) = twoFiles(name)
+        defer:
+          cleanup(name)
+        let tree =
+          if lone:
+            e.loneSidebar()
+          else:
+            e.openFileTree()
+        let width = tree.viewport.width
+        writeFile(second.filePath.get, "changed\n")
+        discard second.insertText(BufferPosition(line: 0, column: 0), "typed ")
+
+        check e.executeCommandOverlay(command)
+
+        # Regression: the listing's root directory was "reloaded", and from a
+        # lone sidebar the last opened buffer lost its unsaved changes.
+        check second.getLine(0) == "typed other"
+        check second.isModified
+        check e.state.statusMessage.contains("Cannot reload a listing")
+        check e.activeWindow == tree
+        e.checkUntouched(tree, width)
+
+  test ":w and :w <name> are refused: the listing is not a file":
+    const name = "moe_sidebar_tab_write"
+    let (e, _, _) = twoFiles(name)
+    let dst = getTempDir() / (name & "_dst.txt")
+    removeFile(dst)
+    defer:
+      cleanup(name)
+      removeFile(dst)
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+
+    # Regression: `:w <name>` wrote the listing's text to the file.
+    check e.executeCommandOverlay(":w " & dst)
+    check not fileExists(dst)
+    check e.state.statusMessage.contains("Cannot write a listing")
+
+    check e.executeCommandOverlay(":w")
+    check e.state.statusMessage.contains("Cannot write a listing")
+    check e.activeWindow == tree
+    e.checkUntouched(tree, width)
+
+  test "a tab-line click on the sidebar is refused with a reason":
+    const name = "moe_sidebar_tab_click"
+    let (e, _, _) = twoFiles(name)
+    defer:
+      cleanup(name)
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+    e.state.statusMessage = ""
+
+    # Regression: the click was dropped silently, and pruned the sidebar's own
+    # listing out of its tab list as if a deleted buffer had left it behind.
+    check not e.switchToWindowBuffer(0)
+
+    check e.state.statusMessage.contains("E1513")
+    check tree.bufferIds == @[tree.tabBufferId]
+    e.checkUntouched(tree, width)
+
+  test "a refused :bnext keeps its reason instead of clearing it":
+    const name = "moe_sidebar_tab_bnext_refused"
+    let (e, first, _) = twoFiles(name)
+    defer:
+      cleanup(name)
+    let fileWin = e.activeWindow
+    let tabBefore = fileWin.tabBufferId
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+    require first.id notin tree.bufferIds
+    tree.bufferIds.add(first.id)
+
+    e.switchToNextBuffer()
+
+    check e.state.statusMessage.contains("E1513")
+    check fileWin.tabBufferId == tabBefore
+    check tree.bufferIds.len == 2
+    e.checkRefused(tree, width)
+
+  test "a location response landing while the tree has focus splits the served window":
+    const name = "moe_sidebar_tab_jump_open_window"
+    let (e, _, _) = twoFiles(name)
+    let third = getTempDir() / (name & "_c.txt")
+    writeFile(third, "third\nline\n")
+    defer:
+      cleanup(name)
+      removeFile(third)
+    let fileWin = e.activeWindow
+    let tabBefore = fileWin.tabBufferId
+    fileWin.cursor = BufferPosition(line: 0, column: 2)
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+    let buffersBefore = e.buffers.len
+
+    # Regression: the split landed on the sidebar, halving its width and
+    # registering the listing as a buffer it then listed as a tab. Then the
+    # jump list recorded the listing, so `C-o` found no buffer to go back to.
+    check e.jumpToLspLocation(
+      lspTypes.Location(
+        uri: "file://" & third,
+        range: lspTypes.Range(
+          start: lspTypes.Position(line: 1, character: 0),
+          `end`: lspTypes.Position(line: 1, character: 4),
+        ),
+      ),
+      "Definition",
+      openWindow = true,
+    )
+
+    check e.windowManager.windows.len == 3
+    check e.buffers.len == buffersBefore + 1
+    check e.activeBuffer().filePath == some(absolutePath(third))
+    check e.activeWindow != fileWin
+    check fileWin.tabBufferId == tabBefore
+    check e.state.jumpList.list[^1] ==
+      JumpPosition(bufferId: tabBefore, line: 0, column: 2)
+    e.checkUntouched(tree, width)
+
+  test "a location response landing on a lone sidebar jumps into one new window":
+    const name = "moe_sidebar_tab_jump_open_window_lone"
+    let (e, _, second) = twoFiles(name)
+    let third = getTempDir() / (name & "_c.txt")
+    writeFile(third, "third\nline\n")
+    defer:
+      cleanup(name)
+      removeFile(third)
+    let tree = e.loneSidebar()
+    let treeView = tree.buffer
+    let sidebarWidth = tree.fixedWidth.get
+    let buffersBefore = e.buffers.len
+
+    # Regression: the split landed on the sidebar itself, so the jump opened a
+    # second window on the listing and registered it as a buffer.
+    check e.jumpToLspLocation(
+      lspTypes.Location(
+        uri: "file://" & third,
+        range: lspTypes.Range(
+          start: lspTypes.Position(line: 1, character: 0),
+          `end`: lspTypes.Position(line: 1, character: 4),
+        ),
+      ),
+      "Definition",
+      openWindow = true,
+    )
+
+    check e.windowManager.windows.len == 2
+    check e.buffers.len == buffersBefore + 1
+    check e.activeBuffer().filePath == some(absolutePath(third))
+    check e.activeWindow != tree
+    check tree.viewport.x == 0
+    check tree.viewport.width == sidebarWidth
+    check e.bufferById(treeView.id).isNone
+    # The jump starts in the window opened for it, not on the listing.
+    check e.state.jumpList.list[^1].bufferId == second.id
+    e.checkSidebar(tree)
+
+  test "a jump that lands while the tree has focus moves nothing there":
+    const name = "moe_sidebar_tab_jump"
+    let (e, first, _) = twoFiles(name)
+    let third = getTempDir() / (name & "_c.txt")
+    writeFile(third, "third\nline\n")
+    defer:
+      cleanup(name)
+      removeFile(third)
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+    let cursorBefore = tree.cursor
+    let buffersBefore = e.buffers.len
+    let jumpsBefore = e.state.jumpList.list.len
+
+    # Regression: the jump was taken as done and its position was set on the
+    # listing; a refused jump still went into the jump list.
+    check not e.openFileAndJumpTo(third, 1, 0)
+    check not e.openFileAndJumpTo(first.filePath.get, 1, 0)
+    check e.tryActivateBuffer(first.id).error.contains("E1513")
+    check not e.activateBuffer(first.id)
+
+    check e.state.jumpList.list.len == jumpsBefore
+    check e.buffers.len == buffersBefore
+    check tree.cursor == cursorBefore
+    check first.id notin tree.bufferIds
+    e.checkRefused(tree, width)
+
+  test "deleting the last buffer while the tree has focus moves its windows":
+    let (e, path) = editorOnFile("moe_sidebar_tab_last_buffer.txt")
+    defer:
+      removeFile(path)
+    let fileBuf = e.activeBuffer()
+    let fileWin = e.activeWindow
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+
+    check e.deleteBufferById(fileBuf.id).isOk
+
+    check e.buffers.len == 1
+    e.checkOnTab(fileWin, e.buffers[0])
+    check e.buffers[0].filePath.isNone
+    check e.activeWindow == tree
+    check e.bufferById(tree.buffer.id).isNone
+    e.checkSidebar(tree)
+    check tree.viewport.width == width
+
+  test "the sidebar is never moved onto a tab":
+    const name = "moe_sidebar_tab_guard"
+    let (e, first, _) = twoFiles(name)
+    defer:
+      cleanup(name)
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+
+    check e.moveWindowToTab(tree, first) == tabSwitchRefused
+    # A switch that skipped `checkTabSwitch` does not list the buffer either.
+    e.switchToBufferByIndex(e.bufferIndexById(first.id))
+
+    check tree.bufferIds == @[tree.tabBufferId]
+    e.checkUntouched(tree, width)
+
+  test "a jump back to a buffer is refused there, not taken for a deleted one":
+    const name = "moe_sidebar_tab_jump_back"
+    let (e, first, _) = twoFiles(name)
+    defer:
+      cleanup(name)
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+
+    # Regression: it said "Buffer no longer available".
+    e.run(HandlerResult(kind: hrJumpToBuffer, jumpBufferId: first.id))
+
+    check first.id notin tree.bufferIds
+    e.checkRefused(tree, width)
+
+  when not defined(moe.embedded):
+    test ":terminal is refused before it touches a split viewer the sidebar serves":
+      const name = "moe_sidebar_tab_terminal_viewer"
+      let (e, _, _) = twoFiles(name)
+      defer:
+        cleanup(name)
+      let (helpWin, _) = e.openHelp()
+      let tree = e.openFileTree()
+      require e.windowManager.windows[e.sidebarTarget()] == helpWin
+      let width = tree.viewport.width
+      let windowsBefore = e.windowManager.windows.len
+      let buffersBefore = e.buffers.len
+
+      # Regression: the viewer's window was closed before the terminal was
+      # refused.
+      e.run(HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: "true"))
+
+      check helpWin in e.windowManager.windows
+      check helpWin.viewerEntry.isSome
+      check e.windowManager.windows.len == windowsBefore
+      check e.buffers.len == buffersBefore
+      e.checkRefused(tree, width)
