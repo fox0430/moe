@@ -182,6 +182,18 @@ proc rebuildEffectiveBindings*(registry: KeyBindingRegistry, mode: EditorMode) =
       else:
         registry.bindSequence(mode, m.triggerKeys, m.command)
 
+proc insertBuiltinKeyError(mode: EditorMode, lhsKeys: seq[KeyCombo]): string =
+  ## Reject Insert-mode C-a / C-p mappings, handled before `resolveBuiltin`
+  ## and so never dispatched. C-@ needs no check (parsed as Ctrl-Space).
+  if mode != EditorMode.Insert or lhsKeys.len == 0:
+    return ""
+  for combo in lhsKeys:
+    if combo.isSpecial or kmCtrl notin combo.modifiers:
+      continue
+    if combo.char.toLowerAscii in ["a", "p"]:
+      return "C-a / C-p are built-in in Insert mode and cannot be remapped"
+  ""
+
 proc addRuntimeMapping*(
     registry: KeyBindingRegistry,
     mode: EditorMode,
@@ -202,6 +214,9 @@ proc addRuntimeMapping*(
   # if/else (not early return) so the command branch can never fall through to
   # the key-sequence branch even if a trailing `return ""` is stripped.
   if rhsStr in registry.commandRegistry:
+    let builtinErr = insertBuiltinKeyError(mode, lhsKeys)
+    if builtinErr.len > 0:
+      return builtinErr
     # Key → command mapping. Recorded in runtimeMappings only; the effective
     # bindings/sequences tables are derived by rebuildEffectiveBindings.
     let command = registry.commandRegistry[rhsStr]
@@ -254,6 +269,9 @@ proc setRuntimeCommandMapping*(
   let lhsKeys = parseKeyString(lhsStr)
   if lhsKeys.len == 0:
     return "Invalid key: " & lhsStr
+  let builtinErr = insertBuiltinKeyError(mode, lhsKeys)
+  if builtinErr.len > 0:
+    return builtinErr
   let mapping = RuntimeKeyMapping(
     triggerKeys: lhsKeys,
     triggerStr: lhsStr,

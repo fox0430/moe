@@ -540,6 +540,11 @@ const InsertModeCommands*: HelpGroup = HelpGroup(
       syntax: "Ctrl-o",
       description: "Execute one Normal mode command and return to Insert mode",
     ),
+    HelpEntry(syntax: "Ctrl-a", description: "Insert the previously inserted text"),
+    HelpEntry(
+      syntax: "Ctrl-@ or Ctrl-Space",
+      description: "Insert the previously inserted text and go to Normal mode",
+    ),
     HelpEntry(syntax: "Esc", description: "Go to Normal mode"),
   ]
 )
