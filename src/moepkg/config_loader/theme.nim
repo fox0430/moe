@@ -225,6 +225,10 @@ proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
 # load doesn't stamp bundled defaults over the user's theme file.
 var themeColorsFromFile* = false
 
+# The [Theme] setting `themeColors` was last loaded for; none before the first
+# `initTheme`. Applying a config rereads the theme only when its setting differs.
+var loadedThemeConfig*: Option[ThemeConfig]
+
 # Forward declaration: `initTheme` bootstraps a missing tkConfig file via
 # `saveThemeToToml`, which is defined further down in the Serializers section.
 proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string]
@@ -243,6 +247,8 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
   ## found" error every launch. If seeding fails (unwritable path, etc.),
   ## the write error is recorded under `Theme.path` and the load falls
   ## through to the default theme.
+
+  loadedThemeConfig = some(config.theme)
 
   if config.theme.kind == tkConfig and config.theme.path.len > 0:
     let expandedPath = expandTilde(config.theme.path)

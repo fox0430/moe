@@ -25,7 +25,7 @@ import std/[unittest, os, strutils]
 import
   ../src/moepkg/[
     editor, config, config_loader, config_mode, color, types, key_bindings,
-    setting_options, editor_config_reload,
+    setting_options, editor_config_reload, handler,
   ]
 import ../src/moepkg/command_handlers/[handler_result, result_processor, config_handler]
 
@@ -226,3 +226,50 @@ suite "Config view - rows shown or hidden by a change elsewhere":
     let item = win.state.items[win.state.searchStartIndex]
     check item.section == row.section
     check item.displayName == row.displayName
+
+proc themeFileEditor(path: string): Editor =
+  ## An editor whose theme file sets keyword.fg to #5fd7ff.
+  writeFile(path, "[Colors]\nkeyword = { fg = \"#5fd7ff\" }\n")
+  let config = newEditorConfig()
+  config.theme.kind = tkConfig
+  config.theme.path = path
+  newEditor(config, newValidationResult())
+
+proc editColor(win: EditorWindow, e: Editor, name, value: string) =
+  discard win.state.select("Theme Colors", name)
+  win.state.startEdit()
+  win.state.editBuffer = value
+  require win.state.confirmEdit(e.state)
+
+proc keywordFg(): ThemeColor =
+  themeColors[EditorColorPairIndex.keyword].foreground
+
+suite "Config view - unsaved theme colors":
+  let themePath = getTempDir() / "moe_config_unsaved_colors.toml"
+
+  teardown:
+    removeFile(themePath)
+
+  test "a change to another value keeps them":
+    let e = themeFileEditor(themePath)
+    let win = e.openConfig()
+    win.editColor(e, "keyword.fg", "#ff0000")
+    discard win.state.select("Standard", "number")
+    let number = e.config.standard.number
+
+    discard e.handleKeyCombo(KeyCombo(isSpecial: true, special: skRight, modifiers: {}))
+
+    check e.config.standard.number != number
+    check keywordFg() == ThemeColor(rgb: rgb("#ff0000"))
+
+  test "leaving the view keeps them":
+    let e = themeFileEditor(themePath)
+    let win = e.openConfig()
+    win.editColor(e, "keyword.fg", "#ff0000")
+    discard win.state.select("Standard", "number")
+    e.press(win, skRight)
+    require win.state.pendingApply
+
+    e.run(HandlerResult(kind: hrConfigQuit))
+
+    check keywordFg() == ThemeColor(rgb: rgb("#ff0000"))

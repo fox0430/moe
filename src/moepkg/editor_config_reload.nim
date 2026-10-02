@@ -21,7 +21,7 @@
 ## editor (display, search, color, LSP, theme, mouse, notification, key-router
 ## settings) and poll the config file for external changes.
 
-import std/[monotimes, times, os]
+import std/[monotimes, times, os, options]
 
 import pkg/results
 
@@ -122,8 +122,10 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   for buf in e.buffers:
     applyHighlightConfig(buf, newConfig)
 
-  # Reload theme if configured
-  initTheme(newConfig)
+  # Theme colors derive from [Theme] alone. Rereading on every apply would drop
+  # colors edited in the Config view but not yet saved.
+  if loadedThemeConfig != some(newConfig.theme):
+    initTheme(newConfig)
 
   # Update sidebar bookmark marker
   setBookmarkMarker(newConfig.standard.bookmarkMarker)
@@ -220,6 +222,9 @@ proc maybeReloadConfig*(e: Editor) =
   if vr.hasDeprecations:
     for msg in vr.toDeprecationMessages:
       logInfo("editor", "Config notice: " & msg)
+
+  # The theme file is not watched, so reread it with the config.
+  initTheme(newConfig)
 
   # Apply the new settings
   e.applyConfigSettings(newConfig)
