@@ -440,6 +440,9 @@ proc utf32ToUtf8(s: string, littleEndian: bool): Result[string, string] =
     let point = advance()
     if point > 0x10FFFF'u32:
       return Result[string, string].err "code point out of range"
+    if point >= 0xD800'u32 and point <= 0xDFFF'u32:
+      # A surrogate is not a scalar value; encoding it would emit invalid UTF-8.
+      return Result[string, string].err "surrogate code point"
     res.add Rune(int(point)).toUTF8
 
   Result[string, string].ok res

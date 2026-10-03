@@ -290,6 +290,14 @@ suite "Encoding Transcoding":
     # U+110000 (one past the Unicode maximum)
     check decodeToUtf8("\x00\x11\x00\x00", CharacterEncoding.utf32Be).isErr
 
+  test "UTF-32 decode rejects surrogate code points":
+    # Regression: U+D800 passed through to Rune.toUTF8 as ED A0 80, invalid
+    # UTF-8 that later transforms rewrote to U+FFFD.
+    check decodeToUtf8("\x00\xD8\x00\x00", CharacterEncoding.utf32Le).isErr
+    check decodeToUtf8("\x00\x00\xD8\x00", CharacterEncoding.utf32Be).isErr
+    check decodeToUtf8("\x00\xDC\x00\x00", CharacterEncoding.utf32Le).isErr
+    check decodeToUtf8("\x00\x00\xDF\xFF", CharacterEncoding.utf32Be).isErr
+
   test "UTF-32 decode rejects length not multiple of 4":
     check decodeToUtf8("\x61\x00\x00", CharacterEncoding.utf32Le).isErr
 

@@ -1416,6 +1416,8 @@ suite "Editor - invalid bytes roundtrip":
         check e.loadFile(src).isOk
         check e.activeBuffer.encoding == CharacterEncoding.unknown
         check not e.activeBuffer.hasBom
+        check e.activeBuffer.keepRaw
+        check not e.activeBuffer.allowsTextTransforms
         check e.activeBuffer.getFileContent() == raw
         # First line must preserve bytes; splitLines()[0] mirrors the
         # spec's suggested check for single- and multi-line raws.
@@ -1439,7 +1441,9 @@ suite "Editor - invalid bytes roundtrip":
         let e = makeEditor
         check e.loadFile(src).isOk
         check e.activeBuffer.encoding == CharacterEncoding.unknown
-        check e.activeBuffer.lineEnding == CRLF
+        check e.activeBuffer.keepRaw
+        # Raw: the CRLF bytes ride in the lines and `endOfLine` round-trips them.
+        check e.activeBuffer.endOfLine
         check e.activeBuffer.getFileContent() == raw
         check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == raw
@@ -1456,7 +1460,7 @@ suite "Editor - invalid bytes roundtrip":
         let e = makeEditor
         check e.loadFile(src).isOk
         check e.activeBuffer.encoding == CharacterEncoding.unknown
-        check e.activeBuffer.lineEnding == CR
+        check e.activeBuffer.keepRaw
         check e.activeBuffer.getFileContent() == raw
         check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == raw
@@ -1473,6 +1477,7 @@ suite "Editor - invalid bytes roundtrip":
         let e = makeEditor
         check e.loadFile(src).isOk
         check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check e.activeBuffer.keepRaw
         check e.activeBuffer.hasBinaryContent
         check e.activeBuffer.getFileContent() == raw
         check e.saveFile(e.activeBuffer(), some(dst)).isOk
@@ -1480,6 +1485,25 @@ suite "Editor - invalid bytes roundtrip":
         removeFile(src)
         if fileExists(dst):
           removeFile(dst)
+
+    test "UTF-32 surrogate bytes roundtrip as raw" & tag:
+      # U+D800 is not a scalar value; the file must stay raw rather than
+      # decode to invalid UTF-8 that a transform could rewrite as U+FFFD.
+      let raw = "\xFF\xFE\x00\x00" & "\x00\xD8\x00\x00"
+      let src = getTempDir() / "moe_test_invalid_utf32_surrogate.bin"
+      let dst = src & ".out"
+      writeFile(src, raw)
+      let e = makeEditor
+      check e.loadFile(src).isOk
+      check e.activeBuffer.encoding == CharacterEncoding.unknown
+      check e.activeBuffer.keepRaw
+      check not e.activeBuffer.allowsTextTransforms
+      check e.activeBuffer.getFileContent() == raw
+      check e.saveFile(e.activeBuffer(), some(dst)).isOk
+      check readFile(dst) == raw
+      removeFile(src)
+      if fileExists(dst):
+        removeFile(dst)
 
     test "Invalid bytes preserved after insertion and save" & tag:
       block lfCase:
@@ -1494,6 +1518,7 @@ suite "Editor - invalid bytes roundtrip":
         let e = makeEditor
         check e.loadFile(src).isOk
         check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check e.activeBuffer.keepRaw
         check e.activeBuffer.insertText(BufferPosition(line: 0, column: 1), "X").isOk
         check e.activeBuffer.getLine(0) == "aX\xE3b"
         check e.activeBuffer.encoding == CharacterEncoding.unknown
@@ -1513,7 +1538,7 @@ suite "Editor - invalid bytes roundtrip":
         let e = makeEditor
         check e.loadFile(src).isOk
         check e.activeBuffer.encoding == CharacterEncoding.unknown
-        check e.activeBuffer.lineEnding == CRLF
+        check e.activeBuffer.keepRaw
         check e.activeBuffer.insertText(BufferPosition(line: 0, column: 1), "X").isOk
         check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == "aX\xE3\r\nb\xFF\r\n"
@@ -1529,10 +1554,30 @@ suite "Editor - invalid bytes roundtrip":
             removeFile(dst)
         let e = makeEditor
         check e.loadFile(src).isOk
+        check e.activeBuffer.keepRaw
         check e.activeBuffer.hasBinaryContent
         check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Z").isOk
         check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == "Za\x00b\xE3c"
+
+    test "Fixing the file lifts raw mode" & tag:
+      let src = getTempDir() / "moe_test_invalid_fixed.bin"
+      defer:
+        removeFile(src)
+      writeFile(src, "a\xE3b\n")
+      let e = makeEditor
+      check e.loadFile(src).isOk
+      check e.activeBuffer.keepRaw
+      check not e.activeBuffer.allowsTextTransforms
+
+      # `keepRaw` is volatile: a valid UTF-8 read must clear it.
+      writeFile(src, "axb\n")
+      check e.loadFile(src).isOk
+      check not e.activeBuffer.keepRaw
+      check e.activeBuffer.allowsTextTransforms
+      check e.activeBuffer.encoding == CharacterEncoding.utf8
+      check e.activeBuffer[0] == "axb"
+      check e.activeBuffer.getFileContent() == "axb\n"
 
   template emptyAndBomRoundtripScenario(makeEditor: untyped, tag: string) =
     test "Empty file roundtrip" & tag:
