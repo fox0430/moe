@@ -165,8 +165,13 @@ type
       cfg, cfgDocDescription: "Show Pop-up window in Command mode"
     .}: bool
     autoDeleteParen* {.cfg, cfgDocDescription: "Automatic delete brackets".}: bool
-    liveReloadOfFile* {.cfg, cfgDocDescription: "Enable live reload of opening files".}:
-      bool
+    liveReloadOfFile* {.
+      cfg,
+      cfgDocDescription:
+        "Enable live reload of opening files. A reload is one undoable edit " &
+        "while it fits the reload limits; past them the buffer is replaced " &
+        "and the undo history is cleared"
+    .}: bool
     colorMode* {.cfg, cfgDocDescription: "Terminal color mode".}: ColorMode
     mouse* {.cfg, cfgDocDescription: "Enable mouse cursor movement".}: bool
     lineWrap* {.cfg, cfgDocDescription: "Enable line wrapping".}: bool

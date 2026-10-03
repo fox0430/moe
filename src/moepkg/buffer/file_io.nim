@@ -768,8 +768,10 @@ proc saveFile*(
   return Result[(), string].ok ()
 
 proc reloadFile*(b: TextBuffer): Result[(), string] =
-  ## Reload file from disk, preserving the file path
-  ## Call this when external modification is detected
+  ## Reload `b` from disk, preserving its file path, for an explicit reload
+  ## (`:e!`): the contents are replaced wholesale and undo history is dropped.
+  ## A change detected on disk goes through `reloadFileIfContentChanged`, which
+  ## lands as an undoable edit when it can.
   if b.filePath.isNone:
     return err("Buffer has no file path")
 
@@ -814,6 +816,10 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
   ## Reload `b` from disk if the on-disk bytes differ from last load/save.
   ## Compared against stored bytes, not a re-serialize (normalization would
   ## look like a change). A no-op write (`touch`) is skipped.
+  ##
+  ## The reload lands as a single undoable edit while it fits the undo limits;
+  ## past them the contents are replaced and undo history is dropped, as in
+  ## `reloadFile`.
   if b.filePath.isNone:
     return err("Buffer has no file path")
 
