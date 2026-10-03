@@ -1521,3 +1521,29 @@ suite "syntax_nim - nimNextToken doc comments":
     g.initGeneralTokenizer("#[regular block]#")
     g.nimNextToken()
     check g.kind == gtLongComment
+
+suite "syntax_nim - char literal at buffer and line boundaries":
+  test "trailing backslash at end of buffer stays in bounds":
+    let buf = "'\\"
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(buf)
+    g.nimNextToken()
+    check g.kind == gtCharLit
+    check g.start + g.length <= buf.len
+    check g.pos <= buf.len
+    check g.length == 2
+    g.nimNextToken()
+    check g.kind == gtEof
+    check g.start + g.length <= buf.len
+    check g.pos <= buf.len
+
+  test "escaped newline in char literal stays line-bounded":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\\n'")
+    g.nimNextToken()
+    check g.kind == gtCharLit
+    check g.length == 2
+    check g.pos == 2
+    g.nimNextToken()
+    check g.kind == gtWhitespace
+    check g.length == 1
