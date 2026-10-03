@@ -44,8 +44,8 @@ type
     decodeFailed: bool
     decodeError: string ## Only set when `decodeFailed`.
     attemptedEncoding: Option[CharacterEncoding]
-      ## `none` when no decode was attempted; `encoding` is reset to unknown on
-      ## failure.
+      ## The encoding the bytes were read as, or `none` when nothing was
+      ## attempted; `encoding` is reset to unknown on failure.
 
   FileShape* = object
     ## How a file was written, and so what a save of it has to put back. A
@@ -64,11 +64,11 @@ type
     shape*: FileShape
     hasBinaryContent*: bool ## NUL near the start.
     decodeFailed*: bool
-      ## No decoding accepted these bytes, so `text` holds them verbatim. Only
-      ## UTF-16/32 can fail this way; anything else comes back as `unknown`.
+      ## Nothing read these bytes (bad UTF-8, or a refused UTF-16/32 decode),
+      ## so `text` holds them verbatim.
     decodeError*: string ## Only set when `decodeFailed`.
     attemptedEncoding*: Option[CharacterEncoding]
-      ## The encoding a decode was attempted as, `none` where none was.
+      ## The encoding the reading was attempted as, `none` where none was.
 
 const
   ExternalModErrorMsg* =
@@ -86,7 +86,7 @@ const
   TranscodedEncodings = {
     CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
     CharacterEncoding.utf32Be,
-  } ## Encodings that `decodeFileContent` decodes; only these can fail.
+  } ## Encodings `decodeFileContent` transcodes; others must read as UTF-8.
 
   TranscodeCandidates =
     TranscodedEncodings + {CharacterEncoding.utf16, CharacterEncoding.utf32}
@@ -142,9 +142,21 @@ proc normalizeLineEndings(content: var string): LineEnding =
   else:
     LF
 
+proc markDecodeFailed(
+    result: var DecodedFileContent, error: string, attempted: CharacterEncoding
+) =
+  ## Record that no decoding read `result.text`, which still holds the bytes as
+  ## they came in (BOM included) for a raw buffer to save back.
+  result.decodeFailed = true
+  result.decodeError = error
+  result.attemptedEncoding = some(attempted)
+  result.encoding = CharacterEncoding.unknown
+  result.hasBom = false
+
 proc decodeFileContent(content: string): DecodedFileContent =
   ## Strip BOM and decode `content` to UTF-8. On failure, return raw bytes
-  ## with `decodeFailed` set and the reason in `decodeError`.
+  ## with `decodeFailed` set and the reason in `decodeError`. Failure covers
+  ## both bytes a Unicode decode refused and bytes no UTF-8 sequence reads.
   result.text = content
   result.encoding = detectCharacterEncoding(result.text)
   var bomLen = 0
@@ -152,7 +164,7 @@ proc decodeFileContent(content: string): DecodedFileContent =
   of CharacterEncoding.utf8:
     if result.text.startsWith("\xEF\xBB\xBF"):
       result.hasBom = true
-      result.text = result.text[3 .. ^1]
+      bomLen = 3
   of CharacterEncoding.utf16:
     result.hasBom = true
     bomLen = 2
@@ -169,8 +181,15 @@ proc decodeFileContent(content: string): DecodedFileContent =
         CharacterEncoding.utf32Le
       else:
         CharacterEncoding.utf32Be
-  else:
+  of CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
+      CharacterEncoding.utf32Be:
+    # BOM-less detection already names the specific encoding.
     discard
+  of CharacterEncoding.unknown:
+    # The detection sample read as no Unicode encoding, so the bytes are not
+    # text and nothing may rewrite them.
+    markDecodeFailed(result, "invalid UTF-8", CharacterEncoding.utf8)
+    return
 
   if result.encoding in TranscodedEncodings:
     result.attemptedEncoding = some(result.encoding)
@@ -178,10 +197,16 @@ proc decodeFileContent(content: string): DecodedFileContent =
     if decoded.isOk:
       result.text = decoded.get
     else:
-      result.decodeError = decoded.error
-      result.decodeFailed = true
-      result.encoding = CharacterEncoding.unknown
-      result.hasBom = false
+      markDecodeFailed(result, decoded.error, result.encoding)
+    return
+
+  # UTF-8: detection reads only the first sample, so bytes past the cut still
+  # have to be read here. No later pass may find bad bytes, or a transform
+  # would rewrite them (U+FFFD) instead of saving the file back unchanged.
+  if result.text.invalidUtf8At != -1:
+    markDecodeFailed(result, "invalid UTF-8", CharacterEncoding.utf8)
+  elif bomLen > 0:
+    result.text = result.text[bomLen .. ^1]
 
 proc decodeForBuffer*(content: string): DecodedText =
   ## Turn file bytes into buffer content: BOM stripped, UTF-16/32 decoded to
@@ -224,12 +249,6 @@ proc lineCount*(decoded: DecodedText): int =
   if decoded.text.len > 0 and decoded.text[^1] == '\n':
     dec result
 
-proc replacementSanitizesBytes*(decoded: DecodedText): bool =
-  ## True if a replacement would rewrite bytes (invalid UTF-8 to U+FFFD). A load
-  ## keeps such bytes verbatim. Scanned here, not at decode, so a plain load
-  ## does not pay for it.
-  decoded.decodeFailed or invalidUtf8At(decoded.text) != -1
-
 proc adoptFileShape(b: TextBuffer, shape: FileShape) =
   ## Make `b` save its text back the way `shape` was written.
   b.encoding = shape.encoding
@@ -246,11 +265,7 @@ proc noteDecodedContent(b: TextBuffer, decoded: DecodedText) =
   b.noteContent()
 
 proc replaceWithDecodedText*(
-    b: TextBuffer,
-    decoded: DecodedText,
-    description: string,
-    adoptShape = false,
-    sanitizesBytes = none(bool),
+    b: TextBuffer, decoded: DecodedText, description: string, adoptShape = false
 ): Result[LineDiff, string] =
   ## Make `b` hold `decoded` as one undo entry named `description`.
   ## Undecodable bytes are refused rather than sanitized into U+FFFD.
@@ -258,9 +273,7 @@ proc replaceWithDecodedText*(
   ## `adoptShape` takes the file's encoding/EOL (reload / initial content).
   ## Leave it off when the buffer already has its own shape. Undo restores
   ## the old lines under the new shape. Content kind is always recorded.
-  ##
-  ## `sanitizesBytes` reuses a prior scan; omitted means scan here.
-  if sanitizesBytes.get(decoded.replacementSanitizesBytes):
+  if decoded.decodeFailed:
     return err(
       "Cannot " & description & ": the replacement text holds bytes no decoding read"
     )
@@ -716,9 +729,6 @@ proc putBufferOnFile(
     # Use debug to avoid spam from autoSave; decode failure already warned at load.
     if not buffer.allowsTextTransforms:
       logDebug("buffer", "Saving raw bytes verbatim (undecodable encoding): " & path)
-    elif buffer.encoding == CharacterEncoding.unknown:
-      # Routine for latin-1 and other unclassifiable text.
-      logDebug("buffer", "Saving file with unknown encoding: " & path)
 
     let content = buffer.getFileContent
 
@@ -841,11 +851,9 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
     b.reloadUndoLines + oldLineCount + decoded.lineCount <= UndoableReloadBudgetLines and
     chooseBackendForFile(content.len.int64) == b.backendKind and
     decoded.hasBinaryContent == b.hasBinaryContent
-  # UTF-8 scan walks the whole text: do it after cheaper checks, and reuse.
-  var sanitizesBytes = none(bool)
+  # A replacement refuses bytes no decoding read, so they only enter wholesale.
   if landsAsEdit:
-    sanitizesBytes = some(decoded.replacementSanitizesBytes)
-    landsAsEdit = not sanitizesBytes.get
+    landsAsEdit = not decoded.decodeFailed
   if landsAsEdit:
     # Walk the buffer only after cheaper checks pass. Head-room is both whole
     # buffers; count a trailing break the new text may omit.
@@ -863,9 +871,7 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
     let newestEntryBefore = b.currentChangeId
     var replaced: Result[LineDiff, string]
     try:
-      replaced = b.replaceWithDecodedText(
-        decoded, "reload", adoptShape = true, sanitizesBytes = sanitizesBytes
-      )
+      replaced = b.replaceWithDecodedText(decoded, "reload", adoptShape = true)
     except CatchableError as e:
       replaced = Result[LineDiff, string].err(e.msg)
     if replaced.isOk:

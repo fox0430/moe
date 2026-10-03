@@ -21,7 +21,7 @@ import std/[unittest, os, strutils, times, options, unicode]
 
 import pkg/[results, celina]
 
-import ../src/moepkg/[buffer, highlight, unicode_utils]
+import ../src/moepkg/[buffer, encoding, highlight, unicode_utils]
 
 suite "Buffer - Trailing Empty Lines":
   test "Insert text with trailing empty lines preserves them":
@@ -3436,9 +3436,62 @@ suite "Buffer - an external reload lands as an edit":
 
     writeFile(path, "caf\xE9\n")
     check buf.reloadFileIfContentChanged().isOk
-    # Verbatim: no byte turned into U+FFFD on the way in.
+    # Raw: the bytes go in verbatim and no transform may rewrite them after.
+    # A wholesale load, which is the only way in that keeps the bytes.
+    check buf.keepRaw
     check buf.getLine(0) == "caf\xE9"
     check buf.endOfLine
+    check buf.undoStack.len == 0
+
+  test "UTF-32 surrogates reload raw instead of being rewritten to U+FFFD":
+    let path = getTempDir() / "moe_test_reload_utf32_surrogate.txt"
+    writeFile(path, "alpha\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    # U+D800 in UTF-32LE. Decoding it would leave invalid UTF-8 for the
+    # reload's edit path to sanitize into U+FFFD.
+    let raw = "\xFF\xFE\x00\x00" & "\x00\xD8\x00\x00"
+    writeFile(path, raw)
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.keepRaw
+    check not buf.allowsTextTransforms
+    check buf.getTextString == raw
+    check buf.getFileContent == raw
+
+  test "A fixed file brings a raw buffer back to text":
+    let path = getTempDir() / "moe_test_reload_raw_back_to_text.txt"
+    writeFile(path, "caf\xE9\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.keepRaw
+    check not buf.allowsTextTransforms
+
+    # `keepRaw` is volatile: valid UTF-8 must lift it again.
+    writeFile(path, "cafe\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check not buf.keepRaw
+    check buf.allowsTextTransforms
+    check buf.encoding == CharacterEncoding.utf8
+    check buf.getLine(0) == "cafe"
+    check buf.getFileContent == "cafe\n"
+
+    # A plain load over the same buffer re-derives it both ways.
+    writeFile(path, "caf\xE9\n")
+    check buf.loadFile(path).isOk
+    check buf.keepRaw
+    check not buf.allowsTextTransforms
+
+    writeFile(path, "alpha\n")
+    check buf.loadFile(path).isOk
+    check not buf.keepRaw
+    check buf.allowsTextTransforms
+    check buf.encoding == CharacterEncoding.utf8
+    check buf.getLine(0) == "alpha"
 
   test "Diagnostics go, because nothing carries them onto the new lines":
     let path = getTempDir() / "moe_test_reload_diagnostics.txt"
@@ -4551,9 +4604,9 @@ suite "Buffer - binary content detection":
     check buf.loadFile(testFile).isOk
     check not buf.hasBinaryContent
 
-  test "an undecodable byte alone is text, not binary":
-    # Bytes that do not decode are ordinary content for a byte-preserving
-    # editor; only a NUL says the file is not text at all.
+  test "an undecodable byte alone is raw, not binary":
+    # Bytes that no decoding reads are kept verbatim; only a NUL says the file
+    # is not text at all.
     let testFile = getTempDir() / "moe_test_badbyte_" & $epochTime() & ".txt"
     writeFile(testFile, "caf\xE9 latte\n")
     defer:
@@ -4562,7 +4615,10 @@ suite "Buffer - binary content detection":
     let buf = newTextBuffer()
     check buf.loadFile(testFile).isOk
     check not buf.hasBinaryContent
+    check buf.keepRaw
+    check not buf.allowsTextTransforms
     check buf[0] == "caf\xE9 latte"
+    check buf.getFileContent == "caf\xE9 latte\n"
 
 suite "Buffer - loadFileWithContent equivalence":
   test "loadFileWithContent matches loadFile for plain UTF-8":
@@ -4986,6 +5042,42 @@ suite "Buffer - decodeForBuffer":
     check decoded.decodeFailed
     check decoded.lines.join("\n") == raw
 
+  test "Invalid UTF-8 is kept verbatim instead of passing as text":
+    let raw = "caf\xE9 latte\n"
+    let decoded = decodeForBuffer(raw)
+    check decoded.decodeFailed
+    check decoded.lines == @["caf\xE9 latte"]
+    check decoded.shape.endOfLine
+    check decoded.shape.encoding == CharacterEncoding.unknown
+    check not decoded.shape.hasBom
+    check decoded.attemptedEncoding == some(CharacterEncoding.utf8)
+
+  test "Invalid UTF-8 past the detection sample is still caught":
+    # Detection reads only the first sample; the decode reads the rest.
+    let raw = repeat("A", EncodingDetectionSampleSize) & "caf\xE9\n"
+    let decoded = decodeForBuffer(raw)
+    check decoded.decodeFailed
+    check decoded.text == raw
+
+  test "A BOM does not survive the text it failed to mark valid":
+    # The BOM is part of the bytes a raw buffer has to write back.
+    let raw = "\xEF\xBB\xBFcaf\xE9\n"
+    let decoded = decodeForBuffer(raw)
+    check decoded.decodeFailed
+    check decoded.text == raw
+    check not decoded.shape.hasBom
+
+  test "UTF-32 surrogates fail the decode instead of entering as text":
+    # A surrogate is not a scalar value; taking it as text would put invalid
+    # UTF-8 in the buffer for a transform to rewrite as U+FFFD.
+    let raw = "\xFF\xFE\x00\x00" & "\x00\xD8\x00\x00"
+    let decoded = decodeForBuffer(raw)
+    check decoded.decodeFailed
+    check decoded.text == raw
+    check decoded.shape.encoding == CharacterEncoding.unknown
+    check not decoded.shape.hasBom
+    check decoded.attemptedEncoding == some(CharacterEncoding.utf32Le)
+
   test "A buffer with no attributes of its own takes the ones the text came with":
     let buf = newTextBuffer()
     let decoded = decodeForBuffer("\xEF\xBB\xBFalpha\r\n")
@@ -5018,15 +5110,17 @@ suite "Buffer - decodeForBuffer":
     check notices.len == 1
     check notices[0].kind == bnContent
 
-  test "Bytes a replacement would sanitize are refused, not rewritten":
+  test "Bytes no reading accepts are refused, not rewritten":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "keep me")
-    # Not valid UTF-8 and not UTF-16/32 either, so nothing reports a failure.
+    # Not valid UTF-8 and not UTF-16/32 either, so the bytes are raw.
     let decoded = decodeForBuffer("caf\xE9\n")
-    check not decoded.decodeFailed
-    check decoded.replacementSanitizesBytes
+    check decoded.decodeFailed
     let replaced = buf.replaceWithDecodedText(decoded, "restore preserved work")
     check replaced.isErr
+    check replaced.error ==
+      "Cannot restore preserved work: " &
+      "the replacement text holds bytes no decoding read"
     check buf.getLine(0) == "keep me"
 
   test "The line count answers what the lines would":

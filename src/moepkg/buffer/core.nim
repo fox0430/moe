@@ -408,8 +408,8 @@ type
       ## do what the user expects, so the open is announced.
     endOfLine*: bool # Whether file should end with newline
     keepRaw*: bool
-      ## Raw bytes kept after UTF-16/32 decode failure; no transforms allowed.
-      ## Volatile; re-derived on every load.
+      ## Raw bytes no reading accepted (bad UTF-8, or a refused UTF-16/32
+      ## decode); no transforms allowed. Volatile; re-derived on every load.
     fileBaseline*: FileStamp
       ## File state at last read/write; compared against a fresh lookup.
     lastLoadedContent*: Option[ContentFingerprint]
