@@ -99,5 +99,9 @@ type
 
   FilterProcessResult* = Result[FilterProcessOutput, FilterProcessError]
 
+  OutputReadResult* = Result[seq[string], FilterProcessError]
+    ## Output read from a finished process, or the reason it could not be read
+    ## to the end. Return type of `readAllOutput`.
+
 proc filterError*(kind: FilterFailureKind, message: string): FilterProcessError =
   FilterProcessError(kind: kind, message: message)

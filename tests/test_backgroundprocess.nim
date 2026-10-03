@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[importutils, unittest, options, os, strutils]
+import std/[importutils, unittest, options, os, sequtils, strutils]
 
 import pkg/chronos
 import pkg/chronos/asyncproc
@@ -138,7 +138,7 @@ suite "BackgroundProcess - readAllOutput":
       let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let output = await bp.readAllOutput()
+        let output = (await bp.readAllOutput()).get
         await bp.closeAsync()
         return output
       else:
@@ -159,7 +159,7 @@ suite "BackgroundProcess - readAllOutput":
       let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let output = await bp.readAllOutput()
+        let output = (await bp.readAllOutput()).get
         await bp.closeAsync()
         return output
       else:
@@ -179,7 +179,7 @@ suite "BackgroundProcess - readAllOutput":
       let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let output = await bp.readAllOutput()
+        let output = (await bp.readAllOutput()).get
         await bp.closeAsync()
         return output
       else:
@@ -190,12 +190,130 @@ suite "BackgroundProcess - readAllOutput":
     check output.len == 0 or (output.len == 1 and output[0] == "")
 
   test "readAllOutput with nil process":
-    proc runTest(): Future[seq[string]] {.async.} =
+    proc runTest(): Future[OutputReadResult] {.async.} =
       let bp = BackgroundProcess(process: nil)
       return await bp.readAllOutput()
 
     let output = waitFor runTest()
-    check output.len == 0
+    check output.isOk
+    check output.get.len == 0
+
+  test "A read that was cut off is an error, not a prefix":
+    # `drainBounded` keeps what it read when it is cancelled, and `atEnd` says
+    # the text is not the whole stream: a caller judging the command by a
+    # prefix would judge the wrong bytes.
+    proc runTest(): Future[OutputReadResult] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sh",
+          # Outlives the cut by far, so the drain cannot reach EOF first.
+          args: @["-c", "echo first; sleep 30"],
+          workingDir: getTempDir(),
+        )
+      ).get
+      let reader = bp.readAllOutput()
+      # Cut the drain off before EOF: what it has is a prefix of the output.
+      reader.cancel()
+      let output = await reader
+      await bp.closeAsync()
+      return output
+
+    let output = waitFor runTest()
+    check output.isErr
+    check "Could not read all" in output.error.message
+
+proc tailOf(script: string, limit: int): seq[string] =
+  ## What `readAllOutput` keeps of `sh -c script` within `limit` bytes.
+  proc run(): Future[seq[string]] {.async.} =
+    let bp = startBackgroundProcess(
+      BackgroundProcessCommand(
+        cmd: "sh", args: @["-c", script], workingDir: getTempDir()
+      )
+    ).get
+    let output = (await bp.readAllOutput(limit)).get
+    await bp.closeAsync()
+    return output
+
+  waitFor run()
+
+suite "BackgroundProcess - readAllOutput keeping the end":
+  test "Only the whole lines at the end of a flood are kept, after a mark":
+    let output = tailOf("seq 1 100000", 1000)
+    check output[0] == OutputDroppedMarker
+    check output[^1] == "100000"
+    # Every line kept is a whole number, not the cut end of one.
+    check output[1 ..^ 1].allIt(it.len > 0 and it.allCharsInSet(Digits))
+    check output[1 ..^ 1].join("\n").len <= 1000
+    check output[1].parseInt + output.len - 2 == 100000
+
+  test "A cut right after a newline keeps the line it starts":
+    # The last 10 bytes are "ABCD\nEFGH\n", right after a newline.
+    check tailOf("printf '0123456789\\nABCD\\nEFGH\\n'", 10) ==
+      @[OutputDroppedMarker, "ABCD", "EFGH"]
+
+  test "A cut inside a line drops what is left of it":
+    # The last 10 bytes are "B\nCD\nEFGH\n": "B" is the end of "AB".
+    check tailOf("printf '0123456789\\nAB\\nCD\\nEFGH\\n'", 10) ==
+      @[OutputDroppedMarker, "CD", "EFGH"]
+
+  test "Output within the limit is kept whole, with no mark":
+    check tailOf("printf 'a\\nb\\n'", 1000) == @["a", "b"]
+
+  test "A single line longer than the limit keeps its end":
+    let output = tailOf("printf %05000d 7", 100)
+    check output.len == 2
+    check output[0] == OutputDroppedMarker
+    check output[1].len == 100
+    check output[1].endsWith("7")
+
+  test "A single overlong line with a trailing newline keeps its end":
+    let output = tailOf("printf '%05000d\\n' 7", 100)
+    check output.len == 2
+    check output[0] == OutputDroppedMarker
+    check output[1].len == 99
+    check output[1].endsWith("7")
+
+  test "An overlong line ending in a blank line keeps its end":
+    # The last 100 bytes are 98 digits then two newlines. Dropping the cut
+    # line here would leave the mark and a blank line and nothing else.
+    let output = tailOf("printf '%05000d\\n\\n' 7", 100)
+    check output.len == 3
+    check output[0] == OutputDroppedMarker
+    check output[1].len == 98
+    check output[1].endsWith("7")
+    check output[2] == ""
+
+  test "A read failing midway fails the run and kills the command":
+    # What was kept is no longer the end, and a command still writing would
+    # block on a pipe nobody empties until its timeout.
+    privateAccess(DrainSink)
+    privateAccess(RunFailure)
+    const Script =
+      "echo first; sleep 0.3; " &
+      "i=0; while [ $i -lt 200000 ]; do echo more$i; i=$((i+1)); done"
+
+    proc run(policy: DrainLimitPolicy): Future[(bool, bool)] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(cmd: "sh", args: @["-c", Script], workingDir: "")
+      ).get
+      let reader = bp.process.stdoutStream()
+      let sink = DrainSink(limit: 1024 * 1024, policy: policy)
+      let failure = RunFailure()
+      let drain = bp.drainBounded(reader, sink, failure)
+      await sleepAsync(100.milliseconds)
+      # The next read raises, once the pending one returns.
+      reader.close()
+      await drain
+      let failed = failure.error.isSome and failure.error.get.kind == ffReadFailed
+      let exited = await bp.waitForExitAsync().withTimeout(2.seconds)
+      bp.kill()
+      await bp.closeAsync()
+      return (failed, exited)
+
+    for policy in [dlpFail, dlpKeepTail]:
+      let (failed, exited) = waitFor run(policy)
+      check failed
+      check exited
 
 suite "BackgroundProcess - waitForExitAsync":
   test "Wait for successful command":
@@ -297,6 +415,28 @@ suite "BackgroundProcess - waitForAsync":
     let r = waitFor runTest()
     check r.beforeNil == false
     check r.afterNil == true
+
+  test "A read failing midway fails the wait, not only the drain":
+    # The output is a prefix once a read fails, and a caller judging the
+    # command by a prefix would judge the wrong bytes.
+    proc runTest(): Future[ProcessOutputResult] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sh",
+          # Outlives the cut by far: a process that ended first would make the
+          # wait succeed, and this test is about a read failing midway.
+          args: @["-c", "echo first; sleep 30"],
+          workingDir: getTempDir(),
+        )
+      ).get
+      # Cut the stream before the drain reads it, so the read raises rather
+      # than racing the process's own end.
+      bp.process.stdoutStream().close()
+      return await bp.waitForAsync(5.seconds)
+
+    let output = waitFor runTest()
+    check output.isErr
+    check "Failed to read the command output" in output.error
 
 suite "BackgroundProcess - cancel and kill":
   test "Cancel running process":

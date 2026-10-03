@@ -31,6 +31,7 @@ import pkg/results
 import
   types/editor_types,
   editor_mode,
+  editor_hooks,
   editor_window,
   editor_window_state,
   editor_window_tab,
@@ -590,7 +591,7 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
   # multi-file startup get the same setup as the first file. Shared with the
   # split startup path (registerSplitBuffer) so the file looks identical however
   # it is opened.
-  e.initLoadedBuffer(newBuffer)
+  e.initLoadedBuffer(newBuffer, roUser)
   ok(newBuffer)
 
 proc editFile*(e: Editor, path: string): Result[(), string] =

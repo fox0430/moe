@@ -120,6 +120,10 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   # entries stay out of the UI: a dynamic keyspace, not fields of the type.
   generateSectionGroupDescriptors(result, lsp, LspConfig)
 
+  # `[Hook]`'s own switches. Its `[[Hook.entries]]` array is left out like
+  # every repeated table: the UI edits one value per row.
+  generateSectionGroupDescriptors(result, hooks, HookConfig)
+
 # Global descriptor table (built once)
 let configDescriptors* = makeDescriptors()
 

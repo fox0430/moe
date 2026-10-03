@@ -26,6 +26,8 @@
 
 import std/[options, tables]
 
+import pkg/regex
+
 import ../modes
 import highlight_types
 when defined(moe.matter) or defined(features.moe.matter):
@@ -33,6 +35,15 @@ when defined(moe.matter) or defined(features.moe.matter):
 
 import ../config_macros
 export config_macros
+
+const DefaultHookTimeout* = 60
+  ## Default wait for a hook command; `timeout = 0` opts out.
+  ## Lives here so `cfgDocDefault` can name it.
+
+const DefaultHookExitWaitTimeout* = 10
+  ## Default cap on the whole wait a quit does for the hooks it owes;
+  ## `exitWaitTimeout = 0` opts out.
+  ## Lives here so `cfgDocDefault` can name it.
 
 const DefaultBackupDir* = "~/.cache/moe/backups"
   ## Effective default for `AutoBackupConfig.backupDir` when the field is
@@ -781,6 +792,63 @@ type
     all*: OrderedTable[string, KeyMappingEntry]
     visualAll*: OrderedTable[string, KeyMappingEntry]
 
+  HookEvent* = enum
+    ## Editor events a hook can attach to; all of them observe without
+    ## blocking. Members carry their TOML spelling; only fired events belong here.
+    heBufWritePost = "BufWritePost" ## A buffer was written to disk
+    heBufReadPost = "BufReadPost" ## A file was read into a buffer
+
+  HookEntry* {.
+    cfgSkip,
+    cfgDocDescription: "One hook: an event, the files it applies to, and a command"
+  .} = object
+    ## One `[[Hook.entries]]` table.
+    # Required keys come first (also the written/completed/documented order).
+    event* {.cfg, cfgDocDescription: "Event to attach to".}: HookEvent
+    command* {.cfg, cfgDocDescription: "Command line to run".}: string
+      ## Placeholders are expanded before exec.
+    filetype* {.
+      cfg,
+      cfgSuggest: filetypeNames,
+      cfgDocDescription: "File types this applies to (default: every type)"
+    .}: seq[string]
+    filter* {.
+      cfg, cfgDocDescription: "Regex the file path must match (default: every path)"
+    .}: string
+    filterRegex* {.cfgSkip.}: Option[Regex2]
+      ## `filter` compiled at load; `matches` runs per event.
+    workingDir* {.
+      cfg, cfgDocDescription: "Directory to run the command in (default: the file's)"
+    .}: string
+    timeout* {.
+      cfg,
+      cfgMin: 0,
+      cfgDocDefault: DefaultHookTimeout,
+      cfgDocDescription: "Seconds before the command is killed. 0 waits without a bound"
+    .}: int = DefaultHookTimeout
+    showOutput* {.
+      cfg, cfgDocDescription: "Show the command output in a horizontal split"
+    .}: bool
+
+  HookConfig* {.
+    cfgGroup: "Hook", cfgDocDescription: "Commands attached to editor events"
+  .} = object
+    ## `[Hook]`. `entries` is filled from the `[[Hook.entries]]` array of tables.
+    enable* {.cfg, cfgDocDescription: "Run hooks at all".}: bool = true
+    onAutoSave* {.cfg, cfgDocDescription: "Run BufWritePost for auto saves too".}: bool
+      ## Off: timer-driven auto save would run them mid-typing.
+    exitWaitTimeout* {.
+      cfg,
+      cfgMin: 0,
+      cfgDocDefault: DefaultHookExitWaitTimeout,
+      cfgDocDescription:
+        "Seconds a quit waits for the BufWritePost hooks in total. 0 waits without a bound"
+    .}: int = DefaultHookExitWaitTimeout
+      ## A cap on the wait as a whole, not on one command: `timeout` bounds
+      ## each hook, and this bounds how long the session stays open for them.
+    entries* {.cfgArrayOfTables: "entries", cfgEntryRules: checkHookEntry.}:
+      seq[HookEntry]
+
   # Main configuration
   EditorConfig* = ref object
     standard*: StandardConfig
@@ -814,3 +882,13 @@ type
     shellCommands*: Table[string, UserCommandEntry] ## Shell command definitions
     commandAliases*: Table[string, UserCommandEntry] ## User-defined command aliases
     disabledCommandAliases*: seq[string] ## Built-in command aliases disabled by the user
+    hooks*: HookConfig ## User commands attached to editor events
+
+const ValidHookEvents* = block:
+  ## TOML spellings of `HookEvent`, read off the enum. Looked up by name by
+  ## `config_macros`' enum loader.
+  ## Per-enum (not generic) since `$` on a generic yields the Nim ident.
+  var names: seq[string]
+  for v in HookEvent:
+    names.add $v
+  names

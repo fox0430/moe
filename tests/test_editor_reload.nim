@@ -198,7 +198,7 @@ suite "editor_reload - reloadCurrentFile":
     sleep(50)
     writeFile(path, "reloaded content")
     e.state.statusMessage = "Saved: " & path
-    check e.reloadCurrentFile(announce = false).isOk
+    check e.reloadCurrentFile(origin = roInternal).isOk
     check e.activeBuffer.getLine(0) == "reloaded content"
     check e.state.statusMessage == "Saved: " & path
 

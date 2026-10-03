@@ -29,6 +29,7 @@ import pkg/results
 import
   types/editor_types,
   editor_window,
+  editor_hooks,
   viewer_mode,
   editor_lsp,
   lsp_service,
@@ -87,10 +88,12 @@ proc bufferIndexForFile(e: Editor, path: string): int =
   ## Index of the buffer holding `path`, or -1.
   indexOfBufferHoldingPath(e.buffers, path)
 
-proc loadAndRegisterBuffer(e: Editor, path: string): Result[TextBuffer, string] =
+proc loadAndRegisterBuffer(
+    e: Editor, path: string, origin: ReadOrigin
+): Result[TextBuffer, string] =
   ## Load `path` into a fresh buffer and register it in the global buffer list
   ## with the setup every opened file gets. Whether a window shows the result is
-  ## the caller's choice.
+  ## the caller's choice; `origin` is as for `initLoadedBuffer`.
   let newBuffer = newTextBuffer()
   # Seed the highlight cap before loadFile builds the first chunk, so the cap
   # is not changed afterwards (which would nil the progressive-load cache).
@@ -107,7 +110,7 @@ proc loadAndRegisterBuffer(e: Editor, path: string): Result[TextBuffer, string] 
   applyHighlightConfig(newBuffer, e.config)
   # Doing this by hand used to leave a file reached by go-to-definition without
   # its bookmarks, gutter or conflict blocks.
-  e.initLoadedBuffer(newBuffer)
+  e.initLoadedBuffer(newBuffer, origin)
 
   ok(newBuffer)
 
@@ -127,7 +130,7 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
     e.switchToBufferForLsp(existing)
     return ok(e.buffers[existing])
 
-  let bufRes = e.loadAndRegisterBuffer(path)
+  let bufRes = e.loadAndRegisterBuffer(path, roUser)
   if bufRes.isErr:
     return err(bufRes.error)
   e.switchToBufferForLsp(e.buffers.high)
@@ -144,7 +147,7 @@ proc openFileInBackground*(e: Editor, path: string): Result[TextBuffer, string] 
   if existing >= 0:
     return ok(e.buffers[existing])
 
-  e.loadAndRegisterBuffer(path)
+  e.loadAndRegisterBuffer(path, roInternal)
 
 proc jumpOrigin*(e: Editor): JumpPosition =
   ## The cursor position, for a jump list entry once a jump from it lands.

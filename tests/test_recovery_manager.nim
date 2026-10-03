@@ -1287,7 +1287,7 @@ suite "recovery manager - settling a restored copy":
     let e = createNoticeEditor()
     e.restoreInto(file)
     let buf = e.activeBuffer
-    check e.reloadCurrentFile(announce = false).isOk
+    check e.reloadCurrentFile(origin = roInternal).isOk
     check e.owesPreservedWork(buf)
     check e.saveFile(buf).isOk
     check not newRecoveryStore(TestRecoveryDir).sessions()[0].files[0].reviewed

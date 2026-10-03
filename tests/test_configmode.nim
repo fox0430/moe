@@ -2209,7 +2209,7 @@ suite "ConfigMode - descriptor completeness":
       "highlight", "autoBackup", "quickRun", "notification", "filer", "fileTree",
       "diffViewer", "autocomplete", "autoSave", "persist", "git", "filter",
       "syntaxChecker", "smoothScroll", "startUpFileOpen", "startUpFileTree",
-      "editorConfig", "log", "theme", "lsp",
+      "editorConfig", "log", "theme", "lsp", "hooks",
     ].toHashSet
     let excluded = [
       "debug", "keyMapping", "shellCommands", "commandAliases", "disabledCommandAliases"
@@ -2235,7 +2235,7 @@ suite "ConfigMode - descriptor completeness":
       "Highlight", "AutoBackup", "QuickRun", "Notification", "Filer", "FileTree",
       "DiffViewer", "Autocomplete", "AutoSave", "Persist", "Git", "SyntaxChecker",
       "SmoothScroll", "StartUp.FileOpen", "StartUp.FileTree", "EditorConfig", "Log",
-      "Theme", "Lsp",
+      "Theme", "Lsp", "Hook",
     ]:
       check name in sections
 
@@ -2289,6 +2289,34 @@ suite "ConfigMode - descriptor completeness":
     check not cfg.lsp.completion.enable
     check not cfg.lsp.codeLens.enable
 
+  test "Hook descriptors carry the section's switches, not its entries":
+    ## The `[Hook]` switches used to be absent from the UI; the repeated table
+    ## itself has no row to edit, but it must not take the switches with it.
+    var sections: HashSet[string]
+    var descriptorFields: HashSet[(string, string)]
+    for desc in configDescriptors:
+      if desc.kind == cvkSection:
+        sections.incl(desc.section)
+      else:
+        descriptorFields.incl((desc.section, desc.displayName))
+
+    check "Hook" in sections
+    check ("Hook", "enable") in descriptorFields
+    check ("Hook", "onAutoSave") in descriptorFields
+    check ("Hook", "exitWaitTimeout") in descriptorFields
+    check ("Hook", "entries") notin descriptorFields
+
+    # The switches address their own fields.
+    let cfg = newEditorConfig()
+    for desc in configDescriptors:
+      if desc.kind == cvkBool and desc.section == "Hook" and desc.displayName == "enable":
+        desc.boolSet(cfg, false)
+      elif desc.kind == cvkInt and desc.section == "Hook" and
+          desc.displayName == "exitWaitTimeout":
+        desc.intSet(cfg, 3)
+    check not cfg.hooks.enable
+    check cfg.hooks.exitWaitTimeout == 3
+
   test "All config fields have descriptors or are explicitly excluded":
     ## If a new field is added to a config struct in a tested section, this
     ## test fails until a descriptor is added to makeDescriptors() or the
@@ -2322,6 +2350,7 @@ suite "ConfigMode - descriptor completeness":
     collectFieldNames(cfg.log, "Log", allFields)
     collectFieldNames(cfg.theme, "Theme", allFields)
     collectFieldNames(cfg.lsp, "Lsp", allFields)
+    collectFieldNames(cfg.hooks, "Hook", allFields)
 
     # Collect (section, displayName) from configDescriptors
     var descriptorFields: HashSet[(string, string)]

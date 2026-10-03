@@ -113,6 +113,11 @@ suite "Build - parseCommandString":
     let r = parseCommandString("nim c \"-d:foo bar")
     check r.isErr
 
+  test "Closed quotes are not an error":
+    check parseCommandString("sh -c 'make' \"a b\" c\\'d").isOk
+    # Quotes inside the other kind do not count.
+    check parseCommandString("echo \"it's\" 'say \"hi'").isOk
+
 suite "Build - nimBuildCommand":
   test "Generate nim build command":
     let cmd = nimBuildCommand("/path/to/file.nim")

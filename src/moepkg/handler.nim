@@ -1756,7 +1756,7 @@ proc runFilterAsync(
       for line in filtered.get.diagnostics:
         # stderr goes straight to the status line, so strip escape sequences
         # (a byte-bounded read can also cut one in half).
-        report.add line.sanitizeInvalidUtf8().sanitizeForDisplay()
+        report.add line.forDisplay
       if filtered.get.diagnosticsTruncated:
         report.add "... the rest of what it wrote on stderr was dropped"
       # stderr output is not failure; only the exit status decides.
@@ -1928,8 +1928,9 @@ proc dispatchKeyMappingTimeout(e: Editor): bool =
 
 proc noteQuit(e: Editor, goesOn: bool): bool =
   ## Every quit reaches the frontend through here, so it is noted once.
+  ## Background work stops, except what the quit is owed.
   if not goesOn:
-    e.state.quitDecided = true
+    e.beginQuit()
   goesOn
 
 proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =

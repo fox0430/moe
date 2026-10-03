@@ -19,8 +19,8 @@
 
 ## Splitting a command line into an argv the process starter can use.
 ##
-## Used by build-on-save, which takes a command as one string from the config
-## and must exec it without a shell.
+## Used by build-on-save and `[Hook]`, which take a command as one string from
+## the config and must exec it without a shell.
 
 import pkg/results
 

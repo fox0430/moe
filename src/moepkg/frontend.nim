@@ -29,6 +29,11 @@
 ## `setFrontendGitRefreshMode`, then call `notifyGitRepositoryChanged` on the
 ## editor thread. `frontendGitStatusRevision` changes when results arrive.
 ##
+## External work (`[Hook]` commands, builds, syntax checks, filters, `:!`)
+## runs on the event loop and the pending queue, which only the terminal
+## frontend drives; a host here does not, so a quit it acts on waits for
+## nothing.
+##
 ## `activateBuffer` keeps its `bool` shape for hosts already built against it.
 ## `tryActivateBuffer` is the same call with the reason it failed — a buffer that
 ## no longer exists, or the FileTree sidebar refusing another tab.

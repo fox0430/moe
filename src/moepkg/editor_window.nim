@@ -33,6 +33,7 @@ import
   editor_window_tab,
   editor_window_state,
   editor_lsp,
+  editor_hooks,
   git_cache,
   git_conflict,
   window_manager,
@@ -128,7 +129,7 @@ proc applyStartUpScreenSize*(e: Editor, termWidth, termHeight: int) =
 
 # Window split procedures
 
-proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
+proc initLoadedBuffer*(e: Editor, buf: TextBuffer, origin: ReadOrigin) =
   ## Per-buffer initialisation shared by every freshly loaded file regardless of
   ## how it is opened: `:e`, the FileTree opener and no-split startup go through
   ## `loadOrCreateBuffer`, while `:vsplit file`/`:split file` and auto-split
@@ -137,6 +138,9 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
   ## language server so a file looks identical whichever path reaches it.
   ## Cursor restore is intentionally omitted: it is handled per window (the
   ## window manager seeds the split cursor, loadFile restores the first file's).
+  ## `origin` says why the file was read; `noteBufferRead` decides what that
+  ## means for `BufReadPost`. An LSP rename's background copy, for one, is
+  ## read for the editor rather than the user.
   if buf.filePath.isSome:
     let absPath = absolutePath(buf.filePath.get)
     if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
@@ -148,6 +152,7 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
   buf.refreshConflicts()
   # Announce the new document to the language server.
   e.openBufferWithLsp(buf)
+  e.noteBufferRead(buf, origin)
 
 proc registerSplitBuffer(
     e: Editor, newBuffer: TextBuffer, applyConfig: bool, context: string
@@ -169,7 +174,7 @@ proc registerSplitBuffer(
     # so split-opened files — including the auto-split multi-file startup path —
     # look identical to no-split startup. WithBuffer splits (applyConfig = false)
     # show an existing or synthetic buffer and must not re-initialise it.
-    e.initLoadedBuffer(newBuffer)
+    e.initLoadedBuffer(newBuffer, roUser)
   logDebug("editor", context & ": buffer added, buffers.len: " & $e.buffers.len)
 
 proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string]
@@ -196,7 +201,7 @@ proc loadSplitBuffer(e: Editor, path: string): Result[TextBuffer, string] =
 
   applyHighlightConfig(buf, e.config)
   applyEditorConfigToBuffer(buf, e.config)
-  e.initLoadedBuffer(buf)
+  e.initLoadedBuffer(buf, roUser)
   ok(buf)
 
 proc viewerOrigin*(

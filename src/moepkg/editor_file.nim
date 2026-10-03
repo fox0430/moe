@@ -31,6 +31,7 @@ import
   backup,
   search_utils,
   editorconfig_helper,
+  editor_hooks,
   path_key,
   editor_mode,
   editor_notify,
@@ -131,6 +132,10 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # LSP initialization - non-blocking, will start in background
   discard e.lsp.onBufferOpen(e.activeBuffer) # onBufferOpen reports its own failure
+
+  # This path reads into the existing buffer instead of going through
+  # `initLoadedBuffer`, so it announces the read itself.
+  e.noteBufferRead(e.activeBuffer, roUser)
 
   ok(())
 
@@ -341,9 +346,21 @@ proc revertTrimIfNeeded(
   buffer.changeListIndex = changeListIndexBefore
   ok(())
 
-proc noteBufferSaved*(e: Editor, buffer: TextBuffer) =
-  ## Refresh git gutter, notify LSP and settle restored copies after `buffer`
-  ## was written.
+proc noteBufferSaved*(
+    e: Editor, buffer: TextBuffer, savedPath: string, automatic = false
+) =
+  ## Queue `BufWritePost` hooks, refresh git gutter, notify LSP and settle
+  ## restored copies after `buffer` was written to `savedPath`.
+  ## `automatic` (timer write) fires hooks only when `onAutoSave` is set.
+  if not automatic or e.config.hooks.onAutoSave:
+    # Match by the saved file: after `:w <other-ext>`, `buffer.language` still
+    # names the old one.
+    let language =
+      if buffer.allowsTextTransforms:
+        detectLanguage(savedPath)
+      else:
+        buffer.language
+    e.queueHooks(heBufWritePost, savedPath, language)
   e.noteSavedForRecovery(buffer)
   if e.showGitDiff:
     e.state.git.requestGitRefresh(buffer)
@@ -358,7 +375,7 @@ proc prepareQuickRun*(
   if prepared.isErr:
     return Result[QuickRunPrepareResult, string].err prepared.error
   if prepared.get.didSave:
-    e.noteBufferSaved(buffer)
+    e.noteBufferSaved(buffer, prepared.get.filePath)
   return Result[QuickRunPrepareResult, string].ok prepared.get
 
 type
@@ -478,7 +495,7 @@ proc saveFile*(
 
   logInfo("editor", "Successfully saved file: " & savePath)
 
-  e.noteBufferSaved(buffer)
+  e.noteBufferSaved(buffer, savePath)
 
   ok(())
 
@@ -570,7 +587,7 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
     result.savedPaths.add(savePath)
     logInfo("editor", "Saved file: " & savePath)
 
-    e.noteBufferSaved(buffer)
+    e.noteBufferSaved(buffer, savePath)
 
 proc autoSave*(e: Editor) =
   ## Automatically save modified buffers if auto save is enabled and interval has passed
@@ -642,7 +659,7 @@ proc autoSave*(e: Editor) =
     savedCount += 1
     savedPaths.add(savePath)
 
-    e.noteBufferSaved(buffer)
+    e.noteBufferSaved(buffer, savePath, automatic = true)
 
   # Update last auto save time
   e.state.timing.lastAutoSave = now
