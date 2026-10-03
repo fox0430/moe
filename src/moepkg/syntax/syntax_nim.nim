@@ -413,7 +413,8 @@ proc nimNextToken*(g: var GeneralTokenizer) =
           inc(pos)
           break
         of '\\':
-          inc(pos, 2)
+          inc(pos)
+          g.skipEscapedChar(pos)
         else:
           inc(pos)
     of '\"':
