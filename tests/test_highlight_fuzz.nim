@@ -544,6 +544,20 @@ proc astroCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc jsonCorpus(): seq[seq[string]] =
+  ## JSON snippets covering key detection, escape sequences, nested
+  ## containers, and lines ending in a backslash.
+  result = @[
+    @[
+      "{", "  \"name\": \"moe\",", "  \"tags\": [\"editor\", \"nim\"],",
+      "  \"meta\": { \"version\": 1, \"ok\": true, \"none\": null }", "}",
+    ],
+    @["[\"a\\\\b\", \"c\\\"d\", \"e\\nf\", \"tab\\there\"]"],
+    @["{", "  \"multi\": \"line\\nvalue\",", "  \"path\": \"C:\\\\dir\\\\file\"", "}"],
+    @["{", "  \"ok\": 1,", "  \"broken\\", "  \"next\": 2", "}"],
+    @["{\"a\":", "1}"],
+  ]
+
 proc yamlCorpus(): seq[seq[string]] =
   ## YAML snippets covering the state-heavy multi-line constructs: block
   ## scalars (`|`, `>` with chomping/indent indicators, which carry `gtCommand`
@@ -1197,6 +1211,9 @@ suite "Incremental Highlight Fuzz":
 
   test "Astro: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langAstro, astroCorpus(), iters, baseSeed)
+
+  test "JSON: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langJson, jsonCorpus(), iters, baseSeed)
 
   test "YAML: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langYaml, yamlCorpus(), iters, baseSeed)

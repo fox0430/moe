@@ -82,11 +82,11 @@ proc jsonLikeNextToken*(g: var GeneralTokenizer, allowComments: bool) =
     if g.buf[pos] == '\\':
       g.kind = gtEscapeSequence
       inc(pos)
-      case g.buf[pos]
-      of '\0':
+      g.skipEscapedChar(pos)
+      # An escape may not pull the next line into the string: at a line
+      # boundary (or EOF) the token stream restarts fresh, not in-string.
+      if g.buf[pos] in eolChars:
         g.state = gtNone
-      else:
-        inc(pos)
     else:
       g.kind = g.state
       while true:
@@ -158,7 +158,15 @@ proc jsonLikeNextToken*(g: var GeneralTokenizer, allowComments: bool) =
           isKey = sawColon
           break
         of '\\':
+          # Keep the lookahead line-bounded: skipping `\<newline>` would make
+          # this line's key-ness depend on later lines (a backward dependency
+          # incremental re-highlighting cannot see), and `\` at end of buffer
+          # would jump past the NUL terminator (same rule as `skipEscapedChar`).
+          if g.buf[tempPos + 1] in eolChars:
+            break
           inc(tempPos, 2)
+        of '\n', '\r':
+          break
         else:
           inc(tempPos)
 

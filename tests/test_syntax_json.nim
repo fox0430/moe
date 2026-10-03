@@ -606,3 +606,42 @@ suite "syntax_json - jsonNextToken string continuation":
     g.jsonNextToken() # world"
     check g.kind == gtKey
     check g.state == gtNone
+
+suite "syntax_json - buffer-end and line-bounded tokenization":
+  test "trailing backslash at buffer end stays in bounds":
+    var g: GeneralTokenizer
+    let src = "\"a\\"
+    g.initGeneralTokenizer(src)
+    var steps = 0
+    while true:
+      g.jsonNextToken()
+      if g.kind == gtEof:
+        break
+      check g.length > 0
+      check g.start + g.length <= src.len
+      inc steps
+      check steps < 100
+
+  test "backslash before newline does not look across the line for a colon":
+    # The first line must be classified as a string, not a key: the key
+    # decision may not depend on a colon on a later line.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\\n\": 1")
+    g.jsonNextToken()
+    check g.kind == gtStringLit
+    check g.length == 2
+
+  test "escape sequence ending at the buffer end reaches EOF":
+    var g: GeneralTokenizer
+    let src = "\"a\\x"
+    g.initGeneralTokenizer(src)
+
+    g.jsonNextToken() # "a
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+
+    g.jsonNextToken() # \x
+    check g.kind == gtEscapeSequence
+
+    g.jsonNextToken()
+    check g.kind == gtEof
