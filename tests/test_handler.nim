@@ -2637,12 +2637,12 @@ suite "enterFilerInActiveWindow":
     check e.activeWindow.viewport.topLine == 0
     check e.activeWindow.viewport.leftColumn == 0
 
-  test "Preserves original buffer in filer state":
+  test "Records the covered tab in the viewer entry":
     let e = createTestEditorWithBuffer("hello")
     let originalBuf = e.activeWindow.buffer
     e.enterFilerInActiveWindow("/tmp")
 
-    check e.activeWindow.originalBuffer == originalBuf
+    check e.activeWindow.viewerEntry.get.returnTab == originalBuf.id
 
   test "Vsplit with directory opens Filer in new split window":
     let e = createTestEditorWithBuffer("hello")
@@ -4395,6 +4395,63 @@ suite "handleKeyCombo - frontend-neutral input":
     check e.state.input.commandText == ":λx"
     check e.state.input.commandCursor == 2
 
+suite "Insert mode Ctrl-A / Ctrl-@":
+  proc charKey(c: string): KeyCombo =
+    KeyCombo(isSpecial: false, char: c, modifiers: {})
+
+  let
+    escapeKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    ctrlAKey = KeyCombo(isSpecial: false, char: "a", modifiers: {key_bindings.kmCtrl})
+    ctrlAtKey = KeyCombo(isSpecial: false, char: " ", modifiers: {key_bindings.kmCtrl})
+
+  proc typeText(e: Editor, text: string) =
+    for c in text:
+      check e.handleKeyCombo(charKey($c))
+
+  test "Ctrl-A re-inserts the last inserted text at the cursor":
+    let e = createTestEditorWithBuffer("")
+    discard e.handleKeyCombo(charKey("i"))
+    e.typeText("abc")
+    discard e.handleKeyCombo(escapeKey)
+    # Normal mode parks on the last inserted character, so `i` re-enters
+    # before it and Ctrl-A duplicates there.
+    discard e.handleKeyCombo(charKey("i"))
+
+    check e.handleKeyCombo(ctrlAKey)
+
+    check e.state.mode == EditorMode.Insert
+    check $e.activeBuffer.getLine(0) == "ababcc"
+    check e.cursor == BufferPosition(line: 0, column: 5)
+
+  test "Ctrl-@ inserts the last inserted text and leaves Insert mode":
+    let e = createTestEditorWithBuffer("")
+    discard e.handleKeyCombo(charKey("i"))
+    e.typeText("abc")
+    discard e.handleKeyCombo(escapeKey)
+    discard e.handleKeyCombo(charKey("i"))
+
+    check e.handleKeyCombo(ctrlAtKey)
+
+    check e.state.mode == EditorMode.Normal
+    check $e.activeBuffer.getLine(0) == "ababcc"
+    check not e.activeBuffer.inTransaction
+
+  test "Ctrl-@ after `o` records the re-inserted text for `.`":
+    let e = createTestEditorWithBuffer("abc")
+    discard e.handleKeyCombo(charKey("i"))
+    e.typeText("xyz")
+    discard e.handleKeyCombo(escapeKey)
+    discard e.handleKeyCombo(charKey("o"))
+
+    check e.handleKeyCombo(ctrlAtKey)
+
+    check e.state.mode == EditorMode.Normal
+    check $e.activeBuffer.getLine(1) == "xyz"
+    let lastCmd = e.state.editState.lastEditCommand
+    check lastCmd.isSome
+    check lastCmd.get.kind == lecInsertText
+    check lastCmd.get.insertedText == "\nxyz"
+
 suite "forced Insert mode":
   let
     escapeKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
@@ -4928,7 +4985,7 @@ suite "handleRecentFileModeKeyCombo - window cleanup":
     check e.handleRecentFileModeKeyCombo(enterKey) == true
 
     check e.windowManager.windows.len == winCount + 1
-    check e.bufferIndexById(recentBufId) >= 0
+    check e.activeWindow.buffer.id == recentBufId
     check e.state.mode == EditorMode.RecentFile
     check e.state.statusMessage == "File not found: " & missing
 
@@ -5118,6 +5175,36 @@ suite "Ctrl-w window commands in special modes":
     let idx = e.bufferIndexById(modifiedId)
     check idx >= 0
     check e.buffers[idx].isModified
+
+  test "Ctrl-w n opens an empty buffer in a new window above":
+    let (e, path) = editorOnTempFile("moe_ctrlw_new.txt")
+    defer:
+      removeFile(path)
+    let origWin = e.activeWindow
+    let origBufferId = e.activeBuffer().id
+
+    e.sendWindowCommand("n")
+
+    check e.windowManager.windows.len == 2
+    check e.activeWindow != origWin
+    check e.activeWindow.viewport.x == origWin.viewport.x
+    check e.activeWindow.viewport.y < origWin.viewport.y
+    check e.activeBuffer().id != origBufferId
+    check e.activeBuffer().len == 1
+    check e.activeBuffer().getLine(0).len == 0
+    check e.state.mode == EditorMode.Normal
+    check origWin.buffer.id == origBufferId
+
+  test "Ctrl-w n in a special mode opens an empty buffer in Normal mode":
+    let e = createSplitEditorInFileTree()
+    let windowsBefore = e.windowManager.windows.len
+
+    e.sendWindowCommand("n")
+
+    check e.windowManager.windows.len == windowsBefore + 1
+    check e.activeBuffer().len == 1
+    check e.activeBuffer().getLine(0).len == 0
+    check e.state.mode == EditorMode.Normal
 
 suite "Ctrl-C in Terminal mode":
   proc fakeTerminalState(): TerminalState =

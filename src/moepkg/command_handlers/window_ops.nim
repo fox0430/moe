@@ -25,7 +25,7 @@ when not defined(moe.embedded):
 
 import pkg/results
 
-import ../[editor, editor_window_state, logger, types, viewer_mode, window_manager]
+import ../[editor, types, viewer_mode, window_manager]
 
 import editor_ops, handler_result
 
@@ -36,7 +36,8 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     # Handle jump to buffer with position (Ctrl-o/Ctrl-i across files)
     let targetLine = r.jumpLine
     let targetCol = r.jumpColumn
-    if e.activateBuffer(r.jumpBufferId):
+    let activated = e.tryActivateBuffer(r.jumpBufferId)
+    if activated.isOk:
       # Update cursor position after buffer switch
       let buf = e.activeBuffer()
       if buf.len > 0:
@@ -50,8 +51,7 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
             min(targetCol, max(0, lineCharLen - 1))
       e.updateViewportForCursor(e.cursor)
     else:
-      # Buffer was deleted since the jump was recorded
-      e.state.statusMessage = "Buffer no longer available"
+      e.state.statusMessage = activated.error
     return true
   of hrBufferNext:
     e.switchToNextBuffer()
@@ -147,15 +147,7 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
       e.closeTerminalBuffer(e.activeWindow.tabBufferId)
     return true
   of hrFileTreeQuit:
-    # Close file tree window
-    e.activeWindow.clearModeState(EditorMode.FileTree)
-    # Remove file tree window and redistribute space
-    let shouldQuit = e.closeWindow()
-    if shouldQuit:
-      let enewResult = e.enew()
-      if enewResult.isErr:
-        logError("handler", "Enew failed after file tree quit: " & enewResult.error)
-        e.state.statusMessage = "Error: " & enewResult.error
+    e.closeFileTree()
     return true
   else:
     return true # Not a window kind; caller misrouted (defensive)

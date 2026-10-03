@@ -37,6 +37,7 @@
 import std/[options, strutils]
 
 import setting_options, command_line_commands, help_description
+import key_bindings/window_commands
 
 descriptionFromStringConverter()
 export setting_options, command_line_commands
@@ -50,6 +51,22 @@ type HelpGroup* = object
     ## the longest `syntax` in `entries`. Set this when the original
     ## hand-written text pads beyond that natural max (e.g. one extra
     ## trailing space for visual breathing room).
+
+func withWindowCommands(g: HelpGroup, after = ""): HelpGroup =
+  ## `g` with a `Ctrl-w` entry per `WindowSecondKeyCommands` row, inserted
+  ## after the entry whose syntax is `after`, or appended when it is empty.
+  var windowEntries: seq[HelpEntry]
+  for c in WindowSecondKeyCommands:
+    windowEntries.add HelpEntry(syntax: "Ctrl-w " & c.key, description: c.desc)
+  var at = g.entries.len
+  if after.len > 0:
+    at = -1
+    for i, entry in g.entries:
+      if entry.syntax == after:
+        at = i + 1
+    doAssert at >= 0, "no help entry: " & after
+  result = g
+  result.entries = g.entries[0 ..< at] & windowEntries & g.entries[at .. ^1]
 
 const ChangingModesCommands*: HelpGroup = HelpGroup(
   entries: @[
@@ -280,12 +297,6 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     ),
     HelpEntry(syntax: ";", description: "Repeat last f/F/t/T"),
     HelpEntry(syntax: ",", description: "Repeat last f/F/t/T in reverse"),
-    HelpEntry(syntax: "Ctrl-w w", description: "Move to the next window"),
-    HelpEntry(syntax: "Ctrl-w p", description: "Move to the last accessed window"),
-    HelpEntry(syntax: "Ctrl-w h", description: "Move to the window on the left"),
-    HelpEntry(syntax: "Ctrl-w j", description: "Move to the window below"),
-    HelpEntry(syntax: "Ctrl-w k", description: "Move to the window above"),
-    HelpEntry(syntax: "Ctrl-w l", description: "Move to the window on the right"),
     HelpEntry(
       syntax: "zt", description: "Scroll the screen so the cursor is at the top"
     ),
@@ -296,14 +307,6 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "zz", description: "Center the screen on the cursor"),
     HelpEntry(syntax: "ZZ", description: "Write current file and exit"),
     HelpEntry(syntax: "ZQ", description: "Same as :q!"),
-    HelpEntry(syntax: "Ctrl-w c", description: "Close current window"),
-    HelpEntry(syntax: "Ctrl-w _", description: "Maximize window height"),
-    HelpEntry(syntax: "Ctrl-w +", description: "Increase window height"),
-    HelpEntry(syntax: "Ctrl-w -", description: "Decrease window height"),
-    HelpEntry(syntax: "Ctrl-w >", description: "Increase window width"),
-    HelpEntry(syntax: "Ctrl-w <", description: "Decrease window width"),
-    HelpEntry(syntax: "Ctrl-w =", description: "Equalize window sizes"),
-    HelpEntry(syntax: "Ctrl-w x", description: "Swap window with next window"),
     HelpEntry(syntax: "/", description: "Search forwards"),
     HelpEntry(syntax: "?", description: "Search backwards"),
     HelpEntry(syntax: "\\r", description: "QuickRun"),
@@ -351,7 +354,7 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "gmp", description: "Jump to previous bookmark"),
     HelpEntry(syntax: "gmc", description: "Clear all bookmarks in current buffer"),
   ]
-)
+).withWindowCommands(after = "ZQ")
 
 const BackupModeCommands*: HelpGroup = HelpGroup(
   entries: @[
@@ -537,6 +540,11 @@ const InsertModeCommands*: HelpGroup = HelpGroup(
       syntax: "Ctrl-o",
       description: "Execute one Normal mode command and return to Insert mode",
     ),
+    HelpEntry(syntax: "Ctrl-a", description: "Insert the previously inserted text"),
+    HelpEntry(
+      syntax: "Ctrl-@ or Ctrl-Space",
+      description: "Insert the previously inserted text and go to Normal mode",
+    ),
     HelpEntry(syntax: "Esc", description: "Go to Normal mode"),
   ]
 )
@@ -601,22 +609,8 @@ const FileTreeModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "R", description: "Refresh tree"),
     HelpEntry(syntax: ":", description: "Enter command mode"),
     HelpEntry(syntax: "Esc", description: "Clear search highlight (press twice)"),
-    HelpEntry(syntax: "Ctrl-w w", description: "Move to the next window"),
-    HelpEntry(syntax: "Ctrl-w p", description: "Move to the last accessed window"),
-    HelpEntry(syntax: "Ctrl-w h", description: "Move to the window on the left"),
-    HelpEntry(syntax: "Ctrl-w j", description: "Move to the window below"),
-    HelpEntry(syntax: "Ctrl-w k", description: "Move to the window above"),
-    HelpEntry(syntax: "Ctrl-w l", description: "Move to the window on the right"),
-    HelpEntry(syntax: "Ctrl-w c", description: "Close current window"),
-    HelpEntry(syntax: "Ctrl-w _", description: "Maximize window height"),
-    HelpEntry(syntax: "Ctrl-w +", description: "Increase window height"),
-    HelpEntry(syntax: "Ctrl-w -", description: "Decrease window height"),
-    HelpEntry(syntax: "Ctrl-w >", description: "Increase window width"),
-    HelpEntry(syntax: "Ctrl-w <", description: "Decrease window width"),
-    HelpEntry(syntax: "Ctrl-w =", description: "Equalize window sizes"),
-    HelpEntry(syntax: "Ctrl-w x", description: "Swap window with next window"),
   ]
-)
+).withWindowCommands()
 
 const BufferManagerModeCommands*: HelpGroup = HelpGroup(
   entries: @[

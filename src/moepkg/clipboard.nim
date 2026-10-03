@@ -520,7 +520,7 @@ proc writeAllBounded(
     continue
   return closeToolInput(p)
 
-proc writeAllBounded(
+proc writeAllBounded*(
     p: Process, text: string, deadline: MonoTime
 ): Result[void, string] =
   ## Overload without caller diagnostics.

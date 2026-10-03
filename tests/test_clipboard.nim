@@ -132,6 +132,17 @@ proc readClipboardWithRetry(
   # Final attempt
   return readFromClipboardSync(tool)
 
+proc killClipboardOwner(tool: ClipboardTool) =
+  ## Kill the background process holding CLIPBOARD ownership. Matches the
+  ## write command line only, so tests running in parallel that own PRIMARY
+  ## keep their selection.
+  if tool notin {cbtXclip, cbtXsel}:
+    return
+  let cmd = getClipboardCommand(tool, ClipboardOperation.write)
+  if cmd.isNone:
+    return
+  discard execCmdEx("pkill -f " & quoteShell("^" & cmd.get().join(" ")))
+
 suite "clipboard: readFromClipboardSync and writeToClipboardSync":
   test "write and read with xclip":
     if not isXclipAvailable():
@@ -145,8 +156,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.isOk
       check readResult.get() == testText
 
-      # Kill xclip's background process that holds clipboard ownership
-      discard execCmdEx("pkill xclip")
+      killClipboardOwner(cbtXclip)
       sleep(100)
 
   test "write and read with xsel":
@@ -161,8 +171,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.isOk
       check readResult.get() == testText
 
-      # Kill xsel's background process that holds clipboard ownership
-      discard execCmdEx("pkill xsel")
+      killClipboardOwner(cbtXsel)
       sleep(100)
 
   test "write and read with wl-clipboard":
@@ -213,8 +222,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.isOk
       check readResult.get() == testText
 
-      # Kill xsel's background process that holds clipboard ownership
-      discard execCmdEx("pkill xsel")
+      killClipboardOwner(cbtXsel)
       sleep(100)
 
   test "write and read multiline text with wl-clipboard":

@@ -26,7 +26,7 @@ import pkg/results
 import ../src/moepkg/unicode_utils
 import ../src/moepkg/types
 import ../src/moepkg/types/config_types
-import ../src/moepkg/buffer/[core, edit, fold]
+import ../src/moepkg/buffer/[core, fold]
 import ../src/moepkg/motion {.all.}
 
 suite "TillChar Motion":

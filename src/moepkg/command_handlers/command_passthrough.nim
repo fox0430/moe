@@ -49,6 +49,7 @@ type PassthroughKind* = enum
   ptDecreaseWindowWidth
   ptEqualizeWindows
   ptSwapWindow
+  ptNewWindow
   ptCloseWindow
   # file.*
   ptSave
@@ -109,6 +110,8 @@ proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
     some(ptEqualizeWindows)
   of "window.swap":
     some(ptSwapWindow)
+  of "window.new":
+    some(ptNewWindow)
   of "window.close":
     some(ptCloseWindow)
   of "file.save":
@@ -189,6 +192,8 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
     HandlerResult(kind: hrEqualizeWindows)
   of ptSwapWindow:
     HandlerResult(kind: hrSwapWindow)
+  of ptNewWindow:
+    HandlerResult(kind: hrNew)
   of ptCloseWindow:
     HandlerResult(kind: hrCloseWindow, forceClose: false)
   of ptSave:
@@ -243,9 +248,9 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
 proc windowSecondKeyToHandlerResult*(key: string): Option[HandlerResult] =
   ## HandlerResult for a `C-w <key>` second key, resolved through the same
   ## command names as the Normal-mode bindings. None for unknown keys.
-  for (k, name) in WindowSecondKeyCommands:
-    if k == key:
-      let commandId = actionCommandId(name)
+  for c in WindowSecondKeyCommands:
+    if c.key == key:
+      let commandId = actionCommandId(c.name)
       if commandId.isNone:
         return none(HandlerResult)
       let passthrough = lookupPassthrough(commandId.get)

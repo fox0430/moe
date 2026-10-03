@@ -26,11 +26,111 @@ import pkg/results
 
 import
   ../[
-    buffer, editor, filetree, filer, logger, quick_run_utils, types, uri_utils,
-    viewer_mode, window_manager,
+    buffer, editor, editor_window_state, filetree, filer, logger, quick_run_utils,
+    types, uri_utils, viewer_mode, window_manager,
   ]
 
 import editor_ops, handler_result
+
+proc restoreSidebarFocus(e: Editor, side: EditorWindow) =
+  ## Return focus to the sidebar after a failed command, so the failure does
+  ## not strand the cursor in the target window.
+  for i, win in e.windowManager.windows:
+    if win == side:
+      e.windowManager.activateWindow(i)
+      e.syncActiveWindow()
+      return
+
+proc openFromSidebar(e: Editor, inServed, beside: proc(): Result[(), string]): bool =
+  ## From the sidebar, run `inServed` in the window it serves; beside a lone
+  ## sidebar, `beside` opens a window next to it instead. A failure is reported
+  ## and leaves the sidebar focused.
+  let side = e.activeWindow
+  let openResult =
+    if e.sidebarTarget() < 0:
+      beside()
+    else:
+      # Leave the sidebar through the shared primitive. The sidebar holds no
+      # Insert session, so the focus move leaves nothing behind.
+      discard e.leaveSidebar()
+      inServed()
+  if openResult.isErr:
+    logError("handler", "Open from the file tree failed: " & openResult.error)
+    e.state.statusMessage = "Error: " & openResult.error
+    e.restoreSidebarFocus(side)
+    return false
+  true
+
+proc splitFromSidebar(e: Editor, dir: Option[string], vertical: bool) =
+  ## The sidebar has no tab to split, and its listing must not become one: open
+  ## a window on the tab it serves and browse `dir`, or the tree's root, there,
+  ## as Vim's split of a netrw window shows the listing again.
+  let side = e.activeWindow
+  let path =
+    if dir.isSome:
+      dir.get
+    elif side.modeState.kind == mskFileTree:
+      side.modeState.fileTree.rootPath
+    else:
+      getCurrentDir()
+  let opened = e.openFromSidebar(
+    proc(): Result[(), string] =
+      if vertical:
+        e.vsplitWithBuffer(e.tabBuffer(e.activeWindow))
+      else:
+        e.hsplitWithBuffer(e.tabBuffer(e.activeWindow)),
+    proc(): Result[(), string] =
+      # The window opened beside a lone sidebar is the split, as a split-viewer
+      # request from it covers its new window in place.
+      let tab = e.sidebarTab()
+      if tab.isNone:
+        return err("no buffer to open a window on")
+      ?e.openWindowBesideSidebar(tab.get)
+      ok(()),
+  )
+  if opened:
+    e.enterFilerInActiveWindow(path)
+
+proc splitFileFromSidebar(e: Editor, path: string, vertical: bool) =
+  ## Open `path` in a split of the window the sidebar serves.
+  discard e.openFromSidebar(
+    proc(): Result[(), string] =
+      if vertical:
+        e.vsplit(some(path))
+      else:
+        e.hsplit(some(path)),
+    proc(): Result[(), string] =
+      e.openFileInNewRightWindow(path),
+  )
+
+proc newFromSidebar(e: Editor, vertical: bool) =
+  ## `:new` / `:vnew` open a window, so from the sidebar they split the window
+  ## it serves, as `:split <file>` does.
+  discard e.openFromSidebar(
+    proc(): Result[(), string] =
+      if vertical:
+        e.vnew()
+      else:
+        e.new(),
+    proc(): Result[(), string] =
+      e.newBesideSidebar(),
+  )
+
+proc openFileFromSidebar(e: Editor, path: string) =
+  ## From the sidebar, open `path` in the window it serves; if it is alone, in
+  ## a new window to its right. The tree reveals the file.
+  let side = e.activeWindow
+  let opened = e.openFromSidebar(
+    proc(): Result[(), string] =
+      e.editFile(path),
+    proc(): Result[(), string] =
+      e.openFileInNewRightWindow(path),
+  )
+  if not opened:
+    return
+  if side.modeState.kind == mskFileTree:
+    side.modeState.fileTree.revealPath(path)
+  e.state.statusMessage = "Opened: " & path
 
 proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Handle file / buffer open and split kinds. Returns true to continue.
@@ -77,36 +177,7 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
         logInfo("filer", "Opened file in hsplit: " & r.filerFilePath)
     return true
   of hrFileTreeOpenFile:
-    # Open in the first non-FileTree window; if the FileTree is alone,
-    # open the file in a new window to its right.
-    var targetWinIdx = -1
-    for i, win in e.windowManager.windows:
-      if win.mode != EditorMode.FileTree:
-        targetWinIdx = i
-        break
-
-    # Reveal the opened file in the file tree
-    for win in e.windowManager.windows:
-      if win.mode == EditorMode.FileTree and win.modeState.kind == mskFileTree:
-        win.modeState.fileTree.revealPath(r.fileTreeFilePath)
-        break
-
-    if targetWinIdx >= 0:
-      # Switch to the target window and open the file (keeps unsaved changes)
-      e.windowManager.activateWindow(targetWinIdx)
-      e.syncActiveWindow()
-      let editResult = e.editFile(r.fileTreeFilePath)
-      if editResult.isErr:
-        e.state.statusMessage = "Error: " & editResult.error
-      else:
-        e.state.statusMessage = "Opened: " & r.fileTreeFilePath
-    else:
-      # FileTree is the only window: create a new window on its right
-      let openResult = e.openFileInNewRightWindow(r.fileTreeFilePath)
-      if openResult.isErr:
-        e.state.statusMessage = "Error: " & openResult.error
-      else:
-        e.state.statusMessage = "Opened: " & r.fileTreeFilePath
+    e.openFileFromSidebar(r.fileTreeFilePath)
     return true
   of hrFilerDeleteFile:
     # Delete file/directory from filer
@@ -178,6 +249,11 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
         e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
     return true
   of hrVSplit:
+    if r.vsplitFilename.isNone and e.activeWindow.viewerEntry.isSome:
+      let splitResult = e.splitViewer(vpVSplit)
+      if splitResult.isErr:
+        e.state.statusMessage = "Error: " & splitResult.error
+      return true
     let expandedVsplit =
       if r.vsplitFilename.isSome:
         some(expandTilde(r.vsplitFilename.get))
@@ -193,6 +269,12 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
         none(string)
       else:
         expandedVsplit
+    if splitFilename.isNone and e.activeWindow.isSidebar:
+      e.splitFromSidebar(filerPath, vertical = true)
+      return true
+    if e.activeWindow.isSidebar and splitFilename.isSome:
+      e.splitFileFromSidebar(splitFilename.get, vertical = true)
+      return true
     let splitResult = e.vsplit(splitFilename)
     if splitResult.isErr:
       logError("handler", "Vertical split failed: " & splitResult.error)
@@ -201,6 +283,11 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
       e.enterFilerInActiveWindow(filerPath.get)
     return true
   of hrHSplit:
+    if r.hsplitFilename.isNone and e.activeWindow.viewerEntry.isSome:
+      let splitResult = e.splitViewer(vpHSplit)
+      if splitResult.isErr:
+        e.state.statusMessage = "Error: " & splitResult.error
+      return true
     let expandedHsplit =
       if r.hsplitFilename.isSome:
         some(expandTilde(r.hsplitFilename.get))
@@ -216,6 +303,12 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
         none(string)
       else:
         expandedHsplit
+    if splitFilename.isNone and e.activeWindow.isSidebar:
+      e.splitFromSidebar(filerPath, vertical = false)
+      return true
+    if e.activeWindow.isSidebar and splitFilename.isSome:
+      e.splitFileFromSidebar(splitFilename.get, vertical = false)
+      return true
     let splitResult = e.hsplit(splitFilename)
     if splitResult.isErr:
       logError("handler", "Horizontal split failed: " & splitResult.error)
@@ -224,12 +317,18 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
       e.enterFilerInActiveWindow(filerPath.get)
     return true
   of hrNew:
+    if e.activeWindow.isSidebar:
+      e.newFromSidebar(vertical = false)
+      return true
     let newResult = e.new()
     if newResult.isErr:
       logError("handler", "New failed: " & newResult.error)
       e.state.statusMessage = "Error: " & newResult.error
     return true
   of hrVnew:
+    if e.activeWindow.isSidebar:
+      e.newFromSidebar(vertical = true)
+      return true
     let vnewResult = e.vnew()
     if vnewResult.isErr:
       logError("handler", "Vnew failed: " & vnewResult.error)

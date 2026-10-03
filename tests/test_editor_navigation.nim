@@ -500,7 +500,7 @@ suite "editor_navigation - addToJumpList":
     e.cursor = BufferPosition(line: 1, column: 3)
     let initialLen = e.state.jumpList.list.len
 
-    e.addToJumpList()
+    e.addToJumpList(e.jumpOrigin())
 
     check e.state.jumpList.list.len == initialLen + 1
     let lastPos = e.state.jumpList.list[^1]
@@ -518,10 +518,10 @@ suite "editor_navigation - addToJumpList":
     discard e.editFile(testFile)
     e.cursor = BufferPosition(line: 1, column: 3)
 
-    e.addToJumpList()
+    e.addToJumpList(e.jumpOrigin())
     let lenAfterFirst = e.state.jumpList.list.len
 
-    e.addToJumpList()
+    e.addToJumpList(e.jumpOrigin())
     let lenAfterSecond = e.state.jumpList.list.len
 
     check lenAfterFirst == lenAfterSecond
@@ -530,7 +530,7 @@ suite "editor_navigation - addToJumpList":
     let e = createTestEditor()
     e.state.jumpList.index = 5
 
-    e.addToJumpList()
+    e.addToJumpList(e.jumpOrigin())
 
     check e.state.jumpList.index == -1
 

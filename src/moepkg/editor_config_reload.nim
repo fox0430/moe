@@ -21,7 +21,7 @@
 ## editor (display, search, color, LSP, theme, mouse, notification, key-router
 ## settings) and poll the config file for external changes.
 
-import std/[monotimes, times, os]
+import std/[monotimes, times, os, options]
 
 import pkg/results
 
@@ -87,9 +87,8 @@ proc setMatterGrammar*(
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor.
-  ## Display/edit flags are pull-read from `e.config`, so the ref swap at the
-  ## bottom of this proc is the only sync step they need. Other runtime state
-  ## (search, timings, LSP, clipboard, notifications) still needs manual apply.
+  ## `newConfig` is copied into `e.config` in place, so all holders stay current.
+  ## Other runtime state still needs manual apply.
 
   if not newConfig.lsp.diagnostics.enable:
     # Diagnostics are server-push; drop applied markers/hover so a disable
@@ -123,8 +122,10 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   for buf in e.buffers:
     applyHighlightConfig(buf, newConfig)
 
-  # Reload theme if configured
-  initTheme(newConfig)
+  # Theme colors derive from [Theme] alone. Rereading on every apply would drop
+  # colors edited in the Config view but not yet saved.
+  if loadedThemeConfig != some(newConfig.theme):
+    initTheme(newConfig)
 
   # Update sidebar bookmark marker
   setBookmarkMarker(newConfig.standard.bookmarkMarker)
@@ -164,9 +165,8 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
     TimeoutPolicy(timeoutlen: newConfig.standard.timeoutlen, enabled: true)
   )
 
-  # Store the new config; state.config aliases the same ref.
-  e.config = newConfig
-  e.state.config = newConfig
+  if newConfig != e.config:
+    e.config[] = newConfig[]
   e.enforceModePolicy()
 
   # Re-apply [Lsp.<lang>] entries so live reload / :lspRestart pick up server
@@ -222,6 +222,9 @@ proc maybeReloadConfig*(e: Editor) =
   if vr.hasDeprecations:
     for msg in vr.toDeprecationMessages:
       logInfo("editor", "Config notice: " & msg)
+
+  # The theme file is not watched, so reread it with the config.
+  initTheme(newConfig)
 
   # Apply the new settings
   e.applyConfigSettings(newConfig)

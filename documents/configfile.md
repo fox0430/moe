@@ -618,8 +618,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | background | Suspend moe to the shell |
 | buffer-next-tab | Switch to next buffer tab |
 | buffer-prev-tab | Switch to previous buffer tab |
-| window-next | Switch to next window |
-| window-prev | Switch to the last accessed window |
+| window-next | Move to the next window |
+| window-prev | Move to the last accessed window |
 | window-move-left | Move to the window on the left |
 | window-move-down | Move to the window below |
 | window-move-up | Move to the window above |
@@ -631,6 +631,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | window-decrease-width | Decrease window width |
 | window-equalize | Equalize all window sizes |
 | window-swap | Swap window with next window |
+| window-new | Create a new empty buffer in a horizontally split window |
 
 ##### Mode switching
 

@@ -618,12 +618,12 @@ suite "HelpViewer - Mode sections (snapshot)":
     let state = newHelpViewerState()
     check state.items.contains("# Insert mode")
     check state.items.contains(
-      "Ctrl-e              - Insert the character which is below the cursor"
+      "Ctrl-e               - Insert the character which is below the cursor"
     )
     check state.items.contains(
-      "Ctrl-h or Backspace - Delete the character before the cursor"
+      "Ctrl-h or Backspace  - Delete the character before the cursor"
     )
-    check state.items.contains("Esc                 - Go to Normal mode")
+    check state.items.contains("Esc                  - Go to Normal mode")
 
   test "# Backup mode section is aligned to width 5":
     let state = newHelpViewerState()

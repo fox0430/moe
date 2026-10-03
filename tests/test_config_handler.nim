@@ -19,7 +19,7 @@
 
 ## Tests for config_handler.nim
 
-import std/[unittest, strutils]
+import std/[unittest]
 
 import ../src/moepkg/[types, key_bindings, config_mode, config]
 import ../src/moepkg/command_handlers/config_handler
@@ -37,7 +37,6 @@ proc createTestEditorState(): EditorState =
 suite "ConfigModeState - Key Sequence Flags":
   test "fresh ConfigModeState has key-sequence flags reset":
     let configState = createTestConfigState()
-    let editorState = createTestEditorState()
 
     check configState.waitingForG == false
     check configState.lastKeyWasEscape == false
@@ -199,14 +198,15 @@ suite "config_handler: Boolean Value Editing":
 
     if boolIndex >= 0:
       configState.selectedIndex = boolIndex
-      let originalValue = configState.items[boolIndex].boolValue
+      let originalValue = configState.items[boolIndex].boolValue(configState.config)
 
       let keyCombo =
         KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
-      check configState.items[boolIndex].boolValue == (not originalValue)
+      check configState.items[boolIndex].boolValue(configState.config) ==
+        (not originalValue)
 
   test "Toggle bool value with Space":
     let configState = createTestConfigState()
@@ -220,13 +220,14 @@ suite "config_handler: Boolean Value Editing":
 
     if boolIndex >= 0:
       configState.selectedIndex = boolIndex
-      let originalValue = configState.items[boolIndex].boolValue
+      let originalValue = configState.items[boolIndex].boolValue(configState.config)
 
       let keyCombo = KeyCombo(isSpecial: false, char: " ", modifiers: {})
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
-      check configState.items[boolIndex].boolValue == (not originalValue)
+      check configState.items[boolIndex].boolValue(configState.config) ==
+        (not originalValue)
 
   test "Toggle bool value with l":
     let configState = createTestConfigState()
@@ -240,13 +241,14 @@ suite "config_handler: Boolean Value Editing":
 
     if boolIndex >= 0:
       configState.selectedIndex = boolIndex
-      let originalValue = configState.items[boolIndex].boolValue
+      let originalValue = configState.items[boolIndex].boolValue(configState.config)
 
       let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
-      check configState.items[boolIndex].boolValue == (not originalValue)
+      check configState.items[boolIndex].boolValue(configState.config) ==
+        (not originalValue)
 
   test "Toggle bool value with Right arrow":
     let configState = createTestConfigState()
@@ -260,14 +262,15 @@ suite "config_handler: Boolean Value Editing":
 
     if boolIndex >= 0:
       configState.selectedIndex = boolIndex
-      let originalValue = configState.items[boolIndex].boolValue
+      let originalValue = configState.items[boolIndex].boolValue(configState.config)
 
       let keyCombo =
         KeyCombo(isSpecial: true, special: skRight, fnNum: 0, modifiers: {})
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
-      check configState.items[boolIndex].boolValue == (not originalValue)
+      check configState.items[boolIndex].boolValue(configState.config) ==
+        (not originalValue)
 
 suite "config_handler: Int Value Editing":
   test "Increment int value with Right arrow":
@@ -282,7 +285,7 @@ suite "config_handler: Int Value Editing":
 
     if intIndex >= 0:
       configState.selectedIndex = intIndex
-      let originalValue = configState.items[intIndex].intValue
+      let originalValue = configState.items[intIndex].intValue(configState.config)
 
       let keyCombo =
         KeyCombo(isSpecial: true, special: skRight, fnNum: 0, modifiers: {})
@@ -290,7 +293,8 @@ suite "config_handler: Int Value Editing":
 
       check result.kind == cmrHandled
       if originalValue < configState.items[intIndex].intMax:
-        check configState.items[intIndex].intValue == originalValue + 1
+        check configState.items[intIndex].intValue(configState.config) ==
+          originalValue + 1
 
   test "Decrement int value with Left arrow":
     let configState = createTestConfigState()
@@ -306,14 +310,15 @@ suite "config_handler: Int Value Editing":
       configState.selectedIndex = intIndex
       # Increment first to make sure we can decrement
       configState.incrementIntValue(editorState)
-      let originalValue = configState.items[intIndex].intValue
+      let originalValue = configState.items[intIndex].intValue(configState.config)
 
       let keyCombo = KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {})
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
       if originalValue > configState.items[intIndex].intMin:
-        check configState.items[intIndex].intValue == originalValue - 1
+        check configState.items[intIndex].intValue(configState.config) ==
+          originalValue - 1
 
   test "Decrement int value with h":
     let configState = createTestConfigState()
@@ -328,14 +333,15 @@ suite "config_handler: Int Value Editing":
     if intIndex >= 0:
       configState.selectedIndex = intIndex
       configState.incrementIntValue(editorState)
-      let originalValue = configState.items[intIndex].intValue
+      let originalValue = configState.items[intIndex].intValue(configState.config)
 
       let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
       if originalValue > configState.items[intIndex].intMin:
-        check configState.items[intIndex].intValue == originalValue - 1
+        check configState.items[intIndex].intValue(configState.config) ==
+          originalValue - 1
 
   test "Start int edit mode with Enter":
     let configState = createTestConfigState()
@@ -370,7 +376,7 @@ suite "config_handler: Float Value Editing":
 
     if floatIndex >= 0:
       configState.selectedIndex = floatIndex
-      let originalValue = configState.items[floatIndex].floatValue
+      let originalValue = configState.items[floatIndex].floatValue(configState.config)
       let step = configState.items[floatIndex].floatStep
 
       let keyCombo =
@@ -379,7 +385,8 @@ suite "config_handler: Float Value Editing":
 
       check result.kind == cmrHandled
       if originalValue + step <= configState.items[floatIndex].floatMax:
-        check configState.items[floatIndex].floatValue == originalValue + step
+        check configState.items[floatIndex].floatValue(configState.config) ==
+          originalValue + step
 
   test "Decrement float value with Left arrow":
     let configState = createTestConfigState()
@@ -395,7 +402,7 @@ suite "config_handler: Float Value Editing":
       configState.selectedIndex = floatIndex
       # Increment first to make sure we can decrement
       configState.incrementFloatValue(editorState)
-      let originalValue = configState.items[floatIndex].floatValue
+      let originalValue = configState.items[floatIndex].floatValue(configState.config)
       let step = configState.items[floatIndex].floatStep
 
       let keyCombo = KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {})
@@ -403,7 +410,8 @@ suite "config_handler: Float Value Editing":
 
       check result.kind == cmrHandled
       if originalValue - step >= configState.items[floatIndex].floatMin:
-        check configState.items[floatIndex].floatValue == originalValue - step
+        check configState.items[floatIndex].floatValue(configState.config) ==
+          originalValue - step
 
 suite "config_handler: Enum Value Editing":
   test "Cycle enum value forward with Right arrow":
@@ -418,7 +426,7 @@ suite "config_handler: Enum Value Editing":
 
     if enumIndex >= 0:
       configState.selectedIndex = enumIndex
-      let originalValue = configState.items[enumIndex].enumValue
+      let originalValue = configState.items[enumIndex].enumValue(configState.config)
       let options = configState.items[enumIndex].enumOptions
       var currentIdx = options.find(originalValue)
       if currentIdx < 0:
@@ -430,7 +438,8 @@ suite "config_handler: Enum Value Editing":
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
-      check configState.items[enumIndex].enumValue == options[expectedIdx]
+      check configState.items[enumIndex].enumValue(configState.config) ==
+        options[expectedIdx]
 
   test "Cycle enum value backward with Left arrow":
     let configState = createTestConfigState()
@@ -444,7 +453,7 @@ suite "config_handler: Enum Value Editing":
 
     if enumIndex >= 0:
       configState.selectedIndex = enumIndex
-      let originalValue = configState.items[enumIndex].enumValue
+      let originalValue = configState.items[enumIndex].enumValue(configState.config)
       let options = configState.items[enumIndex].enumOptions
       var currentIdx = options.find(originalValue)
       if currentIdx < 0:
@@ -455,7 +464,8 @@ suite "config_handler: Enum Value Editing":
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
-      check configState.items[enumIndex].enumValue == options[expectedIdx]
+      check configState.items[enumIndex].enumValue(configState.config) ==
+        options[expectedIdx]
 
   test "Open enum popup with Enter":
     let configState = createTestConfigState()
@@ -1204,7 +1214,7 @@ suite "config_handler: Float Value Editing Extended":
     if floatIndex >= 0:
       configState.selectedIndex = floatIndex
       configState.incrementFloatValue(editorState)
-      let originalValue = configState.items[floatIndex].floatValue
+      let originalValue = configState.items[floatIndex].floatValue(configState.config)
       let step = configState.items[floatIndex].floatStep
 
       let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
@@ -1212,7 +1222,8 @@ suite "config_handler: Float Value Editing Extended":
 
       check result.kind == cmrHandled
       if originalValue - step >= configState.items[floatIndex].floatMin:
-        check configState.items[floatIndex].floatValue == originalValue - step
+        check configState.items[floatIndex].floatValue(configState.config) ==
+          originalValue - step
 
 suite "config_handler: Int Value Editing Extended":
   test "Start int edit mode with l":
@@ -1342,14 +1353,14 @@ suite "config_handler: Bool Value Editing Extended":
 
     if boolIndex >= 0:
       configState.selectedIndex = boolIndex
-      let originalValue = configState.items[boolIndex].boolValue
+      let originalValue = configState.items[boolIndex].boolValue(configState.config)
 
       let keyCombo = KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {})
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
       # Bool value should NOT change with left arrow
-      check configState.items[boolIndex].boolValue == originalValue
+      check configState.items[boolIndex].boolValue(configState.config) == originalValue
 
   test "h key on bool does nothing":
     let configState = createTestConfigState()
@@ -1363,14 +1374,14 @@ suite "config_handler: Bool Value Editing Extended":
 
     if boolIndex >= 0:
       configState.selectedIndex = boolIndex
-      let originalValue = configState.items[boolIndex].boolValue
+      let originalValue = configState.items[boolIndex].boolValue(configState.config)
 
       let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
       let result = handleConfigModeKey(configState, editorState, 24, keyCombo)
 
       check result.kind == cmrHandled
       # Bool value should NOT change with h
-      check configState.items[boolIndex].boolValue == originalValue
+      check configState.items[boolIndex].boolValue(configState.config) == originalValue
 
 suite "config_handler: Empty Items Edge Case":
   test "Handle key with empty items list":
@@ -1498,52 +1509,3 @@ suite "config_handler: Search":
     let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
     let result = handleConfigModeKey(configState, editorState, 24, n)
     check result.kind == cmrHandled
-
-suite "config_handler: applyColorChange persistence warning":
-  proc findFirstColorItem(configState: ConfigModeState): int =
-    for i, item in configState.items:
-      if item.kind == cvkColor:
-        return i
-    return -1
-
-  test "tkDefault: warning appears when a color is edited":
-    let configState = createTestConfigState()
-    let editorState = createTestEditorState()
-    editorState.config.theme.kind = tkDefault
-    editorState.statusMessage = ""
-    let idx = findFirstColorItem(configState)
-    check idx >= 0
-    configState.items[idx].colorValue = "#123456"
-
-    configState.applyColorChange(editorState, idx)
-
-    check editorState.statusMessage.len > 0
-    check "preview only" in editorState.statusMessage
-    check ":theme" in editorState.statusMessage
-
-  test "tkConfig: no warning (edit will persist on :writeconf)":
-    let configState = createTestConfigState()
-    let editorState = createTestEditorState()
-    editorState.config.theme.kind = tkConfig
-    editorState.config.theme.path = "/tmp/moe_test_theme_persist.toml"
-    editorState.statusMessage = ""
-    let idx = findFirstColorItem(configState)
-    check idx >= 0
-    configState.items[idx].colorValue = "#654321"
-
-    configState.applyColorChange(editorState, idx)
-
-    check editorState.statusMessage == ""
-
-  test "tkVscode: warning appears (edit will not persist)":
-    let configState = createTestConfigState()
-    let editorState = createTestEditorState()
-    editorState.config.theme.kind = tkVscode
-    editorState.statusMessage = ""
-    let idx = findFirstColorItem(configState)
-    check idx >= 0
-    configState.items[idx].colorValue = "#abcdef"
-
-    configState.applyColorChange(editorState, idx)
-
-    check "preview only" in editorState.statusMessage

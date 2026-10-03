@@ -179,26 +179,27 @@
 | <kbd>**T**</kbd> | Move to the right of the back any character on the current line |
 | <kbd>**;**</kbd> | Repeat last f/F/t/T |
 | <kbd>**,**</kbd> | Repeat last f/F/t/T in reverse |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**w**</kbd> | Move to the next window |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**p**</kbd> | Move to the last accessed window |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**h**</kbd> | Move to the window on the left |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**j**</kbd> | Move to the window below |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**k**</kbd> | Move to the window above |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**l**</kbd> | Move to the window on the right |
 | <kbd>**z**</kbd> <kbd>**t**</kbd> | Scroll the screen so the cursor is at the top |
 | <kbd>**z**</kbd> <kbd>**b**</kbd> | Scroll the screen so the cursor is at the bottom |
 | <kbd>**z**</kbd> <kbd>**.**</kbd> | Center the screen on the cursor |
 | <kbd>**z**</kbd> <kbd>**z**</kbd> | Center the screen on the cursor |
 | <kbd>**Z**</kbd> <kbd>**Z**</kbd> | Write current file and exit |
 | <kbd>**Z**</kbd> <kbd>**Q**</kbd> | Same as :q! |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**w**</kbd> | Move to the next window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**p**</kbd> | Move to the last accessed window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**h**</kbd> | Move to the window on the left |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**j**</kbd> | Move to the window below |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**k**</kbd> | Move to the window above |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**l**</kbd> | Move to the window on the right |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd> | Close current window |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**_**</kbd> | Maximize window height |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**+**</kbd> | Increase window height |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**-**</kbd> | Decrease window height |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**>**</kbd> | Increase window width |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**<**</kbd> | Decrease window width |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**=**</kbd> | Equalize window sizes |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**=**</kbd> | Equalize all window sizes |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**x**</kbd> | Swap window with next window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**n**</kbd> | Create a new empty buffer in a horizontally split window |
 | <kbd>**/**</kbd> | Search forwards |
 | <kbd>**?**</kbd> | Search backwards |
 | <kbd>**\\**</kbd> <kbd>**r**</kbd> | QuickRun |
@@ -340,6 +341,8 @@
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Delete all characters before the cursor in the current line |
 | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> | Signature Help (LSP) |
 | <kbd>**Ctrl**</kbd> <kbd>**o**</kbd> | Execute one Normal mode command and return to Insert mode |
+| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> | Insert the previously inserted text |
+| <kbd>**Ctrl**</kbd> <kbd>**@**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**Space**</kbd> | Insert the previously inserted text and go to Normal mode |
 | <kbd>**Esc**</kbd> | Go to Normal mode |
 <!-- AUTO-GEN:end InsertMode -->
 
@@ -503,8 +506,9 @@ Open the fileTree sidebar with `:filetree` command. If already open, it will clo
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**-**</kbd> | Decrease window height |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**>**</kbd> | Increase window width |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**<**</kbd> | Decrease window width |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**=**</kbd> | Equalize window sizes |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**=**</kbd> | Equalize all window sizes |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**x**</kbd> | Swap window with next window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**n**</kbd> | Create a new empty buffer in a horizontally split window |
 <!-- AUTO-GEN:end FileTreeMode -->
 
 </details>

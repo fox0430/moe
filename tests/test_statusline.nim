@@ -19,12 +19,12 @@
 
 ## Tests for status_line.nim - Status line rendering for moe editor
 
-import std/[unittest, options, tables, strutils, os, osproc]
+import std/[unittest, options, tables, strutils, os]
 
 import pkg/celina
 
 import ../src/moepkg/[types, modes, registers, config, git_cache, unicode_utils]
-import ../src/moepkg/buffer/[core, edit]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/status_line {.all.}
 
@@ -1571,6 +1571,7 @@ suite "StatusLine - sanitize control characters":
     renderStatusLine(state, tb, buf, 23, cfg)
     let line = getBufferLine(buf, 23)
     check not hasControl(line)
+    check res in line
 
   test "buildGitInfo sanitizes branch name with controls":
     let tb = createTestTextBuffer("/path/to/file.nim", false, "test")

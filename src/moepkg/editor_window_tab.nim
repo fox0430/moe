@@ -22,11 +22,14 @@
 ## `moveWindowToTab` is the single procedure that repoints a window at another
 ## tab and rebuilds the mode state the old tab owned. `deriveTabMode` rebuilds
 ## only the mode, for a window whose tab is already in place: a new split, or a
-## viewer resuming after its tab moved underneath it.
+## viewer resuming after its tab moved underneath it. `syncTabView` derives what
+## the window then shows.
 
 import std/options
 
-import types/editor_types, editor_mode, editor_window_state
+import pkg/results
+
+import types/editor_types, editor_mode, editor_window_state, logger
 
 when not defined(moe.embedded):
   import std/tables
@@ -43,6 +46,18 @@ when not defined(moe.embedded):
     of tsmInput:
       # View is only for the status line/tab list; `renderTerminal` draws the grid.
       win.setView(e.tabBuffer(win))
+
+proc syncTabView*(e: Editor, win: EditorWindow) =
+  ## Show what `win`'s tab and `modeState` make it show when no viewer covers
+  ## it: a Terminal's view, or else the tab's buffer. A viewer resumes through
+  ## this rather than keeping what it covered.
+  if win.modeState.kind == mskTerminal:
+    when defined(moe.embedded):
+      win.setView(e.tabBuffer(win))
+    else:
+      e.syncTerminalView(win)
+  else:
+    win.setView(e.tabBuffer(win))
 
 proc applyTabMode(e: Editor, win: EditorWindow, tabId: BufferId) =
   when not defined(moe.embedded):
@@ -69,18 +84,14 @@ type WindowView* = enum
   ## instead of a silent extra branch.
   wvTabView ## The tab's own content: a text buffer, or a live terminal grid.
   wvTabSnapshot ## A frozen view of the tab's terminal scrollback (Terminal-Normal).
-  wvSplitViewer
-    ## A viewer's listing hosted in its own split window; the listing is the
-    ## window's tab.
-  wvInPlaceViewer ## A viewer's listing covering a tab's view in place.
-  wvForeignMode ## A non-viewer mode (Filer, Help, ...) over a hidden tab.
+  wvViewer ## A viewer's listing covering the tab's view.
+  wvForeignMode ## A mode's own state with no viewer entry: the FileTree sidebar.
 
 proc windowViewOf(e: Editor, win: EditorWindow): WindowView =
   ## Derive what `win` draws, from `viewerEntry`, `modeState` and
   ## `terminalStates`. The only place that reads those fields together.
   if win.viewerEntry.isSome:
-    return
-      if win.viewerEntry.get.placement == vpInPlace: wvInPlaceViewer else: wvSplitViewer
+    return wvViewer
   when defined(moe.embedded):
     if win.modeState.kind == mskNone: wvTabView else: wvForeignMode
   else:
@@ -103,39 +114,49 @@ proc isShowingTab*(e: Editor, win: EditorWindow, tabId: BufferId): bool =
   if win.tabBufferId != tabId:
     return false
   case e.windowViewOf(win)
-  of wvTabView, wvTabSnapshot:
-    true
-  of wvSplitViewer:
-    win.viewerEntry.get.bufferId == tabId
-  of wvInPlaceViewer, wvForeignMode:
-    false
+  of wvTabView, wvTabSnapshot: true
+  of wvViewer, wvForeignMode: false
 
-proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): bool =
+proc checkTabSwitch*(win: EditorWindow): Result[void, string] =
+  ## Whether `win` may show another tab. The FileTree sidebar keeps its
+  ## listing, as Vim's 'winfixbuf' window keeps its buffer. Commands check it
+  ## before they load or create what they would show.
+  if win.isSidebar:
+    return err("E1513: Cannot switch buffer in the file tree")
+  ok()
+
+type TabMove* = enum
+  ## How `moveWindowToTab` ended.
+  tabMoved ## The window now shows the tab.
+  tabAlreadyShown ## It already did; nothing changed.
+  tabSwitchRefused ## The window keeps its own tab; nothing changed.
+
+proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
   ## Move `win` onto `buf`'s tab and rebuild state owned by the old tab
   ## (Insert session, buffer-swap modes, view position, derived mode).
   ##
-  ## Returns false when the window already shows `buf`'s tab itself.
+  ## Callers pass `checkTabSwitch` before they load or create what they would
+  ## show, so a refusal here means a caller skipped it.
+  if win.checkTabSwitch().isErr:
+    logError("editor", "Tab switch reached a window that keeps its tab")
+    return tabSwitchRefused
   if e.isShowingTab(win, buf.id):
-    return false
+    return tabAlreadyShown
 
   let isActiveWindow = win == e.activeWindow
   # Only the active window owns the global Insert session.
   if isActiveWindow:
     e.finalizeInsertSessionForBufferSwitch(win.buffer)
 
-  # Null `originalBuffer` first to skip its restore. Terminal state stays in
-  # `e.terminalStates`; never `cleanup()` it here.
-  win.originalBuffer = nil
-  # Drop both records: an overlay could strand the other mode's state.
+  # Terminal state stays in `e.terminalStates`; never `cleanup()` it here.
   discard win.takeViewerEntry()
-  discard win.takeSuspendedMode()
   let wasSpecialMode =
     when defined(moe.embedded):
       win.modeState.kind != mskNone
     else:
       win.modeState.kind != mskNone and win.modeState.kind != mskTerminal
   if wasSpecialMode:
-    win.clearModeState(win.mode)
+    win.dropModeState()
 
   win.setTab(buf)
   win.cursor = BufferPosition(line: 0, column: 0)
@@ -152,4 +173,13 @@ proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): bool =
   if isActiveWindow:
     e.enforceModePolicy()
 
-  true
+  tabMoved
+
+proc moveTabUnder*(e: Editor, win: EditorWindow, buf: TextBuffer) =
+  ## Move `win` onto `buf`'s tab when its tab goes away. A viewer keeps its view
+  ## and resumes onto `buf` when it ends; any other window takes the shared
+  ## transition.
+  if win.viewerEntry.isSome:
+    win.retabTo(buf)
+  else:
+    discard e.moveWindowToTab(win, buf)

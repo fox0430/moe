@@ -25,6 +25,7 @@ import std/[options, tables]
 import ../[types, motion, commands, command_registry, modes, quick_run_utils, job_lanes]
 import ../key_bindings except Command
 import ../command_handlers/handler_types
+import ../command_handlers/handler_result as handler_result_types
 import ../buffer/core as buffer_core
 import ../command_line/types as command_line_types
 import ../key_router/types as key_router_types
@@ -45,6 +46,11 @@ type
 
   HostCommandFilter* = proc(e: Editor, command: ParsedCommand): bool {.closure.}
     ## Return true to let the host handle a parsed `:` command instead of Moe.
+
+  HostResultFilter* =
+    proc(e: Editor, r: handler_result_types.HandlerResult): bool {.closure.}
+    ## Return true to queue a dispatched result for the host instead of applying
+    ## Moe's side effects. Covers commands, mappings, and viewer/window keys.
 
   Editor* = ref object
     state*: EditorState
@@ -91,7 +97,10 @@ type
       ## nothing, keeping buffers usable outside a full editor.
     xHostPopupMenus: bool
     hostCommandFilter*: HostCommandFilter
+    hostResultFilter*: HostResultFilter
     xHostCommandRequests: seq[ParsedCommand]
+    xHostResultRequests: seq[handler_result_types.HandlerResult]
+    xHostResultRequestCount: int
     when not defined(moe.embedded):
       terminalStates*: Table[BufferId, TerminalState]
         ## Live Terminal sessions keyed by their buffer id. The window's
@@ -310,6 +319,23 @@ proc takeHostCommandRequest*(e: Editor): Option[ParsedCommand] =
   if e.xHostCommandRequests.len > 0:
     result = some(e.xHostCommandRequests[0])
     e.xHostCommandRequests.delete(0)
+
+proc interceptHostResult*(e: Editor, r: handler_result_types.HandlerResult): bool =
+  ## Queue a result when the host elects to own its side effects.
+  if not e.hostResultFilter.isNil and e.hostResultFilter(e, r):
+    e.xHostResultRequests.add(r)
+    inc e.xHostResultRequestCount
+    return true
+
+proc hostResultRequestCount*(e: Editor): int =
+  ## Total results queued for the host, including requests already consumed.
+  e.xHostResultRequestCount
+
+proc takeHostResultRequest*(e: Editor): Option[handler_result_types.HandlerResult] =
+  ## Consume the oldest host-handled result, or none when the queue is empty.
+  if e.xHostResultRequests.len > 0:
+    result = some(e.xHostResultRequests[0])
+    e.xHostResultRequests.delete(0)
 
 flag2(autoIndent, bool, standard, autoIndent)
 flag2(smartIndent, bool, standard, smartIndent)

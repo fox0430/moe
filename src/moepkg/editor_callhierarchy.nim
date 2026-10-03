@@ -87,12 +87,15 @@ proc enterCallHierarchyMode(
   ## Enter or refresh CallHierarchy mode. Re-entry (Incoming ↔ Outgoing) keeps
   ## the origin snapshot via `enterViewerMode`.
   let chState = newCallHierarchyViewerState(items, viewKind)
-  discard e.enterViewerMode(
+  let entered = e.enterViewerMode(
     EditorMode.CallHierarchy,
     ModeState(kind: mskCallHierarchy, callHierarchy: chState),
     chState.createCallHierarchyTextBuffer(),
     vpInPlace,
   )
+  if entered.isErr:
+    e.state.statusMessage = "Failed to open call hierarchy: " & entered.error
+    return
 
   let
     direction = if viewKind == chvkIncoming: "incoming" else: "outgoing"

@@ -140,6 +140,11 @@ proc handleConfigModeKey*(
   ##
   ## Returns a ConfigModeResult indicating what action should be taken
 
+  # Refresh rows first: a macro may have changed values without an intervening
+  # frame. Swallow the key if its edit lost its row (already reported).
+  if configState.refreshItems(editorState):
+    return ConfigModeResult(kind: cmrHandled)
+
   # If in edit mode, handle separately
   if configState.isEditing():
     return handleEditModeKey(configState, editorState, keyCombo)

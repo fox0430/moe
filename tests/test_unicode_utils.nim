@@ -22,7 +22,7 @@ import std/[options, unittest, unicode]
 import pkg/celina
 
 import ../src/moepkg/[unicode_utils, render_utils]
-import ../src/moepkg/buffer/[core, edit]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/buffer_backends/gap_buffer
 
 suite "GapBuffer - Unicode Support":

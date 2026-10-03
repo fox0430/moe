@@ -33,9 +33,19 @@
 ## runs on the event loop and the pending queue, which only the terminal
 ## frontend drives; a host here does not, so a quit it acts on waits for
 ## nothing.
+##
+## `activateBuffer` keeps its `bool` shape for hosts already built against it.
+## `tryActivateBuffer` is the same call with the reason it failed — a buffer that
+## no longer exists, or the FileTree sidebar refusing another tab.
 
 import
   config, editor, editor_frame, editor_display, editor_buffers, frontend_input, handler
+import command_handlers/handler_result
+from types/editor_types import
+  HostResultFilter, hostResultRequestCount, takeHostResultRequest
+
+export handler_result.HandlerResult, handler_result.HandlerResultKind
+export HostResultFilter, hostResultRequestCount, takeHostResultRequest
 
 export config.EditorConfig, config.newEditorConfig
 export editor.Editor, editor.newEditor
@@ -48,7 +58,8 @@ export
   editor_display.frontendGitStatusRevision
 export
   editor_buffers.OpenBufferInfo, editor_buffers.activeWindowBuffers,
-  editor_buffers.activateBuffer, editor_buffers.closeBuffer, editor_buffers.moveBuffer,
+  editor_buffers.activateBuffer, editor_buffers.tryActivateBuffer,
+  editor_buffers.closeBuffer, editor_buffers.moveBuffer,
   editor_buffers.deleteCurrentBuffer
 export
   frontend_input.GridRegion, frontend_input.PointerButton, frontend_input.PointerAction,

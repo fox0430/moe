@@ -67,27 +67,36 @@ proc showCommandOutput*(
   let staleIdx = editor.bufferIndexById(editor.state.commandOutputBufferId)
   if staleIdx >= 0:
     let stale = editor.buffers[staleIdx]
-    var outputWindow: EditorWindow = nil
+    # A window a viewer covers is not reused: showing the output would put the
+    # viewer's window in Normal. It still moves its tab below.
+    var
+      outputWindow: EditorWindow = nil
+      covered = false
     for window in editor.windowManager.windows:
-      if window.buffer == stale:
+      if window.tabBufferId != stale.id:
+        continue
+      if window.viewerEntry.isSome:
+        covered = true
+      elif outputWindow.isNil:
         outputWindow = window
-        break
-    if not outputWindow.isNil:
-      discard editor.removeBufferAt(staleIdx)
+    discard editor.removeBufferAt(staleIdx)
+    if not outputWindow.isNil or covered:
       editor.addBuffer(outputBuffer)
       applyHighlightConfig(outputBuffer, editor.config)
+      # Covered windows only move their tab, so leaving the viewer shows the new
+      # output rather than the deleted one.
       editor.redirectWindowsFromBuffer(stale, outputBuffer)
       editor.state.commandOutputBufferId = outputBuffer.id
+    else:
+      # The window is gone but its buffer is still listed; drop it, or every
+      # close-split-then-run cycle strands another one.
+      editor.state.commandOutputBufferId = BufferId(0)
+    if not outputWindow.isNil:
       editor.syncActiveWindow()
       if not keepFocus:
         editor.focusOutputWindow(outputWindow, EditorMode.Normal, EditorMode.Normal)
       editor.enforceModePolicy()
       return true
-    else:
-      # The window is gone but its buffer is still listed; drop it, or every
-      # close-split-then-run cycle strands another one.
-      discard editor.removeBufferAt(staleIdx)
-      editor.state.commandOutputBufferId = BufferId(0)
 
   let
     previousWindow = editor.activeWindow

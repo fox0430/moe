@@ -25,6 +25,7 @@ const
   SequentialTests = [
     "test_registers.nim", "test_terminal_handler.nim", "test_pty.nim",
     "test_deadly_signals.nim", "test_signal_watcher.nim", "test_terminal_command.nim",
+    "test_exit_sequence.nim",
   ]
 
 proc defaultJobs(): int =

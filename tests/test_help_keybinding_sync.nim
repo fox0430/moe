@@ -215,8 +215,8 @@ suite "help / keybinding consistency":
     )
     let missing = block:
       var allNormal = @NormalBindings
-      for (key, cmd) in WindowSecondKeyCommands:
-        allNormal.add ("C-w " & key, cmd)
+      for c in WindowSecondKeyCommands:
+        allNormal.add ("C-w " & c.key, c.name)
       findUndocumented(allNormal, help, allowKeys, allowCmds)
     report("Normal", missing)
     check missing.len == 0

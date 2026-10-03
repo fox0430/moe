@@ -456,6 +456,32 @@ proc deleteToLineStart*(buffer: TextBuffer, state: EditorState) =
 
   state.cursor.column = min(max(0, pos.column - deleted), lineLen - deleted)
 
+proc insertLastText*(buffer: TextBuffer, state: EditorState): Result[string, string] =
+  ## Re-insert the text recorded for `.` at the cursor (Ctrl-A in Insert mode).
+  ## Substitute text and `o`/`O` newline with auto-indent replay as-is.
+  ## No-op when no insertable text was recorded.
+  ## Returns the inserted text for signature help tracking.
+  if state.editState.lastEditCommand.isNone:
+    return ok("")
+
+  let lastCmd = state.editState.lastEditCommand.get
+  var text = ""
+  case lastCmd.kind
+  of lecInsertText:
+    text = lastCmd.insertedText
+  of lecSubstitute:
+    text = lastCmd.substituteText
+  else:
+    discard
+  if text.len == 0:
+    return ok("")
+
+  let insertResult = buffer.insertTextEnd(state.cursor, text)
+  if insertResult.isErr:
+    return err(insertResult.error)
+  state.cursor = insertResult.get.cursor
+  ok(text)
+
 proc insertCharFromAbove*(buffer: TextBuffer, state: EditorState): bool =
   ## Insert character from the line above at the same column (Ctrl-Y in insert mode)
   ## Returns true if a character was inserted, false otherwise

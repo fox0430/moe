@@ -372,7 +372,7 @@ suite "Search mode - Config mode integration":
 
     # Selection lands on an item matching the live text (the committed
     # searchQuery is only set on finalize, so match against the live text).
-    check cfg.items[cfg.selectedIndex].matchesSearchQuery(name)
+    check cfg.items[cfg.selectedIndex].matchesSearchQuery(cfg.config, name)
     check cfg.selectedIndex > 0
 
   test "performIncrementalSearch with empty text restores the anchor selection":
@@ -398,7 +398,7 @@ suite "Search mode - Config mode integration":
     for ch in name:
       handleSearchCharacterInput(e, $ch)
 
-    check cfg.items[cfg.selectedIndex].matchesSearchQuery(name)
+    check cfg.items[cfg.selectedIndex].matchesSearchQuery(cfg.config, name)
 
   test "handleSearchBackspace re-searches from the anchor on the shorter text":
     let (e, cfg) = createTestEditorInConfigMode()
@@ -414,7 +414,9 @@ suite "Search mode - Config mode integration":
 
     # The selection still rests on an item matching the (shortened) live text.
     check e.state.input.search.text == name[0 ..< name.high]
-    check cfg.items[cfg.selectedIndex].matchesSearchQuery(e.state.input.search.text)
+    check cfg.items[cfg.selectedIndex].matchesSearchQuery(
+      cfg.config, e.state.input.search.text
+    )
 
   test "finalizeSearch commits the query and selects the first match":
     let (e, cfg) = createTestEditorInConfigMode()
@@ -905,7 +907,7 @@ suite "Search mode - empty Enter repeats the last search":
     finalizeSearch(e)
 
     check cfg.selectedIndex != firstMatch
-    check cfg.items[cfg.selectedIndex].matchesSearchQuery("e")
+    check cfg.items[cfg.selectedIndex].matchesSearchQuery(cfg.config, "e")
 
   test "Config mode: a backward repeat steps back to the previous match":
     let (e, cfg) = createTestEditorInConfigMode()

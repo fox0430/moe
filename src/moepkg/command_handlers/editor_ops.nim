@@ -29,13 +29,13 @@ import pkg/results
 
 import
   ../[
-    editor, editor_window_state, editor_window_tab, modes, buffer, logger, types, filer,
-    filetree, config_loader, window_manager, log_viewer, syntax_checker, render_utils,
-    motion, viewer_mode, editor_build_jobs, buffer_manager,
+    editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
+    config_loader, window_manager, log_viewer, syntax_checker, render_utils, motion,
+    viewer_mode, editor_build_jobs, buffer_manager,
   ]
 
 when not defined(moe.embedded):
-  import ../[editor_window_layout, terminal_mode]
+  import ../[editor_window_layout, editor_window_tab, terminal_mode]
 
 import handler_result
 
@@ -57,7 +57,7 @@ proc getBufferInfos*(e: Editor): seq[BufferInfo] =
   ## Extract buffer information from the buffer list for BufferManager.
   ## Active means the window's tab, not what an overlay viewer shows.
   result = @[]
-  let activeTabId = e.activeWindow.tabBufferId
+  let activeTabId = e.commandTab().id
   for buf in e.buffers:
     result.add(buf.toBufferInfo(buf.id == activeTabId))
 
@@ -297,18 +297,20 @@ proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffe
 
 proc enterFilerInActiveWindow*(e: Editor, path: string) =
   let filerState = newFilerState(path)
-  discard e.enterViewerMode(
+  let entered = e.enterViewerMode(
     EditorMode.Filer,
     ModeState(kind: mskFiler, filer: filerState),
     filerState.createFilerTextBuffer(e.config.filer.showIcons),
     vpInPlace,
   )
+  if entered.isErr:
+    e.state.statusMessage = "Failed to open filer: " & entered.error
 
 proc focusFileTreeWindow*(e: Editor): bool =
   ## Focus the fileTree sidebar, or return false if none is open. Unlike
   ## `toggleFileTree`, it never closes the sidebar.
   for i, win in e.windowManager.windows:
-    if win.mode == EditorMode.FileTree:
+    if win.isSidebar:
       e.windowManager.activateWindow(i)
       e.syncActiveWindow()
       return true
@@ -318,16 +320,14 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
   ## Toggle the fileTree sidebar (open if absent, close if present).
   var existingIdx = -1
   for i, win in e.windowManager.windows:
-    if win.mode == EditorMode.FileTree:
+    if win.isSidebar:
       existingIdx = i
       break
 
   if existingIdx >= 0:
-    # Close existing fileTree window
     e.windowManager.activateWindow(existingIdx)
     e.syncActiveWindow()
-    e.activeWindow.clearModeState(EditorMode.FileTree)
-    discard e.closeWindow()
+    e.closeFileTree()
     return
 
   # Create fileTree window as left-side vsplit (follows vsplit pattern)
@@ -425,6 +425,11 @@ proc enterTerminalInActiveWindow*(e: Editor, command: string) =
     e.state.statusMessage = "Terminal mode is unavailable in embedded builds"
   else:
     ## Open a new Terminal session as a tab in the active window.
+    let switchable = e.activeWindow.checkTabSwitch()
+    if switchable.isErr:
+      # Before the PTY starts.
+      e.state.statusMessage = switchable.error
+      return
     let (cols, rows) = e.calculateTerminalAreaDimensions(e.activeWindow)
     let termResult = newTerminalState(command, cols, rows)
     if termResult.isErr:

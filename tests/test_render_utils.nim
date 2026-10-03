@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils, unicode]
+import std/[unittest, strutils]
 
 import pkg/results
 

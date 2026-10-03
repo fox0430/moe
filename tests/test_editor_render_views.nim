@@ -25,8 +25,8 @@ import pkg/celina
 
 import
   ../src/moepkg/[
-    editor, config, config_loader, modes, types, buffer, render_utils, editor_window,
-    editor_window_layout,
+    editor, config, config_loader, config_mode, modes, types, buffer, render_utils,
+    editor_window, editor_window_layout,
   ]
 import ../src/moepkg/editor_render_views {.all.}
 
@@ -2081,13 +2081,52 @@ suite "advanceLayoutForFrame - viewer selection drives the window viewport":
 
     check e.windowManager.windows[0].viewport.topLine == 0
 
-suite "editor_render_views - sanitize control characters":
-  proc hasControl(s: string): bool =
-    for r in s.runes:
-      if int(r) < 0x20 or int(r) == 0x7F:
-        return true
-    false
+suite "advanceLayoutForFrame - Config view follows the config":
+  proc setupConfig(e: Editor, section, name: string): ConfigModeState =
+    ## Give the active window a Config view and select one row of it.
+    let state = newConfigModeState(e.config)
+    let win = e.windowManager.windows[0]
+    win.mode = EditorMode.Config
+    e.state.mode = EditorMode.Config
+    win.modeState = ModeState(kind: mskConfig, config: state)
+    for i, item in state.items:
+      if item.section == section and item.displayName == name:
+        state.selectedIndex = i
+        return state
+    raiseAssert section & "." & name & " not listed"
 
+  test "a row hidden elsewhere disappears on the next frame":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.config.theme.kind = tkDefault
+    let state = e.setupConfig("Theme", "kind")
+
+    e.config.theme.kind = tkConfig
+    e.advanceLayoutForFrame(buffer, false)
+
+    var hasPath = false
+    for item in state.items:
+      hasPath = hasPath or (item.section == "Theme" and item.displayName == "path")
+    check hasPath
+    # The selected row is still listed, so the selection stays on it.
+    check state.items[state.selectedIndex].displayName == "kind"
+
+  test "an edit whose row the frame hides is cancelled and reported":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.config.theme.kind = tkConfig
+    let state = e.setupConfig("Theme", "path")
+    state.startEdit()
+    require state.isEditing
+
+    e.config.theme.kind = tkDefault
+    e.advanceLayoutForFrame(buffer, false)
+
+    check not state.isEditing
+    check state.editBuffer == ""
+    check e.state.statusMessage == "Setting disappeared; the edit was cancelled"
+
+suite "editor_render_views - sanitize control characters":
   test "renderBottomLines sanitizes single-line statusMessage":
     let e = createTestEditor()
     var buffer = createTestBuffer()

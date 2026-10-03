@@ -437,7 +437,12 @@ proc saveFile*(
 ): Result[(), string] =
   ## Write `buffer` to file. If `path` is given, save there (`:w <name>`).
   ## Without `force`, refuse when the target was modified externally or is
-  ## already held by another buffer.
+  ## already held by another buffer. A listing is never written: its
+  ## `filePath` is the directory it lists, and `:w <name>` would make it that
+  ## file.
+  if buffer.isUtilityBuffer:
+    logError("editor", "Save refused: the buffer is a listing")
+    return err("Cannot write a listing")
 
   # `:w ~/f` keeps the tilde, so expand it like the open commands do.
   let savePath =

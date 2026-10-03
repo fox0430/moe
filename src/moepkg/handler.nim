@@ -603,7 +603,7 @@ proc pointerTabPress(e: Editor, input: PointerInput): bool =
     let tabIdx =
       hitTestTabLine(buffersToShow, window.mode, 0, window.viewport.width, input.column)
     if tabIdx >= 0:
-      e.switchToWindowBuffer(tabIdx)
+      discard e.switchToWindowBuffer(tabIdx)
       return true
     return false
 
@@ -621,7 +621,7 @@ proc pointerTabPress(e: Editor, input: PointerInput): bool =
         hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, input.column)
       if tabIdx >= 0:
         e.activatePointerWindow(i)
-        e.switchToWindowBuffer(tabIdx)
+        discard e.switchToWindowBuffer(tabIdx)
         return true
   return false
 

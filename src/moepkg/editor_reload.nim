@@ -272,6 +272,9 @@ proc reloadCurrentFile*(e: Editor, origin: ReadOrigin = roUser): Result[void, st
   ## reload the user asked for, which announces itself on the status line and
   ## fires `BufReadPost`; any other origin reloads quietly.
   let activeBuffer = e.activeBuffer()
+  if activeBuffer.isUtilityBuffer:
+    # Its `filePath` is the directory it lists, not a file to read back.
+    return err("Cannot reload a listing")
   if activeBuffer.filePath.isNone:
     return err("No file name")
 

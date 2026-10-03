@@ -29,7 +29,7 @@ import
   ../[
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
     syntax_checker, cursor_util, quick_run_utils, command_completion, key_bindings,
-    key_router, lsp_integration, command_registry, command_line,
+    key_router, lsp_integration, command_registry, command_line, editor_window_state,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -41,11 +41,12 @@ type
     ## Outcome from a single replayed key, after full processResult side effects.
     roContinue
     roQuit ## hrQuit / hrCquit — main loop terminates
-    roAbort ## hrError — statusMessage already set; loop stops, app continues
+    roAbort ## Error or queued host result — loop stops, app continues
 
   OverlayPlaybackHook* = proc(e: Editor, keyCombo: KeyCombo): Option[bool] {.closure.}
     ## Playback overlay dispatch. `none` = no overlay, fall through; `some(true)`
-    ## = handled, continue; `some(false)` = handled, requested app exit. Wired
+    ## = handled, continue unless a host result was queued;
+    ## `some(false)` = handled, requested app exit. Wired
     ## from handler.nim to avoid an import cycle (overlay handlers import here).
 
 const ModesNeedingContext = {
@@ -59,7 +60,19 @@ var overlayPlaybackHook*: OverlayPlaybackHook = nil
 
 proc executeCommandOverlay*(e: Editor, commandText: string): bool
 
-proc processResultEpilogue(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
+proc processResultEpilogue(
+  e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
+): bool
+
+proc processResultWithHost(
+  e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
+): bool
+
+proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
+  ## Apply a result unless the host takes ownership of it. Host-handled results
+  ## keep the editor running and skip Moe's effects and mode transitions.
+  var hostHandled: bool
+  e.processResultWithHost(r, activeBuffer, hostHandled)
 
 proc modeSwitchEntry(mode: EditorMode): Option[HandlerResult] =
   ## Entry result for `mode_switch`-able modes that build a listing on entry;
@@ -142,9 +155,15 @@ proc processHistoryResult(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
 
   true
 
-proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
+proc processResultWithHost(
+    e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
+): bool =
   ## Apply the editor-level side effects implied by `r`. Returns true to
   ## continue the main loop, false to quit.
+
+  if e.interceptHostResult(r):
+    hostHandled = true
+    return true
 
   # Process the result
   case r.kind
@@ -264,10 +283,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     )
     discard # Consumed by processReplayedResult; only reaches here defensively.
 
-  return e.processResultEpilogue(r, activeBuffer)
+  return e.processResultEpilogue(r, activeBuffer, hostHandled)
 
 proc processResultEpilogue(
-    e: Editor, r: HandlerResult, activeBuffer: TextBuffer
+    e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
 ): bool =
   ## Post-processing for falling-through arms (hrHandled / hrUnhandled /
   ## hrError / hrExecCommand): overlay and mode transitions, viewer buffer
@@ -318,8 +337,10 @@ proc processResultEpilogue(
       else:
         modeSwitchEntry(newMode)
     if entry.isSome:
-      if not e.processResult(entry.get, activeBuffer):
+      if not e.processResultWithHost(entry.get, activeBuffer, hostHandled):
         return false
+      if hostHandled:
+        return true
     elif not focused:
       e.setMode(newMode)
 
@@ -363,7 +384,7 @@ proc processResultEpilogue(
   # FileTree buffer regeneration after state changes (check all windows since
   # the file tree sidebar may not be the active window)
   for win in e.windowManager.windows:
-    if win.mode == EditorMode.FileTree and win.modeState.kind == mskFileTree and
+    if win.isSidebar and win.modeState.kind == mskFileTree and
         win.modeState.fileTree.needsBufferRefresh:
       win.setView(
         win.modeState.fileTree.createFileTreeTextBuffer(e.config.filer.showIcons)
@@ -425,8 +446,9 @@ proc processReplayedResult*(
       state.insertNormalMode = false
       e.setMode(EditorMode.Insert)
     return roContinue
-  let shouldContinue = processResult(e, r, activeBuffer)
-  if r.kind == hrError:
+  let queued = e.hostResultRequestCount
+  let shouldContinue = e.processResult(r, activeBuffer)
+  if e.hostResultRequestCount > queued or r.kind == hrError:
     return roAbort
   if not shouldContinue:
     return roQuit
@@ -553,9 +575,12 @@ proc runNestedKeyCombo*(
   # When an overlay is active the live loop routes through the overlay handler;
   # replay must do the same or recorded overlay keys hit the base-mode handler.
   if not overlayPlaybackHook.isNil:
+    let queued = e.hostResultRequestCount
     let overlayResult = overlayPlaybackHook(e, keyCombo)
     if overlayResult.isSome:
-      return if overlayResult.get: roContinue else: roQuit
+      if not overlayResult.get:
+        return roQuit
+      return if e.hostResultRequestCount > queued: roAbort else: roContinue
   if not manager.keyBindingRegistry.isReplayingMapping:
     let expand = checkRuntimeKeySeqMapping(manager, e, keyCombo)
     if expand.isSome:
@@ -570,7 +595,8 @@ proc outcomeToHandlerResult(e: Editor, outcome: ReplayOutcome): HandlerResult =
   ## Fold a ReplayOutcome into the HandlerResult shape test-facing wrappers
   ## return. `roAbort` pulls the diagnostic from `state.statusMessage`, which
   ## the abort site (`playbackMacroImpl`, `replayRuntimeKeySequence`, or
-  ## `processResult`'s hrError arm) has already populated.
+  ## `processResult`'s hrError arm) has already populated. A host-owned
+  ## result sets nothing, so `errorMessage` is stale.
   case outcome
   of roContinue:
     HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
@@ -699,9 +725,17 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
     return true
 
   # 4. side effects
-  let shouldContinue = e.processResult(r, activeBuffer)
+  var hostHandled: bool
+  let shouldContinue = e.processResultWithHost(r, activeBuffer, hostHandled)
   if not shouldContinue:
     return false
+  if hostHandled:
+    # A host-owned result must not quit or re-apply a synthesized mode switch
+    # through the original result's group after its side effects were skipped.
+    e.state.exitOverlay()
+    e.setMode(e.state.mode)
+    e.handleInsertNormalReturn()
+    return true
 
   # 5. teardown
   case r.group
