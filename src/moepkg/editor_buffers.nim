@@ -154,6 +154,15 @@ proc windowBufferIndex*(e: Editor): int =
       return i
   return -1
 
+proc refuseTabSwitch(e: Editor): bool =
+  ## True when the active window keeps its own tab, leaving the reason in the
+  ## status message.
+  let switchable = e.activeWindow.checkTabSwitch()
+  if switchable.isErr:
+    e.state.statusMessage = switchable.error
+    return true
+  false
+
 proc switchToWindowBuffer*(e: Editor, windowIndex: int): bool =
   ## Switch to a buffer in the active window's tab list by tab position.
   ## Silently drops the call if the entry is stale (buffer was deleted).
@@ -163,9 +172,7 @@ proc switchToWindowBuffer*(e: Editor, windowIndex: int): bool =
     return true
 
   # A refused window keeps its tab, so its own entry is not stale either.
-  let switchable = e.activeWindow.checkTabSwitch()
-  if switchable.isErr:
-    e.state.statusMessage = switchable.error
+  if e.refuseTabSwitch():
     return false
 
   let id = e.activeWindow.bufferIds[windowIndex]
@@ -269,6 +276,8 @@ when not defined(moe.embedded):
 
 proc switchToNextBuffer*(e: Editor) =
   ## Switch to the next buffer in the active window's tab list (:bnext).
+  if e.refuseTabSwitch():
+    return
   if e.activeWindow.bufferIds.len <= 1:
     e.state.statusMessage = "E88: There is only one buffer"
     return
@@ -287,6 +296,8 @@ proc switchToNextBuffer*(e: Editor) =
 
 proc switchToPrevBuffer*(e: Editor) =
   ## Switch to the previous buffer in the active window's tab list (:bprev).
+  if e.refuseTabSwitch():
+    return
   if e.activeWindow.bufferIds.len <= 1:
     e.state.statusMessage = "E88: There is only one buffer"
     return
@@ -304,6 +315,8 @@ proc switchToPrevBuffer*(e: Editor) =
 
 proc switchToFirstBuffer*(e: Editor) =
   ## Switch to the first buffer in the active window's tab list (:bfirst).
+  if e.refuseTabSwitch():
+    return
   if e.activeWindow.bufferIds.len <= 1:
     e.state.statusMessage = "Already at first buffer"
     return
@@ -317,6 +330,8 @@ proc switchToFirstBuffer*(e: Editor) =
 
 proc switchToLastBuffer*(e: Editor) =
   ## Switch to the last buffer in the active window's tab list (:blast).
+  if e.refuseTabSwitch():
+    return
   if e.activeWindow.bufferIds.len <= 1:
     e.state.statusMessage = "Already at last buffer"
     return
