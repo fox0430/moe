@@ -1230,13 +1230,8 @@ suite "Tab commands from the FileTree sidebar":
       if not lone:
         check fileWin.tabBufferId == tabBefore
 
-  for (kind, message) in [
-    (hrBufferNext, "E88: There is only one buffer"),
-    (hrBufferPrev, "E88: There is only one buffer"),
-    (hrBufferFirst, "Already at first buffer"),
-    (hrBufferLast, "Already at last buffer"),
-  ]:
-    test $kind & " finds no other tab: the sidebar lists only its listing":
+  for kind in [hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast]:
+    test $kind & " is refused on the sidebar with E1513 instead of E88":
       let name = "moe_sidebar_tab_cycle_" & $kind
       let (e, _, _) = twoFiles(name)
       defer:
@@ -1249,7 +1244,7 @@ suite "Tab commands from the FileTree sidebar":
 
       e.run(HandlerResult(kind: kind))
 
-      check e.state.statusMessage == message
+      check e.state.statusMessage == "E1513: Cannot switch buffer in the file tree"
       check e.activeWindow == tree
       check fileWin.tabBufferId == tabBefore
       check e.buffers.len == buffersBefore
