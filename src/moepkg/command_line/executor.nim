@@ -171,8 +171,15 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
   of claBufferLast:
     return CommandLineResult(kind: claBufferLast)
   of claBufferDelete:
-    return
-      CommandLineResult(kind: claBufferDelete, forceBufferDelete: "force" in cmd.flags)
+    return CommandLineResult(
+      kind: claBufferDelete,
+      forceBufferDelete: "force" in cmd.flags,
+      deleteBufferArg:
+        if cmd.args.len > 0:
+          cmd.args[0]
+        else:
+          "",
+    )
   of claBuffer:
     if cmd.args.len > 0:
       return CommandLineResult(kind: claBuffer, bufferArg: cmd.args[0])

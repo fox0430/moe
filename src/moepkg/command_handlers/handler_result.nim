@@ -241,6 +241,7 @@ type
       jumpColumn*: int # Target column number
     of hrBufferDelete:
       forceBufferDelete*: bool
+      deleteBufferArg*: string # Buffer number or name (empty = current buffer)
     of hrStripWhitespace:
       strippedLineCount*: int
     of hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit:

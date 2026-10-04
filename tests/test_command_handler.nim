@@ -1100,14 +1100,16 @@ suite "CommandModeHandler - Buffer Navigation":
     check result.bufferArg == "test.nim"
 
 suite "CommandModeHandler - executeBufferDelete":
-  # The modified-buffer check lives in `deleteCurrentBuffer`, which resolves the
-  # real target; the handler only carries `force` through.
+  # The modified-buffer check lives in `deleteCurrentBuffer`/`deleteBufferByArg`,
+  # which resolve the real target; the handler only carries `force` and the
+  # target argument through.
   test "Defers the deletion target to deleteCurrentBuffer":
     let handler = setupHandler()
 
     let result = handler.executeBufferDelete(force = false)
     check result.kind == hrBufferDelete
     check result.forceBufferDelete == false
+    check result.deleteBufferArg == ""
 
   test "Passes force through":
     let handler = setupHandler()
@@ -1115,6 +1117,13 @@ suite "CommandModeHandler - executeBufferDelete":
     let result = handler.executeBufferDelete(force = true)
     check result.kind == hrBufferDelete
     check result.forceBufferDelete == true
+
+  test "Passes the buffer argument through":
+    let handler = setupHandler()
+
+    let result = handler.executeBufferDelete(force = false, bufferArg = "3")
+    check result.kind == hrBufferDelete
+    check result.deleteBufferArg == "3"
 
 suite "CommandModeHandler - raw buffer gates":
   test "stripwhitespace refuses a raw buffer":

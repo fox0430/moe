@@ -656,11 +656,25 @@ suite "CommandLine - execute":
     let result = parser.parseAndExecute(":bd")
     check result.kind == claBufferDelete
     check result.forceBufferDelete == false
+    check result.deleteBufferArg == ""
 
   test "Execute :bd!":
     let result = parser.parseAndExecute(":bd!")
     check result.kind == claBufferDelete
     check result.forceBufferDelete == true
+    check result.deleteBufferArg == ""
+
+  test "Execute :bd with a buffer number":
+    let result = parser.parseAndExecute(":bd 3")
+    check result.kind == claBufferDelete
+    check result.forceBufferDelete == false
+    check result.deleteBufferArg == "3"
+
+  test "Execute :bd! with a buffer name":
+    let result = parser.parseAndExecute(":bd! foo.nim")
+    check result.kind == claBufferDelete
+    check result.forceBufferDelete == true
+    check result.deleteBufferArg == "foo.nim"
 
   test "Execute :b with buffer number":
     let result = parser.parseAndExecute(":b 3")

@@ -134,7 +134,11 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
       e.setActiveWindowScreenCursor(e.activeWindow)
     return true
   of hrBufferDelete:
-    let deleteResult = e.deleteCurrentBuffer(r.forceBufferDelete)
+    let deleteResult =
+      if r.deleteBufferArg.len == 0:
+        e.deleteCurrentBuffer(r.forceBufferDelete)
+      else:
+        e.deleteBufferByArg(r.deleteBufferArg, r.forceBufferDelete)
     if deleteResult.isErr:
       e.state.statusMessage = deleteResult.error
     return true

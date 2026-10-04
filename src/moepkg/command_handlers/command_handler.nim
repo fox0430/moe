@@ -313,10 +313,15 @@ proc executeBufferLast*(handler: CommandModeHandler): HandlerResult =
 proc executeBuffer*(handler: CommandModeHandler, arg: string): HandlerResult =
   HandlerResult(kind: hrBuffer, bufferArg: arg)
 
-proc executeBufferDelete*(handler: CommandModeHandler, force: bool): HandlerResult =
-  ## Execute bdelete command (:bd, :bdelete). Takes no buffer: the target and
-  ## its modified check both live in `deleteCurrentBuffer`.
-  HandlerResult(kind: hrBufferDelete, forceBufferDelete: force)
+proc executeBufferDelete*(
+    handler: CommandModeHandler, force: bool, bufferArg: string = ""
+): HandlerResult =
+  ## Execute bdelete command (:bd, :bdelete). `bufferArg` names the target by
+  ## number or name; empty means the current buffer. The target resolution and
+  ## modified check live in `deleteCurrentBuffer`/`deleteBufferByArg`.
+  HandlerResult(
+    kind: hrBufferDelete, forceBufferDelete: force, deleteBufferArg: bufferArg
+  )
 
 proc executeStripWhitespace*(
     handler: CommandModeHandler, buffer: TextBuffer
@@ -630,7 +635,7 @@ proc handleCommandModeInput*(
   of claBufferLast:
     handler.executeBufferLast()
   of claBufferDelete:
-    handler.executeBufferDelete(cmdResult.forceBufferDelete)
+    handler.executeBufferDelete(cmdResult.forceBufferDelete, cmdResult.deleteBufferArg)
   of claBuffer:
     handler.executeBuffer(cmdResult.bufferArg)
   of claStripWhitespace:

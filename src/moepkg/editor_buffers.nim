@@ -329,6 +329,39 @@ proc switchToLastBuffer*(e: Editor) =
   if e.switchToWindowBuffer(lastIdx):
     e.state.statusMessage = ""
 
+proc resolveBufferArg*(e: Editor, arg: string): Result[BufferId, string] =
+  ## Resolve a `:b`-style argument — a stable buffer number (`BufferId`, as
+  ## shown by `:ls`) or the best name match — to a registered buffer id.
+  if arg.len == 0:
+    return err("E94: No matching buffer for " & arg)
+
+  # A number is not a position in the list: deleting a buffer never renumbers
+  # the others.
+  try:
+    let bufNum = parseInt(arg)
+    for buf in e.buffers:
+      if buf.id.int == bufNum:
+        return ok(buf.id)
+    return err("E86: Buffer " & $bufNum & " does not exist")
+  except ValueError:
+    discard # Not a number, try matching by name
+
+  # Pick the best-ranked buffer in one scan. `matchRank` owns the precedence,
+  # and strict `>` keeps the earliest buffer on a tie.
+  var
+    bestIndex = -1
+    bestRank = bmrNone
+  for i, buf in e.buffers:
+    let rank = buf.matchRank(arg)
+    if rank > bestRank:
+      bestRank = rank
+      bestIndex = i
+
+  if bestIndex >= 0:
+    return ok(e.buffers[bestIndex].id)
+
+  err("E94: No matching buffer for " & arg)
+
 proc switchToBuffer*(e: Editor, arg: string): bool =
   ## Switch to a buffer by number or name (:b N or :b name)
   ## Returns true if successful, false otherwise
@@ -345,64 +378,21 @@ proc switchToBuffer*(e: Editor, arg: string): bool =
     e.state.statusMessage = switchable.error
     return false
 
-  if arg.len == 0:
-    e.state.statusMessage = "E94: No matching buffer for " & arg
+  let resolved = e.resolveBufferArg(arg)
+  if resolved.isErr:
+    e.state.statusMessage = resolved.error
     return false
 
-  # Try to parse as a number first: a stable buffer number (`BufferId`, as
-  # shown by `:ls`), not a position in the list — deleting a buffer never
-  # renumbers the others.
-  try:
-    let bufNum = parseInt(arg)
-    var matchedId: Option[BufferId] = none(BufferId)
-    for buf in e.buffers:
-      if buf.id.int == bufNum:
-        matchedId = some(buf.id)
-        break
-
-    logDebug("editor", "Parsed buffer number: " & $bufNum)
-
-    if matchedId.isNone:
-      e.state.statusMessage = "E86: Buffer " & $bufNum & " does not exist"
-      logDebug("editor", "Buffer does not exist")
-      return false
-
-    let targetId = matchedId.get
-    if e.isShowingTab(e.activeWindow, targetId):
-      # An overlay covering the tab does not count as showing it
-      logDebug("editor", "Already showing this buffer")
-      return true
-
-    # Switch to the buffer
-    logDebug("editor", "Switching to buffer id: " & $bufNum)
-    discard e.tryActivateBuffer(targetId)
-    e.state.statusMessage = ""
-    return true
-  except ValueError:
-    discard # Not a number, try matching by name
-
-  # Pick the best-ranked buffer in one scan. `matchRank` owns the precedence,
-  # and strict `>` keeps the earliest buffer on a tie.
-  let win = e.activeWindow
-  var
-    bestIndex = -1
-    bestRank = bmrNone
-  for i, buf in e.buffers:
-    let rank = buf.matchRank(arg)
-    if rank > bestRank:
-      bestRank = rank
-      bestIndex = i
-
-  if bestIndex >= 0:
-    if e.isShowingTab(win, e.buffers[bestIndex].id):
-      logDebug("editor", "Already showing this buffer")
-      return true
-    e.switchToBufferByIndex(bestIndex)
-    e.state.statusMessage = ""
+  let targetId = resolved.get
+  if e.isShowingTab(e.activeWindow, targetId):
+    # An overlay covering the tab does not count as showing it
+    logDebug("editor", "Already showing this buffer")
     return true
 
-  e.state.statusMessage = "E94: No matching buffer for " & arg
-  return false
+  logDebug("editor", "Switching to buffer id: " & $targetId)
+  discard e.tryActivateBuffer(targetId)
+  e.state.statusMessage = ""
+  return true
 
 proc isBufferShared*(e: Editor, buffer: TextBuffer): bool =
   ## Check if the given buffer is shared across multiple windows
@@ -494,6 +484,20 @@ proc closeBuffer*(e: Editor, id: BufferId): Result[(), string] =
   if not e.isTerminalBuffer(id) and buffer.get.isModified:
     return err("No write since last change (add ! to override)")
   e.deleteBufferById(id)
+
+proc deleteBufferByArg*(
+    e: Editor, arg: string, force: bool = false
+): Result[(), string] =
+  ## Delete a buffer named by a `:b`-style argument: a stable number as shown
+  ## by `:ls`, or the best name match (`:bd N`, `:bd name`). `force` skips the
+  ## modified check as `:bd!` does. Refusals come back as `err`, not a status
+  ## message, so an embedding caller can tell a refusal from a deletion.
+  let resolved = e.resolveBufferArg(arg)
+  if resolved.isErr:
+    return err(resolved.error)
+  if force:
+    return e.deleteBufferById(resolved.get)
+  e.closeBuffer(resolved.get)
 
 proc moveBuffer*(e: Editor, id: BufferId, destination: Natural): bool =
   ## Move a buffer to a zero-based position in the active window's ordering.
