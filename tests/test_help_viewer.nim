@@ -466,12 +466,15 @@ suite "HelpViewer - Command mode rendering (snapshot)":
       "delete                - Delete current line and copy to register"
     )
 
-  test "head group 4 (buffers/windows) is aligned to width 15":
+  test "head group 4 (buffers/windows) is aligned to width 17":
     let state = newHelpViewerState()
-    check state.items.contains("ls              - Display all buffers")
-    check state.items.contains("bd or bd number - Delete buffer")
+    check state.items.contains("ls                - Display all buffers")
+    check state.items.contains("bd [number|name]  - Delete buffer")
     check state.items.contains(
-      "filetree path   - Toggle FileTree sidebar with specified root path"
+      "bd! [number|name] - Delete buffer, discarding unsaved changes"
+    )
+    check state.items.contains(
+      "filetree path     - Toggle FileTree sidebar with specified root path"
     )
 
   test "head group 5 (theme/noh/stripwhitespace) is aligned to width 15":

@@ -779,7 +779,8 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `bnext` | Switch to the next buffer |
 | `bfirst` | Switch to the first buffer |
 | `blast` | Switch to the last buffer |
-| `bd` or `bd number` | Delete buffer |
+| `bd [number|name]` | Delete buffer |
+| `bd! [number|name]` | Delete buffer, discarding unsaved changes |
 | `vs` | Vertical split window |
 | `vs filename` | Open in a vertical split window |
 | `sp` | Horizontal split window |

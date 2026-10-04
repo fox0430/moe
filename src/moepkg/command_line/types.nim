@@ -181,6 +181,7 @@ type
       discard
     of claBufferDelete:
       forceBufferDelete*: bool # true for :bd!
+      deleteBufferArg*: string # Buffer number or name (empty = current buffer)
     of claBuffer:
       bufferArg*: string # Buffer number or name
     of claStripWhitespace:

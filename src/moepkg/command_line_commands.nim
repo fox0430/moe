@@ -586,7 +586,13 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "bd",
     completionDescription: "Delete buffer",
-    helpEntries: @[HelpEntry(syntax: "bd or bd number", description: "Delete buffer")],
+    helpEntries: @[
+      HelpEntry(syntax: "bd [number|name]", description: "Delete buffer"),
+      HelpEntry(
+        syntax: "bd! [number|name]",
+        description: "Delete buffer, discarding unsaved changes",
+      ),
+    ],
     action: some(claBufferDelete),
     isCanonicalLong: false,
     keymapBaseDescription: "Delete current buffer",

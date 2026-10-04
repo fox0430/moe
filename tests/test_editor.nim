@@ -2477,6 +2477,141 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     check e.bufferById(f2Id).isNone
     check e.activeBuffer().id != f2Id
 
+suite "Editor - :bd with a buffer argument":
+  test "deletes a buffer by number without moving the active window":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_bd_arg_num_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_arg_num_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    let f1Id = e.activeBuffer().id
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+
+    let deleted = e.deleteBufferByArg($f1Id.int)
+
+    check deleted.isOk
+    check e.bufferById(f1Id).isNone
+    check e.bufferById(f2Id).isSome
+    check e.activeBuffer().id == f2Id
+    check e.windowManager.windows.len == 1
+
+  test "deletes a buffer by name":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_bd_arg_name.txt"
+    let f2 = getTempDir() / "moe_test_bd_arg_name_keep.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    let f1Id = e.activeBuffer().id
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+
+    let deleted = e.deleteBufferByArg("moe_test_bd_arg_name.txt")
+
+    check deleted.isOk
+    check e.bufferById(f1Id).isNone
+    check e.activeBuffer().id == f2Id
+
+  test "deleting the active buffer by number switches to a survivor":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_bd_arg_active_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_arg_active_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+
+    check e.deleteBufferByArg($f2Id.int).isOk
+
+    check e.bufferById(f2Id).isNone
+    check e.activeBuffer().id != f2Id
+
+  test "refuses a modified buffer by argument without force":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_bd_arg_modified_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_arg_modified_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    let f1Id = e.activeBuffer().id
+    discard e.editFile(f2)
+
+    let f1Buffer = e.bufferById(f1Id).get
+    discard f1Buffer.insertText(BufferPosition(line: 0, column: 0), "x")
+
+    let refused = e.deleteBufferByArg($f1Id.int)
+    check refused.isErr
+    check refused.error == "No write since last change (add ! to override)"
+    check e.bufferById(f1Id).isSome
+
+    check e.deleteBufferByArg($f1Id.int, force = true).isOk
+    check e.bufferById(f1Id).isNone
+
+  test "reports E86 for an unknown number and E94 for an unknown name":
+    let e = createTestEditor()
+    let unknown = $(e.buffers[0].id.int + 1000)
+
+    let byNumber = e.deleteBufferByArg(unknown)
+    check byNumber.isErr
+    check byNumber.error == "E86: Buffer " & unknown & " does not exist"
+
+    let byName = e.deleteBufferByArg("nonexistent_file.txt")
+    check byName.isErr
+    check byName.error == "E94: No matching buffer for nonexistent_file.txt"
+
+  test "processResult(hrBufferDelete) deletes the named buffer":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_bd_arg_wired_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_arg_wired_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    let f1Id = e.activeBuffer().id
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+
+    let r = HandlerResult(
+      kind: hrBufferDelete, forceBufferDelete: false, deleteBufferArg: $f1Id.int
+    )
+    discard e.processResult(r, e.activeBuffer())
+
+    check e.bufferById(f1Id).isNone
+    check e.activeBuffer().id == f2Id
+
+  test "processResult(hrBufferDelete) surfaces a refusal as a status message":
+    let e = createTestEditor()
+    let unknown = $(e.buffers[0].id.int + 1000)
+
+    let r = HandlerResult(
+      kind: hrBufferDelete, forceBufferDelete: false, deleteBufferArg: unknown
+    )
+    discard e.processResult(r, e.activeBuffer())
+
+    check e.state.statusMessage == "E86: Buffer " & unknown & " does not exist"
+
 suite "Editor - BackupManager <-> DiffViewer round-trip":
   # Regression: opening a diff from the backup manager overwrote the window's
   # modeState with the DiffViewer variant, and quitting the diff reset it to
