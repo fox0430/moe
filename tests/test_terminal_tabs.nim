@@ -1083,6 +1083,59 @@ suite "Terminal tabs - splitting off a session":
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.modeState.terminalSubMode == tsmInput
 
+suite "Terminal tabs - a session with no command":
+  test "The shell it runs names the session":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "")
+
+    check termBuf.displayName == some("[Terminal: " & defaultShellName() & "]")
+    check termBuf.matchAliases == @[defaultShellName()]
+
+  test ":b finds it by the shell name":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "")
+    require e.tryActivateBuffer(textBuf.id).isOk
+
+    check e.switchToBuffer(defaultShellName())
+    check e.activeWindow.tabBufferId == termBuf.id
+
+  test "An empty arg still matches nothing":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    discard registerFakeTerminal(e, "")
+    require e.tryActivateBuffer(textBuf.id).isOk
+
+    check not e.switchToBuffer("")
+    check e.activeWindow.tabBufferId == textBuf.id
+    check e.state.statusMessage == "E94: No matching buffer for "
+
+  test "An explicit command keeps naming the session":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "htop")
+
+    check termBuf.displayName == some("[Terminal: htop]")
+    check termBuf.matchAliases == @["htop"]
+
+  test "defaultShell falls back to /bin/sh when SHELL is unset or empty":
+    let savedShell = getEnv("SHELL")
+    defer:
+      if savedShell.len > 0:
+        putEnv("SHELL", savedShell)
+      else:
+        delEnv("SHELL")
+
+    delEnv("SHELL")
+    check defaultShell() == "/bin/sh"
+    check defaultShellName() == "sh"
+
+    putEnv("SHELL", "/usr/bin/zsh")
+    check defaultShell() == "/usr/bin/zsh"
+    check defaultShellName() == "zsh"
+
+    putEnv("SHELL", "")
+    check defaultShell() == "/bin/sh"
+
 suite "Terminal tabs - display integration":
   test "BufferManager names the session and marks its tab active in Normal":
     let e = createTestEditor()

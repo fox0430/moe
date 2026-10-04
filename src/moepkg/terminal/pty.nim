@@ -111,6 +111,11 @@ proc ioctl(
   fd: cint, request: culong
 ): cint {.importc, header: "<sys/ioctl.h>", varargs.}
 
+proc defaultShell*(): string =
+  ## The shell a session runs when no command is given.
+  let shell = getEnv("SHELL")
+  if shell.len > 0: shell else: "/bin/sh"
+
 proc openPtyAndSpawn*(
     command: string = "", cols: int = 80, rows: int = 24
 ): Result[PtyHandle, string] =
@@ -132,7 +137,7 @@ proc openPtyAndSpawn*(
 
     putEnv("TERM", "xterm-256color")
 
-    let shell = getEnv("SHELL", "/bin/sh")
+    let shell = defaultShell()
     if command.len > 0:
       discard execl(shell.cstring, shell.cstring, "-c".cstring, command.cstring, nil)
     else:

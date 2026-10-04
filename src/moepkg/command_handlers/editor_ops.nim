@@ -404,11 +404,14 @@ when not defined(moe.embedded):
     ## The PTY is tracked in `e.terminalStates` by buffer id, so the session
     ## survives view swaps and tab switches. Returns the session's buffer.
     let activeWin = e.activeWindow
+    # A session with no command still needs a name, so it takes the shell it
+    # runs. The spawn command itself stays empty (an interactive shell).
+    let name = if command.len > 0: command else: defaultShellName()
     result = newTextBuffer("")
-    result.displayName = some("[Terminal: " & command & "]")
-    # The command is the session's stable `:b` key; the label is presentation
+    result.displayName = some("[Terminal: " & name & "]")
+    # The name is the session's stable `:b` key; the label is presentation
     # only, so matching survives label changes.
-    result.matchAliases = @[command]
+    result.matchAliases = @[name]
     # Input goes to the PTY; a window that reaches this buffer in a text mode
     # must not be able to edit, save or preserve it.
     result.readOnly = true

@@ -429,7 +429,7 @@ type
     of hrCallHierarchyRequestOutgoing:
       callHierarchyOutgoingItem*: lspTypes.CallHierarchyItem
     of hrEnterTerminal:
-      enterTerminalCommand*: string # Optional command (empty = default shell)
+      enterTerminalCommand*: string # Optional command; empty means the shell
     of hrTerminalQuit:
       discard
     of hrExecCommand:
