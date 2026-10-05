@@ -21,8 +21,112 @@ import tokenizer, syntax_latex
 
 const SubLanguageCarryStates =
   {gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit, gtCData}
-  ## Sub-language states whose token continues, so whitespace and backticks
-  ## belong to it rather than to Markdown.
+  ## Sub-language states whose token continues, so whitespace belongs to it
+  ## rather than to Markdown.
+
+proc skipBlanks(lexer: GeneralTokenizer, p, col: var int) =
+  ## Advance `p` past spaces and tabs, moving `col` along with tab stops of 4.
+  while true:
+    case lexer.buf[p]
+    of ' ':
+      inc col
+    of '\t':
+      col = (col div 4 + 1) * 4
+    else:
+      break
+    inc p
+
+proc fenceBaseCol(lexer: GeneralTokenizer, pos: int): int =
+  ## The column a fence at `pos` measures its closing fence's indent from, -1
+  ## when the text before it on its line keeps it from opening a block. Only
+  ## blanks and list markers may come before it: blanks alone put it at most
+  ## 3 columns in and count from its own column, a list marker counts from the
+  ## item's content.
+  var lineStart = pos
+  while lineStart > 0 and
+      lexer.buf[lineStart - 1] in {' ', '\t', '-', '*', '+', '.', ')', '0' .. '9'}:
+    dec lineStart
+  if lineStart > 0 and lexer.buf[lineStart - 1] != '\n':
+    return -1
+  var
+    p = lineStart
+    col = 0
+  lexer.skipBlanks(p, col)
+  if p == pos:
+    # It may be on a list item's continuation line, whose content column is
+    # not tracked; the fence's own column stands in for it.
+    return if col <= 3: col else: -1
+  while p < pos:
+    # A list marker, then 1 to 4 columns of blanks; more makes the fence
+    # indented code in the item.
+    let markerStart = p
+    if lexer.buf[p] in {'-', '*', '+'}:
+      inc p
+    else:
+      while lexer.buf[p] in {'0' .. '9'}:
+        inc p
+      if p == markerStart or lexer.buf[p] notin {'.', ')'}:
+        return -1
+      inc p
+    col += p - markerStart
+    let markerEnd = col
+    lexer.skipBlanks(p, col)
+    if col - markerEnd notin 1 .. 4:
+      return -1
+  col
+
+proc openingFence(lexer: GeneralTokenizer, pos: int): tuple[len, baseCol: int] =
+  ## The fence run at `pos` when it opens a code block, `len` 0 otherwise. A
+  ## backtick fence's info string cannot contain a backtick.
+  let fenceChar = lexer.buf[pos]
+  var p = pos
+  while lexer.buf[p] == fenceChar:
+    inc p
+  if p - pos < 3:
+    return
+  if fenceChar == '`':
+    var q = p
+    while lexer.buf[q] notin eolChars:
+      if lexer.buf[q] == '`':
+        return
+      inc q
+  let baseCol = lexer.fenceBaseCol(pos)
+  if baseCol >= 0:
+    result = (p - pos, baseCol)
+
+proc isClosingFence(lexer: GeneralTokenizer, lineStart: int): bool =
+  ## Whether the line at `lineStart` closes the open code block: blanks up to
+  ## 3 columns past the block's base column, a run of the opening fence char
+  ## at least as long, then blanks.
+  let md = lexer.lang.markdown
+  if md.fenceChar notin {'`', '~'}:
+    return false
+  var
+    p = lineStart
+    col = 0
+  lexer.skipBlanks(p, col)
+  if col > md.fenceBaseCol + 3:
+    return false
+  let runStart = p
+  while lexer.buf[p] == md.fenceChar:
+    inc p
+  if p - runStart < md.fenceLen:
+    return false
+  while lexer.buf[p] in lwsChars:
+    inc p
+  lexer.buf[p] in eolChars
+
+proc atClosingFence(lexer: GeneralTokenizer, pos: int): bool =
+  ## Whether `pos` is in the indent of, or at the fence of, a closing fence
+  ## line.
+  let maxIndent = lexer.lang.markdown.fenceBaseCol + 3
+  var lineStart = pos
+  while lineStart > 0 and lexer.buf[lineStart - 1] in {' ', '\t'}:
+    if pos - lineStart == maxIndent:
+      return false
+    dec lineStart
+  (lineStart == 0 or lexer.buf[lineStart - 1] == '\n') and
+    lexer.isClosingFence(lineStart)
 
 proc codeBlockDelegate*(lexer: GeneralTokenizer): SourceLanguage =
   ## Language that lexes the next token: the code block's language for its
@@ -35,22 +139,91 @@ proc codeBlockDelegate*(lexer: GeneralTokenizer): SourceLanguage =
   if not md.inCodeBlock or md.codeBlockLang == langNone:
     return langNone
 
-  let carried = lexer.state in SubLanguageCarryStates
+  # The closing fence ends the block whatever its body left open; checked
+  # last, only where the block's language would otherwise get the token.
   case lexer.buf[lexer.pos]
   of '\0':
     langNone
   of ' ', '\t' .. '\r':
-    if carried: md.codeBlockLang else: langNone
-  of '`':
-    let fence = lexer.peek(lexer.pos) == '`' and lexer.peek(lexer.pos, 2) == '`'
-    # A Go raw string cannot contain ```, so a fence closes it. Other languages
-    # (Nim, Python) can embed ``` in a multi-line string.
-    let goFenceClose =
-      md.codeBlockLang == langGo and lexer.state == gtLongStringLit and fence
-    if (carried and not goFenceClose) or not fence: md.codeBlockLang else: langNone
+    if lexer.state in SubLanguageCarryStates and not lexer.atClosingFence(lexer.pos):
+      md.codeBlockLang
+    else:
+      langNone
   else:
     # gtSpecialVar: the language name after the opening fence.
-    if lexer.state == gtSpecialVar: langNone else: md.codeBlockLang
+    if lexer.state == gtSpecialVar or lexer.atClosingFence(lexer.pos):
+      langNone
+    else:
+      md.codeBlockLang
+
+proc boundCodeBlock(lexer: var GeneralTokenizer) =
+  ## Find the span of the block `pos` is in, copying it when its closing
+  ## fence comes before the end of the buffer.
+  if lexer.pos >= lexer.mdBlockBase and lexer.pos < lexer.mdBlockEnd:
+    return
+  var base = lexer.pos
+  while base > 0 and lexer.buf[base - 1] != '\n':
+    dec base
+  var blockEnd = lexer.pos
+  while lexer.buf[blockEnd] != '\0':
+    if lexer.buf[blockEnd] == '\n' and lexer.isClosingFence(blockEnd + 1):
+      inc blockEnd
+      break
+    inc blockEnd
+  lexer.mdBlockBase = base
+  lexer.mdBlockEnd = blockEnd
+  if lexer.buf[blockEnd] == '\0':
+    lexer.mdBlockText = nil
+  else:
+    lexer.mdBlockText = new string
+    lexer.mdBlockText[] = newString(blockEnd - base)
+    copyMem(addr lexer.mdBlockText[][0], addr lexer.buf[base], blockEnd - base)
+
+template lexCodeBlockBody*(lexer: var GeneralTokenizer, lexToken: untyped) =
+  ## Run `lexToken`, the block language's lexer, on the block alone: a token
+  ## the body leaves open (a raw string, a docstring) ends at the closing
+  ## fence line instead of running past it.
+  lexer.boundCodeBlock()
+  if lexer.mdBlockText.isNil:
+    lexToken
+  else:
+    let
+      wholeBuf = lexer.buf
+      base = lexer.mdBlockBase
+    lexer.buf = lexer.mdBlockText[].cstring
+    lexer.pos -= base
+    lexToken
+    lexer.buf = wholeBuf
+    lexer.pos += base
+    lexer.start += base
+
+proc openCodeBlock(
+    lexer: var GeneralTokenizer, position: var int, fence: tuple[len, baseCol: int]
+) =
+  lexer.kind = gtSpecialVar
+  lexer.lang.markdown.inCodeBlock = true
+  lexer.lang.markdown.fenceChar = lexer.buf[position]
+  lexer.lang.markdown.fenceLen = fence.len
+  lexer.lang.markdown.fenceBaseCol = fence.baseCol
+  # Signals that the language name may follow.
+  lexer.state = gtSpecialVar
+  inc position, fence.len
+
+proc closeCodeBlock(lexer: var GeneralTokenizer) =
+  ## Also drops the block language's state: the body may have left a
+  ## construct open, and the next block must not inherit it.
+  var md = lexer.lang.markdown
+  md.inCodeBlock = false
+  md.codeBlockLang = langNone
+  md.fenceChar = '\0'
+  md.fenceLen = 0
+  md.fenceBaseCol = 0
+  lexer.lang = defaultLangState()
+  lexer.lang.markdown = md
+  lexer.state = gtNone
+  lexer.mdBlockBase = 0
+  lexer.mdBlockEnd = 0
+  lexer.mdBlockText = nil
 
 template isLineStart(lexer: GeneralTokenizer): bool =
   lexer.state in {gtWhitespace, low(TokenClass)}
@@ -203,21 +376,6 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         elif lexer.state != gtSpecialVar:
           lexer.state = gtNone
         inc position
-    of '`':
-      if lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
-        # Closing ```
-        lexer.kind = gtSpecialVar
-        inc position, 3
-        while lexer.buf[position] notin eolChars:
-          inc position
-        lexer.lang.markdown.inCodeBlock = false
-        lexer.lang.markdown.codeBlockLang = langNone
-        lexer.state = gtNone
-      else:
-        # Regular content
-        lexer.kind = gtLongStringLit
-        while lexer.buf[position] notin eolChars:
-          inc position
     else:
       # Check if this is the language name (right after opening ```)
       if lexer.state == gtSpecialVar:
@@ -229,11 +387,14 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         let lang = getSourceLanguage(langName)
         lexer.lang.markdown.codeBlockLang = if lang == langMarkdown: langNone else: lang
         lexer.state = gtNone
+      elif lexer.atClosingFence(position):
+        lexer.kind = gtSpecialVar
+        position = lexer.endLine(position)
+        lexer.closeCodeBlock()
       else:
         # Code block content
         lexer.kind = gtLongStringLit
-        while lexer.buf[position] notin eolChars:
-          inc position
+        position = lexer.endLine(position)
 
     lexer.length = position - lexer.pos
     if lexer.kind != gtEof and lexer.length <= 0:
@@ -277,44 +438,27 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
   of '\0':
     lexer.kind = gtEof
   of '`':
-    if lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
-      # Check if there are more backticks on this line.
-      # Per CommonMark, a backtick fence info string cannot contain backticks,
-      # so ```abc``` is not a valid code fence.
-      var scanPos = position + 3
-      var hasMoreBackticks = false
-      while lexer.buf[scanPos] notin eolChars:
-        if lexer.buf[scanPos] == '`':
-          hasMoreBackticks = true
+    let fence = lexer.openingFence(position)
+    if fence.len > 0:
+      # Emit just the fence; the language name is lexed on the next call.
+      lexer.openCodeBlock(position, fence)
+    elif lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
+      # Not a fence (mid-line, or ```abc```): inline code with a triple
+      # backtick delimiter (```...```).
+      lexer.kind = gtSpecialVar
+      inc position, 3
+      while true:
+        case lexer.buf[position]
+        of '\0', '\n', '\r':
           break
-        inc scanPos
-
-      if not hasMoreBackticks:
-        # Opening ``` - emit just the backticks
-        lexer.kind = gtSpecialVar
-        inc position, 3
-        lexer.lang.markdown.inCodeBlock = true
-        # state = gtSpecialVar signals that lang name may follow
-        lexer.state = gtSpecialVar
-        # If there's content on this line, it will be lexed as lang name on next call
-        # If we're at EOL, state will be reset by whitespace handler
-      else:
-        # Not a valid code fence - treat as inline code with triple backtick
-        # delimiter (```...```)
-        lexer.kind = gtSpecialVar
-        inc position, 3
-        while true:
-          case lexer.buf[position]
-          of '\0', '\n', '\r':
+        of '`':
+          if lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
+            inc position, 3
             break
-          of '`':
-            if lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
-              inc position, 3
-              break
-            else:
-              inc position
           else:
             inc position
+        else:
+          inc position
     else:
       # Inline code `...`. Stops at the closing backtick or the end of the
       # line: an unclosed span must not bleed into the following line. This
@@ -504,7 +648,10 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       while lexer.buf[position] in symChars:
         inc position
   of '~':
-    if lexer.buf[position + 1] == '~':
+    let fence = lexer.openingFence(position)
+    if fence.len > 0:
+      lexer.openCodeBlock(position, fence)
+    elif lexer.buf[position + 1] == '~':
       # ~~strikethrough~~
       lexer.kind = gtComment
       inc position, 2

@@ -156,7 +156,7 @@ Which sections are shown is controlled by the `[Debug.*]` tables in `moerc.toml`
 
 ## Adding a syntax language
 
-Syntax highlighting is dispatched from `getNextToken` in `src/moepkg/syntax/dispatch.nim`. It is the only module that imports every `syntax_*` lexer, and no lexer imports it. Markdown code fences go through the same dispatch: `codeBlockDelegate` in `syntax_markdown.nim` names the language of the next token, and `dispatch.nim` calls its lexer. To add a language:
+Syntax highlighting is dispatched from `getNextToken` in `src/moepkg/syntax/dispatch.nim`. It is the only module that imports every `syntax_*` lexer, and no lexer imports it. Markdown code fences go through the same dispatch: `codeBlockDelegate` in `syntax_markdown.nim` names the language of the next token, and `dispatch.nim` calls its lexer on the block's body alone, which ends before the closing fence line. A lexer therefore needs no knowledge of Markdown fences. To add a language:
 
 1. Add a `lang<Name>` value to the `SourceLanguage` enum.
 2. Add entries in `sourceLanguageToStr` and `getSourceLanguage` so filetype detection and LSP language IDs round-trip.

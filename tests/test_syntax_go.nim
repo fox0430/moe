@@ -198,24 +198,9 @@ suite "syntax_go - strings":
   test "raw string keeps `\\` as a literal byte, not an escape":
     check tokens("`a\\tb`") == @[(gtLongStringLit, "`a\\tb`")]
 
-  test "unclosed raw string yields before a ``` fence at the next line":
-    # scanRawString must stop past the newline so an outer markdown tokenizer
-    # can close its code block on the fence instead of losing the first
-    # backtick to the raw string body.
-    let src = "`unclosed\n```\n"
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer(src)
-    g.getNextToken(langGo)
-    check g.kind == gtLongStringLit
-    check g.state == gtLongStringLit
-    check src[g.start ..< g.start + g.length] == "`unclosed\n"
-
-  test "``` fence detection also applies after up to 3 leading spaces":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("`x\n   ```\n")
-    g.getNextToken(langGo)
-    check g.kind == gtLongStringLit
-    check g.state == gtLongStringLit
+  test "a line of backticks is raw string content, not a markdown fence":
+    # Markdown bounds a fenced block before Go sees it, so Go knows no fences.
+    check firstToken("`x\n   ```\n") == (gtLongStringLit, "`x\n   `")
 
   test "rune literal":
     check firstToken("'a'") == (gtCharLit, "'a'")

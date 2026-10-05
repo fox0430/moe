@@ -44,8 +44,7 @@ proc scanRawString(g: var GeneralTokenizer, position: int): int =
   ## Consume a Go raw string body through its closing backtick. Raw strings have
   ## no escape processing — every byte is literal. On EOF `g.state` is left as
   ## `gtLongStringLit` so the next line resumes inside the string; on close it
-  ## reverts to `gtNone`. Stops past a newline that leads into a markdown ```
-  ## fence so the outer `markdownNextToken` can close the code block.
+  ## reverts to `gtNone`.
   result = position
   while true:
     case g.buf[result]
@@ -54,15 +53,6 @@ proc scanRawString(g: var GeneralTokenizer, position: int): int =
     of '`':
       g.state = gtNone
       return result + 1
-    of '\n':
-      inc(result)
-      var scan = result
-      var spaces = 0
-      while g.buf[scan] == ' ' and spaces < 3:
-        inc(scan)
-        inc(spaces)
-      if g.buf[scan] == '`' and g.buf[scan + 1] == '`' and g.buf[scan + 2] == '`':
-        return
     else:
       inc(result)
 

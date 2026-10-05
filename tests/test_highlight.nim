@@ -2031,6 +2031,27 @@ suite "Highlight - budgeted incremental update":
     check ih.pendingReparse == nil
     checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
 
+  test "a closing fence that ends an open string in the next chunk":
+    # The fence ends the docstring; a chunk resuming inside the block must
+    # stop the docstring there exactly as the full parse does.
+    var buffer = rustLines(2 * ChunkSize + 50)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langMarkdown)
+    buffer[ChunkSize - 2] = "```python"
+    buffer[ChunkSize - 1] = "x = \"\"\"doc"
+    buffer[ChunkSize] = "continued"
+    buffer[ChunkSize + 1] = "  ```"
+    buffer[ChunkSize + 2] = "# after"
+    let getLine = proc(i: int): string =
+      buffer[i]
+    buffer[0] = "paragraph 0 edited"
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 0, @[], SourceLanguage.langMarkdown, 0, 100, 1
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
   test "a restart does not converge inside the discarded flight's window":
     # Regression (found by the budgeted fuzz): a restart inherited the
     # ORIGINAL tail while the discarded flight had refreshed the cached
@@ -3958,6 +3979,81 @@ suite "Highlight - Markdown Incremental":
       SourceLanguage.langMarkdown,
     )
     checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+  test "edits around a closing fence that ends an open string":
+    var buffer = @[
+      "```python", "x = 1", "\"\"\"doc", "more", "  ```", "# Heading", "```go",
+      "y := `raw", "```", "after",
+    ]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    var ih =
+      IncrementalHighlight(segments: seg0, lineStates: LineStateCache(states: ls0))
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+    # Inside the open string, then the fence itself: four spaces stop it
+    # closing, and restoring it closes the block again.
+    for (row, text) in [(3, "more edited"), (4, "    ```"), (4, "```")]:
+      buffer[row] = text
+      updateHighlightIncremental(
+        buffer.len,
+        proc(i: int): string =
+          buffer[i],
+        ih,
+        row,
+        @[],
+        SourceLanguage.langMarkdown,
+      )
+      checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+  test "editing a list marker moves where a closing fence may be indented":
+    var buffer = @["10. ```sh", "make", "    ```", "# Heading", "text"]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    var ih =
+      IncrementalHighlight(segments: seg0, lineStates: LineStateCache(states: ls0))
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+    # Without the marker the 4-space fence no longer closes the block, and
+    # with it back the block closes again.
+    for text in ["```sh", "10. ```sh"]:
+      buffer[0] = text
+      updateHighlightIncremental(
+        buffer.len,
+        proc(i: int): string =
+          buffer[i],
+        ih,
+        0,
+        @[],
+        SourceLanguage.langMarkdown,
+      )
+      checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+  test "editing a continuation-line fence's indent moves where its closing fence may be":
+    var buffer = @["1. item", "", "   ```sh", "make", "    ```", "# Heading", "text"]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    var ih =
+      IncrementalHighlight(segments: seg0, lineStates: LineStateCache(states: ls0))
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+    # Unindented, the opening fence no longer lets the 4-space fence close the
+    # block, and indented again it does.
+    for text in ["```sh", "   ```sh"]:
+      buffer[2] = text
+      updateHighlightIncremental(
+        buffer.len,
+        proc(i: int): string =
+          buffer[i],
+        ih,
+        2,
+        @[],
+        SourceLanguage.langMarkdown,
+      )
+      checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
 
 suite "Highlight - Markdown isCodeBlockLine during multi-frame flight":
   test "line-count-changing edit trims stale line states past the flight frontier":
