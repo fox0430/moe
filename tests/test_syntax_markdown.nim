@@ -19,13 +19,14 @@
 
 import std/unittest
 
-import ../src/moepkg/syntax/[tokenizer, syntax_markdown, syntax_nim]
+import ../src/moepkg/syntax/[tokenizer, dispatch, syntax_markdown]
 
 proc collectTokens(input: string): seq[(TokenClass, string)] =
+  ## Through the dispatcher, so fenced code blocks reach their own lexer.
   var g: GeneralTokenizer
   g.initGeneralTokenizer(input)
   while true:
-    g.markdownNextToken()
+    g.getNextToken(langMarkdown)
     if g.kind == gtEof:
       break
     result.add((g.kind, input[g.start ..< g.start + g.length]))
@@ -1257,7 +1258,7 @@ suite "syntax_markdown - code block regression":
     g.lang.markdown.inCodeBlock = true
     g.lang.markdown.codeBlockLang = langNim
     g.state = gtLongStringLit
-    g.markdownNextToken()
+    g.getNextToken(langMarkdown)
     check g.lang.markdown.inCodeBlock
 
   test "language name token resets state to gtNone":
@@ -1285,7 +1286,7 @@ suite "syntax_markdown - code block regression":
     g.lang.markdown.inCodeBlock = true
     g.lang.markdown.codeBlockLang = langPython
     g.state = gtDocLongComment
-    g.markdownNextToken()
+    g.getNextToken(langMarkdown)
     check g.kind == gtDocLongComment
 
   test "whitespace-prefixed line inside rust block comment delegates to sub-language":
@@ -1294,7 +1295,7 @@ suite "syntax_markdown - code block regression":
     g.lang.markdown.inCodeBlock = true
     g.lang.markdown.codeBlockLang = langRust
     g.state = gtLongComment
-    g.markdownNextToken()
+    g.getNextToken(langMarkdown)
     check g.kind == gtLongComment
 
   test "whitespace-prefixed line inside nim long string delegates to sub-language":
@@ -1303,7 +1304,7 @@ suite "syntax_markdown - code block regression":
     g.lang.markdown.inCodeBlock = true
     g.lang.markdown.codeBlockLang = langNim
     g.state = gtLongStringLit
-    g.markdownNextToken()
+    g.getNextToken(langMarkdown)
     check g.kind == gtLongStringLit
 
   test "cpp alias code block is tokenized":
@@ -1320,4 +1321,65 @@ suite "syntax_markdown - code block regression":
     let tokens = collectTokens("```cs\nusing System;\n```")
     check tokens[0] == (gtSpecialVar, "```")
     check (gtKeyword, "using") in tokens
+    check tokens[^1] == (gtSpecialVar, "```")
+
+  test "a block labelled as Markdown is lexed by Markdown without recursing":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("echo 1")
+    g.lang.markdown.inCodeBlock = true
+    g.lang.markdown.codeBlockLang = langMarkdown
+    g.getNextToken(langMarkdown)
+    check g.kind == gtLongStringLit
+
+suite "syntax_markdown - codeBlockDelegate":
+  proc delegateAt(
+      input: string, state = gtNone, lang = langNim, inCodeBlock = true
+  ): SourceLanguage =
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(input)
+    g.lang.markdown.inCodeBlock = inCodeBlock
+    g.lang.markdown.codeBlockLang = lang
+    g.state = state
+    g.codeBlockDelegate
+
+  test "outside a code block":
+    check delegateAt("echo 1", inCodeBlock = false) == langNone
+
+  test "an unlabelled block":
+    check delegateAt("echo 1", lang = langNone) == langNone
+
+  test "end of buffer":
+    check delegateAt("") == langNone
+
+  test "body text goes to the block's language":
+    check delegateAt("echo 1") == langNim
+
+  test "a lone backtick goes to the block's language":
+    check delegateAt("`x`") == langNim
+
+  test "whitespace between tokens":
+    check delegateAt("  echo") == langNone
+
+  test "whitespace inside a carried token goes to the block's language":
+    check delegateAt("  x", state = gtLongStringLit) == langNim
+
+  test "the closing fence":
+    check delegateAt("```") == langNone
+
+  test "a fence inside a carried token goes to the block's language":
+    check delegateAt("```", state = gtLongStringLit) == langNim
+
+  test "a fence closes a carried Go raw string":
+    check delegateAt("```", state = gtLongStringLit, lang = langGo) == langNone
+
+  test "markdownNextToken alone lexes a labelled body as plain content":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("```nim\necho 1\n```")
+    var tokens: seq[(TokenClass, string)]
+    while true:
+      g.markdownNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add((g.kind, "```nim\necho 1\n```"[g.start ..< g.start + g.length]))
+    check (gtLongStringLit, "echo 1") in tokens
     check tokens[^1] == (gtSpecialVar, "```")

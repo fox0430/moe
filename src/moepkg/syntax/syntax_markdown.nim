@@ -17,86 +17,40 @@
 #                                                                              #
 #[############################################################################]#
 
-import
-  tokenizer, syntax_latex, syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp,
-  syntax_csharp, syntax_diff, syntax_dockerfile, syntax_fish, syntax_git_rebase_todo,
-  syntax_gitignore, syntax_go, syntax_haskell, syntax_html, syntax_hyprland,
-  syntax_java, syntax_javascript, syntax_lisp, syntax_log, syntax_lua, syntax_python,
-  syntax_rust, syntax_shell, syntax_tcl, syntax_toml, syntax_yaml, syntax_json,
-  syntax_jsonc, syntax_typescript, syntax_xml, syntax_zsh
+import tokenizer, syntax_latex
 
-proc codeBlockNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
-  ## The single language dispatch, shared with `getNextToken` in
-  ## tokenizer.nim. langMarkdown/langNone have no tokenizer here.
-  ## langNim goes through the lexer registry to avoid an import cycle, so the
-  ## dispatching binary must import `syntax_nim`.
-  case lang
-  of langAstro:
-    g.astroNextToken
-  of langC:
-    g.cNextToken
-  of langCommitEditMsg:
-    g.commitEditMsgNextToken
-  of langCpp:
-    g.cppNextToken
-  of langCsharp:
-    g.csharpNextToken
-  of langDiff:
-    g.diffNextToken
-  of langDockerfile:
-    g.dockerfileNextToken
-  of langFish:
-    g.fishNextToken
-  of langGitRebaseTodo:
-    g.gitRebaseTodoNextToken
-  of langGitignore:
-    g.gitignoreNextToken
-  of langGo:
-    g.goNextToken
-  of langHaskell:
-    g.haskellNextToken
-  of langHtml:
-    g.htmlNextToken
-  of langHyprland:
-    g.hyprlandNextToken
-  of langJava:
-    g.javaNextToken
-  of langJavaScript, langJsx:
-    g.javaScriptNextToken
-  of langLatex:
-    g.latexNextToken
-  of langLisp:
-    g.lispNextToken
-  of langLog:
-    g.logNextToken
-  of langLua:
-    g.luaNextToken
-  of langNim:
-    g.dispatchRegisteredLexer(langNim)
-  of langPython:
-    g.pythonNextToken
-  of langRust:
-    g.rustNextToken
-  of langShell:
-    g.shellNextToken
-  of langTcl:
-    g.tclNextToken
-  of langToml:
-    g.tomlNextToken
-  of langYaml:
-    g.yamlNextToken
-  of langJson:
-    g.jsonNextToken
-  of langJsonc:
-    g.jsoncNextToken
-  of langTypeScript, langTsx:
-    g.typescriptNextToken
-  of langXml:
-    g.xmlNextToken
-  of langZsh:
-    g.zshNextToken
-  of langMarkdown, langNone:
-    discard
+const SubLanguageCarryStates =
+  {gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit, gtCData}
+  ## Sub-language states whose token continues, so whitespace and backticks
+  ## belong to it rather than to Markdown.
+
+proc codeBlockDelegate*(lexer: GeneralTokenizer): SourceLanguage =
+  ## Language that lexes the next token: the code block's language for its
+  ## body, `langNone` where Markdown lexes it (fences, language name,
+  ## whitespace between tokens).
+  let md = lexer.lang.markdown
+  # These modes come first in `markdownNextToken`.
+  if md.inDisplayMath or md.inMathMode or lexer.mdInIndentedCode:
+    return langNone
+  if not md.inCodeBlock or md.codeBlockLang == langNone:
+    return langNone
+
+  let carried = lexer.state in SubLanguageCarryStates
+  case lexer.buf[lexer.pos]
+  of '\0':
+    langNone
+  of ' ', '\t' .. '\r':
+    if carried: md.codeBlockLang else: langNone
+  of '`':
+    let fence = lexer.peek(lexer.pos) == '`' and lexer.peek(lexer.pos, 2) == '`'
+    # A Go raw string cannot contain ```, so a fence closes it. Other languages
+    # (Nim, Python) can embed ``` in a multi-line string.
+    let goFenceClose =
+      md.codeBlockLang == langGo and lexer.state == gtLongStringLit and fence
+    if (carried and not goFenceClose) or not fence: md.codeBlockLang else: langNone
+  else:
+    # gtSpecialVar: the language name after the opening fence.
+    if lexer.state == gtSpecialVar: langNone else: md.codeBlockLang
 
 template isLineStart(lexer: GeneralTokenizer): bool =
   lexer.state in {gtWhitespace, low(TokenClass)}
@@ -235,17 +189,13 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     lexer.pos = position
     return
 
-  # Inside a code block: handle language name, content lines, and closing ```
+  # Inside a code block: handle language name, content lines, and closing ```.
+  # A labelled block's body is lexed by its own language (`codeBlockDelegate`).
   if lexer.lang.markdown.inCodeBlock:
     case lexer.buf[position]
     of '\0':
       lexer.kind = gtEof
     of ' ', '\t' .. '\r':
-      if lexer.lang.markdown.codeBlockLang != langNone and
-          lexer.state in
-          {gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit, gtCData}:
-        codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
-        return
       lexer.kind = gtWhitespace
       while lexer.buf[position] in wsChars:
         if lexer.buf[position] == '\n':
@@ -254,20 +204,6 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           lexer.state = gtNone
         inc position
     of '`':
-      # Go raw strings share the backtick with the fence — ``` can never
-      # appear inside a Go raw string body, so the fence wins even when Go
-      # left state = gtLongStringLit. Other sub-languages (Nim, Python) can
-      # legitimately embed ``` inside a multi-line string, so keep the state
-      # check for them.
-      let goFenceClose =
-        lexer.lang.markdown.codeBlockLang == langGo and lexer.state == gtLongStringLit and
-        lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`'
-      if lexer.lang.markdown.codeBlockLang != langNone and
-          lexer.state in
-          {gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit, gtCData} and
-          not goFenceClose:
-        codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
-        return
       if lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
         # Closing ```
         lexer.kind = gtSpecialVar
@@ -277,9 +213,6 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         lexer.lang.markdown.inCodeBlock = false
         lexer.lang.markdown.codeBlockLang = langNone
         lexer.state = gtNone
-      elif lexer.lang.markdown.codeBlockLang != langNone:
-        codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
-        return
       else:
         # Regular content
         lexer.kind = gtLongStringLit
@@ -296,9 +229,6 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         let lang = getSourceLanguage(langName)
         lexer.lang.markdown.codeBlockLang = if lang == langMarkdown: langNone else: lang
         lexer.state = gtNone
-      elif lexer.lang.markdown.codeBlockLang != langNone:
-        codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
-        return
       else:
         # Code block content
         lexer.kind = gtLongStringLit

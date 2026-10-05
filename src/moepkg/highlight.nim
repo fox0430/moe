@@ -24,11 +24,7 @@ import celina_backend as celina
 
 import color, unicode_utils
 import types/highlight_types
-import syntax/tokenizer
-
-# Side-effect-only import: `syntax_nim` registers the Nim lexer. Dropping it
-# still compiles but silently loses Nim highlighting.
-import syntax/syntax_nim
+import syntax/[tokenizer, dispatch]
 
 import lsp/protocol/types
 when defined(moe.matter) or defined(features.moe.matter):

@@ -469,8 +469,3 @@ proc nimNextToken*(g: var GeneralTokenizer) =
   if g.kind != gtEof and g.state != gtNone and g.length <= 0:
     assert false, "nimNextToken: produced an empty token"
   g.pos = pos
-
-# Self-register so the dispatcher resolves Nim without importing this module.
-# Importers may need it only for this side effect, so never report it unused.
-{.used.}
-registerLexer(langNim, nimNextToken)

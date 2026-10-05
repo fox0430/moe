@@ -37,7 +37,7 @@
 import std/[unittest, unicode, os, random, strformat, strutils]
 
 import ../src/moepkg/highlight
-import ../src/moepkg/syntax/tokenizer
+import ../src/moepkg/syntax/[tokenizer, dispatch]
 
 type
   EditKind = enum

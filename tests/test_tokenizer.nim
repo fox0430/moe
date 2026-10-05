@@ -21,7 +21,7 @@ import std/[unittest, sets, strutils]
 
 import
   ../src/moepkg/syntax/
-    [tokenizer, syntax_markdown, syntax_nim, syntax_python, syntax_javascript]
+    [tokenizer, dispatch, syntax_markdown, syntax_python, syntax_javascript]
 
 suite "tokenizer - TokenClass enum":
   test "TokenClass has expected values":
@@ -1213,6 +1213,16 @@ suite "tokenizer - getNextToken dispatch":
     g.initGeneralTokenizer("abc")
     g.getNextToken(langNone)
     check g.pos == 0
+
+  test "every language but langNone has a lexer":
+    for lang in SourceLanguage:
+      if lang == langNone:
+        continue
+      checkpoint $lang
+      var g: GeneralTokenizer
+      g.initGeneralTokenizer("x")
+      g.getNextToken(lang)
+      check g.kind != gtEof
 
   test "langPython dispatch matches pythonNextToken":
     var g: GeneralTokenizer

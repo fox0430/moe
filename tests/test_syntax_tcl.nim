@@ -19,7 +19,7 @@
 
 import std/unittest
 
-import ../src/moepkg/syntax/[tokenizer, syntax_tcl]
+import ../src/moepkg/syntax/[tokenizer, dispatch, syntax_tcl]
 
 suite "syntax_tcl - tclKeywords constant":
   test "tclKeywords contains control flow keywords":

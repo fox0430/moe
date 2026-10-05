@@ -26,7 +26,7 @@ import pkg/results
 import pkg/celina
 
 import ../src/moepkg/[buffer, highlight, color, theme]
-import ../src/moepkg/syntax/[tokenizer, syntax_diff]
+import ../src/moepkg/syntax/[tokenizer, dispatch, syntax_diff]
 import ../src/moepkg/diff_viewer {.all.}
 
 setThemeColors(DefaultColors)
