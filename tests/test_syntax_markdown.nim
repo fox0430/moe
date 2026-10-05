@@ -609,6 +609,255 @@ suite "syntax_markdown - code block edge cases":
     check sawRawString
     check tokens[^1] == (gtSpecialVar, "```")
 
+suite "syntax_markdown - fence lines":
+  proc lineTokens(input: string): seq[(TokenClass, string)] =
+    ## `collectTokens` without the whitespace between lines.
+    for (kind, text) in collectTokens(input):
+      if kind != gtWhitespace or '\n' notin text:
+        result.add((kind, text))
+
+  test "an indented closing fence closes an unclosed Go raw string":
+    let tokens = lineTokens("```go\nx := `abc\n  ```\n# Heading\n")
+    check tokens[^6 .. ^1] ==
+      @[
+        (gtLongStringLit, "`abc\n"),
+        (gtWhitespace, "  "),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "backticks in the middle of a line do not close a labelled block":
+    let tokens = lineTokens("```sh\necho ```hi```\n```\n# Heading\n")
+    check tokens[^4 .. ^1] ==
+      @[
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "backticks in the middle of a line do not open a block":
+    check lineTokens("text ```foo\n# Heading\n") ==
+      @[
+        (gtIdentifier, "text"),
+        (gtWhitespace, " "),
+        (gtSpecialVar, "```foo"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a fence indented by four spaces does not close the block":
+    check lineTokens("```\nfoo\n    ```\n# Heading\n```\n") ==
+      @[
+        (gtSpecialVar, "```"),
+        (gtLongStringLit, "foo"),
+        (gtLongStringLit, "```"),
+        (gtLongStringLit, "# Heading"),
+        (gtSpecialVar, "```"),
+      ]
+
+  test "a fence followed by text does not close the block":
+    check lineTokens("```\n``` x\n```\n# Heading\n") ==
+      @[
+        (gtSpecialVar, "```"),
+        (gtLongStringLit, "``` x"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "an unclosed Python docstring ends at the closing fence":
+    check lineTokens("```python\n\"\"\"doc\n```\n# Heading\n") ==
+      @[
+        (gtSpecialVar, "```"),
+        (gtKeyword, "python"),
+        (gtDocLongComment, "\"\"\"doc\n"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a longer fence holds a shorter run":
+    check lineTokens("````\n```\n````\n# Heading\n") ==
+      @[
+        (gtSpecialVar, "````"),
+        (gtLongStringLit, "```"),
+        (gtSpecialVar, "````"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a closing fence may be longer than the opening one":
+    check lineTokens("```\nx\n`````\n# Heading") ==
+      @[
+        (gtSpecialVar, "```"),
+        (gtLongStringLit, "x"),
+        (gtSpecialVar, "`````"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a tilde fence":
+    check lineTokens("~~~\n```\n~~~\n# Heading\n") ==
+      @[
+        (gtSpecialVar, "~~~"),
+        (gtLongStringLit, "```"),
+        (gtSpecialVar, "~~~"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a tilde line does not close a backtick fence":
+    check lineTokens("```\n~~~\n```\n# Heading\n") ==
+      @[
+        (gtSpecialVar, "```"),
+        (gtLongStringLit, "~~~"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a fence right after a list marker opens a block":
+    check lineTokens("- ```sh\n  make\n  ```\n# Heading\n") ==
+      @[
+        (gtOperator, "- "),
+        (gtSpecialVar, "```"),
+        (gtKeyword, "sh"),
+        (gtIdentifier, "make"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a closing fence indented to a list item's content closes its block":
+    check lineTokens("10. ```sh\n    make\n    ```\n# Heading\n") ==
+      @[
+        (gtOperator, "10. "),
+        (gtSpecialVar, "```"),
+        (gtKeyword, "sh"),
+        (gtIdentifier, "make"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a closing fence indented by a tab closes a list item's block":
+    check lineTokens("- ```sh\n\tmake\n\t```\n# Heading\n") ==
+      @[
+        (gtOperator, "- "),
+        (gtSpecialVar, "```"),
+        (gtKeyword, "sh"),
+        (gtIdentifier, "make"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a fence indented 4 columns past a list item's content does not close":
+    check lineTokens("- ```\n      ```\n  ```\n# Heading\n") ==
+      @[
+        (gtOperator, "- "),
+        (gtSpecialVar, "```"),
+        (gtLongStringLit, "```"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a closing fence indented past a continuation-line fence closes":
+    check lineTokens("1. item\n\n   ```sh\n   make\n      ```\n# Heading\n") ==
+      @[
+        (gtOperator, "1. "),
+        (gtIdentifier, "item"),
+        (gtSpecialVar, "```"),
+        (gtKeyword, "sh"),
+        (gtIdentifier, "make"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a fence indented 4 columns past a continuation-line fence does not close":
+    check lineTokens("1. item\n\n   ```\n       ```\n   ```\n# Heading\n") ==
+      @[
+        (gtOperator, "1. "),
+        (gtIdentifier, "item"),
+        (gtSpecialVar, "```"),
+        (gtLongStringLit, "```"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a fence after an indented list marker opens a block":
+    let tokens = lineTokens("  - ```sh\n    make\n    ```\n# Heading\n")
+    check tokens[^7 .. ^1] ==
+      @[
+        (gtSpecialVar, "```"),
+        (gtKeyword, "sh"),
+        (gtIdentifier, "make"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "a fence after a list marker and extra blanks opens a block":
+    check lineTokens("-   ```sh\n    make\n    ```\n# Heading\n") ==
+      @[
+        (gtOperator, "- "),
+        (gtWhitespace, "  "),
+        (gtSpecialVar, "```"),
+        (gtKeyword, "sh"),
+        (gtIdentifier, "make"),
+        (gtSpecialVar, "```"),
+        (gtBuiltin, "#"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "Heading"),
+      ]
+
+  test "five blanks after a list marker make the fence item content":
+    # CommonMark: the item's content starts one column after the marker, so
+    # the fence is indented code there.
+    check lineTokens("-     ```sh\nmake\n") ==
+      @[
+        (gtOperator, "- "),
+        (gtWhitespace, "    "),
+        (gtLongStringLit, "```sh"),
+        (gtIdentifier, "make"),
+      ]
+
+  test "a construct left open in one block does not leak into the next":
+    # The first block leaves a JSX element open; a stale JSX mode would lex
+    # the second block as markup.
+    let tokens = lineTokens("```jsx\nconst a = <div>\n```\n```jsx\nconst b = 1\n```\n")
+    check tokens[^8 .. ^1] ==
+      @[
+        (gtKeyword, "const"),
+        (gtWhitespace, " "),
+        (gtIdentifier, "b"),
+        (gtWhitespace, " "),
+        (gtOperator, "="),
+        (gtWhitespace, " "),
+        (gtDecNumber, "1"),
+        (gtSpecialVar, "```"),
+      ]
+
 suite "syntax_markdown - bold edge cases":
   test "** followed by space is not bold":
     let tokens = collectTokens("** text**")
@@ -1252,14 +1501,19 @@ suite "Markdown - indented code blocks":
     check hasSpecialVar
 
 suite "syntax_markdown - code block regression":
-  test "backticks inside multi-line sub-language state do not close code block":
+  test "a closing fence line closes the block inside a multi-line sub-language token":
+    # CommonMark: the body is opaque, so a string left open in it cannot hold
+    # the fence. Embedding ``` takes a longer fence.
     var g: GeneralTokenizer
     g.initGeneralTokenizer("```\n\"\"\"")
     g.lang.markdown.inCodeBlock = true
     g.lang.markdown.codeBlockLang = langNim
+    g.lang.markdown.fenceChar = '`'
+    g.lang.markdown.fenceLen = 3
     g.state = gtLongStringLit
     g.getNextToken(langMarkdown)
-    check g.lang.markdown.inCodeBlock
+    check g.kind == gtSpecialVar
+    check not g.lang.markdown.inCodeBlock
 
   test "language name token resets state to gtNone":
     var g: GeneralTokenizer
@@ -1333,13 +1587,23 @@ suite "syntax_markdown - code block regression":
 
 suite "syntax_markdown - codeBlockDelegate":
   proc delegateAt(
-      input: string, state = gtNone, lang = langNim, inCodeBlock = true
+      input: string,
+      state = gtNone,
+      lang = langNim,
+      inCodeBlock = true,
+      pos = 0,
+      fenceLen = 3,
+      baseCol = 0,
   ): SourceLanguage =
     var g: GeneralTokenizer
     g.initGeneralTokenizer(input)
     g.lang.markdown.inCodeBlock = inCodeBlock
     g.lang.markdown.codeBlockLang = lang
+    g.lang.markdown.fenceChar = '`'
+    g.lang.markdown.fenceLen = fenceLen
+    g.lang.markdown.fenceBaseCol = baseCol
     g.state = state
+    g.pos = pos
     g.codeBlockDelegate
 
   test "outside a code block":
@@ -1366,11 +1630,32 @@ suite "syntax_markdown - codeBlockDelegate":
   test "the closing fence":
     check delegateAt("```") == langNone
 
-  test "a fence inside a carried token goes to the block's language":
-    check delegateAt("```", state = gtLongStringLit) == langNim
+  test "the closing fence wins over a carried token":
+    check delegateAt("```", state = gtLongStringLit) == langNone
 
-  test "a fence closes a carried Go raw string":
-    check delegateAt("```", state = gtLongStringLit, lang = langGo) == langNone
+  test "the indent of a closing fence line":
+    check delegateAt("   ```", state = gtLongStringLit) == langNone
+    check delegateAt("   ```", state = gtLongStringLit, pos = 2) == langNone
+    check delegateAt("   ```", pos = 3) == langNone
+
+  test "four spaces of indent is not a fence":
+    check delegateAt("    ```", state = gtLongStringLit) == langNim
+    check delegateAt("    ```", pos = 4) == langNim
+
+  test "a list item's block measures the fence indent from its content":
+    check delegateAt("    ```", pos = 4, baseCol = 4) == langNone
+    check delegateAt("\t```", pos = 1, baseCol = 2) == langNone
+    check delegateAt("       ```", pos = 7, baseCol = 4) == langNone
+    check delegateAt("        ```", pos = 8, baseCol = 4) == langNim
+
+  test "a mid-line fence goes to the block's language":
+    check delegateAt("echo ```", pos = 5) == langNim
+
+  test "a fence line with trailing text goes to the block's language":
+    check delegateAt("``` x") == langNim
+
+  test "a run shorter than the opening fence goes to the block's language":
+    check delegateAt("```", fenceLen = 4) == langNim
 
   test "markdownNextToken alone lexes a labelled body as plain content":
     var g: GeneralTokenizer

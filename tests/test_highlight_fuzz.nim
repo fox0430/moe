@@ -275,6 +275,19 @@ proc markdownCorpus(): seq[seq[string]] =
       "---", "key: value", "---", "", "- item one", "- item two", "", "> a blockquote",
       "", "**bold** and *italic*",
     ],
+    @[
+      # Closing fences that end a construct the body left open, and fences
+      # that must not close or open a block.
+      "```python", "\"\"\"doc", "```", "# after", "```go", "x := `raw", "  ```",
+      "text ```foo", "````", "```", "````", "~~~", "    ```", "~~~", "- ```jsx",
+      "  <div>", "  ```", "```sh", "echo ```hi```", "```",
+    ],
+    @[
+      # Fences in list items: the closing fence's indent counts from the
+      # item's content.
+      "10. ```sh", "    make", "    ```", "  - ```python", "\t\"\"\"doc", "\t```",
+      "-   ```", "        ```", "    ```", "# after",
+    ],
   ]
 
 proc pythonCorpus(): seq[seq[string]] =

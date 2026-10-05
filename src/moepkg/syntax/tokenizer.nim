@@ -167,6 +167,12 @@ type
     inFrontmatter*: bool
     firstLine*: bool
     codeBlockLang*: SourceLanguage
+    fenceChar*: char ## '`' or '~' while `inCodeBlock`.
+    fenceLen*: int ## Length of the opening fence run while `inCodeBlock`.
+    fenceBaseCol*: int
+      ## Column a closing fence's indent counts from while `inCodeBlock`: the
+      ## list item's content column when the fence follows its marker, else
+      ## the opening fence's own column.
 
   LatexState* = object
     inMathMode*: bool
@@ -231,6 +237,14 @@ type
       ## Per-line transient: set while consuming a markdown line's leading
       ## indent, cleared at content start. Kept off `lang` so it is not
       ## persisted at line boundaries (would emit an empty token on resume).
+    mdBlockBase*, mdBlockEnd*: int
+      ## Transient: the span of the fenced block being lexed by its own
+      ## language, from a line start to the start of its closing fence line
+      ## (or the end of the buffer).
+    mdBlockText*: ref string
+      ## Transient: a copy of that span when a closing fence ends it, so the
+      ## block's lexer sees the end of input there. Nil when the span already
+      ## ends the buffer.
 
   SourceLanguage* = enum
     langNone
@@ -391,6 +405,9 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.pos = 0
   g.lang = defaultLangState()
   g.mdInIndentedCode = false
+  g.mdBlockBase = 0
+  g.mdBlockEnd = 0
+  g.mdBlockText = nil
 
 proc scanToTerminator*(buf: cstring, pos: var int, t0, t1, t2: char): bool =
   ## Advance `pos` until the 3-byte terminator `t0 t1 t2` (consumed) or the

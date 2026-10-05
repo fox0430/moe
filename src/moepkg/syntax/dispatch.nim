@@ -103,7 +103,8 @@ proc fencedMarkdownNextToken(g: var GeneralTokenizer) =
   if sub in {langNone, langMarkdown}:
     g.markdownNextToken
   else:
-    g.languageNextToken(sub)
+    g.lexCodeBlockBody:
+      g.languageNextToken(sub)
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   let
