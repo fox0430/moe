@@ -192,7 +192,20 @@ proc actOnExternalChange(e: Editor, buf: TextBuffer, filePath: string) =
     return
 
   logInfo("editor", "File externally modified, reloading: " & filePath)
-  let reloadResult = buf.reloadFileIfContentChanged()
+  # A reload that changes lines drops Visual mode. Saved first, the area
+  # follows the new lines.
+  let window = if buf == e.activeBuffer(): e.activeWindow else: nil
+  let replacedArea =
+    if window != nil:
+      window.saveLastVisualAhead()
+    else:
+      none(VisualArea)
+  let reloadResult =
+    try:
+      buf.reloadFileIfContentChanged()
+    finally:
+      if window != nil:
+        window.settleLastVisual(replacedArea)
   if reloadResult.isErr:
     e.reportExternalChange(
       buf, "Failed to reload file: " & reloadResult.error, isError = true

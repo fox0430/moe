@@ -1359,17 +1359,9 @@ proc handleIncrementNumber*(
     line[0 ..< startPos] & newNumStr &
     (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
 
-  let lineIdx = ctx.cursor.line
-  let txr = withTransaction(ctx.buffer, "Increment number"):
-    let delResult = ctx.buffer.deleteLine(lineIdx)
-    if delResult.isErr:
-      return err(delResult.error)
-
-    let insResult = ctx.buffer.insert(lineIdx, newLine)
-    if insResult.isErr:
-      return err(insResult.error)
-  if txr.isErr:
-    return err(txr.error)
+  let replaceResult = ctx.buffer.replaceLine(ctx.cursor.line, newLine)
+  if replaceResult.isErr:
+    return err(replaceResult.error)
 
   # Move cursor to start of the number (convert byte pos to char pos)
   ctx.cursor.column = byteToCharPos(newLine, startPos)
@@ -1405,17 +1397,9 @@ proc handleDecrementNumber*(
     line[0 ..< startPos] & newNumStr &
     (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
 
-  let lineIdx = ctx.cursor.line
-  let txr = withTransaction(ctx.buffer, "Decrement number"):
-    let delResult = ctx.buffer.deleteLine(lineIdx)
-    if delResult.isErr:
-      return err(delResult.error)
-
-    let insResult = ctx.buffer.insert(lineIdx, newLine)
-    if insResult.isErr:
-      return err(insResult.error)
-  if txr.isErr:
-    return err(txr.error)
+  let replaceResult = ctx.buffer.replaceLine(ctx.cursor.line, newLine)
+  if replaceResult.isErr:
+    return err(replaceResult.error)
 
   # Move cursor to start of the number (convert byte pos to char pos)
   ctx.cursor.column = byteToCharPos(newLine, startPos)

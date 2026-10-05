@@ -119,6 +119,8 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       applyUndo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
       b.bookmarks = change.snapshotBookmarks
+      for i in countdown(change.snapshotRows.len - 1, 0):
+        b.shiftLastVisual(change.snapshotRows[i].reversed)
       b.lastChangedLines = 0
 
     # Drive the row-remap subscribers backwards. ckSnapshot restored state
@@ -174,11 +176,13 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     modifiedLinesDelta: change.modifiedLinesDelta,
     snapshotFoldState: b.foldState,
     snapshotBookmarks: b.bookmarks,
+    snapshotRows: change.snapshotRows,
     namedMarkChanges: change.namedMarkChanges,
     noChangeListPosition: change.noChangeListPosition,
     isReload: change.isReload,
     changeListAcross: change.changeListAcross,
     changeListIndexAcross: change.changeListIndexAcross,
+    visualAcross: change.visualAcross,
     reloadChargeLines: change.reloadChargeLines,
     reloadChargeBytes: change.reloadChargeBytes,
   )
@@ -220,6 +224,7 @@ proc beginTransaction*(
       startSeq: b.changeSeq,
       cursorPos: cursorPos,
       namedMarksBefore: b.namedMarks,
+      lastVisualBefore: b.lastVisual,
     )
   )
   return ok(())
@@ -266,8 +271,10 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
             computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
           snapshotFoldState: b.pendingSnapshotFolds,
           snapshotBookmarks: b.pendingSnapshotBookmarks,
+          snapshotRows: b.takePendingSnapshotRows(),
           namedMarkChanges:
             diffNamedMarks(b.pendingSnapshotNamedMarks, b.namedMarks, touchedMarks),
+          visualAcross: transaction.lastVisualBefore.boxed,
         )
       )
       # Pending snapshot state is now consumed into the entry; reset it all.
@@ -283,6 +290,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
         transactionCursorPos: transaction.cursorPos,
         namedMarkChanges:
           diffNamedMarks(transaction.namedMarksBefore, b.namedMarks, touchedMarks),
+        visualAcross: transaction.lastVisualBefore.boxed,
       )
       b.undoStack.addLast(transactionChange)
     # Note: changeSeq was inc'd per inner change in pushUndoChange; preTxnSeq /
@@ -386,10 +394,12 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
       let r = b.undoChange(transaction.changes[i])
       if r.isErr:
         # Clean up transaction state even if rollback partially fails
+        b.lastVisual = transaction.lastVisualBefore
         b.inTransaction = false
         b.currentTransaction = none(BufferTransaction)
         b.discardPendingSnapshot()
         return err("Failed to rollback transaction: " & r.error)
+  b.lastVisual = transaction.lastVisualBefore
 
   # Drop every pending-snapshot artifact, matching the commit path, so a later
   # capture/edit never reuses a stale pre-transaction base. Required for the
@@ -432,6 +442,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   let initialChangeSeq = b.changeSeq
   let initialChangeListIndex = b.changeListIndex
   let initialChangeList = b.changeList
+  let initialLastVisual = b.lastVisual
 
   # Undo 'count' changes
   for i in 0 ..< count:
@@ -453,6 +464,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       redoEntry.savedModifiedLines = b.modifiedLines
       redoEntry.savedLineMarkers = b.lineMarkers
 
+    let visualBefore = b.lastVisual
     let r = b.undoChange(change)
     if r.isErr:
       # Roll forward the already-undone changes so the buffer returns to the
@@ -469,6 +481,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       b.advanceContentVersion()
       b.changeList = initialChangeList
       b.changeListIndex = initialChangeListIndex
+      b.lastVisual = initialLastVisual
       b.undoStack.addLast(change)
       for j in countdown(poppedOriginals.len - 1, 0):
         b.undoStack.addLast(poppedOriginals[j])
@@ -481,6 +494,10 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       redoEntry.changeListIndexAcross = b.changeListIndex
       b.changeList = change.changeListAcross.get
       b.changeListIndex = change.changeListIndexAcross
+
+    if change.visualAcross != nil:
+      redoEntry.visualAcross = visualBefore.boxed
+      b.lastVisual = some(change.visualAcross[])
 
     undoneChanges.add(redoEntry)
     poppedOriginals.add(change)
@@ -595,6 +612,8 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       applyRedo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
       b.bookmarks = change.snapshotBookmarks
+      for i in 0 ..< change.snapshotRows.len:
+        b.shiftLastVisual(change.snapshotRows[i])
       b.lastChangedLines = 0
 
     # Drive the row-remap subscribers forward. Symmetric to undoChange:
@@ -640,6 +659,7 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   let initialChangeSeq = b.changeSeq
   let initialChangeListIndex = b.changeListIndex
   let initialChangeList = b.changeList
+  let initialLastVisual = b.lastVisual
 
   # Redo 'count' changes
   for i in 0 ..< count:
@@ -661,6 +681,7 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       undoEntry.savedModifiedLines = b.modifiedLines
       undoEntry.savedLineMarkers = b.lineMarkers
 
+    let visualBefore = b.lastVisual
     let r = b.redoChange(change)
     if r.isErr:
       # Roll back the already-redone changes so the buffer returns to the
@@ -677,6 +698,7 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       b.advanceContentVersion()
       b.changeList = initialChangeList
       b.changeListIndex = initialChangeListIndex
+      b.lastVisual = initialLastVisual
       b.redoStack.addLast(change)
       for j in countdown(poppedOriginals.len - 1, 0):
         b.redoStack.addLast(poppedOriginals[j])
@@ -689,6 +711,10 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       undoEntry.changeListIndexAcross = b.changeListIndex
       b.changeList = change.changeListAcross.get
       b.changeListIndex = change.changeListIndexAcross
+
+    if change.visualAcross != nil:
+      undoEntry.visualAcross = visualBefore.boxed
+      b.lastVisual = some(change.visualAcross[])
 
     redoneChanges.add(undoEntry)
     poppedOriginals.add(change)

@@ -207,8 +207,16 @@ proc handleVisualPaste*(
   result = visualPaste(ctx.buffer, ctx.state, ctx.clipboardConfig, cursorAfter)
   ctx.cursor = ctx.state.cursor
 
+proc handleVisualReselect*(ctx: CommandContext): Result[(), string] =
+  ## Swap the selection with the last Visual area (gv in Visual mode)
+  let r = reselectVisual(ctx.buffer, ctx.state)
+  if r.isErr:
+    return Result[(), string].err r.error
+  ctx.cursor = ctx.state.cursor
+  Result[(), string].ok ()
+
 proc registerVisualCommands*(registry: CommandRegistry) =
-  ## Register all 29 visual mode commands.
+  ## Register all 30 visual mode commands.
 
   # Visual mode movement commands
   registry.register(
@@ -496,6 +504,16 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Paste over selection (p/P command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualPaste(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualReselect),
+    "Visual Reselect",
+    "Exchange the selection with the previous visual area (gv command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualReselect(ctx),
     0,
     0,
   )

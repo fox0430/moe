@@ -282,17 +282,17 @@ proc deleteLineSelection(
   # Get text to yank first
   deletedText = getLineText(buffer, sel)
 
-  # Delete lines from end to start to preserve line numbers
+  # Delete lines from end to start to preserve line numbers. The last line is
+  # deleted too, after an empty one is added below it: clearing it would keep
+  # its marks and bookmarks, and the area then lands on the empty line.
   for lineNum in countdown(endLine, startLine):
+    if buffer.len == 1:
+      let insResult = buffer.insert(1, "")
+      if insResult.isErr:
+        return err(insResult.error)
     let delResult = buffer.deleteLine(lineNum)
     if delResult.isErr:
       return err(delResult.error)
-
-  # If buffer is empty after deletion, add an empty line
-  if buffer.len == 0:
-    let insResult = buffer.insert(0, "")
-    if insResult.isErr:
-      return err(insResult.error)
 
   # Move cursor to start line (or last line if start was beyond buffer)
   let newLine = min(startLine, buffer.len - 1)
@@ -730,10 +730,10 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
         deletedText = getLineText(buffer, sel)
         deletedIsLine = true
 
-        for _ in startLine .. endLine:
-          checkVisualEdit(state, buffer.deleteLine(startLine))
-
-        checkVisualEdit(state, buffer.insert(startLine, ""))
+        # The first line stays and is cleared, as `cc` does.
+        for _ in startLine + 1 .. endLine:
+          checkVisualEdit(state, buffer.deleteLine(startLine + 1))
+        checkVisualEdit(state, buffer.replaceLine(startLine, ""))
         state.cursor.line = startLine
         state.cursor.column = 0
       of vskChar:
@@ -761,6 +761,27 @@ proc visualSwapSelection*(buffer: TextBuffer, state: EditorState) =
   let sel = state.activeWindow.visualSelection
   if sel.active:
     state.selectVisualRange(anchor = sel.current, focus = sel.start)
+
+proc reselectVisual*(
+    buffer: TextBuffer, state: EditorState
+): Result[EditorMode, string] =
+  ## `gv`: select the buffer's last Visual area again, in the mode it had, and
+  ## return that mode. From Visual mode the current and last areas swap.
+  if buffer.lastVisual.isNone or buffer.lastVisual.get.start.line >= buffer.len:
+    return Result[EditorMode, string].err "No previous visual selection"
+
+  let area = buffer.lastVisual.get
+  if state.mode.isVisualAllMode:
+    state.activeWindow.saveLastVisual()
+
+  proc clamped(pos: BufferPosition): BufferPosition =
+    # Visual mode lets the column rest one past the end of the line.
+    let line = min(pos.line, buffer.len - 1)
+    BufferPosition(line: line, column: min(pos.column, buffer.getLine(line).charLen))
+
+  state.enterVisual(area.kind, clamped(area.start), clamped(area.cursor))
+  state.preferredColumn = -1
+  Result[EditorMode, string].ok area.kind.visualMode
 
 proc visualPaste*(
     buffer: TextBuffer,
@@ -873,18 +894,39 @@ proc visualPaste*(
     state.statusMessage = ""
     state.leaveVisual()
 
+    let
+      lastPutLine = min(pasteStart.line + max(pastedLineCount, 1) - 1, buffer.len - 1)
+      afterPut = pasteEndPos(pasteStart, pasteText)
+
+    # Like Vim, the next `gv` selects the put text, in the mode the replaced
+    # selection had.
+    let putEnd =
+      case selKind
+      of vskLine:
+        BufferPosition(
+          line: lastPutLine, column: max(0, buffer.getLine(lastPutLine).charLen - 1)
+        )
+      of vskChar, vskBlock:
+        if afterPut.column > 0:
+          BufferPosition(line: afterPut.line, column: afterPut.column - 1)
+        else:
+          BufferPosition(
+            line: afterPut.line - 1, column: buffer.getLine(afterPut.line - 1).charLen
+          )
+    buffer.lastVisual =
+      some(VisualArea(start: pasteStart, cursor: putEnd, kind: selKind))
+
     if cursorAfter and buffer.len > 0:
       case selKind
       of vskLine:
-        let lastPastedEndLine = pasteStart.line + max(pastedLineCount, 1) - 1
-        let afterLine = lastPastedEndLine + 1
+        let afterLine = lastPutLine + 1
         if afterLine < buffer.len:
           state.cursor.line = afterLine
           state.cursor.column = 0
         else:
           # Unlike Normal gp: col 0 unless the put replaced the whole buffer
           # (then last char).
-          state.cursor.line = min(lastPastedEndLine, buffer.len - 1)
+          state.cursor.line = lastPutLine
           if pasteStart.line == 0:
             let lineLen = buffer.getLine(state.cursor.line).charLen
             state.cursor.column = lineLen
@@ -892,7 +934,7 @@ proc visualPaste*(
           else:
             state.cursor.column = 0
       of vskChar, vskBlock:
-        state.cursor = pasteEndPos(pasteStart, pasteText)
+        state.cursor = afterPut
         if buffer.len > 0:
           clampCursorToLastChar(state.cursor, buffer.getLine(state.cursor.line).charLen)
 

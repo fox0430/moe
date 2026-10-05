@@ -147,9 +147,10 @@ proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
   # Only the active window owns the global Insert session.
   if isActiveWindow:
     e.finalizeInsertSessionForBufferSwitch(win.buffer)
-  # The selection is in the old tab's text; Vim leaves Visual on `:b` too.
+  # The selection is in the old tab's text; Vim leaves Visual on `:b` too, and
+  # saves it for `gv` as setMode does.
   if win.mode.isVisualAllMode:
-    win.mode = EditorMode.Normal
+    win.setMode(EditorMode.Normal)
     win.previousMode = EditorMode.Normal
 
   # Terminal state stays in `e.terminalStates`; never `cleanup()` it here.

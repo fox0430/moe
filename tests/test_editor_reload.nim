@@ -310,6 +310,91 @@ suite "editor_reload - position state invalidation":
     check e.state.mode == EditorMode.Normal
     check e.cursor == BufferPosition(line: 0, column: 0)
 
+  test "saves the dropped selection for gv, following the reloaded lines":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_reload_visual_area.txt"
+    writeFile(path, "one\ntwo\nthree\nfour")
+    defer:
+      removeFile(path)
+    discard e.loadFile(path)
+
+    e.state.selectVisual(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: 0), vskLine
+    )
+
+    sleep(50)
+    writeFile(path, "zero\none\ntwo\nthree\nfour")
+    e.state.timing.lastFileModCheck = pastMonoTime(5000)
+    e.maybeReloadExternallyModifiedFile()
+
+    check e.activeBuffer.getLine(0) == "zero"
+    check e.state.mode == EditorMode.Normal
+    check e.activeBuffer.lastVisual ==
+      some(
+        VisualArea(
+          start: BufferPosition(line: 2, column: 0),
+          cursor: BufferPosition(line: 3, column: 0),
+          kind: vskLine,
+        )
+      )
+
+  test "keeps the last Visual area when the text on disk is unchanged":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_reload_visual_unchanged.txt"
+    writeFile(path, "one\ntwo\nthree")
+    defer:
+      removeFile(path)
+    discard e.loadFile(path)
+    let lastArea = some(
+      VisualArea(
+        start: BufferPosition(line: 0, column: 0),
+        cursor: BufferPosition(line: 0, column: 2),
+        kind: vskChar,
+      )
+    )
+    e.activeBuffer.lastVisual = lastArea
+
+    e.state.selectVisual(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: 0), vskLine
+    )
+
+    sleep(50)
+    writeFile(path, "one\ntwo\nthree")
+    e.state.timing.lastFileModCheck = pastMonoTime(5000)
+    e.maybeReloadExternallyModifiedFile()
+
+    check e.state.mode == EditorMode.VisualLine
+    check e.activeBuffer.lastVisual == lastArea
+
+  test "keeps the last Visual area when only the line endings change on disk":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_reload_visual_line_endings.txt"
+    writeFile(path, "one\ntwo\nthree")
+    defer:
+      removeFile(path)
+    discard e.loadFile(path)
+    let lastArea = some(
+      VisualArea(
+        start: BufferPosition(line: 0, column: 0),
+        cursor: BufferPosition(line: 0, column: 2),
+        kind: vskChar,
+      )
+    )
+    e.activeBuffer.lastVisual = lastArea
+
+    e.state.selectVisual(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: 0), vskLine
+    )
+
+    sleep(50)
+    writeFile(path, "one\r\ntwo\r\nthree")
+    e.state.timing.lastFileModCheck = pastMonoTime(5000)
+    e.maybeReloadExternallyModifiedFile()
+
+    check e.activeBuffer.getLine(1) == "two"
+    check e.state.mode == EditorMode.VisualLine
+    check e.activeBuffer.lastVisual == lastArea
+
   test "pulls a viewport parked past the new end back into view":
     let e = createTestEditor()
     let path = getTempDir() / "moe_test_reload_viewport.txt"

@@ -215,6 +215,7 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("v", "switch-to-visual"),
   ("V", "switch-to-visual-line"),
   ("C-v", "switch-to-visual-block"),
+  ("g v", "visual-reselect"),
   ("R", "switch-to-replace"),
 ]
 

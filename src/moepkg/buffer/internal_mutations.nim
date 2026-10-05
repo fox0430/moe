@@ -78,8 +78,16 @@ proc backendReplaceLines*(
   ## Swap the `deleteCount` lines at `start` for `lines`. Rows both sides have
   ## are overwritten in place, so the buffer never briefly holds both spans.
   let overlap = min(deleteCount, lines.len)
-  for j in 0 ..< overlap:
-    b.backendReplaceLine(start + j, lines[j])
+  # The tree backends take the run in one edit; line by line, each line would
+  # become a piece or leaf of its own.
+  case b.backendKind
+  of PieceTable:
+    b.storage.pieceTable.replaceLineRun(start, lines.toOpenArray(0, overlap - 1))
+  of Rope:
+    b.storage.rope.replaceLineRun(start, lines.toOpenArray(0, overlap - 1))
+  of GapBuffer, SqrtDecomp:
+    for j in 0 ..< overlap:
+      b.backendReplaceLine(start + j, lines[j])
   for j in overlap ..< lines.len:
     b.backendInsertLine(start + j, lines[j])
   for _ in overlap ..< deleteCount:

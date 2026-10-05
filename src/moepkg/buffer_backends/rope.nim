@@ -22,6 +22,8 @@
 ## Stores text as a balanced B-tree of UTF-8 chunks.
 ## All major operations are O(log n).
 
+import std/strutils
+
 const
   MIN_CHILDREN* = 4
   MAX_CHILDREN* = 8
@@ -446,6 +448,22 @@ proc replaceLine*(rope: Rope, lineNumber: int, content: string) =
   if lineNumber < 0 or lineNumber >= rope.cachedLineCount:
     raise newException(IndexDefect, "Rope line out of bounds")
   rope[lineNumber] = content
+
+proc replaceLineRun*(rope: Rope, start: int, lines: openArray[string]) =
+  ## Overwrite the `lines.len` lines at `start` with one split and one join, so
+  ## the run lands as one subtree rather than one leaf per line.
+  if lines.len == 0:
+    return
+  if start < 0 or start + lines.len > rope.cachedLineCount:
+    raise newException(IndexDefect, "Rope line out of bounds")
+  let
+    first = rope.lineStartByteOffset(start)
+    last = rope.lineEndByteOffset(start + lines.len - 1)
+  let (leftPart, rest) = splitNode(rope.root, first)
+  let (_, rightPart) = splitNode(rest, last - first)
+  rope.root =
+    concatNodes(concatNodes(leftPart, textToNode(lines.join("\n"))), rightPart)
+  rope.cachedLineCount = rope.root.lineBreakCount + 1
 
 proc modifyLineContent*(rope: Rope, lineNumber: int, f: proc(s: var string)) =
   if lineNumber < 0 or lineNumber >= rope.cachedLineCount:
