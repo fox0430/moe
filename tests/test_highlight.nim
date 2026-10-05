@@ -5793,12 +5793,7 @@ suite "Highlight - diagnosticOverlay read path":
     check buf.highlight.diagnosticOverlay[2].cells[0].firstColumn == 0
     check buf.highlight.diagnosticOverlay[2].cells[0].lastColumn == 2
 
-suite "Highlight - Nim lexer registry wiring":
-  # `highlight` imports `syntax_nim` only for its self-registration, and
-  # dropping that import still compiles. These tests guard it.
-  test "importing highlight registers the Nim lexer":
-    check isLexerRegistered(SourceLanguage.langNim)
-
+suite "Highlight - Nim lexer wiring":
   test "Nim keywords highlighted correctly":
     let buffer = @["proc main() = discard"]
     let h = initHighlight(buffer, @[], SourceLanguage.langNim)
@@ -5811,7 +5806,6 @@ suite "Highlight - Nim lexer registry wiring":
     check foundKeyword
 
   test "a nim code block does not truncate the rest of a markdown buffer":
-    # An unregistered lexer degrades to EOF, stopping the whole buffer scan.
     let buffer =
       @["# Title", "", "```nim", "proc main() = discard", "```", "", "## After"]
     let h = initHighlight(buffer, @[], SourceLanguage.langMarkdown)

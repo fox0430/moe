@@ -156,11 +156,11 @@ Which sections are shown is controlled by the `[Debug.*]` tables in `moerc.toml`
 
 ## Adding a syntax language
 
-Syntax highlighting is dispatched from `codeBlockNextToken` in `src/moepkg/syntax/syntax_markdown.nim`. This is the single dispatch shared by top-level tokenization (`getNextToken` in `src/moepkg/syntax/tokenizer.nim`) and markdown code fences. To add a language:
+Syntax highlighting is dispatched from `getNextToken` in `src/moepkg/syntax/dispatch.nim`. It is the only module that imports every `syntax_*` lexer, and no lexer imports it. Markdown code fences go through the same dispatch: `codeBlockDelegate` in `syntax_markdown.nim` names the language of the next token, and `dispatch.nim` calls its lexer. To add a language:
 
 1. Add a `lang<Name>` value to the `SourceLanguage` enum.
 2. Add entries in `sourceLanguageToStr` and `getSourceLanguage` so filetype detection and LSP language IDs round-trip.
-3. Add a `case` arm in `codeBlockNextToken` that dispatches to `<name>NextToken`.
+3. Add a `case` arm in `languageNextToken` (`dispatch.nim`) that dispatches to `<name>NextToken`. The `case` is exhaustive, so a missing arm is a compile error.
 4. Implement the tokenizer in `src/moepkg/syntax/syntax_<name>.nim`.
 5. If the tokenizer carries multi-line state (block comments, raw/long strings, template literals, mode flags, …), put it in a `<Name>State` object under `LangState` in `tokenizer.nim`, seed the initial value in `defaultLangState`, and access it as `g.lang.<name>.<field>`. Do **not** add fields directly to `GeneralTokenizer`; those are silently dropped by the incremental highlighter's capture/restore.
 6. **Any language whose tokenizer touches a `LangState` member (or otherwise carries state across lines via `g.state`) requires an entry in `tests/test_highlight_fuzz.nim`**: a `<name>Corpus` proc with snippets that exercise every stateful path, a `runFuzz` test in the `Incremental Highlight Fuzz` suite, and an entry in the `Monotonic-advance guard` corpora table. The fuzz suite is the only automated check that the incremental output matches a full reparse under random edits.

@@ -19,7 +19,7 @@
 
 import std/[unittest, algorithm, random, sequtils, strutils]
 
-import ../src/moepkg/syntax/[tokenizer, syntax_go]
+import ../src/moepkg/syntax/[tokenizer, dispatch, syntax_go]
 
 proc tokens(code: string): seq[tuple[kind: TokenClass, text: string]] =
   ## Tokenize `code` as Go and return every non-whitespace token.

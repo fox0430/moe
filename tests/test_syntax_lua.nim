@@ -19,7 +19,7 @@
 
 import std/[unittest, algorithm, random, sequtils, strutils]
 
-import ../src/moepkg/syntax/[tokenizer, syntax_lua]
+import ../src/moepkg/syntax/[tokenizer, dispatch, syntax_lua]
 
 proc tokens(code: string): seq[tuple[kind: TokenClass, text: string]] =
   ## Tokenize `code` as Lua and return every non-whitespace token.

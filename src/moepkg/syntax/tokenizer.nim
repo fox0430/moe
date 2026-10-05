@@ -35,7 +35,7 @@
 ## Currently only few languages are supported, other languages may be added.
 ## The interface supports one language nested in another.
 ##
-## **Note:** Import ``packages/docutils/highlite`` to use this module
+## **Note:** ``getNextToken`` lives in ``dispatch``, which imports every lexer
 ##
 ## You can use this to build your own syntax highlighting, check this example:
 ##
@@ -554,47 +554,3 @@ proc scanRadixNumber*(g: var GeneralTokenizer, position: int): int =
 
 proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
-
-type LexerProc* = proc(g: var GeneralTokenizer) ## Single-language tokenizer proc.
-
-var lexerRegistry: array[SourceLanguage, LexerProc]
-  ## Runtime lexer table. Each `syntax_*` module self-registers on import, so
-  ## the dispatcher never imports them back and the import cycle stays closed.
-
-proc registerLexer*(lang: SourceLanguage, lexer: LexerProc) =
-  ## Called once at module scope by a `syntax_*` module.
-  assert lexerRegistry[lang] == nil or lexerRegistry[lang] == lexer,
-    "registerLexer: conflicting lexer for " & $lang
-  lexerRegistry[lang] = lexer
-
-proc isLexerRegistered*(lang: SourceLanguage): bool =
-  ## True once a `syntax_*` module has registered a lexer for `lang`.
-  lexerRegistry[lang] != nil
-
-proc dispatchRegisteredLexer*(g: var GeneralTokenizer, lang: SourceLanguage) =
-  ## A missing registration means the module was never imported: fail loudly in
-  ## debug builds, degrade to EOF instead of a nil call in release.
-  if lexerRegistry[lang] == nil:
-    assert false, "dispatchRegisteredLexer: no lexer registered for " & $lang
-    g.kind = gtEof
-  else:
-    lexerRegistry[lang](g)
-
-import syntax_markdown
-
-proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
-  let
-    startPos = g.pos
-    startState = g.state
-  if lang == langMarkdown:
-    g.markdownNextToken
-  else:
-    g.codeBlockNextToken(lang)
-
-  if g.kind != gtEof and g.pos <= startPos and g.state == startState:
-    # Monotonic-advance guard: a non-EOF token must make progress, by consuming
-    # input (`pos` advances) or changing `state` (YAML's zero-consume document
-    # transitions). When it does neither the tokenizer is stuck; the per-tokenizer
-    # `assert` that catches this is compiled out under `-d:danger`, where the
-    # consumer loops would spin forever. Force EOF to terminate them.
-    g.kind = gtEof
