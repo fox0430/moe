@@ -41,7 +41,7 @@ proc newTerminalState*(
   ## keeps running instead of exiting once the command finishes.
   let spawnCommand =
     if command.len > 0:
-      command & "; exec " & getEnv("SHELL", "/bin/sh")
+      command & "; exec " & defaultShell()
     else:
       ""
   let ptyResult = openPtyAndSpawn(spawnCommand, cols, rows)
@@ -57,6 +57,11 @@ proc newTerminalState*(
   )
 
   ok(state)
+
+proc defaultShellName*(): string =
+  ## Base name of the shell a session with no command runs. Names such a
+  ## session, since `:b` needs something its alias can carry.
+  defaultShell().extractFilename
 
 proc flushWrites(state: TerminalState, budget: var int) =
   ## Push the queue a little further, spending `budget` - what one poll may
