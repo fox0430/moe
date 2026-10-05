@@ -406,7 +406,11 @@ when not defined(moe.embedded):
     let activeWin = e.activeWindow
     # A session with no command still needs a name, so it takes the shell it
     # runs. The spawn command itself stays empty (an interactive shell).
-    let name = if command.len > 0: command else: defaultShellName()
+    let name =
+      if command.len > 0:
+        command
+      else:
+        defaultShellName()
     result = newTextBuffer("")
     result.displayName = some("[Terminal: " & name & "]")
     # The name is the session's stable `:b` key; the label is presentation
