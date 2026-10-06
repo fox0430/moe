@@ -649,7 +649,7 @@ proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
         cmd: prepared.command.cmd,
         args: prepared.command.args,
         filePath: prepared.filePath,
-        isTempFile: prepared.isTempFile,
+        workDir: prepared.workDir,
       ),
     )
     if e.config.notification.screenNotifications and

@@ -824,7 +824,7 @@ type
       # and mode.
       automatic: bool
   QuickRunInfo* =
-    tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
+    tuple[cmd: string, args: seq[string], filePath: string, workDir: string]
   SyntaxCheckInfo* = tuple[path: string, language: int]
   FilterInfo* =
     tuple[

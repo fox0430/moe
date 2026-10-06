@@ -1611,7 +1611,7 @@ proc runQuickRunJob(
       let prepared = QuickRunPrepareResult(
         command: BackgroundProcessCommand(cmd: info.cmd, args: info.args),
         filePath: info.filePath,
-        isTempFile: info.isTempFile,
+        workDir: info.workDir,
       )
       let quickRunResult = startBackgroundQuickRun(prepared)
       if quickRunResult.isErr:
@@ -1770,6 +1770,7 @@ proc runQuickRunAsync(
   ## `epoch` is what the op carried when queued, so an earlier `:jobs!` stops
   ## the run rather than letting it start late.
   if editor.commandsStoppedSince(epoch):
+    removeQuickRunWorkDir(info.workDir)
     return
   await runQuickRunJob(editor, info)
 

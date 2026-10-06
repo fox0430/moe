@@ -25,10 +25,13 @@ You can use ```\ + r``` in normal mode. And ```run``` or ```Q``` command in Comm
 Currently QuickRun supports these languages by default and runs the following command internally.
 
 - Nim ```nim c -r filename```
-- C ```gcc filename && ./a.out```
-- C++ ```g++ filename && ./a.out```
+- C ```gcc filename -o program && program```
+- C++ ```g++ filename -o program && program```
+- Rust ```rustc filename -o program && program```
 - bash ```bash filename```
 - sh ```sh filename```
+
+A buffer with no file on disk runs from a copy. The copy and the C, C++ and Rust programs go in a private directory under `~/.cache/moe/quickrun` that is removed when the run ends, so QuickRun writes nothing to the current directory. The program still runs in the current directory.
 
 You can overwrite the command to be executed in the setting. That way you can use other compilers and languages.
 
