@@ -19,6 +19,14 @@
 
 import std/[monotimes, os, strformat, options, strutils]
 
+when defined(macosx):
+  # std/posix declares it in <stdlib.h>, where macOS doesn't.
+  proc mkdtemp(tmpl: cstring): cstring {.importc, header: "<unistd.h>".}
+elif defined(posix):
+  from std/posix import mkdtemp
+else:
+  import std/tempfiles
+
 import pkg/[results, chronos]
 
 import syntax/tokenizer
@@ -29,7 +37,9 @@ export SourceLanguage
 type QuickRunProcess* = object
   command*: BackgroundProcessCommand
   filePath*: string
-  isTempFile*: bool
+  workDir*: string
+    ## Private dir holding everything this run wrote (temp source, built
+    ## program); removed whole when the run ends. Empty when nothing was written.
   process*: BackgroundProcess
   startedAt*: MonoTime
     ## So a run holding a file can be listed, and timed, beside the others.
@@ -129,33 +139,35 @@ proc nimQuickRunCommand(
   return BackgroundProcessCommand(cmd: Cmd, args: args)
 
 proc clangQuickRunCommand(
-    path: string, settings: QuickRunConfig
+    path, program: string, settings: QuickRunConfig
 ): BackgroundProcessCommand {.inline.} =
   let options =
     if settings.clangOptions.isSome:
       settings.clangOptions.get & " "
     else:
       ""
-  # quoteShell the file-derived path so a malicious file/dir name cannot inject
+  # quoteShell the file-derived paths so a malicious file/dir name cannot inject
   # shell commands into the `/bin/bash -c` string (e.g. `evil$(...).c`).
+  let exe = quoteShell(program)
   BackgroundProcessCommand(
     cmd: "/bin/bash",
-    args: @["-c", fmt"gcc {options}{quoteShell(path)} -o ./.out && ./.out"],
+    args: @["-c", fmt"gcc {options}{quoteShell(path)} -o {exe} && {exe}"],
   )
 
 proc cppQuickRunCommand(
-    path: string, settings: QuickRunConfig
+    path, program: string, settings: QuickRunConfig
 ): BackgroundProcessCommand {.inline.} =
   let options =
     if settings.cppOptions.isSome:
       settings.cppOptions.get & " "
     else:
       ""
-  # quoteShell the file-derived path (see clangQuickRunCommand) to prevent
+  # quoteShell the file-derived paths (see clangQuickRunCommand) to prevent
   # command injection via the source file name.
+  let exe = quoteShell(program)
   BackgroundProcessCommand(
     cmd: "/bin/bash",
-    args: @["-c", fmt"g++ {options}{quoteShell(path)} -o ./.out && ./.out"],
+    args: @["-c", fmt"g++ {options}{quoteShell(path)} -o {exe} && {exe}"],
   )
 
 proc shQuickRunCommand(
@@ -198,30 +210,38 @@ proc goQuickRunCommand(
   BackgroundProcessCommand(cmd: "go", args: @["run", path])
 
 proc rustQuickRunCommand(
-    path: string, settings: QuickRunConfig
+    path, program: string, settings: QuickRunConfig
 ): BackgroundProcessCommand =
-  # rustc <path> -o ./outName && ./outName
-  # quoteShell both the path and the derived output name so a malicious file
-  # name cannot inject shell commands into the `/bin/bash -c` string.
-  let
-    outName = path.splitFile.name
-    quotedOut = quoteShell(outName)
+  # quoteShell both paths so a malicious file name cannot inject shell
+  # commands into the `/bin/bash -c` string.
+  let exe = quoteShell(program)
   BackgroundProcessCommand(
-    cmd: "/bin/bash",
-    args: @["-c", fmt"rustc {quoteShell(path)} -o ./{quotedOut} && ./{quotedOut}"],
+    cmd: "/bin/bash", args: @["-c", fmt"rustc {quoteShell(path)} -o {exe} && {exe}"]
   )
 
+proc buildsProgram(lang: SourceLanguage): bool =
+  ## Whether QuickRun names the built program itself, so it needs a work dir to
+  ## put it in. Nim leaves its program next to the source.
+  lang in {SourceLanguage.langC, SourceLanguage.langCpp, SourceLanguage.langRust}
+
+proc programPath(workDir, path: string): string =
+  workDir / path.splitFile.name
+
 proc quickRunCommand(
-    path: string, lang: SourceLanguage, buffer: TextBuffer, settings: QuickRunConfig
+    path: string,
+    lang: SourceLanguage,
+    buffer: TextBuffer,
+    settings: QuickRunConfig,
+    workDir: string,
 ): Result[BackgroundProcessCommand, string] =
   var command: BackgroundProcessCommand
   case lang
   of SourceLanguage.langNim:
     command = nimQuickRunCommand(path, settings)
   of SourceLanguage.langC:
-    command = clangQuickRunCommand(path, settings)
+    command = clangQuickRunCommand(path, programPath(workDir, path), settings)
   of SourceLanguage.langCpp:
-    command = cppQuickRunCommand(path, settings)
+    command = cppQuickRunCommand(path, programPath(workDir, path), settings)
   of SourceLanguage.langShell:
     if buffer.isSh:
       command = shQuickRunCommand(path, settings)
@@ -230,7 +250,7 @@ proc quickRunCommand(
   of SourceLanguage.langPython:
     command = pythonQuickRunCommand(path, settings)
   of SourceLanguage.langRust:
-    command = rustQuickRunCommand(path, settings)
+    command = rustQuickRunCommand(path, programPath(workDir, path), settings)
   of SourceLanguage.langLua:
     command = luaQuickRunCommand(path, settings)
   of SourceLanguage.langGo:
@@ -254,16 +274,59 @@ proc kill*(p: QuickRunProcess) {.inline.} =
 type QuickRunPrepareResult* = object
   command*: BackgroundProcessCommand
   filePath*: string
-  isTempFile*: bool
+  workDir*: string ## See `QuickRunProcess.workDir`.
   didSave*: bool
     ## True when staging saved the buffer to its real file.
     ## The caller must then run `noteBufferSaved`.
+
+proc createWorkDir(): Result[string, string] =
+  ## A fresh dir only the user can enter, so nothing planted can redirect what
+  ## a run writes. Under the user's cache, not the shared temp dir: compilers
+  ## read config from every parent of a source (nim runs any `config.nims` up
+  ## the tree), and anyone can put one in /tmp.
+  var cache = getCacheDir()
+  if cache.len == 0:
+    # `getCacheDir` returns "" for a set-but-empty XDG_CACHE_HOME, which the
+    # XDG spec treats as unset and expects to fall back to `$HOME/.cache`.
+    let home = getHomeDir()
+    if home.len > 0:
+      cache = home / ".cache"
+  if not cache.isAbsolute:
+    return
+      Result[string, string].err "no absolute cache directory (HOME or XDG_CACHE_HOME)"
+  let base = cache / "moe" / "quickrun"
+  try:
+    createDir(base)
+  except IOError, OSError:
+    return Result[string, string].err getCurrentExceptionMsg()
+
+  when defined(posix):
+    var path = base / "run-XXXXXX"
+    if mkdtemp(path.cstring).isNil:
+      return Result[string, string].err osErrorMsg(osLastError())
+    return Result[string, string].ok path
+  else:
+    try:
+      return Result[string, string].ok createTempDir("run-", "", base)
+    except OSError as e:
+      return Result[string, string].err e.msg
+
+proc removeQuickRunWorkDir*(workDir: string) =
+  ## Remove a run's work dir with everything in it. Swallows OS errors so it
+  ## can run from shutdown paths.
+  if workDir.len == 0:
+    return
+  try:
+    removeDir(workDir)
+  except OSError:
+    discard
 
 proc prepareQuickRun*(
     buffer: TextBuffer, settings: EditorConfig
 ): Result[QuickRunPrepareResult, string] =
   ## Assemble the run command and stage its input.
-  ## The command is built before any disk write, so failure has no side effects.
+  ## The buffer's file is written only once the command is built, and a
+  ## failure removes the work dir, so failure leaves nothing behind.
   ## Staging writes bytes directly without trim or mode handling.
 
   when defined(moe.embedded) and defined(windows):
@@ -280,17 +343,29 @@ proc prepareQuickRun*(
         Result[string, string].ok "sh"
       else:
         buffer.language.languageExtension
-    path =
-      if useTempFile:
-        # A temporary file name.
-        if langExt.isErr:
-          return Result[QuickRunPrepareResult, string].err langExt.error
-        "quickruntemp." & langExt.get
-      else:
-        buffer.filePath.get
+  if useTempFile and langExt.isErr:
+    return Result[QuickRunPrepareResult, string].err langExt.error
 
-  # Build the command before writing, so failure has no side effects.
-  let command = quickRunCommand(path, buffer.language, buffer, settings.quickRun)
+  var workDir = ""
+  if useTempFile or buffer.language.buildsProgram:
+    let created = createWorkDir()
+    if created.isErr:
+      return Result[QuickRunPrepareResult, string].err fmt"Failed to create a directory for QuickRun: {created.error}"
+    workDir = created.get
+
+  var staged = false
+  defer:
+    if not staged:
+      removeQuickRunWorkDir(workDir)
+
+  let path =
+    if useTempFile:
+      workDir / ("quickruntemp." & langExt.get)
+    else:
+      buffer.filePath.get
+
+  let command =
+    quickRunCommand(path, buffer.language, buffer, settings.quickRun, workDir)
   if command.isErr:
     return
       Result[QuickRunPrepareResult, string].err fmt"QuickRun failed: {command.error}"
@@ -309,72 +384,48 @@ proc prepareQuickRun*(
       return Result[QuickRunPrepareResult, string].err fmt"Failed to save the current code: {saveResult.error}"
     didSave = true
 
+  staged = true
   return Result[QuickRunPrepareResult, string].ok QuickRunPrepareResult(
-    command: command.get, filePath: path, isTempFile: useTempFile, didSave: didSave
+    command: command.get, filePath: path, workDir: workDir, didSave: didSave
   )
-
-proc cleanupTempFiles(filePath: string, isTempFile: bool) =
-  ## Cleanup temporary files created by QuickRun.
-  if not isTempFile:
-    return
-  try:
-    # Cleanup temporary a source code file.
-    if filePath.fileExists:
-      removeFile(filePath)
-    # Cleanup temporary a executable.
-    let baseName = filePath.splitFile.name
-    if baseName.fileExists:
-      removeFile(baseName)
-    # Also cleanup .out files for C/C++
-    if ".out".fileExists:
-      removeFile(".out")
-  except OSError:
-    discard
-
-proc cleanupTempFiles(p: QuickRunProcess) =
-  cleanupTempFiles(p.filePath, p.isTempFile)
 
 proc startBackgroundQuickRun*(
     prepared: QuickRunPrepareResult
 ): Result[QuickRunProcess, string] =
   ## Start a background process for build and run commands.
-  ## On failure, cleans up the temp source file that `prepareQuickRun`
-  ## may have written, so a failed start never leaves `quickruntemp.<ext>`
-  ## behind.
+  ## On failure, removes the work dir `prepareQuickRun` may have made.
 
   let backgroundProcess = startBackgroundProcess(prepared.command)
   if backgroundProcess.isErr:
-    cleanupTempFiles(prepared.filePath, prepared.isTempFile)
+    removeQuickRunWorkDir(prepared.workDir)
     return Result[QuickRunProcess, string].err fmt"QuickRun failed: {backgroundProcess.error}"
 
   return Result[QuickRunProcess, string].ok QuickRunProcess(
     command: prepared.command,
     filePath: prepared.filePath,
-    isTempFile: prepared.isTempFile,
+    workDir: prepared.workDir,
     process: backgroundProcess.get,
     startedAt: getMonoTime(),
   )
 
 proc abandonQuickRunProcess*(p: QuickRunProcess) =
-  ## Kill a running QuickRun process and remove its temporary files (temp
-  ## source + build artifacts) without waiting for completion. Used on editor
-  ## shutdown/crash so an in-flight QuickRun never orphans its process or
-  ## leaves temp files behind. Safe to call multiple times and with a nil
-  ## process; `cleanupTempFiles` swallows OS errors so it can run from
-  ## shutdown paths. Mirrors `git_diff.abandonGitDiffProcess`.
+  ## Kill a running QuickRun process and remove its work dir without waiting
+  ## for completion. Used on editor shutdown/crash so an in-flight QuickRun
+  ## never orphans its process or leaves files behind. Safe to call multiple
+  ## times and with a nil process. Mirrors `git_diff.abandonGitDiffProcess`.
   if not p.process.isNil:
     p.kill()
-  p.cleanupTempFiles()
+  removeQuickRunWorkDir(p.workDir)
 
 proc waitForResultAsync*(
     p: QuickRunProcess, timeout: Duration
 ): Future[ProcessOutputResult] {.async: (raises: []).} =
   ## Wait for the process to finish and return the output. A program still
   ## running after `timeout` (an infinite loop, or one waiting on stdin, which
-  ## QuickRun never provides) is killed and reported as an error. Temporary
-  ## files are removed either way.
+  ## QuickRun never provides) is killed and reported as an error. The work dir
+  ## is removed either way.
 
   let output = await p.process.waitForAsync(timeout)
-  p.cleanupTempFiles()
+  removeQuickRunWorkDir(p.workDir)
 
   return output

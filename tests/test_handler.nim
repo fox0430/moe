@@ -1156,7 +1156,7 @@ suite "Pending async operations":
     )
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
+      quickRun: (cmd: "echo", args: @["hi"], filePath: "", workDir: ""),
     )
 
     waitFor editor.handlePendingAsyncOperations(
@@ -1214,7 +1214,7 @@ proc detachedPendingWriter(e: Editor): Future[void] {.async: (raises: [Exception
   # from handler.nim after handleEvent has already returned.
   e.state.pending.add PendingAsyncOp(
     kind: paoQuickRun,
-    quickRun: (cmd: "echo", args: @["detached"], filePath: "", isTempFile: false),
+    quickRun: (cmd: "echo", args: @["detached"], filePath: "", workDir: ""),
   )
 
 proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception]).} =
@@ -1257,7 +1257,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
+      quickRun: (cmd: "echo", args: @["hi"], filePath: "", workDir: ""),
     )
 
     waitFor editor.handlePendingAsyncOperations(FrontendHooks())
@@ -1284,7 +1284,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
+      quickRun: (cmd: "echo", args: @["hi"], filePath: "", workDir: ""),
     )
     editor.state.pending.add PendingAsyncOp(
       kind: paoFilter,
@@ -1308,17 +1308,43 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["a"], filePath: "", isTempFile: false),
+      quickRun: (cmd: "echo", args: @["a"], filePath: "", workDir: ""),
     )
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["b"], filePath: "", isTempFile: false),
+      quickRun: (cmd: "echo", args: @["b"], filePath: "", workDir: ""),
     )
     check editor.state.pending.len == 2
 
     waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
     check editor.state.pending.len == 0
+
+  test "a QuickRun stopped by :jobs! before it starts removes its work dir":
+    let editor = newEditor(newEditorConfig())
+    let workDir = getTempDir() / "moe_test_handler_quickrun_stopped"
+    createDir(workDir)
+    writeFile(workDir / "quickruntemp.py", "print('never run')")
+    defer:
+      removeDir(workDir)
+
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoQuickRun,
+      epoch: editor.state.commandEpoch,
+      quickRun: (
+        cmd: "echo",
+        args: @["never run"],
+        filePath: workDir / "quickruntemp.py",
+        workDir: workDir,
+      ),
+    )
+    # What `:jobs!` does to work queued before it.
+    editor.state.commandEpoch.inc
+
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+
+    check editor.state.pending.len == 0
+    check not dirExists(workDir)
 
   test "drain with an empty queue is a no-op":
     let config = newEditorConfig()

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, options, strutils]
+import std/[unittest, os, options, strutils, sequtils]
 from std/times import getTime, initDuration, `-`
 
 import pkg/chronos
@@ -26,6 +26,22 @@ import ../src/moepkg/quick_run_utils {.all.}
 import ../src/moepkg/[config, background_process, child_process]
 import ../src/moepkg/buffer/[core, file_io, edit]
 import ../src/moepkg/syntax/tokenizer
+
+# Keep the work dirs these tests make out of the user's real cache.
+let testCacheHome = getTempDir() / "moe_test_quickrun_cache"
+putEnv("XDG_CACHE_HOME", testCacheHome)
+
+template inDir(dir: string, body: untyped) =
+  ## Run `body` with `dir` (made fresh) as the current directory.
+  removeDir(dir)
+  createDir(dir)
+  let saved = getCurrentDir()
+  setCurrentDir(dir)
+  try:
+    body
+  finally:
+    setCurrentDir(saved)
+    removeDir(dir)
 
 suite "QuickRunUtils - quickRunStartupMessage":
   test "Generate startup message":
@@ -234,32 +250,30 @@ suite "QuickRunUtils - nimQuickRunCommand":
 suite "QuickRunUtils - clangQuickRunCommand":
   test "Basic C command":
     let settings = QuickRunConfig(clangOptions: none(string))
-    let cmd = clangQuickRunCommand("/path/to/file.c", settings)
+    let cmd = clangQuickRunCommand("/path/to/file.c", "/work/file", settings)
     check cmd.cmd == "/bin/bash"
     check cmd.args.len == 2
     check cmd.args[0] == "-c"
-    check "gcc" in cmd.args[1]
-    check "./.out" in cmd.args[1]
+    check cmd.args[1] == "gcc /path/to/file.c -o /work/file && /work/file"
 
   test "C command with options":
     let settings = QuickRunConfig(clangOptions: some("-Wall -Wextra"))
-    let cmd = clangQuickRunCommand("/path/to/file.c", settings)
+    let cmd = clangQuickRunCommand("/path/to/file.c", "/work/file", settings)
     check cmd.cmd == "/bin/bash"
     check "-Wall -Wextra" in cmd.args[1]
 
 suite "QuickRunUtils - cppQuickRunCommand":
   test "Basic C++ command":
     let settings = QuickRunConfig(cppOptions: none(string))
-    let cmd = cppQuickRunCommand("/path/to/file.cpp", settings)
+    let cmd = cppQuickRunCommand("/path/to/file.cpp", "/work/file", settings)
     check cmd.cmd == "/bin/bash"
     check cmd.args.len == 2
     check cmd.args[0] == "-c"
-    check "g++" in cmd.args[1]
-    check "./.out" in cmd.args[1]
+    check cmd.args[1] == "g++ /path/to/file.cpp -o /work/file && /work/file"
 
   test "C++ command with options":
     let settings = QuickRunConfig(cppOptions: some("-std=c++17"))
-    let cmd = cppQuickRunCommand("/path/to/file.cpp", settings)
+    let cmd = cppQuickRunCommand("/path/to/file.cpp", "/work/file", settings)
     check cmd.cmd == "/bin/bash"
     check "-std=c++17" in cmd.args[1]
 
@@ -299,23 +313,16 @@ suite "QuickRunUtils - pythonQuickRunCommand":
 suite "QuickRunUtils - rustQuickRunCommand":
   test "Basic rust command":
     let settings = QuickRunConfig()
-    let cmd = rustQuickRunCommand("/path/to/file.rs", settings)
+    let cmd = rustQuickRunCommand("/path/to/file.rs", "/work/file", settings)
     check cmd.cmd == "/bin/bash"
     check cmd.args.len == 2
     check cmd.args[0] == "-c"
-    check "rustc" in cmd.args[1]
-    check "./file" in cmd.args[1]
+    check cmd.args[1] == "rustc /path/to/file.rs -o /work/file && /work/file"
 
-  test "Rust command extracts correct output name":
-    let settings = QuickRunConfig()
-    let cmd = rustQuickRunCommand("/some/deep/path/myprogram.rs", settings)
-    check "./myprogram" in cmd.args[1]
-    check "rustc" in cmd.args[1]
-
-  test "Rust command with simple filename":
-    let settings = QuickRunConfig()
-    let cmd = rustQuickRunCommand("main.rs", settings)
-    check "./main" in cmd.args[1]
+suite "QuickRunUtils - programPath":
+  test "The program is named after the source, inside the work dir":
+    check programPath("/work", "/some/deep/path/myprogram.rs") == "/work/myprogram"
+    check programPath("/work", "main.c") == "/work/main"
 
 suite "QuickRunUtils - command injection (H11 regression)":
   # A malicious file/dir name must not be able to inject shell commands into the
@@ -324,29 +331,32 @@ suite "QuickRunUtils - command injection (H11 regression)":
   test "C: malicious file name is shell-quoted":
     let settings = QuickRunConfig(clangOptions: none(string))
     let malicious = "/tmp/evil$(touch pwned).c"
-    let cmd = clangQuickRunCommand(malicious, settings)
+    let program = programPath("/work", malicious)
+    let cmd = clangQuickRunCommand(malicious, program, settings)
     check quoteShell(malicious) in cmd.args[1]
+    check quoteShell(program) in cmd.args[1]
     # The raw, unquoted name must not appear right after the compiler.
     check ("gcc " & malicious) notin cmd.args[1]
 
   test "C++: malicious file name is shell-quoted":
     let settings = QuickRunConfig(cppOptions: none(string))
     let malicious = "/tmp/evil`id`.cpp"
-    let cmd = cppQuickRunCommand(malicious, settings)
+    let program = programPath("/work", malicious)
+    let cmd = cppQuickRunCommand(malicious, program, settings)
     check quoteShell(malicious) in cmd.args[1]
+    check quoteShell(program) in cmd.args[1]
     check ("g++ " & malicious) notin cmd.args[1]
 
   test "Rust: malicious name is quoted in both compile and run":
     let settings = QuickRunConfig()
     let malicious = "/tmp/ev il$(id).rs"
-    let cmd = rustQuickRunCommand(malicious, settings)
+    let program = programPath("/work dir", malicious)
+    let cmd = rustQuickRunCommand(malicious, program, settings)
     check quoteShell(malicious) in cmd.args[1]
-    # The derived output name is used both for `-o` and to execute it.
-    check quoteShell("ev il$(id)") in cmd.args[1]
+    # The program path is used both for `-o` and to execute it.
+    check cmd.args[1].count(quoteShell(program)) == 2
     check "$(id)" notin
-      cmd.args[1].replace(quoteShell(malicious), "").replace(
-        quoteShell("ev il$(id)"), ""
-      )
+      cmd.args[1].replace(quoteShell(malicious), "").replace(quoteShell(program), "")
 
 suite "QuickRunUtils - quickRunCommand":
   test "Nim language":
@@ -354,8 +364,9 @@ suite "QuickRunUtils - quickRunCommand":
     buffer.language = SourceLanguage.langNim
     let settings =
       QuickRunConfig(nimAdvancedCommand: none(string), nimOptions: none(string))
-    let result =
-      quickRunCommand("/path/to/file.nim", SourceLanguage.langNim, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/file.nim", SourceLanguage.langNim, buffer, settings, "/work"
+    )
     check result.isOk
     check result.get.cmd == "nim"
 
@@ -363,8 +374,9 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#include <stdio.h>\nint main() { return 0; }")
     buffer.language = SourceLanguage.langC
     let settings = QuickRunConfig(clangOptions: none(string))
-    let result =
-      quickRunCommand("/path/to/file.c", SourceLanguage.langC, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/file.c", SourceLanguage.langC, buffer, settings, "/work"
+    )
     check result.isOk
     check result.get.cmd == "/bin/bash"
     check "gcc" in result.get.args[1]
@@ -373,8 +385,9 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#include <iostream>\nint main() { return 0; }")
     buffer.language = SourceLanguage.langCpp
     let settings = QuickRunConfig(cppOptions: none(string))
-    let result =
-      quickRunCommand("/path/to/file.cpp", SourceLanguage.langCpp, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/file.cpp", SourceLanguage.langCpp, buffer, settings, "/work"
+    )
     check result.isOk
     check result.get.cmd == "/bin/bash"
     check "g++" in result.get.args[1]
@@ -383,8 +396,9 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("fn main() {}")
     buffer.language = SourceLanguage.langRust
     let settings = QuickRunConfig()
-    let result =
-      quickRunCommand("/path/to/file.rs", SourceLanguage.langRust, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/file.rs", SourceLanguage.langRust, buffer, settings, "/work"
+    )
     check result.isOk
     check result.get.cmd == "/bin/bash"
     check "rustc" in result.get.args[1]
@@ -393,8 +407,9 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("print('hello')")
     buffer.language = SourceLanguage.langPython
     let settings = QuickRunConfig()
-    let result =
-      quickRunCommand("/path/to/script.py", SourceLanguage.langPython, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/script.py", SourceLanguage.langPython, buffer, settings, "/work"
+    )
     check result.isOk
     check result.get.cmd == "python3"
 
@@ -402,8 +417,9 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#!/bin/sh\necho hello")
     buffer.language = SourceLanguage.langShell
     let settings = QuickRunConfig(shOptions: none(string), bashOptions: none(string))
-    let result =
-      quickRunCommand("/path/to/script.sh", SourceLanguage.langShell, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/script.sh", SourceLanguage.langShell, buffer, settings, "/work"
+    )
     check result.isOk
     check result.get.cmd == "/bin/sh"
 
@@ -411,8 +427,9 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#!/bin/bash\necho hello")
     buffer.language = SourceLanguage.langShell
     let settings = QuickRunConfig(shOptions: none(string), bashOptions: none(string))
-    let result =
-      quickRunCommand("/path/to/script.sh", SourceLanguage.langShell, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/script.sh", SourceLanguage.langShell, buffer, settings, "/work"
+    )
     check result.isOk
     check result.get.cmd == "/bin/bash"
 
@@ -420,8 +437,9 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("<html></html>")
     buffer.language = SourceLanguage.langHtml
     let settings = QuickRunConfig()
-    let result =
-      quickRunCommand("/path/to/file.html", SourceLanguage.langHtml, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/file.html", SourceLanguage.langHtml, buffer, settings, "/work"
+    )
     check result.isErr
     check "Unsupported language" in result.error
 
@@ -429,8 +447,9 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#!/usr/bin/env python3\nprint('x')")
     buffer.language = SourceLanguage.langNone
     let settings = QuickRunConfig()
-    let result =
-      quickRunCommand("/path/to/script", SourceLanguage.langNone, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/script", SourceLanguage.langNone, buffer, settings, "/work"
+    )
     check result.isOk
     check result.get.cmd == "python3"
     check result.get.args == @["/path/to/script"]
@@ -439,8 +458,9 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#!/usr/bin/perl -w\nprint \"x\\n\";")
     buffer.language = SourceLanguage.langNone
     let settings = QuickRunConfig()
-    let result =
-      quickRunCommand("/path/to/script.pl", SourceLanguage.langNone, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/script.pl", SourceLanguage.langNone, buffer, settings, "/work"
+    )
     check result.isOk
     check result.get.cmd == "/usr/bin/perl"
     check result.get.args == @["-w", "/path/to/script.pl"]
@@ -449,10 +469,50 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("just text")
     buffer.language = SourceLanguage.langNone
     let settings = QuickRunConfig()
-    let result =
-      quickRunCommand("/path/to/file", SourceLanguage.langNone, buffer, settings)
+    let result = quickRunCommand(
+      "/path/to/file", SourceLanguage.langNone, buffer, settings, "/work"
+    )
     check result.isErr
     check "Unsupported language" in result.error
+
+proc runToEnd(prepared: QuickRunPrepareResult): seq[string] =
+  ## Start `prepared`, wait for it, and return its output.
+  let started = startBackgroundQuickRun(prepared)
+  doAssert started.isOk, started.error
+  let output = waitFor started.get.waitForResultAsync(60.seconds)
+  doAssert output.isOk, output.error
+  output.get
+
+suite "QuickRunUtils - createWorkDir":
+  test "An empty XDG_CACHE_HOME falls back to $HOME/.cache":
+    # `getCacheDir` returns "" for a set-but-empty XDG_CACHE_HOME, though the
+    # XDG spec treats it as unset.
+    let home = getTempDir() / "moe_test_quickrun_home"
+    removeDir(home)
+    createDir(home)
+    defer:
+      removeDir(home)
+
+    let
+      savedCache = getEnv("XDG_CACHE_HOME")
+      savedHome = getEnv("HOME")
+    putEnv("XDG_CACHE_HOME", "")
+    putEnv("HOME", home)
+    try:
+      let created = createWorkDir()
+      require created.isOk
+      defer:
+        removeQuickRunWorkDir(created.get)
+      check created.get.parentDir == home / ".cache" / "moe" / "quickrun"
+    finally:
+      if savedCache.len > 0:
+        putEnv("XDG_CACHE_HOME", savedCache)
+      else:
+        delEnv("XDG_CACHE_HOME")
+      if savedHome.len > 0:
+        putEnv("HOME", savedHome)
+      else:
+        delEnv("HOME")
 
 suite "QuickRunUtils - prepareQuickRun":
   test "Prepare QuickRun for Nim file with path":
@@ -470,7 +530,8 @@ suite "QuickRunUtils - prepareQuickRun":
     let result = prepareQuickRun(buffer, config)
     check result.isOk
     check result.get.filePath == getTempDir() / "test.nim"
-    check result.get.isTempFile == false
+    # Nim leaves its program next to the source: nothing for QuickRun to hold.
+    check result.get.workDir == ""
     check result.get.command.cmd == "nim"
 
   test "Prepare QuickRun for unsaved buffer creates temp file":
@@ -481,16 +542,15 @@ suite "QuickRunUtils - prepareQuickRun":
     config.quickRun.saveBufferWhenQuickRun = true
 
     let result = prepareQuickRun(buffer, config)
-    check result.isOk
-    check result.get.isTempFile == true
-    check result.get.filePath == "quickruntemp.py"
+    require result.isOk
+    defer:
+      removeQuickRunWorkDir(result.get.workDir)
+    check result.get.workDir.len > 0
+    check result.get.filePath == result.get.workDir / "quickruntemp.py"
     check result.get.command.cmd == "python3"
+    check result.get.command.args == @[result.get.filePath]
     # A temp copy only: no save, nothing owed.
     check result.get.didSave == false
-
-    # Cleanup temp file
-    if fileExists("quickruntemp.py"):
-      removeFile("quickruntemp.py")
 
   test "The temp copy leaves an unsaved buffer unsaved and unnamed":
     # saveFile would bind the buffer to a path QuickRun deletes after the run.
@@ -502,14 +562,83 @@ suite "QuickRunUtils - prepareQuickRun":
     config.quickRun.saveBufferWhenQuickRun = true
 
     let result = prepareQuickRun(buffer, config)
+    require result.isOk
     defer:
-      if fileExists("quickruntemp.py"):
-        removeFile("quickruntemp.py")
-    check result.isOk
+      removeQuickRunWorkDir(result.get.workDir)
 
     check buffer.filePath.isNone
     check buffer.isModified
-    check readFile("quickruntemp.py") == buffer.getFileContent
+    check readFile(result.get.filePath) == buffer.getFileContent
+
+  test "The work dir is private and under the user's cache":
+    # Not the shared temp dir: nim runs any `config.nims` found in a parent of
+    # the source, and anyone can put one in /tmp.
+    var buffer = newTextBuffer("print('hello')")
+    buffer.language = SourceLanguage.langPython
+
+    let result = prepareQuickRun(buffer, newEditorConfig())
+    require result.isOk
+    defer:
+      removeQuickRunWorkDir(result.get.workDir)
+    check result.get.workDir.parentDir == testCacheHome / "moe" / "quickrun"
+    when defined(posix):
+      check getFilePermissions(result.get.workDir) ==
+        {fpUserRead, fpUserWrite, fpUserExec}
+
+  test "Each run gets its own work dir":
+    var buffer = newTextBuffer("print('hello')")
+    buffer.language = SourceLanguage.langPython
+
+    let
+      first = prepareQuickRun(buffer, newEditorConfig())
+      second = prepareQuickRun(buffer, newEditorConfig())
+    require first.isOk and second.isOk
+    defer:
+      removeQuickRunWorkDir(first.get.workDir)
+      removeQuickRunWorkDir(second.get.workDir)
+    check first.get.workDir != second.get.workDir
+
+  test "Staging an unsaved buffer writes nothing to the current directory":
+    # A planted `quickruntemp.<ext>` symlink used to be followed and written
+    # through.
+    let victim = getTempDir() / "moe_test_quickrun_victim.txt"
+    writeFile(victim, "precious")
+    defer:
+      removeFile(victim)
+
+    inDir(getTempDir() / "moe_test_quickrun_cwd_stage"):
+      createSymlink(victim, "quickruntemp.py")
+      var buffer = newTextBuffer("print('hello')")
+      buffer.language = SourceLanguage.langPython
+
+      let result = prepareQuickRun(buffer, newEditorConfig())
+      require result.isOk
+      defer:
+        removeQuickRunWorkDir(result.get.workDir)
+      check readFile(victim) == "precious"
+      var entries: seq[string]
+      for _, path in walkDir("."):
+        entries.add path.extractFilename
+      check entries == @["quickruntemp.py"]
+
+  test "A real C file builds into the work dir":
+    let path = getTempDir() / "moe_test_quickrun_real.c"
+    writeFile(path, "int main() { return 0; }\n")
+    defer:
+      removeFile(path)
+
+    var buffer = newTextBuffer()
+    discard buffer.loadFile(path)
+    buffer.language = SourceLanguage.langC
+
+    let result = prepareQuickRun(buffer, newEditorConfig())
+    require result.isOk
+    defer:
+      removeQuickRunWorkDir(result.get.workDir)
+    check result.get.filePath == path
+    check result.get.workDir.len > 0
+    let program = quoteShell(result.get.workDir / "moe_test_quickrun_real")
+    check ("-o " & program & " && " & program) in result.get.command.args[1]
 
   test "Prepare QuickRun for unsupported language returns error":
     var buffer = newTextBuffer("<html></html>")
@@ -535,7 +664,7 @@ suite "QuickRunUtils - prepareQuickRun":
     let result = prepareQuickRun(buffer, config)
     check result.isOk
     check result.get.filePath == getTempDir() / "test_nosave.nim"
-    check result.get.isTempFile == false
+    check result.get.workDir == ""
     # Saving disabled: no save, nothing owed.
     check result.get.didSave == false
 
@@ -559,6 +688,23 @@ suite "QuickRunUtils - prepareQuickRun":
     check "Failed to save" in result.error
     # On-disk content must be left untouched.
     check readFile(path) == "echo \"external change\""
+
+  test "A refused save removes the work dir it made":
+    let path = getTempDir() / "test_quickrun_ext_mod.c"
+    writeFile(path, "int main() { return 0; }\n")
+    defer:
+      removeFile(path)
+
+    var buffer = newTextBuffer()
+    discard buffer.loadFile(path)
+    buffer.language = SourceLanguage.langC
+    buffer.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
+    writeFile(path, "int main() { return 1; }\n")
+
+    let before = toSeq(walkDir(testCacheHome / "moe" / "quickrun")).len
+    let result = prepareQuickRun(buffer, newEditorConfig())
+    check result.isErr
+    check toSeq(walkDir(testCacheHome / "moe" / "quickrun")).len == before
 
   test "Prepare QuickRun saves an unsaved edit when not externally modified":
     let path = getTempDir() / "test_quickrun_ok.nim"
@@ -610,13 +756,10 @@ suite "QuickRunUtils - prepareQuickRun":
 
     let config = newEditorConfig()
     let result = prepareQuickRun(buffer, config)
-    check result.isOk
-    check result.get.isTempFile == true
-    check result.get.filePath == "quickruntemp.nim"
-
-    # Cleanup temp file
-    if fileExists("quickruntemp.nim"):
-      removeFile("quickruntemp.nim")
+    require result.isOk
+    defer:
+      removeQuickRunWorkDir(result.get.workDir)
+    check result.get.filePath == result.get.workDir / "quickruntemp.nim"
 
   test "Prepare QuickRun for unsupported language with no filePath":
     var buffer = newTextBuffer("unsupported content")
@@ -628,82 +771,22 @@ suite "QuickRunUtils - prepareQuickRun":
     check "Unknown language" in result.error
 
   test "Prepare QuickRun for each supported language temp file":
-    # Test Nim
-    block:
-      var buffer = newTextBuffer("echo 1")
-      buffer.language = SourceLanguage.langNim
-      let config = newEditorConfig()
-      let result = prepareQuickRun(buffer, config)
-      check result.isOk
-      check result.get.filePath == "quickruntemp.nim"
-      if fileExists("quickruntemp.nim"):
-        removeFile("quickruntemp.nim")
-
-    # Test C
-    block:
-      var buffer = newTextBuffer("int main() { return 0; }")
-      buffer.language = SourceLanguage.langC
-      let config = newEditorConfig()
-      let result = prepareQuickRun(buffer, config)
-      check result.isOk
-      check result.get.filePath == "quickruntemp.c"
-      if fileExists("quickruntemp.c"):
-        removeFile("quickruntemp.c")
-
-    # Test C++
-    block:
-      var buffer = newTextBuffer("int main() { return 0; }")
-      buffer.language = SourceLanguage.langCpp
-      let config = newEditorConfig()
-      let result = prepareQuickRun(buffer, config)
-      check result.isOk
-      check result.get.filePath == "quickruntemp.cpp"
-      if fileExists("quickruntemp.cpp"):
-        removeFile("quickruntemp.cpp")
-
-    # Test Shell
-    block:
-      var buffer = newTextBuffer("echo hello")
-      buffer.language = SourceLanguage.langShell
-      let config = newEditorConfig()
-      let result = prepareQuickRun(buffer, config)
-      check result.isOk
-      check result.get.filePath == "quickruntemp.bash"
-      if fileExists("quickruntemp.bash"):
-        removeFile("quickruntemp.bash")
-
-    # Test Shell with sh shebang
-    block:
-      var buffer = newTextBuffer("#!/bin/sh\necho hello")
-      buffer.language = SourceLanguage.langShell
-      let config = newEditorConfig()
-      let result = prepareQuickRun(buffer, config)
-      check result.isOk
-      check result.get.filePath == "quickruntemp.sh"
-      if fileExists("quickruntemp.sh"):
-        removeFile("quickruntemp.sh")
-
-    # Test Shell with sh shebang and arguments
-    block:
-      var buffer = newTextBuffer("#!/bin/sh -e\necho hello")
-      buffer.language = SourceLanguage.langShell
-      let config = newEditorConfig()
-      let result = prepareQuickRun(buffer, config)
-      check result.isOk
-      check result.get.filePath == "quickruntemp.sh"
-      if fileExists("quickruntemp.sh"):
-        removeFile("quickruntemp.sh")
-
-    # Test Rust
-    block:
-      var buffer = newTextBuffer("fn main() {}")
-      buffer.language = SourceLanguage.langRust
-      let config = newEditorConfig()
-      let result = prepareQuickRun(buffer, config)
-      check result.isOk
-      check result.get.filePath == "quickruntemp.rs"
-      if fileExists("quickruntemp.rs"):
-        removeFile("quickruntemp.rs")
+    for (text, lang, name) in [
+      ("echo 1", SourceLanguage.langNim, "quickruntemp.nim"),
+      ("int main() { return 0; }", SourceLanguage.langC, "quickruntemp.c"),
+      ("int main() { return 0; }", SourceLanguage.langCpp, "quickruntemp.cpp"),
+      ("echo hello", SourceLanguage.langShell, "quickruntemp.bash"),
+      ("#!/bin/sh\necho hello", SourceLanguage.langShell, "quickruntemp.sh"),
+      ("#!/bin/sh -e\necho hello", SourceLanguage.langShell, "quickruntemp.sh"),
+      ("fn main() {}", SourceLanguage.langRust, "quickruntemp.rs"),
+    ]:
+      var buffer = newTextBuffer(text)
+      buffer.language = lang
+      let result = prepareQuickRun(buffer, newEditorConfig())
+      require result.isOk
+      check result.get.filePath == result.get.workDir / name
+      check fileExists(result.get.filePath)
+      removeQuickRunWorkDir(result.get.workDir)
 
 suite "QuickRunUtils - startBackgroundQuickRun":
   test "Start QuickRun with echo command":
@@ -713,7 +796,6 @@ suite "QuickRunUtils - startBackgroundQuickRun":
           cmd: "echo", args: @["quick", "run"], workingDir: getCurrentDir()
         ),
         filePath: "test.nim",
-        isTempFile: false,
         didSave: false,
       )
 
@@ -740,7 +822,6 @@ suite "QuickRunUtils - startBackgroundQuickRun":
           cmd: "/nonexistent/command", args: @[], workingDir: getCurrentDir()
         ),
         filePath: "test.nim",
-        isTempFile: false,
         didSave: false,
       )
 
@@ -749,48 +830,33 @@ suite "QuickRunUtils - startBackgroundQuickRun":
 
     check waitFor(runTest())
 
-  test "Failed start removes temp source file":
-    const tempPath = "quickruntemp_start_fail.py"
-    writeFile(tempPath, "print('leaked?')")
-    defer:
-      if fileExists(tempPath):
-        removeFile(tempPath)
+  test "Failed start removes the work dir":
+    let workDir = createWorkDir().get
+    writeFile(workDir / "quickruntemp.py", "print('leaked?')")
 
-    proc runTest(): Future[bool] {.async.} =
-      let prepared = QuickRunPrepareResult(
-        command: BackgroundProcessCommand(
-          cmd: "/nonexistent/command", args: @[], workingDir: getCurrentDir()
-        ),
-        filePath: tempPath,
-        isTempFile: true,
-        didSave: false,
-      )
-      let r = startBackgroundQuickRun(prepared)
-      return r.isErr
+    let prepared = QuickRunPrepareResult(
+      command: BackgroundProcessCommand(
+        cmd: "/nonexistent/command", args: @[], workingDir: getCurrentDir()
+      ),
+      filePath: workDir / "quickruntemp.py",
+      workDir: workDir,
+    )
+    check startBackgroundQuickRun(prepared).isErr
+    check not dirExists(workDir)
 
-    check waitFor(runTest())
-    check not fileExists(tempPath)
-
-  test "Failed start keeps file when isTempFile is false":
-    const keepPath = "quickruntemp_start_fail_keep.nim"
+  test "Failed start without a work dir removes nothing":
+    let keepPath = getTempDir() / "moe_test_quickrun_start_fail_keep.nim"
     writeFile(keepPath, "echo 1")
     defer:
-      if fileExists(keepPath):
-        removeFile(keepPath)
+      removeFile(keepPath)
 
-    proc runTest(): Future[bool] {.async.} =
-      let prepared = QuickRunPrepareResult(
-        command: BackgroundProcessCommand(
-          cmd: "/nonexistent/command", args: @[], workingDir: getCurrentDir()
-        ),
-        filePath: keepPath,
-        isTempFile: false,
-        didSave: false,
-      )
-      let r = startBackgroundQuickRun(prepared)
-      return r.isErr
-
-    check waitFor(runTest())
+    let prepared = QuickRunPrepareResult(
+      command: BackgroundProcessCommand(
+        cmd: "/nonexistent/command", args: @[], workingDir: getCurrentDir()
+      ),
+      filePath: keepPath,
+    )
+    check startBackgroundQuickRun(prepared).isErr
     check fileExists(keepPath)
 
 suite "QuickRunUtils - waitForResultAsync":
@@ -802,9 +868,7 @@ suite "QuickRunUtils - waitForResultAsync":
 
       let r = startBackgroundProcess(cmd)
       if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: "test.nim", isTempFile: false, process: r.get
-        )
+        let qp = QuickRunProcess(command: cmd, filePath: "test.nim", process: r.get)
         let output = await qp.waitForResultAsync(30.seconds)
         if output.isOk:
           return (true, output.get)
@@ -828,9 +892,7 @@ suite "QuickRunUtils - waitForResultAsync":
 
       let r = startBackgroundProcess(cmd)
       if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: "test.sh", isTempFile: false, process: r.get
-        )
+        let qp = QuickRunProcess(command: cmd, filePath: "test.sh", process: r.get)
         let output = await qp.waitForResultAsync(30.seconds)
         if output.isOk:
           return output.get
@@ -845,108 +907,85 @@ suite "QuickRunUtils - waitForResultAsync":
     check output[1] == "line2"
     check output[2] == "line3"
 
-suite "QuickRunUtils - cleanupTempFiles":
-  test "Cleanup temp files when isTempFile is true":
-    # Create temp files
-    const tempPath = "quickruntemp_test.py"
-    writeFile(tempPath, "print('test')")
+suite "QuickRunUtils - work dir removal":
+  test "The work dir goes when the run ends":
+    let workDir = createWorkDir().get
+    writeFile(workDir / "quickruntemp.c", "int main() { return 0; }")
+    writeFile(workDir / "quickruntemp", "fake executable")
 
-    proc runTest(): Future[void] {.async.} =
-      let cmd = BackgroundProcessCommand(
-        cmd: "echo", args: @["test"], workingDir: getCurrentDir()
-      )
-      let r = startBackgroundProcess(cmd)
-      if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: tempPath, isTempFile: true, process: r.get
-        )
-        discard await qp.waitForResultAsync(30.seconds)
+    let cmd = BackgroundProcessCommand(
+      cmd: "echo", args: @["test"], workingDir: getCurrentDir()
+    )
+    let r = startBackgroundProcess(cmd)
+    require r.isOk
+    let qp = QuickRunProcess(
+      command: cmd,
+      filePath: workDir / "quickruntemp.c",
+      workDir: workDir,
+      process: r.get,
+    )
+    discard waitFor qp.waitForResultAsync(30.seconds)
+    check not dirExists(workDir)
 
-    waitFor runTest()
-
-    # File should be cleaned up
-    check not fileExists(tempPath)
-
-  test "No cleanup when isTempFile is false":
-    const tempPath = "quickruntemp_no_cleanup.nim"
-    writeFile(tempPath, "echo \"test\"")
+  test "A run without a work dir leaves its file alone":
+    let path = getTempDir() / "moe_test_quickrun_no_cleanup.nim"
+    writeFile(path, "echo \"test\"")
     defer:
-      if fileExists(tempPath):
-        removeFile(tempPath)
+      removeFile(path)
 
-    proc runTest(): Future[void] {.async.} =
-      let cmd = BackgroundProcessCommand(
-        cmd: "echo", args: @["test"], workingDir: getCurrentDir()
-      )
-      let r = startBackgroundProcess(cmd)
-      if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: tempPath, isTempFile: false, process: r.get
-        )
-        discard await qp.waitForResultAsync(30.seconds)
+    let cmd = BackgroundProcessCommand(
+      cmd: "echo", args: @["test"], workingDir: getCurrentDir()
+    )
+    let r = startBackgroundProcess(cmd)
+    require r.isOk
+    let qp = QuickRunProcess(command: cmd, filePath: path, process: r.get)
+    discard waitFor qp.waitForResultAsync(30.seconds)
+    check fileExists(path)
 
-    waitFor runTest()
-
-    # File should still exist
-    check fileExists(tempPath)
-
-  test "Cleanup executable file (baseName)":
-    # Create temp source and executable files
-    const tempPath = "quickruntemp_exec.nim"
-    const execPath = "quickruntemp_exec"
-    writeFile(tempPath, "echo 1")
-    writeFile(execPath, "fake executable")
+suite "QuickRunUtils - runs leave the current directory alone":
+  test "An unsaved bash buffer runs from the work dir":
+    let victim = getTempDir() / "moe_test_quickrun_bash_victim.txt"
+    writeFile(victim, "precious")
     defer:
-      if fileExists(tempPath):
-        removeFile(tempPath)
-      if fileExists(execPath):
-        removeFile(execPath)
+      removeFile(victim)
 
-    proc runTest(): Future[void] {.async.} =
-      let cmd = BackgroundProcessCommand(
-        cmd: "echo", args: @["test"], workingDir: getCurrentDir()
-      )
-      let r = startBackgroundProcess(cmd)
-      if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: tempPath, isTempFile: true, process: r.get
+    inDir(getTempDir() / "moe_test_quickrun_cwd_bash"):
+      createSymlink(victim, "quickruntemp.bash")
+      var buffer = newTextBuffer("echo hi\npwd")
+      buffer.language = SourceLanguage.langShell
+
+      let prepared = prepareQuickRun(buffer, newEditorConfig())
+      require prepared.isOk
+      let output = runToEnd(prepared.get)
+      check output.len == 2
+      check output[0] == "hi"
+      # The program still runs where the editor does.
+      check output[1] == getCurrentDir()
+      check readFile(victim) == "precious"
+      check symlinkExists("quickruntemp.bash")
+      check not dirExists(prepared.get.workDir)
+
+  test "A real C file keeps the user's .out and leaves no program behind":
+    if findExe("gcc").len == 0:
+      skip()
+    else:
+      inDir(getTempDir() / "moe_test_quickrun_cwd_c"):
+        writeFile(".out", "user data")
+        let path = getCurrentDir() / "hello.c"
+        writeFile(
+          path, "#include <stdio.h>\nint main() { puts(\"hello\"); return 0; }\n"
         )
-        discard await qp.waitForResultAsync(30.seconds)
 
-    waitFor runTest()
+        var buffer = newTextBuffer()
+        discard buffer.loadFile(path)
+        buffer.language = SourceLanguage.langC
 
-    # Both files should be cleaned up
-    check not fileExists(tempPath)
-    check not fileExists(execPath)
-
-  test "Cleanup .out file for C/C++":
-    # Create temp source and .out files
-    const tempPath = "quickruntemp_c.c"
-    const outPath = ".out"
-    writeFile(tempPath, "int main() { return 0; }")
-    writeFile(outPath, "fake executable")
-    defer:
-      if fileExists(tempPath):
-        removeFile(tempPath)
-      if fileExists(outPath):
-        removeFile(outPath)
-
-    proc runTest(): Future[void] {.async.} =
-      let cmd = BackgroundProcessCommand(
-        cmd: "echo", args: @["test"], workingDir: getCurrentDir()
-      )
-      let r = startBackgroundProcess(cmd)
-      if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: tempPath, isTempFile: true, process: r.get
-        )
-        discard await qp.waitForResultAsync(30.seconds)
-
-    waitFor runTest()
-
-    # All files should be cleaned up
-    check not fileExists(tempPath)
-    check not fileExists(outPath)
+        let prepared = prepareQuickRun(buffer, newEditorConfig())
+        require prepared.isOk
+        check runToEnd(prepared.get) == @["hello"]
+        check readFile(".out") == "user data"
+        check not fileExists("hello")
+        check not dirExists(prepared.get.workDir)
 
 suite "QuickRunUtils - cancel and kill":
   test "Cancel running process":
@@ -957,9 +996,7 @@ suite "QuickRunUtils - cancel and kill":
 
       let r = startBackgroundProcess(cmd)
       if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: "test.sh", isTempFile: false, process: r.get
-        )
+        let qp = QuickRunProcess(command: cmd, filePath: "test.sh", process: r.get)
         qp.cancel()
         await sleepAsync(100.milliseconds)
         let finished = not qp.process.process.running()
@@ -978,9 +1015,7 @@ suite "QuickRunUtils - cancel and kill":
 
       let r = startBackgroundProcess(cmd)
       if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: "test.sh", isTempFile: false, process: r.get
-        )
+        let qp = QuickRunProcess(command: cmd, filePath: "test.sh", process: r.get)
         qp.kill()
         await sleepAsync(100.milliseconds)
         let finished = not qp.process.process.running()
@@ -992,34 +1027,32 @@ suite "QuickRunUtils - cancel and kill":
     check finished
 
 suite "QuickRunUtils - abandonQuickRunProcess":
-  test "Removes temp source file":
-    let tempPath = getTempDir() / "moe_test_quickrun_abandon.txt"
-    writeFile(tempPath, "echo 1")
-    # nil process: kill() is a no-op, so this exercises temp-file cleanup only.
-    let p = QuickRunProcess(filePath: tempPath, isTempFile: true)
+  test "Removes the work dir":
+    let workDir = createWorkDir().get
+    writeFile(workDir / "quickruntemp.py", "print(1)")
+    # nil process: kill() is a no-op, so this exercises the removal only.
+    let p = QuickRunProcess(filePath: workDir / "quickruntemp.py", workDir: workDir)
     abandonQuickRunProcess(p)
-    check not fileExists(tempPath)
+    check not dirExists(workDir)
 
-  test "Leaves non-temp files untouched":
+  test "Leaves the file alone without a work dir":
     let path = getTempDir() / "moe_test_quickrun_keep.txt"
     writeFile(path, "echo 1")
-    let p = QuickRunProcess(filePath: path, isTempFile: false)
+    let p = QuickRunProcess(filePath: path)
     abandonQuickRunProcess(p)
     check fileExists(path)
     removeFile(path)
 
   test "Safe to call multiple times":
-    let tempPath = getTempDir() / "moe_test_quickrun_multi.txt"
-    writeFile(tempPath, "echo 1")
-    let p = QuickRunProcess(filePath: tempPath, isTempFile: true)
+    let workDir = createWorkDir().get
+    let p = QuickRunProcess(filePath: workDir / "quickruntemp.py", workDir: workDir)
     abandonQuickRunProcess(p)
     abandonQuickRunProcess(p)
-    check not fileExists(tempPath)
+    check not dirExists(workDir)
 
-  test "Kills a running process and removes temp file":
+  test "Kills a running process and removes the work dir":
     proc runTest(): Future[bool] {.async.} =
-      let tempPath = getTempDir() / "moe_test_quickrun_kill.txt"
-      writeFile(tempPath, "")
+      let workDir = createWorkDir().get
       let cmd = BackgroundProcessCommand(
         cmd: "sleep", args: @["10"], workingDir: getCurrentDir()
       )
@@ -1027,10 +1060,13 @@ suite "QuickRunUtils - abandonQuickRunProcess":
       if not r.isOk:
         return false
       let qp = QuickRunProcess(
-        command: cmd, filePath: tempPath, isTempFile: true, process: r.get
+        command: cmd,
+        filePath: workDir / "quickruntemp.sh",
+        workDir: workDir,
+        process: r.get,
       )
       abandonQuickRunProcess(qp)
       await sleepAsync(100.milliseconds)
-      return not qp.process.process.running() and not fileExists(tempPath)
+      return not qp.process.process.running() and not dirExists(workDir)
 
     check waitFor runTest()
