@@ -1816,6 +1816,17 @@ suite "Completion - expandSnippet":
     check expandSnippet("${TM_SELECTED_TEXT}").text == ""
     check expandSnippet("name: ${UNKNOWN:fallback}").text == "name: fallback"
 
+  test "Deeply nested placeholders are cut off, not a stack overflow":
+    # A hostile snippet can nest `${1:...}` without bound; recursion must stop
+    # at a fixed depth and keep the rest as literal text.
+    var body = "leaf"
+    for _ in 0 ..< 10000:
+      body = "${1:" & body & "}"
+    let (text, _) = expandSnippet(body)
+    check text.contains("leaf")
+    # Past the depth cap the remaining nested markers stay literal.
+    check text.contains("${1:")
+
 suite "Completion - expandSnippetWithStops":
   test "clangd-style multi-parameter placeholders":
     let (text, stops) = expandSnippetWithStops(

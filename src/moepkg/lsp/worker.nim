@@ -683,9 +683,17 @@ proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
   ## (missing or wrong-typed fields) resolve to a warning levLogMessage so a
   ## bad frame never unwinds the caller and drops adjacent frames from the
   ## same drain.
+  # `params` comes straight off the wire: a non-object (e.g. `"params": null`)
+  # would hit `hasKey`'s JObject assert, an uncatchable Defect on this thread.
+  # Normalize it once so every branch below can treat params as an object.
+  let paramsObj =
+    if not params.isNil and params.kind == JObject:
+      params
+    else:
+      newJObject()
   case meth
   of "textDocument/publishDiagnostics":
-    let uri = params.getOrDefault("uri").getStr
+    let uri = paramsObj.getOrDefault("uri").getStr
     if uri.len == 0:
       return LspEvent(
         kind: levLogMessage,
@@ -693,16 +701,18 @@ proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
         message: "publishDiagnostics missing/invalid uri; dropping frame",
       )
     # Serialize the raw diagnostics array; the main thread parses it
-    # (Diagnostic carries JsonNode fields that must not cross threads)
+    # (Diagnostic carries JsonNode fields that must not cross threads). A
+    # non-array value is dropped: iterating it on the main thread asserts.
+    let diagsNode = paramsObj{"diagnostics"}
     let diagsJson =
-      if params.hasKey("diagnostics"):
-        $params["diagnostics"]
+      if not diagsNode.isNil and diagsNode.kind == JArray:
+        $diagsNode
       else:
         "[]"
     # PublishDiagnosticsParams.version is optional; accept only well-formed int.
     let version =
-      if params.hasKey("version") and params["version"].kind == JInt:
-        some(params["version"].getInt)
+      if paramsObj.hasKey("version") and paramsObj["version"].kind == JInt:
+        some(paramsObj["version"].getInt)
       else:
         none(int)
     return LspEvent(
@@ -715,25 +725,25 @@ proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
     return LspEvent(
       kind: levLogMessage,
       msgType:
-        toEnumOr[MessageType](params.getOrDefault("type").getInt(mtLog.ord), mtLog),
-      message: params.getOrDefault("message").getStr,
+        toEnumOr[MessageType](paramsObj.getOrDefault("type").getInt(mtLog.ord), mtLog),
+      message: paramsObj.getOrDefault("message").getStr,
     )
   of "window/showMessage":
     return LspEvent(
       kind: levShowMessage,
       msgType:
-        toEnumOr[MessageType](params.getOrDefault("type").getInt(mtLog.ord), mtLog),
-      message: params.getOrDefault("message").getStr,
+        toEnumOr[MessageType](paramsObj.getOrDefault("type").getInt(mtLog.ord), mtLog),
+      message: paramsObj.getOrDefault("message").getStr,
     )
   of "$/logTrace":
-    var message = params.getOrDefault("message").getStr
-    let verbose = params.getOrDefault("verbose").getStr
+    var message = paramsObj.getOrDefault("message").getStr
+    let verbose = paramsObj.getOrDefault("verbose").getStr
     if verbose.len > 0:
       message &= "\n" & verbose
     return LspEvent(kind: levLogMessage, msgType: mtInfo, message: message)
   of "$/progress":
     try:
-      let progressParams = parseWorkDoneProgressParams(params)
+      let progressParams = parseWorkDoneProgressParams(paramsObj)
       return LspEvent(
         kind: levProgress,
         progressToken: getProgressToken(progressParams),
@@ -749,12 +759,12 @@ proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
     # rust-analyzer style status notification
     try:
       let health =
-        case params.getOrDefault("health").getStr
+        case paramsObj.getOrDefault("health").getStr
         of "warning": shWarning
         of "error": shError
         else: shOk
-      let quiescent = params.getOrDefault("quiescent").getBool(true)
-      let msgNode = params.getOrDefault("message")
+      let quiescent = paramsObj.getOrDefault("quiescent").getBool(true)
+      let msgNode = paramsObj.getOrDefault("message")
       let message =
         if not msgNode.isNil and msgNode.kind == JString:
           some(msgNode.getStr)
@@ -775,12 +785,12 @@ proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
   of "extension/statusUpdate":
     # nimlangserver style status notification
     try:
-      let projectErrors = params.getOrDefault("projectErrors")
+      let projectErrors = paramsObj.getOrDefault("projectErrors")
       let hasErrors =
         not projectErrors.isNil and projectErrors.kind == JArray and
         projectErrors.len > 0
       let health = if hasErrors: shWarning else: shOk
-      let pending = params.getOrDefault("pendingRequests")
+      let pending = paramsObj.getOrDefault("pendingRequests")
       let quiescent =
         if not pending.isNil and pending.kind == JArray:
           pending.len == 0
@@ -934,14 +944,25 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     ## `none` when the response is deferred — workspace/applyEdit is answered
     ## later, once the main thread has applied the edit, via
     ## lcmdApplyEditResponse.
+    # As in notificationToEvents, normalize params before any handler indexes
+    # it: a `"params": null` request must not hit the JObject asserts in
+    # `hasKey`/`[]` and kill the worker thread. Handlers that validate their
+    # params (register/unregister) check the raw `params` instead, so a
+    # non-object value is rejected rather than silently normalized away.
+    let paramsObj =
+      if not params.isNil and params.kind == JObject:
+        params
+      else:
+        newJObject()
     case meth
     of "window/workDoneProgress/create":
       # Accept the progress token creation (respond with null/empty result)
       return some(%*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()})
     of "client/registerCapability":
-      # Dynamic capability registration. Validate here so a malformed
-      # request is rejected to the server; the main thread re-parses the
-      # serialized params when it processes the event.
+      # Dynamic capability registration. Validate the raw params so a
+      # non-object value (e.g. `"params": null`) is rejected with -32602
+      # instead of being accepted as an empty registration; the main thread
+      # re-parses the serialized params when it processes the event.
       try:
         discard parseRegistrationParams(params)
         sendDynamicRegister($params)
@@ -956,7 +977,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           }
         )
     of "client/unregisterCapability":
-      # Dynamic capability unregistration (validated as above)
+      # Dynamic capability unregistration (validated as above, raw params)
       try:
         discard parseUnregistrationParams(params)
         sendDynamicUnregister($params)
@@ -977,12 +998,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       # (it mutates TextBuffers), so forward the `edit` and defer the response;
       # the main thread answers via lcmdApplyEditResponse once it is applied.
       #
-      # `params{"edit"}` is nil-safe: it returns nil when params is not a JObject
-      # (e.g. a non-conforming `"params": null`, which would otherwise crash the
-      # worker thread on `hasKey`'s `assert(kind == JObject)`) or when the key is
-      # absent. Reject a null edit value too, rather than forwarding a no-op edit
-      # the main thread would "apply" and report back as success.
-      let editNode = params{"edit"}
+      # `paramsObj{"edit"}` is nil-safe when the key is absent. Reject a null
+      # edit value too, rather than forwarding a no-op edit the main thread
+      # would "apply" and report back as success.
+      let editNode = paramsObj{"edit"}
       if editNode.isNil or editNode.kind == JNull:
         return some(
           %*{
@@ -1000,9 +1019,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       # offered action titles to the surfaced text so the user at least sees
       # that the server asked something with choices (we just can't answer it).
       let msgType =
-        toEnumOr[MessageType](params.getOrDefault("type").getInt(mtInfo.ord), mtInfo)
-      var msg = params.getOrDefault("message").getStr("")
-      let actions = params.getOrDefault("actions")
+        toEnumOr[MessageType](paramsObj.getOrDefault("type").getInt(mtInfo.ord), mtInfo)
+      var msg = paramsObj.getOrDefault("message").getStr("")
+      let actions = paramsObj.getOrDefault("actions")
       if not actions.isNil and actions.kind == JArray and actions.len > 0:
         var titles: seq[string] = @[]
         for a in actions:
@@ -1018,7 +1037,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         %*{
           "jsonrpc": "2.0",
           "id": reqId,
-          "result": buildWorkspaceConfigurationResponse(params, currentSettings),
+          "result": buildWorkspaceConfigurationResponse(paramsObj, currentSettings),
         }
       )
     else:
@@ -1133,6 +1152,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         respResult = await fut
       except CancelledError:
         # Cancelled by cleanupProcess; just stop draining.
+        break
+      except Defect as e:
+        # Last-resort net for a malformed frame that slipped past the kind
+        # checks. This future is never awaited by mainLoop, so an escaping
+        # Defect would kill the pump silently (no readPumpStopped, no
+        # restart). Surface it like a read failure instead.
+        readPumpError = "worker defect while reading: " & e.msg
+        readPumpStopped = true
         break
       except CatchableError as e:
         readPumpError = e.msg
@@ -1370,14 +1397,21 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       # Forward capabilities (parsed on the main thread)
       if response.hasKey("result"):
         let resultNode = response["result"]
-        if resultNode.hasKey("capabilities"):
-          sendCapabilities($resultNode["capabilities"])
-        if resultNode.hasKey("serverInfo"):
-          let si = resultNode["serverInfo"]
-          var version: Option[string] = none(string)
-          if si.hasKey("version"):
-            version = some(si["version"].getStr)
-          sendServerInfo(si["name"].getStr, version)
+        # `result` may be any JSON type; `hasKey` on a non-object is an
+        # uncatchable Defect that would kill the worker mid-handshake.
+        if not resultNode.isNil and resultNode.kind == JObject:
+          if resultNode.hasKey("capabilities"):
+            sendCapabilities($resultNode["capabilities"])
+          if resultNode.hasKey("serverInfo"):
+            let si = resultNode["serverInfo"]
+            let name = si{"name"}.getStr
+            # serverInfo.name is required when the object is present; a
+            # malformed one is ignored rather than surfaced.
+            if not si.isNil and si.kind == JObject and name.len > 0:
+              var version: Option[string] = none(string)
+              if si.hasKey("version"):
+                version = some(si["version"].getStr)
+              sendServerInfo(name, version)
 
       break
 
@@ -1619,6 +1653,11 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
   proc dispatchFrame(response: JsonNode): Future[void] {.async.} =
     ## Dispatch one frame the read pump drained from the server. The pump owns
     ## reading/re-arming; this only routes a parsed frame to its handler.
+    # read() already rejects top-level non-objects; keep the guard local so a
+    # future frame source cannot reintroduce the hasKey JObject assert here.
+    if response.isNil or response.kind != JObject:
+      sendLogMessage(mtWarning, "Dropped non-object LSP frame")
+      return
     # Log received JSON (pretty formatted)
     sendRawJson(ljdReceived, response)
 
@@ -1805,6 +1844,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
   except CatchableError as e:
     # Fatal error - worker thread is about to exit
     var evt = LspEvent(kind: levError, errorMsg: "Worker thread fatal error: " & e.msg)
+    ctx.eventQueue[].push(evt)
+    ctx.sharedState.storeState(lwsCrashed)
+    ctx.sharedState.storeRunning(false)
+  except Defect as e:
+    # Last-resort net: the kind checks at the JSON consumption points are the
+    # primary defense against malformed server frames. If one still escapes,
+    # report a crash event instead of dying silently with the state stuck.
+    var evt = LspEvent(kind: levError, errorMsg: "Worker thread defect: " & e.msg)
     ctx.eventQueue[].push(evt)
     ctx.sharedState.storeState(lwsCrashed)
     ctx.sharedState.storeRunning(false)

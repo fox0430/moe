@@ -310,6 +310,29 @@ suite "Message Parsing - parseJsonRpcMessage":
     check result.isErr
     check result.error.contains("Invalid")
 
+  test "rejects a non-object body without raising":
+    # `hasKey` asserts JObject; a scalar/array frame used to raise an
+    # uncatchable Defect out of this proc.
+    for body in ["[]", "null", "42", "\"x\"", "true"]:
+      let result = parseJsonRpcMessage(body)
+      check result.isErr
+      check result.error.contains("Invalid JSON-RPC message structure")
+
+  test "rejects a non-object error field without raising":
+    let body = """{"jsonrpc":"2.0","id":1,"error":"boom"}"""
+    let result = parseJsonRpcMessage(body)
+    check result.isErr
+    check result.error.contains("Invalid JSON-RPC error object")
+
+  test "tolerates an error object with missing code/message":
+    # Missing fields degrade to defaults instead of raising KeyError.
+    let body = """{"jsonrpc":"2.0","id":1,"error":{}}"""
+    let result = parseJsonRpcMessage(body)
+    check result.isOk
+    check result.get.kind == jrmkError
+    check result.get.error.code == 0
+    check result.get.error.message == ""
+
   test "accepts response with string id":
     let body = """{"jsonrpc":"2.0","id":"42","result":{"ok":true}}"""
     let result = parseJsonRpcMessage(body)

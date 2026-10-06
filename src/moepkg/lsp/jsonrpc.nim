@@ -169,8 +169,13 @@ proc parseJsonRpcMessage*(body: string): Result[JsonRpcMessage, string] =
   except JsonParsingError as e:
     return err("JSON parse error: " & e.msg)
 
+  # A top-level non-object (array, string, number, ...) must be rejected here:
+  # `hasKey` asserts JObject and a Defect is uncatchable for the caller.
+  if jsonNode.isNil or jsonNode.kind != JObject:
+    return err("Invalid JSON-RPC message structure")
+
   # Check jsonrpc version
-  if not jsonNode.hasKey("jsonrpc") or jsonNode["jsonrpc"].getStr != "2.0":
+  if not jsonNode.hasKey("jsonrpc") or jsonNode{"jsonrpc"}.getStr != "2.0":
     return err("Invalid or missing jsonrpc version")
 
   # Determine message type
@@ -182,6 +187,8 @@ proc parseJsonRpcMessage*(body: string): Result[JsonRpcMessage, string] =
   if hasError:
     # Error response
     let errNode = jsonNode["error"]
+    if errNode.isNil or errNode.kind != JObject:
+      return err("Invalid JSON-RPC error object")
     var errId: Option[RequestId] = none(RequestId)
     if hasId:
       let idRes = idNodeToRequestId(jsonNode["id"])
@@ -198,7 +205,10 @@ proc parseJsonRpcMessage*(body: string): Result[JsonRpcMessage, string] =
         kind: jrmkError,
         errId: errId,
         error: JsonRpcError(
-          code: errNode["code"].getInt, message: errNode["message"].getStr, data: data
+          # `{}` + typed getters: a MISSING code/message must not raise either.
+          code: errNode{"code"}.getInt,
+          message: errNode{"message"}.getStr,
+          data: data,
         ),
       )
     )
@@ -266,7 +276,10 @@ proc isInvalidContentType(s: string, valueStart: int): bool {.inline.} =
   s.find("utf-8", valueStart) == -1 and s.find("utf8", valueStart) == -1
 
 proc isValidJsonRpc(json: JsonNode): bool {.inline.} =
-  json.contains("jsonrpc")
+  ## A top-level non-object frame must be rejected before `contains`/`hasKey`,
+  ## whose JObject assert is a Defect that would kill the worker thread (or
+  ## unwind the init handshake) instead of taking the crash/restart path.
+  not json.isNil and json.kind == JObject and json.contains("jsonrpc")
 
 proc parseFrameHeaders*(headerBlock: string): Result[int, string] =
   ## Parse a JSON-RPC header block and return the Content-Length.
