@@ -19,7 +19,10 @@
 
 import std/[monotimes, os, strformat, options, strutils]
 
-when defined(posix):
+when defined(macosx):
+  # std/posix declares it in <stdlib.h>, where macOS doesn't.
+  proc mkdtemp(tmpl: cstring): cstring {.importc, header: "<unistd.h>".}
+elif defined(posix):
   from std/posix import mkdtemp
 else:
   import std/tempfiles
