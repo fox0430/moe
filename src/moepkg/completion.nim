@@ -375,11 +375,18 @@ proc matchingBrace(body: string, openIdx: int): int =
     inc j
   return -1
 
-proc parseSnippet(body: string): SnippetParse =
+const
+  ## How deep `${n:...}` placeholder defaults are expanded recursively. Real
+  ## snippets nest a few levels at most; a crafted one can nest without bound
+  ## (`${1:${1:...}}`) and exhaust the stack, so stop descending past this.
+  MaxSnippetNestingDepth = 32
+
+proc parseSnippet(body: string, depth = 0): SnippetParse =
   ## Recursive worker for expandSnippet. Walks the snippet body once, building
   ## the plain text and recording cursor-stop offsets (the final `$0` and the
   ## lowest-numbered tabstop). Placeholder defaults are parsed recursively so a
-  ## stop nested inside a `${n:...}` default is honored.
+  ## stop nested inside a `${n:...}` default is honored, bounded by
+  ## MaxSnippetNestingDepth.
   result =
     SnippetParse(text: "", finalStop: -1, firstStopNum: high(int), firstStopOffset: -1)
   var i = 0
@@ -427,21 +434,34 @@ proc parseSnippet(body: string): SnippetParse =
           recordStop(num, pos)
         var defaultLen = 0
         if default.len > 0:
-          # Expand the default, lifting any stop nested inside it to our coords.
-          let sub = parseSnippet(default)
-          if sub.finalStop >= 0 and result.finalStop < 0:
-            result.finalStop = pos + sub.finalStop
-          if sub.firstStopOffset >= 0 and sub.firstStopNum < result.firstStopNum:
-            result.firstStopNum = sub.firstStopNum
-            result.firstStopOffset = pos + sub.firstStopOffset
-          defaultLen = sub.text.charLen
-          if num >= 0:
-            result.stops.add(SnippetStopOffset(num: num, offset: pos, len: defaultLen))
-          for s in sub.stops:
-            result.stops.add(
-              SnippetStopOffset(num: s.num, offset: pos + s.offset, len: s.len)
-            )
-          result.text.add(sub.text)
+          if depth < MaxSnippetNestingDepth:
+            # Expand the default, lifting any stop nested inside it to our coords.
+            let sub = parseSnippet(default, depth + 1)
+            if sub.finalStop >= 0 and result.finalStop < 0:
+              result.finalStop = pos + sub.finalStop
+            if sub.firstStopOffset >= 0 and sub.firstStopNum < result.firstStopNum:
+              result.firstStopNum = sub.firstStopNum
+              result.firstStopOffset = pos + sub.firstStopOffset
+            defaultLen = sub.text.charLen
+            if num >= 0:
+              result.stops.add(
+                SnippetStopOffset(num: num, offset: pos, len: defaultLen)
+              )
+            for s in sub.stops:
+              result.stops.add(
+                SnippetStopOffset(num: s.num, offset: pos + s.offset, len: s.len)
+              )
+            result.text.add(sub.text)
+          else:
+            # Too deep: keep the default verbatim and stop descending. Cursor
+            # stops inside the unexpanded part are lost, which is preferable to
+            # a stack overflow from a hostile snippet.
+            defaultLen = default.charLen
+            if num >= 0:
+              result.stops.add(
+                SnippetStopOffset(num: num, offset: pos, len: defaultLen)
+              )
+            result.text.add(default)
         elif num >= 0:
           result.stops.add(SnippetStopOffset(num: num, offset: pos, len: 0))
         i = closeIdx + 1

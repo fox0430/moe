@@ -314,6 +314,114 @@ suite "types - position/range parsing is defensive":
     check e.newText == "x"
     check e.range.start.line == 0
 
+suite "types - parser entry points tolerate non-object input":
+  test "server JSON parsers accept a non-object node":
+    # Every parser that consumes raw server JSON must be total: `hasKey`/`[]`
+    # and array iteration assert their JSON kind, and a Defect would escape the
+    # worker thread or the main-thread pollers.
+    for n in [newJNull(), newJString("x"), newJInt(1), newJArray()]:
+      discard parseLocationLink(n)
+      discard parseCompletionItem(n)
+      discard parseParameterInformation(n)
+      discard parseSignatureInformation(n)
+      discard parseSignatureHelp(n)
+      discard parseDocumentSymbol(n)
+      discard parseSymbolInformation(n)
+      discard parseInlayHintLabelPart(n)
+      discard parseSelectionRange(n)
+      discard parseDocumentHighlight(n)
+      discard parseDocumentLink(n)
+      discard parseSemanticTokensLegend(n)
+      discard parseSemanticTokensOptions(n)
+      discard parseExecuteCommandOptions(n)
+      discard parseWorkDoneProgressBegin(n)
+      discard parseWorkDoneProgressReport(n)
+      discard parseWorkDoneProgressEnd(n)
+      discard parseCommand(n)
+      discard parseCodeLens(n)
+      discard parseCodeAction(n)
+      discard parseCallHierarchyItem(n)
+      discard parseCallHierarchyIncomingCall(n)
+      discard parseCallHierarchyOutgoingCall(n)
+      discard parseFoldingRange(n)
+      discard parseDocumentSymbolResult(n)
+
+  test "work done progress raises a catchable error, not a Defect":
+    for n in [newJNull(), newJString("x"), newJArray()]:
+      expect ValueError:
+        discard parseWorkDoneProgress(n)
+      expect ValueError:
+        discard parseWorkDoneProgressParams(n)
+
+  test "wrong-typed array fields are skipped without raising":
+    # The `node{"x"}.kind == JArray` guards must keep a malformed field from
+    # reaching the items iterator's JArray assert (an uncatchable Defect).
+    let item = parseCompletionItem(%*{"label": "x", "additionalTextEdits": 5})
+    check item.additionalTextEdits.isNone
+
+    let sigInfo = parseSignatureInformation(%*{"label": "x", "parameters": "bad"})
+    check sigInfo.parameters.isNone
+
+    check parseSignatureHelp(%*{"signatures": {"a": 1}}).signatures.len == 0
+
+    let types = parseSemanticTokensLegend(%*{"tokenTypes": {}})
+    check types.tokenTypes.len == 0
+    let modifiers = parseSemanticTokensLegend(%*{"tokenModifiers": 5})
+    check modifiers.tokenModifiers.len == 0
+
+    check parseExecuteCommandOptions(%*{"commands": 5}).commands.len == 0
+
+    let incoming = parseCallHierarchyIncomingCall(%*{"fromRanges": {}})
+    check incoming.fromRanges.len == 0
+    let outgoing = parseCallHierarchyOutgoingCall(%*{"fromRanges": 5})
+    check outgoing.fromRanges.len == 0
+
+  test "deeply nested symbol children terminate":
+    var child = %*{"name": "leaf", "kind": 1}
+    for _ in 0 ..< 5000:
+      child = %*{"name": "n", "kind": 1, "children": [child]}
+    let sym = parseDocumentSymbol(child)
+    check sym.name == "n"
+    # The chain must be cut at the cap (64 parsed levels below the root), not
+    # merely avoid a stack overflow on this machine. Copy the child through a
+    # temporary: `cursor = cursor.children.get[0]` would bind the `var Option`
+    # overload of `get` and self-assign from a view into `cursor`.
+    var levels = 0
+    var cursor = sym
+    while cursor.children.isSome:
+      let next = cursor.children.get[0]
+      cursor = next
+      inc levels
+    check levels == 64
+
+  test "deeply nested selection range parents terminate":
+    var parent = %*{"range": {"start": {}, "end": {}}}
+    for _ in 0 ..< 5000:
+      parent = %*{"range": {"start": {}, "end": {}}, "parent": parent}
+    let sel = parseSelectionRange(parent)
+    check not sel.isNil
+    # Same cap as document symbols: 64 parent hops, then the chain is cut.
+    var levels = 0
+    var cursor = sel
+    while not cursor.parent.isNil:
+      cursor = cursor.parent
+      inc levels
+    check levels == 64
+
+  test "registration params reject malformed shapes without a Defect":
+    expect ValueError:
+      discard parseRegistrationParams(newJNull())
+    expect ValueError:
+      discard parseRegistrationParams(%*{"registrations": 5})
+    expect ValueError:
+      discard parseRegistration(%*"x")
+    expect ValueError:
+      discard parseUnregistrationParams(newJNull())
+    expect ValueError:
+      discard parseUnregistrationParams(%*{"unregisterations": 5})
+    expect ValueError:
+      discard parseUnregistration(%*"x")
+
 suite "types - parseServerCapabilities":
   test "completionProvider object is supported":
     let caps = parseServerCapabilities(%*{"completionProvider": {}})
@@ -366,6 +474,49 @@ suite "types - parseServerCapabilities":
     check caps.semanticTokensProvider.get.legend.tokenTypes == @["keyword"]
     check caps.semanticTokensProvider.get.legend.tokenModifiers == @["static"]
     check caps.semanticTokensProvider.get.full.isSome
+
+  test "executeCommandProvider tolerates non-object values":
+    # `true` means supported with no options; a wrong-typed value is ignored
+    # instead of reaching parseExecuteCommandOptions' hasKey assert.
+    let caps = parseServerCapabilities(%*{"executeCommandProvider": true})
+    check caps.executeCommandProvider.isSome
+    check caps.executeCommandProvider.get.commands.len == 0
+    let garbage = parseServerCapabilities(%*{"executeCommandProvider": "x"})
+    check garbage.executeCommandProvider.isNone
+
+  test "non-array triggerCharacters does not raise":
+    for bad in [newJInt(5), newJString(".."), newJNull(), parseJson("""{"sep": "."}""")]:
+      var inner = newJObject()
+      inner["triggerCharacters"] = bad
+      var root = newJObject()
+      root["completionProvider"] = inner
+      let caps = parseServerCapabilities(root)
+      check caps.completionProvider.isSome
+      check caps.completionProvider.get.triggerCharacters.isNone
+    for bad in [newJInt(5), newJString(".."), newJNull()]:
+      var inner = newJObject()
+      inner["triggerCharacters"] = bad
+      var root = newJObject()
+      root["signatureHelpProvider"] = inner
+      let caps = parseServerCapabilities(root)
+      check caps.signatureHelpProvider.isSome
+      check caps.signatureHelpProvider.get.triggerCharacters.isNone
+      var inner2 = newJObject()
+      inner2["retriggerCharacters"] = bad
+      var root2 = newJObject()
+      root2["signatureHelpProvider"] = inner2
+      let re = parseServerCapabilities(root2)
+      check re.signatureHelpProvider.isSome
+      check re.signatureHelpProvider.get.retriggerCharacters.isNone
+
+  test "wrong-typed provider values are treated as unsupported":
+    for bad in [newJString("x"), newJInt(5), newJArray(), newJNull()]:
+      var root = newJObject()
+      root["completionProvider"] = bad
+      check parseServerCapabilities(root).completionProvider.isNone
+      var root2 = newJObject()
+      root2["signatureHelpProvider"] = bad
+      check parseServerCapabilities(root2).signatureHelpProvider.isNone
 
 suite "types - parseLocations":
   test "parse single location object":
@@ -479,6 +630,55 @@ suite "types - Diagnostic parsing":
     let diag = parseDiagnostic(j)
     check diag.severity.isSome
     check diag.severity.get == dsWarning
+
+  test "parseDiagnostic on a non-object node returns defaults":
+    # A scalar/array diagnostic must not assert on hasKey / item iteration.
+    for node in [newJNull(), newJString("x"), newJInt(1), newJArray()]:
+      let diag = parseDiagnostic(node)
+      check diag.message == ""
+      check diag.severity.isNone
+      check diag.tags.isNone
+
+  test "parseDiagnostic with wrong-typed fields does not raise":
+    let j = %*{
+      "range": 5,
+      "message": 7,
+      "severity": "high",
+      "source": [],
+      "code": {"nested": true},
+      "tags": "not-an-array",
+    }
+    let diag = parseDiagnostic(j)
+    check diag.message == ""
+    check diag.range.start.line == 0
+    check diag.severity.isNone
+    check diag.source.isSome
+    check diag.source.get == ""
+    check diag.tags.isNone
+
+  test "parseDiagnostic with a non-array tags field does not raise":
+    # Iterating a JString asserts JArray; the field must be skipped instead.
+    let diag = parseDiagnostic(%*{"message": "x", "tags": {"a": 1}})
+    check diag.tags.isNone
+
+suite "types - Hover parsing":
+  test "parseHover on a non-object node returns empty contents":
+    for node in [newJNull(), newJString("x"), newJInt(1), newJArray()]:
+      let hover = parseHover(node)
+      check hover.contents.kind == JNull
+      check hover.range.isNone
+
+  test "parseHover with a missing contents normalizes to null":
+    let hover = parseHover(%*{"range": {"start": {}, "end": {}}})
+    check not hover.contents.isNil
+    check hover.contents.kind == JNull
+    check hover.range.isSome
+
+  test "parseHover with wrong-typed range does not raise":
+    let hover = parseHover(%*{"contents": "text", "range": "bad"})
+    check hover.contents.getStr == "text"
+    check hover.range.isSome
+    check hover.range.get.start.line == 0
 
 suite "types - FoldingRange parsing":
   test "parseFoldingRange basic":

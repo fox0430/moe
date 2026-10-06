@@ -820,6 +820,31 @@ suite "LspWorker - notificationToEvents":
     check evt.kind == levDiagnostics
     check evt.diagVersion.isNone
 
+  test "publishDiagnostics with null params returns a warning, not a raise":
+    # `"params": null` used to reach `hasKey`'s JObject assert (a Defect that
+    # kills the worker). Params are normalized to an object first.
+    let evt = notificationToEvents("textDocument/publishDiagnostics", newJNull())
+    check evt.kind == levLogMessage
+    check evt.msgType == mtWarning
+
+  test "publishDiagnostics with a non-array diagnostics field drops it":
+    # The main thread iterates the serialized value; a non-array must become
+    # an empty array here rather than an assert there.
+    let evt = notificationToEvents(
+      "textDocument/publishDiagnostics",
+      %*{"uri": "file:///t.nim", "diagnostics": newJNull()},
+    )
+    check evt.kind == levDiagnostics
+    check evt.diagnosticsJson == "[]"
+
+  test "non-object params do not raise for any known notification":
+    for meth in [
+      "textDocument/publishDiagnostics", "window/logMessage", "window/showMessage",
+      "$/logTrace", "$/progress", "experimental/serverStatus", "extension/statusUpdate",
+    ]:
+      for params in [newJNull(), newJArray(), newJString("x")]:
+        discard notificationToEvents(meth, params)
+
   test "window/logMessage with missing type defaults to mtLog":
     let params = %*{"message": "hello"}
     let evt = notificationToEvents("window/logMessage", params)
@@ -1425,3 +1450,136 @@ suite "LspWorker - lifetime":
     worker.stop()
     expect AssertionDefect:
       worker.start()
+
+suite "LspWorker - malformed server frames":
+  proc waitForState(
+      worker: LspWorker, expected: LspWorkerState, timeoutMs = 5000
+  ): bool =
+    ## Poll until the worker reaches `expected` state or the timeout expires.
+    let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+    while getMonoTime() < deadline:
+      if worker.state == expected:
+        return true
+      sleep(10)
+    false
+
+  proc waitForEvent(worker: LspWorker, kind: LspEventKind, timeoutMs = 5000): bool =
+    ## Drain events until one of `kind` shows up or the timeout expires.
+    let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+    while getMonoTime() < deadline:
+      for evt in worker.pollEvents():
+        if evt.kind == kind:
+          return true
+      sleep(10)
+    false
+
+  proc waitForWarning(worker: LspWorker, needle: string, timeoutMs = 5000): bool =
+    let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+    while getMonoTime() < deadline:
+      for evt in worker.pollEvents():
+        if evt.kind == levLogMessage and evt.msgType == mtWarning and
+            evt.message.contains(needle):
+          return true
+      sleep(10)
+    false
+
+  proc waitForError(worker: LspWorker, needle: string, timeoutMs = 5000): bool =
+    let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+    while getMonoTime() < deadline:
+      for evt in worker.pollEvents():
+        if evt.kind == levError and evt.errorMsg.contains(needle):
+          return true
+      sleep(10)
+    false
+
+  proc fakeServerScript(bodies: seq[string]): string =
+    ## `sh` script that emits each body as a Content-Length framed LSP message
+    ## and then stays alive until the worker kills it.
+    result = "emit() { printf 'Content-Length: %s\\r\\n\\r\\n%s' \"${#1}\" \"$1\"; }\n"
+    for body in bodies:
+      result &= "emit '" & body & "'\n"
+    result &= "sleep 30\n"
+
+  test "registerCapability with null params is rejected, worker survives":
+    let worker = newLspWorker("nim").get
+    worker.start()
+    worker.startServer(
+      "sh",
+      @[
+        "-c",
+        fakeServerScript(
+          @[
+            """{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}""",
+            """{"jsonrpc":"2.0","id":2,"method":"client/registerCapability","params":null}""",
+          ]
+        ),
+      ],
+      "/tmp",
+    )
+    check worker.waitForState(lwsRunning)
+    check worker.waitForWarning("Failed to parse registerCapability")
+    # The malformed request must not take the worker down.
+    check worker.state == lwsRunning
+    worker.stop()
+
+  test "valid registerCapability still registers":
+    let worker = newLspWorker("nim").get
+    worker.start()
+    worker.startServer(
+      "sh",
+      @[
+        "-c",
+        fakeServerScript(
+          @[
+            """{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}""",
+            """{"jsonrpc":"2.0","id":2,"method":"client/registerCapability","params":{"registrations":[{"id":"r1","method":"workspace/didChangeWatchedFiles"}]}}""",
+          ]
+        ),
+      ],
+      "/tmp",
+    )
+    check worker.waitForState(lwsRunning)
+    check worker.waitForEvent(levDynamicRegister)
+    check worker.state == lwsRunning
+    worker.stop()
+
+  test "unregisterCapability with non-object params is rejected, worker survives":
+    let worker = newLspWorker("nim").get
+    worker.start()
+    worker.startServer(
+      "sh",
+      @[
+        "-c",
+        fakeServerScript(
+          @[
+            """{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}""",
+            """{"jsonrpc":"2.0","id":2,"method":"client/unregisterCapability","params":[]}""",
+          ]
+        ),
+      ],
+      "/tmp",
+    )
+    check worker.waitForState(lwsRunning)
+    check worker.waitForWarning("Failed to parse unregisterCapability")
+    check worker.state == lwsRunning
+    worker.stop()
+
+  test "non-object initialize result does not kill the worker":
+    let worker = newLspWorker("nim").get
+    worker.start()
+    worker.startServer(
+      "sh",
+      @["-c", fakeServerScript(@["""{"jsonrpc":"2.0","id":1,"result":[]}"""])],
+      "/tmp",
+    )
+    check worker.waitForState(lwsRunning)
+    worker.stop()
+
+  test "non-object top-level frame crashes gracefully instead of a Defect":
+    let worker = newLspWorker("nim").get
+    worker.start()
+    worker.startServer("sh", @["-c", fakeServerScript(@["[]"])], "/tmp")
+    check worker.waitForState(lwsCrashed)
+    check worker.isThreadAlive
+    check worker.waitForError("Invalid jsonrpc")
+    worker.stop()

@@ -645,7 +645,13 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
   of levDiagnostics:
     var diagnostics: seq[Diagnostic] = @[]
     try:
-      for d in parseJson(evt.diagnosticsJson):
+      let diagNode = parseJson(evt.diagnosticsJson)
+      # A non-array payload must not reach the items iterator, whose JArray
+      # assert is an uncatchable Defect on this (main) thread.
+      if diagNode.kind != JArray:
+        svc.onLogMessage(langId, mtWarning, "Ignoring non-array diagnostics payload")
+        return
+      for d in diagNode:
         diagnostics.add(parseDiagnostic(d))
     except CatchableError as e:
       svc.onLogMessage(langId, mtWarning, "Failed to parse diagnostics: " & e.msg)

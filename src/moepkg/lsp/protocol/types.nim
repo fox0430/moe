@@ -609,6 +609,8 @@ proc parseLocation*(node: JsonNode): Location =
   Location(uri: node{"uri"}.getStr, range: parseRange(node{"range"}))
 
 proc parseLocationLink*(node: JsonNode): LocationLink =
+  if node.isNil or node.kind != JObject:
+    return LocationLink()
   result.targetUri = node{"targetUri"}.getStr
   result.targetRange = parseRange(node{"targetRange"})
   result.targetSelectionRange = parseRange(node{"targetSelectionRange"})
@@ -719,25 +721,37 @@ defLspIntEnum(SymbolKind)
 defLspIntEnum(DiagnosticSeverity)
 
 proc parseDiagnostic*(node: JsonNode): Diagnostic =
-  result.range = parseRange(node["range"])
-  result.message = node["message"].getStr
+  ## Defensive against malformed server JSON: every field is kind-checked so a
+  ## non-object item (or a wrong-typed field) degrades to defaults instead of
+  ## raising a Defect (uncatchable worker/main-thread crash) on `hasKey` or
+  ## array iteration.
+  if node.isNil or node.kind != JObject:
+    return Diagnostic()
+  result.range = parseRange(node{"range"})
+  result.message = node{"message"}.getStr
 
-  if node.hasKey("severity"):
-    result.severity = toEnum[DiagnosticSeverity](node["severity"].getInt)
-  if node.hasKey("code"):
-    result.code = some(node["code"])
-  if node.hasKey("source"):
-    result.source = some(node["source"].getStr)
-  if node.hasKey("tags"):
+  let severityNode = node{"severity"}
+  if not severityNode.isNil:
+    result.severity = toEnum[DiagnosticSeverity](severityNode.getInt)
+  let codeNode = node{"code"}
+  if not codeNode.isNil:
+    result.code = some(codeNode)
+  let sourceNode = node{"source"}
+  if not sourceNode.isNil:
+    result.source = some(sourceNode.getStr)
+  let tagsNode = node{"tags"}
+  if not tagsNode.isNil and tagsNode.kind == JArray:
     var tags: seq[DiagnosticTag] = @[]
-    for t in node["tags"]:
+    for t in tagsNode:
       let tag = toEnum[DiagnosticTag](t.getInt)
       if tag.isSome:
         tags.add(tag.get)
     result.tags = some(tags)
 
 proc parseCompletionItem*(node: JsonNode): CompletionItem =
-  result.label = node["label"].getStr
+  if node.isNil or node.kind != JObject:
+    return CompletionItem()
+  result.label = node{"label"}.getStr
 
   if node.hasKey("kind"):
     result.kind = toEnum[CompletionItemKind](node["kind"].getInt)
@@ -759,21 +773,33 @@ proc parseCompletionItem*(node: JsonNode): CompletionItem =
     result.preselect = some(node["preselect"].getBool)
   if node.hasKey("textEdit"):
     result.textEdit = some(node["textEdit"])
-  if node.hasKey("additionalTextEdits"):
+  let extraEditsNode = node{"additionalTextEdits"}
+  if not extraEditsNode.isNil and extraEditsNode.kind == JArray:
     var edits: seq[TextEdit] = @[]
-    for e in node["additionalTextEdits"]:
+    for e in extraEditsNode:
       edits.add(parseTextEdit(e))
     result.additionalTextEdits = some(edits)
   if node.hasKey("data"):
     result.data = some(node["data"])
 
 proc parseHover*(node: JsonNode): Hover =
-  result.contents = node["contents"]
-  if node.hasKey("range"):
-    result.range = some(parseRange(node["range"]))
+  ## Defensive against malformed server JSON: a non-object hover result (or a
+  ## wrong-typed field) must not assert-crash on `hasKey`/`[]`. `contents` is
+  ## normalized to JNull so getHoverText never sees a nil node.
+  if node.isNil or node.kind != JObject:
+    return Hover(contents: newJNull())
+  result.contents = node{"contents"}
+  if result.contents.isNil:
+    result.contents = newJNull()
+  let rangeNode = node{"range"}
+  if not rangeNode.isNil:
+    result.range = some(parseRange(rangeNode))
 
 proc parseParameterInformation*(node: JsonNode): ParameterInformation =
   ## Parse parameter information from JSON
+  # A non-object must not reach the hasKey/[] JObject asserts below.
+  if node.isNil or node.kind != JObject:
+    return ParameterInformation()
   # Label can be string or [start, end] tuple - we handle both
   if node.hasKey("label"):
     if node["label"].kind == JString:
@@ -787,12 +813,15 @@ proc parseParameterInformation*(node: JsonNode): ParameterInformation =
 
 proc parseSignatureInformation*(node: JsonNode): SignatureInformation =
   ## Parse signature information from JSON
-  result.label = node["label"].getStr
+  if node.isNil or node.kind != JObject:
+    return SignatureInformation()
+  result.label = node{"label"}.getStr
   if node.hasKey("documentation"):
     result.documentation = some(node["documentation"])
-  if node.hasKey("parameters"):
+  let parametersNode = node{"parameters"}
+  if not parametersNode.isNil and parametersNode.kind == JArray:
     var params: seq[ParameterInformation] = @[]
-    for p in node["parameters"]:
+    for p in parametersNode:
       params.add(parseParameterInformation(p))
     result.parameters = some(params)
   if node.hasKey("activeParameter"):
@@ -800,20 +829,30 @@ proc parseSignatureInformation*(node: JsonNode): SignatureInformation =
 
 proc parseSignatureHelp*(node: JsonNode): SignatureHelp =
   ## Parse signature help response from JSON
-  if node.hasKey("signatures"):
-    for sig in node["signatures"]:
+  if node.isNil or node.kind != JObject:
+    return SignatureHelp()
+  let signaturesNode = node{"signatures"}
+  if not signaturesNode.isNil and signaturesNode.kind == JArray:
+    for sig in signaturesNode:
       result.signatures.add(parseSignatureInformation(sig))
   if node.hasKey("activeSignature"):
     result.activeSignature = some(node["activeSignature"].getInt)
   if node.hasKey("activeParameter"):
     result.activeParameter = some(node["activeParameter"].getInt)
 
-proc parseDocumentSymbol*(node: JsonNode): DocumentSymbol =
+const
+  ## Cap for recursive server structures (symbol children, selection range
+  ## parents): a crafted payload must not be able to exhaust the stack.
+  MaxJsonTreeNestingDepth = 64
+
+proc parseDocumentSymbol*(node: JsonNode, depth = 0): DocumentSymbol =
   ## Parse DocumentSymbol from JSON (hierarchical format)
-  result.name = node["name"].getStr
-  result.kind = toEnumOr[SymbolKind](node["kind"].getInt, skFile)
-  result.range = parseRange(node["range"])
-  result.selectionRange = parseRange(node["selectionRange"])
+  if node.isNil or node.kind != JObject:
+    return DocumentSymbol()
+  result.name = node{"name"}.getStr
+  result.kind = toEnumOr[SymbolKind](node{"kind"}.getInt, skFile)
+  result.range = parseRange(node{"range"})
+  result.selectionRange = parseRange(node{"selectionRange"})
 
   if node.hasKey("detail") and node["detail"].kind != JNull:
     result.detail = some(node["detail"].getStr)
@@ -824,17 +863,20 @@ proc parseDocumentSymbol*(node: JsonNode): DocumentSymbol =
     for t in node["tags"]:
       tags.add(t.getInt)
     result.tags = some(tags)
-  if node.hasKey("children") and node["children"].kind == JArray:
+  if node.hasKey("children") and node["children"].kind == JArray and
+      depth < MaxJsonTreeNestingDepth:
     var children: seq[DocumentSymbol] = @[]
     for child in node["children"]:
-      children.add(parseDocumentSymbol(child))
+      children.add(parseDocumentSymbol(child, depth + 1))
     result.children = some(children)
 
 proc parseSymbolInformation*(node: JsonNode): SymbolInformation =
   ## Parse SymbolInformation from JSON (flat format)
-  result.name = node["name"].getStr
-  result.kind = toEnumOr[SymbolKind](node["kind"].getInt, skFile)
-  result.location = parseLocation(node["location"])
+  if node.isNil or node.kind != JObject:
+    return SymbolInformation()
+  result.name = node{"name"}.getStr
+  result.kind = toEnumOr[SymbolKind](node{"kind"}.getInt, skFile)
+  result.location = parseLocation(node{"location"})
 
   if node.hasKey("deprecated"):
     result.deprecated = some(node["deprecated"].getBool)
@@ -848,7 +890,9 @@ proc parseSymbolInformation*(node: JsonNode): SymbolInformation =
 
 proc parseInlayHintLabelPart*(node: JsonNode): InlayHintLabelPart =
   ## Parse InlayHintLabelPart from JSON
-  result.value = node["value"].getStr
+  if node.isNil or node.kind != JObject:
+    return InlayHintLabelPart()
+  result.value = node{"value"}.getStr
   if node.hasKey("tooltip"):
     result.tooltip = some(node["tooltip"])
   if node.hasKey("location"):
@@ -926,26 +970,31 @@ proc getInlayHintLabel*(hint: InlayHint): string =
   else:
     return ""
 
-proc parseSelectionRange*(node: JsonNode): SelectionRange =
+proc parseSelectionRange*(node: JsonNode, depth = 0): SelectionRange =
   ## Parse SelectionRange from JSON (recursive structure)
-  ## Returns nil if node is invalid
-  if node.isNil or node.kind == JNull or not node.hasKey("range"):
+  ## Returns nil if node is invalid. Descent into parents is bounded.
+  if node.isNil or node.kind != JObject or not node.hasKey("range"):
     return nil
 
   result = SelectionRange()
   result.range = parseRange(node["range"])
-  if node.hasKey("parent") and node["parent"].kind != JNull:
-    result.parent = parseSelectionRange(node["parent"])
+  if node.hasKey("parent") and node["parent"].kind != JNull and
+      depth < MaxJsonTreeNestingDepth:
+    result.parent = parseSelectionRange(node["parent"], depth + 1)
 
 proc parseDocumentHighlight*(node: JsonNode): DocumentHighlight =
   ## Parse DocumentHighlight from JSON
-  result.range = parseRange(node["range"])
+  if node.isNil or node.kind != JObject:
+    return DocumentHighlight()
+  result.range = parseRange(node{"range"})
   if node.hasKey("kind") and node["kind"].kind == JInt:
     result.kind = toEnum[DocumentHighlightKind](node["kind"].getInt)
 
 proc parseDocumentLink*(node: JsonNode): DocumentLink =
   ## Parse DocumentLink from JSON
-  result.range = parseRange(node["range"])
+  if node.isNil or node.kind != JObject:
+    return DocumentLink()
+  result.range = parseRange(node{"range"})
   if node.hasKey("target") and node["target"].kind == JString:
     result.target = some(node["target"].getStr)
   if node.hasKey("tooltip") and node["tooltip"].kind == JString:
@@ -955,15 +1004,21 @@ proc parseDocumentLink*(node: JsonNode): DocumentLink =
 
 proc parseSemanticTokensLegend*(node: JsonNode): SemanticTokensLegend =
   ## Parse SemanticTokensLegend from JSON
-  if node.hasKey("tokenTypes"):
-    for t in node["tokenTypes"]:
+  if node.isNil or node.kind != JObject:
+    return SemanticTokensLegend()
+  let typesNode = node{"tokenTypes"}
+  if not typesNode.isNil and typesNode.kind == JArray:
+    for t in typesNode:
       result.tokenTypes.add(t.getStr)
-  if node.hasKey("tokenModifiers"):
-    for m in node["tokenModifiers"]:
+  let modifiersNode = node{"tokenModifiers"}
+  if not modifiersNode.isNil and modifiersNode.kind == JArray:
+    for m in modifiersNode:
       result.tokenModifiers.add(m.getStr)
 
 proc parseSemanticTokensOptions*(node: JsonNode): SemanticTokensOptions =
   ## Parse SemanticTokensOptions from JSON
+  if node.isNil or node.kind != JObject:
+    return SemanticTokensOptions()
   if node.hasKey("legend"):
     result.legend = parseSemanticTokensLegend(node["legend"])
   if node.hasKey("range"):
@@ -973,15 +1028,20 @@ proc parseSemanticTokensOptions*(node: JsonNode): SemanticTokensOptions =
 
 proc parseExecuteCommandOptions*(node: JsonNode): ExecuteCommandOptions =
   ## Parse ExecuteCommandOptions from JSON
-  if node.hasKey("commands"):
-    for cmd in node["commands"]:
+  if node.isNil or node.kind != JObject:
+    return ExecuteCommandOptions()
+  let commandsNode = node{"commands"}
+  if not commandsNode.isNil and commandsNode.kind == JArray:
+    for cmd in commandsNode:
       result.commands.add(cmd.getStr)
   if node.hasKey("workDoneProgress"):
     result.workDoneProgress = some(node["workDoneProgress"].getBool)
 
 proc parseWorkDoneProgressBegin*(node: JsonNode): WorkDoneProgressBegin =
   ## Parse WorkDoneProgressBegin from JSON
-  result.title = node["title"].getStr
+  if node.isNil or node.kind != JObject:
+    return WorkDoneProgressBegin()
+  result.title = node{"title"}.getStr
   if node.hasKey("cancellable"):
     result.cancellable = some(node["cancellable"].getBool)
   if node.hasKey("message"):
@@ -991,6 +1051,8 @@ proc parseWorkDoneProgressBegin*(node: JsonNode): WorkDoneProgressBegin =
 
 proc parseWorkDoneProgressReport*(node: JsonNode): WorkDoneProgressReport =
   ## Parse WorkDoneProgressReport from JSON
+  if node.isNil or node.kind != JObject:
+    return WorkDoneProgressReport()
   if node.hasKey("cancellable"):
     result.cancellable = some(node["cancellable"].getBool)
   if node.hasKey("message"):
@@ -1000,12 +1062,17 @@ proc parseWorkDoneProgressReport*(node: JsonNode): WorkDoneProgressReport =
 
 proc parseWorkDoneProgressEnd*(node: JsonNode): WorkDoneProgressEnd =
   ## Parse WorkDoneProgressEnd from JSON
+  if node.isNil or node.kind != JObject:
+    return WorkDoneProgressEnd()
   if node.hasKey("message"):
     result.message = some(node["message"].getStr)
 
 proc parseWorkDoneProgress*(node: JsonNode): WorkDoneProgress =
-  ## Parse WorkDoneProgress value from JSON
-  let kindStr = node["kind"].getStr
+  ## Parse WorkDoneProgress value from JSON. Raises ValueError (catchable) on a
+  ## non-object or unknown kind instead of asserting on `[]`/`hasKey`.
+  if node.isNil or node.kind != JObject:
+    raise newException(ValueError, "Invalid work done progress value")
+  let kindStr = node{"kind"}.getStr
   case kindStr
   of "begin":
     result = WorkDoneProgress(kind: wdpkBegin, begin: parseWorkDoneProgressBegin(node))
@@ -1018,9 +1085,14 @@ proc parseWorkDoneProgress*(node: JsonNode): WorkDoneProgress =
     raise newException(ValueError, "Unknown work done progress kind: " & kindStr)
 
 proc parseWorkDoneProgressParams*(node: JsonNode): WorkDoneProgressParams =
-  ## Parse WorkDoneProgressParams ($/progress notification) from JSON
-  result.token = node["token"]
-  result.value = parseWorkDoneProgress(node["value"])
+  ## Parse WorkDoneProgressParams ($/progress notification) from JSON. Raises
+  ## ValueError (catchable) rather than asserting on malformed params.
+  if node.isNil or node.kind != JObject:
+    raise newException(ValueError, "Invalid $/progress params")
+  result.token = node{"token"}
+  if result.token.isNil:
+    raise newException(ValueError, "Missing $/progress token")
+  result.value = parseWorkDoneProgress(node{"value"})
 
 proc getProgressToken*(params: WorkDoneProgressParams): string =
   ## Get progress token as string (handles both int and string tokens)
@@ -1038,37 +1110,42 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
   if node.hasKey("completionProvider"):
     let cp = node["completionProvider"]
     # A server may advertise a literal `false` (or `null`, via Option-field
-    # serialisation) to disable the feature. The spec types this as Options,
-    # but be defensive: only a truthy/object value counts as supported so we
-    # never fire requests that hang until the timeout.
-    if cp.kind != JNull and (cp.kind != JBool or cp.getBool):
+    # serialisation) to disable the feature. Only an object or a bare `true`
+    # counts as supported; any other wrong-typed value is ignored so we never
+    # fire requests that hang until the timeout.
+    if cp.kind == JObject:
       var opts = CompletionOptions()
-      if cp.kind == JObject:
-        if cp.hasKey("triggerCharacters"):
-          var chars: seq[string] = @[]
-          for c in cp["triggerCharacters"]:
-            chars.add(c.getStr)
-          opts.triggerCharacters = some(chars)
-        if cp.hasKey("resolveProvider"):
-          opts.resolveProvider = some(cp["resolveProvider"].getBool)
+      let triggerNode = cp{"triggerCharacters"}
+      if not triggerNode.isNil and triggerNode.kind == JArray:
+        var chars: seq[string] = @[]
+        for c in triggerNode:
+          chars.add(c.getStr)
+        opts.triggerCharacters = some(chars)
+      if cp.hasKey("resolveProvider"):
+        opts.resolveProvider = some(cp["resolveProvider"].getBool)
       result.completionProvider = some(opts)
+    elif cp.kind == JBool and cp.getBool:
+      result.completionProvider = some(CompletionOptions())
   if node.hasKey("signatureHelpProvider"):
     let sh = node["signatureHelpProvider"]
-    # See completionProvider above: skip literal `false` and `null`.
-    if sh.kind != JNull and (sh.kind != JBool or sh.getBool):
+    # Same policy as completionProvider above: object or bare `true` only.
+    if sh.kind == JObject:
       var opts = SignatureHelpOptions()
-      if sh.kind == JObject:
-        if sh.hasKey("triggerCharacters"):
-          var chars: seq[string] = @[]
-          for c in sh["triggerCharacters"]:
-            chars.add(c.getStr)
-          opts.triggerCharacters = some(chars)
-        if sh.hasKey("retriggerCharacters"):
-          var chars: seq[string] = @[]
-          for c in sh["retriggerCharacters"]:
-            chars.add(c.getStr)
-          opts.retriggerCharacters = some(chars)
+      let triggerNode = sh{"triggerCharacters"}
+      if not triggerNode.isNil and triggerNode.kind == JArray:
+        var chars: seq[string] = @[]
+        for c in triggerNode:
+          chars.add(c.getStr)
+        opts.triggerCharacters = some(chars)
+      let retriggerNode = sh{"retriggerCharacters"}
+      if not retriggerNode.isNil and retriggerNode.kind == JArray:
+        var chars: seq[string] = @[]
+        for c in retriggerNode:
+          chars.add(c.getStr)
+        opts.retriggerCharacters = some(chars)
       result.signatureHelpProvider = some(opts)
+    elif sh.kind == JBool and sh.getBool:
+      result.signatureHelpProvider = some(SignatureHelpOptions())
   if node.hasKey("hoverProvider"):
     result.hoverProvider = some(node["hoverProvider"])
   if node.hasKey("definitionProvider"):
@@ -1098,9 +1175,13 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
     result.renameProvider = some(node["renameProvider"])
   if node.hasKey("executeCommandProvider"):
     let ec = node["executeCommandProvider"]
-    # See completionProvider above: skip literal `false` and `null`.
-    if ec.kind != JNull and (ec.kind != JBool or ec.getBool):
+    # See completionProvider above: `false`/`null` means unsupported, a bare
+    # `true` means supported with no options. Only an object is parsed; a
+    # wrong-typed value must not reach parseExecuteCommandOptions' hasKey.
+    if ec.kind == JObject:
       result.executeCommandProvider = some(parseExecuteCommandOptions(ec))
+    elif ec.kind == JBool and ec.getBool:
+      result.executeCommandProvider = some(ExecuteCommandOptions())
   if node.hasKey("semanticTokensProvider"):
     let stp = node["semanticTokensProvider"]
     # Some servers send a bare `false` / `null` instead of an options object.
@@ -1138,8 +1219,10 @@ proc toJson*(params: CodeLensParams): JsonNode =
 
 proc parseCommand*(node: JsonNode): Command =
   ## Parse Command from JSON
-  result.title = node["title"].getStr
-  result.command = node["command"].getStr
+  if node.isNil or node.kind != JObject:
+    return Command()
+  result.title = node{"title"}.getStr
+  result.command = node{"command"}.getStr
   if node.hasKey("arguments") and node["arguments"].kind == JArray:
     var args: seq[JsonNode] = @[]
     for arg in node["arguments"]:
@@ -1148,7 +1231,9 @@ proc parseCommand*(node: JsonNode): Command =
 
 proc parseCodeLens*(node: JsonNode): CodeLens =
   ## Parse CodeLens from JSON
-  result.range = parseRange(node["range"])
+  if node.isNil or node.kind != JObject:
+    return CodeLens()
+  result.range = parseRange(node{"range"})
   if node.hasKey("command") and node["command"].kind == JObject:
     result.command = some(parseCommand(node["command"]))
   if node.hasKey("data"):
@@ -1184,7 +1269,9 @@ proc toJson*(params: CodeActionParams): JsonNode =
 
 proc parseCodeAction*(node: JsonNode): CodeAction =
   ## Parse CodeAction from JSON
-  result.title = node["title"].getStr
+  if node.isNil or node.kind != JObject:
+    return CodeAction()
+  result.title = node{"title"}.getStr
   if node.hasKey("kind") and node["kind"].kind == JString:
     result.kind = some(node["kind"].getStr)
   if node.hasKey("diagnostics") and node["diagnostics"].kind == JArray:
@@ -1218,11 +1305,13 @@ proc toJson*(action: CodeAction): JsonNode =
 # Call Hierarchy serialization and parsing
 proc parseCallHierarchyItem*(node: JsonNode): CallHierarchyItem =
   ## Parse CallHierarchyItem from JSON
-  result.name = node["name"].getStr
-  result.kind = toEnumOr[SymbolKind](node["kind"].getInt, skFile)
-  result.uri = node["uri"].getStr
-  result.range = parseRange(node["range"])
-  result.selectionRange = parseRange(node["selectionRange"])
+  if node.isNil or node.kind != JObject:
+    return CallHierarchyItem()
+  result.name = node{"name"}.getStr
+  result.kind = toEnumOr[SymbolKind](node{"kind"}.getInt, skFile)
+  result.uri = node{"uri"}.getStr
+  result.range = parseRange(node{"range"})
+  result.selectionRange = parseRange(node{"selectionRange"})
   if node.hasKey("tags") and node["tags"].kind == JArray:
     var tags: seq[int] = @[]
     for t in node["tags"]:
@@ -1251,15 +1340,23 @@ proc toJson*(item: CallHierarchyItem): JsonNode =
 
 proc parseCallHierarchyIncomingCall*(node: JsonNode): CallHierarchyIncomingCall =
   ## Parse CallHierarchyIncomingCall from JSON
-  result.`from` = parseCallHierarchyItem(node["from"])
-  for r in node["fromRanges"]:
-    result.fromRanges.add(parseRange(r))
+  if node.isNil or node.kind != JObject:
+    return CallHierarchyIncomingCall()
+  result.`from` = parseCallHierarchyItem(node{"from"})
+  let rangesNode = node{"fromRanges"}
+  if not rangesNode.isNil and rangesNode.kind == JArray:
+    for r in rangesNode:
+      result.fromRanges.add(parseRange(r))
 
 proc parseCallHierarchyOutgoingCall*(node: JsonNode): CallHierarchyOutgoingCall =
   ## Parse CallHierarchyOutgoingCall from JSON
-  result.to = parseCallHierarchyItem(node["to"])
-  for r in node["fromRanges"]:
-    result.fromRanges.add(parseRange(r))
+  if node.isNil or node.kind != JObject:
+    return CallHierarchyOutgoingCall()
+  result.to = parseCallHierarchyItem(node{"to"})
+  let rangesNode = node{"fromRanges"}
+  if not rangesNode.isNil and rangesNode.kind == JArray:
+    for r in rangesNode:
+      result.fromRanges.add(parseRange(r))
 
 # Folding Range parsing
 proc parseFoldingRangeKind*(s: string): Option[FoldingRangeKind] =
@@ -1276,8 +1373,10 @@ proc parseFoldingRangeKind*(s: string): Option[FoldingRangeKind] =
 
 proc parseFoldingRange*(node: JsonNode): FoldingRange =
   ## Parse FoldingRange from JSON
-  result.startLine = node["startLine"].getInt
-  result.endLine = node["endLine"].getInt
+  if node.isNil or node.kind != JObject:
+    return FoldingRange()
+  result.startLine = node{"startLine"}.getInt
+  result.endLine = node{"endLine"}.getInt
   if node.hasKey("startCharacter") and node["startCharacter"].kind == JInt:
     result.startCharacter = some(node["startCharacter"].getInt)
   if node.hasKey("endCharacter") and node["endCharacter"].kind == JInt:
@@ -1292,6 +1391,8 @@ proc parseFoldingRange*(node: JsonNode): FoldingRange =
 proc parseLocations*(node: JsonNode): seq[Location] =
   ## Parse Location or Location[] from JSON. Malformed entries (non-object or
   ## missing uri) are skipped so one bad item doesn't drop the whole list.
+  if node.isNil:
+    return
   case node.kind
   of JArray:
     for item in node:
@@ -1310,12 +1411,12 @@ proc parseLocations*(node: JsonNode): seq[Location] =
 
 proc parseDocumentSymbolResult*(node: JsonNode): DocumentSymbolResult =
   ## Parse DocumentSymbol[] or SymbolInformation[] from JSON
-  if node.kind != JArray or node.len == 0:
+  if node.isNil or node.kind != JArray or node.len == 0:
     return DocumentSymbolResult(isHierarchical: true, symbols: @[])
 
   # Check if first item has "children" or "location" to determine type
   let firstItem = node[0]
-  if firstItem.hasKey("location"):
+  if firstItem.kind == JObject and firstItem.hasKey("location"):
     # SymbolInformation[]
     var syms: seq[SymbolInformation] = @[]
     for item in node:
@@ -1404,26 +1505,41 @@ type
     workDoneProgress*: Option[bool]
 
 proc parseRegistration*(node: JsonNode): Registration =
-  ## Parse Registration from JSON
-  result.id = node["id"].getStr
-  result.`method` = node["method"].getStr
+  ## Parse Registration from JSON. Raises ValueError (catchable) instead of
+  ## asserting when an entry is not an object.
+  if node.isNil or node.kind != JObject:
+    raise newException(ValueError, "Invalid registration entry")
+  result.id = node{"id"}.getStr
+  result.`method` = node{"method"}.getStr
   if node.hasKey("registerOptions"):
     result.registerOptions = some(node["registerOptions"])
 
 proc parseRegistrationParams*(node: JsonNode): RegistrationParams =
   ## Parse RegistrationParams from JSON
-  if node.hasKey("registrations"):
-    for reg in node["registrations"]:
+  if node.isNil or node.kind != JObject:
+    raise newException(ValueError, "Invalid registration params")
+  let regsNode = node{"registrations"}
+  if not regsNode.isNil:
+    if regsNode.kind != JArray:
+      raise newException(ValueError, "registrations is not an array")
+    for reg in regsNode:
       result.registrations.add(parseRegistration(reg))
 
 proc parseUnregistration*(node: JsonNode): Unregistration =
   ## Parse Unregistration from JSON
-  result.id = node["id"].getStr
-  result.`method` = node["method"].getStr
+  if node.isNil or node.kind != JObject:
+    raise newException(ValueError, "Invalid unregistration entry")
+  result.id = node{"id"}.getStr
+  result.`method` = node{"method"}.getStr
 
 proc parseUnregistrationParams*(node: JsonNode): UnregistrationParams =
   ## Parse UnregistrationParams from JSON
   # Note: The LSP spec uses "unregisterations" (with typo)
-  if node.hasKey("unregisterations"):
-    for unreg in node["unregisterations"]:
+  if node.isNil or node.kind != JObject:
+    raise newException(ValueError, "Invalid unregistration params")
+  let unregsNode = node{"unregisterations"}
+  if not unregsNode.isNil:
+    if unregsNode.kind != JArray:
+      raise newException(ValueError, "unregisterations is not an array")
+    for unreg in unregsNode:
       result.unregisterations.add(parseUnregistration(unreg))

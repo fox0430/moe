@@ -1114,6 +1114,48 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     )
     check not called
 
+  test "levDiagnostics with a non-array payload does not invoke the callback":
+    # Iterating a non-JArray asserts (uncatchable Defect); reject it instead.
+    let svc = newLspService()
+    var called = false
+    svc.onDiagnosticsUpdate = proc(
+        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    ) {.gcsafe.} =
+      called = true
+    for payload in ["null", "42", "{}", "\"x\""]:
+      svc.processEvent(
+        "nim",
+        LspEvent(
+          kind: levDiagnostics, diagUri: "file:///t.nim", diagnosticsJson: payload
+        ),
+      )
+    check not called
+
+  test "levDiagnostics tolerates a malformed item in the array":
+    # A non-object item must not assert in parseDiagnostic; other items survive.
+    let svc = newLspService()
+    var gotDiags: seq[Diagnostic] = @[]
+    svc.onDiagnosticsUpdate = proc(
+        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    ) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        gotDiags = diagnostics
+    let payload = $(
+      %*[
+        {"range": 5, "message": "ok"},
+        "not-an-object",
+        {"message": "also ok", "tags": "bad"},
+      ]
+    )
+    svc.processEvent(
+      "nim",
+      LspEvent(kind: levDiagnostics, diagUri: "file:///t.nim", diagnosticsJson: payload),
+    )
+    check gotDiags.len == 3
+    check gotDiags[0].message == "ok"
+    check gotDiags[1].message == ""
+    check gotDiags[2].message == "also ok"
+
   test "levCapabilities is parsed and stored":
     let svc = newLspService()
     svc.processEvent(
