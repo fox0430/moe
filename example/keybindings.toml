@@ -3,7 +3,6 @@
 # Place this file at:
 #   $XDG_CONFIG_HOME/moe/keybindings.toml
 #   ~/.config/moe/keybindings.toml
-#   ./keybindings.toml          (current directory)
 #
 # This file uses the SAME entry format as the [KeyMapping] section in
 # moerc.toml, but the per-mode tables sit at the top level (the whole file is
