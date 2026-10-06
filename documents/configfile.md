@@ -951,7 +951,8 @@ The file is searched in the following locations (in order):
 
 1. `$XDG_CONFIG_HOME/moe/keybindings.toml`
 2. `~/.config/moe/keybindings.toml`
-3. `./keybindings.toml` (current directory)
+
+The current directory is not searched, so a `keybindings.toml` inside a project you open cannot change your key mappings.
 
 Entries here are merged on top of `moerc.toml`'s `[KeyMapping]` section. When both define the same key in the same mode, the dedicated file wins (it is loaded last).
 

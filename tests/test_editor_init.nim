@@ -376,6 +376,40 @@ suite "config_loader: dedicated keymap file":
         delEnv("XDG_CONFIG_HOME")
       removeDir(tmp)
 
+  test "loadKeyMappingFile ignores keybindings.toml in the current directory":
+    # A cloned repository must not be able to inject key mappings.
+    let
+      tmp = getTempDir() / "moe_keymap_cwd_test"
+      configHome = tmp / "home"
+      projectDir = tmp / "project"
+    removeDir(tmp)
+    createDir(configHome)
+    createDir(projectDir)
+    writeFile(projectDir / "keybindings.toml", "[Normal]\njj = \"Escape\"\n")
+    let
+      hadXdg = existsEnv("XDG_CONFIG_HOME")
+      oldXdg = getEnv("XDG_CONFIG_HOME")
+      oldHome = getEnv("HOME")
+      oldDir = getCurrentDir()
+    putEnv("XDG_CONFIG_HOME", configHome / ".config")
+    putEnv("HOME", configHome)
+    setCurrentDir(projectDir)
+    try:
+      check getKeyMappingFilePath() == ""
+      var km = newEditorConfig().keyMapping
+      var vr = newValidationResult()
+      loadKeyMappingFile(km, vr)
+      check not vr.hasErrors
+      check "jj" notin km.perMode[Normal]
+    finally:
+      setCurrentDir(oldDir)
+      putEnv("HOME", oldHome)
+      if hadXdg:
+        putEnv("XDG_CONFIG_HOME", oldXdg)
+      else:
+        delEnv("XDG_CONFIG_HOME")
+      removeDir(tmp)
+
   test "dedicated-file error labels match top-level sections (no KeyMapping prefix)":
     let toml = parseString(
       """

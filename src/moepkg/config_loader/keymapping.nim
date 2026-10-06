@@ -189,11 +189,11 @@ proc getKeyMappingFilePath*(): string =
   ## "" when none exists.
   ## 1. $XDG_CONFIG_HOME/moe/keybindings.toml
   ## 2. ~/.config/moe/keybindings.toml
-  ## 3. ./keybindings.toml
+  ## The current directory is never searched: an untrusted checkout could
+  ## otherwise bind keys to arbitrary commands.
   let paths = [
     getConfigDir() / "moe" / "keybindings.toml",
     getHomeDir() / ".config" / "moe" / "keybindings.toml",
-    "keybindings.toml",
   ]
   for p in paths:
     if fileExists(p):
