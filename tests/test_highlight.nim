@@ -329,6 +329,25 @@ suite "Highlight - Edge Cases":
     let color = h.getColorPair(0, 0)
     check color == EditorColorPairIndex.default
 
+  test "an empty reserved word is ignored instead of hanging":
+    # `find("")` is always 0, so an empty word matched without consuming input.
+    let
+      buffer = @["// TODO: x"]
+      words = @[
+        ReservedWord(word: "", color: EditorColorPairIndex.reservedWord),
+        ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
+      ]
+      col = buffer[0].find("TODO")
+
+    let full = initHighlight(buffer, words, SourceLanguage.langRust)
+    check full.getColorPair(0, col) == EditorColorPairIndex.reservedWord
+
+    let (segments, _) = initHighlightIncremental(
+      buffer, 0, 0, TokenizerState(), words, SourceLanguage.langRust
+    )
+    check Highlight(colorSegments: segments).getColorPair(0, col) ==
+      EditorColorPairIndex.reservedWord
+
   test "initHighlightIncremental with langNone returns empty":
     let buffer = @["test"]
     let (segments, lineStates) = initHighlightIncremental(

@@ -869,6 +869,9 @@ iterator parseReservedWord(
 
     # search minimum pos
     for r in reservedWords:
+      # An empty word always matches at 0 and would never advance.
+      if r.word.len == 0:
+        continue
       let p = buffer.find(r.word)
       if p < 0:
         continue
