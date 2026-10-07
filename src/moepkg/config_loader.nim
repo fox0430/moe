@@ -235,6 +235,16 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   appendDisabledCommandAliasesToml(lines, config.disabledCommandAliases)
   appendHookToml(lines, config.hooks)
 
+  # Auto-create missing theme files only inside the moe config dir (same rule
+  # as `initTheme`); pre-existing paths stay permissive. Reject before writing
+  # to avoid partial saves.
+  if config.theme.kind == tkConfig and config.theme.path.len > 0 and
+      not fileExists(expandTilde(config.theme.path)) and
+      not isThemePathAllowed(config.theme.path):
+    return Result[void, string].err(
+      "Theme.path outside moe config dir: " & config.theme.path
+    )
+
   # Ensure directory exists
   let dir = parentDir(path)
   if not dirExists(dir):
