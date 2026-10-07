@@ -42,7 +42,8 @@ import
   editor_hover,
   editor_callhierarchy,
   editor_navigation,
-  editor_render
+  editor_render,
+  visual_selection
 
 import
   git_cache, render_utils, logger, message_log, debug_viewer, completion,
@@ -142,14 +143,15 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     e.state.pendingInput.macroState.playbackDepth, debugConfig.macroState.enable,
   )
 
+  let sel = e.activeWindow.visualSelection
   generateVisualInfo(
     debugLines,
-    e.state.visualSelection.active,
-    $e.state.visualSelection.kind,
-    e.state.visualSelection.start.line,
-    e.state.visualSelection.start.column,
-    e.state.visualSelection.current.line,
-    e.state.visualSelection.current.column,
+    sel.active,
+    $sel.kind,
+    sel.start.line,
+    sel.start.column,
+    sel.current.line,
+    sel.current.column,
     debugConfig.visual.enable,
   )
 

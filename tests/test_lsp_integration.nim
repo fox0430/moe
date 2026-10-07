@@ -1499,6 +1499,32 @@ suite "LspIntegration - applyLspFoldingRanges":
     check buffer.foldState.getFoldAt(0).isNone
     check buffer.foldState.getFoldAt(3).isSome
 
+  test "applyLspFoldingRanges keeps an LSP fold a manual fold repeats":
+    let buffer = newTextBuffer("0\n1\n2\n3")
+    let ranges = @[
+      FoldingRange(
+        startLine: 0,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: some("{...}"),
+      )
+    ]
+    check buffer.applyLspFoldingRanges(ranges) == 1
+    # As `zf` over the LSP fold does.
+    check buffer.foldState.addFold(0, 2) == true
+
+    check buffer.applyLspFoldingRanges(ranges) == 1
+
+    var sources: seq[FoldSource]
+    for fold in buffer.foldState.folds:
+      sources.add fold.source
+      if fold.source == fsLsp:
+        check fold.collapsedText == some("{...}")
+    check sources.len == 2
+    check fsLsp in sources and fsManual in sources
+
 suite "LspIntegration - Buffer Operations (disabled)":
   privateAccess(LspIntegration)
 

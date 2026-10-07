@@ -59,6 +59,11 @@ proc syncActiveWindow*(e: Editor) =
   ## The per-window buffer/viewport/wrapCountCache that the executor caches are
   ## re-aliased in a single place via `bindToWindow`, so split / navigation /
   ## close / resize paths only have to call this hook.
+  let left = e.state.activeWindow
+  if left != nil and left != e.activeWindow:
+    # Visual lives only in the focused window, as in Vim: nothing would move
+    # the anchor of a window left behind when another one edits its text.
+    left.leaveVisual()
   e.state.activeWindow = e.activeWindow
   e.motionController.bindToWindow(e.activeWindow)
   # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that
@@ -178,7 +183,7 @@ proc registerSplitBuffer(
   logDebug("editor", context & ": buffer added, buffers.len: " & $e.buffers.len)
 
 proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string]
-proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string]
+proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer, focus = true): Result[(), string]
 
 proc loadSplitBuffer(e: Editor, path: string): Result[TextBuffer, string] =
   ## Buffer for a split on `path`: reuse the holder if open, else load a new one.
@@ -416,12 +421,18 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
 
   ok(())
 
-proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
-  ## Create a horizontal split window with a specific buffer
+proc hsplitWithBuffer*(
+    e: Editor, buffer: TextBuffer, focus = true
+): Result[(), string] =
+  ## Create a horizontal split window with a specific buffer. Without `focus`
+  ## the active window keeps the focus and its mode.
   # Save current window state before splitting
   e.saveActiveWindowState()
 
-  let origin = e.splitOrigin()
+  let
+    origin = e.splitOrigin()
+    originWindow = e.activeWindow
+    previousWindow = e.windowManager.previousWindow
   let bufferResult = e.windowManager.hsplitWithBuffer(
     e.tabBuffer(e.activeWindow),
     origin.viewport,
@@ -443,12 +454,18 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   # Add the new buffer to the buffer list if it's not already there
   e.registerSplitBuffer(newBuffer, applyConfig = false, context = "hsplitWithBuffer")
 
+  let newWindow = e.activeWindow
+  if not focus:
+    # The new window was never visited, so it is not the previous one either.
+    e.windowManager.activateWindow(e.windowManager.windows.find(originWindow))
+    e.windowManager.previousWindow = previousWindow
+
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
 
   # Derive the new window's mode from its tab.
-  e.deriveTabMode(e.activeWindow)
-  e.state.previousMode = EditorMode.Normal
+  e.deriveTabMode(newWindow)
+  newWindow.previousMode = EditorMode.Normal
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:

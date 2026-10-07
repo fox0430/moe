@@ -32,7 +32,7 @@ import std/[options, tables]
 
 import pkg/results
 
-import types/editor_types, editor_lsp, lsp_integration, unicode_utils
+import types/editor_types, editor_lsp, lsp_integration, unicode_utils, visual_selection
 
 const SelectionRangeValidModes* =
   {EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
@@ -107,16 +107,7 @@ proc flattenSelectionChain(
 
 proc applySelectionRange(e: Editor, level: tuple[first, last: BufferPosition]) =
   ## Enter Visual mode (if not already) and select the given range.
-  if e.state.mode != EditorMode.Visual:
-    # Never record a visual mode: restoring it would leave a visual mode with
-    # no selection.
-    if not e.state.mode.isVisualAllMode:
-      e.state.previousMode = e.state.mode
-    e.setMode(EditorMode.Visual)
-  e.state.visualSelection = VisualSelection(
-    kind: vskChar, start: level.first, current: level.last, active: true
-  )
-  e.cursor = level.last
+  e.state.enterVisual(vskChar, level.first, level.last)
 
 proc selectionChainPosition(e: Editor): int =
   ## Index of the cached chain level that matches the current selection, or -1
@@ -124,11 +115,11 @@ proc selectionChainPosition(e: Editor): int =
   let c = e.state.lspCache
   if c.selectionRangeChain.len == 0:
     return -1
-  if e.state.mode != EditorMode.Visual or not e.state.visualSelection.active:
+  if e.state.mode != EditorMode.Visual:
     return -1
   if c.selectionRangeIndex < 0 or c.selectionRangeIndex >= c.selectionRangeChain.len:
     return -1
-  let cur = normalizedSelection(e.state.visualSelection)
+  let cur = normalizedSelection(e.activeWindow.visualSelection)
   let lvl = c.selectionRangeChain[c.selectionRangeIndex]
   if cur.first == lvl.first and cur.last == lvl.last:
     return c.selectionRangeIndex

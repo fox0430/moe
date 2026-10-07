@@ -54,6 +54,7 @@ when not defined(moe.embedded):
   import types/terminal_mode_types
 
 from lsp/protocol/types import SemanticTokensLegend
+from cursor_util import clampCursorToLastChar
 
 export
   buffer.LineMarkerKind, registers_types, command_completion_types, filer_types,
@@ -218,8 +219,12 @@ type
       # are pruned in the bdelete path.
     viewport*: ViewPort
     cursor*: BufferPosition # Window-local cursor position
+    visualAnchor*: BufferPosition
+      # Where the window's Visual selection started; the cursor is its other end.
     active*: bool # Whether this is the active window
-    mode*: EditorMode # Current mode for this window
+    mode*: EditorMode
+      # Current mode for this window. Enter a Visual mode through `setMode`,
+      # which puts the anchor on the cursor.
     previousMode*: EditorMode # Previous mode for ESC handling
     preferredColumn*: int # Preferred column for vertical movement (vim's $ behavior)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
@@ -645,11 +650,12 @@ type
     vskBlock # Block (column) selection (Ctrl-V)
     vskLine # Line-wise selection (V)
 
-  VisualSelection* = object ## Represents a visual mode selection range
-    start*: BufferPosition # Selection start position (anchor)
-    current*: BufferPosition # Current cursor position (selection end)
-    active*: bool # Whether selection is currently active
-    kind*: VisualSelectionKind # Type of selection (char, block, line)
+  VisualSelection* = object
+    ## A window's Visual selection, derived from its anchor, cursor and mode.
+    start*: BufferPosition # Anchor
+    current*: BufferPosition # Cursor
+    active*: bool # False outside the Visual modes
+    kind*: VisualSelectionKind # Follows the Visual mode
 
   PointerSelectionGranularity* = enum
     ## Unit established by the primary-button press for the rest of a gesture.
@@ -919,7 +925,6 @@ type
     currentWord*: string # Word under cursor (for currentWord highlighting)
     statusMessageStr: string # Internal - use statusMessage getter/setter
     editState*: EditState # Edit operation state (motions, repeat, etc.)
-    visualSelection*: VisualSelection # Visual mode selection state
     pointerSelection*: PointerSelectionGesture
       ## Primary-button gesture currently owned by the editor.
     snippetSession*: SnippetSession # Snippet tabstop cycling state (Insert mode)
@@ -1161,9 +1166,40 @@ proc mode*(s: EditorState): EditorMode =
   ## Get current mode from the active window
   s.activeWindow.mode
 
+proc setMode*(win: EditorWindow, m: EditorMode) =
+  ## Set the window's mode. Entering a Visual mode from outside starts the
+  ## selection at the cursor, so no entry path can resume a stale anchor.
+  ## Leaving Visual for a mode other than Insert or Replace brings the cursor
+  ## back onto the line, off the end `$` left it at.
+  let leavingVisual = win.mode.isVisualAllMode and not m.isVisualAllMode
+  if m.isVisualAllMode and not win.mode.isVisualAllMode:
+    win.visualAnchor = win.cursor
+  win.mode = m
+  if leavingVisual and m notin {EditorMode.Insert, EditorMode.Replace} and
+      not win.buffer.isNil and win.cursor.line < win.buffer.len:
+    win.cursor.clampCursorToLastChar(win.buffer.getLineLen(win.cursor.line))
+
+func modeAfterVisual(win: EditorWindow): EditorMode =
+  ## The mode Visual was entered from. Never another Visual mode, which would
+  ## resume this selection instead of ending it, and never Insert or Replace:
+  ## their session ended on entering Visual.
+  if win.previousMode.isVisualAllMode or
+      win.previousMode in {EditorMode.Insert, EditorMode.Replace}:
+    EditorMode.Normal
+  else:
+    win.previousMode
+
+proc leaveVisual*(win: EditorWindow) =
+  ## Return to the mode Visual was entered from, which ends the selection.
+  if win.mode.isVisualAllMode:
+    win.setMode(win.modeAfterVisual)
+
 proc `mode=`*(s: EditorState, m: EditorMode) =
   ## Set current mode on the active window
-  s.activeWindow.mode = m
+  s.activeWindow.setMode(m)
+
+proc leaveVisual*(s: EditorState) =
+  s.activeWindow.leaveVisual()
 
 proc previousMode*(s: EditorState): EditorMode =
   ## Get previous mode from the active window
@@ -1277,7 +1313,9 @@ proc isRenameOverlay*(state: EditorState): bool =
 
 proc enterCommandOverlay*(state: EditorState) =
   ## Enter command mode overlay
-  ## The base mode (Normal, Filer, etc.) is preserved
+  ## The base mode (Normal, Filer, etc.) is preserved; Visual ends first, as
+  ## in Vim.
+  state.leaveVisual()
   state.overlay = some(okCommand)
   state.input.commandText = ":"
   state.input.commandCursor = 0

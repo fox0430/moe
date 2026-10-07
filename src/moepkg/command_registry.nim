@@ -28,8 +28,8 @@ from std/strutils import repeat
 
 import pkg/results
 
-import types, motion, key_bindings, modes, logger
-import buffer/[core, edit, fold, undo]
+import types, motion, key_bindings, modes, logger, visual_selection
+import buffer/[core, edit, undo]
 
 import command_handlers/visual_commands
 
@@ -69,17 +69,12 @@ const VisualEditCommandIds = [
   "visual.uppercase", "visual.togglecase", "visual.joinlines", "visual.to.insert",
   "visual.change", "visual.block.append", "visual.paste", "visual.paste.end",
 ]
-  ## Visual-mode command ids that modify the selection. The selection is snapped
-  ## to fold boundaries before the edit, and gated on read-only buffers.
+  ## Visual-mode command ids that modify the selection, gated on read-only
+  ## buffers.
 
 const VisualEditOperatorTypes = ["visual-replace", "visual-surround"]
   ## ctOperatorPending operatorTypes that modify the visual selection (`r`, `S`).
   ## Guarded the same way as EditOperatorTypes / VisualEditCommandIds.
-
-const VisualSnapOnlyCommandIds = ["visual.yank"]
-  ## Visual-mode command ids that consume the selection whole but leave the
-  ## buffer untouched. They need the same fold snap as an edit, so `y` and `d`
-  ## agree on the selection, but stay outside the read-only gate.
 
 proc reverseFindMotion(m: Motion): Motion =
   ## The opposite-direction find/till motion, used by `,`.
@@ -248,51 +243,18 @@ proc executeCommand*(
       cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
       cmd.commandId in VisualEditCommandIds
     ) or (cmd.kind == ctOperatorPending and cmd.operatorType in VisualEditOperatorTypes)
-  let isVisualSnapCommand =
-    isVisualEditCommand or (
-      cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
-      cmd.commandId in VisualSnapOnlyCommandIds
-    )
-  # A selection reaching into a closed fold covers that fold whole, as operators
-  # do. A whole fold is whole lines, so such a selection becomes linewise.
-  if isVisualSnapCommand and ctx.state.visualSelection.active:
-    let
-      selLo = min(
-        ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line
-      )
-      selHi = max(
-        ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line
-      )
-      snapped = ctx.buffer.foldState.snapRangeToFolds(selLo, selHi)
-    if ctx.buffer.foldState.touchesCollapsedFold(selLo, selHi):
-      ctx.state.visualSelection.kind = vskLine
-      ctx.state.visualSelection.start =
-        BufferPosition(line: snapped.startLine, column: 0)
-      ctx.state.visualSelection.current =
-        BufferPosition(line: snapped.endLine, column: 0)
-      # The mode has to follow the selection kind: handlers such as
-      # `visualBlockAppend` key off both and would otherwise do nothing.
-      if ctx.state.mode in {EditorMode.Visual, EditorMode.VisualBlock}:
-        ctx.state.mode = EditorMode.VisualLine
-
   # Primitive-level checks in moepkg/buffer/edit.nim reject writes on readOnly
   # buffers at the choke point, and the operators now propagate those results.
   # Keep this gate as defense-in-depth: it centralizes the status message and
   # cancels any visual selection or pending operator in one place, instead of
   # leaving each handler to unwind its own state after a rejected edit.
   if (isEditCommand or isVisualEditCommand) and ctx.buffer.readOnly:
-    # Only unwind a selection that exists.
-    if isVisualEditCommand and ctx.state.visualSelection.active:
-      ctx.state.visualSelection.active = false
-      # `previousMode` may itself be a visual mode, which has no selection now.
-      ctx.state.mode =
-        if ctx.state.previousMode.isVisualAllMode:
-          EditorMode.Normal
-        else:
-          ctx.state.previousMode
+    if isVisualEditCommand:
+      ctx.state.leaveVisual()
     ctx.state.pendingInput.pendingOperator = none(PendingOperator)
     ctx.state.statusMessage = "Buffer is read-only"
     return ok(())
+
   case cmd.kind
   of ctMotion:
     # ; / , replay the last f/F/t/T (resolved from editState), reusing the same
@@ -569,13 +531,13 @@ proc executeCommand*(
         return err("No character specified for replace")
 
       # Check if we're in visual mode with active selection
-      if not ctx.state.visualSelection.active:
+      if not ctx.state.mode.isVisualAllMode:
         return err("No visual selection active")
 
       # Record the selection shape for `.` (Vim-compatible sizes).
       # `$`-extended ends keep the raw column; repeat clamps to the line.
       let
-        sel = ctx.state.visualSelection
+        sel = ctx.state.operandSelection(ctx.buffer)
         loLine = min(sel.start.line, sel.current.line)
         hiLine = max(sel.start.line, sel.current.line)
         loCol = min(sel.start.column, sel.current.column)
@@ -638,7 +600,7 @@ proc executeCommand*(
       if cmd.targetChar.charLen != 1:
         return err("No character specified for surround")
 
-      if not ctx.state.visualSelection.active:
+      if not ctx.state.mode.isVisualAllMode:
         return err("No visual selection active")
 
       # Surface a failed rollback (untrustworthy buffer) as a status message

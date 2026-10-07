@@ -29,7 +29,7 @@ import std/options
 
 import pkg/results
 
-import types/editor_types, editor_mode, editor_window_state, logger
+import types/editor_types, editor_mode, editor_window_state, logger, modes
 
 when not defined(moe.embedded):
   import std/tables
@@ -147,6 +147,10 @@ proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
   # Only the active window owns the global Insert session.
   if isActiveWindow:
     e.finalizeInsertSessionForBufferSwitch(win.buffer)
+  # The selection is in the old tab's text; Vim leaves Visual on `:b` too.
+  if win.mode.isVisualAllMode:
+    win.mode = EditorMode.Normal
+    win.previousMode = EditorMode.Normal
 
   # Terminal state stays in `e.terminalStates`; never `cleanup()` it here.
   discard win.takeViewerEntry()

@@ -34,6 +34,7 @@ import
 from ../src/moepkg/types/editor_types import Editor
 
 import editor_test_helper
+import visual_test_helper
 
 const AllEditModes = {
   EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
@@ -1453,6 +1454,73 @@ suite "addRuntimeMappingExpanded - complex command targets":
     check err == ""
     let m = registry.runtimeMappings[Insert][^1]
     check m.kind == rmkKeySequence
+
+suite "Integration - mode_switch into Visual":
+  test "starts the selection at the cursor, not at an old anchor":
+    # The switch reaches the mode transition with nothing but a target mode.
+    for mode in [EditorMode.Insert, EditorMode.Replace]:
+      let manager = createTestManager()
+      let buffer = newTextBuffer("aaa\nbbb\nccc")
+      let state = createTestState(mode)
+      check manager.keyBindingRegistry.addRuntimeMappingExpanded(
+        mode, "C-v", "mode_switch visual"
+      ) == ""
+      let editor = createTestEditor(
+        buffer, state, createTestViewport(), manager.keyBindingRegistry, manager
+      )
+      state.visualAnchor = BufferPosition(line: 0, column: 0)
+      state.cursor = BufferPosition(line: 2, column: 1)
+
+      discard manager.runKeyCombo(editor, parseKeyCombo("C-v").get)
+
+      check state.mode == EditorMode.Visual
+      check state.visualSelection.start == BufferPosition(line: 2, column: 1)
+
+  test "leaving it lands in Normal, not in an Insert session that has ended":
+    # Entering Visual ended the Insert session; Escape, the command line and a
+    # focus change must not put the window back in Insert without one.
+    for mode in [EditorMode.Insert, EditorMode.Replace]:
+      for leave in ["Escape", "overlay", "window"]:
+        let manager = createTestManager()
+        let buffer = newTextBuffer("aaa\nbbb")
+        let state = createTestState(mode)
+        check manager.keyBindingRegistry.addRuntimeMappingExpanded(
+          mode, "C-v", "mode_switch visualblock"
+        ) == ""
+        let editor = createTestEditor(
+          buffer, state, createTestViewport(), manager.keyBindingRegistry, manager
+        )
+        discard manager.runKeyCombo(editor, parseKeyCombo("C-v").get)
+        check state.mode == EditorMode.VisualBlock
+
+        case leave
+        of "Escape":
+          discard manager.runKeyCombo(editor, parseKeyCombo("Escape").get)
+        of "overlay":
+          state.enterCommandOverlay()
+        else:
+          state.activeWindow.leaveVisual()
+
+        check state.activeWindow.mode == EditorMode.Normal
+
+suite "Integration - mode_switch out of Visual":
+  test "Normal brings the cursor back off the end `$` left it at":
+    # `v$` then the mapping, then `vd`, must not take the newline with it.
+    let manager = createTestManager()
+    let buffer = newTextBuffer("abc\ndef")
+    let state = createTestState(EditorMode.Normal)
+    check manager.keyBindingRegistry.addRuntimeMappingExpanded(
+      Visual, "q", "mode_switch normal"
+    ) == ""
+    let editor = createTestEditor(
+      buffer, state, createTestViewport(), manager.keyBindingRegistry, manager
+    )
+
+    for key in ["v", "$", "q"]:
+      discard manager.runKeyCombo(editor, parseKeyCombo(key).get)
+
+    check state.mode == EditorMode.Normal
+    check state.cursor == BufferPosition(line: 0, column: 2)
 
 suite "Integration - Vim-style jj mapping":
   test "Vim-style jj accumulates then triggers":

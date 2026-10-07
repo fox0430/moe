@@ -158,6 +158,8 @@ proc enterViewerMode*(
   if ?e.leaveSidebar():
     # That window is new already: cover it rather than split it again.
     placement = vpInPlace
+  # A viewer replaces what the window shows, so Visual ends as on `:b`.
+  e.state.leaveVisual()
   let originMode = e.state.mode
   var reentering = false
   if placement == vpInPlace:
@@ -258,6 +260,8 @@ proc splitViewer*(e: Editor, placement: ViewerPlacement): Result[void, string] =
   let win = e.activeWindow
   if win.viewerEntry.isNone:
     return err("No viewer in the active window")
+  # The copy shows the listing, not a selection on it.
+  win.leaveVisual()
   let
     entryMode = win.viewerEntry.get.mode
     mode = win.mode
@@ -299,8 +303,7 @@ proc tearDownViewer(
   e.undoViewer(win, result.get, textMode)
 
 proc leaveViewerMode*(e: Editor, mode: EditorMode) =
-  ## Undo `enterViewerMode`, resuming what the viewer covered (round-trips
-  ## Visual).
+  ## Undo `enterViewerMode`, resuming what the viewer covered.
   discard e.tearDownViewer(mode, none(EditorMode))
 
 proc leaveViewerModeForJump*(e: Editor, mode: EditorMode): Option[ViewerEntry] =

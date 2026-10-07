@@ -113,9 +113,7 @@ type
     cursorLine*: int
     cursorCol*: int
     cursorDisplayCol*: int ## Screen column of cursor (accounting for tabs/wide chars)
-    hasSelection*: bool
-    selStart*: BufferPosition
-    selEnd*: BufferPosition
+    selection*: VisualSelection ## The rendered window's own selection
     windowMode*: EditorMode ## Mode of the window being rendered
     windowRightEdge*: int ## Absolute screen X of window's right edge
     isActiveWindow*: bool ## Whether the window being rendered is the active one
@@ -242,7 +240,7 @@ proc `cursor=`*(e: Editor, pos: BufferPosition) {.inline.} =
 
 proc setMode*(e: Editor, mode: EditorMode) {.inline.} =
   ## Set the current mode in the active window
-  e.activeWindow.mode = mode
+  e.activeWindow.setMode(mode)
 
 # Editor-based config pull-type accessors. State-based ones live in types.nim.
 

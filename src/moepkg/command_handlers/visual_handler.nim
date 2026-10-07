@@ -76,23 +76,6 @@ proc newVisualModeHandler*(
     motionController: motionController,
   )
 
-proc initSelection*(
-    state: EditorState, buffer: TextBuffer, kind: VisualSelectionKind = vskChar
-) =
-  ## Initialize visual selection at current cursor position
-  let cursorPos = state.cursor
-  state.visualSelection =
-    VisualSelection(start: cursorPos, current: cursorPos, active: true, kind: kind)
-
-proc clearSelection*(state: EditorState) =
-  ## Clear the visual selection
-  state.visualSelection.active = false
-
-proc updateSelection*(state: EditorState, newPos: BufferPosition) =
-  ## Update the current end of the selection
-  if state.visualSelection.active:
-    state.visualSelection.current = newPos
-
 proc getSelectionRange*(
     selection: VisualSelection
 ): tuple[start, endPos: BufferPosition] {.inline.} =
@@ -255,10 +238,8 @@ proc handleVisualModeKey*(
     ):
       if handler.keyBindingRegistry != nil:
         discard state.pendingInput.cancelAll(handler.keyBindingRegistry)
-      state.clearSelection()
-      let returnMode = state.previousMode
-      state.mode = returnMode
-      return VisualModeResult(kind: vmrHandled, modeTransition: some(returnMode))
+      state.leaveVisual()
+      return VisualModeResult(kind: vmrHandled, modeTransition: some(state.mode))
     return VisualModeResult(kind: vmrUnhandled)
 
   let cmd = route.command
@@ -295,10 +276,6 @@ proc handleVisualModeKey*(
 
   # Execute command through registry
   let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
-
-  # Update visual selection current position if still in visual mode
-  if isVisualAllMode(state.mode) and state.visualSelection.active:
-    state.visualSelection.current = state.cursor
 
   if cmdResult.isErr:
     return VisualModeResult(kind: vmrError, errorMessage: cmdResult.error)

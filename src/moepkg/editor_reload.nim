@@ -67,7 +67,6 @@ proc invalidatePositionStateForBuffer*(e: Editor, buf: TextBuffer) =
   ## living on the buffer (undo, folds, bookmarks, diagnostics) are reset by
   ## `loadFile`; position-keyed state outside it belongs here.
   let isActive = buf == e.activeBuffer()
-  var leftVisualMode = false
 
   for window in e.windowManager.windows:
     if window.buffer != buf:
@@ -88,17 +87,11 @@ proc invalidatePositionStateForBuffer*(e: Editor, buf: TextBuffer) =
     if window.mode.isVisualAllMode:
       window.mode = EditorMode.Normal
       window.previousMode = EditorMode.Normal
-      leftVisualMode = true
 
     # A viewport past the new end renders an empty window that no cursor
     # movement scrolls back into view.
     if window.viewport.topLine >= buf.len:
       window.viewport.resetViewportTop(window.cursor.line)
-
-  # The selection is a single global naming whichever window built it, so any
-  # window forced out of Visual above has to drop it.
-  if isActive or leftVisualMode:
-    e.state.visualSelection.active = false
 
   if isActive:
     e.state.snippetSession.active = false

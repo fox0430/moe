@@ -28,6 +28,7 @@ import
     command_config, command_registry, logger, modes,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
+import visual_test_helper
 import
   ../src/moepkg/command_handlers/
     [command_mode_handler, handler_result, result_processor]
@@ -2522,6 +2523,28 @@ suite "Editor - :bd with a buffer argument":
     check e.bufferById(f1Id).isNone
     check e.activeBuffer().id == f2Id
 
+  test "takes the window in Visual on the buffer out of Visual":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_bd_arg_visual_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_arg_visual_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f2)
+    discard e.editFile(f1)
+    let f1Id = e.activeBuffer().id
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0)
+    )
+
+    check e.deleteBufferByArg($f1Id.int).isOk
+
+    check e.state.mode == EditorMode.Normal
+    check not e.state.visualSelection.active
+
   test "deleting the active buffer by number switches to a survivor":
     let e = createTestEditor()
     let f1 = getTempDir() / "moe_test_bd_arg_active_1.txt"
@@ -3150,6 +3173,22 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     check win.cursor.column == 3
     check win.viewport.topLine == 6
     check win.viewport.leftColumn == 1
+
+suite "Editor - a command line from Visual":
+  test "a mapping that runs a command line leaves Visual first, as `:` does":
+    let e = createTestEditor()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 7)
+    )
+
+    discard e.processResult(
+      HandlerResult(kind: hrExecCommand, execCommandText: "noh", execCommandCount: 1),
+      e.activeBuffer(),
+    )
+
+    check e.state.mode == EditorMode.Normal
+    check not e.state.visualSelection.active
 
 suite "Editor - Command mode command alias bridge end-to-end (#2597)":
   # Regression: the `keyMappableCommandModeAliases` bridge in

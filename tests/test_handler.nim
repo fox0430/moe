@@ -30,6 +30,7 @@ import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
 
 import config_test_helper
+import visual_test_helper
 
 import
   ../src/moepkg/[
@@ -1779,6 +1780,35 @@ suite "frontend-neutral pointer and scroll input":
     check handled
     check e.cursor.line == 2
 
+  test "a click in another window ends Visual in the window left":
+    let e = createTestEditorWithBuffer("left window text")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0)
+    let rightBuffer = newTextBuffer("right window text")
+    let rightWindow = EditorWindow(
+      viewBuffer: rightBuffer,
+      tabBufferId: rightBuffer.id,
+      bufferIds: @[rightBuffer.id],
+      viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+      mode: EditorMode.Normal,
+    )
+    e.windowManager.windows.add(rightWindow)
+    let leftWindow = e.activeWindow
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
+    )
+
+    check e.handlePointerInput(initPointerInput(0, 25))
+
+    check e.activeWindow == rightWindow
+    check leftWindow.mode == EditorMode.Normal
+    check not leftWindow.visualSelection.active
+
   test "empty split tab-line area does not move the cursor":
     let e = createTestEditorWithBuffer("left window text")
     e.state.showTabLine = true
@@ -1949,11 +1979,8 @@ suite "frontend-neutral pointer and scroll input":
     e.state.showSidebar = false
     e.state.mode = EditorMode.VisualBlock
     e.state.previousMode = EditorMode.Normal
-    e.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 1),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     check e.handlePointerInput(
@@ -4872,12 +4899,8 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
     let buf2 = newTextBuffer("x\ny")
     e.addSecondWindow(buf2)
 
-    e.state.mode = EditorMode.Visual
-    e.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 5, column: 0),
-      current: BufferPosition(line: 5, column: 0),
-      active: true,
-      kind: vskChar,
+    e.state.selectVisual(
+      BufferPosition(line: 5, column: 0), BufferPosition(line: 5, column: 0)
     )
 
     let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
@@ -5315,6 +5338,126 @@ suite "Ctrl-C in Terminal mode":
     check e.state.mode == EditorMode.Terminal
     # `interrupt()` would have dropped the paste on its way to the child.
     check e.activeWindow.modeState.terminal.pty.droppableBytes == 5
+
+suite "gn - the match becomes the selection":
+  proc charKey(c: string): KeyCombo =
+    KeyCombo(isSpecial: false, char: c, modifiers: {})
+
+  test "gn selects from the match start to its end":
+    let e = createTestEditorWithBuffer("say hello")
+    e.state.input.search.last.pattern = "hello"
+
+    check e.handleKeyCombo(charKey("g"))
+    check e.handleKeyCombo(charKey("n"))
+
+    check e.state.mode == EditorMode.Visual
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 4)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 8)
+
+  test "<C-o>gn selects the match and ends the Insert session":
+    let e = createTestEditorWithBuffer("say hello")
+    e.state.input.search.last.pattern = "hello"
+    check e.handleKeyCombo(charKey("i"))
+    check e.handleKeyCombo(
+      KeyCombo(isSpecial: false, char: "o", modifiers: {key_bindings.kmCtrl})
+    )
+
+    check e.handleKeyCombo(charKey("g"))
+    check e.handleKeyCombo(charKey("n"))
+
+    check e.state.mode == EditorMode.Visual
+    check not e.state.insertNormalMode
+    check not e.activeBuffer.inTransaction
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 4)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 8)
+
+suite "handleInterrupt - Visual":
+  test "Ctrl-C leaves Visual like Esc, back to the mode it was entered from":
+    let e = createTestEditorWithBuffer("hello world")
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
+    )
+    e.state.previousMode = EditorMode.LogViewer
+
+    check e.handleInterrupt()
+
+    check e.state.mode == EditorMode.LogViewer
+    # Unlike leaving Insert, the cursor stays put.
+    check e.cursor == BufferPosition(line: 0, column: 4)
+
+  test "switching the Visual kind keeps the mode Visual was entered from":
+    let e = createTestEditorWithBuffer("hello world")
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
+    )
+    e.state.previousMode = EditorMode.LogViewer
+
+    discard e.processResult(
+      HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.VisualLine)),
+      e.activeBuffer(),
+    )
+    check e.state.mode == EditorMode.VisualLine
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
+
+    check e.handleInterrupt()
+
+    check e.state.mode == EditorMode.LogViewer
+
+  test "Ctrl-C clears a pending Visual operand":
+    let e = createTestEditorWithBuffer("hello world")
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
+    )
+    e.state.pendingInput.pendingRegister = some('a')
+
+    check e.handleInterrupt()
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.pendingInput.pendingRegister.isNone
+
+  proc typeChars(e: Editor, keys: string) =
+    for key in keys:
+      check e.handleKeyCombo(KeyCombo(isSpecial: false, char: $key, modifiers: {}))
+
+  test "Ctrl-C after v$ puts the cursor back on the last character":
+    let e = createTestEditorWithBuffer("abc\ndef")
+    e.typeChars("v$")
+    check e.cursor == BufferPosition(line: 0, column: 3)
+
+    check e.handleInterrupt()
+
+    check e.state.mode == EditorMode.Normal
+    check e.cursor == BufferPosition(line: 0, column: 2)
+    # A fresh `vd` takes the last character, not the newline.
+    e.typeChars("vd")
+    check e.activeBuffer.getLine(0) == "ab"
+    check e.activeBuffer.getLine(1) == "def"
+
+  test "Esc after v$ puts the cursor back on the last character":
+    let e = createTestEditorWithBuffer("abc\ndef")
+    e.typeChars("v$")
+
+    check e.handleKeyCombo(KeyCombo(isSpecial: true, special: skEscape))
+
+    check e.state.mode == EditorMode.Normal
+    check e.cursor == BufferPosition(line: 0, column: 2)
+
+  test "Ctrl-C from a mouse selection in forced Insert mode lands in Insert":
+    let e = createTestEditorWithBuffer("hello world")
+    e.config.standard.forceInsertMode = true
+    e.state.config.standard.forceInsertMode = true
+    e.enforceModePolicy()
+    check e.activeBuffer.commitTransaction().isOk
+    # A mouse selection started from Insert records Normal as the way back.
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
+    )
+    e.state.previousMode = EditorMode.Normal
+
+    check e.handleInterrupt()
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.inTransaction
 
 suite "middleClickPaste - the click picks the target":
   proc fakeTerminalState(): TerminalState =

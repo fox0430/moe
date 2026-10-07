@@ -42,7 +42,8 @@ import
   editor_codelens,
   virtual_text,
   command_line,
-  buffer
+  buffer,
+  visual_selection
 import command_handlers/visual_handler
 
 type
@@ -224,11 +225,6 @@ proc newLineStyleContext*(
 # effects, no style construction. The 4 priority-chain procs below call
 # them in order so the priority list reads as a sequence of named checks.
 
-template matchesVisualSelection(
-    e: Editor, hasSelection: bool, pos: BufferPosition
-): bool =
-  hasSelection and e.state.visualSelection.isPositionInSelection(pos)
-
 template matchesSnippetStop(
     e: Editor, lineCtx: LineStyleContext, pos: BufferPosition
 ): bool =
@@ -350,7 +346,7 @@ proc baseStyleWithOverlay(
 proc getSelectionStyle*(
     e: Editor,
     buffer: TextBuffer,
-    hasSelection: bool,
+    selection: VisualSelection,
     pos: BufferPosition,
     cursorCol: int,
     windowMode: EditorMode,
@@ -377,7 +373,7 @@ proc getSelectionStyle*(
     else:
       normalStyle()
 
-  if e.matchesVisualSelection(hasSelection, pos):
+  if selection.isPositionInSelection(pos):
     syntaxBaseStyle().merge(bgOnly(visualStyle().bg))
   elif e.matchesSnippetStop(lineCtx, pos):
     syntaxBaseStyle().merge(bgOnly(snippetTabStopStyle().bg))
@@ -392,25 +388,6 @@ proc getSelectionStyle*(
   else:
     e.baseStyleWithOverlay(
       buffer, pos, windowMode, displayCol, cursorDisplayCol, lineCtx
-    )
-
-proc getVisualSelection*(
-    e: Editor, windowMode: EditorMode, windowActive: bool = true
-): tuple[hasSelection: bool, selStart, selEnd: BufferPosition] =
-  ## Get visual selection range if active
-  ## windowMode: The mode of the window being rendered
-  ## windowActive: only show selection in active window (default true for compatibility)
-  let hasSelection =
-    isVisualAllMode(windowMode) and e.state.visualSelection.active and windowActive
-
-  if hasSelection:
-    let (start, endPos) = e.state.visualSelection.getSelectionRange()
-    result = (hasSelection: true, selStart: start, selEnd: endPos)
-  else:
-    result = (
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
     )
 
 proc shouldShowIndentationGuide*(
@@ -494,15 +471,15 @@ proc fillLineBackground*(
     cursorDisplayCol: int = -1,
     textBuffer: TextBuffer = nil,
     isEmptyLine: bool = false,
-    hasSelection: bool = false,
+    selection = VisualSelection(),
 ) =
   ## Fill the rest of the line to the window right edge.
   ## Uses cursor line highlight for the cursor line, normal style otherwise.
   ## When `textBuffer` is provided and the line is inside a git conflict block,
   ## the conflict background takes priority over cursor-line highlight.
-  ## When `isEmptyLine` and `hasSelection` are both true and the visual
-  ## selection covers (lineIndex, 0), column 0 is rendered with the visual
-  ## selection background so that Visual mode is visible on empty lines.
+  ## When `isEmptyLine` and `selection` covers (lineIndex, 0), column 0 is
+  ## rendered with the visual selection background so that Visual mode is
+  ## visible on empty lines.
   # Partial LineStyleContext: lineFillPatch only reads isCursorLine,
   # lineConflict, useTwoColor, and lineBg. The seq/colorcode fields stay at
   # their defaults — lineIndex is set so any future read of it stays correct.
@@ -514,10 +491,8 @@ proc fillLineBackground*(
     lineBg: resolveLineBg(e, textBuffer, lineIndex),
   )
   let selectionAtStart =
-    isEmptyLine and hasSelection and
-    e.state.visualSelection.isPositionInSelection(
-      BufferPosition(line: lineIndex, column: 0)
-    )
+    isEmptyLine and
+    selection.isPositionInSelection(BufferPosition(line: lineIndex, column: 0))
   var displayX = 0
   while screenX + displayX < windowRightEdge:
     let inVisualSelection = displayX == 0 and selectionAtStart
@@ -687,7 +662,7 @@ proc renderLineSegmentWithSelection*(
         pos = BufferPosition(line: lineIndex, column: charIdx)
         style = e.getSelectionStyle(
           textBuffer,
-          ctx.hasSelection,
+          ctx.selection,
           pos,
           ctx.cursorCol,
           ctx.windowMode,
@@ -706,7 +681,7 @@ proc renderLineSegmentWithSelection*(
         pos = BufferPosition(line: lineIndex, column: col)
         style = e.getSelectionStyle(
           textBuffer,
-          ctx.hasSelection,
+          ctx.selection,
           pos,
           ctx.cursorCol,
           ctx.windowMode,
@@ -798,7 +773,7 @@ proc renderWindowLineWrapped*(
       cursorDisplayCol = ctx.cursorDisplayCol,
       textBuffer = window.buffer,
       isEmptyLine = true,
-      hasSelection = ctx.hasSelection,
+      selection = ctx.selection,
     )
     # Empty lines bypass renderLineSegmentWithSelection, so draw any end-of-line
     # virtual text (inlay hints) here too, over the just-filled background.
@@ -986,7 +961,7 @@ proc renderWindowLineNoWrap*(
       cursorDisplayCol = ctx.cursorDisplayCol,
       textBuffer = window.buffer,
       isEmptyLine = (line.charLen == 0),
-      hasSelection = ctx.hasSelection,
+      selection = ctx.selection,
     )
     # The text path skips end-of-line virtual text for empty/scrolled-past
     # lines. Draw it here when the line's end column is still on-screen
@@ -1180,10 +1155,6 @@ proc renderWindow*(
     else:
       none(Sidebar)
 
-  # Get visual selection range if active
-  let (hasSelection, selStart, selEnd) =
-    e.getVisualSelection(window.mode, window.active)
-
   # Wrap mode: displayX restarts at 0 on every segment, so use the cursor's
   # segment-relative column — an absolute one only matches segment 1.
   let cursorDisplayCol =
@@ -1204,9 +1175,7 @@ proc renderWindow*(
     cursorLine: window.cursor.line,
     cursorCol: window.cursor.column,
     cursorDisplayCol: cursorDisplayCol,
-    hasSelection: hasSelection,
-    selStart: selStart,
-    selEnd: selEnd,
+    selection: window.visualSelection,
     windowMode: window.mode,
     windowRightEdge: window.viewport.x + window.viewport.width,
     isActiveWindow: isActiveWindow,

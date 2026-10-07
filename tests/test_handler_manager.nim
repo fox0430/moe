@@ -192,7 +192,8 @@ suite "HandlerManager - getOverlayTransition helper":
 proc createVisualTestState(mode: EditorMode): EditorState =
   ## Create an EditorState with visual selection active for testing
   let window = EditorWindow(
-    cursor: BufferPosition(line: 0, column: 0),
+    cursor: BufferPosition(line: 0, column: 3),
+    visualAnchor: BufferPosition(line: 0, column: 0),
     mode: mode,
     previousMode: EditorMode.Normal,
   )
@@ -213,17 +214,6 @@ proc createVisualTestState(mode: EditorMode): EditorState =
       )
     ),
     registers: initRegisters(),
-    visualSelection: VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 3),
-      active: true,
-      kind:
-        case mode
-        of EditorMode.VisualBlock: vskBlock
-        of EditorMode.VisualLine: vskLine
-        else: vskChar
-      ,
-    ),
   )
 
 suite "HandlerManager - Visual to Insert mode transaction":
@@ -355,6 +345,7 @@ proc createBlockVisualTestState(
   ## Create an EditorState with visual block selection for testing
   let window = EditorWindow(
     cursor: BufferPosition(line: endLine, column: endCol),
+    visualAnchor: BufferPosition(line: startLine, column: startCol),
     mode: EditorMode.VisualBlock,
     previousMode: EditorMode.Normal,
   )
@@ -375,12 +366,6 @@ proc createBlockVisualTestState(
       )
     ),
     registers: initRegisters(),
-    visualSelection: VisualSelection(
-      start: BufferPosition(line: startLine, column: startCol),
-      current: BufferPosition(line: endLine, column: endCol),
-      active: true,
-      kind: vskBlock,
-    ),
   )
 
 suite "HandlerManager - Visual Block insert replication":
@@ -2043,6 +2028,34 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     check r.kind == hrHandled
     check r.modeTransition.get == EditorMode.VisualBlock
+    check not state.insertNormalMode
+    check not buffer.inTransaction
+    check state.editState.insertModeStartPos.isNone
+
+  test "gn selects the match instead of returning to Insert":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "say hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.input.search.last.pattern = "hello"
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    let gKey = KeyCombo(isSpecial: false, char: "g", modifiers: {})
+    discard manager.handleKeyCombo(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), gKey
+    )
+    let nKey = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    let r = manager.handleKeyCombo(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), nKey
+    )
+
+    check r.kind == hrHandled
+    check r.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 4)
+    check state.cursor == BufferPosition(line: 0, column: 8)
     check not state.insertNormalMode
     check not buffer.inTransaction
     check state.editState.insertModeStartPos.isNone

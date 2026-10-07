@@ -22,10 +22,13 @@
 
 import std/[unittest, options]
 
-import ../src/moepkg/[editor, config, editor_window, window_manager, types]
+import pkg/results
+
+import ../src/moepkg/[editor, config, editor_window, window_manager, types, buffer]
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/editor_command_output
 import ../src/moepkg/command_handlers/[handler_result, result_processor]
+import visual_test_helper
 
 proc testEditor(): Editor =
   newEditor(newEditorConfig())
@@ -79,6 +82,19 @@ suite "Background command output":
     check e.windowManager.windows.len == 2
     check e.activeWindow == userWindow
     check e.state.mode == EditorMode.Insert
+
+  test "A command the user did not start leaves the previous window alone":
+    # The user never visited the output window, so `<C-w>p` must not go there.
+    let e = testEditor()
+    let first = e.activeWindow
+    check e.hsplitWithBuffer(e.activeBuffer).isOk
+    let second = e.activeWindow
+    require e.windowManager.previousWindow == first
+
+    e.showCommandOutput(@["built"], keepFocus = true)
+
+    check e.activeWindow == second
+    check e.windowManager.previousWindow == first
 
   test "A command the user asked for moves the focus to its output":
     let e = testEditor()
@@ -165,6 +181,37 @@ suite "Background command output":
     let e = testEditor()
     e.showCommandOutput(@["one", "two"], keepFocus = false)
     check e.activeWindow.buffer.getLine(1) == "two"
+
+suite "Background command output - from Visual":
+  test "A command the user did not start keeps the selection":
+    let e = testEditor()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let userWindow = e.activeWindow
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 7)
+    )
+
+    e.showCommandOutput(@["built"], keepFocus = true)
+
+    check e.activeWindow == userWindow
+    check e.state.mode == EditorMode.Visual
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 2)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
+
+  test "The window a command takes the focus from leaves Visual":
+    let e = testEditor()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let userWindow = e.activeWindow
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 7)
+    )
+
+    e.showCommandOutput(@["ran"], keepFocus = false)
+
+    check e.activeWindow != userWindow
+    check not e.state.visualSelection.active
+    check userWindow.mode == EditorMode.Normal
+    check not userWindow.visualSelection.active
 
 suite "Background command output - window covered by a viewer":
   test "The covered window moves its tab to the new output":

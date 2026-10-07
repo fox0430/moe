@@ -28,7 +28,7 @@ import pkg/results
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_registry, registers,
-    render_utils, search_utils, uri_utils, key_router, unicode_utils,
+    render_utils, search_utils, uri_utils, key_router, unicode_utils, visual_selection,
   ]
 import handler_types, visual_handler, insert_commands, command_passthrough
 import ../types/editor_types
@@ -228,10 +228,7 @@ proc searchMatchAndSelect(
   let endCol = getMatchEndCol(buffer, searchText, pos, ignoreCase, wholeWord)
   let matchEnd = BufferPosition(line: pos.line, column: endCol)
   recordJump(state)
-  state.initSelection(buffer, vskChar)
-  state.visualSelection.start = pos
-  state.visualSelection.current = matchEnd
-  state.cursor = matchEnd
+  state.enterVisual(vskChar, pos, matchEnd)
   return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
 
 proc searchMatchAndOperate(
@@ -381,20 +378,9 @@ proc handleModeSwitch*(
       modeTransition: some(EditorMode.Insert),
       insertReplayCount: max(1, count),
     )
-  of EditorMode.Visual:
-    # Initialize visual selection at current cursor position (character-wise)
-    state.initSelection(buffer, vskChar)
-    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
-  of EditorMode.VisualBlock:
-    # Initialize visual selection at current cursor position (block/column)
-    state.initSelection(buffer, vskBlock)
-    return
-      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.VisualBlock))
-  of EditorMode.VisualLine:
-    # Initialize visual selection at current cursor position (line-wise)
-    state.initSelection(buffer, vskLine)
-    return
-      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.VisualLine))
+  of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
+    # Entering the mode starts the selection at the cursor.
+    return NormalModeResult(kind: nmrHandled, modeTransition: some(targetMode))
   of EditorMode.Replace:
     if buffer.readOnly:
       state.statusMessage = "Buffer is read-only"

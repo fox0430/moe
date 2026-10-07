@@ -25,6 +25,7 @@ import pkg/results
 
 import ../src/moepkg/[buffer, types, modes, registers, config, clipboard]
 import ../src/moepkg/command_handlers/visual_commands
+import visual_test_helper
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -55,12 +56,6 @@ proc createTestState(): EditorState =
       )
     ),
     registers: initRegisters(),
-    visualSelection: VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
-      active: true,
-      kind: vskChar,
-    ),
   )
 
 proc isToolAvailable(cmd: string): bool =
@@ -187,7 +182,6 @@ suite "Visual Commands - visualMoveLeft":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 5)
-    state.visualSelection.current = state.cursor
 
     visualMoveLeft(buf, state)
 
@@ -199,7 +193,6 @@ suite "Visual Commands - visualMoveLeft":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveLeft(buf, state)
 
@@ -212,7 +205,6 @@ suite "Visual Commands - visualMoveRight":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 5)
-    state.visualSelection.current = state.cursor
 
     visualMoveRight(buf, state)
 
@@ -224,7 +216,6 @@ suite "Visual Commands - visualMoveRight":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 11)
-    state.visualSelection.current = state.cursor
 
     visualMoveRight(buf, state)
 
@@ -237,7 +228,6 @@ suite "Visual Commands - visualMoveUp":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 3)
-    state.visualSelection.current = state.cursor
 
     visualMoveUp(buf, state)
 
@@ -249,7 +239,6 @@ suite "Visual Commands - visualMoveUp":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 3)
-    state.visualSelection.current = state.cursor
 
     visualMoveUp(buf, state)
 
@@ -261,7 +250,6 @@ suite "Visual Commands - visualMoveUp":
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nlonger line")
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 10)
-    state.visualSelection.current = state.cursor
 
     visualMoveUp(buf, state)
 
@@ -275,7 +263,6 @@ suite "Visual Commands - visualMoveDown":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 3)
-    state.visualSelection.current = state.cursor
 
     visualMoveDown(buf, state)
 
@@ -287,7 +274,6 @@ suite "Visual Commands - visualMoveDown":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 3)
-    state.visualSelection.current = state.cursor
 
     visualMoveDown(buf, state)
 
@@ -299,7 +285,6 @@ suite "Visual Commands - visualMoveDown":
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nshort")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 10)
-    state.visualSelection.current = state.cursor
 
     visualMoveDown(buf, state)
 
@@ -375,11 +360,8 @@ suite "Visual Commands - visualYank":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 6)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualYank(buf, state)
@@ -396,12 +378,8 @@ suite "Visual Commands - visualYank":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
 
     visualYank(buf, state)
@@ -414,11 +392,8 @@ suite "Visual Commands - visualYank":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     state.pendingInput.pendingRegister = some('a')
 
@@ -437,11 +412,8 @@ suite "Visual Commands - visualYank":
     # Start selection at column 18 on short line (line 0), extend to long line (line 1)
     # This simulates: cursor on line 0 col 18 (past end), select down to line 1
     state.cursor = BufferPosition(line: 1, column: 18)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 18),
-      current: BufferPosition(line: 1, column: 18),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 18), BufferPosition(line: 1, column: 18)
     )
 
     visualYank(buf, state)
@@ -455,11 +427,8 @@ suite "Visual Commands - visualYank":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "\nsome text")
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 5)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 1, column: 5),
-      current: BufferPosition(line: 0, column: 0),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 1, column: 5), BufferPosition(line: 0, column: 0)
     )
 
     visualYank(buf, state)
@@ -472,11 +441,8 @@ suite "Visual Commands - visualDelete":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualDelete(buf, state)
@@ -493,12 +459,8 @@ suite "Visual Commands - visualDelete":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
 
     visualDelete(buf, state)
@@ -511,7 +473,7 @@ suite "Visual Commands - visualDelete":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualDelete(buf, state)
 
@@ -525,9 +487,7 @@ suite "Visual Commands - visualDelete":
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection = VisualSelection(
-      start: state.cursor, current: state.cursor, active: true, kind: vskChar
-    )
+    state.selectVisual(state.cursor, state.cursor)
 
     for _ in 1 .. 5:
       visualMoveRight(buf, state)
@@ -544,9 +504,7 @@ suite "Visual Commands - visualDelete":
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection = VisualSelection(
-      start: state.cursor, current: state.cursor, active: true, kind: vskChar
-    )
+    state.selectVisual(state.cursor, state.cursor)
 
     visualMoveEnd(buf, state)
     check state.cursor.column == 5 # == lineLen
@@ -561,11 +519,8 @@ suite "Visual Commands - visualDelete":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
     discard buf.insertText(BufferPosition(line: 0, column: 3), "\nde")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 1),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 1, column: 2)
     )
 
     visualDelete(buf, state)
@@ -578,11 +533,8 @@ suite "Visual Commands - visualDelete":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualDelete(buf, state)
@@ -598,11 +550,8 @@ suite "Visual Commands - visualDelete":
     let state = createTestState()
     state.mode = EditorMode.VisualLine
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
 
     visualDelete(buf, state)
@@ -618,11 +567,8 @@ suite "Visual Commands - visualDelete":
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 1),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 1), vskBlock
     )
 
     visualDelete(buf, state)
@@ -635,11 +581,8 @@ suite "Visual Commands - visualDelete":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.pendingInput.pendingRegister = some('+')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualDelete(buf, state)
@@ -655,11 +598,8 @@ suite "Visual Commands - visualReplace character counting":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "あい")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 1),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 1)
     )
 
     visualReplace(buf, state, "x")
@@ -670,11 +610,8 @@ suite "Visual Commands - visualReplace character counting":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "ab\ncd")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 1),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 1)
     )
 
     visualReplace(buf, state, "x")
@@ -690,11 +627,9 @@ suite "Visual Commands - raw buffer gates":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: text.charLen - 1),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 0, column: text.charLen - 1),
     )
     (buf, state)
 
@@ -727,13 +662,9 @@ suite "Visual Commands - raw buffer gates":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 2, column: 4),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 4), vskLine
     )
-    state.cursor = BufferPosition(line: 2, column: 4)
 
     visualIndent(buf, state)
 
@@ -748,13 +679,9 @@ suite "Visual Commands - raw buffer gates":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskLine
     )
-    state.cursor = BufferPosition(line: 1, column: 2)
 
     visualDedent(buf, state)
 
@@ -771,13 +698,9 @@ suite "Visual Commands - raw buffer gates":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskLine
     )
-    state.cursor = BufferPosition(line: 1, column: 2)
 
     visualIndent(buf, state)
 
@@ -808,11 +731,8 @@ suite "Visual Commands - visualIndent":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualIndent(buf, state)
@@ -829,11 +749,8 @@ suite "Visual Commands - visualIndent":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 2, column: 3),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 3)
     )
 
     visualIndent(buf, state)
@@ -848,11 +765,8 @@ suite "Visual Commands - visualIndent":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualIndent(buf, state, 3)
@@ -867,11 +781,8 @@ suite "Visual Commands - visualDedent":
     state.expandTab = true
     state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 2)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 6),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 6)
     )
 
     visualDedent(buf, state)
@@ -885,11 +796,8 @@ suite "Visual Commands - visualDedent":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualDedent(buf, state)
@@ -901,11 +809,8 @@ suite "Visual Commands - visualLowercase":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO World")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualLowercase(buf, state)
@@ -919,12 +824,8 @@ suite "Visual Commands - visualLowercase":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nWORLD")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 4),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 4), vskLine
     )
 
     visualLowercase(buf, state)
@@ -938,12 +839,8 @@ suite "Visual Commands - visualLowercase":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nGHIJKL")
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nMNOPQR")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 1),
-      current: BufferPosition(line: 2, column: 3),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 3), vskBlock
     )
 
     visualLowercase(buf, state)
@@ -957,11 +854,8 @@ suite "Visual Commands - visualLowercase":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "AAABBB")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nCCCDDD")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 3),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 2)
     )
 
     visualLowercase(buf, state)
@@ -974,11 +868,8 @@ suite "Visual Commands - visualUppercase":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualUppercase(buf, state)
@@ -992,11 +883,8 @@ suite "Visual Commands - visualUppercase":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "\xF0caf\xC3\xA9")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualUppercase(buf, state)
@@ -1008,12 +896,8 @@ suite "Visual Commands - visualUppercase":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 4),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 4), vskLine
     )
 
     visualUppercase(buf, state)
@@ -1027,12 +911,8 @@ suite "Visual Commands - visualUppercase":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nghijkl")
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nmnopqr")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 1),
-      current: BufferPosition(line: 2, column: 3),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 3), vskBlock
     )
 
     visualUppercase(buf, state)
@@ -1046,11 +926,8 @@ suite "Visual Commands - visualToggleCase":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "HeLLo WoRLd")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualToggleCase(buf, state)
@@ -1062,11 +939,8 @@ suite "Visual Commands - visualToggleCase":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello123World")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 12),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 12)
     )
 
     visualToggleCase(buf, state)
@@ -1078,12 +952,8 @@ suite "Visual Commands - visualToggleCase":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "AbCdEf")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nGhIjKl")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 1),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 1, column: 3), vskBlock
     )
 
     visualToggleCase(buf, state)
@@ -1096,12 +966,8 @@ suite "Visual Commands - visualToggleCase":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "aBcD")
     discard buf.insertText(BufferPosition(line: 0, column: 4), "\nEfGh")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0), vskLine
     )
 
     visualToggleCase(buf, state)
@@ -1114,11 +980,8 @@ suite "Visual Commands - visualReplace":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualReplace(buf, state, "x")
@@ -1131,11 +994,8 @@ suite "Visual Commands - visualReplace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 4)
     )
 
     visualReplace(buf, state, "x")
@@ -1147,11 +1007,8 @@ suite "Visual Commands - visualReplace":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "あいう world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2), vskBlock
     )
 
     visualReplace(buf, state, "x")
@@ -1163,11 +1020,8 @@ suite "Visual Commands - visualReplace":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "ab world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 1),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 1)
     )
 
     visualReplace(buf, state, "あ")
@@ -1181,11 +1035,8 @@ suite "Visual Commands - visualReplace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "ab")
     discard buf.insertText(BufferPosition(line: 0, column: 2), "\ncde")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0), vskLine
     )
 
     visualReplace(buf, state, "あ")
@@ -1198,11 +1049,8 @@ suite "Visual Commands - visualReplace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
     discard buf.insertText(BufferPosition(line: 0, column: 3), "\ndef")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 1),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 1), vskBlock
     )
 
     visualReplace(buf, state, "あ")
@@ -1214,11 +1062,8 @@ suite "Visual Commands - visualReplace":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "あい world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 1),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 1)
     )
 
     visualReplace(buf, state, "x")
@@ -1231,11 +1076,8 @@ suite "Visual Commands - visualReplace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "あい")
     discard buf.insertText(BufferPosition(line: 0, column: 2), "\nうえ")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 1),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 1)
     )
 
     visualReplace(buf, state, "x")
@@ -1247,11 +1089,8 @@ suite "Visual Commands - visualReplace":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 2),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)
     )
 
     visualReplace(buf, state, "")
@@ -1263,11 +1102,8 @@ suite "Visual Commands - visualReplace":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 2),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)
     )
 
     visualReplace(buf, state, "ab")
@@ -1281,11 +1117,8 @@ suite "Visual Commands - visualJoinLines":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 4)
     )
 
     visualJoinLines(buf, state)
@@ -1298,11 +1131,8 @@ suite "Visual Commands - visualJoinLines":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualJoinLines(buf, state)
@@ -1317,11 +1147,8 @@ suite "Visual Commands - visualJoinLines":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 2, column: 3),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 3)
     )
 
     visualJoinLines(buf, state)
@@ -1335,7 +1162,6 @@ suite "Visual Commands - visualMoveHome":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 5)
-    state.visualSelection.current = state.cursor
 
     visualMoveHome(buf, state)
 
@@ -1348,7 +1174,6 @@ suite "Visual Commands - visualMoveEnd":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveEnd(buf, state)
 
@@ -1360,7 +1185,6 @@ suite "Visual Commands - visualMoveEnd":
     let buf = newTextBuffer()
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveEnd(buf, state)
 
@@ -1372,7 +1196,6 @@ suite "Visual Commands - visualMoveFirstNonBlank":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "   hello world")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 10)
-    state.visualSelection.current = state.cursor
 
     visualMoveFirstNonBlank(buf, state)
 
@@ -1386,7 +1209,6 @@ suite "Visual Commands - visualMoveFirstLine":
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
     state.cursor = BufferPosition(line: 2, column: 3)
-    state.visualSelection.current = state.cursor
 
     visualMoveFirstLine(buf, state)
 
@@ -1402,7 +1224,6 @@ suite "Visual Commands - visualMoveLastLine":
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 3)
-    state.visualSelection.current = state.cursor
 
     visualMoveLastLine(buf, state)
 
@@ -1416,7 +1237,6 @@ suite "Visual Commands - visualMoveLastLine":
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveLastLine(buf, state, 2) # Go to line 2 (1-indexed)
 
@@ -1428,7 +1248,6 @@ suite "Visual Commands - visualMoveWord":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveWord(buf, state)
 
@@ -1440,7 +1259,6 @@ suite "Visual Commands - visualMoveWord":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test foo")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveWord(buf, state, 2)
 
@@ -1452,7 +1270,6 @@ suite "Visual Commands - visualMoveWordBack":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 12)
-    state.visualSelection.current = state.cursor
 
     visualMoveWordBack(buf, state)
 
@@ -1464,7 +1281,6 @@ suite "Visual Commands - visualMoveWordEnd":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveWordEnd(buf, state)
 
@@ -1478,7 +1294,6 @@ suite "Visual Commands - visualMoveParagraphForward":
     discard buf.insertText(BufferPosition(line: 1, column: 0), "\nparagraph 2")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveParagraphForward(buf, state)
 
@@ -1492,7 +1307,6 @@ suite "Visual Commands - visualMoveParagraphBackward":
     discard buf.insertText(BufferPosition(line: 1, column: 0), "\nparagraph 2")
     let state = createTestState()
     state.cursor = BufferPosition(line: 2, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveParagraphBackward(buf, state)
 
@@ -1504,12 +1318,8 @@ suite "Visual Commands - visualToInsertMode":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.mode = EditorMode.Visual
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 2),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 1, column: 3)
     )
 
     visualToInsertMode(buf, state)
@@ -1524,11 +1334,8 @@ suite "Visual Commands - visualChange":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualChange(buf, state)
@@ -1543,12 +1350,8 @@ suite "Visual Commands - visualChange":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
 
     visualChange(buf, state)
@@ -1561,11 +1364,8 @@ suite "Visual Commands - visualChange":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualChange(buf, state)
@@ -1581,11 +1381,8 @@ suite "Visual Commands - visualChange":
     let state = createTestState()
     state.mode = EditorMode.VisualLine
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
 
     visualChange(buf, state)
@@ -1601,11 +1398,8 @@ suite "Visual Commands - visualChange":
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 1),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 1), vskBlock
     )
 
     visualChange(buf, state)
@@ -1617,11 +1411,8 @@ suite "Visual Commands - visualChange":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualChange(buf, state)
@@ -1635,12 +1426,8 @@ suite "Visual Commands - visualChange":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
 
     visualChange(buf, state)
@@ -1654,11 +1441,8 @@ suite "Visual Commands - visualSwapSelection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 8)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 2),
-      current: BufferPosition(line: 0, column: 8),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 8)
     )
 
     visualSwapSelection(buf, state)
@@ -1667,19 +1451,18 @@ suite "Visual Commands - visualSwapSelection":
     check state.visualSelection.current == BufferPosition(line: 0, column: 2)
     check state.cursor == BufferPosition(line: 0, column: 2)
 
-  test "Swap inactive selection (no-op)":
+  test "Swap outside Visual (no-op)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection.active = false
-    state.visualSelection.start = BufferPosition(line: 0, column: 2)
-    state.visualSelection.current = BufferPosition(line: 0, column: 8)
+    state.mode = EditorMode.Normal
+    state.visualAnchor = BufferPosition(line: 0, column: 2)
+    state.cursor = BufferPosition(line: 0, column: 8)
 
     visualSwapSelection(buf, state)
 
-    # Should not change anything since not active
-    check state.visualSelection.start == BufferPosition(line: 0, column: 2)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 8)
+    check state.visualAnchor == BufferPosition(line: 0, column: 2)
+    check state.cursor == BufferPosition(line: 0, column: 8)
 
 suite "Visual Commands - visualPaste":
   test "Paste replaces character selection":
@@ -1687,11 +1470,8 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.registers.setYankedRegister("REPLACED", false)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     discard visualPaste(buf, state)
@@ -1705,11 +1485,8 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.registers.setYankedRegister("XYZ", false)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1724,11 +1501,8 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
     state.registers.setYankedRegister("XY", false)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1745,11 +1519,8 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualLine
     state.registers.setYankedRegister("XX\nYY\n", true)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1767,11 +1538,8 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualLine
     state.registers.setYankedRegister("XX\n", true)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1787,11 +1555,8 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualLine
     state.registers.setYankedRegister("XX\nYY\n", true)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1808,11 +1573,8 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualLine
     state.registers.setYankedRegister("  pasted\n", true)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1828,11 +1590,8 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualLine
     state.registers.setYankedRegister("XX\n", true)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 1, column: 0),
-      current: BufferPosition(line: 1, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 0), vskLine
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1850,11 +1609,8 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
     state.registers.setYankedRegister("XYZ", false)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1873,11 +1629,8 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
     state.registers.setYankedRegister("X\nYZ", false)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 3),
-      current: BufferPosition(line: 1, column: 5),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 5), vskBlock
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1897,11 +1650,8 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualLine
     state.registers.setYankedRegister("", true)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 1, column: 0),
-      current: BufferPosition(line: 1, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 5), vskLine
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1918,11 +1668,8 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.registers.setYankedRegister("", false)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
@@ -1935,11 +1682,8 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     # Don't set any register content
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     discard visualPaste(buf, state)
@@ -1953,11 +1697,8 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     discard state.registers.setNamedRegister('a', "NAMED", false)
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     discard visualPaste(buf, state)
@@ -1974,11 +1715,8 @@ suite "Visual Commands - visualPaste":
     state.mode = EditorMode.VisualBlock
     discard state.registers.setNamedRegister('a', "REG_A_CONTENT", false)
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 2, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 2), vskBlock
     )
 
     discard visualPaste(buf, state)
@@ -1997,11 +1735,8 @@ suite "Visual Commands - visualPaste":
     # Linewise register holding a single empty line (Vim's dd on a blank line
     # or yy on an empty line produces this).
     state.registers.setYankedRegister("", true)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 1, column: 0),
-      current: BufferPosition(line: 1, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 5), vskLine
     )
 
     discard visualPaste(buf, state)
@@ -2018,11 +1753,8 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.registers.setYankedRegister("", true)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     discard visualPaste(buf, state)
@@ -2054,11 +1786,8 @@ suite "Visual Commands - visualPaste":
         discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
         state = createTestState()
         # No register set — unnamed register is empty.
-        state.visualSelection = VisualSelection(
-          start: BufferPosition(line: 0, column: 0),
-          current: BufferPosition(line: 0, column: 4),
-          active: true,
-          kind: vskChar,
+        state.selectVisual(
+          BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
         )
 
         pasted = visualPaste(buf, state, cfg)
@@ -2079,11 +1808,8 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.registers.setClipboardTool(cbtWin32yank)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     let cfg = ClipboardConfig(enable: true, tool: cbtWin32yank)
     let r = visualPaste(buf, state, cfg)
@@ -2101,12 +1827,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
     discard buf.insertText(BufferPosition(line: 1, column: 7), "\ntest line")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 2, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 2), vskBlock
     )
 
     visualDelete(buf, state)
@@ -2121,12 +1843,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     visualYank(buf, state)
@@ -2139,12 +1857,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO WORLD")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nFOO BAR")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     visualLowercase(buf, state)
@@ -2158,12 +1872,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     visualUppercase(buf, state)
@@ -2177,12 +1887,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "HeLLo world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nFoO bar")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     visualToggleCase(buf, state)
@@ -2197,12 +1903,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     visualReplace(buf, state, "x")
@@ -2216,12 +1918,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskLine
     )
 
     visualReplace(buf, state, "x")
@@ -2236,12 +1934,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
     state.registers.setYankedRegister("REPLACED", false)
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
 
     discard visualPaste(buf, state)
@@ -2257,12 +1951,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 1, column: 10), "\nold line 3")
     let state = createTestState()
     state.registers.setYankedRegister("new line A\nnew line B", true)
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
 
     discard visualPaste(buf, state)
@@ -2277,12 +1967,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
     let state = createTestState()
     state.registers.setYankedRegister("new line A\r\nnew line B", true)
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
 
     discard visualPaste(buf, state)
@@ -2303,12 +1989,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 1, column: 10), "\nold line 3")
     let state = createTestState()
     state.registers.setYankedRegister("new line A\nnew line B\n", true)
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
 
     discard visualPaste(buf, state)
@@ -2326,12 +2008,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
     let state = createTestState()
     state.registers.setYankedRegister("foo\n", true)
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
 
     discard visualPaste(buf, state)
@@ -2347,12 +2025,8 @@ suite "Visual Commands - Block Selection":
     let state = createTestState()
     # Charwise register (isLine = false) whose content still spans lines.
     state.registers.setYankedRegister("frag A\nfrag B", false)
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
 
     discard visualPaste(buf, state)
@@ -2373,12 +2047,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar baz")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 4),
-      current: BufferPosition(line: 1, column: 6),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 4), BufferPosition(line: 1, column: 6), vskBlock
     )
 
     visualYank(buf, state)
@@ -2392,12 +2062,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "abcあいうdef")
     discard buf.insertText(BufferPosition(line: 0, column: 9), "\nghiかきくjkl")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 3),
-      current: BufferPosition(line: 1, column: 5),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 5), vskBlock
     )
 
     visualYank(buf, state)
@@ -2411,12 +2077,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 2),
-      current: BufferPosition(line: 1, column: 4),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 1, column: 4), vskBlock
     )
 
     visualDelete(buf, state)
@@ -2432,12 +2094,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO WORLD")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nFOO BAR")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 4),
-      current: BufferPosition(line: 1, column: 6),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 4), BufferPosition(line: 1, column: 6), vskBlock
     )
 
     visualLowercase(buf, state)
@@ -2451,12 +2109,8 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 4),
-      current: BufferPosition(line: 1, column: 6),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 4), BufferPosition(line: 1, column: 6), vskBlock
     )
 
     visualUppercase(buf, state)
@@ -2470,7 +2124,7 @@ suite "Visual Commands - Edge Cases":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
     state.registers.setYankedRegister("", false)
 
     visualYank(buf, state)
@@ -2481,7 +2135,7 @@ suite "Visual Commands - Edge Cases":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualIndent(buf, state)
 
@@ -2491,7 +2145,7 @@ suite "Visual Commands - Edge Cases":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualDedent(buf, state)
 
@@ -2501,7 +2155,7 @@ suite "Visual Commands - Edge Cases":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualLowercase(buf, state)
 
@@ -2511,7 +2165,7 @@ suite "Visual Commands - Edge Cases":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualUppercase(buf, state)
 
@@ -2521,7 +2175,7 @@ suite "Visual Commands - Edge Cases":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "HeLLo")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualToggleCase(buf, state)
 
@@ -2531,30 +2185,29 @@ suite "Visual Commands - Edge Cases":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualReplace(buf, state, "x")
 
     check buf.getLine(0) == "hello"
 
-  test "Change inactive selection (no-op)":
+  test "Change outside Visual (no-op)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.mode = EditorMode.Visual
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualChange(buf, state)
 
     check buf.getLine(0) == "hello"
-    check state.mode == EditorMode.Visual
+    check state.mode == EditorMode.Normal
 
   test "Paste inactive selection (no-op)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
     state.registers.setYankedRegister("REPLACED", false)
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     discard visualPaste(buf, state)
 
@@ -2564,12 +2217,8 @@ suite "Visual Commands - Edge Cases":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "only line")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
 
     visualDelete(buf, state)
@@ -2583,12 +2232,8 @@ suite "Visual Commands - Edge Cases":
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nhi")
     discard buf.insertText(BufferPosition(line: 1, column: 2), "\ntest line")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 5),
-      current: BufferPosition(line: 2, column: 8),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 5), BufferPosition(line: 2, column: 8), vskBlock
     )
 
     visualYank(buf, state)
@@ -2606,7 +2251,6 @@ suite "Visual Commands - Edge Cases":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 5) # At end
-    state.visualSelection.current = state.cursor
 
     visualMoveRight(buf, state)
 
@@ -2617,7 +2261,6 @@ suite "Visual Commands - Edge Cases":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "only line")
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.visualSelection.current = state.cursor
 
     visualMoveDown(buf, state)
 
@@ -2628,7 +2271,7 @@ suite "Visual Commands - Edge Cases":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualJoinLines(buf, state)
 
@@ -2640,12 +2283,8 @@ suite "Visual Commands - Unicode support":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "ABCあいう")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nDEFかきく")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 5), vskLine
     )
 
     visualLowercase(buf, state)
@@ -2658,12 +2297,8 @@ suite "Visual Commands - Unicode support":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "abcあいう")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\ndefかきく")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 5), vskLine
     )
 
     visualUppercase(buf, state)
@@ -2676,12 +2311,8 @@ suite "Visual Commands - Unicode support":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "AbCあいう")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nDeFかきく")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 5), vskLine
     )
 
     visualToggleCase(buf, state)
@@ -2694,12 +2325,8 @@ suite "Visual Commands - Unicode support":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "ABCあいう")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nDEFかきく")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 5),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 5), vskLine
     )
 
     visualReplace(buf, state, "x")
@@ -2713,13 +2340,9 @@ suite "Visual Commands - Cursor clamping after delete":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 3),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 3), BufferPosition(line: 0, column: 4)
     )
-    state.cursor = BufferPosition(line: 0, column: 4)
 
     visualDelete(buf, state)
 
@@ -2732,13 +2355,9 @@ suite "Visual Commands - Cursor clamping after delete":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 2),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)
     )
-    state.cursor = BufferPosition(line: 0, column: 2)
 
     visualDelete(buf, state)
 
@@ -2750,14 +2369,9 @@ suite "Visual Commands - Cursor clamping after delete":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line1")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nline2")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 4),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 4), vskLine
     )
-    state.cursor = BufferPosition(line: 1, column: 4)
 
     visualDelete(buf, state)
 
@@ -2770,14 +2384,9 @@ suite "Visual Commands - Cursor clamping after delete":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nab")
     discard buf.insertText(BufferPosition(line: 1, column: 2), "\nabcdef")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 3),
-      current: BufferPosition(line: 2, column: 5),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 2, column: 5), BufferPosition(line: 0, column: 3), vskBlock
     )
-    state.cursor = BufferPosition(line: 0, column: 3)
 
     visualDelete(buf, state)
 
@@ -2793,11 +2402,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "(")
@@ -2810,11 +2416,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, ")")
@@ -2825,11 +2428,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "「")
@@ -2842,11 +2442,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "」")
@@ -2857,11 +2454,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "あ")
@@ -2873,11 +2467,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "[")
@@ -2888,11 +2479,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "{")
@@ -2903,11 +2491,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "<")
@@ -2918,11 +2503,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "\"")
@@ -2933,11 +2515,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "'")
@@ -2948,11 +2527,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "`")
@@ -2964,12 +2540,8 @@ suite "Visual Commands - visualSurround":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskLine
     )
 
     visualSurround(buf, state, "(")
@@ -2983,12 +2555,8 @@ suite "Visual Commands - visualSurround":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     visualSurround(buf, state, "[")
@@ -3000,7 +2568,7 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.visualSelection.active = false
+    state.mode = EditorMode.Normal
 
     visualSurround(buf, state, "(")
 
@@ -3010,11 +2578,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world foo")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 6),
-      current: BufferPosition(line: 0, column: 10),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 6), BufferPosition(line: 0, column: 10)
     )
 
     visualSurround(buf, state, "\"")
@@ -3027,11 +2592,8 @@ suite "Visual Commands - visualSurround":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 2),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 1, column: 2)
     )
 
     visualSurround(buf, state, "(")
@@ -3046,12 +2608,8 @@ suite "Visual Commands - visualSurround":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nhi")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 4),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 4), vskBlock
     )
 
     visualSurround(buf, state, "{")
@@ -3066,12 +2624,8 @@ suite "Visual Commands - visualSurround":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "あいう")
     discard buf.insertText(BufferPosition(line: 0, column: 3), "\nかきく")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskLine
     )
 
     visualSurround(buf, state, "[")
@@ -3083,11 +2637,8 @@ suite "Visual Commands - visualSurround":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "(")
@@ -3100,12 +2651,8 @@ suite "Visual Commands - visualSurround":
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\n")
     discard buf.insertText(BufferPosition(line: 1, column: 0), "\nworld")
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 2, column: 2),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 2), vskLine
     )
 
     visualSurround(buf, state, "(")
@@ -3119,11 +2666,8 @@ suite "Visual Commands - visualSurround":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     # current (col 2) is before start (col 8) — reverse direction
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 8),
-      current: BufferPosition(line: 0, column: 2),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 8), BufferPosition(line: 0, column: 2)
     )
 
     visualSurround(buf, state, "(")
@@ -3137,12 +2681,8 @@ suite "Visual Commands - visualSurround":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "あいう world")
     discard buf.insertText(BufferPosition(line: 0, column: 9), "\nかきく bar")
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     visualSurround(buf, state, "[")
@@ -3156,7 +2696,6 @@ suite "Visual Commands - fold-aware movement":
     discard buf.foldState.addFold(2, 4, collapsed = true)
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 0)
-    state.visualSelection.current = state.cursor
     # j onto the fold start line.
     visualMoveDown(buf, state)
     check state.cursor.line == 2
@@ -3170,7 +2709,6 @@ suite "Visual Commands - fold-aware movement":
     discard buf.foldState.addFold(2, 4, collapsed = true)
     let state = createTestState()
     state.cursor = BufferPosition(line: 5, column: 0)
-    state.visualSelection.current = state.cursor
     # k from below the fold jumps to the fold start.
     visualMoveUp(buf, state)
     check state.cursor.line == 2
@@ -3183,7 +2721,6 @@ suite "Visual Commands - fold-aware movement":
     discard buf.foldState.addFold(2, 4, collapsed = true)
     let state = createTestState()
     state.cursor = BufferPosition(line: 2, column: 0)
-    state.visualSelection.current = state.cursor
     visualMoveDown(buf, state)
     check state.cursor.line == 2
 
@@ -3203,13 +2740,8 @@ suite "Visual paste - cursor on a rolled-back paste":
 
   test "charwise paste failure keeps the cursor":
     let (buf, state) = newReadOnlyPasteState()
-    state.mode = EditorMode.Visual
-    state.cursor = BufferPosition(line: 1, column: 5)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 5)
     )
 
     let r = visualPaste(buf, state)
@@ -3221,13 +2753,8 @@ suite "Visual paste - cursor on a rolled-back paste":
 
   test "blockwise paste failure keeps the cursor":
     let (buf, state) = newReadOnlyPasteState()
-    state.mode = EditorMode.VisualBlock
-    state.cursor = BufferPosition(line: 1, column: 5)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 2),
-      current: BufferPosition(line: 1, column: 4),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 1, column: 5), vskBlock
     )
 
     let r = visualPaste(buf, state)
@@ -3257,12 +2784,8 @@ suite "Visual delete - register/buffer atomicity":
 
   test "charwise visual delete keeps registers when the delete fails":
     let (buf, state) = newReadOnlyState()
-    state.mode = EditorMode.Visual
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualDelete(buf, state)
@@ -3272,12 +2795,8 @@ suite "Visual delete - register/buffer atomicity":
 
   test "linewise visual delete keeps registers when the delete fails":
     let (buf, state) = newReadOnlyState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0), vskLine
     )
 
     visualDelete(buf, state)
@@ -3287,12 +2806,8 @@ suite "Visual delete - register/buffer atomicity":
 
   test "blockwise visual delete keeps registers when the delete fails":
     let (buf, state) = newReadOnlyState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 2),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
 
     visualDelete(buf, state)
@@ -3304,11 +2819,8 @@ suite "Visual delete - register/buffer atomicity":
     let (buf, state) = newReadOnlyState()
     state.mode = EditorMode.Visual
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualDelete(buf, state)
@@ -3319,11 +2831,8 @@ suite "Visual delete - register/buffer atomicity":
     let (buf, state) = newReadOnlyState()
     state.mode = EditorMode.Visual
     state.pendingInput.pendingRegister = some('a')
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualDelete(buf, state)
@@ -3336,11 +2845,8 @@ suite "Visual delete - register/buffer atomicity":
     let (buf, state) = newReadOnlyState()
     state.mode = EditorMode.Visual
     state.registers.setYankedRegister("XYZ", false)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     discard visualPaste(buf, state)
@@ -3352,11 +2858,8 @@ suite "Visual delete - register/buffer atomicity":
     let (buf, state) = newReadOnlyState()
     state.mode = EditorMode.VisualLine
     state.registers.setYankedRegister("XYZ\n", true)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4), vskLine
     )
 
     discard visualPaste(buf, state)
@@ -3376,12 +2879,8 @@ suite "Visual edit commands - read-only failure rolls back and reports":
 
   test "visualUppercase on read-only buffer keeps text and reports":
     let (buf, state) = newReadOnlyVisualState()
-    state.mode = EditorMode.Visual
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualUppercase(buf, state)
@@ -3393,12 +2892,8 @@ suite "Visual edit commands - read-only failure rolls back and reports":
 
   test "visualReplace on read-only buffer keeps text and reports":
     let (buf, state) = newReadOnlyVisualState()
-    state.mode = EditorMode.Visual
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualReplace(buf, state, "x")
@@ -3410,12 +2905,8 @@ suite "Visual edit commands - read-only failure rolls back and reports":
 
   test "visualChange on read-only buffer keeps text and stays out of Insert":
     let (buf, state) = newReadOnlyVisualState()
-    state.mode = EditorMode.Visual
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualChange(buf, state)
@@ -3427,12 +2918,8 @@ suite "Visual edit commands - read-only failure rolls back and reports":
 
   test "visualSurround on read-only buffer keeps text and reports":
     let (buf, state) = newReadOnlyVisualState()
-    state.mode = EditorMode.Visual
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualSurround(buf, state, "(")
@@ -3446,11 +2933,8 @@ suite "Visual edit commands - read-only failure rolls back and reports":
     let (buf, state) = newReadOnlyVisualState()
     state.mode = EditorMode.Visual
     state.registers.setYankedRegister("XYZ", false)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     let r = visualPaste(buf, state)
@@ -3463,12 +2947,8 @@ suite "Visual edit commands - read-only failure rolls back and reports":
 
   test "visualUppercase linewise on read-only buffer keeps all lines":
     let (buf, state) = newReadOnlyVisualState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0), vskLine
     )
 
     visualUppercase(buf, state)
@@ -3483,13 +2963,9 @@ suite "Visual edit commands - read-only failure rolls back and reports":
     let (buf, state) = newReadOnlyVisualState()
     # previousMode differs from Normal here: a regression that hardcodes
     # EditorMode.Normal in the failure path must not pass this check.
-    state.previousMode = EditorMode.Insert
-    state.mode = EditorMode.Visual
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.previousMode = EditorMode.LogViewer
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     visualDelete(buf, state)
@@ -3497,4 +2973,4 @@ suite "Visual edit commands - read-only failure rolls back and reports":
     check buf.getLine(0) == "Hello World"
     check state.statusMessage.len > 0
     check not state.visualSelection.active
-    check state.mode == EditorMode.Insert
+    check state.mode == EditorMode.LogViewer

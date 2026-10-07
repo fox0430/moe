@@ -887,10 +887,22 @@ suite "Buffer - Folding":
     check buf.foldState.addFold(1, 3) == false # crosses (2, 4)
     check buf.foldState.addFold(3, 5) == false # crosses (2, 4)
 
-  test "addFold rejects exact duplicate":
+  test "addFold rejects an LSP fold that repeats an LSP fold":
+    let buf = newTextBuffer("0\n1\n2\n3")
+    check buf.foldState.addFold(0, 2, source = fsLsp) == true
+    check buf.foldState.addFold(0, 2, source = fsLsp) == false
+
+  test "addFold nests an LSP fold under a manual fold over the same range":
     let buf = newTextBuffer("0\n1\n2\n3")
     check buf.foldState.addFold(0, 2) == true
-    check buf.foldState.addFold(0, 2) == false
+    check buf.foldState.addFold(0, 2, source = fsLsp) == true
+    check buf.foldState.folds.len == 2
+
+  test "addFold nests a manual fold over the same range, as Vim's zf does":
+    let buf = newTextBuffer("0\n1\n2\n3")
+    check buf.foldState.addFold(0, 2) == true
+    check buf.foldState.addFold(0, 2) == true
+    check buf.foldState.folds.len == 2
 
   test "addFold keeps outer fold first on tie":
     let buf = newTextBuffer("0\n1\n2\n3")
@@ -920,26 +932,70 @@ suite "Buffer - Folding":
     check outerIdx.isSome
     check buf.foldState.folds[outerIdx.get].endLine == 5
 
-  test "openFold/closeFold target the innermost fold":
+  test "openFold opens the collapsed fold drawn, the outermost":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
     discard buf.foldState.addFold(0, 5) # outer at idx 0
     discard buf.foldState.addFold(1, 3) # inner at idx 1
-    # Opening at an inner line opens only the inner fold.
+    # The outer fold hides the inner one, so it is the one opened.
     check buf.foldState.openFold(2) == true
-    check buf.foldState.folds[1].collapsed == false # inner opened
-    check buf.foldState.folds[0].collapsed == true # outer untouched
-    # Closing at an inner line closes only the inner fold again.
+    check buf.foldState.folds[0].collapsed == false
+    check buf.foldState.folds[1].collapsed == true
+    # The inner fold is drawn now and opens next.
+    check buf.foldState.openFold(2) == true
+    check buf.foldState.folds[1].collapsed == false
+    check buf.foldState.openFold(2) == false
+
+  test "closeFold closes the innermost open fold":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5, collapsed = false)
+    discard buf.foldState.addFold(1, 3, collapsed = false)
     check buf.foldState.closeFold(2) == true
     check buf.foldState.folds[1].collapsed == true
+    check buf.foldState.folds[0].collapsed == false
+    # The inner fold is closed already, so the outer one closes next.
+    check buf.foldState.closeFold(2) == true
+    check buf.foldState.folds[0].collapsed == true
+    check buf.foldState.closeFold(2) == false
 
-  test "deleteFold removes the innermost fold":
+  test "closeFold leaves a fold hidden in a collapsed one alone":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5, collapsed = true)
+    discard buf.foldState.addFold(1, 3, collapsed = false)
+    check buf.foldState.closeFold(2) == false
+    check buf.foldState.folds[1].collapsed == false
+
+  test "deleteFold removes the collapsed fold drawn, else the innermost":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
     discard buf.foldState.addFold(0, 5)
     discard buf.foldState.addFold(1, 3)
     check buf.foldState.deleteFold(2) == true
     check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 1 # inner remains
+    discard buf.foldState.addFold(0, 5, collapsed = false)
+    check buf.foldState.deleteFold(2) == true
+    check buf.foldState.folds.len == 1
     check buf.foldState.folds[0].startLine == 0 # outer remains
     check buf.foldState.folds[0].endLine == 5
+
+  test "zo and za reach a fold made over another with the same range":
+    # `Vzf` on a closed fold nests a second one with its range, as in Vim,
+    # where two `zo` open both.
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+    discard buf.foldState.addFold(2, 5)
+    check buf.foldState.addFold(2, 5) == true
+    check buf.foldState.openFold(2) == true
+    check buf.foldState.isLineInCollapsedFold(3)
+    check buf.foldState.openFold(2) == true
+    check not buf.foldState.isLineInCollapsedFold(3)
+    # za likewise opens one level at a time, then closes the innermost.
+    buf.foldState.closeAllFolds()
+    check buf.foldState.toggleFold(2) == true
+    check buf.foldState.isLineInCollapsedFold(3)
+    check buf.foldState.toggleFold(2) == true
+    check not buf.foldState.isLineInCollapsedFold(3)
+    check buf.foldState.toggleFold(2) == true
+    check buf.foldState.folds[1].collapsed == true
+    check buf.foldState.folds[0].collapsed == false
 
   test "foldIndexAt returns the outermost fold, unlike foldIndexAtInnermost":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
@@ -1337,21 +1393,26 @@ suite "Buffer - snapRangeToFolds":
     let st = initFoldState()
     check st.snapRangeToFolds(3, 7) == (3, 7)
 
-  test "touchesCollapsedFold reports a fold the range already covers whole":
+  test "endsInCollapsedFold reports an end on a fold's boundary line":
     # snapRangeToFolds returns such a range unchanged, so "the range widened" is
     # not a usable test for "a closed fold is in play".
     let st = stateWith(@[(2, 5, true)])
-    check st.snapRangeToFolds(1, 6) == (1, 6)
-    check st.touchesCollapsedFold(1, 6)
+    check st.snapRangeToFolds(2, 6) == (2, 6)
+    check st.endsInCollapsedFold(2, 6)
+    check st.endsInCollapsedFold(1, 5)
 
-  test "touchesCollapsedFold ignores open folds and untouched ones":
+  test "endsInCollapsedFold ignores a fold the range only contains":
+    let st = stateWith(@[(2, 5, true)])
+    check not st.endsInCollapsedFold(1, 6)
+
+  test "endsInCollapsedFold ignores open folds and untouched ones":
     let st = stateWith(@[(1, 5, false), (8, 9, true)])
-    check not st.touchesCollapsedFold(0, 6)
-    check st.touchesCollapsedFold(6, 8)
+    check not st.endsInCollapsedFold(0, 6)
+    check st.endsInCollapsedFold(6, 8)
 
-  test "touchesCollapsedFold normalizes a reversed range":
+  test "endsInCollapsedFold normalizes a reversed range":
     let st = stateWith(@[(1, 5, true)])
-    check st.touchesCollapsedFold(6, 2)
+    check st.endsInCollapsedFold(6, 2)
 
 suite "Buffer - Row-ref subscribers dispatch (folds/bookmarks)":
   # Guards the refactor's promise that folds, bookmarks, lineMarkers, and

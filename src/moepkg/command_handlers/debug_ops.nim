@@ -24,7 +24,7 @@ import std/[monotimes, tables]
 
 import pkg/results
 
-import ../[debug_viewer, editor, types, viewer_mode]
+import ../[debug_viewer, editor, types, viewer_mode, visual_selection]
 
 import handler_result
 
@@ -95,14 +95,15 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
       e.state.pendingInput.macroState.registers.len,
       e.state.pendingInput.macroState.playbackDepth, debugConfig.macroState.enable,
     )
+    let sel = e.activeWindow.visualSelection
     generateVisualInfo(
       debugLines,
-      e.state.visualSelection.active,
-      $e.state.visualSelection.kind,
-      e.state.visualSelection.start.line,
-      e.state.visualSelection.start.column,
-      e.state.visualSelection.current.line,
-      e.state.visualSelection.current.column,
+      sel.active,
+      $sel.kind,
+      sel.start.line,
+      sel.start.column,
+      sel.current.line,
+      sel.current.column,
       debugConfig.visual.enable,
     )
     generateJumpListInfo(

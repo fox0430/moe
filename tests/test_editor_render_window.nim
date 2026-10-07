@@ -22,6 +22,7 @@
 
 import std/[unittest, options, strutils, tables, unicode]
 import pkg/celina
+import visual_test_helper
 import
   ../src/moepkg/[
     editor, buffer, config, config_loader, render_utils, modes, color, highlight, types
@@ -81,9 +82,14 @@ proc getSelectionStyleAt(
     searchRanges: searchRanges,
     wordRanges: wordRanges,
   )
+  let selection =
+    if hasSelection:
+      e.state.visualSelection
+    else:
+      VisualSelection()
   e.getSelectionStyle(
     buffer,
-    hasSelection = hasSelection,
+    selection = selection,
     pos = pos,
     cursorCol = cursorCol,
     windowMode = windowMode,
@@ -146,14 +152,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.x = 0
     window.viewport.y = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
     var screenY = 0
     var lineIndex = 0
@@ -176,14 +175,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.x = 0
     window.viewport.y = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
     var screenY = 0
     var lineIndex = 0
@@ -205,14 +197,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.x = 0
     window.viewport.y = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
     var screenY = 0
     var lineIndex = 0
@@ -237,14 +222,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.x = 0
     window.viewport.y = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 40,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 40)
 
     var screenY = 0
     var lineIndex = 0
@@ -274,14 +252,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.x = 0
     window.viewport.y = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 4,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 4)
 
     var screenY = 0
     var lineIndex = 0
@@ -308,14 +279,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.x = 0
     window.viewport.y = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 4,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 4)
 
     var screenY = 0
     var lineIndex = 0
@@ -339,14 +303,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.x = 0
     window.viewport.y = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
     var screenY = 1 # Start after tab line
     var lineIndex = 0
@@ -372,14 +329,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.x = 0
     window.viewport.y = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 10,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 10)
 
     var screenY = 0
     var lineIndex = 0
@@ -407,14 +357,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.x = 0
     window.viewport.y = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 14,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 14)
 
     # skip = 1: continuation row, gutter blank (digit at x=2 becomes a space).
     var skipBuffer = createTestBuffer()
@@ -462,14 +405,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     window.viewport.y = 0
     window.cursor.line = 5
 
-    let ctx = RenderContext(
-      cursorLine: 5,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 10,
-    )
+    let ctx = RenderContext(cursorLine: 5, cursorCol: 0, windowRightEdge: 10)
 
     var screenY = 0
     var lineIndex = 0
@@ -493,14 +429,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.y = 0
     window.viewport.leftColumn = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
     e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
 
@@ -517,14 +446,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.y = 0
     window.viewport.leftColumn = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
     e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
 
@@ -541,14 +463,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.y = 0
     window.viewport.leftColumn = 0
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
     e.renderWindowLineNoWrap(buffer, window, 4, ctx, 0, 0)
 
@@ -566,14 +481,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.y = 0
     window.viewport.leftColumn = 50 # Scroll right
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 50,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 50, windowRightEdge: 80)
 
     e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
 
@@ -590,14 +498,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.y = 0
     window.viewport.leftColumn = 100 # Scroll past line end
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
     e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
 
@@ -616,14 +517,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.leftColumn = 0
     window.cursor.line = 0 # Cursor on this line
 
-    let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
     e.renderWindowLineNoWrap(buffer, window, 4, ctx, 0, 0)
 
@@ -995,12 +889,9 @@ suite "renderWindow - Visual selection":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.Visual
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.cursor = BufferPosition(line: 0, column: 5)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5)
+    )
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
@@ -1019,12 +910,9 @@ suite "renderWindow - Visual selection":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.VisualLine
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 2, column: 0)
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskLine
-    e.state.cursor = BufferPosition(line: 2, column: 0)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0), vskLine
+    )
 
     discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
@@ -1045,12 +933,9 @@ suite "renderWindow - Visual selection":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.VisualBlock
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 2, column: 5)
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskBlock
-    e.state.cursor = BufferPosition(line: 2, column: 5)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 5), vskBlock
+    )
 
     discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
@@ -1077,12 +962,9 @@ suite "renderWindow - Visual selection over indentation guides":
     e.state.showLineNumbers = false
     e.state.showIndentationLines = true
     e.state.tabStop = 2
-    e.state.mode = EditorMode.Visual
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.cursor = BufferPosition(line: 0, column: 5)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5)
+    )
 
     # 4 leading spaces + "body"; with tabStop=2, indent guides land at
     # displayX 2 (space at charIdx 2).
@@ -1123,7 +1005,7 @@ suite "renderWindow - Visual selection over indentation guides":
     e.state.showIndentationLines = true
     e.state.tabStop = 2
     e.state.mode = EditorMode.Normal
-    e.state.visualSelection.active = false
+    e.state.mode = EditorMode.Normal
     e.state.cursor = BufferPosition(line: 0, column: 0)
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "    body")
@@ -1158,12 +1040,9 @@ suite "renderWindow - Visual selection on empty line":
     e.viewport.height = 24
     e.state.lineWrap = false
     e.state.showSidebar = false
-    e.state.mode = EditorMode.Visual
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.cursor = BufferPosition(line: 0, column: 0)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0)
+    )
 
     # Empty buffer (single empty line)
     let window = e.windowManager.windows[0]
@@ -1195,12 +1074,9 @@ suite "renderWindow - Visual selection on empty line":
     e.viewport.height = 24
     e.state.lineWrap = true
     e.state.showSidebar = false
-    e.state.mode = EditorMode.Visual
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.cursor = BufferPosition(line: 0, column: 0)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0)
+    )
 
     # Empty buffer
     let window = e.windowManager.windows[0]
@@ -1231,7 +1107,7 @@ suite "renderWindow - Visual selection on empty line":
     e.state.lineWrap = false
     e.state.showSidebar = false
     e.state.mode = EditorMode.Normal
-    e.state.visualSelection.active = false
+    e.state.mode = EditorMode.Normal
     e.state.cursor = BufferPosition(line: 0, column: 0)
 
     let window = e.windowManager.windows[0]
@@ -1557,13 +1433,7 @@ suite "Cursor line highlight - Window boundary clipping":
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "AB")
 
     let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 30,
+      cursorLine: 0, cursorCol: 0, windowMode: EditorMode.Normal, windowRightEdge: 30
     )
 
     e.renderLineSegmentWithSelection(
@@ -1596,13 +1466,7 @@ suite "Cursor line highlight - Window boundary clipping":
 
     # Now render this line as a NON-cursor line (cursor is on line 99)
     let ctx = RenderContext(
-      cursorLine: 99,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 40,
+      cursorLine: 99, cursorCol: 0, windowMode: EditorMode.Normal, windowRightEdge: 40
     )
 
     e.renderLineSegmentWithSelection(
@@ -1817,12 +1681,9 @@ suite "Markdown code block - line background":
     e.state.showCursorLine = false
     e.state.showSidebar = false
     e.state.showLineNumbers = false
-    e.state.mode = EditorMode.Visual
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.visualSelection.start = BufferPosition(line: 1, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 1, column: 5)
-    e.state.cursor = BufferPosition(line: 1, column: 5)
+    e.state.selectVisual(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 5)
+    )
 
     let src = "```nim\nlet x = 1\n```\n"
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), src)
@@ -1964,58 +1825,50 @@ suite "Cursor column highlight - wrap segments":
       check buffer[4, row].style.bg != hlStyle.bg
       check buffer[6, row].style.bg != hlStyle.bg
 
-suite "getVisualSelection - Detailed":
-  test "Default hasSelection is false":
+suite "renderWindow - selection of the rendered window":
+  proc selectionCells(buffer: Buffer, row: int): seq[int] =
+    for x in 0 ..< 40:
+      if buffer[x, row].style.bg == visualStyle().bg:
+        result.add x
+
+  proc setupWindows(e: Editor): EditorWindow =
+    ## A second, inactive window on the active window's buffer.
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    result = EditorWindow(
+      viewBuffer: e.activeBuffer,
+      tabBufferId: e.activeBuffer.id,
+      bufferIds: @[e.activeBuffer.id],
+      viewport: ViewPort(width: 40, height: 24),
+      mode: EditorMode.Normal,
+      wrapCountCache: WrapCountCache(),
+    )
+
+  test "a window draws its own selection":
     let e = createTestEditor()
-    let result = e.getVisualSelection(EditorMode.Normal)
-    check result.hasSelection == false
-    check result.selStart.line == 0
-    check result.selStart.column == 0
-    check result.selEnd.line == 0
-    check result.selEnd.column == 0
+    var buffer = createTestBuffer()
+    let other = e.setupWindows()
+    other.mode = EditorMode.Visual
+    other.visualAnchor = BufferPosition(line: 0, column: 6)
+    other.cursor = BufferPosition(line: 0, column: 8)
 
-  test "Visual mode with selection":
+    e.renderWindow(buffer, other, 0, true, false, 0)
+
+    check buffer.selectionCells(0) == @[6, 7, 8]
+
+  test "a window not in Visual draws none of the active window's":
     let e = createTestEditor()
-    e.state.mode = EditorMode.Visual
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.visualSelection.start = BufferPosition(line: 1, column: 5)
-    e.state.visualSelection.current = BufferPosition(line: 3, column: 10)
+    var buffer = createTestBuffer()
+    let other = e.setupWindows()
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
+    )
 
-    let result = e.getVisualSelection(EditorMode.Visual)
-    check result.hasSelection == true
+    e.renderWindow(buffer, other, 0, true, false, 0)
 
-  test "VisualLine mode":
-    let e = createTestEditor()
-    e.state.mode = EditorMode.VisualLine
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskLine
-    e.state.visualSelection.start = BufferPosition(line: 2, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 5, column: 0)
-
-    let result = e.getVisualSelection(EditorMode.VisualLine)
-    check result.hasSelection == true
-
-  test "VisualBlock mode":
-    let e = createTestEditor()
-    e.state.mode = EditorMode.VisualBlock
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskBlock
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 2)
-    e.state.visualSelection.current = BufferPosition(line: 4, column: 8)
-
-    let result = e.getVisualSelection(EditorMode.VisualBlock)
-    check result.hasSelection == true
-
-  test "windowActive=false disables selection":
-    let e = createTestEditor()
-    e.state.mode = EditorMode.Visual
-    e.state.visualSelection.active = true
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 1, column: 5)
-
-    let result = e.getVisualSelection(EditorMode.Visual, windowActive = false)
-    check result.hasSelection == false
+    check buffer.selectionCells(0).len == 0
 
 suite "shouldShowIndentationGuide - Detailed":
   test "Disabled when showIndentationLines is false":
@@ -2119,10 +1972,9 @@ suite "getSelectionStyle - Basic":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
     e.state.showSyntax = false
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 10)
+    )
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
@@ -2143,10 +1995,9 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
     e.state.showSyntax = true
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 10)
+    )
 
     # Set up buffer with highlight
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
@@ -2172,10 +2023,9 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     let e = createTestEditor()
     e.state.mode = EditorMode.VisualLine
     e.state.showSyntax = true
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskLine
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
+    )
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
     e.activeBuffer.language = SourceLanguage.langNim
@@ -2198,10 +2048,9 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
     e.state.showSyntax = false
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 10)
+    )
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
@@ -2348,10 +2197,9 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
     e.state.showSyntax = false
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 6)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 6)
+    )
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
@@ -2678,11 +2526,7 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let tb = newTextBuffer("hello   ")
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Normal, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
@@ -2706,11 +2550,7 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let tb = newTextBuffer("hello   ")
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 80,
+      cursorLine: 0, cursorCol: 0, windowMode: EditorMode.Normal, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
@@ -2734,11 +2574,7 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let tb = newTextBuffer("hello   ")
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 80,
+      cursorLine: 0, cursorCol: 0, windowMode: EditorMode.Normal, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
@@ -2764,11 +2600,7 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let tb = newTextBuffer("hello   ")
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Help,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Help, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
@@ -2794,7 +2626,6 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.BufferManager,
       windowRightEdge: 80,
     )
@@ -2819,7 +2650,6 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.DiffViewer,
       windowRightEdge: 80,
     )
@@ -2845,11 +2675,7 @@ suite "renderLineSegmentWithSelection - zero-width rune folding":
     let tb = newTextBuffer(text)
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Normal, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
@@ -2866,11 +2692,7 @@ suite "renderLineSegmentWithSelection - zero-width rune folding":
     let tb = newTextBuffer(text)
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Normal, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
@@ -2896,11 +2718,7 @@ suite "renderLineSegmentWithSelection - C0 control sanitization":
     let tb = newTextBuffer(text)
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Normal, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
@@ -2926,11 +2744,7 @@ suite "renderLineSegmentWithSelection - full-width space highlight":
     let tb = newTextBuffer(text)
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Normal, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
@@ -2953,11 +2767,7 @@ suite "renderLineSegmentWithSelection - full-width space highlight":
     let tb = newTextBuffer(text)
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Help,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Help, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
@@ -2979,11 +2789,7 @@ suite "renderLineSegmentWithSelection - full-width space highlight":
     let tb = newTextBuffer(text)
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Debug,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Debug, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
@@ -3007,11 +2813,7 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
     let tb = newTextBuffer(text)
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Normal, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
@@ -3035,11 +2837,7 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
     let tb = newTextBuffer(text)
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      windowMode: EditorMode.Normal,
-      windowRightEdge: 80,
+      cursorLine: 0, cursorCol: 0, windowMode: EditorMode.Normal, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
@@ -3063,11 +2861,7 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
     let tb = newTextBuffer(text)
     var buf = newBuffer(80, 1)
     let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: EditorMode.Help,
-      windowRightEdge: 80,
+      cursorLine: -1, cursorCol: -1, windowMode: EditorMode.Help, windowRightEdge: 80
     )
 
     e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
@@ -3088,30 +2882,6 @@ proc setupDocumentHighlight(e: Editor, line, startCol, endCol, kind: int) =
   }.toTable
 
 suite "render layer predicates":
-  test "matchesVisualSelection: hasSelection false short-circuits":
-    let e = createTestEditor()
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    check not e.matchesVisualSelection(false, BufferPosition(line: 0, column: 2))
-
-  test "matchesVisualSelection: position inside selection":
-    let e = createTestEditor()
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    check e.matchesVisualSelection(true, BufferPosition(line: 0, column: 2))
-
-  test "matchesVisualSelection: position outside selection":
-    let e = createTestEditor()
-    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
-    e.state.visualSelection.active = true
-    e.state.visualSelection.kind = VisualSelectionKind.vskChar
-    check not e.matchesVisualSelection(true, BufferPosition(line: 0, column: 9))
-
   test "matchesMatchingParen: positive match":
     let e = createTestEditor()
     e.state.matchingParenPos = some(BufferPosition(line: 2, column: 7))
@@ -3670,7 +3440,6 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[provider],
@@ -3713,7 +3482,6 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[provider],
@@ -3749,7 +3517,6 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 5,
       virtualTextProviders: @[provider],
@@ -3776,7 +3543,6 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[],
@@ -3820,7 +3586,6 @@ suite "Empty-line end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[inlayHintProvider()],
@@ -3845,7 +3610,6 @@ suite "Empty-line end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[inlayHintProvider()],
@@ -3870,7 +3634,6 @@ suite "Empty-line end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[inlayHintProvider()],
@@ -3902,7 +3665,6 @@ suite "Empty-line end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[inlayHintProvider()],
@@ -3933,7 +3695,6 @@ suite "Empty-line end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 40,
       virtualTextProviders: @[inlayHintProvider()],
@@ -3956,7 +3717,6 @@ suite "Empty-line end-of-line virtual text":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[inlayHintProvider()],
@@ -3992,7 +3752,6 @@ suite "End-of-line virtual text - cursor line highlight":
     let ctx = RenderContext(
       cursorLine: 0,
       cursorCol: 0,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[provider],
@@ -4041,7 +3800,6 @@ suite "End-of-line virtual text - cursor line highlight":
     let ctx = RenderContext(
       cursorLine: 0,
       cursorCol: 0,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: @[provider],
@@ -4083,7 +3841,6 @@ suite "End-of-line virtual text - cursor line highlight":
     let ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
-      hasSelection: false,
       windowMode: EditorMode.Normal,
       windowRightEdge: 80,
       virtualTextProviders: providers,
@@ -4118,14 +3875,7 @@ suite "renderWindowLineNoWrap - display-width clipping":
     result.state.scrollbar = false
 
   proc noWrapCtx(): RenderContext =
-    RenderContext(
-      cursorLine: 0,
-      cursorCol: 0,
-      hasSelection: false,
-      selStart: BufferPosition(line: 0, column: 0),
-      selEnd: BufferPosition(line: 0, column: 0),
-      windowRightEdge: 80,
-    )
+    RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
   test "CJK line fills the budget instead of being byte-truncated":
     # 10 wide runes = 20 display cells but 30 bytes. With cellBudget 25 the old

@@ -161,6 +161,24 @@ suite "Split viewer - covers a split of the active tab":
     e.maybeUpdateDebugBuffer()
     check debugWin.buffer != after
 
+  test ":vsplit from Visual in the viewer copies the listing, not the selection":
+    let (e, path) = editorOnFile("moe_sv_vsplit_visual.txt")
+    defer:
+      removeFile(path)
+    let (helpWin, _) = e.openHelp()
+    helpWin.cursor = BufferPosition(line: 3, column: 0)
+    e.state.previousMode = e.state.mode
+    e.state.mode = EditorMode.Visual
+    helpWin.cursor = BufferPosition(line: 5, column: 0)
+
+    e.run(HandlerResult(kind: hrVSplit))
+
+    let dupWin = e.activeWindow
+    require dupWin != helpWin
+    check dupWin.mode == EditorMode.Help
+    check dupWin.cursor == BufferPosition(line: 5, column: 0)
+    check helpWin.mode == EditorMode.Help
+
   test ":split inside an in-place viewer opens it again in a split":
     let (e, path) = editorOnFile("moe_sv_split_inplace.txt")
     defer:
