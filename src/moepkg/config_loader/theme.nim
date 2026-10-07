@@ -95,6 +95,10 @@ proc loadThemeFromToml*(
   if not toml.hasKey("Colors"):
     return Result[ThemeColors, string].err("Theme file missing [Colors] section")
 
+  if toml["Colors"].kind != TomlValueKind.Table:
+    return
+      Result[ThemeColors, string].err("Theme file [Colors] section must be a table")
+
   let colorsTable = toml["Colors"].getTable()
   const section = "Theme.Colors"
 

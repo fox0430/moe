@@ -1516,6 +1516,20 @@ suite "Config - loadThemeFromToml":
     check result.isErr
     check "Colors" in result.error
 
+  test "Non-table [Colors] section returns error":
+    ## Regression: `getTable` on a non-table yields an empty default, so without
+    ## a kind check a scalar `Colors` silently loaded the bundled defaults.
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_nontable_" & $testFileCounter & ".toml"
+    writeFile(testFile, "Colors = \"x\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isErr
+    check "Colors" in result.error
+
   test "Valid [Colors] section returns Ok":
     inc testFileCounter
     let testFile = getTempDir() / "moe_test_theme_valid_" & $testFileCounter & ".toml"
@@ -2486,6 +2500,100 @@ splitType = "vertical"
     let msg = item.toMessage
     check "Invalid value" in msg
     check "Standard.tabStop" in msg
+
+suite "Config Validation - Hand-dispatched section types":
+  test "Scalar where a hand-dispatched top-level table is expected is reported":
+    ## Regression: `getTable` on a non-table yields an empty default, so without
+    ## `expectTable` these known keys loaded nothing and reported nothing.
+    let fresh = newEditorConfig()
+    let wrongTypes = [
+      ("Theme = \"x\"\n", "Theme"),
+      ("StartUp = \"x\"\n", "StartUp"),
+      ("[StartUp]\nFileOpen = \"x\"\n", "StartUp.FileOpen"),
+      ("[StartUp]\nFileTree = \"x\"\n", "StartUp.FileTree"),
+      ("Lsp = \"x\"\n", "Lsp"),
+      ("Debug = \"x\"\n", "Debug"),
+      ("KeyMapping = \"x\"\n", "KeyMapping"),
+      ("CommandAliases = \"x\"\n", "CommandAliases"),
+      ("ShellCommands = \"x\"\n", "ShellCommands"),
+      ("Hook = \"x\"\n", "Hook"),
+      ("DisabledCommandAliases = \"x\"\n", "DisabledCommandAliases"),
+    ]
+    for (tomlStr, wantName) in wrongTypes:
+      let (config, vr) = loadFromTomlString(tomlStr)
+      check vr.errors.anyIt(
+        it.kind == sikInvalidValue and it.name == wantName and it.expected == "table"
+      )
+      # Invalid value is skipped, defaults kept
+      case wantName
+      of "Theme":
+        check config.theme.kind == fresh.theme.kind
+        check config.theme.path == fresh.theme.path
+      of "StartUp":
+        check config.startUpFileOpen.autoSplit == fresh.startUpFileOpen.autoSplit
+        check config.startUpFileTree.enable == fresh.startUpFileTree.enable
+      of "StartUp.FileOpen":
+        check config.startUpFileOpen.autoSplit == fresh.startUpFileOpen.autoSplit
+        check config.startUpFileOpen.splitType == fresh.startUpFileOpen.splitType
+      of "StartUp.FileTree":
+        check config.startUpFileTree.enable == fresh.startUpFileTree.enable
+      of "Lsp":
+        check config.lsp.enable == fresh.lsp.enable
+        check config.lsp.servers.len == 0
+      of "Debug":
+        check config.debug.windowNode.enable == fresh.debug.windowNode.enable
+        check config.debug.lsp.enable == fresh.debug.lsp.enable
+      of "KeyMapping":
+        check config.keyMapping.all.len == 0
+        check config.keyMapping.visualAll.len == 0
+      of "CommandAliases":
+        check config.commandAliases.len == 0
+      of "ShellCommands":
+        check config.shellCommands.len == 0
+      of "Hook":
+        check config.hooks.enable == fresh.hooks.enable
+        check config.hooks.entries.len == 0
+      of "DisabledCommandAliases":
+        check config.disabledCommandAliases.len == 0
+      else:
+        check false
+
+  test "Scalar where a [Debug.*] sub-table is expected is reported":
+    let fresh = newEditorConfig()
+    let wrongTypes = [
+      ("[Debug]\nWindowNode = \"x\"\n", "Debug.WindowNode"),
+      ("[Debug]\nEditorView = \"x\"\n", "Debug.EditorView"),
+      ("[Debug]\nBufferStatus = \"x\"\n", "Debug.BufferStatus"),
+      ("[Debug]\nSearch = \"x\"\n", "Debug.Search"),
+      ("[Debug]\nMacroState = \"x\"\n", "Debug.MacroState"),
+      ("[Debug]\nVisual = \"x\"\n", "Debug.Visual"),
+      ("[Debug]\nJumpList = \"x\"\n", "Debug.JumpList"),
+      ("[Debug]\nLsp = \"x\"\n", "Debug.Lsp"),
+    ]
+    for (tomlStr, wantName) in wrongTypes:
+      let (config, vr) = loadFromTomlString(tomlStr)
+      check vr.errors.anyIt(
+        it.kind == sikInvalidValue and it.name == wantName and it.expected == "table"
+      )
+      case wantName
+      of "Debug.WindowNode":
+        check config.debug.windowNode.enable == fresh.debug.windowNode.enable
+      of "Debug.EditorView":
+        check config.debug.editorView.enable == fresh.debug.editorView.enable
+      of "Debug.BufferStatus":
+        check config.debug.bufferStatus.enable == fresh.debug.bufferStatus.enable
+      of "Debug.Search":
+        check config.debug.search.enable == fresh.debug.search.enable
+      of "Debug.MacroState":
+        check config.debug.macroState.enable == fresh.debug.macroState.enable
+      of "Debug.Visual":
+        check config.debug.visual.enable == fresh.debug.visual.enable
+      of "Debug.JumpList":
+        check config.debug.jumpList.enable == fresh.debug.jumpList.enable
+      of "Debug.Lsp":
+        check config.debug.lsp.enable == fresh.debug.lsp.enable
+      else:
+        check false
 
 suite "Config - saveThemeToToml":
   test "Save DefaultColors to file":

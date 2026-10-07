@@ -146,42 +146,42 @@ proc loadConfigFromToml*(
   when defined(moe.matter) or defined(features.moe.matter):
     loadMatterGrammarFiles(path, config.highlight, vr)
 
-  if toml.hasKey("Theme"):
+  if expectTable(toml, "Theme", vr):
     loadThemeConfig(toml["Theme"].getTable(), config.theme, vr)
 
-  if toml.hasKey("StartUp"):
+  if expectTable(toml, "StartUp", vr):
     let startUpTable = toml["StartUp"].getTable()
     checkUnknownKeys(startUpTable, StartUpSubSectionNames, "StartUp", vr)
-    if startUpTable.hasKey("FileOpen"):
+    if expectTable(startUpTable, "FileOpen", vr, "StartUp"):
       loadStartUpFileOpenConfig(
         startUpTable["FileOpen"].getTable(), config.startUpFileOpen, vr
       )
-    if startUpTable.hasKey("FileTree"):
+    if expectTable(startUpTable, "FileTree", vr, "StartUp"):
       loadStartUpFileTreeConfig(
         startUpTable["FileTree"].getTable(), config.startUpFileTree, vr
       )
 
-  if toml.hasKey("Lsp"):
+  if expectTable(toml, "Lsp", vr):
     loadLspConfig(toml["Lsp"].getTable(), config.lsp, vr)
 
-  if toml.hasKey("Debug"):
+  if expectTable(toml, "Debug", vr):
     loadDebugConfig(toml["Debug"].getTable(), config.debug, vr)
 
-  if toml.hasKey("KeyMapping"):
+  if expectTable(toml, "KeyMapping", vr):
     loadKeyMappingConfig(toml["KeyMapping"].getTable(), config.keyMapping, vr)
 
-  if toml.hasKey("CommandAliases"):
+  if expectTable(toml, "CommandAliases", vr):
     loadCommandAliasesConfig(
       toml["CommandAliases"].getTable(), config.commandAliases, vr
     )
 
-  if toml.hasKey("ShellCommands"):
+  if expectTable(toml, "ShellCommands", vr):
     loadShellCommandsConfig(toml["ShellCommands"].getTable(), config.shellCommands, vr)
 
-  if toml.hasKey("Hook"):
+  if expectTable(toml, "Hook", vr):
     loadHookConfig(toml["Hook"].getTable(), config.hooks, vr)
 
-  if toml.hasKey("DisabledCommandAliases"):
+  if expectTable(toml, "DisabledCommandAliases", vr):
     loadDisabledCommandAliasesConfig(
       toml["DisabledCommandAliases"].getTable(), config.disabledCommandAliases, vr
     )
