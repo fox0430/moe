@@ -32,6 +32,7 @@ import ../src/moepkg/modes
 import ../src/moepkg/help_viewer
 import ../src/moepkg/filer
 import ../src/moepkg/backup_manager
+import visual_test_helper
 import ../src/moepkg/diff_viewer
 import ../src/moepkg/render_utils
 
@@ -955,3 +956,80 @@ suite "applyStartUpScreenSize":
       check win.viewport.height == TermHeight - steadyBottomAreaHeight()
 
     e.checkScreenSizeSynced()
+
+suite "moveWindowToTab - Visual":
+  test "the window that moves leaves Visual":
+    let e = createTestEditor()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let other = newTextBuffer("other tab")
+    e.addBuffer(other)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 3)
+    )
+
+    check e.moveWindowToTab(e.activeWindow, other) == tabMoved
+
+    check e.state.mode == EditorMode.Normal
+    check not e.state.visualSelection.active
+
+  test "a window moved in the background leaves the active window's selection":
+    let e = createTestEditor()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let other = newTextBuffer("other tab")
+    e.addBuffer(other)
+    let background = e.activeWindow
+    discard e.vsplit()
+    require e.activeWindow != background
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
+    )
+
+    check e.moveWindowToTab(background, other) == tabMoved
+
+    check e.state.visualSelection.active
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 4)
+
+suite "Visual and the focus":
+  test "the window that loses the focus leaves Visual":
+    let e = createTestEditor()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let origin = e.activeWindow
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 3)
+    )
+
+    discard e.vsplit()
+
+    require e.activeWindow != origin
+    check origin.mode == EditorMode.Normal
+    check not origin.visualSelection.active
+    check not e.state.visualSelection.active
+
+  test "it returns to the mode Visual was entered from":
+    let e = createTestEditor()
+    let origin = e.activeWindow
+    e.state.previousMode = EditorMode.LogViewer
+    e.state.mode = EditorMode.Visual
+    let next = newTextBuffer("next")
+    e.addBuffer(next)
+    discard e.vsplitWithBuffer(next)
+
+    require e.activeWindow != origin
+    check origin.mode == EditorMode.LogViewer
+
+  test "going back to the window does not resume the selection":
+    let e = createTestEditor()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let origin = e.activeWindow
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 3)
+    )
+    discard e.vsplit()
+
+    for i, win in e.windowManager.windows:
+      if win == origin:
+        e.windowManager.activateWindow(i)
+    e.syncActiveWindow()
+
+    check e.activeWindow == origin
+    check e.state.mode == EditorMode.Normal

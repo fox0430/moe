@@ -21,7 +21,7 @@
 
 import std/options
 
-import types/editor_types
+import types/editor_types, visual_selection
 from command_handlers/visual_commands import getSelectionRange, getVisualSelectionText
 
 type
@@ -34,6 +34,9 @@ type
     ## Snapshot of the active buffer's selection. Positions use zero-based
     ## rune columns and inclusive endpoints, matching Moe's editing model.
     ## Block selections describe a rectangle rather than one contiguous range.
+    ## `anchor`/`focus` are the ends the user placed; `kind`/`first`/`last` are
+    ## what the selection covers, a closed fold at either end whole, which is
+    ## what a yank takes and `selectedText` returns.
     bufferId*: BufferId
     kind*: EditorSelectionKind
     anchor*: BufferPosition
@@ -50,16 +53,20 @@ func toEditorSelectionKind(kind: VisualSelectionKind): EditorSelectionKind =
 proc currentSelection*(e: Editor): Option[EditorSelection] =
   ## Return a value snapshot of the active selection, or `none` when Moe has
   ## only a caret. Callers cannot mutate editor state through the snapshot.
-  if e.isNil or e.windowManager.windows.len == 0 or not e.state.visualSelection.active:
+  if e.isNil or e.windowManager.windows.len == 0:
+    return none(EditorSelection)
+
+  let selection = e.activeWindow.visualSelection
+  if not selection.active:
     return none(EditorSelection)
 
   let
-    selection = e.state.visualSelection
-    (first, last) = selection.getSelectionRange()
+    operand = e.activeWindow.operandSelection(e.activeBuffer)
+    (first, last) = operand.getSelectionRange()
   some(
     EditorSelection(
       bufferId: e.activeBuffer.id,
-      kind: selection.kind.toEditorSelectionKind,
+      kind: operand.kind.toEditorSelectionKind,
       anchor: selection.start,
       focus: selection.current,
       first: first,
@@ -68,8 +75,11 @@ proc currentSelection*(e: Editor): Option[EditorSelection] =
   )
 
 proc selectedText*(e: Editor): string =
-  ## Return the active selection's text using Moe's character, line, or block
-  ## semantics. Returns an empty string when there is no active selection.
+  ## Return the text a yank of the active selection would take, using Moe's
+  ## character, line, or block semantics. Returns an empty string when there is
+  ## no active selection.
   if e.isNil or e.windowManager.windows.len == 0:
     return ""
-  getVisualSelectionText(e.activeBuffer, e.state.visualSelection)
+  getVisualSelectionText(
+    e.activeBuffer, e.activeWindow.operandSelection(e.activeBuffer)
+  )

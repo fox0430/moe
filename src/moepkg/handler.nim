@@ -59,7 +59,8 @@ import
   editor_file_jobs,
   editor_command_output,
   job_lanes,
-  highlight
+  highlight,
+  visual_selection
 
 when not defined(moe.embedded):
   import terminal_mode
@@ -435,8 +436,8 @@ proc screenToBufferPosition(
 
 proc finalizeCurrentWindowForMouseJump(e: Editor) =
   ## Exit the current mode before a mouse click hands focus to another window.
-  ## visualSelection and pendingOperator carry no buffer identity, and an open
-  ## transaction is per-buffer, so any of them would misfire on the new buffer.
+  ## pendingOperator carries no buffer identity and an open transaction is
+  ## per-buffer, so either would misfire on the new buffer. Visual ends as in Vim.
   let activeBuffer = e.activeBuffer()
   let wasInInsert = e.state.mode in {EditorMode.Insert, EditorMode.Replace}
 
@@ -448,11 +449,7 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
     let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
     adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
 
-  case e.state.mode
-  of EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock:
-    e.state.visualSelection.active = false
-  else:
-    discard
+  e.state.leaveVisual()
 
   e.state.pendingInput.pendingOperator = none(PendingOperator)
   e.state.pendingInput.pendingTextObject = none(PendingTextObject)
@@ -865,12 +862,6 @@ proc pointerRange(
   of psgCharacter, psgBlock:
     (position, position)
 
-func visualKind(granularity: PointerSelectionGranularity): VisualSelectionKind =
-  case granularity
-  of psgLine: vskLine
-  of psgBlock: vskBlock
-  of psgCharacter, psgWord: vskChar
-
 func visualMode(granularity: PointerSelectionGranularity): EditorMode =
   case granularity
   of psgLine: EditorMode.VisualLine
@@ -918,33 +909,21 @@ proc updatePointerSelection(e: Editor, position: BufferPosition) =
     e.enterPointerVisualMode(gesture.granularity)
     e.state.pointerSelection.selectionStarted = true
 
-  e.state.visualSelection = VisualSelection(
-    start: anchor, current: focus, active: true, kind: gesture.granularity.visualKind
-  )
-  e.cursor = focus
+  e.state.selectVisualRange(anchor, focus)
   e.activeWindow.viewport.detachedFromCursor = false
-
-proc collapseVisualSelectionForPointer(e: Editor) =
-  e.state.visualSelection.active = false
-  if e.state.mode.isVisualAllMode:
-    let returnMode = e.state.previousMode
-    if returnMode.isVisualAllMode:
-      e.setMode(EditorMode.Normal)
-    else:
-      e.setMode(returnMode)
 
 proc beginPointerSelection(e: Editor, input: PointerInput, hit: PointerTextHit) =
   e.activatePointerWindow(hit.windowIndex)
 
   let
     oldCursor = e.cursor
-    oldSelection = e.state.visualSelection
+    oldSelection = e.activeWindow.visualSelection
     extendSelection = kmShift in input.modifiers
     granularity = input.pointerGranularity(oldSelection)
     pressedRange = e.activeBuffer.pointerRange(hit.position, granularity)
 
   if not extendSelection:
-    e.collapseVisualSelectionForPointer()
+    e.state.leaveVisual()
 
   let anchor =
     if extendSelection:
@@ -965,7 +944,6 @@ proc beginPointerSelection(e: Editor, input: PointerInput, hit: PointerTextHit) 
   if extendSelection or granularity in {psgWord, psgLine}:
     e.updatePointerSelection(hit.position)
   else:
-    e.state.visualSelection.active = false
     e.cursor = hit.position
     e.activeWindow.viewport.detachedFromCursor = false
 
@@ -1208,8 +1186,13 @@ proc handleInterruptCore(e: Editor): bool =
       return true
     # Normal mode: show exit message like Vim
     e.state.statusMessage = "Type :qa and press <Enter> to exit"
+  elif e.state.mode.isVisualAllMode:
+    # As Esc: back to the mode Visual was entered from, which may be a viewer.
+    discard e.state.pendingInput.cancelAll(e.keyRouter.registry)
+    e.state.leaveVisual()
+    e.enforceModePolicy()
   elif e.state.mode.isFileEditMode:
-    # Other file edit modes (Insert, Visual, Replace, etc.): switch to Normal mode
+    # Insert and Replace: switch to Normal mode
     let activeBuffer = e.activeBuffer()
 
     # Ctrl-C records the insert for dot-repeat, but does not run Escape-only

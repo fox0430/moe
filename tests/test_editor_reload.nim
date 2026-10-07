@@ -22,6 +22,7 @@
 import std/[unittest, os, monotimes, options, posix, times, strutils]
 
 import pkg/results
+import visual_test_helper
 
 import
   ../src/moepkg/[
@@ -297,11 +298,8 @@ suite "editor_reload - position state invalidation":
 
     e.setMode(EditorMode.VisualLine)
     e.cursor = BufferPosition(line: 3, column: 0)
-    e.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 3, column: 0),
-      active: true,
-      kind: vskLine,
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 3, column: 0), vskLine
     )
 
     sleep(50)
@@ -828,10 +826,9 @@ suite "editor_reload - state a reload cannot be run under":
 
     check e.state.pendingInput.pendingOperator.isNone
 
-  test "cancels the selection of a background window forced out of Visual":
-    # The selection is one global: a background window on the reloaded buffer
-    # leaves it naming text that is gone, and the accessors read it without
-    # ever looking at a mode.
+  test "ends Visual in a background window on the reloaded buffer only":
+    # Each window's selection is its own, so the reload ends the one naming
+    # text that is gone and leaves the active window's alone.
     let e = createTestEditor()
     let
       pathA = getTempDir() / "moe_test_reload_bg_visual_a.txt"
@@ -852,12 +849,10 @@ suite "editor_reload - state a reload cannot be run under":
         backgroundWindow = window
     check not backgroundWindow.isNil
     backgroundWindow.mode = EditorMode.VisualLine
+    backgroundWindow.visualAnchor = BufferPosition(line: 0, column: 0)
     backgroundWindow.cursor = BufferPosition(line: 3, column: 0)
-    e.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 3, column: 0),
-      active: true,
-      kind: vskLine,
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0)
     )
 
     sleep(50)
@@ -867,7 +862,8 @@ suite "editor_reload - state a reload cannot be run under":
 
     check bufA.getLine(0) == "only"
     check backgroundWindow.mode == EditorMode.Normal
-    check not e.state.visualSelection.active
+    check not backgroundWindow.visualSelection.active
+    check e.state.visualSelection.active
 
   test "clamps a jump list column onto a line that grew shorter":
     let e = createTestEditor()

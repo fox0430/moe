@@ -789,22 +789,37 @@ suite "Viewer round-trip - split-window viewers":
     let origBuf = origWin.buffer
     let windowsBefore = e.windowManager.windows.len
     e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
-    e.setMode(EditorMode.Visual)
+    e.setMode(EditorMode.Insert)
 
     discard e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
     check e.windowManager.windows.len == windowsBefore + 1
     check e.state.mode == EditorMode.Config
     check e.activeWindow != origWin
     check e.activeWindow.modeState.kind == mskConfig
-    check e.state.previousMode == EditorMode.Visual
-    check origWin.mode == EditorMode.Visual
+    check e.state.previousMode == EditorMode.Insert
+    check origWin.mode == EditorMode.Insert
 
     discard e.processResult(HandlerResult(kind: hrConfigQuit), e.activeBuffer())
-    check e.state.mode == EditorMode.Visual
+    check e.state.mode == EditorMode.Insert
     check e.windowManager.windows.len == windowsBefore
     check e.activeWindow == origWin
     check e.activeWindow.buffer == origBuf
     check e.activeWindow.modeState.kind == mskNone
+
+  test "hrConfig from Visual ends the selection, which Config does not resume":
+    let (e, path) = editorOnFile("moe_rt_config_visual.txt")
+    defer:
+      removeFile(path)
+    let origWin = e.activeWindow
+    e.setMode(EditorMode.Visual)
+
+    discard e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
+    check e.state.previousMode == EditorMode.Normal
+    check origWin.mode == EditorMode.Normal
+
+    discard e.processResult(HandlerResult(kind: hrConfigQuit), e.activeBuffer())
+    check e.activeWindow == origWin
+    check e.state.mode == EditorMode.Normal
 
   test "Config quit commands close the scratch window through the overlay":
     for commandText in [":q", ":q foo", ": q", ":quit", ":q!"]:

@@ -1409,14 +1409,14 @@ proc calculateOperatorRange*(
   return range
 
 proc snapOperatorRange*(buffer: TextBuffer, range: OperatorRange): OperatorRange =
-  ## Widen an operator range so every closed fold it touches is covered whole:
-  ## "dl" on a closed fold deletes the fold, not one hidden line. A whole fold is
-  ## whole lines, so a charwise range reaching into one becomes linewise.
-  ## Idempotent, and a no-op when no closed fold is touched.
+  ## Widen an operator range so a closed fold either end lies in is covered
+  ## whole: "dl" on a closed fold deletes the fold, not one hidden line. A whole
+  ## fold is whole lines, so such a charwise range becomes linewise. Idempotent,
+  ## and a no-op when neither end is in a closed fold.
   result = range
   if range.isEmpty:
     return
-  if not buffer.foldState.touchesCollapsedFold(range.start.line, range.endPos.line):
+  if not buffer.foldState.endsInCollapsedFold(range.start.line, range.endPos.line):
     return
   let snapped = buffer.foldState.snapRangeToFolds(range.start.line, range.endPos.line)
   result.isLinewise = true

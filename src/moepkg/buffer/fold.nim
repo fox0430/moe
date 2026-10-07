@@ -39,8 +39,11 @@ proc addFold*(
   ## Folds are kept sorted by startLine (outer-first when start lines tie).
   ## Single-line folds (startLine == endLine) are allowed.
   ## Nested and disjoint folds are allowed; only *crossing* (partial overlap)
-  ## and exact-duplicate folds are rejected. LSP servers only ever produce
-  ## disjoint or properly-nested ranges, but the crossing guard stays for safety.
+  ## folds are rejected, and an LSP range that repeats an LSP fold. Any other
+  ## repeat nests, as Vim's `zf` does over a fold, so a refresh that re-adds
+  ## the LSP folds keeps one a manual fold repeats. LSP servers only ever
+  ## produce disjoint or properly-nested ranges, but the crossing guard stays
+  ## for safety.
   ## collapsed: Whether the fold starts collapsed (default: true)
   ## collapsedText: Custom text to display when collapsed (from LSP)
   ## source: Origin of the fold (manual or LSP)
@@ -48,8 +51,8 @@ proc addFold*(
     return false
 
   for fold in state.folds:
-    # Reject an exact duplicate.
-    if startLine == fold.startLine and endLine == fold.endLine:
+    if startLine == fold.startLine and endLine == fold.endLine and source == fsLsp and
+        fold.source == fsLsp:
       return false
     let
       disjoint = endLine < fold.startLine or startLine > fold.endLine
@@ -156,16 +159,18 @@ proc getCollapsedFoldAt*(state: FoldState, line: int): Option[Fold] =
     if fold.collapsed and line >= fold.startLine and line <= fold.endLine:
       return some(fold)
 
-proc touchesCollapsedFold*(state: FoldState, startLine, endLine: int): bool =
-  ## True when any collapsed fold overlaps the inclusive line range, including
-  ## a fold the range already contains whole.
+proc endsInCollapsedFold*(state: FoldState, startLine, endLine: int): bool =
+  ## True when either end line of the range lies in a collapsed fold. A fold the
+  ## range only contains does not count: its lines are whole lines of the range
+  ## anyway, so an operator keeps its shape across it, as in Vim.
   let
     lo = min(startLine, endLine)
     hi = max(startLine, endLine)
   for fold in state.folds:
     if fold.startLine > hi:
       break
-    if fold.collapsed and fold.endLine >= lo:
+    if fold.collapsed and
+        (lo in fold.startLine .. fold.endLine or hi in fold.startLine .. fold.endLine):
       return true
 
 proc snapRangeToFolds*(
@@ -193,35 +198,60 @@ proc snapRangeToFolds*(
         changed = true
   (lo, hi)
 
+proc collapsedFoldIndexAt(state: FoldState, line: int): Option[int] =
+  ## Index of the outermost collapsed fold containing `line`: the one drawn
+  ## there, which hides any fold nested in it.
+  for i in 0 ..< state.folds.len:
+    let fold = state.folds[i]
+    if fold.startLine > line:
+      break
+    if fold.collapsed and line <= fold.endLine:
+      return some(i)
+
+proc foldIndexUnderCursor(state: FoldState, line: int): Option[int] =
+  ## The fold a cursor on `line` is on, as Vim picks it: the collapsed fold
+  ## drawn there, else the innermost one.
+  result = state.collapsedFoldIndexAt(line)
+  if result.isNone:
+    result = state.foldIndexAtInnermost(line)
+
 proc openFold*(state: var FoldState, line: int): bool =
-  ## Open the innermost fold at the given line. Returns true only when a
-  ## collapsed fold was actually opened, so callers can use the result to decide
-  ## whether a redraw is needed (an already-open fold is a no-op).
-  let idx = state.foldIndexAtInnermost(line)
-  if idx.isSome and state.folds[idx.get].collapsed:
+  ## Open the collapsed fold drawn at `line`, so a fold nested in it, even one
+  ## with the same range, takes another `zo`. Returns true only when a fold was
+  ## opened, so callers can tell an already-open fold apart.
+  let idx = state.collapsedFoldIndexAt(line)
+  if idx.isSome:
     state.folds[idx.get].collapsed = false
     return true
 
 proc closeFold*(state: var FoldState, line: int): bool =
-  ## Close the innermost fold at the given line. Returns true only when an open
-  ## fold was actually closed, so callers can treat an already-closed fold as a
-  ## silent no-op and avoid a needless redraw (mirroring openFold).
-  let idx = state.foldIndexAtInnermost(line)
-  if idx.isSome and not state.folds[idx.get].collapsed:
-    state.folds[idx.get].collapsed = true
+  ## Close the innermost open fold at `line`, so a fold around a collapsed one
+  ## still closes, as in Vim. One a collapsed fold hides is left alone. Returns
+  ## true only when a fold was closed.
+  var best = -1
+  for i in 0 ..< state.folds.len:
+    let fold = state.folds[i]
+    if fold.startLine > line:
+      break
+    if line > fold.endLine:
+      continue
+    # Sorted outer-first, so a later fold covering the line is nested deeper.
+    if fold.collapsed:
+      break
+    best = i
+  if best >= 0:
+    state.folds[best].collapsed = true
     return true
 
 proc toggleFold*(state: var FoldState, line: int): bool =
-  ## Toggle the innermost fold at the given line. Returns true if a fold was toggled.
-  let idx = state.foldIndexAtInnermost(line)
-  if idx.isSome:
-    state.folds[idx.get].collapsed = not state.folds[idx.get].collapsed
-    return true
+  ## Open the collapsed fold drawn at `line`, else close the innermost fold.
+  ## Returns true if a fold was toggled.
+  state.openFold(line) or state.closeFold(line)
 
 proc deleteFold*(state: var FoldState, line: int): bool =
-  ## Delete the innermost fold containing the given line.
-  ## Returns true if a fold was deleted.
-  let idx = state.foldIndexAtInnermost(line)
+  ## Delete the fold under the cursor: the collapsed one drawn at `line`, else
+  ## the innermost. Returns true if a fold was deleted.
+  let idx = state.foldIndexUnderCursor(line)
   if idx.isSome:
     state.folds.delete(idx.get)
     return true

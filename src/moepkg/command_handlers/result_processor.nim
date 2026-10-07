@@ -325,7 +325,9 @@ proc processResultEpilogue(
       e.state.statusMessage = "Cannot switch to " & $newMode & " mode directly"
       return true
 
-    e.state.previousMode = oldMode
+    # Switching between Visual kinds keeps where Visual was entered from.
+    if not (oldMode.isVisualAllMode and newMode.isVisualAllMode):
+      e.state.previousMode = oldMode
 
     # FileTree toggles, so replaying its entry would close the open sidebar;
     # focus it instead.
@@ -687,6 +689,9 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
   ## Insert-Normal recovery. Returns false when the caller should stop the
   ## main loop (app quit).
   # 1. pre-teardown (kind-independent)
+  # A command line runs outside Visual, as `:` leaves it in Vim; a Visual
+  # mapping that runs one directly gets here without the overlay.
+  e.state.leaveVisual()
   e.state.commandCompletionManager.cancelCompletion()
   if e.state.ui.substitutePreview.isActive:
     e.cancelSubstitutePreview()

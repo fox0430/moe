@@ -2364,11 +2364,8 @@ suite "NormalModeHandler - gn (search next select)":
 
     let result = pressGn(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Visual
-    check state.visualSelection.active == true
-    check state.visualSelection.start == BufferPosition(line: 0, column: 0)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 4)
+    check result.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 0)
     check state.cursor == BufferPosition(line: 0, column: 4)
 
   test "gn selects match at cursor":
@@ -2382,9 +2379,9 @@ suite "NormalModeHandler - gn (search next select)":
 
     let result = pressGn(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.get == EditorMode.Visual
-    check state.visualSelection.start == BufferPosition(line: 0, column: 6)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+    check result.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 6)
+    check state.cursor == BufferPosition(line: 0, column: 10)
 
   test "gn with no match returns error":
     let buf = newTextBuffer()
@@ -2408,9 +2405,9 @@ suite "NormalModeHandler - gn (search next select)":
 
     let result = pressGn(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.get == EditorMode.Visual
-    check state.visualSelection.start == BufferPosition(line: 2, column: 0)
-    check state.visualSelection.current == BufferPosition(line: 2, column: 2)
+    check result.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 2, column: 0)
+    check state.cursor == BufferPosition(line: 2, column: 2)
 
   test "gn wraps around to beginning":
     let buf = newTextBuffer()
@@ -2423,9 +2420,9 @@ suite "NormalModeHandler - gn (search next select)":
 
     let result = pressGn(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.get == EditorMode.Visual
-    check state.visualSelection.start == BufferPosition(line: 0, column: 0)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 4)
+    check result.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 0)
+    check state.cursor == BufferPosition(line: 0, column: 4)
 
   test "gn selects match when cursor at match start":
     let buf = newTextBuffer()
@@ -2438,8 +2435,8 @@ suite "NormalModeHandler - gn (search next select)":
 
     let result = pressGn(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check state.visualSelection.start == BufferPosition(line: 0, column: 6)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 6)
+    check state.cursor == BufferPosition(line: 0, column: 10)
 
   test "gn selects match when cursor at match end":
     let buf = newTextBuffer()
@@ -2452,8 +2449,8 @@ suite "NormalModeHandler - gn (search next select)":
 
     let result = pressGn(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check state.visualSelection.start == BufferPosition(line: 0, column: 6)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 6)
+    check state.cursor == BufferPosition(line: 0, column: 10)
 
   test "gn with unicode text":
     let buf = newTextBuffer()
@@ -2467,9 +2464,9 @@ suite "NormalModeHandler - gn (search next select)":
 
     let result = pressGn(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.get == EditorMode.Visual
-    check state.visualSelection.start == BufferPosition(line: 0, column: 8)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+    check result.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 8)
+    check state.cursor == BufferPosition(line: 0, column: 10)
 
   test "gn re-enables hlsearch":
     let buf = newTextBuffer()
@@ -2517,11 +2514,8 @@ suite "NormalModeHandler - gN (search prev select)":
 
     let result = pressGN(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Visual
-    check state.visualSelection.active == true
-    check state.visualSelection.start == BufferPosition(line: 0, column: 12)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 16)
+    check result.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 12)
     check state.cursor == BufferPosition(line: 0, column: 16)
 
   test "gN selects match at cursor":
@@ -2535,9 +2529,9 @@ suite "NormalModeHandler - gN (search prev select)":
 
     let result = pressGN(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.get == EditorMode.Visual
-    check state.visualSelection.start == BufferPosition(line: 0, column: 6)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+    check result.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 6)
+    check state.cursor == BufferPosition(line: 0, column: 10)
 
   test "gN with no match returns error":
     let buf = newTextBuffer()
@@ -2561,9 +2555,9 @@ suite "NormalModeHandler - gN (search prev select)":
 
     let result = pressGN(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.get == EditorMode.Visual
-    check state.visualSelection.start == BufferPosition(line: 0, column: 0)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 2)
+    check result.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 0)
+    check state.cursor == BufferPosition(line: 0, column: 2)
 
   test "gN wraps around to end":
     let buf = newTextBuffer()
@@ -2576,9 +2570,9 @@ suite "NormalModeHandler - gN (search prev select)":
 
     let result = pressGN(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.get == EditorMode.Visual
-    check state.visualSelection.start == BufferPosition(line: 0, column: 4)
-    check state.visualSelection.current == BufferPosition(line: 0, column: 6)
+    check result.modeTransition == some(EditorMode.Visual)
+    check state.activeWindow.visualAnchor == BufferPosition(line: 0, column: 4)
+    check state.cursor == BufferPosition(line: 0, column: 6)
 
 suite "NormalModeHandler - dgn (delete search match forward)":
   proc pressDgn(

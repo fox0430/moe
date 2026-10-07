@@ -20,6 +20,7 @@
 import std/[unittest, options, tables, strutils]
 
 import pkg/results
+import visual_test_helper
 
 import
   ../src/moepkg/[
@@ -681,12 +682,8 @@ suite "CommandRegistry - readOnly buffer guard":
     let buffer = newTextBuffer("hello")
     buffer.readOnly = true
     let ctx = createReadOnlyTestContext(buffer)
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 2),
-      active: true,
-      kind: vskChar,
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)
     )
     let registry = newCommandRegistry()
     registerBuiltinCommands(registry)

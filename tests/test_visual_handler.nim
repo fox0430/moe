@@ -20,6 +20,7 @@
 ## Tests for visual_handler.nim
 
 import std/[unittest, options, tables]
+import visual_test_helper
 
 import
   ../src/moepkg/
@@ -56,12 +57,6 @@ proc createTestState(): EditorState =
       )
     ),
     registers: initRegisters(),
-    visualSelection: VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
-      active: false,
-      kind: vskChar,
-    ),
   )
 
 proc createTestViewport(): ViewPort =
@@ -90,101 +85,6 @@ suite "VisualModeHandler - Constructor":
     check handler.motionController != nil
     check handler.keyBindingRegistry != nil
     check handler.commandRegistry != nil
-
-suite "VisualModeHandler - initSelection":
-  test "Initialize character selection":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
-
-    initSelection(state, buf, vskChar)
-
-    check state.visualSelection.active == true
-    check state.visualSelection.kind == vskChar
-    check state.visualSelection.start.line == 0
-    check state.visualSelection.start.column == 5
-    check state.visualSelection.current.line == 0
-    check state.visualSelection.current.column == 5
-
-  test "Initialize line selection":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 3)
-
-    initSelection(state, buf, vskLine)
-
-    check state.visualSelection.active == true
-    check state.visualSelection.kind == vskLine
-    check state.visualSelection.start == state.cursor
-    check state.visualSelection.current == state.cursor
-
-  test "Initialize block selection":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 2)
-
-    initSelection(state, buf, vskBlock)
-
-    check state.visualSelection.active == true
-    check state.visualSelection.kind == vskBlock
-
-suite "VisualModeHandler - clearSelection":
-  test "Clear active selection":
-    let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 2, column: 5),
-      active: true,
-      kind: vskChar,
-    )
-
-    clearSelection(state)
-
-    check state.visualSelection.active == false
-
-  test "Clear already inactive selection":
-    let state = createTestState()
-    state.visualSelection.active = false
-
-    clearSelection(state)
-
-    check state.visualSelection.active == false
-
-suite "VisualModeHandler - updateSelection":
-  test "Update selection with new position":
-    let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 5),
-      active: true,
-      kind: vskChar,
-    )
-
-    let newPos = BufferPosition(line: 2, column: 10)
-    updateSelection(state, newPos)
-
-    check state.visualSelection.current.line == 2
-    check state.visualSelection.current.column == 10
-    check state.visualSelection.start.line == 0 # unchanged
-    check state.visualSelection.start.column == 0 # unchanged
-
-  test "Update inactive selection (no-op)":
-    let state = createTestState()
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 5),
-      active: false,
-      kind: vskChar,
-    )
-
-    let newPos = BufferPosition(line: 2, column: 10)
-    updateSelection(state, newPos)
-
-    check state.visualSelection.current.line == 0 # unchanged
-    check state.visualSelection.current.column == 5 # unchanged
 
 suite "VisualModeHandler - getSelectionRange":
   test "Get range from visual handler module":
@@ -350,7 +250,7 @@ suite "VisualModeHandler - executeCommand":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 5)
     state.mode = EditorMode.Visual
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     let result = handler.executeCommand(buf, state, viewport, "motion.left")
@@ -375,12 +275,8 @@ suite "VisualModeHandler - handleVisualModeKey":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.mode = EditorMode.Visual
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 5),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5)
     )
     let viewport = createTestViewport()
 
@@ -395,7 +291,7 @@ suite "VisualModeHandler - handleVisualModeKey":
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.mode = EditorMode.Visual
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     # Use a key that is unlikely to be bound
@@ -410,7 +306,7 @@ suite "VisualModeHandler - handleVisualModeKey":
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.mode = EditorMode.Visual
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     state.pendingInput.macroState.isRecording = true
     state.pendingInput.macroState.register = 'a'
     state.pendingInput.macroState.recordedKeys = @[]
@@ -436,9 +332,7 @@ suite "VisualModeHandler - sequence dispatch (M7 regression)":
       let state = createTestState()
       state.mode = subMode
       state.cursor = BufferPosition(line: 2, column: 0)
-      initSelection(
-        state, buf, if subMode == EditorMode.VisualLine: vskLine else: vskBlock
-      )
+      state.visualAnchor = state.cursor
       let viewport = createTestViewport()
 
       # First `g`: must wait, cursor must not jump to the first line.
@@ -458,7 +352,7 @@ suite "VisualModeHandler - sequence dispatch (M7 regression)":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.cursor = BufferPosition(line: 2, column: 0)
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     let r1 = handler.handleVisualModeKey(buf, state, viewport, gKey)
@@ -478,7 +372,7 @@ suite "VisualModeHandler - sequence dispatch (M7 regression)":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.cursor = BufferPosition(line: 2, column: 0)
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     check handler.handleVisualModeKey(buf, state, viewport, gKey).kind ==
@@ -500,7 +394,7 @@ suite "VisualModeHandler - sequence dispatch (M7 regression)":
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
     state.cursor = BufferPosition(line: 0, column: 0)
-    initSelection(state, buf, vskBlock)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
@@ -518,7 +412,7 @@ suite "VisualModeHandler - sequence dispatch (M7 regression)":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.cursor = BufferPosition(line: 0, column: 0)
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     let rKey = KeyCombo(isSpecial: false, char: "r", modifiers: {})
@@ -536,7 +430,7 @@ suite "VisualModeHandler - sequence dispatch (M7 regression)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.mode = EditorMode.VisualLine
-    initSelection(state, buf, vskLine)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     # Try a key that should be handled by Visual mode bindings
@@ -551,7 +445,7 @@ suite "VisualModeHandler - sequence dispatch (M7 regression)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
-    initSelection(state, buf, vskBlock)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
@@ -567,11 +461,8 @@ suite "VisualModeHandler - Mode Transitions":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.previousMode = EditorMode.Normal
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     let viewport = createTestViewport()
 
@@ -590,11 +481,8 @@ suite "VisualModeHandler - Mode Transitions":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.previousMode = EditorMode.Normal
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     let viewport = createTestViewport()
 
@@ -609,12 +497,8 @@ suite "VisualModeHandler - Mode Transitions":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.mode = EditorMode.Visual
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     let viewport = createTestViewport()
 
@@ -634,11 +518,8 @@ suite "VisualModeHandler - Selection Types":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.cursor = BufferPosition(line: 0, column: 4)
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     let viewport = createTestViewport()
 
@@ -656,12 +537,8 @@ suite "VisualModeHandler - Selection Types":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.mode = EditorMode.VisualLine
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
-      active: true,
-      kind: vskLine,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
     let viewport = createTestViewport()
 
@@ -678,12 +555,8 @@ suite "VisualModeHandler - Selection Types":
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.mode = EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
-      active: true,
-      kind: vskBlock,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskBlock
     )
     let viewport = createTestViewport()
 
@@ -704,7 +577,7 @@ suite "VisualModeHandler - Waiting for Input":
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.mode = EditorMode.Visual
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     # Try 'r' for replace - should wait for char input
@@ -748,7 +621,7 @@ suite "VisualModeHandler - Command mode command alias bridge":
 
     let state = createTestState()
     state.mode = EditorMode.Visual
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
     let keyCombo = KeyCombo(isSpecial: false, char: "K", modifiers: {})
 
@@ -765,7 +638,7 @@ suite "VisualModeHandler - Command mode command alias bridge":
 
     let state = createTestState()
     state.mode = EditorMode.Visual
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
     let keyCombo = KeyCombo(isSpecial: false, char: "D", modifiers: {})
 
@@ -782,11 +655,8 @@ suite "VisualModeHandler - Escape returns to previousMode":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.previousMode = EditorMode.Normal
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     let viewport = createTestViewport()
 
@@ -806,11 +676,8 @@ suite "VisualModeHandler - Escape returns to previousMode":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.previousMode = EditorMode.LogViewer
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     let viewport = createTestViewport()
 
@@ -830,11 +697,8 @@ suite "VisualModeHandler - Escape returns to previousMode":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.previousMode = EditorMode.LogViewer
-    state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     let viewport = createTestViewport()
 
@@ -859,7 +723,7 @@ suite "VisualModeHandler - Escape returns to previousMode":
     state.mode = EditorMode.Visual
     state.previousMode = EditorMode.Normal
     state.pendingInput.pendingRegister = some('a')
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
@@ -882,7 +746,7 @@ suite "VisualModeHandler - Escape returns to previousMode":
     state.previousMode = EditorMode.Normal
     state.pendingInput.macroState.waitingForRegister = true
     state.pendingInput.macroState.commandType = "record"
-    initSelection(state, buf, vskChar)
+    state.visualAnchor = state.cursor
     let viewport = createTestViewport()
 
     let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)

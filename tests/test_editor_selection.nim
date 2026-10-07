@@ -19,7 +19,8 @@
 
 import std/[options, unittest]
 
-import ../src/moepkg/[buffer, config, editor, types]
+import ../src/moepkg/[buffer, config, editor, modes, types]
+import visual_test_helper
 
 proc createSelectionEditor(text: string): Editor =
   result = newEditor(newEditorConfig())
@@ -34,11 +35,8 @@ suite "editor selection API":
 
   test "character selection exposes an ordered value snapshot":
     let e = createSelectionEditor("alpha beta")
-    e.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 9),
-      current: BufferPosition(line: 0, column: 6),
-      active: true,
-      kind: vskChar,
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 9), BufferPosition(line: 0, column: 6)
     )
 
     let selection = e.currentSelection()
@@ -54,21 +52,49 @@ suite "editor selection API":
 
   test "line and block text use the editor selection semantics":
     let e = createSelectionEditor("alpha\nbeta\ngamma")
-    e.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 1, column: 0),
-      active: true,
-      kind: vskLine,
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0), vskLine
     )
 
     check e.currentSelection().get.kind == EditorSelectionKind.Line
     check e.selectedText() == "alpha\nbeta"
 
-    e.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 1),
-      current: BufferPosition(line: 2, column: 2),
-      active: true,
-      kind: vskBlock,
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 2), vskBlock
     )
     check e.currentSelection().get.kind == EditorSelectionKind.Block
     check e.selectedText() == "lp\net\nam"
+
+  test "a selection ending in a closed fold reports the text a yank would take":
+    let e = createSelectionEditor("alpha\nbeta\ngamma\ndelta")
+    check e.activeBuffer.foldState.addFold(1, 2, collapsed = true)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 1, column: 0)
+    )
+
+    let selection = e.currentSelection().get
+    check selection.kind == EditorSelectionKind.Line
+    check selection.first.line == 0
+    check selection.last.line == 2
+    # The ends stay where the user put them.
+    check selection.anchor == BufferPosition(line: 0, column: 2)
+    check selection.focus == BufferPosition(line: 1, column: 0)
+    check e.selectedText() == "alpha\nbeta\ngamma"
+
+  test "takes every field from the window the editor reports as active":
+    # Between the window manager switching windows and the editor syncing, the
+    # state still names the window left; the snapshot must not mix the two.
+    let e = createSelectionEditor("alpha")
+    let other = EditorWindow(mode: EditorMode.Normal)
+    other.setTab(newTextBuffer("one two"))
+    e.windowManager.windows.add other
+    other.setMode(EditorMode.Visual)
+    other.cursor = BufferPosition(line: 0, column: 2)
+    e.windowManager.activeWindowIndex = 1
+
+    let selection = e.currentSelection().get
+
+    check selection.bufferId == other.buffer.id
+    check selection.first == BufferPosition(line: 0, column: 0)
+    check selection.last == BufferPosition(line: 0, column: 2)
+    check e.selectedText() == "one"

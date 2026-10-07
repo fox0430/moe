@@ -35,19 +35,16 @@ import
   modes,
   window_manager
 
-proc focusOutputWindow(
-    editor: Editor, target: EditorWindow, mode, previousMode: EditorMode
-) =
-  ## Move the focus to `target` and leave the editor in `mode`.
-  ## Unlike `hsplitWithBuffer`, reusing a window does not activate it.
+proc focusOutputWindow(editor: Editor, target: EditorWindow) =
+  ## Move the focus to the reused output window, in Normal.
   for i, window in editor.windowManager.windows:
     if window == target:
       editor.windowManager.activateWindow(i)
       # Sync first: `state.activeWindow` is cached, so `previousMode` would
       # otherwise land on the window just left.
       editor.syncActiveWindow()
-      editor.setMode(mode)
-      editor.state.previousMode = previousMode
+      editor.setMode(EditorMode.Normal)
+      editor.state.previousMode = EditorMode.Normal
       editor.setActiveWindowScreenCursor(editor.activeWindow)
       break
 
@@ -94,22 +91,16 @@ proc showCommandOutput*(
     if not outputWindow.isNil:
       editor.syncActiveWindow()
       if not keepFocus:
-        editor.focusOutputWindow(outputWindow, EditorMode.Normal, EditorMode.Normal)
+        editor.focusOutputWindow(outputWindow)
       editor.enforceModePolicy()
       return true
 
-  let
-    previousWindow = editor.activeWindow
-    previousMode = editor.state.mode
-    previousPreviousMode = editor.state.previousMode
-  let splitResult = editor.hsplitWithBuffer(outputBuffer)
+  # Not a focus round trip: leaving the user's window would end their Visual.
+  let splitResult = editor.hsplitWithBuffer(outputBuffer, focus = not keepFocus)
   if splitResult.isErr:
     editor.notify("Failed to open output window: " & splitResult.error, nlError)
     return false
   editor.state.commandOutputBufferId = outputBuffer.id
-
-  if keepFocus:
-    editor.focusOutputWindow(previousWindow, previousMode, previousPreviousMode)
   editor.enforceModePolicy()
   true
 

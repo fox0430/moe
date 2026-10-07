@@ -20,6 +20,7 @@
 ## Tests for editor_selectionrange.nim
 
 import std/[tables, unittest, json, options, importutils]
+import visual_test_helper
 
 import
   ../src/moepkg/[
@@ -350,7 +351,7 @@ suite "editor_selectionrange - chain expansion":
     # the cached chain level. The next request takes the fresh-request path
     # (which fails here since no real server is attached) and must abandon the
     # stale chain rather than expanding it.
-    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
+    e.state.cursor = BufferPosition(line: 0, column: 5)
     discard e.requestLspSelectionRange()
     check e.state.lspCache.selectionRangeChain.len == 0
     check e.state.lspCache.selectionRangeIndex == 0
@@ -386,12 +387,8 @@ suite "editor_selectionrange - chain expansion":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "foo(bar)")
 
     e.state.previousMode = EditorMode.Normal
-    e.state.mode = EditorMode.VisualLine
-    e.state.visualSelection = VisualSelection(
-      kind: vskLine,
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
-      active: true,
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
 
     let responseJson = %*[

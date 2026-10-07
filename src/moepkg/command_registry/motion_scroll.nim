@@ -23,7 +23,7 @@ import std/options
 
 import pkg/results
 
-import ../[types, motion, modes, render_utils, visible_rows]
+import ../[types, motion, render_utils, visible_rows, visual_selection]
 import ../buffer/[core, fold]
 
 import core
@@ -290,21 +290,18 @@ proc handleFoldCloseAll*(ctx: CommandContext, args: seq[string]): Result[(), str
 proc handleFoldCreate*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Create fold from visual selection (zf command)
   ## This is called from visual mode with the selection range
-  if not ctx.state.visualSelection.active:
+  let sel = ctx.state.operandSelection(ctx.buffer)
+  if not sel.active:
     ctx.state.statusMessage = "No selection"
     return ok(())
 
   let
-    startLine =
-      min(ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line)
-    endLine =
-      max(ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line)
+    startLine = min(sel.start.line, sel.current.line)
+    endLine = max(sel.start.line, sel.current.line)
 
   if ctx.buffer.foldState.addFold(startLine, endLine):
     ctx.state.statusMessage = "Fold created"
-    # Exit visual mode
-    ctx.state.visualSelection.active = false
-    ctx.state.mode = EditorMode.Normal
+    ctx.state.leaveVisual()
   else:
     ctx.state.statusMessage = "Cannot create overlapping fold"
 

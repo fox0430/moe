@@ -31,6 +31,7 @@ import
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/buffer
 import ../src/moepkg/command_handlers/editor_ops
+import visual_test_helper
 
 const TestLines = "aaaa\nbbbb\ncccc\n"
 
@@ -139,6 +140,39 @@ suite "viewer_mode - leaveViewerMode":
       removeFile(path)
     e.leaveViewerMode(EditorMode.Help)
     check e.activeBuffer.len == 3
+
+  test "a viewer ends the selection it would cover":
+    let (e, path) = editorOnFile("moe_viewer_leave_visual.txt")
+    defer:
+      removeFile(path)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 1, column: 2)
+    )
+    discard e.enterViewerMode(
+      EditorMode.Help, makeHelpModeState(), newTextBuffer("help line 1"), vpInPlace
+    )
+    check not e.state.visualSelection.active
+
+    e.leaveViewerMode(EditorMode.Help)
+
+    check e.state.mode == EditorMode.Normal
+    check not e.state.visualSelection.active
+    check e.state.cursor == BufferPosition(line: 1, column: 2)
+
+  test "a selection made inside the viewer ends with it":
+    let (e, path) = editorOnFile("moe_viewer_leave_visual_inner.txt")
+    defer:
+      removeFile(path)
+    discard e.enterViewerMode(
+      EditorMode.Help, makeHelpModeState(), newTextBuffer("help line 1"), vpInPlace
+    )
+    e.state.previousMode = EditorMode.Help
+    e.state.mode = EditorMode.Visual
+
+    e.leaveViewerMode(EditorMode.Help)
+
+    check e.state.mode == EditorMode.Normal
+    check not e.state.visualSelection.active
 
 suite "viewer_mode - enterViewerMode (vpVSplit)":
   test "opens a new window with the listing buffer":
@@ -264,6 +298,22 @@ suite "viewer_mode - leaveViewerModeForJump":
     # The jump list anchors at the cursor, so it must be the origin, not the
     # listing's.
     check e.activeWindow.cursor == BufferPosition(line: 2, column: 1)
+
+  test "ends the selection the viewer covered":
+    let (e, path) = editorOnFile("moe_viewer_jump_visual.txt")
+    defer:
+      removeFile(path)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)
+    )
+    discard e.enterViewerMode(
+      EditorMode.Help, makeHelpModeState(), newTextBuffer("help line 1"), vpInPlace
+    )
+
+    discard e.leaveViewerModeForJump(EditorMode.Help)
+
+    check e.state.mode == EditorMode.Normal
+    check not e.state.visualSelection.active
 
 suite "viewer_mode - from the FileTree sidebar":
   test "an in-place viewer covers the file window, not the sidebar":

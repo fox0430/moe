@@ -39,7 +39,7 @@ when not defined(moe.embedded):
 import
   ../[
     types, buffer, modes, key_bindings, keybind_config, string_builder, filer, filetree,
-    diff_viewer, recent_file_mode, command_line,
+    diff_viewer, recent_file_mode, command_line, visual_selection,
   ]
 
 when not defined(moe.embedded):
@@ -679,21 +679,13 @@ proc handleLogViewerMode*(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of lvrEnterVisual:
-    # Start a visual selection at the cursor and enter the requested Visual
-    # variant. The log buffer stays readOnly, so destructive commands are
-    # blocked in the command registry. `y` / Esc return via
-    # `state.mode = state.previousMode` in the shared visual commands, which
-    # falls back to LogViewer because processResult sets previousMode here.
-    let targetMode =
-      case r.visualKind
-      of vskChar: EditorMode.Visual
-      of vskLine: EditorMode.VisualLine
-      of vskBlock: EditorMode.VisualBlock
-    state.visualSelection = VisualSelection(
-      start: state.cursor, current: state.cursor, active: true, kind: r.visualKind
-    )
+    # Enter the requested Visual variant, which starts the selection at the
+    # cursor. The log buffer stays readOnly, so destructive commands are
+    # blocked in the command registry. `y` / Esc / Ctrl-C return through
+    # `leaveVisual`, which lands on LogViewer because processResult sets
+    # previousMode here.
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(targetMode), statusMessage: ""
+      kind: hrHandled, modeTransition: some(r.visualKind.visualMode), statusMessage: ""
     )
   of lvrQuit:
     return HandlerResult(kind: hrLogViewerQuit)

@@ -23,6 +23,7 @@
 import std/[deques, options, os, sets, strutils, tables, unittest]
 
 import pkg/results
+import visual_test_helper
 
 import
   ../src/moepkg/[
@@ -68,20 +69,14 @@ proc setCursor(ctx: CommandContext, line, column: int) =
   ctx.state.cursor = BufferPosition(line: line, column: column)
 
 proc setupVisual(
-    ctx: CommandContext,
-    startLine, startCol, endLine, endCol: int,
-    mode = EditorMode.Visual,
-    kind = vskChar,
+    ctx: CommandContext, startLine, startCol, endLine, endCol: int, kind = vskChar
 ) =
-  ## Setup visual mode with selection range
-  ctx.state.mode = mode
-  ctx.state.visualSelection = VisualSelection(
-    active: true,
-    start: BufferPosition(line: startLine, column: startCol),
-    current: BufferPosition(line: endLine, column: endCol),
-    kind: kind,
+  ## Select the range in the Visual mode of `kind`.
+  ctx.state.selectVisual(
+    BufferPosition(line: startLine, column: startCol),
+    BufferPosition(line: endLine, column: endCol),
+    kind,
   )
-  ctx.setCursor(endLine, endCol)
 
 suite "executeCommand - Motion commands":
   test "execute basic motion (Right)":
@@ -844,12 +839,8 @@ suite "executeCommand - visual replace":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 1),
-      active: true,
-      kind: vskChar,
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 1)
     )
 
     let cmd = Command(
@@ -866,12 +857,8 @@ suite "executeCommand - visual replace":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 1),
-      active: true,
-      kind: vskChar,
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 1)
     )
 
     let cmd = Command(
@@ -901,7 +888,7 @@ suite "executeCommand - visual replace dot-repeat":
     ).isOk
     check buffer[0] == "zbcde"
 
-    ctx.setupVisual(1, 0, 1, 1, EditorMode.Visual, vskChar)
+    ctx.setupVisual(1, 0, 1, 1)
     check registry.executeCommand(
       ctx,
       Command(
@@ -935,7 +922,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(1, 0, 1, 1, EditorMode.Visual, vskChar)
+    ctx.setupVisual(1, 0, 1, 1)
     check registry.executeCommand(
       ctx,
       Command(
@@ -965,7 +952,7 @@ suite "executeCommand - visual replace dot-repeat":
       ),
     ).isOk
 
-    ctx.setupVisual(0, 0, 0, 1, EditorMode.Visual, vskChar)
+    ctx.setupVisual(0, 0, 0, 1)
     check registry.executeCommand(
       ctx,
       Command(
@@ -990,7 +977,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 1, 1, EditorMode.Visual, vskChar)
+    ctx.setupVisual(0, 0, 1, 1)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1021,7 +1008,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine, vskLine)
+    ctx.setupVisual(0, 0, 1, 0, vskLine)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1049,7 +1036,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 1, 1, EditorMode.VisualBlock, vskBlock)
+    ctx.setupVisual(0, 0, 1, 1, vskBlock)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1088,7 +1075,7 @@ suite "executeCommand - visual replace dot-repeat":
     check ctx.state.editState.lastEditCommand.get.kind == lecReplaceChar
 
     buffer.keepRaw = true
-    ctx.setupVisual(0, 0, 0, 1, EditorMode.Visual, vskChar)
+    ctx.setupVisual(0, 0, 0, 1)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1108,7 +1095,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 0, 1, EditorMode.Visual, vskChar)
+    ctx.setupVisual(0, 0, 0, 1)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1137,7 +1124,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine, vskLine)
+    ctx.setupVisual(0, 0, 1, 0, vskLine)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1167,7 +1154,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 1, 1, EditorMode.VisualBlock, vskBlock)
+    ctx.setupVisual(0, 0, 1, 1, vskBlock)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1200,7 +1187,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 1, 1, EditorMode.Visual, vskChar)
+    ctx.setupVisual(0, 0, 1, 1)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1233,7 +1220,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 0, 1, EditorMode.Visual, vskChar)
+    ctx.setupVisual(0, 0, 0, 1)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1262,7 +1249,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 1, 1, EditorMode.VisualBlock, vskBlock)
+    ctx.setupVisual(0, 0, 1, 1, vskBlock)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1293,7 +1280,7 @@ suite "executeCommand - visual replace dot-repeat":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 1, 1, EditorMode.Visual, vskChar)
+    ctx.setupVisual(0, 0, 1, 1)
     check registry.executeCommand(
       ctx,
       Command(
@@ -1323,12 +1310,8 @@ suite "executeCommand - visual surround":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
-      active: true,
-      kind: vskChar,
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
     let cmd = Command(
@@ -3169,7 +3152,7 @@ suite "Handler - Visual mode operations":
   test "visual indent":
     let buffer = newTextBuffer("line1\nline2\nline3")
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine)
+    ctx.setupVisual(0, 0, 1, 0, vskLine)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcVisualIndent)).isOk
@@ -3197,7 +3180,7 @@ suite "Handler - Visual mode operations":
   test "visual join lines":
     let buffer = newTextBuffer("line1\nline2\nline3")
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine)
+    ctx.setupVisual(0, 0, 1, 0, vskLine)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcVisualJoinLines)).isOk
@@ -3893,10 +3876,9 @@ suite "Handler - Text Object operations":
     let buffer = newTextBuffer("<a></a>")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 1)
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection.start = BufferPosition(line: 0, column: 1)
-    ctx.state.visualSelection.current = BufferPosition(line: 0, column: 1)
-    ctx.state.visualSelection.active = true
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 1)
+    )
     let registry = createTestRegistry()
 
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -4206,11 +4188,8 @@ suite "Handler - Clipboard operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     ctx.state.config.clipboard = ClipboardConfig(enable: false)
     let registry = createTestRegistry()
@@ -4234,11 +4213,8 @@ suite "Handler - Clipboard operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     ctx.state.config.clipboard = ClipboardConfig(enable: false)
     let registry = createTestRegistry()
@@ -4252,7 +4228,7 @@ suite "Handler - Clipboard operations":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     ctx.state.mode = EditorMode.Normal
-    ctx.state.visualSelection = VisualSelection(active: false)
+    ctx.state.mode = EditorMode.Normal
     ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
     let registry = createTestRegistry()
 
@@ -4270,7 +4246,7 @@ suite "Handler - Clipboard operations":
       try:
         let buffer = newTextBuffer("hello world")
         let ctx = createTestContext(buffer)
-        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.Visual, kind = vskChar)
+        ctx.setupVisual(0, 0, 0, 4)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
         let registry = createTestRegistry()
 
@@ -4306,7 +4282,7 @@ suite "Handler - Clipboard operations":
       try:
         let buffer = newTextBuffer("hello world\nfoo bar baz")
         let ctx = createTestContext(buffer)
-        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.setupVisual(0, 0, 0, 4, kind = vskLine)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
         let registry = createTestRegistry()
 
@@ -4339,7 +4315,7 @@ suite "Handler - Clipboard operations":
       try:
         let buffer = newTextBuffer("hello world\nfoo bar baz")
         let ctx = createTestContext(buffer)
-        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.setupVisual(0, 0, 0, 4, kind = vskLine)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtWlClipboard)
         let registry = createTestRegistry()
         ctx.state.registers.setClipboardTool(cbtWlClipboard)
@@ -4388,7 +4364,7 @@ suite "Handler - Clipboard operations":
         for _ in 0 ..< 10:
           let buffer = newTextBuffer("hello world\nfoo bar baz")
           let ctx = createTestContext(buffer)
-          ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+          ctx.setupVisual(0, 0, 0, 4, kind = vskLine)
           ctx.state.config.clipboard =
             ClipboardConfig(enable: true, tool: cbtWlClipboard)
           let registry = createTestRegistry()
@@ -4418,7 +4394,7 @@ suite "Handler - Clipboard operations":
       try:
         let buffer = newTextBuffer("hello world\nfoo bar baz")
         let ctx = createTestContext(buffer)
-        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.setupVisual(0, 0, 0, 4, kind = vskLine)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtWlClipboard)
         let registry = createTestRegistry()
         ctx.state.registers.setClipboardTool(cbtWlClipboard)
@@ -4448,7 +4424,7 @@ suite "Handler - Clipboard operations":
     # would paste the pre-copy content instead of the selected text.
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.Visual, kind = vskChar)
+    ctx.setupVisual(0, 0, 0, 4)
     ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
     let registry = createTestRegistry()
 
@@ -4471,7 +4447,7 @@ suite "Handler - Clipboard operations":
       try:
         let buffer = newTextBuffer("hello world\nfoo bar baz\ntail")
         let ctx = createTestContext(buffer)
-        ctx.setupVisual(0, 3, 1, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.setupVisual(0, 3, 1, 4, kind = vskLine)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
         let registry = createTestRegistry()
 
@@ -4501,7 +4477,7 @@ suite "Handler - Clipboard operations":
         # Deliberately place start.col past the end of "first" and current.col
         # mid-way through "second" so a naive char-range would drop bytes on
         # both ends.
-        ctx.setupVisual(0, 5, 1, 2, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.setupVisual(0, 5, 1, 2, kind = vskLine)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
 
         check getVisualSelectionText(buffer, ctx.state.visualSelection) ==
@@ -4522,7 +4498,7 @@ suite "Handler - Clipboard operations":
       try:
         let buffer = newTextBuffer("abcdef\nghijkl\nmnopqr")
         let ctx = createTestContext(buffer)
-        ctx.setupVisual(0, 1, 2, 3, mode = EditorMode.VisualBlock, kind = vskBlock)
+        ctx.setupVisual(0, 1, 2, 3, kind = vskBlock)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
 
         check getVisualSelectionText(buffer, ctx.state.visualSelection) ==
@@ -4549,7 +4525,7 @@ suite "Handler - Clipboard operations":
       try:
         let buffer = newTextBuffer("hello world")
         let ctx = createTestContext(buffer)
-        ctx.setupVisual(0, 2, 0, 6, mode = EditorMode.Visual, kind = vskChar)
+        ctx.setupVisual(0, 2, 0, 6)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
 
         check getVisualSelectionText(buffer, ctx.state.visualSelection) == "llo w"
@@ -4560,11 +4536,34 @@ suite "Handler - Clipboard operations":
       finally:
         removeFakeClipboardTool(fakeDir)
 
+  test "clipboard cut copies a closed fold it deletes":
+    # visualDelete takes a closed fold the selection reaches into whole, so
+    # the copy has to as well or the hidden lines are lost.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("a0\na1\na2\na3\ntail")
+        check buffer.foldState.addFold(2, 3, collapsed = true)
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 1, 2, 0)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        let registry = createTestRegistry()
+
+        check registry.execute(ctx, builtin(bcEditCut)).isOk
+
+        check buffer.len == 1
+        check buffer[0] == "tail"
+        waitForClipboardWrite(fakeDir, "a0\na1\na2\na3")
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
   test "clipboard cut continues the delete when the CLIPBOARD write fails":
     # A failed copy must not cancel the delete half.
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 2, 0, 6, mode = EditorMode.Visual, kind = vskChar)
+    ctx.setupVisual(0, 2, 0, 6)
     ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
     let registry = createTestRegistry()
 
@@ -4817,7 +4816,7 @@ suite "Handler - Visual mode extended operations":
   test "visual dedent":
     let buffer = newTextBuffer("    line1\n    line2\nline3")
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine)
+    ctx.setupVisual(0, 0, 1, 0, vskLine)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcVisualDedent)).isOk
@@ -4846,12 +4845,8 @@ suite "Handler - Visual mode extended operations":
   test "visual paste replaces selection":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      kind: vskChar,
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 4),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     ctx.setCursor(0, 4)
     ctx.state.registers.setYankedRegister("XYZ", false)
@@ -5110,6 +5105,59 @@ suite "Handler - Fold Operations":
     check fold.isSome
     check fold.get.startLine == 1
     check fold.get.endLine == 2
+
+  test "fold create takes a closed fold it reaches into whole":
+    # As for any operator in Vim; the new fold nests the closed one instead of
+    # crossing it.
+    let buffer = newTextBuffer("l0\nl1\nl2\nl3\nl4")
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 2, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcFoldCreate)).isOk
+    check ctx.state.statusMessage == "Fold created"
+    let fold = buffer.foldState.getFoldAt(0)
+    check fold.isSome
+    check fold.get.endLine == 4
+
+  test "fold create on a closed fold alone nests a fold of the same range":
+    # The selection covers the fold whole, which is the fold's own range. Vim
+    # nests a second fold there rather than refusing it.
+    let buffer = newTextBuffer("l0\nl1\nl2\nl3\nl4")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(1, 0, 1, 0, vskLine)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcFoldCreate)).isOk
+    check ctx.state.statusMessage == "Fold created"
+    check buffer.foldState.folds.len == 2
+    for fold in buffer.foldState.folds:
+      check fold.startLine == 1
+      check fold.endLine == 3
+
+  test "visual yank keeps a charwise selection across a closed fold it contains":
+    let buffer = newTextBuffer("a0\na1\na2\na3\na4")
+    check buffer.foldState.addFold(2, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(1, 1, 4, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualYank)).isOk
+    let yanked = ctx.state.registers.getNoNamedRegister()
+    check yanked.getContent() == "1\na2\na3\na"
+    check not yanked.isLine
+
+  test "fold create returns to the mode Visual was entered from":
+    let buffer = newTextBuffer("l0\nl1\nl2")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 1, 0)
+    ctx.state.previousMode = EditorMode.LogViewer
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcFoldCreate)).isOk
+    check ctx.state.mode == EditorMode.LogViewer
 
   test "fold delete":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -6088,11 +6136,8 @@ suite "Handler - Visual mode text object selection":
     let buffer = newTextBuffer("hello world test")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 7) # On 'o' in "world"
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 7),
-      current: BufferPosition(line: 0, column: 7),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 7), BufferPosition(line: 0, column: 7)
     )
     let registry = createTestRegistry()
 
@@ -6113,11 +6158,8 @@ suite "Handler - Visual mode text object selection":
     let buffer = newTextBuffer("hello world test")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 7) # On 'o' in "world"
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 7),
-      current: BufferPosition(line: 0, column: 7),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 7), BufferPosition(line: 0, column: 7)
     )
     let registry = createTestRegistry()
 
@@ -6137,11 +6179,8 @@ suite "Handler - Visual mode text object selection":
     let buffer = newTextBuffer("say \"hello world\" now")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 6) # Inside quotes
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 6),
-      current: BufferPosition(line: 0, column: 6),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 6), BufferPosition(line: 0, column: 6)
     )
     let registry = createTestRegistry()
 
@@ -6159,11 +6198,8 @@ suite "Handler - Visual mode text object selection":
     let buffer = newTextBuffer("if true {\nhello\nworld\n}")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0) # Inside braces
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 1, column: 0),
-      current: BufferPosition(line: 1, column: 0),
+    ctx.state.selectVisual(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 0)
     )
     let registry = createTestRegistry()
 
@@ -6186,11 +6222,8 @@ suite "Handler - Visual mode text object selection":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0)
     )
     let registry = createTestRegistry()
 
@@ -6202,11 +6235,8 @@ suite "Handler - Visual mode text object selection":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 0, column: 0),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0)
     )
     let registry = createTestRegistry()
 
@@ -6407,11 +6437,8 @@ suite "Multibyte character support":
     let buffer = newTextBuffer("あいう hello かきく")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 5) # On 'l' in "hello"
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 5),
-      current: BufferPosition(line: 0, column: 5),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 5), BufferPosition(line: 0, column: 5)
     )
     let registry = createTestRegistry()
 
@@ -6430,11 +6457,8 @@ suite "Multibyte character support":
     let buffer = newTextBuffer("関数 \"あいうえお\" 結果")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4) # Inside quotes
-    ctx.state.mode = EditorMode.Visual
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 4),
-      current: BufferPosition(line: 0, column: 4),
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 4), BufferPosition(line: 0, column: 4)
     )
     let registry = createTestRegistry()
 
@@ -8124,13 +8148,12 @@ suite "Change operator over a linewise range":
 
 suite "executeCommand - visual selections snapped by a closed fold":
   test "A in visual block enters Insert instead of doing nothing":
-    # Snapping the selection to the fold makes it line-shaped, so the mode has
-    # to follow -- a VisualBlock mode over a line selection used to make the
-    # handler fall through and leave the editor sitting in Visual mode.
+    # Snapping the selection to the fold makes it line-shaped, which has no
+    # block columns to append into, so `A` appends after its last line.
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 0, 1, 0, mode = EditorMode.VisualBlock, kind = vskBlock)
+    ctx.setupVisual(0, 0, 1, 0, kind = vskBlock)
     let registry = createTestRegistry()
 
     let cmd = Command(kind: ctCustom, commandId: "visual.block.append", count: 1)
@@ -8143,7 +8166,7 @@ suite "executeCommand - visual selections snapped by a closed fold":
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 0, 1, 0, mode = EditorMode.VisualBlock, kind = vskBlock)
+    ctx.setupVisual(0, 0, 1, 0, kind = vskBlock)
     let registry = createTestRegistry()
 
     let cmd = Command(kind: ctCustom, commandId: "visual.to.insert", count: 1)
@@ -8151,17 +8174,6 @@ suite "executeCommand - visual selections snapped by a closed fold":
     check ctx.state.mode == EditorMode.Insert
     check not ctx.state.visualSelection.active
     check ctx.state.cursor == BufferPosition(line: 0, column: 0)
-
-  test "the mode follows the selection kind when a fold snaps it":
-    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
-    check buffer.foldState.addFold(1, 3, collapsed = true)
-    let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 1, 1, 2, mode = EditorMode.Visual, kind = vskChar)
-    let registry = createTestRegistry()
-
-    let cmd = Command(kind: ctCustom, commandId: "visual.indent", count: 1)
-    check registry.executeCommand(ctx, cmd).isOk
-    check ctx.state.visualSelection.kind == vskLine
 
   test "visual yank covers the same lines visual delete would":
     # Yank changes nothing, so it sits outside the read-only gate -- but it still
@@ -8171,7 +8183,7 @@ suite "executeCommand - visual selections snapped by a closed fold":
       let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\ntail")
       check buffer.foldState.addFold(1, 3, collapsed = true)
       let ctx = createTestContext(buffer)
-      ctx.setupVisual(0, 0, 1, 0, mode = EditorMode.Visual, kind = vskChar)
+      ctx.setupVisual(0, 0, 1, 0)
       let registry = createTestRegistry()
 
       let cmd = Command(kind: ctCustom, commandId: "visual.yank", count: 1)
@@ -8184,7 +8196,7 @@ suite "executeCommand - visual selections snapped by a closed fold":
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\ntail")
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 0, 1, 0, mode = EditorMode.Visual, kind = vskChar)
+    ctx.setupVisual(0, 0, 1, 0)
     let registry = createTestRegistry()
 
     let cmd = Command(kind: ctCustom, commandId: "visual.delete", count: 1)
@@ -8192,6 +8204,39 @@ suite "executeCommand - visual selections snapped by a closed fold":
     check buffer.len == 1
     check buffer[0] == "tail"
     check yanked == ctx.state.registers.getNoNamedRegister().getContent()
+
+  test "a command that does nothing leaves the cursor where it was":
+    # The snap is how the command sees the selection; with nothing to paste `p`
+    # only leaves Visual, so the cursor stays where the user put it.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 1, 1, 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.paste", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 5
+    check ctx.state.mode == EditorMode.Normal
+    check ctx.state.cursor == BufferPosition(line: 1, column: 0)
+
+  test "a refused replace leaves the selection as it was":
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 1, 1, 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "visual-replace",
+      targetChar: "ab",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, cmd).isErr
+    check ctx.state.mode == EditorMode.Visual
+    check ctx.state.visualSelection.start == BufferPosition(line: 0, column: 1)
+    check ctx.state.cursor == BufferPosition(line: 1, column: 0)
 
 suite "executeCommand - cursor pinned on collapsed folds":
   test "horizontal motion is pinned on a collapsed fold start line":
@@ -8225,11 +8270,8 @@ suite "executeCommand - a visual selection covers closed folds whole":
     check buffer.foldState.addFold(2, 4, collapsed = true)
     let ctx = createTestContext(buffer)
     # Select lines 1..3, which reaches into the collapsed fold (2-4).
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 1, column: 0),
-      current: BufferPosition(line: 3, column: 0),
-      kind: vskChar,
+    ctx.state.selectVisual(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 3, column: 0)
     )
     ctx.state.mode = EditorMode.Visual
     let registry = createTestRegistry()
@@ -8247,11 +8289,8 @@ suite "executeCommand - a visual selection covers closed folds whole":
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
     check buffer.foldState.addFold(4, 6, collapsed = true) # below the selection
     let ctx = createTestContext(buffer)
-    ctx.state.visualSelection = VisualSelection(
-      active: true,
-      start: BufferPosition(line: 0, column: 0),
-      current: BufferPosition(line: 2, column: 0),
-      kind: vskChar,
+    ctx.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)
     )
     ctx.state.mode = EditorMode.Visual
     let registry = createTestRegistry()
@@ -8345,17 +8384,6 @@ suite "executeCommand - read-only gate allowlists stay in sync":
     for op in EditOperatorTypes:
       check op in ops
 
-  test "every VisualSnapOnlyCommandIds entry is a registered command":
-    let ids = registeredCommandIds()
-    for id in VisualSnapOnlyCommandIds:
-      check id in ids
-
-  test "a snap-only id is never also an edit id":
-    # The two lists drive different gates: everything in the snap-only list has
-    # to stay out of the read-only gate.
-    for id in VisualSnapOnlyCommandIds:
-      check id notin VisualEditCommandIds
-
   test "every VisualEditOperatorTypes entry is a registered operatorType":
     let ops = registeredOperatorTypes()
     for op in VisualEditOperatorTypes:
@@ -8393,12 +8421,12 @@ suite "executeCommand - read-only gate allowlists stay in sync":
       "visual.move.left", "visual.move.paragraph.backward",
       "visual.move.paragraph.forward", "visual.move.right", "visual.move.up",
       "visual.move.word", "visual.move.word.back", "visual.move.word.end",
-      "visual.move.word.end.backward", "visual.swap.selection",
+      "visual.move.word.end.backward", "visual.swap.selection", "visual.yank",
     ]
     for id in visualModeCommandIds():
       # EditCommandIds covers the cursor-edit ids also bound in visual modes.
-      check id in VisualEditCommandIds or id in VisualSnapOnlyCommandIds or
-        id in EditCommandIds or id in VisualNonEditCommandIds
+      check id in VisualEditCommandIds or id in EditCommandIds or
+        id in VisualNonEditCommandIds
 
 suite "executeCommand - count prefix respects handler maxArgs":
   # executeCommand prepends an explicit count to the handler args so commands

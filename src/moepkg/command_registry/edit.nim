@@ -24,7 +24,11 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[cursor_util, types, motion, modes, registers, logger, unicode_utils]
+import
+  ../[
+    cursor_util, types, motion, modes, registers, logger, unicode_utils,
+    visual_selection,
+  ]
 import ../buffer/[core, edit, fold, undo]
 
 import core, operator_engine
@@ -1982,7 +1986,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
             let line = ctx.cursor.line
             if line < 0 or line >= ctx.buffer.len:
               return err("Nothing to replace")
-            if ctx.buffer.foldState.touchesCollapsedFold(line, line):
+            if ctx.buffer.foldState.endsInCollapsedFold(line, line):
               let (snapLo, snapHi) = ctx.buffer.foldState.snapRangeToFolds(line, line)
               let txr = withTransaction(ctx.buffer, "repeat visual replace"):
                 let res = ctx.buffer.replaceWholeLines(
@@ -2022,9 +2026,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
           let (snapLo, snapHi) =
             ctx.buffer.foldState.snapRangeToFolds(firstLine, lastLine)
           let txr = withTransaction(ctx.buffer, "repeat visual replace"):
-            # Closed folds repeat whole, linewise. A fold the range merely
-            # contains does not widen it, so test for a touch, not a widening.
-            if ctx.buffer.foldState.touchesCollapsedFold(firstLine, lastLine):
+            # A closed fold at either end repeats whole, linewise. One the range
+            # ends exactly on does not widen it, so test the ends, not a widening.
+            if ctx.buffer.foldState.endsInCollapsedFold(firstLine, lastLine):
               let res = ctx.buffer.replaceWholeLines(
                 snapLo, snapHi, "replace characters", repFill
               )
@@ -2095,9 +2099,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
           let (snapLo, snapHi) =
             ctx.buffer.foldState.snapRangeToFolds(firstLine, lastLine)
           let txr = withTransaction(ctx.buffer, "repeat visual replace"):
-            # Closed folds repeat whole, linewise. A fold the range merely
-            # contains does not widen it, so test for a touch, not a widening.
-            if ctx.buffer.foldState.touchesCollapsedFold(firstLine, lastLine):
+            # A closed fold at either end repeats whole, linewise. One the range
+            # ends exactly on does not widen it, so test the ends, not a widening.
+            if ctx.buffer.foldState.endsInCollapsedFold(firstLine, lastLine):
               let res = ctx.buffer.replaceWholeLines(
                 snapLo, snapHi, "replace characters", repFill
               )
@@ -2399,10 +2403,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
             # the current selection untouched like vim.
             return ok(())
           # In Visual mode - update selection to text object range
-          ctx.state.visualSelection.start = toRange.start
-          ctx.state.visualSelection.current = toRange.endPos
-          ctx.state.visualSelection.active = true
-          ctx.cursor = toRange.endPos
+          ctx.state.selectVisualRange(toRange.start, toRange.endPos)
           return ok(())
         else:
           return err("Text objects require an operator or Visual mode"),
