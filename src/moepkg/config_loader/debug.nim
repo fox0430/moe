@@ -80,23 +80,23 @@ proc loadDebugConfig*(
     "JumpList", "Lsp",
   ]
   checkUnknownKeys(table, validKeys, "Debug", vr)
-  if table.hasKey("WindowNode"):
+  if expectTable(table, "WindowNode", vr, "Debug"):
     loadDebugWindowNodeConfig(table["WindowNode"].getTable(), config.windowNode, vr)
-  if table.hasKey("EditorView"):
+  if expectTable(table, "EditorView", vr, "Debug"):
     loadDebugEditorViewConfig(table["EditorView"].getTable(), config.editorView, vr)
-  if table.hasKey("BufferStatus"):
+  if expectTable(table, "BufferStatus", vr, "Debug"):
     loadDebugBufferStatusConfig(
       table["BufferStatus"].getTable(), config.bufferStatus, vr
     )
-  if table.hasKey("Search"):
+  if expectTable(table, "Search", vr, "Debug"):
     loadDebugSearchConfig(table["Search"].getTable(), config.search, vr)
-  if table.hasKey("MacroState"):
+  if expectTable(table, "MacroState", vr, "Debug"):
     loadDebugMacroConfig(table["MacroState"].getTable(), config.macroState, vr)
-  if table.hasKey("Visual"):
+  if expectTable(table, "Visual", vr, "Debug"):
     loadDebugVisualConfig(table["Visual"].getTable(), config.visual, vr)
-  if table.hasKey("JumpList"):
+  if expectTable(table, "JumpList", vr, "Debug"):
     loadDebugJumpListConfig(table["JumpList"].getTable(), config.jumpList, vr)
-  if table.hasKey("Lsp"):
+  if expectTable(table, "Lsp", vr, "Debug"):
     loadDebugLspConfig(table["Lsp"].getTable(), config.lsp, vr)
 
 # Serializer
