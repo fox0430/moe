@@ -2002,37 +2002,35 @@ suite "ConfigMode - Theme section":
     check state.items[pathIndex].stringValue(state.config) == cfg.theme.path
 
   test "Theme path string edit applies to config":
-    let cfg = newEditorConfig()
-    let state = newConfigModeState(cfg)
+    withTempHome(tmpHome):
+      let cfg = newEditorConfig()
+      let state = newConfigModeState(cfg)
 
-    var pathIndex = -1
-    for i, item in state.items:
-      if item.kind == cvkString and item.section == "Theme" and
-          item.displayName == "path":
-        pathIndex = i
-        break
+      var pathIndex = -1
+      for i, item in state.items:
+        if item.kind == cvkString and item.section == "Theme" and
+            item.displayName == "path":
+          pathIndex = i
+          break
 
-    check pathIndex >= 0
-    state.selectedIndex = pathIndex
+      check pathIndex >= 0
+      state.selectedIndex = pathIndex
 
-    # Test editing via startEdit/confirmEdit
-    state.startEdit()
-    check state.editMode == true
-    check state.editBuffer == cfg.theme.path
+      # Test editing via startEdit/confirmEdit
+      state.startEdit()
+      check state.editMode == true
+      check state.editBuffer == cfg.theme.path
 
-    # Use a writable temp path so initTheme's bootstrap can seed it and the
-    # revert-on-failure guard doesn't roll back a legitimate edit.
-    let tmpPath = getTempDir() / "moe_configmode_theme_test.toml"
-    defer:
-      try:
-        removeFile(tmpPath)
-      except OSError:
-        discard
-    state.editBuffer = tmpPath
-    state.editCursor = state.editBuffer.len
-    let result = state.confirmEdit(testEditorState(cfg))
-    check result == true
-    check cfg.theme.path == tmpPath
+      # Use a path inside the moe config dir so initTheme's bootstrap can
+      # seed it and the revert-on-failure guard doesn't roll back a
+      # legitimate edit. Paths outside the config dir are rejected.
+      let tmpPath =
+        tmpHome / ".config" / "moe" / "themes" / "moe_configmode_theme_test.toml"
+      state.editBuffer = tmpPath
+      state.editCursor = state.editBuffer.len
+      let result = state.confirmEdit(testEditorState(cfg))
+      check result == true
+      check cfg.theme.path == tmpPath
 
   test "Theme path is visible when kind is config":
     let cfg = newEditorConfig()
@@ -2108,9 +2106,9 @@ suite "ConfigMode - Theme section":
     check pathFound
 
   test "Theme change reverts on load failure and surfaces status":
-    # Point Theme.path at an unwritable location so initTheme's bootstrap
-    # (saveThemeToToml) fails; the write must roll cfg.theme back to the
-    # working baseline and reach statusMessage.
+    # Point Theme.path outside the moe config dir; the containment guard
+    # rejects it before any bootstrap write, and the edit must roll
+    # cfg.theme back to the working baseline and reach statusMessage.
     let workingPath = getTempDir() / "moe_configmode_theme_baseline.toml"
     defer:
       try:
@@ -2134,7 +2132,8 @@ suite "ConfigMode - Theme section":
     let editorState = testEditorState(cfg)
     editorState.statusMessage = ""
     state.selectedIndex = pathIndex
-    # /proc/1/... is unwritable for non-root — createDir fails, so bootstrap fails.
+    # /proc/1/... is outside the moe config dir, so the containment guard
+    # rejects it before any bootstrap write.
     state.setTextValue(editorState, pathIndex, "/proc/1/moe_theme_should_fail.toml")
 
     check cfg.theme.path == workingPath

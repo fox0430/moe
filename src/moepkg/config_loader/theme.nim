@@ -37,6 +37,40 @@ const ThemeConfigKeys* = ["kind", "path"]
 
 # [Theme] section loader (kind/path)
 
+proc moeThemeBaseDirs*(): seq[string] =
+  ## Dirs a theme file may be auto-created in (XDG dir + home fallback).
+  var bases: seq[string] = @[]
+  for raw in [getConfigDir() / "moe", getHomeDir() / ".config" / "moe"]:
+    try:
+      let norm = normalizedPath(absolutePath(raw))
+      if norm notin bases:
+        bases.add(norm)
+    except CatchableError:
+      discard
+  bases
+
+proc isThemePathAllowed*(path: string): bool =
+  ## True iff `path` resolves inside a moe config dir. Guards implicit
+  ## theme-file creation from crafted moerc paths; reads/overwrites stay
+  ## permissive.
+  if path.len == 0:
+    return false
+  let expanded =
+    try:
+      normalizedPath(absolutePath(expandTilde(path)))
+    except CatchableError:
+      return false
+  for base in moeThemeBaseDirs():
+    if expanded == base:
+      continue
+    # `relativePath` returns the input unchanged across drives/UNC roots,
+    # which `isRelativeTo` would misread as contained. Require a genuinely
+    # relative result without `..` escapes.
+    let rel = relativePath(expanded, base)
+    if rel.len > 0 and not rel.isAbsolute and not rel.startsWith "..":
+      return true
+  false
+
 proc loadThemeConfig*(
     table: TomlTableRef, config: var ThemeConfig, vr: var ValidationResult
 ) =
@@ -257,6 +291,11 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
   if config.theme.kind == tkConfig and config.theme.path.len > 0:
     let expandedPath = expandTilde(config.theme.path)
     if not fileExists(expandedPath):
+      if not isThemePathAllowed(config.theme.path):
+        vr.addError("Theme.path", config.theme.path, "theme file inside moe config dir")
+        initDefaultTheme()
+        themeColorsFromFile = false
+        return
       let saveResult = saveThemeToToml(DefaultColors, config.theme.path)
       if saveResult.isErr:
         vr.addError("Theme.path", config.theme.path, saveResult.error)

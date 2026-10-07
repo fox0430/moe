@@ -1848,56 +1848,66 @@ suite "Config - initTheme":
     initTheme(config)
 
   test "Bootstrap: missing tkConfig file is seeded with DefaultColors":
-    inc testFileCounter
-    let themeFile =
-      getTempDir() / "moe_test_inittheme_bootstrap_" & $testFileCounter & ".toml"
-    defer:
-      if fileExists(themeFile):
-        removeFile(themeFile)
+    withTempHome(tmpHome):
+      inc testFileCounter
+      let themeFile =
+        tmpHome / ".config" / "moe" / "themes" & "/moe_test_inittheme_bootstrap_" &
+        $testFileCounter & ".toml"
 
-    check not fileExists(themeFile)
+      check not fileExists(themeFile)
 
-    var config = newEditorConfig()
-    config.theme.kind = tkConfig
-    config.theme.path = themeFile
-    var vr = newValidationResult()
-    initTheme(config, vr)
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
+      var vr = newValidationResult()
+      initTheme(config, vr)
 
-    check not vr.hasErrors
-    check fileExists(themeFile)
-    check themeColorsFromFile
+      check not vr.hasErrors
+      check fileExists(themeFile)
+      check themeColorsFromFile
 
-    let loaded = loadThemeFromToml(themeFile)
-    check loaded.isOk
+      let loaded = loadThemeFromToml(themeFile)
+      check loaded.isOk
 
   test "Bootstrap failure (unwritable path) falls back to default":
-    inc testFileCounter
-    let notADir = getTempDir() / "moe_test_inittheme_boot_notadir_" & $testFileCounter
-    writeFile(notADir, "sentinel")
-    defer:
-      removeFile(notADir)
-    let themeFile = notADir / "theme.toml"
+    withTempHome(tmpHome):
+      inc testFileCounter
+      let notADir =
+        tmpHome / ".config" / "moe" / "themes" /
+        ("moe_test_inittheme_boot_notadir_" & $testFileCounter)
+      createDir(parentDir(notADir))
+      writeFile(notADir, "sentinel")
+      let themeFile = notADir / "theme.toml"
 
-    var config = newEditorConfig()
-    config.theme.kind = tkConfig
-    config.theme.path = themeFile
-    initTheme(config)
+      # Must pass containment so the save-failure branch is exercised.
+      check isThemePathAllowed(themeFile)
+
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
+      initTheme(config)
+      check not themeColorsFromFile
 
   test "Bootstrap failure (unwritable path) is reported in ValidationResult":
-    inc testFileCounter
-    let notADir = getTempDir() / "moe_test_inittheme_boot_report_" & $testFileCounter
-    writeFile(notADir, "sentinel")
-    defer:
-      removeFile(notADir)
-    let themeFile = notADir / "theme.toml"
+    withTempHome(tmpHome):
+      inc testFileCounter
+      let notADir =
+        tmpHome / ".config" / "moe" / "themes" /
+        ("moe_test_inittheme_boot_report_" & $testFileCounter)
+      createDir(parentDir(notADir))
+      writeFile(notADir, "sentinel")
+      let themeFile = notADir / "theme.toml"
 
-    var config = newEditorConfig()
-    config.theme.kind = tkConfig
-    config.theme.path = themeFile
-    var vr = newValidationResult()
-    initTheme(config, vr)
-    check vr.hasErrors
-    check vr.errors.anyIt("Theme.path" in it.name)
+      # Must pass containment so the save-failure branch is exercised.
+      check isThemePathAllowed(themeFile)
+
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
+      var vr = newValidationResult()
+      initTheme(config, vr)
+      check vr.hasErrors
+      check vr.errors.anyIt("Theme.path" in it.name)
 
   test "Invalid keys in theme file are reported via initTheme":
     inc testFileCounter
@@ -2760,29 +2770,30 @@ suite "Config - saveThemeToToml":
 
 suite "Config - saveConfigToToml saves theme file":
   test "Theme file is saved when kind is tkConfig with path":
-    inc testFileCounter
-    let configFile =
-      getTempDir() / "moe_test_save_cfg_theme_" & $testFileCounter & ".toml"
-    let themeFile =
-      getTempDir() / "moe_test_save_cfg_theme_colors_" & $testFileCounter & ".toml"
-    defer:
-      removeFile(configFile)
-      removeFile(themeFile)
+    withTempHome(tmpHome):
+      inc testFileCounter
+      let configFile =
+        tmpHome / ".config" / "moe" /
+        ("moe_test_save_cfg_theme_" & $testFileCounter & ".toml")
+      let themeFile =
+        tmpHome / ".config" / "moe" / "themes" /
+        ("moe_test_save_cfg_theme_colors_" & $testFileCounter & ".toml")
 
-    # Set up global themeColors
-    setThemeColors(DefaultColors)
+      # Set up global themeColors
+      setThemeColors(DefaultColors)
+      themeColorsFromFile = false
 
-    var config = newEditorConfig()
-    config.theme.kind = tkConfig
-    config.theme.path = themeFile
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
 
-    let result = saveConfigToToml(config, configFile)
-    check result.isOk
-    check fileExists(themeFile)
+      let result = saveConfigToToml(config, configFile)
+      check result.isOk
+      check fileExists(themeFile)
 
-    # Verify the theme file can be loaded
-    let loadResult = loadThemeFromToml(themeFile)
-    check loadResult.isOk
+      # Verify the theme file can be loaded
+      let loadResult = loadThemeFromToml(themeFile)
+      check loadResult.isOk
 
   test "Theme file is not saved when kind is tkDefault":
     inc testFileCounter
@@ -2850,19 +2861,180 @@ background = "#123456"
     check result.isOk
     check readFile(themeFile) == userThemeToml
 
-  test "Bootstrap: theme file is written when it doesn't exist yet":
+  test "Existing theme file outside config dir is overwritten when loaded":
+    # Containment blocks implicit creation only; once the theme file exists
+    # (e.g. it was loaded by initTheme), an explicit save must still
+    # overwrite it.
     inc testFileCounter
     let configFile =
-      getTempDir() / "moe_test_save_cfg_theme_bootstrap_" & $testFileCounter & ".toml"
+      getTempDir() / "moe_test_save_cfg_theme_found_" & $testFileCounter & ".toml"
     let themeFile =
-      getTempDir() / "moe_test_save_cfg_theme_bootstrap_colors_" & $testFileCounter &
-      ".toml"
+      getTempDir() / "moe_test_save_cfg_theme_found_colors_" & $testFileCounter & ".toml"
     defer:
       removeFile(configFile)
       if fileExists(themeFile):
         removeFile(themeFile)
+      if fileExists(themeFile & ".bac"):
+        removeFile(themeFile & ".bac")
 
+    let userThemeToml = """
+[Colors]
+foreground = "#abcdef"
+background = "#123456"
+"""
+    writeFile(themeFile, userThemeToml)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+
+    # A successful load makes `themeColorsFromFile` true, so the save below
+    # takes the overwrite branch for the pre-existing file.
+    initTheme(config)
+    check themeColorsFromFile
+
+    setThemeColors(DefaultColors)
+
+    let result = saveConfigToToml(config, configFile)
+    check result.isOk
+    check readFile(themeFile) != userThemeToml
+    check loadThemeFromToml(themeFile).isOk
+
+  test "Bootstrap: theme file is written when it doesn't exist yet":
+    withTempHome(tmpHome):
+      inc testFileCounter
+      let configFile =
+        tmpHome / ".config" / "moe" /
+        ("moe_test_save_cfg_theme_bootstrap_" & $testFileCounter & ".toml")
+      let themeFile =
+        tmpHome / ".config" / "moe" / "themes" /
+        ("moe_test_save_cfg_theme_bootstrap_colors_" & $testFileCounter & ".toml")
+
+      check not fileExists(themeFile)
+
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
+
+      setThemeColors(DefaultColors)
+      themeColorsFromFile = false
+
+      let result = saveConfigToToml(config, configFile)
+      check result.isOk
+      check fileExists(themeFile)
+      check loadThemeFromToml(themeFile).isOk
+
+suite "Config - Theme path containment (regression)":
+  test "isThemePathAllowed accepts only files inside moe config dir":
+    withTempHome(tmpHome):
+      let inside = tmpHome / ".config" / "moe" / "themes" / "dark.toml"
+      check isThemePathAllowed(inside)
+      check not isThemePathAllowed("")
+      check not isThemePathAllowed(getTempDir() / "moe_escape.toml")
+      check not isThemePathAllowed(
+        tmpHome / ".config" / "moe" / "themes" / ".." / ".." / "evil.toml"
+      )
+      # The base dir itself is not a theme file.
+      check not isThemePathAllowed(tmpHome / ".config" / "moe")
+
+  when defined(windows):
+    test "isThemePathAllowed rejects paths on another root":
+      # `relativePath` cannot relate these to the config dir (different
+      # drive / UNC root), so containment must not accept them through
+      # its unchanged-absolute fallback.
+      check not isThemePathAllowed("Q:/moe_theme_escape/theme.toml")
+      check not isThemePathAllowed("\\moe_theme_escape\\theme.toml")
+      check not isThemePathAllowed("\\\\moe-test\\share\\theme.toml")
+
+  test "Theme files under XDG_CONFIG_HOME are allowed and bootstrapped":
+    withTempHome(tmpHome):
+      let xdgDir = tmpHome / "xdg"
+      let origXdg = getEnv("XDG_CONFIG_HOME")
+      putEnv("XDG_CONFIG_HOME", xdgDir)
+      defer:
+        if origXdg.len > 0:
+          putEnv("XDG_CONFIG_HOME", origXdg)
+        else:
+          delEnv("XDG_CONFIG_HOME")
+
+      let themeFile = xdgDir / "moe" / "themes" / "dark.toml"
+      check isThemePathAllowed(themeFile)
+
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
+      var vr = newValidationResult()
+      initTheme(config, vr)
+
+      check not vr.hasErrors
+      check fileExists(themeFile)
+      check themeColorsFromFile
+
+  test "initTheme does not create dirs/files outside config dir (absolute)":
+    inc testFileCounter
+    let baseDir = getTempDir() / "moe_test_theme_escape_" & $testFileCounter
+    let themeFile = baseDir / "subdir" / "theme.toml"
+    defer:
+      if dirExists(baseDir):
+        removeDir(baseDir)
+
+    check not dirExists(baseDir)
+
+    # Seed a non-default theme so the fallback to DefaultColors is observable.
+    var seededColors = DefaultColors
+    seededColors[EditorColorPairIndex.keyword].foreground =
+      ThemeColor(rgb: Rgb(red: 0x12, green: 0x34, blue: 0x56))
+    setThemeColors(seededColors)
+    check themeColors != DefaultColors
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+    var vr = newValidationResult()
+    initTheme(config, vr)
+
+    check vr.hasErrors
+    check vr.errors.anyIt("Theme.path" in it.name)
+    check not dirExists(baseDir)
     check not fileExists(themeFile)
+    check not themeColorsFromFile
+    check themeColors == DefaultColors
+
+  test "initTheme does not create via ../ traversal":
+    withTempHome(tmpHome):
+      inc testFileCounter
+      let themeFile =
+        tmpHome / ".config" / "moe" / "themes" / ".." / ".." /
+        ("evil_" & $testFileCounter & ".toml")
+      let resolved = normalizedPath(absolutePath(expandTilde(themeFile)))
+
+      check not isThemePathAllowed(themeFile)
+      check not fileExists(resolved)
+
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
+      var vr = newValidationResult()
+      initTheme(config, vr)
+
+      check vr.hasErrors
+      check vr.errors.anyIt("Theme.path" in it.name)
+      check not fileExists(resolved)
+      check not themeColorsFromFile
+
+  test "saveConfigToToml does not bootstrap outside config dir":
+    inc testFileCounter
+    let configFile =
+      getTempDir() / "moe_test_save_cfg_escape_" & $testFileCounter & ".toml"
+    let baseDir = getTempDir() / "moe_test_save_theme_escape_" & $testFileCounter
+    let themeFile = baseDir / "subdir" / "theme.toml"
+    defer:
+      if fileExists(configFile):
+        removeFile(configFile)
+      if dirExists(baseDir):
+        removeDir(baseDir)
+
+    check not dirExists(baseDir)
 
     var config = newEditorConfig()
     config.theme.kind = tkConfig
@@ -2872,9 +3044,12 @@ background = "#123456"
     themeColorsFromFile = false
 
     let result = saveConfigToToml(config, configFile)
-    check result.isOk
-    check fileExists(themeFile)
-    check loadThemeFromToml(themeFile).isOk
+    check result.isErr
+    # The rejection happens before any write, so neither the config file
+    # nor the theme file may be left behind.
+    check not fileExists(configFile)
+    check not dirExists(baseDir)
+    check not fileExists(themeFile)
 
 suite "Config Validation - KeyMapping section":
   test "Normal key mappings":

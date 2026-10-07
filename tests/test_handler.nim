@@ -2754,14 +2754,10 @@ suite "handleCommandModeEvent - :putconfigfile":
       check fileExists(backupPath)
 
   test "Theme file saved when kind is tkConfig":
-    var themeFileCounter {.global.} = 0
-    inc themeFileCounter
-    let themeFile =
-      getTempDir() / "moe_test_putconfigfile_theme_" & $themeFileCounter & ".toml"
-    defer:
-      removeFile(themeFile)
-
     withTempHome(tmpDir):
+      let themeFile =
+        tmpDir / ".config" / "moe" / "themes" / "moe_test_putconfigfile_theme.toml"
+
       let e = createTestEditorWithBuffer("hello")
       e.config.theme.kind = tkConfig
       e.config.theme.path = themeFile
