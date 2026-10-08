@@ -21,20 +21,13 @@ import std/[unittest, options, os, tables]
 
 import pkg/results
 
-import ../src/moepkg/editor
-import ../src/moepkg/window_manager
+import
+  ../src/moepkg/[
+    editor, window_manager, editor_window_state, path_key, config, types, buffer, modes,
+    help_viewer, filer, backup_manager, diff_viewer, render_utils,
+  ]
 import ../src/moepkg/editor_window {.all.}
-import ../src/moepkg/editor_window_state
-import ../src/moepkg/config
-import ../src/moepkg/types
-import ../src/moepkg/buffer
-import ../src/moepkg/modes
-import ../src/moepkg/help_viewer
-import ../src/moepkg/filer
-import ../src/moepkg/backup_manager
 import visual_test_helper
-import ../src/moepkg/diff_viewer
-import ../src/moepkg/render_utils
 
 # Helper to create a minimal Editor for testing
 proc createTestEditor(): Editor =
@@ -829,7 +822,7 @@ indent_size = 4
     e.state.showGitDiff = false
     e.config.persist.bookmarks = true
     let testFile = getTempDir() / "moe_split_bookmark.txt"
-    e.savedBookmarks[absolutePath(testFile)] = @[2]
+    e.persistedBookmarks.changes[pathKey(testFile)] = @[2]
     let newBuffer = newTextBuffer("a\nb\nc\n", some(testFile))
 
     e.registerSplitBuffer(newBuffer, applyConfig = true, context = "test")
@@ -842,7 +835,7 @@ indent_size = 4
     let e = createTestEditor()
     e.config.persist.bookmarks = true
     let testFile = getTempDir() / "moe_split_noinit.txt"
-    e.savedBookmarks[absolutePath(testFile)] = @[1]
+    e.persistedBookmarks.changes[pathKey(testFile)] = @[1]
     let newBuffer = newTextBuffer(conflictContent, some(testFile))
 
     e.registerSplitBuffer(newBuffer, applyConfig = false, context = "test")

@@ -19,11 +19,24 @@
 
 ## Lightweight type definitions for editor persistence entries.
 ##
-## Split out from `persist` so modules that only need `CursorPositionEntry`
-## (notably `types/editor_types` for the `Editor.cursorPositions` field) do not
+## Split out from `persist` so modules that only need these types (notably
+## `types/editor_types` for the `Editor.persisted*` fields) do not
 ## transitively pull in the JSON / appdirs / file I/O of the full `persist`
 ## module. The save/load procs stay in `persist`.
+
+import std/tables
 
 type CursorPositionEntry* = object
   line*: int
   column*: int
+
+type PersistedRecords*[T] = object
+  ## Per-file records kept across sessions, keyed by `pathKey`. Saving merges
+  ## `changes` into the file as it is then, so other sessions' entries survive.
+  changes*: Table[string, T] ## This session's writes, merged on save.
+  restored*: Table[string, T]
+    ## The value each path was last opened with. A value equal to it is not a
+    ## change, so it never overwrites what another session saved since.
+  unreadableReported*: bool
+    ## Whether the user was told the file cannot be read. Saving skips such a
+    ## file, so it is reported once rather than lost silently.

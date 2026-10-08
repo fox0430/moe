@@ -73,8 +73,8 @@ type
       ## never mutate directly.
     config*: EditorConfig
     lsp*: LspIntegration
-    cursorPositions*: Table[string, CursorPositionEntry]
-    savedBookmarks*: Table[string, seq[int]]
+    persistedCursorPositions*: PersistedRecords[CursorPositionEntry]
+    persistedBookmarks*: PersistedRecords[seq[int]]
     recovery*: Option[RecoveryIndex]
       ## What a crash preserved, as this editor last read it. Only `main` sets
       ## it, so an editor a test builds never reads the user's cache.

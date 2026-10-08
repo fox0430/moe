@@ -27,7 +27,7 @@ import
   ../src/moepkg/
     [editor, config, config_loader, types, lsp_service, terminal_mode, modes]
 import ../src/moepkg/buffer/core
-import ../src/moepkg/editor_navigation
+import ../src/moepkg/[editor_navigation, path_key]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
@@ -363,7 +363,7 @@ suite "editor_navigation - openFileInActiveWindow per-buffer setup":
     writeFile(testFile, "a\nb\nc\n")
     defer:
       removeFile(testFile)
-    e.savedBookmarks[absolutePath(testFile)] = @[2]
+    e.persistedBookmarks.changes[pathKey(testFile)] = @[2]
 
     let opened = e.openFileInActiveWindow(testFile)
 
@@ -397,7 +397,7 @@ suite "editor_navigation - openFileInActiveWindow per-buffer setup":
     let first = e.openFileInActiveWindow(testFile)
     check first.isOk
     first.get.bookmarks = @[1]
-    e.savedBookmarks[absolutePath(testFile)] = @[2]
+    e.persistedBookmarks.changes[pathKey(testFile)] = @[2]
 
     let second = e.openFileInActiveWindow(testFile)
 

@@ -19,7 +19,7 @@
 
 ## File operation procedures (load, save, auto-save, auto-backup)
 
-import std/[options, strformat, os, monotimes, times, tables, strutils]
+import std/[options, strformat, os, monotimes, times, tables, strutils, sequtils]
 
 import pkg/results
 
@@ -38,6 +38,7 @@ import
   highlight,
   highlight_config,
   persist,
+  editor_persist,
   buffer,
   lsp_integration,
   quick_run_utils,
@@ -96,26 +97,33 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Restore cursor position if persisted, otherwise reset to file start
   # Don't restore for temporary git files
-  let absPath = absolutePath(path)
-  if e.config.persist.cursorPosition and
-      isPersistCursorPositionFile(e.activeBuffer.language) and
-      e.cursorPositions.hasKey(absPath):
-    let savedPos = e.cursorPositions[absPath]
+  let persistCursor =
+    e.config.persist.cursorPosition and
+    isPersistCursorPositionFile(e.activeBuffer.language)
+  let savedPos =
+    if persistCursor:
+      e.savedCursorPosition(pathKey(path))
+    else:
+      none(CursorPositionEntry)
+  if savedPos.isSome:
+    let pos = savedPos.get
     # Ensure cursor position is within buffer bounds
-    let line = min(savedPos.line, max(0, e.activeBuffer.len - 1))
+    let line = min(pos.line, max(0, e.activeBuffer.len - 1))
     let col =
       if line < e.activeBuffer.len:
-        min(savedPos.column, max(0, e.activeBuffer.getLine(line).charLen - 1))
+        min(pos.column, max(0, e.activeBuffer.getLine(line).charLen - 1))
       else:
         0
     e.cursor = BufferPosition(line: line, column: col)
     logDebug("editor", fmt"Restored cursor position for {path}: line={line}, col={col}")
   else:
     e.cursor = BufferPosition(line: 0, column: 0)
+  if persistCursor:
+    e.persistedCursorPositions.markRestored(
+      pathKey(path), CursorPositionEntry(line: e.cursor.line, column: e.cursor.column)
+    )
 
-  # Restore bookmarks if persisted
-  if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
-    e.activeBuffer.bookmarks = e.savedBookmarks[absPath]
+  e.restoreBookmarks(e.activeBuffer)
 
   # Reset viewport to start (will be adjusted by motion controller)
   e.viewport.resetViewportTop()
@@ -140,16 +148,18 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   ok(())
 
 proc saveBufferCursorPosition*(e: Editor, buffer: TextBuffer) =
-  ## Save cursor position for a buffer if persist.cursorPosition is enabled
+  ## Record the cursor position in `buffer` for the next save if
+  ## persist.cursorPosition is enabled
   if not e.config.persist.cursorPosition:
     return
   if buffer.filePath.isNone:
     return
   if not isPersistCursorPositionFile(buffer.language):
     return
-  let absPath = absolutePath(buffer.filePath.get)
-  e.cursorPositions[absPath] =
-    CursorPositionEntry(line: e.cursor.line, column: e.cursor.column)
+  e.persistedCursorPositions.record(
+    pathKey(buffer.filePath.get),
+    CursorPositionEntry(line: e.cursor.line, column: e.cursor.column),
+  )
 
 proc addCommandToHistory*(e: Editor, command: string) =
   ## Add a command to the command history
@@ -167,7 +177,7 @@ proc addCommandToHistory*(e: Editor, command: string) =
   if e.state.input.commandState.history.len > limit:
     e.state.input.commandState.history.setLen(limit)
 
-proc savePersistData*(e: Editor) =
+proc savePersistData*(e: Editor) {.raises: [].} =
   ## Save all persist data (search history, command history, cursor positions)
   ## Called on shutdown
 
@@ -192,30 +202,20 @@ proc savePersistData*(e: Editor) =
     # Save current buffer's cursor position first
     let activeBuffer = e.activeBuffer()
     e.saveBufferCursorPosition(activeBuffer)
-    # Save all positions
-    let r = saveCursorPositions(e.cursorPositions)
+    let r = updateCursorPositions(
+      e.persistedCursorPositions.changes, e.persistedCursorPositions.restored.keys.toSeq
+    )
     if r.isErr:
       logError("editor", "Failed to save cursor positions: " & r.error)
 
   if e.config.persist.bookmarks:
-    # Save bookmarks
-    var allBookmarks = initTable[string, seq[int]]()
     for buf in e.buffers:
-      if buf.filePath.isSome and buf.bookmarks.len > 0:
-        let absPath = absolutePath(buf.filePath.get)
-        allBookmarks[absPath] = buf.bookmarks
-    if allBookmarks.len > 0:
-      let r = saveBookmarks(allBookmarks)
-      if r.isErr:
-        logError("editor", "Failed to save bookmarks: " & r.error)
-    else:
-      # Remove the file if no bookmarks exist
-      let bmPath = getBookmarksPath()
-      if bmPath.isOk and fileExists(bmPath.get.string):
-        try:
-          removeFile(bmPath.get.string)
-        except CatchableError as ex:
-          logError("editor", "Failed to remove empty bookmark file: " & ex.msg)
+      e.rememberBookmarks(buf)
+    let r = updateBookmarks(
+      e.persistedBookmarks.changes, e.persistedBookmarks.restored.keys.toSeq
+    )
+    if r.isErr:
+      logError("editor", "Failed to save bookmarks: " & r.error)
 
 proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer): Result[(), string] =
   # Skip for read-only and raw buffers (trim may corrupt raw bytes).

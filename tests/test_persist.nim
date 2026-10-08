@@ -17,11 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, tables, json, options, strutils]
+import std/[unittest, os, tables, json, strutils]
 import pkg/results
 import ../src/moepkg/persist
 
 let TestPersistDir = getTempDir() / "moe_test_persist"
+let TestCacheHome = getTempDir() / "moe_test_persist_cache"
+putEnv("XDG_CACHE_HOME", TestCacheHome)
 
 proc cleanupTestDir() =
   if dirExists(TestPersistDir):
@@ -155,9 +157,10 @@ suite "persist - saveCursorPositions and loadCursorPositions":
     check loaded["/home/user/file2.txt"].column == 20
 
   test "Load empty positions from non-existent file":
+    removeDir(TestCacheHome)
     let loaded = loadCursorPositions()
-    # Should return empty table if file doesn't exist
-    check loaded.len >= 0
+    check loaded.isOk
+    check loaded.get.len == 0
 
   test "Save empty cursor positions":
     let posPath = TestPersistDir / "cursor_positions_empty.json"
@@ -175,65 +178,6 @@ suite "persist - saveCursorPositions and loadCursorPositions":
 
     check jsonNode.kind == JObject
     check jsonNode.len == 0
-
-suite "persist - getCursorPosition":
-  test "Get existing cursor position":
-    var positions = initTable[string, CursorPositionEntry]()
-    let testPath = getCurrentDir() / "testfile.txt"
-    positions[testPath] = CursorPositionEntry(line: 42, column: 10)
-
-    let result = getCursorPosition(positions, "testfile.txt")
-
-    check result.isSome
-    check result.get().line == 42
-    check result.get().column == 10
-
-  test "Get non-existent cursor position":
-    let positions = initTable[string, CursorPositionEntry]()
-
-    let result = getCursorPosition(positions, "/nonexistent/file.txt")
-
-    check result.isNone
-
-  test "Get cursor position with absolute path":
-    var positions = initTable[string, CursorPositionEntry]()
-    positions["/home/user/myfile.nim"] = CursorPositionEntry(line: 100, column: 25)
-
-    let result = getCursorPosition(positions, "/home/user/myfile.nim")
-
-    check result.isSome
-    check result.get().line == 100
-    check result.get().column == 25
-
-suite "persist - setCursorPosition":
-  test "Set cursor position for new file":
-    var positions = initTable[string, CursorPositionEntry]()
-    let testPath = getCurrentDir() / "newfile.txt"
-
-    setCursorPosition(positions, "newfile.txt", 50, 15)
-
-    check positions.hasKey(testPath)
-    check positions[testPath].line == 50
-    check positions[testPath].column == 15
-
-  test "Update existing cursor position":
-    var positions = initTable[string, CursorPositionEntry]()
-    let testPath = getCurrentDir() / "existing.txt"
-    positions[testPath] = CursorPositionEntry(line: 10, column: 5)
-
-    setCursorPosition(positions, "existing.txt", 200, 30)
-
-    check positions[testPath].line == 200
-    check positions[testPath].column == 30
-
-  test "Set cursor position with absolute path":
-    var positions = initTable[string, CursorPositionEntry]()
-
-    setCursorPosition(positions, "/absolute/path/file.txt", 75, 12)
-
-    check positions.hasKey("/absolute/path/file.txt")
-    check positions["/absolute/path/file.txt"].line == 75
-    check positions["/absolute/path/file.txt"].column == 12
 
 suite "persist - command history integration":
   setup:
@@ -380,8 +324,10 @@ suite "persist - saveBookmarks and loadBookmarks":
     check loaded["/home/user/file2.nim"] == @[0, 100]
 
   test "Load bookmarks from non-existent file returns empty":
+    removeDir(TestCacheHome)
     let loaded = loadBookmarks()
-    check loaded.len >= 0
+    check loaded.isOk
+    check loaded.get.len == 0
 
   test "Save empty bookmarks":
     let bmPath = TestPersistDir / "bookmarks_empty.json"
@@ -423,90 +369,135 @@ suite "persist - saveBookmarks and loadBookmarks":
     check jsonNode["/path/to/file.nim"][1].getInt() == 5
     check jsonNode["/path/to/file.nim"][2].getInt() == 10
 
-suite "persist - saveBookmarks and loadBookmarks (actual functions)":
-  test "saveBookmarks and loadBookmarks roundtrip":
+suite "persist - updateBookmarks and loadBookmarks":
+  setup:
+    removeDir(TestCacheHome)
+
+  teardown:
+    removeDir(TestCacheHome)
+
+  proc writeBookmarksFile(content: string) =
+    let bmPath = getBookmarksPath().get.string
+    createDir(bmPath.parentDir)
+    writeFile(bmPath, content)
+
+  test "updateBookmarks and loadBookmarks roundtrip":
     var bookmarks = initTable[string, seq[int]]()
     bookmarks["/home/user/file1.nim"] = @[5, 10, 25]
     bookmarks["/home/user/file2.nim"] = @[0, 100]
 
-    let r = saveBookmarks(bookmarks)
-    check r.isOk
+    check updateBookmarks(bookmarks).isOk
 
     let loaded = loadBookmarks()
-    check loaded.len == 2
-    check loaded["/home/user/file1.nim"] == @[5, 10, 25]
-    check loaded["/home/user/file2.nim"] == @[0, 100]
+    check loaded.isOk
+    check loaded.get.len == 2
+    check loaded.get["/home/user/file1.nim"] == @[5, 10, 25]
+    check loaded.get["/home/user/file2.nim"] == @[0, 100]
 
-  test "saveBookmarks overwrites previous data":
-    var bookmarks1 = initTable[string, seq[int]]()
-    bookmarks1["/file.nim"] = @[1, 2, 3]
-    check saveBookmarks(bookmarks1).isOk
-
-    var bookmarks2 = initTable[string, seq[int]]()
-    bookmarks2["/other.nim"] = @[10]
-    check saveBookmarks(bookmarks2).isOk
+  test "updateBookmarks keeps entries it does not change":
+    check updateBookmarks({"/file.nim": @[1, 2, 3]}.toTable).isOk
+    check updateBookmarks({"/other.nim": @[10]}.toTable).isOk
 
     let loaded = loadBookmarks()
-    check loaded.len == 1
-    check loaded.hasKey("/other.nim")
-    check not loaded.hasKey("/file.nim")
+    check loaded.isOk
+    check loaded.get.len == 2
+    check loaded.get["/file.nim"] == @[1, 2, 3]
+    check loaded.get["/other.nim"] == @[10]
 
-  test "saveBookmarks skips entries with empty bookmark list":
-    var bookmarks = initTable[string, seq[int]]()
-    bookmarks["/file1.nim"] = @[1]
-    bookmarks["/file2.nim"] = @[]
-    check saveBookmarks(bookmarks).isOk
+  test "An empty list removes the entry":
+    check updateBookmarks({"/file1.nim": @[1], "/file2.nim": @[2]}.toTable).isOk
+    check updateBookmarks({"/file2.nim": newSeq[int]()}.toTable).isOk
 
     let loaded = loadBookmarks()
-    check loaded.len == 1
-    check loaded.hasKey("/file1.nim")
-    check not loaded.hasKey("/file2.nim")
+    check loaded.isOk
+    check loaded.get.len == 1
+    check loaded.get.hasKey("/file1.nim")
+
+  test "Removing the last entry removes the file":
+    check updateBookmarks({"/file.nim": @[1]}.toTable).isOk
+    check updateBookmarks({"/file.nim": newSeq[int]()}.toTable).isOk
+
+    check not fileExists(getBookmarksPath().get.string)
+
+  test "updateBookmarks keeps changes ahead of the file's oldest entries":
+    var old = initTable[string, seq[int]]()
+    for i in 0 ..< MaxRecordedFiles:
+      old["/old/" & $i & ".nim"] = @[i]
+    check updateBookmarks(old).isOk
+
+    check updateBookmarks({"/new.nim": @[1]}.toTable, ["/old/7.nim"]).isOk
+
+    let loaded = loadBookmarks().get
+    check loaded.len == MaxRecordedFiles
+    check loaded["/new.nim"] == @[1]
+    check loaded["/old/7.nim"] == @[7]
+
+  test "updateBookmarks refuses to replace an unreadable file":
+    writeBookmarksFile("not valid json {{{")
+
+    check updateBookmarks({"/file.nim": @[1]}.toTable).isErr
+    check readFile(getBookmarksPath().get.string) == "not valid json {{{"
+
+  test "loadBookmarks normalizes keys":
+    writeBookmarksFile("""{"/dir/./sub/../file.nim": [1]}""")
+
+    let loaded = loadBookmarks()
+    check loaded.isOk
+    check loaded.get["/dir/file.nim"] == @[1]
 
   test "loadBookmarks ignores negative line numbers":
-    let bmPath = getBookmarksPath()
-    check bmPath.isOk
-    let jsonStr = """{"file.nim": [5, -1, 10, -100, 0]}"""
-    writeFile(bmPath.get.string, jsonStr)
+    writeBookmarksFile("""{"/file.nim": [5, -1, 10, -100, 0]}""")
 
     let loaded = loadBookmarks()
-    check loaded.len == 1
-    check loaded["file.nim"] == @[5, 10, 0]
+    check loaded.isOk
+    check loaded.get["/file.nim"] == @[0, 5, 10]
 
-  test "loadBookmarks handles corrupt JSON gracefully":
-    let bmPath = getBookmarksPath()
-    check bmPath.isOk
-    writeFile(bmPath.get.string, "not valid json {{{")
+  test "loadBookmarks sorts and deduplicates lines":
+    writeBookmarksFile("""{"/file.nim": [7, 2, 7, 2]}""")
 
     let loaded = loadBookmarks()
-    check loaded.len == 0
+    check loaded.isOk
+    check loaded.get["/file.nim"] == @[2, 7]
 
-  test "loadBookmarks handles wrong JSON types gracefully":
-    let bmPath = getBookmarksPath()
-    check bmPath.isOk
-    let jsonStr = """{"file.nim": "not an array", "file2.nim": [1, "str", 3]}"""
-    writeFile(bmPath.get.string, jsonStr)
+  test "loadCursorPositions skips negative or non-integer positions":
+    let posPath = getCursorPositionsPath().get.string
+    createDir(posPath.parentDir)
+    writeFile(
+      posPath,
+      """{"/a.nim": {"line": -1, "column": 0}, "/b.nim": {"line": "3", "column": 0},""" &
+        """ "/c.nim": {"line": 4, "column": 1}}""",
+    )
+
+    let loaded = loadCursorPositions()
+    check loaded.isOk
+    check "/a.nim" notin loaded.get
+    check "/b.nim" notin loaded.get
+    check loaded.get["/c.nim"] == CursorPositionEntry(line: 4, column: 1)
+
+  test "loadBookmarks reports corrupt JSON":
+    writeBookmarksFile("not valid json {{{")
+
+    check loadBookmarks().isErr
+
+  test "loadBookmarks skips entries of the wrong type":
+    writeBookmarksFile("""{"/file.nim": "not an array", "/file2.nim": [1, "str", 3]}""")
 
     let loaded = loadBookmarks()
-    # "file.nim" skipped (not an array)
-    # "file2.nim" has [1, 3] (non-int "str" skipped)
-    check loaded.len == 1
-    check loaded["file2.nim"] == @[1, 3]
+    check loaded.isOk
+    check loaded.get.len == 1
+    check loaded.get["/file2.nim"] == @[1, 3]
 
   test "loadBookmarks handles empty JSON object":
-    let bmPath = getBookmarksPath()
-    check bmPath.isOk
-    writeFile(bmPath.get.string, "{}")
+    writeBookmarksFile("{}")
 
     let loaded = loadBookmarks()
-    check loaded.len == 0
+    check loaded.isOk
+    check loaded.get.len == 0
 
-  test "loadBookmarks handles JSON array at top level":
-    let bmPath = getBookmarksPath()
-    check bmPath.isOk
-    writeFile(bmPath.get.string, "[1, 2, 3]")
+  test "loadBookmarks reports a JSON array at top level":
+    writeBookmarksFile("[1, 2, 3]")
 
-    let loaded = loadBookmarks()
-    check loaded.len == 0
+    check loadBookmarks().isErr
 
 suite "persist - default limits":
   test "DefaultCommandHistoryLimit is reasonable":
