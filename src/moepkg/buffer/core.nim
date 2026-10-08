@@ -19,7 +19,7 @@
 
 ## Core buffer types: TextBuffer, BufferChange, FoldState, and supporting enums.
 
-from std/strutils import rfind, contains
+from std/strutils import contains
 
 import std/[algorithm, deques, hashes, options, os, tables, times, unicode]
 
@@ -1368,44 +1368,34 @@ proc moveLastVisualEnds*(b: TextBuffer, start, cursor: Option[BufferPosition]) =
     if cursor.isSome:
       b.lastVisual.get.cursor = cursor.get
 
-func acrossLineBreak(
-    change: BufferChange, pos: BufferPosition
+type JoinSpan = object
+  first: BufferPosition ## where the join starts
+  joinedLine: int ## the line pulled up onto `first.line`
+
+func joinSpan(change: BufferChange): Option[JoinSpan] =
+  ## The lines `change` joins, none when it joins none. A split moves no
+  ## column, as in Vim; `joinLines` moves marks itself, as its trim shifts them.
+  if change.kind == ckDeleteRange:
+    let joinedLine = change.deleteEndPos.line + ord(change.deleteJoinedNextLine)
+    if joinedLine > change.deleteStartPos.line:
+      return some(JoinSpan(first: change.deleteStartPos, joinedLine: joinedLine))
+
+func acrossJoin(
+    span: JoinSpan, pos: BufferPosition, keepDropped: bool
 ): Option[BufferPosition] =
-  ## Where `pos` lands when `change` splits its line or joins it to another;
-  ## none when its row only moves whole.
-  case change.kind
-  of ckInsertText:
-    # With nothing after the break, as for `o`, no text moves down to follow.
-    let rows = countNewlines(change.insertText)
-    if rows > 0 and change.insertSplitTailLen > 0 and pos.line == change.insertPos.line and
-        pos.column >= change.insertPos.column:
-      let tailColumn =
-        change.insertText[change.insertText.rfind('\n') + 1 .. ^1].charLen
-      return some(
-        BufferPosition(
-          line: pos.line + rows,
-          column: tailColumn + pos.column - change.insertPos.column,
-        )
-      )
-  of ckDeleteRange:
-    let
-      first = change.deleteStartPos
-      last = change.deleteEndPos
-      joined = change.deleteJoinedNextLine
-    if (first.line == last.line and not joined) or pos < first:
-      return
-    if joined and pos.line == last.line + 1:
-      return some(BufferPosition(line: first.line, column: first.column + pos.column))
-    if not joined and pos.line == last.line and pos.column > last.column:
-      return some(
-        BufferPosition(
-          line: first.line, column: first.column + pos.column - last.column - 1
-        )
-      )
-    if pos.line <= last.line:
-      return some(first)
-  else:
-    discard
+  ## Where `pos` lands across the join, as Vim's mark_col_adjust puts it: one
+  ## on the joined line moves right by the join column, even over text deleted
+  ## from that line's start. One on a dropped line moves the same way when
+  ## `keepDropped`, else is left to the row callbacks. Not clamped, as in Vim.
+  ## none when `pos` is outside the join.
+  if pos < span.first or pos.line > span.joinedLine:
+    return
+  if pos.line == span.first.line:
+    return some(pos)
+  if pos.line == span.joinedLine or keepDropped:
+    return some(
+      BufferPosition(line: span.first.line, column: span.first.column + pos.column)
+    )
 
 proc insert[T](x: var seq[T], v: T, i, count: int) =
   ## `count` copies of `v` at `i`, tail moved once. Plain-seq twin of the
@@ -2001,51 +1991,18 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
     foldsBefore = b.foldState
     bookmarksBefore = b.bookmarks
   b.emitRowColRemapEvents(change)
-  # Row callbacks cannot express a split/merge column. Preserve exact marks
-  # in the surviving tail using the original edit coordinates.
-  if change.kind == ckInsertText and countNewlines(change.insertText) > 0:
-    let
-      rows = countNewlines(change.insertText)
-      tailColumn = change.insertText[change.insertText.rfind('\n') + 1 .. ^1].charLen
+  let join = change.joinSpan
+  if join.isSome:
     for name in 'a' .. 'z':
       if marksBefore[name].isSome:
-        let pos = marksBefore[name].get
-        if pos.line == change.insertPos.line and pos.column >= change.insertPos.column:
-          b.namedMarks[name] = some(
-            BufferPosition(
-              line: pos.line + rows,
-              column: tailColumn + pos.column - change.insertPos.column,
-            )
-          )
-  elif change.kind == ckDeleteRange and
-      change.deleteEndPos.line > change.deleteStartPos.line:
-    let maxStartColumn = max(0, b.getLine(change.deleteStartPos.line).charLen - 1)
-    for name in 'a' .. 'z':
-      if marksBefore[name].isSome:
-        let pos = marksBefore[name].get
-        if pos.line == change.deleteStartPos.line and
-            pos.column >= change.deleteStartPos.column:
-          b.namedMarks[name] = some(
-            BufferPosition(
-              line: change.deleteStartPos.line,
-              column: min(change.deleteStartPos.column, maxStartColumn),
-            )
-          )
-        elif pos.line == change.deleteEndPos.line and
-            pos.column > change.deleteEndPos.column and not change.deleteJoinedNextLine:
-          b.namedMarks[name] = some(
-            BufferPosition(
-              line: change.deleteStartPos.line,
-              column:
-                change.deleteStartPos.column + pos.column - change.deleteEndPos.column -
-                1,
-            )
-          )
-  if visualBefore.isSome:
-    b.moveLastVisualEnds(
-      change.acrossLineBreak(visualBefore.get.start),
-      change.acrossLineBreak(visualBefore.get.cursor),
-    )
+        let moved = join.get.acrossJoin(marksBefore[name].get, keepDropped = false)
+        if moved.isSome:
+          b.namedMarks[name] = moved
+    if visualBefore.isSome:
+      b.moveLastVisualEnds(
+        join.get.acrossJoin(visualBefore.get.start, keepDropped = true),
+        join.get.acrossJoin(visualBefore.get.cursor, keepDropped = true),
+      )
 
   let namedMarkChanges = diffNamedMarks(marksBefore, b.namedMarks)
 

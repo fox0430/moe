@@ -868,6 +868,28 @@ suite "ReplaceModeHandler - Newline history (Enter + Backspace)":
     check state.cursor.column == 5
     check state.editState.replaceHistory.len == 0
 
+  test "Backspace after Enter moves marks by the join column, as Vim does":
+    let buf = newTextBuffer("abcdef")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 1)
+    discard handler.handleNewline(buf, state)
+    buf.namedMarks['a'] = some(BufferPosition(line: 1, column: 2))
+    buf.lastVisual = some(
+      VisualArea(
+        start: BufferPosition(line: 1, column: 1),
+        cursor: BufferPosition(line: 1, column: 3),
+        kind: vskChar,
+      )
+    )
+
+    check handler.handleBackspace(buf, state).kind == rmrHandled
+
+    check buf.getLine(0) == "abcdef"
+    check buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 3))
+    check buf.lastVisual.get.start == BufferPosition(line: 0, column: 2)
+    check buf.lastVisual.get.cursor == BufferPosition(line: 0, column: 4)
+
   test "Backspace after Enter preserves prior replacements":
     # Regression: previously Enter left no marker, so Backspace popped the
     # pre-Enter char-replace entry, reverted an unrelated character, and left

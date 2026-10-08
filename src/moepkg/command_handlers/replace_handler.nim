@@ -146,24 +146,12 @@ proc handleBackspace*(
       state.cursor = lastEntry.pos
       return ReplaceModeResult(kind: rmrHandled, modeTransition: none(EditorMode))
 
-    let tailContent = buffer.getLine(splitLine + 1)
-    let deleteResult = buffer.deleteLine(splitLine + 1)
-    if deleteResult.isErr:
+    let joinResult = buffer.joinWithNextLine(splitLine)
+    if joinResult.isErr:
       state.editState.replaceHistory.add(lastEntry)
       return ReplaceModeResult(
-        kind: rmrError, errorMessage: "Failed to undo newline: " & deleteResult.error
+        kind: rmrError, errorMessage: "Failed to undo newline: " & joinResult.error
       )
-
-    if tailContent.len > 0:
-      let joinPos =
-        BufferPosition(line: splitLine, column: buffer.getLine(splitLine).charLen)
-      let insertResult = buffer.insertText(joinPos, tailContent)
-      if insertResult.isErr:
-        state.editState.replaceHistory.add(lastEntry)
-        return ReplaceModeResult(
-          kind: rmrError,
-          errorMessage: "Failed to restore joined text: " & insertResult.error,
-        )
 
     state.cursor = lastEntry.pos
   of rheReplace:

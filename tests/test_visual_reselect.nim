@@ -72,27 +72,37 @@ suite "TextBuffer lastVisual":
       check b.getLine(0) == "onetwo foo"
       check b.lastVisual == area(pos(0, 7), pos(0, 9), vskChar)
 
-    test "follows the text a deletion across lines joins (" & $backend & ")":
+    test "moves the joined line's ends by the join column, as Vim does (" & $backend &
+      ")":
+      # Vim does not shift them back over the text deleted from that line.
       let b = newTextBuffer("one\nxtwo foo\nthree", backend = backend)
       b.lastVisual = area(pos(1, 5), pos(1, 7), vskChar)
 
       check b.deleteRange(pos(0, 1), pos(1, 1)).isOk
       check b.getLine(0) == "owo foo"
-      check b.lastVisual == area(pos(0, 4), pos(0, 6), vskChar)
+      check b.lastVisual == area(pos(0, 6), pos(0, 8), vskChar)
 
-    test "an end in a deletion across lines goes to its start (" & $backend & ")":
+    test "an end in a deletion across lines keeps its column (" & $backend & ")":
       let b = newTextBuffer("one\ntwo\nthree", backend = backend)
       b.lastVisual = area(pos(0, 2), pos(1, 1), vskChar)
 
       check b.deleteRange(pos(0, 1), pos(1, 1)).isOk
-      check b.lastVisual == area(pos(0, 1), pos(0, 1), vskChar)
+      check b.lastVisual == area(pos(0, 2), pos(0, 2), vskChar)
 
-    test "follows the text a line break moves down (" & $backend & ")":
+    test "an end on a line a deletion drops goes to the joined line (" & $backend & ")":
+      let b = newTextBuffer("abcd\nefgh\nijkl\nmnop", backend = backend)
+      b.lastVisual = area(pos(1, 2), pos(2, 3), vskChar)
+
+      check b.deleteRange(pos(0, 1), pos(2, 1)).isOk
+      check b.getLine(0) == "akl"
+      check b.lastVisual == area(pos(0, 3), pos(0, 4), vskChar)
+
+    test "stays on its line across a line break, as Vim does (" & $backend & ")":
       let b = newTextBuffer("aaaaa foo", backend = backend)
       b.lastVisual = area(pos(0, 1), pos(0, 8), vskChar)
 
       check b.insertText(pos(0, 2), "\n").isOk
-      check b.lastVisual == area(pos(0, 1), pos(1, 6), vskChar)
+      check b.lastVisual == area(pos(0, 1), pos(0, 8), vskChar)
 
     test "follows the lines J joins (" & $backend & ")":
       let b = newTextBuffer("one\n  two foo\nthree", backend = backend)
@@ -563,13 +573,18 @@ suite "gv":
     check e.state.mode == EditorMode.Visual
     check e.selection == (pos(0, 1), pos(0, 2))
 
-  test "after a line break before the area, reselects the text it moved":
+  test "a line break before the area leaves it on its line, as Vim does":
     let e = newTestEditor("aaaaa foo")
-    e.press("w", "v", "e", "Esc", "0", "l", "l", "i", "Enter", "Esc", "g", "v")
+    e.press("w", "v", "e", "Esc", "0", "l", "l", "i", "Enter", "Esc")
 
     check e.activeBuffer.getLine(1) == "aaa foo"
+    check e.activeBuffer.lastVisual == area(pos(0, 6), pos(0, 8), vskChar)
+
+    e.press("g", "v")
+
+    # Vim selects one past the end of the shortened line.
     check e.state.mode == EditorMode.Visual
-    check e.selection == (pos(1, 4), pos(1, 6))
+    check e.selection == (pos(0, 2), pos(0, 2))
 
   test "a binding that switches out of Visual mode saves the area":
     let e = newTestEditor("one\ntwo\nthree")

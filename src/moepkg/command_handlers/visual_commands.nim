@@ -644,6 +644,7 @@ proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
           startLine: startLine,
           endLine: endLine,
           insertColumn: startCol,
+          firstLineLen: buffer.getLine(startLine).charLen,
         )
       )
     else:
@@ -682,7 +683,11 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
   state.cursor.column = endCol + 1
   state.editState.visualBlockInsertContext = some(
     VisualBlockInsertContext(
-      kind: vbiAppend, startLine: startLine, endLine: endLine, insertColumn: endCol + 1
+      kind: vbiAppend,
+      startLine: startLine,
+      endLine: endLine,
+      insertColumn: endCol + 1,
+      firstLineLen: buffer.getLine(startLine).charLen,
     )
   )
 
@@ -720,6 +725,7 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
             startLine: startLine,
             endLine: endLine,
             insertColumn: startCol,
+            firstLineLen: buffer.getLine(startLine).charLen,
           )
         )
       of vskLine:

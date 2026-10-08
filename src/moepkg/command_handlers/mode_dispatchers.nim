@@ -56,10 +56,9 @@ proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
   ## Handles insertions and deletions (backspace during insert mode)
   ## Optimized with StringBuilder for O(n) instead of O(n²) performance
   ##
-  ## Insert-mode backspace at a line start decomposes into ckDeleteLine plus
-  ## ckInsertText, where the insert payload is the pre-existing content of the
-  ## joined line — not user input. Skip that paired re-attach so it does not
-  ## leak into lastEditCommand and get replayed by `.` (dot-repeat).
+  ## A line join (Backspace at a line start) starts the text over: what came
+  ## before it may not have been typed. A deleted line whose content is then
+  ## re-attached is dropped the same way, re-attach included.
   var sb = newStringBuilder()
   var skipNextInsertText = false
   for change in transaction.changes:
@@ -90,8 +89,12 @@ proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
       sb.clear()
       skipNextInsertText = change.deletedLineText.len > 0
     of buffer.ckDeleteRange:
-      # Range deletion - remove from end of accumulated text
-      sb.removeLast(change.deletedRangeText.len)
+      if change.deletedRangeText == "\n":
+        # A line join
+        sb.clear()
+      else:
+        # Range deletion - remove from end of accumulated text
+        sb.removeLast(change.deletedRangeText.len)
       skipNextInsertText = false
     of buffer.ckReplaceLine, buffer.ckReplaceLines:
       discard # Line replacement doesn't contribute to inserted text tracking
@@ -228,6 +231,38 @@ proc commitInsertModeBoundary*(
 
   ok()
 
+proc replicateBlockInsert*(buffer: TextBuffer, state: EditorState): string =
+  ## End a Visual-block insert: copy what the first line gained, from the block
+  ## column, onto the other lines, as Vim does. Nothing is copied when the
+  ## cursor left the first line. Returns an error message, or "".
+  if state.editState.visualBlockInsertContext.isNone:
+    return ""
+  let ctx = state.editState.visualBlockInsertContext.get
+  state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
+  if state.cursor.line != ctx.startLine or ctx.startLine >= buffer.len:
+    return ""
+  let
+    firstLine = buffer.getLine(ctx.startLine)
+    gained = firstLine.charLen - ctx.firstLineLen
+  if gained <= 0:
+    return ""
+  let text = firstLine.charSubStr(min(ctx.insertColumn, ctx.firstLineLen), gained)
+
+  for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
+    let lineCharLen = buffer.getLine(lineNum).charLen
+    let col = ctx.insertColumn
+    if col > lineCharLen:
+      let padding = ' '.repeat(col - lineCharLen)
+      let padResult =
+        buffer.insertText(BufferPosition(line: lineNum, column: lineCharLen), padding)
+      if padResult.isErr:
+        return padResult.error
+    let replayResult =
+      buffer.insertText(BufferPosition(line: lineNum, column: col), text)
+    if replayResult.isErr:
+      return replayResult.error
+  ""
+
 proc finalizeInsertExit*(
     buffer: TextBuffer, state: EditorState
 ): Result[string, string] =
@@ -244,36 +279,14 @@ proc finalizeInsertExit*(
 
   clearAutoIndentIfUnedited(buffer, state)
 
-  var replicationError = ""
-
   if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
     let transaction = buffer.currentTransaction.get
-    let insertedText = extractInsertedText(transaction)
-
-    if state.editState.visualBlockInsertContext.isSome:
-      if insertedText.len > 0:
-        let ctx = state.editState.visualBlockInsertContext.get
-        for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
-          let lineCharLen = buffer.getLine(lineNum).charLen
-          let col = ctx.insertColumn
-          if col > lineCharLen:
-            let padding = ' '.repeat(col - lineCharLen)
-            let padResult = buffer.insertText(
-              BufferPosition(line: lineNum, column: lineCharLen), padding
-            )
-            if padResult.isErr:
-              replicationError = padResult.error
-              break
-          let replayResult =
-            buffer.insertText(BufferPosition(line: lineNum, column: col), insertedText)
-          if replayResult.isErr:
-            replicationError = replayResult.error
-            break
-      state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
-
     recordLastInsertEdit(transaction, state)
     # Replay before commit so [count]i repeats share the same undo group.
     replayCountedInsert(buffer, state)
+
+  # After recording, so `.` repeats what was typed, not the copies.
+  let replicationError = replicateBlockInsert(buffer, state)
 
   state.editState.insertModeStartPos = none(BufferPosition)
   state.editState.insertReplayCount = 0
@@ -315,6 +328,14 @@ proc handleInsertMode*(
   of imrHandled:
     # Check if we're leaving Insert mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
+      # Ctrl-o ends a Visual-block insert, as in Vim.
+      var replicationMessage = ""
+      if state.insertNormalMode:
+        let replicationError = replicateBlockInsert(buffer, state)
+        if replicationError.len > 0:
+          replicationMessage =
+            "Failed to replicate visual block insert: " & replicationError
+
       # Forced Insert mode uses Ctrl-o as its built-in route to Command mode.
       if state.config.standard.forceInsertMode and state.insertNormalMode and
           r.modeTransition.get == EditorMode.Normal:
@@ -323,14 +344,16 @@ proc handleInsertMode*(
           kind: hrHandled,
           modeTransition: none(EditorMode),
           overlayTransition: some(OverlayKind.okCommand),
-          statusMessage: "",
+          statusMessage: replicationMessage,
         )
 
       # Ctrl-o (insert-normal mode): skip transaction commit/cleanup,
       # keep insert state intact so we can resume after one Normal command
       if state.insertNormalMode:
         return HandlerResult(
-          kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
+          kind: hrHandled,
+          modeTransition: r.modeTransition,
+          statusMessage: replicationMessage,
         )
 
       # Resolve the keybinding before applying Ctrl-C's interrupt semantics so

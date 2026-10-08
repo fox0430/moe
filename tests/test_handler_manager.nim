@@ -2852,11 +2852,34 @@ suite "HandlerManager - [count]i/a/o insert replay":
     check buffer.getLine(0) == "XYabc"
 
 suite "HandlerManager - extractInsertedText line-join skip":
-  # Regression: Insert-mode backspace at a line start decomposes into
-  # ckDeleteLine + ckInsertText, where the paired insert carries the joined
-  # line's pre-existing content (not user input). Without the skip that
-  # content leaked into lastEditCommand.insertedText and got re-inserted at
-  # the cursor on `.` (dot-repeat) — even across buffers.
+  # Regression: a line join's pre-existing content (not user input) leaked
+  # into lastEditCommand.insertedText and was re-inserted on `.`, even across
+  # buffers. Covers both join shapes: one ckDeleteRange of the break, and a
+  # ckDeleteLine whose content a ckInsertText re-attaches.
+  test "A deleted line break starts the text over":
+    let tx = buffer.BufferTransaction(
+      changes: @[
+        buffer.BufferChange(
+          kind: buffer.ckInsertText,
+          insertPos: BufferPosition(line: 1, column: 0),
+          insertText: "AB",
+        ),
+        buffer.BufferChange(
+          kind: buffer.ckDeleteRange,
+          deleteStartPos: BufferPosition(line: 0, column: 4),
+          deleteEndPos: BufferPosition(line: 0, column: 4),
+          deletedRangeText: "\n",
+          deleteJoinedNextLine: true,
+        ),
+        buffer.BufferChange(
+          kind: buffer.ckInsertText,
+          insertPos: BufferPosition(line: 0, column: 4),
+          insertText: "X",
+        ),
+      ]
+    )
+    check extractInsertedText(tx) == "X"
+
   test "ckDeleteLine drops the immediately following ckInsertText":
     let tx = buffer.BufferTransaction(
       changes: @[
@@ -3151,6 +3174,40 @@ suite "HandlerManager - Insert-mode line-join backspace . repeat":
     check state.editState.lastEditCommand.isSome
     check state.editState.lastEditCommand.get.kind == types.lecInsertText
     check state.editState.lastEditCommand.get.insertedText == "X"
+
+  test "Joining a line the typing did not end keeps the previous `.`":
+    # The typed "XY" is not the text before the joined break, so nothing is
+    # recorded rather than "X" (one byte taken off for the break).
+    let manager = createTestManager()
+    let buffer = newTextBuffer("PREV\nSECRET")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 4)
+    state.mode = EditorMode.Insert
+    let viewport = createTestViewport()
+
+    check buffer.beginTransaction("test insert").isOk
+    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 4))
+    state.editState.lastEditCommand = some(
+      types.LastEditCommand(
+        kind: types.lecInsertText,
+        insertedText: "prev",
+        insertPosition: BufferPosition(line: 0, column: 0),
+      )
+    )
+
+    proc press(key: KeyCombo) =
+      discard manager.handleInsertMode(
+        createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), key
+      )
+
+    press(KeyCombo(isSpecial: false, char: "X", modifiers: {}))
+    press(KeyCombo(isSpecial: false, char: "Y", modifiers: {}))
+    state.cursor = BufferPosition(line: 1, column: 0)
+    press(KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {}))
+    press(KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {}))
+
+    check buffer.getLine(0) == "PREVXYSECRET"
+    check state.editState.lastEditCommand.get.insertedText == "prev"
 
 suite "Insert mode - the cursor line is never folded":
   # Insert mode is the one place folds are opened rather than widened over: the

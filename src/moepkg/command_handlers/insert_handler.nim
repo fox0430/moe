@@ -143,122 +143,20 @@ proc handleCharacterInsertion*(
 proc handleBackspace*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ): InsertModeResult =
-  ## Handle backspace key with auto-delete paren support
-  let pos = state.cursor
-
-  if pos.column > 0:
-    # Check if auto-delete paren is enabled
-    if state.autoDeleteParen:
-      let currentLine = buffer.getLine(pos.line)
-
-      try:
-        # Auto-delete adjacent pairs only: cursor must be between open and close
-        # e.g., (|), [|], {|}, "|", '|'
-        if isAdjacentPair(currentLine, pos.column - 1):
-          # Delete the opening char first; the closing char then shifts into the
-          # same column. Move the cursor only after both edits succeed.
-          let pairPos = BufferPosition(line: pos.line, column: pos.column - 1)
-          let openResult = buffer.deleteChar(pairPos) # Delete opening char
-          if openResult.isErr:
-            return InsertModeResult(kind: imrError, errorMessage: openResult.error)
-          let closeResult = buffer.deleteChar(pairPos) # Delete closing char
-          if closeResult.isErr:
-            return InsertModeResult(kind: imrError, errorMessage: closeResult.error)
-          state.cursor.column -= 1
-          return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
-      except IndexDefect, CatchableError:
-        # If accessing rune fails, fall through to normal backspace
-        discard
-
-    # softTabStop-aware backspace: delete to previous boundary in leading whitespace
-    if state.expandTab:
-      let currentLine = buffer.getLine(pos.line)
-      # Check if cursor is within leading whitespace
-      let upToCursor = currentLine.charSubStr(0, pos.column)
-      var allSpaces = upToCursor.charLen == pos.column
-      if allSpaces:
-        for (ch, _) in upToCursor.chars:
-          if ch != Rune(' ') and ch != Rune('\t'):
-            allSpaces = false
-            break
-      if allSpaces and pos.column > 0:
-        let sts = effectiveSoftTabStop(state)
-        let tabWidth = max(1, sts)
-        # Calculate how many chars to delete to reach previous boundary
-        let remainder = pos.column mod tabWidth
-        let deleteCount = if remainder == 0: tabWidth else: remainder
-        let actualDelete = min(deleteCount, pos.column)
-        # Delete from the top down so each position is stable, and move the
-        # cursor only after each edit succeeds.
-        for i in 0 ..< actualDelete:
-          let deletePos = BufferPosition(line: pos.line, column: pos.column - 1 - i)
-          let deleteResult = buffer.deleteChar(deletePos)
-          if deleteResult.isErr:
-            return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
-          state.cursor.column -= 1
-      else:
-        # Normal backspace: delete the char before the cursor, then move back
-        let deletePos = BufferPosition(line: pos.line, column: pos.column - 1)
-        let deleteResult = buffer.deleteChar(deletePos)
-        if deleteResult.isErr:
-          return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
-        state.cursor.column -= 1
-    else:
-      # Normal backspace: delete the char before the cursor, then move back
-      let deletePos = BufferPosition(line: pos.line, column: pos.column - 1)
-      let deleteResult = buffer.deleteChar(deletePos)
-      if deleteResult.isErr:
-        return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
-      state.cursor.column -= 1
-  elif pos.line > 0:
-    # At start of line, join with previous line
-    let prevLine = buffer.getLine(pos.line - 1)
-    let currentLine = buffer.getLine(pos.line)
-    let prevLineLen = prevLine.charLen
-
-    # Delete the current line first
-    let deleteResult = buffer.deleteLine(pos.line)
-    if deleteResult.isErr:
-      return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
-    # Append current line content to previous line. The join point is where
-    # the appended text begins on the merged line, which the insertion reports:
-    # appending can complete a character the previous line was waiting on.
-    var joinColumn = prevLineLen
-    if currentLine.len > 0:
-      let insertResult = buffer.insertTextEnd(
-        BufferPosition(line: pos.line - 1, column: prevLineLen),
-        currentLine,
-        cursorByte = 0,
-      )
-      if insertResult.isErr:
-        # The current line is already deleted, so the cursor must still move to
-        # the join point to stay in bounds.
-        state.cursor.line -= 1
-        state.cursor.column = prevLineLen
-        return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
-      joinColumn = insertResult.get.cursor.column
-
-    # Move cursor to the join point
-    state.cursor.line -= 1
-    state.cursor.column = joinColumn
-
-  return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+  ## Handle backspace key
+  let r = deleteBeforeCursor(buffer, state)
+  if r.isErr:
+    return InsertModeResult(kind: imrError, errorMessage: r.error)
+  InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleDelete*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ): InsertModeResult =
   ## Handle delete key
-  let pos = state.cursor
-  if pos.line >= 0 and pos.line < buffer.len and
-      pos.column >= buffer.getLine(pos.line).charLen:
-    # At end of line: nothing to delete (no-op)
-    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
-
-  let deleteResult = buffer.deleteChar(pos)
-  if deleteResult.isErr:
-    return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
-
-  return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+  let r = deleteAtCursor(buffer, state)
+  if r.isErr:
+    return InsertModeResult(kind: imrError, errorMessage: r.error)
+  InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleNewline*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState

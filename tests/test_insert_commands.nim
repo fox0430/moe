@@ -284,6 +284,38 @@ suite "Insert Commands - insertBackspace":
     check state.cursor.line == 0
     check state.cursor.column == 5
 
+  test "Backspace joining lines moves marks by the join column, as Vim does":
+    let buf = newTextBuffer("abc\ndefgh")
+    buf.namedMarks['a'] = some(BufferPosition(line: 1, column: 1))
+    buf.lastVisual = some(
+      VisualArea(
+        start: BufferPosition(line: 1, column: 0),
+        cursor: BufferPosition(line: 1, column: 1),
+        kind: vskChar,
+      )
+    )
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 0)
+
+    insertBackspace(buf, state)
+
+    check buf.getLine(0) == "abcdefgh"
+    check state.cursor == BufferPosition(line: 0, column: 3)
+    check buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 4))
+    check buf.lastVisual.get.start == BufferPosition(line: 0, column: 3)
+    check buf.lastVisual.get.cursor == BufferPosition(line: 0, column: 4)
+
+  test "Backspace deletes an auto-paired pair, as the Insert key does":
+    let buf = newTextBuffer("f()")
+    let state = createTestState()
+    state.autoDeleteParen = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertBackspace(buf, state)
+
+    check buf.getLine(0) == "f"
+    check state.cursor.column == 1
+
   test "Backspace at beginning of first line (no-op)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
