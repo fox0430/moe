@@ -19,7 +19,7 @@
 
 ## Window split and buffer management procedures
 
-import std/[options, os, tables]
+import std/options
 
 import pkg/results
 
@@ -34,6 +34,7 @@ import
   editor_window_state,
   editor_lsp,
   editor_hooks,
+  editor_persist,
   git_cache,
   git_conflict,
   window_manager,
@@ -146,12 +147,9 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer, origin: ReadOrigin) =
   ## `origin` says why the file was read; `noteBufferRead` decides what that
   ## means for `BufReadPost`. An LSP rename's background copy, for one, is
   ## read for the editor rather than the user.
-  if buf.filePath.isSome:
-    let absPath = absolutePath(buf.filePath.get)
-    if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
-      buf.bookmarks = e.savedBookmarks[absPath]
-    if e.showGitDiff:
-      e.state.git.requestGitRefresh(buf)
+  e.restoreBookmarks(buf)
+  if buf.filePath.isSome and e.showGitDiff:
+    e.state.git.requestGitRefresh(buf)
   # Scan conflict markers regardless of the highlight config (like loadFile) so
   # conflict-navigation works as soon as this buffer becomes active.
   buf.refreshConflicts()

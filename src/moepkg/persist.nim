@@ -22,12 +22,17 @@
 ## Handles saving and loading of:
 ## - Command history (ex-mode commands)
 ## - Cursor positions (per file)
+## - Bookmarks (per file)
 
-import std/[os, appdirs, paths, strformat, strutils, tables, json, options]
+import
+  std/[
+    algorithm, os, appdirs, paths, sequtils, strformat, strutils, tables, json, options
+  ]
 
 import pkg/results
 
-import logger
+import logger, path_key
+import buffer/atomic_write
 import types/persist_types
 export persist_types
 
@@ -121,179 +126,223 @@ proc saveCommandHistory*(
   except CatchableError as e:
     return err(fmt"Failed to save command history: {e.msg}")
 
-# Cursor Position Persistence
+# Per-file records
+#
+# Several sessions share one file, so a save merges the entries this session
+# changed into what the file holds now instead of writing a table read at
+# startup. Keys are `pathKey`s.
 
-proc getCursorPositionsPath*(): Result[Path, string] =
-  ## Get the path to the cursor positions file
-  ## Returns: ~/$XDG_CACHE_HOME/moe/cursor_positions.json
+const MaxRecordedFiles* = 100
+  ## Files a per-file record file keeps, as Vim's viminfo default `'100`.
+
+type RecordParser[T] = proc(node: JsonNode): Option[T] {.nimcall, raises: [].}
+
+proc cacheFilePath(name: string): Result[Path, string] =
   let cacheDir = appdirs.getCacheDir()
   if len(cacheDir.string) == 0:
     return Result[Path, string].err "Failed to get cache directory"
 
   var p = cacheDir
   p.add Path("moe")
-  p.add Path("cursor_positions.json")
+  p.add Path(name)
 
   return Result[Path, string].ok p
 
-proc loadCursorPositions*(): Table[string, CursorPositionEntry] =
-  ## Load cursor positions from disk
-  ## Returns: table mapping absolute file paths to cursor positions
-  ## Returns empty table if file doesn't exist or on error
-  result = initTable[string, CursorPositionEntry]()
-
-  let posPath = getCursorPositionsPath()
-  if posPath.isErr:
-    logError("persist", posPath.error)
-    return
-
-  let posPathStr = posPath.get.string
-
-  if not fileExists(posPathStr):
-    logDebug("persist", fmt"cursor positions file not found: {posPathStr}")
-    return
-
+proc loadRecords[T](
+    path: Result[Path, string], parse: RecordParser[T]
+): Result[OrderedTable[string, T], string] {.raises: [].} =
+  ## Entries in `path` in file order; empty when there is no file. A file that
+  ## cannot be read or is not a JSON object is an error, never an empty table.
+  if path.isErr:
+    return err(path.error)
+  let pathStr = path.get.string
+  var records = initOrderedTable[string, T]()
+  if not fileExists(pathStr):
+    return ok(records)
   try:
-    let content = readFile(posPathStr)
-    let jsonNode = parseJson(content)
-
-    if jsonNode.kind == JObject:
-      for path, pos in jsonNode.pairs:
-        if pos.kind == JObject and pos.hasKey("line") and pos.hasKey("column"):
-          result[path] = CursorPositionEntry(
-            line: pos["line"].getInt(), column: pos["column"].getInt()
-          )
+    let node = parseJson(readFile(pathStr))
+    if node.kind != JObject:
+      return err(fmt"{pathStr}: not a JSON object")
+    for key, value in node.pairs:
+      let parsed = parse(value)
+      if parsed.isSome:
+        records[pathKey(key)] = parsed.get
   except CatchableError as e:
-    logError("persist", fmt"Failed to load cursor positions: {e.msg}")
-    return initTable[string, CursorPositionEntry]()
+    return err(fmt"{pathStr}: {e.msg}")
+  ok(records)
 
-proc saveCursorPositions*(
-    positions: Table[string, CursorPositionEntry]
-): Result[void, string] =
-  ## Save cursor positions to disk as JSON
+proc toTable[T](records: OrderedTable[string, T]): Table[string, T] =
+  for key, value in records:
+    result[key] = value
 
-  let posPath = getCursorPositionsPath()
-  if posPath.isErr:
-    return err(posPath.error)
-
-  let
-    pathSplited = posPath.get.splitPath
-    pathHeadStr = pathSplited.head.string
-
-  if not dirExists(pathHeadStr):
-    try:
-      createDir(pathHeadStr)
-    except CatchableError as e:
-      return err(fmt"Failed to create dir: {e.msg}: {pathHeadStr}")
-
-  let posPathStr = posPath.get.string
-
-  try:
-    var jsonObj = newJObject()
-    for path, pos in positions.pairs:
-      jsonObj[path] = %*{"line": pos.line, "column": pos.column}
-
-    writeFile(posPathStr, $jsonObj)
+proc updateRecords[T](
+    path: Result[Path, string],
+    changes: Table[string, T],
+    opened: openArray[string],
+    parse: RecordParser[T],
+    emit: proc(value: T): JsonNode {.nimcall, raises: [].},
+    drop: proc(value: T): bool {.nimcall, raises: [].},
+): Result[void, string] {.raises: [].} =
+  ## Apply `changes` onto the entries in `path`, leaving the rest as they are.
+  ## A change `drop` accepts removes its entry. Like Vim's viminfo, the file
+  ## keeps the `MaxRecordedFiles` most recent files: this session's changes and
+  ## `opened` files first, then the file's own order. Nothing is written when
+  ## the current file cannot be read.
+  if changes.len == 0:
     return ok()
+  let current = ?loadRecords(path, parse)
+  var records = initOrderedTable[string, T]()
+  for key, value in changes:
+    if not drop(value) and records.len < MaxRecordedFiles:
+      records[key] = value
+  for key in opened:
+    if key notin changes and key notin records and key in current and
+        records.len < MaxRecordedFiles:
+      records[key] = current.getOrDefault(key)
+  for key, value in current:
+    if key notin changes and key notin records and records.len < MaxRecordedFiles:
+      records[key] = value
+
+  let pathStr = path.get.string
+  if records.len == 0:
+    try:
+      if fileExists(pathStr):
+        removeFile(pathStr)
+    except CatchableError as e:
+      return err(fmt"Failed to remove {pathStr}: {e.msg}")
+    return ok()
+
+  let dir = pathStr.parentDir
+  try:
+    createDir(dir)
   except CatchableError as e:
-    return err(fmt"Failed to save cursor positions: {e.msg}")
+    return err(fmt"Failed to create dir: {e.msg}: {dir}")
 
-proc getCursorPosition*(
-    positions: Table[string, CursorPositionEntry], filePath: string
-): Option[CursorPositionEntry] =
-  ## Get cursor position for a specific file
-  ## Returns none if not found
-  let absPath = absolutePath(filePath)
-  if positions.hasKey(absPath):
-    return some(positions[absPath])
-  return none(CursorPositionEntry)
+  var obj = newJObject()
+  for key, value in records:
+    obj[key] = emit(value)
+  try:
+    # `copyFileWithPermissions` in the hardlink path is declared to raise
+    # `Exception`; it raises only OS and I/O errors.
+    {.cast(raises: [CatchableError]).}:
+      let w = writeAtomic(pathStr, $obj, wpForce)
+      if w.isErr:
+        return err(fmt"{pathStr}: {w.error}")
+  except CatchableError as e:
+    return err(fmt"{pathStr}: {e.msg}")
+  ok()
 
-proc setCursorPosition*(
-    positions: var Table[string, CursorPositionEntry],
-    filePath: string,
-    line: int,
-    column: int,
-) =
-  ## Set cursor position for a specific file
-  let absPath = absolutePath(filePath)
-  positions[absPath] = CursorPositionEntry(line: line, column: column)
+# Cursor Position Persistence
+
+proc getCursorPositionsPath*(): Result[Path, string] =
+  ## Get the path to the cursor positions file
+  ## Returns: ~/$XDG_CACHE_HOME/moe/cursor_positions.json
+  cacheFilePath("cursor_positions.json")
+
+proc parseCursorPosition(node: JsonNode): Option[CursorPositionEntry] =
+  if node.kind != JObject:
+    return
+  let line = node{"line"}
+  let column = node{"column"}
+  if line != nil and line.kind == JInt and line.getInt() >= 0 and column != nil and
+      column.kind == JInt and column.getInt() >= 0:
+    return some(CursorPositionEntry(line: line.getInt(), column: column.getInt()))
+
+proc emitCursorPosition(pos: CursorPositionEntry): JsonNode =
+  %*{"line": pos.line, "column": pos.column}
+
+proc neverDrop(pos: CursorPositionEntry): bool =
+  false
+
+proc loadCursorPositions*(): Result[Table[string, CursorPositionEntry], string] =
+  ## Cursor positions by `pathKey`; empty when there is no file.
+  loadRecords(getCursorPositionsPath(), parseCursorPosition).map(toTable)
+
+proc updateCursorPositions*(
+    changes: Table[string, CursorPositionEntry], opened: openArray[string] = []
+): Result[void, string] =
+  ## Merge `changes` into the cursor positions file. `opened` are files this
+  ## session opened, kept ahead of older entries.
+  updateRecords(
+    getCursorPositionsPath(),
+    changes,
+    opened,
+    parseCursorPosition,
+    emitCursorPosition,
+    neverDrop,
+  )
 
 # Bookmark Persistence
 
 proc getBookmarksPath*(): Result[Path, string] =
   ## Get the path to the bookmarks file
   ## Returns: ~/$XDG_CACHE_HOME/moe/bookmarks.json
-  let cacheDir = appdirs.getCacheDir()
-  if len(cacheDir.string) == 0:
-    return Result[Path, string].err "Failed to get cache directory"
+  cacheFilePath("bookmarks.json")
 
-  var p = cacheDir
-  p.add Path("moe")
-  p.add Path("bookmarks.json")
-
-  return Result[Path, string].ok p
-
-proc loadBookmarks*(): Table[string, seq[int]] =
-  ## Load bookmarks from disk
-  ## Returns: table mapping absolute file paths to sorted bookmark line numbers
-  result = initTable[string, seq[int]]()
-
-  let bmPath = getBookmarksPath()
-  if bmPath.isErr:
-    logError("persist", bmPath.error)
+proc parseBookmarks(node: JsonNode): Option[seq[int]] =
+  if node.kind != JArray:
     return
+  var lines: seq[int]
+  for lineNode in node:
+    if lineNode.kind == JInt and lineNode.getInt() >= 0:
+      lines.add lineNode.getInt()
+  lines.sort()
+  lines = lines.deduplicate(isSorted = true)
+  if lines.len > 0:
+    return some(lines)
 
-  let bmPathStr = bmPath.get.string
+proc emitBookmarks(lines: seq[int]): JsonNode =
+  %lines
 
-  if not fileExists(bmPathStr):
-    logDebug("persist", fmt"bookmarks file not found: {bmPathStr}")
-    return
+proc noBookmarks(lines: seq[int]): bool =
+  lines.len == 0
 
-  try:
-    let content = readFile(bmPathStr)
-    let jsonNode = parseJson(content)
+proc loadBookmarks*(): Result[Table[string, seq[int]], string] =
+  ## Bookmarked lines by `pathKey`; empty when there is no file.
+  loadRecords(getBookmarksPath(), parseBookmarks).map(toTable)
 
-    if jsonNode.kind == JObject:
-      for path, lines in jsonNode.pairs:
-        if lines.kind == JArray:
-          var bookmarks: seq[int] = @[]
-          for lineNode in lines:
-            if lineNode.kind == JInt:
-              let lineNum = lineNode.getInt()
-              if lineNum >= 0:
-                bookmarks.add(lineNum)
-          if bookmarks.len > 0:
-            result[path] = bookmarks
-  except CatchableError as e:
-    logError("persist", fmt"Failed to load bookmarks: {e.msg}")
-    return initTable[string, seq[int]]()
+proc updateBookmarks*(
+    changes: Table[string, seq[int]], opened: openArray[string] = []
+): Result[void, string] =
+  ## Merge `changes` into the bookmarks file. An empty list removes the entry,
+  ## and the file goes away with its last entry. `opened` are files this
+  ## session opened, kept ahead of older entries.
+  updateRecords(
+    getBookmarksPath(), changes, opened, parseBookmarks, emitBookmarks, noBookmarks
+  )
 
-proc saveBookmarks*(bookmarks: Table[string, seq[int]]): Result[void, string] =
-  ## Save bookmarks to disk as JSON
+# Session state
 
-  let bmPath = getBookmarksPath()
-  if bmPath.isErr:
-    return err(bmPath.error)
+proc lookup[T](
+    records: PersistedRecords[T],
+    key: string,
+    path: Result[Path, string],
+    parse: RecordParser[T],
+): Result[Option[T], string] =
+  ## This session's record for `key`, else the file's as it is now.
+  if key in records.changes:
+    return ok(some(records.changes[key]))
+  let loaded = ?loadRecords(path, parse)
+  if key in loaded:
+    return ok(some(loaded[key]))
+  ok(none(T))
 
-  let
-    pathSplited = bmPath.get.splitPath
-    pathHeadStr = pathSplited.head.string
+proc lookupCursorPosition*(
+    records: PersistedRecords[CursorPositionEntry], key: string
+): Result[Option[CursorPositionEntry], string] =
+  records.lookup(key, getCursorPositionsPath(), parseCursorPosition)
 
-  if not dirExists(pathHeadStr):
-    try:
-      createDir(pathHeadStr)
-    except CatchableError as e:
-      return err(fmt"Failed to create dir: {e.msg}: {pathHeadStr}")
+proc lookupBookmarks*(
+    records: PersistedRecords[seq[int]], key: string
+): Result[Option[seq[int]], string] =
+  records.lookup(key, getBookmarksPath(), parseBookmarks)
 
-  let bmPathStr = bmPath.get.string
+proc markRestored*[T](records: var PersistedRecords[T], key: string, value: T) =
+  ## Note that the file at `key` was opened with `value`.
+  records.restored[key] = value
 
-  try:
-    var jsonObj = newJObject()
-    for path, lines in bookmarks.pairs:
-      if lines.len > 0:
-        jsonObj[path] = %lines
-
-    writeFile(bmPathStr, $jsonObj)
-    return ok()
-  except CatchableError as e:
-    return err(fmt"Failed to save bookmarks: {e.msg}")
+proc record*[T](records: var PersistedRecords[T], key: string, value: T) =
+  ## Record `value` for the next save unless it is what `key` was opened with.
+  ## A file never opened counts as opened with the default value.
+  if key in records.changes or records.restored.getOrDefault(key) != value:
+    records.changes[key] = value

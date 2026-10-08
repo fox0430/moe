@@ -296,16 +296,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     windowManager: newEditorWindowManager(),
     buffers: @[], # Will be initialized below
     config: editorConfig, # Store configuration
-    cursorPositions:
-      if editorConfig.persist.cursorPosition:
-        loadCursorPositions()
-      else:
-        initTable[string, CursorPositionEntry](),
-    savedBookmarks:
-      if editorConfig.persist.bookmarks:
-        loadBookmarks()
-      else:
-        initTable[string, seq[int]](),
   )
 
   # Subscribe before the first buffer is registered; `addBuffer` installs the

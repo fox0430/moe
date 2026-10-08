@@ -21,7 +21,7 @@
 
 import std/[unittest, os, options, monotimes, times, posix, strutils, tables]
 import pkg/results
-import ../src/moepkg/[editor, buffer, config, config_loader, highlight]
+import ../src/moepkg/[editor, buffer, config, config_loader, highlight, path_key]
 import ../src/moepkg/command_handlers/editor_ops
 import ../src/moepkg/command_handlers/handler_result
 
@@ -315,8 +315,9 @@ suite "Editor - loadFile":
       removeFile(testFile)
 
     # Set a persisted cursor position
-    let absPath = absolutePath(testFile)
-    e.cursorPositions[absPath] = CursorPositionEntry(line: 2, column: 3)
+    let absPath = pathKey(testFile)
+    e.persistedCursorPositions.changes[absPath] =
+      CursorPositionEntry(line: 2, column: 3)
 
     let result = e.loadFile(testFile)
     check result.isOk
@@ -334,8 +335,9 @@ suite "Editor - loadFile":
       removeFile(testFile)
 
     # Set a persisted cursor position that exceeds buffer
-    let absPath = absolutePath(testFile)
-    e.cursorPositions[absPath] = CursorPositionEntry(line: 100, column: 100)
+    let absPath = pathKey(testFile)
+    e.persistedCursorPositions.changes[absPath] =
+      CursorPositionEntry(line: 100, column: 100)
 
     let result = e.loadFile(testFile)
     check result.isOk
@@ -908,10 +910,10 @@ suite "Editor - saveBufferCursorPosition":
     e.saveBufferCursorPosition(e.activeBuffer)
 
     # Verify cursor position was saved
-    let absPath = absolutePath(testFile)
-    check e.cursorPositions.hasKey(absPath)
-    check e.cursorPositions[absPath].line == 0
-    check e.cursorPositions[absPath].column == 3
+    let absPath = pathKey(testFile)
+    check e.persistedCursorPositions.changes.hasKey(absPath)
+    check e.persistedCursorPositions.changes[absPath].line == 0
+    check e.persistedCursorPositions.changes[absPath].column == 3
 
   test "Do not save cursor position when disabled":
     var config = newEditorConfig()
@@ -929,8 +931,8 @@ suite "Editor - saveBufferCursorPosition":
     e.saveBufferCursorPosition(e.activeBuffer)
 
     # Cursor position should not be saved
-    let absPath = absolutePath(testFile)
-    check not e.cursorPositions.hasKey(absPath)
+    let absPath = pathKey(testFile)
+    check not e.persistedCursorPositions.changes.hasKey(absPath)
 
   test "Do not save cursor position for buffer without path":
     var config = newEditorConfig()
@@ -940,11 +942,11 @@ suite "Editor - saveBufferCursorPosition":
     # Buffer has no file path
     check e.activeBuffer.filePath.isNone
 
-    let initialCount = e.cursorPositions.len
+    let initialCount = e.persistedCursorPositions.changes.len
     e.saveBufferCursorPosition(e.activeBuffer)
 
     # No new cursor position should be added
-    check e.cursorPositions.len == initialCount
+    check e.persistedCursorPositions.changes.len == initialCount
 
   test "Do not save cursor position for COMMIT_EDITMSG":
     var config = newEditorConfig()
@@ -962,8 +964,8 @@ suite "Editor - saveBufferCursorPosition":
 
     e.saveBufferCursorPosition(e.activeBuffer)
 
-    let absPath = absolutePath(testFile)
-    check not e.cursorPositions.hasKey(absPath)
+    let absPath = pathKey(testFile)
+    check not e.persistedCursorPositions.changes.hasKey(absPath)
 
   test "Do not save cursor position for git-rebase-todo":
     var config = newEditorConfig()
@@ -981,8 +983,8 @@ suite "Editor - saveBufferCursorPosition":
 
     e.saveBufferCursorPosition(e.activeBuffer)
 
-    let absPath = absolutePath(testFile)
-    check not e.cursorPositions.hasKey(absPath)
+    let absPath = pathKey(testFile)
+    check not e.persistedCursorPositions.changes.hasKey(absPath)
 
   test "Do not restore cursor position for COMMIT_EDITMSG":
     var config = newEditorConfig()
@@ -996,8 +998,9 @@ suite "Editor - saveBufferCursorPosition":
       removeDir(getTempDir() / "moe_test_COMMIT_EDITMSG2")
 
     # Pre-populate cursor positions with a saved position for this file
-    let absPath = absolutePath(testFile)
-    e.cursorPositions[absPath] = CursorPositionEntry(line: 0, column: 10)
+    let absPath = pathKey(testFile)
+    e.persistedCursorPositions.changes[absPath] =
+      CursorPositionEntry(line: 0, column: 10)
 
     discard e.loadFile(testFile)
 
@@ -1017,8 +1020,9 @@ suite "Editor - saveBufferCursorPosition":
       removeDir(getTempDir() / "moe_test_rebase2")
 
     # Pre-populate cursor positions with a saved position for this file
-    let absPath = absolutePath(testFile)
-    e.cursorPositions[absPath] = CursorPositionEntry(line: 0, column: 10)
+    let absPath = pathKey(testFile)
+    e.persistedCursorPositions.changes[absPath] =
+      CursorPositionEntry(line: 0, column: 10)
 
     discard e.loadFile(testFile)
 

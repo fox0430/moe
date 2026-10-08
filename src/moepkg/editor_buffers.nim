@@ -32,6 +32,7 @@ import
   types/editor_types,
   editor_mode,
   editor_hooks,
+  editor_persist,
   editor_window,
   editor_window_state,
   editor_window_tab,
@@ -463,6 +464,7 @@ proc deleteBufferById*(e: Editor, id: BufferId): Result[(), string] =
   let bufferIndex = e.bufferIndexById(id)
   if bufferIndex < 0:
     return err("Buffer does not exist")
+  e.rememberBookmarks(e.buffers[bufferIndex])
   let deletedBuffer = e.removeBufferAt(bufferIndex)
 
   let newBuf =
