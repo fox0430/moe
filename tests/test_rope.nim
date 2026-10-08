@@ -301,6 +301,42 @@ suite "Rope - Replace Line":
     check r[0] == "hi"
     check r[1] == "world"
 
+  test "replaceLineRun matches replacing line by line":
+    for (text, start, lines) in [
+      ("a\nb\nc", 0, @["x", "y"]),
+      ("a\nb\nc", 1, @["", "zz"]),
+      ("a\nb\nc", 2, @["last"]),
+      ("a\n\nc", 0, @["", "", ""]),
+      ("a\nbb\nccc", 0, @["", "", ""]),
+      ("", 0, @["only"]),
+      ("", 0, @[""]),
+    ]:
+      let
+        bulk = newRope(text)
+        perLine = newRope(text)
+      bulk.replaceLineRun(start, lines)
+      for j, line in lines:
+        perLine.replaceLine(start + j, line)
+      check $bulk == $perLine
+      check bulk.len == perLine.len
+
+  test "replaceLineRun lands the run as one subtree":
+    var lines: seq[string]
+    for i in 0 ..< 1000:
+      lines.add "line " & $i
+    let r = newRope(lines.join("\n"))
+    for line in lines.mitems:
+      line = line.toUpperAscii
+    r.replaceLineRun(0, lines)
+    check $r == lines.join("\n")
+    check r.getTreeInfo.leafCount == newRope(lines.join("\n")).getTreeInfo.leafCount
+
+  test "replaceLineRun refuses lines the rope does not hold":
+    let r = newRope("a\nb")
+    expect IndexDefect:
+      r.replaceLineRun(1, @["x", "y"])
+    check $r == "a\nb"
+
   test "modifyLineContent":
     let r = newRope("hello\nworld")
     r.modifyLineContent(

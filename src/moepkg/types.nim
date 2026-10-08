@@ -221,6 +221,9 @@ type
     cursor*: BufferPosition # Window-local cursor position
     visualAnchor*: BufferPosition
       # Where the window's Visual selection started; the cursor is its other end.
+    holdLastVisual: bool
+      # Set from `saveLastVisualAhead` to `settleLastVisual`. The area was saved
+      # for `gv` before the edit moved it, so leaving Visual keeps it.
     active*: bool # Whether this is the active window
     mode*: EditorMode
       # Current mode for this window. Enter a Visual mode through `setMode`,
@@ -643,12 +646,6 @@ type
     of lecOperatorLines:
       linesOperator*: OperatorType # OpIndent, OpOutdent, OpLowerCase, OpUpperCase
       operatorLineCount*: int # Number of lines the operator was applied to
-
-  VisualSelectionKind* = enum
-    ## Type of visual selection
-    vskChar # Character-wise selection (v)
-    vskBlock # Block (column) selection (Ctrl-V)
-    vskLine # Line-wise selection (V)
 
   VisualSelection* = object
     ## A window's Visual selection, derived from its anchor, cursor and mode.
@@ -1166,14 +1163,51 @@ proc mode*(s: EditorState): EditorMode =
   ## Get current mode from the active window
   s.activeWindow.mode
 
+proc clampedAnchor*(win: EditorWindow): BufferPosition =
+  ## The anchor, pulled back onto the last line when lines under it went away.
+  result = win.visualAnchor
+  let buf = win.buffer
+  if buf.isNil or buf.len == 0 or result.line < buf.len:
+    return
+  result.line = buf.len - 1
+  result.column = min(result.column, buf.getLineLen(result.line))
+
+proc saveLastVisual*(win: EditorWindow) =
+  ## Remember the window's selection on its buffer for `gv`.
+  if win.mode.isVisualAllMode and not win.buffer.isNil:
+    win.buffer.lastVisual = some(
+      VisualArea(
+        start: win.clampedAnchor, cursor: win.cursor, kind: win.mode.visualKind
+      )
+    )
+
+proc saveLastVisualAhead*(win: EditorWindow): Option[VisualArea] =
+  ## Save the selection for `gv` before acting on it, so the edit moves the
+  ## saved area, and keep leaving Visual from saving it again. Returns the area
+  ## it replaced, for `settleLastVisual`.
+  if not win.buffer.isNil:
+    result = win.buffer.lastVisual
+  win.saveLastVisual()
+  win.holdLastVisual = true
+
+proc settleLastVisual*(win: EditorWindow, replaced: Option[VisualArea]) =
+  ## End `saveLastVisualAhead`. Like Vim, only an ended selection is saved, so
+  ## one still active gets the replaced area back.
+  win.holdLastVisual = false
+  if win.mode.isVisualAllMode and not win.buffer.isNil:
+    win.buffer.lastVisual = replaced
+
 proc setMode*(win: EditorWindow, m: EditorMode) =
   ## Set the window's mode. Entering a Visual mode from outside starts the
   ## selection at the cursor, so no entry path can resume a stale anchor.
-  ## Leaving Visual for a mode other than Insert or Replace brings the cursor
-  ## back onto the line, off the end `$` left it at.
+  ## Leaving Visual saves the selection for `gv`, as Vim does, and for a mode
+  ## other than Insert or Replace brings the cursor back onto the line, off the
+  ## end `$` left it at.
   let leavingVisual = win.mode.isVisualAllMode and not m.isVisualAllMode
   if m.isVisualAllMode and not win.mode.isVisualAllMode:
     win.visualAnchor = win.cursor
+  if leavingVisual and not win.holdLastVisual:
+    win.saveLastVisual()
   win.mode = m
   if leavingVisual and m notin {EditorMode.Insert, EditorMode.Replace} and
       not win.buffer.isNil and win.cursor.line < win.buffer.len:

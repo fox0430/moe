@@ -25,6 +25,12 @@ type
     line*: int
     column*: int
 
+  VisualSelectionKind* = enum
+    ## Type of visual selection
+    vskChar # Character-wise selection (v)
+    vskBlock # Block (column) selection (Ctrl-V)
+    vskLine # Line-wise selection (V)
+
   ColumnRange* = object
     ## A half-open column range [startCol, endCol) used for pre-computed
     ## per-line match caching (search highlights, current-word highlights).

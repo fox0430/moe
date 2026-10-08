@@ -8379,6 +8379,11 @@ suite "executeCommand - read-only gate allowlists stay in sync":
     for id in VisualEditCommandIds:
       check id in ids
 
+  test "every VisualConsumeOnlyCommandIds entry is a registered command":
+    let ids = registeredCommandIds()
+    for id in VisualConsumeOnlyCommandIds:
+      check id in ids
+
   test "every EditOperatorTypes entry is a registered operatorType":
     let ops = registeredOperatorTypes()
     for op in EditOperatorTypes:
@@ -8421,7 +8426,8 @@ suite "executeCommand - read-only gate allowlists stay in sync":
       "visual.move.left", "visual.move.paragraph.backward",
       "visual.move.paragraph.forward", "visual.move.right", "visual.move.up",
       "visual.move.word", "visual.move.word.back", "visual.move.word.end",
-      "visual.move.word.end.backward", "visual.swap.selection", "visual.yank",
+      "visual.move.word.end.backward", "visual.reselect", "visual.swap.selection",
+      "visual.yank",
     ]
     for id in visualModeCommandIds():
       # EditCommandIds covers the cursor-edit ids also bound in visual modes.

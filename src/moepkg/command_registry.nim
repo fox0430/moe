@@ -67,7 +67,7 @@ const EditOperatorTypes = ["replace"]
 const VisualEditCommandIds = [
   "visual.delete", "visual.indent", "visual.dedent", "visual.lowercase",
   "visual.uppercase", "visual.togglecase", "visual.joinlines", "visual.to.insert",
-  "visual.change", "visual.block.append", "visual.paste", "visual.paste.end",
+  "visual.change", "visual.block.append", "visual.paste", "visual.paste.end", "edit.cut",
 ]
   ## Visual-mode command ids that modify the selection, gated on read-only
   ## buffers.
@@ -75,6 +75,10 @@ const VisualEditCommandIds = [
 const VisualEditOperatorTypes = ["visual-replace", "visual-surround"]
   ## ctOperatorPending operatorTypes that modify the visual selection (`r`, `S`).
   ## Guarded the same way as EditOperatorTypes / VisualEditCommandIds.
+
+const VisualConsumeOnlyCommandIds = ["visual.yank"]
+  ## Command ids that end Visual by acting on the selection without editing
+  ## it, outside the read-only gate.
 
 proc reverseFindMotion(m: Motion): Motion =
   ## The opposite-direction find/till motion, used by `,`.
@@ -243,6 +247,24 @@ proc executeCommand*(
       cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
       cmd.commandId in VisualEditCommandIds
     ) or (cmd.kind == ctOperatorPending and cmd.operatorType in VisualEditOperatorTypes)
+  # A command acting on the selection ends Visual, so like Vim it saves the area
+  # for `gv` first; its edit then moves the area and the undo entry restores it.
+  let consumer =
+    if ctx.state.mode.isVisualAllMode and (
+      isVisualEditCommand or (
+        cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
+        cmd.commandId in VisualConsumeOnlyCommandIds
+      )
+    ): ctx.state.activeWindow else: nil
+  let replacedArea =
+    if consumer != nil:
+      consumer.saveLastVisualAhead()
+    else:
+      none(VisualArea)
+  defer:
+    if consumer != nil:
+      consumer.settleLastVisual(replacedArea)
+
   # Primitive-level checks in moepkg/buffer/edit.nim reject writes on readOnly
   # buffers at the choke point, and the operators now propagate those results.
   # Keep this gate as defense-in-depth: it centralizes the status message and

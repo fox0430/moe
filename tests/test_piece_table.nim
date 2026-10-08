@@ -357,6 +357,43 @@ suite "PieceTable - Replace Line":
     check pt[0] == "hi"
     check pt[1] == "world"
 
+  test "replaceLineRun matches replacing line by line":
+    for (text, start, lines) in [
+      ("a\nb\nc", 0, @["x", "y"]),
+      ("a\nb\nc", 1, @["", "zz"]),
+      ("a\nb\nc", 2, @["last"]),
+      ("a\n\nc", 0, @["", "", ""]),
+      ("a\nbb\nccc", 0, @["", "", ""]),
+      ("", 0, @["only"]),
+      ("", 0, @[""]),
+    ]:
+      let
+        bulk = newPieceTable(text)
+        perLine = newPieceTable(text)
+      bulk.replaceLineRun(start, lines)
+      for j, line in lines:
+        perLine.replaceLine(start + j, line)
+      check $bulk == $perLine
+      check bulk.len == perLine.len
+      check verifyMetricsNode(bulk.root)
+
+  test "replaceLineRun lands the run as one piece":
+    var lines: seq[string]
+    for i in 0 ..< 1000:
+      lines.add "line " & $i
+    let pt = newPieceTable(lines.join("\n"))
+    for line in lines.mitems:
+      line = line.toUpperAscii
+    pt.replaceLineRun(0, lines)
+    check $pt == lines.join("\n")
+    check pt.getTableInfo.nodeCount == 1
+
+  test "replaceLineRun refuses lines the table does not hold":
+    let pt = newPieceTable("a\nb")
+    expect IndexDefect:
+      pt.replaceLineRun(1, @["x", "y"])
+    check $pt == "a\nb"
+
   test "modifyLineContent":
     let pt = newPieceTable("hello\nworld")
     pt.modifyLineContent(

@@ -19,6 +19,8 @@
 
 import std/options
 
+import primitives
+
 type
   OverlayKind* {.pure.} = enum
     ## Overlay types for transient modes that sit on top of base modes
@@ -116,6 +118,20 @@ proc modeLabel*(m: EditorMode, insertNormal: bool = false): string =
 proc isVisualAllMode*(mode: EditorMode): bool =
   ## Check if the mode is any visual mode variant
   mode in {EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
+
+func visualKind*(mode: EditorMode): VisualSelectionKind =
+  ## The kind of selection a Visual mode makes.
+  case mode
+  of EditorMode.VisualLine: vskLine
+  of EditorMode.VisualBlock: vskBlock
+  else: vskChar
+
+func visualMode*(kind: VisualSelectionKind): EditorMode =
+  ## The Visual mode that makes a selection of `kind`.
+  case kind
+  of vskChar: EditorMode.Visual
+  of vskLine: EditorMode.VisualLine
+  of vskBlock: EditorMode.VisualBlock
 
 proc isNormalOrVisualMode*(mode: EditorMode): bool =
   ## Normal or any Visual variant. Excludes Insert / Replace / viewers.

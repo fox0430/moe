@@ -147,6 +147,9 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     ),
     HelpEntry(syntax: "dgn", description: "Delete next search match"),
     HelpEntry(syntax: "dgN", description: "Delete previous search match"),
+    HelpEntry(
+      syntax: "gv", description: "Reselect the previous Visual area in its mode"
+    ),
     HelpEntry(syntax: "]c", description: "Jump to next git change hunk"),
     HelpEntry(syntax: "[c", description: "Jump to previous git change hunk"),
     HelpEntry(syntax: "]x", description: "Jump to next git merge conflict block"),
@@ -503,6 +506,9 @@ const VisualModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "Ctrl-x", description: "Decrease number under cursor"),
     HelpEntry(syntax: "I", description: "Insert character, multiple lines"),
     HelpEntry(syntax: "zf", description: "Fold selected lines"),
+    HelpEntry(
+      syntax: "gv", description: "Exchange the selection with the previous Visual area"
+    ),
     HelpEntry(syntax: "Ctrl-s", description: "Selection Range (LSP)"),
     HelpEntry(syntax: "Esc", description: "Go to Normal mode"),
   ],

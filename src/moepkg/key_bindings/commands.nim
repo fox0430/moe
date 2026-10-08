@@ -186,6 +186,7 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
     "visual-paste-end", "Delete selection, paste, and leave cursor after pasted text",
     "visual.paste.end",
   ),
+  ("visual-reselect", "Reselect the previous visual area", "visual.reselect"),
 ].withWindowCommands()
 
 func actionCommandId*(name: string): Option[string] =

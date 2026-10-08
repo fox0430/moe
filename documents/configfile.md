@@ -835,6 +835,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | visual-replace-char | Replace visual selection with character |
 | visual-surround-char | Surround visual selection with character |
 | visual-swap-selection | Swap cursor to other end of selection |
+| visual-reselect | Reselect the previous visual area |
 | visual-to-insert | Enter insert mode from visual selection |
 | visual-block-append | Append after visual block selection |
 

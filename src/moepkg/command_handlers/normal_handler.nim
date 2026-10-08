@@ -31,6 +31,7 @@ import
     render_utils, search_utils, uri_utils, key_router, unicode_utils, visual_selection,
   ]
 import handler_types, visual_handler, insert_commands, command_passthrough
+from visual_commands import reselectVisual
 import ../types/editor_types
 export handler_types
 
@@ -260,6 +261,10 @@ proc searchMatchAndOperate(
   let endCol = getMatchEndCol(buffer, searchText, pos, ignoreCase, wholeWord)
   let matchEnd = BufferPosition(line: pos.line, column: endCol)
   recordJump(state)
+  # Like Vim, the match is the Visual area the operator worked on, for `gv`.
+  # An operator that does nothing below leaves the area alone.
+  if op.operatorType in {OpDelete, OpChange, OpYank}:
+    buffer.lastVisual = some(VisualArea(start: pos, cursor: matchEnd, kind: vskChar))
 
   # Get text in the match range
   let selectedText = buffer.getTextInRange(pos, matchEnd)
@@ -880,6 +885,15 @@ proc handleNormalModeKey*(
         state.pendingInput.pendingOperator = none(PendingOperator)
         return searchMatchAndOperate(buffer, state, forward = false, op)
       return searchMatchAndSelect(buffer, state, forward = false)
+    of "visual.reselect":
+      # Like Vim, `gv` is no motion: it cancels a pending operator.
+      if state.pendingInput.pendingOperator.isSome:
+        state.pendingInput.pendingOperator = none(PendingOperator)
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      let r = reselectVisual(buffer, state)
+      if r.isErr:
+        return NormalModeResult(kind: nmrError, errorMessage: r.error)
+      return NormalModeResult(kind: nmrHandled, modeTransition: some(r.get))
     else:
       # Try to execute using command registry for other actions
       let ctx = CommandContext(

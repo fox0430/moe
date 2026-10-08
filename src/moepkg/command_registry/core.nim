@@ -106,6 +106,7 @@ type
     bcVisualChange = "visual.change"
     bcVisualSwapSelection = "visual.swap.selection"
     bcVisualPaste = "visual.paste"
+    bcVisualReselect = "visual.reselect"
     # Fold operations
     bcFoldOpen = "fold.open" # zo - open fold at cursor
     bcFoldClose = "fold.close" # zc - close fold at cursor

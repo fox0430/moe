@@ -22,7 +22,7 @@
 ## Stores text as a set of pieces referencing two buffers (original + add),
 ## organized in a Red-Black Tree for O(log n) operations.
 
-import std/algorithm
+import std/[algorithm, strutils]
 
 type
   RBColor = enum
@@ -915,6 +915,22 @@ proc replaceLine*(pt: PieceTable, lineNumber: int, content: string) =
   if lineNumber < 0 or lineNumber >= pt.cachedLineCount:
     raise newException(IndexDefect, "PieceTable line out of bounds")
   pt[lineNumber] = content
+
+proc replaceLineRun*(pt: PieceTable, start: int, lines: openArray[string]) =
+  ## Overwrite the `lines.len` lines at `start` with one delete and one insert,
+  ## so the run lands as one piece rather than one per line.
+  if lines.len == 0:
+    return
+  if start < 0 or start + lines.len > pt.cachedLineCount:
+    raise newException(IndexDefect, "PieceTable line out of bounds")
+  let
+    first = pt.lineByteRange(start).startOff
+    last = pt.lineByteRange(start + lines.len - 1).endOff
+  if last > first:
+    pt.deleteNodeAt(first, last - first)
+  let text = lines.join("\n")
+  if text.len > 0:
+    pt.insertTextAt(first, text)
 
 proc modifyLineContent*(pt: PieceTable, lineNumber: int, f: proc(s: var string)) =
   if lineNumber < 0 or lineNumber >= pt.cachedLineCount:

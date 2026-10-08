@@ -22,7 +22,7 @@
 
 import std/[options, unicode]
 
-from std/strutils import replace, contains
+from std/strutils import replace, contains, count, join, rfind, split
 
 import pkg/results
 
@@ -301,6 +301,7 @@ proc replaceLines*(
     delete: int,
     lines: openArray[string],
     keepRows: bool = true,
+    column = 0,
 ): Result[(), string] =
   ## Swap the `delete` lines at `start` for `lines`, as one change recorded and
   ## reported to the row-remap subscribers once, so the per-line side arrays
@@ -308,6 +309,8 @@ proc replaceLines*(
   ##
   ## `keepRows = false` gives the old rows up: their markers, folds and
   ## bookmarks go with them instead of staying on unrelated replacement text.
+  ## `column` is where the rewrite starts on the first line, which undo and the
+  ## changelist report as the change's position.
   ##
   ## CR is stripped for decoded buffers; lines must not contain separators.
   if b.readOnly:
@@ -358,6 +361,7 @@ proc replaceLines*(
     BufferChange(
       kind: ckReplaceLines,
       replaceLinesIdx: start,
+      replaceLinesColumn: column,
       replaceLinesOldText: replaced,
       replaceLinesNewText: normalized,
       replaceLinesKeepRows: keepRows,
@@ -517,7 +521,9 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
     for i in 1 ..< linesToJoin:
       let currentLine = b.getLine(startLine)
       let nextLine = b.getLine(startLine + 1)
-      let marksBeforeJoin = b.namedMarks
+      let
+        marksBeforeJoin = b.namedMarks
+        visualBeforeJoin = b.lastVisual
 
       var trimmedCurrent = currentLine.strip(leading = false, trailing = true)
       let trimmedNext = nextLine.strip(leading = true, trailing = false)
@@ -544,24 +550,33 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
         return err(insertResult.error)
 
       let lastColumn = max(0, joinedLine.charLen - 1)
+      proc joined(pos: BufferPosition): Option[BufferPosition] =
+        if pos.line == startLine:
+          some(
+            BufferPosition(
+              line: startLine, column: min(pos.column, min(joinedPrefixLen, lastColumn))
+            )
+          )
+        elif pos.line == startLine + 1:
+          some(
+            BufferPosition(
+              line: startLine,
+              column:
+                min(joinedPrefixLen + max(0, pos.column - leadingTrim), lastColumn),
+            )
+          )
+        else:
+          none(BufferPosition)
+
       for name in 'a' .. 'z':
         if marksBeforeJoin[name].isSome:
-          let pos = marksBeforeJoin[name].get
-          if pos.line == startLine:
-            b.namedMarks[name] = some(
-              BufferPosition(
-                line: startLine,
-                column: min(pos.column, min(joinedPrefixLen, lastColumn)),
-              )
-            )
-          elif pos.line == startLine + 1:
-            b.namedMarks[name] = some(
-              BufferPosition(
-                line: startLine,
-                column:
-                  min(joinedPrefixLen + max(0, pos.column - leadingTrim), lastColumn),
-              )
-            )
+          let moved = joined(marksBeforeJoin[name].get)
+          if moved.isSome:
+            b.namedMarks[name] = moved
+      if visualBeforeJoin.isSome:
+        b.moveLastVisualEnds(
+          joined(visualBeforeJoin.get.start), joined(visualBeforeJoin.get.cursor)
+        )
 
   if txr.isErr:
     return err(txr.error)
@@ -584,6 +599,25 @@ proc transformRange*(
 
   let text = b.getTextInRange(startPos, endPos)
   let newText = transform(text)
+
+  # A rewrite that leaves the line breaks in place keeps its rows, so what is
+  # attached to them (marks, the last Visual area) stays where it was instead
+  # of collapsing onto the start of a delete and insert.
+  let rows = text.count('\n')
+  if rows > 0 and newText.count('\n') == rows and startPos.line + rows < b.len:
+    # The lines between are whole in `text`; only its two ends can be cut short.
+    let
+      firstLine = b.getLine(startPos.line)
+      lastLine = b.getLine(startPos.line + rows)
+      head = text[0 ..< text.find('\n')]
+      tail = text[text.rfind('\n') + 1 .. ^1]
+      prefix = firstLine.charSubStr(0, startPos.column)
+      suffix = lastLine.charSubStr(tail.charLen)
+    if firstLine == prefix & head and lastLine == tail & suffix:
+      var lines = strutils.split(newText, '\n')
+      lines[0] = prefix & lines[0]
+      lines[^1].add suffix
+      return b.replaceLines(startPos.line, rows + 1, lines, column = startPos.column)
 
   let deleteResult = b.deleteRange(startPos, endPos)
   if deleteResult.isErr:

@@ -34,26 +34,7 @@
 import types, modes
 import buffer/[core, fold]
 
-func visualKind*(mode: EditorMode): VisualSelectionKind =
-  case mode
-  of EditorMode.VisualLine: vskLine
-  of EditorMode.VisualBlock: vskBlock
-  else: vskChar
-
-func visualMode*(kind: VisualSelectionKind): EditorMode =
-  case kind
-  of vskChar: EditorMode.Visual
-  of vskLine: EditorMode.VisualLine
-  of vskBlock: EditorMode.VisualBlock
-
-proc clampedAnchor(win: EditorWindow): BufferPosition =
-  ## The anchor, pulled back onto the last line when lines under it went away.
-  result = win.visualAnchor
-  let buf = win.buffer
-  if buf.isNil or buf.len == 0 or result.line < buf.len:
-    return
-  result.line = buf.len - 1
-  result.column = min(result.column, buf.getLineLen(result.line))
+export visualKind, visualMode
 
 proc visualSelection*(win: EditorWindow): VisualSelection =
   ## The window's selection; inactive outside the Visual modes.

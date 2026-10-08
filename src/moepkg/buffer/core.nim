@@ -34,7 +34,7 @@ export cow_seq, seq_delta
 
 export
   CharacterEncoding, encodingToString, detectCharacterEncoding, BufferPosition,
-  ColumnRange
+  ColumnRange, VisualSelectionKind
 
 # `BufferNotice` carries a `SettingIssue`, so notice readers need it too.
 export SettingIssue, SettingIssueKind, toMessage, sameSetting
@@ -174,6 +174,21 @@ type
     name*: char
     before*, after*: Option[BufferPosition]
 
+  VisualArea* = object
+    ## The last Visual selection, for `gv`. Like Vim's it follows lines
+    ## inserted and deleted around it but keeps its columns.
+    start*: BufferPosition ## The anchor
+    cursor*: BufferPosition ## The end the cursor was on
+    kind*: VisualSelectionKind
+
+  RowSpan* = object
+    ## Rows `start ..< start + before` that edits turned into
+    ## `start ..< start + after`; rows below them only shift.
+    start*, before*, after*: int32 ## Narrow: an entry can hold one per edited row
+    joinsAbove*: bool
+      ## The dropped rows were joined onto the row above, so ends on them go
+      ## there.
+
   BufferChange* = object
     savedModifiedLines*: seq[LineModificationKind]
       ## Pre-mutation modifiedLines snapshot for undo/redo (non-PieceTable, 1 byte per line)
@@ -205,6 +220,10 @@ type
       ## Lines this entry holds against the undoable-reload budget, refunded
       ## when it leaves history. Non-zero only for a reload.
     reloadChargeBytes*: int ## Bytes this entry holds against the undoable-reload budget.
+    visualAcross*: ref VisualArea
+      ## `lastVisual` on the other side of this entry, nil for none; undo/redo
+      ## swap the two as Vim does, so undoing an edit restores the area it was
+      ## made with. Boxed because inner transaction changes never set it.
     case kind*: BufferChangeKind
     of ckInsertText:
       insertPos*: BufferPosition
@@ -254,6 +273,7 @@ type
       replaceLineNewText*: string
     of ckReplaceLines:
       replaceLinesIdx*: int
+      replaceLinesColumn*: int ## Where the rewrite starts on its first line
       replaceLinesOldText*: seq[string]
       replaceLinesNewText*: seq[string]
       replaceLinesKeepRows*: bool
@@ -283,6 +303,10 @@ type
       snapshotBookmarks*: seq[int]
         ## Restored wholesale like snapshotLineMarkers / snapshotFoldState;
         ## the non-snapshot line-op branches shift via adjustBookmarksFor*.
+      snapshotRows*: CowSeq[RowSpan]
+        ## The row span of each event the entry fired, in order, which no
+        ## reversed event reports, so `lastVisual` can follow them across undo
+        ## and redo. Shared with the inverse entry instead of copied per swap.
 
   InsertOutcome* = object ## What an insertion did to the line it landed on.
     insertEnd*: BufferPosition ## Just past everything that was written.
@@ -306,6 +330,13 @@ type
         ## (ckInsertText with newlines, ckDeleteRange with a surviving merged
         ## first row). Per-line-array subscribers use it to shift at
         ## `firstAffectedRow + 1`; row-reference subscribers ignore it.
+      pairedRows*: int
+        ## On each half of a rewrite that gives its rows up, the row count of
+        ## the other half; 0 otherwise. Positions that stay on their line take
+        ## the two halves as one span.
+      joinsAbove*: bool
+        ## The dropped rows were joined onto the row above them rather than
+        ## deleted, so positions on them belong to that row.
     of rrekClear:
       discard
 
@@ -367,6 +398,7 @@ type
     startSeq*: int # changeSeq at the start of transaction
     cursorPos*: Option[BufferPosition] # Cursor position before the transaction
     namedMarksBefore*: NamedMarks
+    lastVisualBefore*: Option[VisualArea]
 
   BufferStorage* = object
     ## The text backend, held by value on TextBuffer. Keeping the variant
@@ -483,6 +515,7 @@ type
     pendingSnapshotFolds*: FoldState
     pendingSnapshotNamedMarks*: NamedMarks
     pendingSnapshotBookmarks*: seq[int]
+    pendingSnapshotRows*: seq[RowSpan] ## Rows rewritten since the snapshot was taken
 
     # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
     lineMarkers*: CowSeq[Option[LineMarkerKind]] # Each line can have at most one marker
@@ -530,6 +563,7 @@ type
     # Bookmarks (sorted list of bookmarked line numbers)
     bookmarks*: seq[int]
     namedMarks*: NamedMarks
+    lastVisual*: Option[VisualArea] ## Reselected by `gv`
 
     # LSP diagnostics (full detail for hover display)
     diagnostics*: seq[BufferDiagnostic]
@@ -956,6 +990,7 @@ proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent)
 proc foldShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc bookmarkShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc namedMarkShiftCallback(b: TextBuffer, event: RowColRemapEvent)
+proc lastVisualShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc lineMarkerShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc modifiedLinesShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 
@@ -1009,6 +1044,7 @@ proc newTextBuffer*(
   result.remapCallbacks.add(foldShiftCallback)
   result.remapCallbacks.add(bookmarkShiftCallback)
   result.remapCallbacks.add(namedMarkShiftCallback)
+  result.remapCallbacks.add(lastVisualShiftCallback)
   result.sideArrayCallbacks = @[]
   result.sideArrayCallbacks.add(lineMarkerShiftCallback)
   result.sideArrayCallbacks.add(modifiedLinesShiftCallback)
@@ -1120,7 +1156,8 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
   of ckReplaceLine:
     return BufferPosition(line: change.replaceLineIdx, column: 0)
   of ckReplaceLines:
-    return BufferPosition(line: change.replaceLinesIdx, column: 0)
+    return
+      BufferPosition(line: change.replaceLinesIdx, column: change.replaceLinesColumn)
   of ckTransaction:
     # For transactions, return the saved cursor position if available,
     # otherwise fall back to the position of the first change
@@ -1254,6 +1291,122 @@ proc namedMarkShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
             pos.line += delta
           mark = some(pos)
 
+func boxed*(area: Option[VisualArea]): ref VisualArea =
+  if area.isSome:
+    result = new VisualArea
+    result[] = area.get
+
+func reversed*(span: RowSpan): RowSpan =
+  RowSpan(
+    start: span.start,
+    before: span.after,
+    after: span.before,
+    joinsAbove: span.joinsAbove,
+  )
+
+func rowSpan(event: RowColRemapEvent): Option[RowSpan] =
+  ## The rows `event` adds or drops, as the last Visual area sees them; none
+  ## when it moves no row. The leaving half of a rewrite gives none, as the
+  ## arriving half moves the area for both.
+  if event.kind != rrekMultiLine:
+    return
+  let delta = event.lastAffectedRowAfter - event.lastAffectedRowBefore
+  if delta == 0:
+    return
+  let row = event.firstAffectedRow + ord(event.preservesFirstRow)
+  if event.pairedRows > 0:
+    if delta > 0:
+      return some(
+        RowSpan(start: int32(row), before: int32(event.pairedRows), after: int32(delta))
+      )
+    return
+  some(
+    RowSpan(
+      start: int32(row),
+      before: int32(max(0, -delta)),
+      after: int32(max(0, delta)),
+      joinsAbove: event.joinsAbove or event.preservesFirstRow,
+    )
+  )
+
+proc shiftLastVisual*(b: TextBuffer, rows: RowSpan) =
+  ## Move the last Visual area across `rows` being rewritten: an end on a row
+  ## the rewrite kept stays, one on a dropped row goes to the row after the
+  ## rewrite (or the row it was joined onto), and one below shifts.
+  if b.lastVisual.isNone:
+    return
+  template adjust(line: var int) =
+    if line >= rows.start + rows.before:
+      line += rows.after - rows.before
+    elif line >= rows.start + rows.after:
+      line =
+        if rows.joinsAbove:
+          rows.start - 1
+        else:
+          rows.start + rows.after
+
+  adjust(b.lastVisual.get.start.line)
+  adjust(b.lastVisual.get.cursor.line)
+
+proc lastVisualShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Vim's mark_adjust for the Visual marks: deleting the line an end is on
+  ## does not drop the area, it moves that end to where the deletion was.
+  if b.lastVisual.isNone:
+    return
+  if event.kind == rrekClear:
+    b.lastVisual = none(VisualArea)
+    return
+  let rows = event.rowSpan
+  if rows.isSome:
+    b.shiftLastVisual(rows.get)
+
+proc moveLastVisualEnds*(b: TextBuffer, start, cursor: Option[BufferPosition]) =
+  ## Put each end of the last Visual area an edit re-placed where it went.
+  if b.lastVisual.isSome:
+    if start.isSome:
+      b.lastVisual.get.start = start.get
+    if cursor.isSome:
+      b.lastVisual.get.cursor = cursor.get
+
+func acrossLineBreak(
+    change: BufferChange, pos: BufferPosition
+): Option[BufferPosition] =
+  ## Where `pos` lands when `change` splits its line or joins it to another;
+  ## none when its row only moves whole.
+  case change.kind
+  of ckInsertText:
+    # With nothing after the break, as for `o`, no text moves down to follow.
+    let rows = countNewlines(change.insertText)
+    if rows > 0 and change.insertSplitTailLen > 0 and pos.line == change.insertPos.line and
+        pos.column >= change.insertPos.column:
+      let tailColumn =
+        change.insertText[change.insertText.rfind('\n') + 1 .. ^1].charLen
+      return some(
+        BufferPosition(
+          line: pos.line + rows,
+          column: tailColumn + pos.column - change.insertPos.column,
+        )
+      )
+  of ckDeleteRange:
+    let
+      first = change.deleteStartPos
+      last = change.deleteEndPos
+      joined = change.deleteJoinedNextLine
+    if (first.line == last.line and not joined) or pos < first:
+      return
+    if joined and pos.line == last.line + 1:
+      return some(BufferPosition(line: first.line, column: first.column + pos.column))
+    if not joined and pos.line == last.line and pos.column > last.column:
+      return some(
+        BufferPosition(
+          line: first.line, column: first.column + pos.column - last.column - 1
+        )
+      )
+    if pos.line <= last.line:
+      return some(first)
+  else:
+    discard
+
 proc insert[T](x: var seq[T], v: T, i, count: int) =
   ## `count` copies of `v` at `i`, tail moved once. Plain-seq twin of the
   ## CowSeq overload.
@@ -1328,6 +1481,8 @@ proc reversed(event: RowColRemapEvent): RowColRemapEvent =
       lastAffectedRowBefore: event.lastAffectedRowAfter,
       lastAffectedRowAfter: event.lastAffectedRowBefore,
       preservesFirstRow: event.preservesFirstRow,
+      pairedRows: event.pairedRows,
+      joinsAbove: event.joinsAbove,
     )
   of rrekSingleLine:
     RowColRemapEvent(
@@ -1339,6 +1494,14 @@ proc reversed(event: RowColRemapEvent): RowColRemapEvent =
     )
   of rrekClear:
     event
+
+proc wantsSnapshotRows(b: TextBuffer): bool =
+  ## Undo and redo put back the area an entry was made with, so its rows are
+  ## replayed only for an entry made without one.
+  if b.inTransaction and b.currentTransaction.isSome:
+    b.currentTransaction.get.lastVisualBefore.isNone
+  else:
+    b.lastVisual.isNone
 
 proc emitRowColRemapEvents*(
     b: TextBuffer,
@@ -1359,6 +1522,10 @@ proc emitRowColRemapEvents*(
         reversed(ev)
       else:
         ev
+    if b.pendingSnapshot.isSome and b.wantsSnapshotRows:
+      let rows = toFire.rowSpan
+      if rows.isSome:
+        b.pendingSnapshotRows.add rows.get
     for cb in b.remapCallbacks:
       try:
         cb(b, toFire)
@@ -1506,6 +1673,7 @@ proc emitRowColRemapEvents*(
           firstAffectedRow: startLine + 1,
           lastAffectedRowBefore: startLine + 1,
           lastAffectedRowAfter: startLine,
+          joinsAbove: true,
         )
       else:
         let lastBefore = endLine + (if change.deleteJoinedNextLine: 1 else: 0)
@@ -1555,12 +1723,14 @@ proc emitRowColRemapEvents*(
     else:
       # The old rows leave first and the replacement arrives in their place, so
       # nothing attached to them lands on the new text or stretches over it.
+      let paired = oldCount > 0 and newCount > 0
       if oldCount > 0:
         events.add RowColRemapEvent(
           kind: rrekMultiLine,
           firstAffectedRow: start,
           lastAffectedRowBefore: start + oldCount - 1,
           lastAffectedRowAfter: start - 1,
+          pairedRows: if paired: newCount else: 0,
         )
       if newCount > 0:
         events.add RowColRemapEvent(
@@ -1568,6 +1738,7 @@ proc emitRowColRemapEvents*(
           firstAffectedRow: start,
           lastAffectedRowBefore: start - 1,
           lastAffectedRowAfter: start + newCount - 1,
+          pairedRows: if paired: oldCount else: 0,
         )
     if reverse:
       # `dispatch` inverts each event; undoing the pair also needs them in the
@@ -1694,6 +1865,12 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
       b.pendingLineMarkersSnapshot = b.lineMarkers
       b.hasPendingLineMarkersSnapshot = true
 
+proc takePendingSnapshotRows*(b: TextBuffer): CowSeq[RowSpan] =
+  ## The rows recorded since the snapshot, moved into its undo entry. Left nil
+  ## when none were recorded, as for most entries.
+  if b.pendingSnapshotRows.len > 0:
+    result = initCowSeq(move(b.pendingSnapshotRows))
+
 proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   ## Drop every pending snapshot artifact captured for a mutation that ended up
   ## not happening (e.g. backend raised after captureSnapshotIfNeeded). Symmetric
@@ -1705,6 +1882,9 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   b.pendingSnapshotFolds = initFoldState()
   b.pendingSnapshotNamedMarks = default(NamedMarks)
   b.pendingSnapshotBookmarks.setLen(0)
+  # Released, not truncated: one large edit would otherwise leave its capacity
+  # on the buffer for good.
+  b.pendingSnapshotRows = @[]
   b.hasPendingModifiedLinesSnapshot = false
   b.pendingModifiedLinesSnapshot.setLen(0)
   b.hasPendingLineMarkersSnapshot = false
@@ -1805,6 +1985,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # reaches updateHighlight; without this the version bump above would trip
   # updateHighlight's mismatch guard and wipe the overlay every keystroke.
   let marksBefore = b.namedMarks
+  let visualBefore = b.lastVisual
   # Rows that leave a rewritten span take their folds and bookmarks with them
   # and no reversed event brings them back, so the pre-edit state travels with
   # the change when rows were given up.
@@ -1860,6 +2041,11 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
                 1,
             )
           )
+  if visualBefore.isSome:
+    b.moveLastVisualEnds(
+      change.acrossLineBreak(visualBefore.get.start),
+      change.acrossLineBreak(visualBefore.get.cursor),
+    )
 
   let namedMarkChanges = diffNamedMarks(marksBefore, b.namedMarks)
 
@@ -1917,7 +2103,9 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
           computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
         snapshotFoldState: b.pendingSnapshotFolds,
         snapshotBookmarks: b.pendingSnapshotBookmarks,
+        snapshotRows: b.takePendingSnapshotRows(),
         namedMarkChanges: diffNamedMarks(b.pendingSnapshotNamedMarks, b.namedMarks),
+        visualAcross: visualBefore.boxed,
       )
     )
     # Pending snapshot state is now consumed into the entry; reset it all.
@@ -1925,4 +2113,5 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   else:
     # Add directly to undo stack
     changeWithSnapshot.id = b.allocateChangeId()
+    changeWithSnapshot.visualAcross = visualBefore.boxed
     b.undoStack.addLast(changeWithSnapshot)

@@ -110,6 +110,7 @@
 | <kbd>**g**</kbd> <kbd>**N**</kbd> | Go to previous search match and select it visually |
 | <kbd>**d**</kbd> <kbd>**g**</kbd> <kbd>**n**</kbd> | Delete next search match |
 | <kbd>**d**</kbd> <kbd>**g**</kbd> <kbd>**N**</kbd> | Delete previous search match |
+| <kbd>**g**</kbd> <kbd>**v**</kbd> | Reselect the previous Visual area in its mode |
 | <kbd>**]**</kbd> <kbd>**c**</kbd> | Jump to next git change hunk |
 | <kbd>**[**</kbd> <kbd>**c**</kbd> | Jump to previous git change hunk |
 | <kbd>**]**</kbd> <kbd>**x**</kbd> | Jump to next git merge conflict block |
@@ -302,6 +303,7 @@
 | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> | Decrease number under cursor |
 | <kbd>**I**</kbd> | Insert character, multiple lines |
 | <kbd>**z**</kbd> <kbd>**f**</kbd> | Fold selected lines |
+| <kbd>**g**</kbd> <kbd>**v**</kbd> | Exchange the selection with the previous Visual area |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd> | Selection Range (LSP) |
 | <kbd>**Esc**</kbd> | Go to Normal mode |
 <!-- AUTO-GEN:end VisualMode -->
