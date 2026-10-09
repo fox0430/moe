@@ -53,7 +53,6 @@ proc createTestState(): EditorState =
         lastRegister: none(char),
         waitingForRegister: false,
         commandType: "",
-        recordStartKey: "",
         pendingCount: 0,
         playbackDepth: 0,
       )
@@ -468,10 +467,9 @@ suite "NormalModeHandler - Macro Recording State":
     state.pendingInput.macroState.isRecording = true
     state.pendingInput.macroState.register = 'a'
     state.pendingInput.macroState.recordedKeys = @["d", "d"]
-    state.pendingInput.macroState.recordStartKey = "q"
     state.pendingInput.macroState.registers = initTable[char, seq[string]]()
 
-    # Press 'q' to stop recording (matches recordStartKey)
+    # Press 'q' to stop recording
     let keyCombo = KeyCombo(isSpecial: false, char: "q", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
@@ -493,7 +491,6 @@ suite "NormalModeHandler - Macro Recording State":
     state.pendingInput.macroState.isRecording = true
     state.pendingInput.macroState.register = 'a'
     state.pendingInput.macroState.recordedKeys = @[]
-    state.pendingInput.macroState.recordStartKey = "q"
     state.pendingInput.macroState.registers = initTable[char, seq[string]]()
 
     let fKey = KeyCombo(isSpecial: false, char: "f", modifiers: {})
@@ -1703,7 +1700,6 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     check r.kind == nmrHandled
     check state.pendingInput.macroState.waitingForRegister == true
     check state.pendingInput.macroState.commandType == "record"
-    check state.pendingInput.macroState.recordStartKey == "q"
 
   test "macro-play (@a) returns nmrPlaybackMacro":
     let buf = newTextBuffer()
@@ -1919,10 +1915,10 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     check r2.kind == nmrPassthrough
     check r2.passthroughKind == ptNewWindow
 
-  test "macro recording stops on recordStartKey":
+  test "q stops macro recording":
     ## Per-key recording is captured in `handler.handleKeyCombo`; this test
-    ## seeds `recordedKeys` and verifies that the Normal handler's stop-key
-    ## detection (`q` after start) closes the register.
+    ## seeds `recordedKeys` and verifies that `q` resolved as `macro.record`
+    ## closes the register.
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1973,7 +1969,6 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let r1 = handler.handleNormalModeKey(buf, state, viewport, bigQKey)
     check r1.kind == nmrHandled
     check state.pendingInput.macroState.waitingForRegister == true
-    check state.pendingInput.macroState.recordStartKey == "Q"
 
     # Select register 'b'
     let bKey = KeyCombo(isSpecial: false, char: "b")
@@ -1988,13 +1983,12 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let jKey = KeyCombo(isSpecial: false, char: "j")
     discard handler.handleNormalModeKey(buf, state, viewport, jKey)
 
-    # Stop recording: press Q (matches recordStartKey "Q")
+    # Stop recording: press Q
     let r3 = handler.handleNormalModeKey(buf, state, viewport, bigQKey)
     check r3.kind == nmrHandled
     check state.pendingInput.macroState.isRecording == false
     check state.pendingInput.macroState.registers.hasKey('b')
     check state.pendingInput.macroState.registers['b'] == @["j"]
-    check state.pendingInput.macroState.recordStartKey == ""
 
   test "repeat last macro @@ via key binding":
     let buf = newTextBuffer()

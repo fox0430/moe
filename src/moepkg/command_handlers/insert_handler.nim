@@ -935,11 +935,6 @@ proc isCtrlR(keyCombo: KeyCombo): bool =
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
     keyCombo.char.toLowerAscii == "r"
 
-proc isCtrlO(keyCombo: KeyCombo): bool =
-  ## Check if key is Ctrl+O (one-shot normal mode)
-  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
-    keyCombo.char.toLowerAscii == "o"
-
 proc isCtrlI(keyCombo: KeyCombo): bool =
   ## Check if key is Ctrl+I (insert tab)
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and

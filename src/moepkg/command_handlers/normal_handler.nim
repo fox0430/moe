@@ -29,6 +29,7 @@ import
   ../[
     types, buffer, modes, motion, key_bindings, command_registry, registers,
     render_utils, search_utils, uri_utils, key_router, unicode_utils, visual_selection,
+    pending_input,
   ]
 import handler_types, visual_handler, insert_commands, command_passthrough
 from visual_commands import reselectVisual
@@ -530,6 +531,19 @@ proc requestMacroPlayback(keys: seq[string], count: int = 1): NormalModeResult =
   ## dispatch each key to the appropriate mode handler
   NormalModeResult(kind: nmrPlaybackMacro, macroKeys: keys, macroCount: count)
 
+proc stopRecording(m: var MacroState, fromInsertNormal: bool) =
+  ## Save the recording into its register without the typed key that stopped
+  ## it, `q` itself or a mapping that runs it, as Vim does.
+  var keys = move(m.recordedKeys)
+  keys.setLen(m.typedKeyStart.get(keys.len))
+  # Like Vim, stopping with `<C-o>q` from Insert mode drops the `<C-o>` too.
+  if fromInsertNormal and keys.len > 0:
+    let last = stringToKeyCombo(keys[^1])
+    if last.isSome and last.get.isCtrlO:
+      keys.setLen(keys.len - 1)
+  m.registers[m.register] = keys
+  m.isRecording = false
+
 proc fromPassthrough(k: PassthroughKind): NormalModeResult {.inline.} =
   ## Wrap a PassthroughKind in NormalModeResult. handler_manager will unwrap
   ## it back to a HandlerResult via command_passthrough.toHandlerResult.
@@ -556,6 +570,7 @@ proc handleNormalModeKey*(
           state.pendingInput.macroState.isRecording = true
           state.pendingInput.macroState.register = registerChar.get
           state.pendingInput.macroState.recordedKeys = @[]
+          state.pendingInput.macroState.typedKeyStart = none(int)
           state.statusMessage = "recording @" & $registerChar.get
           state.pendingInput.macroState.waitingForRegister = false
           state.pendingInput.macroState.commandType = ""
@@ -570,22 +585,6 @@ proc handleNormalModeKey*(
       state.statusMessage = ""
       state.pendingInput.macroState.waitingForRegister = false
       state.pendingInput.macroState.commandType = ""
-      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-
-  # Stop recording when the user re-presses the record-start key (`q`).
-  # Per-key recording is captured centrally in `handler.handleKeyCombo`; the
-  # matching `isMacroStopKey` guard suppresses recording of this closing key.
-  if state.pendingInput.macroState.isRecording:
-    let currentKeyStr = keyComboToString(keyCombo)
-    if currentKeyStr == state.pendingInput.macroState.recordStartKey and
-        not handler.keyBindingRegistry.isWaitingForChar():
-      state.pendingInput.macroState.registers[state.pendingInput.macroState.register] =
-        state.pendingInput.macroState.recordedKeys
-      state.pendingInput.macroState.isRecording = false
-      state.pendingInput.macroState.recordedKeys = @[]
-      state.pendingInput.macroState.recordStartKey = ""
-      state.statusMessage = ""
-      handler.keyBindingRegistry.clearSequence()
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Handle pending text object - waiting for text object kind (w, ", (, etc.)
@@ -758,9 +757,17 @@ proc handleNormalModeKey*(
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
     of "macro.record":
+      # Like Vim's `q`: it cancels a pending operator, is ignored in a running
+      # register, stops a recording, and only otherwise takes a register.
+      if state.pendingInput.cancelOperatorPending() or
+          state.pendingInput.macroState.executingDepth > 0:
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      if state.pendingInput.macroState.isRecording:
+        state.pendingInput.macroState.stopRecording(state.insertNormalMode)
+        state.statusMessage = ""
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       state.pendingInput.macroState.waitingForRegister = true
       state.pendingInput.macroState.commandType = "record"
-      state.pendingInput.macroState.recordStartKey = keyComboToString(keyCombo)
       state.statusMessage = "recording @"
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     of "changelist.prev":

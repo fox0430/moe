@@ -32,8 +32,9 @@ proc isActive*(pi: PendingInputState, registry: KeyBindingRegistry): bool =
     pi.pendingCommand != PendingNone or registry.hasActiveSequence()
 
 proc cancelOperatorPending*(pi: var PendingInputState): bool {.discardable.} =
-  ## Drop the operator-pending gesture, along with the text object that is the
-  ## second half of it. Returns true iff something was cleared.
+  ## Drop the operator-pending gesture whole, as Vim's clearop does: the
+  ## operator, the text object that is the second half of it, and the register
+  ## named for it. Returns true iff an operator or text object was pending.
   var cleared = false
   if pi.pendingOperator.isSome:
     pi.pendingOperator = none(PendingOperator)
@@ -41,6 +42,8 @@ proc cancelOperatorPending*(pi: var PendingInputState): bool {.discardable.} =
   if pi.pendingTextObject.isSome:
     pi.pendingTextObject = none(PendingTextObject)
     cleared = true
+  if cleared:
+    pi.pendingRegister = none(char)
   cleared
 
 proc cancelAll*(

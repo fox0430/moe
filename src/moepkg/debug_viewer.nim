@@ -357,6 +357,7 @@ proc generateMacroInfo*(
     register: char,
     registersCount: int,
     playbackDepth: int,
+    executingDepth: int,
     enabled: bool = true,
 ) =
   ## Generate debug info for macro state
@@ -367,6 +368,7 @@ proc generateMacroInfo*(
   lines.addField("register", $register)
   lines.addField("registersCount", $registersCount)
   lines.addField("playbackDepth", $playbackDepth)
+  lines.addField("executingDepth", $executingDepth)
 
 proc generateVisualInfo*(
     lines: var seq[string],

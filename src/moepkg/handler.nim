@@ -1242,27 +1242,17 @@ proc dismissTempMessagesKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   # Otherwise just dismiss and stay in current mode
   return true
 
-proc isMacroStopKey(e: Editor, keyCombo: KeyCombo): bool =
-  ## True when this key ends an active `q<reg>...q` recording. Only Normal
-  ## mode's `q` (the recordStartKey) closes the macro; the router's operand
-  ## waiting state (f/t/r/") holds `q` as a literal.
-  if e.state.mode != EditorMode.Normal:
-    return false
-  if keyComboToString(keyCombo) != e.state.pendingInput.macroState.recordStartKey:
-    return false
-  not e.handlerManager.keyBindingRegistry.isWaitingForChar()
-
 proc recordUserKey(e: Editor, keyCombo: KeyCombo) =
   ## Append a top-level keystroke to the active macro register. Called once
   ## per user key at `handleKeyCombo` entry so every mode records uniformly
   ## (overlays, popups, viewers, Normal/Insert/Visual/Replace). Playback loops
-  ## bypass `handleKeyCombo` and are additionally guarded by
-  ## `withPlaybackGuard` clearing `isRecording`.
+  ## bypass `handleKeyCombo`. If this key stops the recording, directly or
+  ## through a mapping, the stop drops it again from `typedKeyStart`.
   if not e.state.pendingInput.macroState.isRecording:
     return
-  if e.isMacroStopKey(keyCombo):
-    return
-  e.state.pendingInput.macroState.recordedKeys.add(keyComboToString(keyCombo))
+  let macroState = addr e.state.pendingInput.macroState
+  macroState.typedKeyStart = some(macroState.recordedKeys.len)
+  macroState.recordedKeys.add(keyComboToString(keyCombo))
 
 proc handleOverlayKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## Dispatch overlay modes (Command, Search, Rename) and Debug mode.

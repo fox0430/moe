@@ -456,9 +456,12 @@ proc processReplayedResult*(
     return roQuit
   roContinue
 
-template withPlaybackGuard*(e: Editor, body: untyped): ReplayOutcome =
-  ## Shared depth guard + isRecording suspension for macro / runtime-mapping
-  ## replay loops. `body` must assign to `outcome`.
+template withPlaybackGuard*(
+    e: Editor, executesRegister: bool, body: untyped
+): ReplayOutcome =
+  ## Shared depth guard for macro / runtime-mapping replay loops.
+  ## `executesRegister` marks an `@x` replay. Replayed keys never reach the
+  ## recorder, so recording stays on. `body` must assign to `outcome`.
   ## Exposed for tests that fire the exception path with a raising body.
   block:
     let state = e.state
@@ -468,8 +471,8 @@ template withPlaybackGuard*(e: Editor, body: untyped): ReplayOutcome =
       roAbort
     else:
       state.pendingInput.macroState.playbackDepth += 1
-      let wasRecording = state.pendingInput.macroState.isRecording
-      state.pendingInput.macroState.isRecording = false
+      if executesRegister:
+        state.pendingInput.macroState.executingDepth += 1
       var outcome {.inject.} = roContinue
       try:
         # `if true` avoids UnreachableCode when body ends with `return`/`raise`.
@@ -478,14 +481,15 @@ template withPlaybackGuard*(e: Editor, body: untyped): ReplayOutcome =
           body
       finally:
         # Exception safety: always restore playback state, even on failure.
-        state.pendingInput.macroState.isRecording = wasRecording
+        if executesRegister:
+          state.pendingInput.macroState.executingDepth -= 1
         state.pendingInput.macroState.playbackDepth -= 1
       outcome
 
 proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome =
   ## Iterate `combos` through `runNestedKeyCombo` — no per-key parse. Used by
   ## runtime key-sequence mappings whose RHS is pre-parsed at registration.
-  withPlaybackGuard(e):
+  withPlaybackGuard(e, executesRegister = false):
     for k in combos:
       outcome = runNestedKeyCombo(e.handlerManager, e, k)
       if outcome != roContinue:
@@ -495,7 +499,7 @@ proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
   ## Iterate user-recorded macro `keys` (register storage is seq[string]).
   ## Aborts on the first `stringToKeyCombo` failure but keeps executing the
   ## good prefix (matches pre-refactor behaviour).
-  withPlaybackGuard(e):
+  withPlaybackGuard(e, executesRegister = true):
     for keyStr in keys:
       let keyComboOpt = stringToKeyCombo(keyStr)
       if keyComboOpt.isNone:
