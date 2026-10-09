@@ -3100,8 +3100,62 @@ block namedMarks:
     doAssert multi.deleteRange(
       BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 2)
     ).isOk
-    doAssert multi.namedMarks['a'] == some(BufferPosition(line: 0, column: 3))
+    # Vim leaves a mark on the first line where it was.
+    doAssert multi.namedMarks['a'] == some(BufferPosition(line: 0, column: 4))
     doAssert multi.namedMarks['b'] == some(BufferPosition(line: 0, column: 1))
+
+  block followsJoinsLikeVim:
+    # Vim moves a mark on the joined line by the join column, even over text
+    # deleted from that line, and drops one on a line deleted whole.
+    let buf = newTextBuffer("abcd\nefgh\nijkl\nmnop")
+    buf.namedMarks['a'] = some(BufferPosition(line: 1, column: 2))
+    buf.namedMarks['b'] = some(BufferPosition(line: 2, column: 0))
+    buf.namedMarks['c'] = some(BufferPosition(line: 2, column: 3))
+    buf.namedMarks['d'] = some(BufferPosition(line: 3, column: 1))
+    doAssert buf.deleteRange(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 1)
+    ).isOk
+    doAssert buf.getLine(0) == "akl"
+    doAssert buf.namedMarks['a'].isNone
+    doAssert buf.namedMarks['b'] == some(BufferPosition(line: 0, column: 1))
+    # Kept past the end of the line as in Vim; readers clamp.
+    doAssert buf.namedMarks['c'] == some(BufferPosition(line: 0, column: 4))
+    doAssert buf.namedMarks['d'] == some(BufferPosition(line: 1, column: 1))
+    doAssert buf.undo().isOk
+    doAssert buf.namedMarks['a'] == some(BufferPosition(line: 1, column: 2))
+    doAssert buf.namedMarks['c'] == some(BufferPosition(line: 2, column: 3))
+
+    let single = newTextBuffer("one\ntwo")
+    single.namedMarks['a'] = some(BufferPosition(line: 1, column: 1))
+    doAssert single.deleteRange(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 3)
+    ).isOk
+    doAssert single.getLine(0) == "ontwo"
+    doAssert single.namedMarks['a'] == some(BufferPosition(line: 0, column: 3))
+
+  block joinInTransactionKeepsColumn:
+    # A join that a later edit in the same transaction undoes must not leave
+    # the mark clamped to the shorter line in between.
+    let buf = newTextBuffer("abcdefgh\nxyz")
+    buf.namedMarks['a'] = some(BufferPosition(line: 0, column: 6))
+    doAssert buf.beginTransaction("change").isOk
+    doAssert buf.deleteRange(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 1, column: 0)
+    ).isOk
+    doAssert buf.getLine(0) == "abyz"
+    doAssert buf.insertText(BufferPosition(line: 0, column: 2), "cdefgh\nx").isOk
+    doAssert buf.commitTransaction().isOk
+    doAssert buf.getLine(0) == "abcdefgh"
+    doAssert buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 6))
+
+  block openLineBelowKeepsMarks:
+    let buf = newTextBuffer("abc\nd")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+    discard press(handler, buf, state, "ma")
+    doAssert press(handler, buf, state, "o").kind == nmrHandled
+    doAssert buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 2))
 
   block joinPreservesMarks:
     let buf = newTextBuffer("one  \n  two")
@@ -3117,6 +3171,36 @@ block namedMarks:
     doAssert buf.redo().isOk
     doAssert buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 1))
     doAssert buf.namedMarks['b'] == some(BufferPosition(line: 0, column: 5))
+
+  block joinKeepsMarkPastLineEnd:
+    # A join leaves a mark past the end of its line; Vim's J then keeps the
+    # column of a mark on the first line.
+    let buf = newTextBuffer("abcdefgh\nxy\nqwertyuiop")
+    buf.namedMarks['a'] = some(BufferPosition(line: 0, column: 6))
+    doAssert buf.deleteRange(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 1, column: 1)
+    ).isOk
+    doAssert buf.getLine(0) == "ab"
+    doAssert buf.joinLines(0).isOk
+    doAssert buf.getLine(0) == "ab qwertyuiop"
+    doAssert buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 6))
+
+    # Unlike Vim, J trims trailing blanks; a mark in them goes to the join.
+    let trimmed = newTextBuffer("one   \ntwo")
+    trimmed.namedMarks['a'] = some(BufferPosition(line: 0, column: 5))
+    doAssert trimmed.joinLines(0).isOk
+    doAssert trimmed.getLine(0) == "one two"
+    doAssert trimmed.namedMarks['a'] == some(BufferPosition(line: 0, column: 4))
+
+    # Past the end of a line with trailing blanks: on the text Vim's J, which
+    # keeps them, puts at that column.
+    let pastTrimmed = newTextBuffer("ab   \nxyz")
+    pastTrimmed.namedMarks['a'] = some(BufferPosition(line: 0, column: 5))
+    pastTrimmed.namedMarks['b'] = some(BufferPosition(line: 0, column: 6))
+    doAssert pastTrimmed.joinLines(0).isOk
+    doAssert pastTrimmed.getLine(0) == "ab xyz"
+    doAssert pastTrimmed.namedMarks['a'] == some(BufferPosition(line: 0, column: 3))
+    doAssert pastTrimmed.namedMarks['b'] == some(BufferPosition(line: 0, column: 4))
 
   block sameLine:
     let buf = newTextBuffer()
@@ -3200,8 +3284,8 @@ block namedMarks:
     state.cursor.column = 4
     discard press(handler, buf, state, "ma")
     doAssert buf.insertText(BufferPosition(column: 2), "\nxx").isOk
-    discard press(handler, buf, state, "`a")
-    doAssert state.cursor == BufferPosition(line: 1, column: 4)
+    # As in Vim, the mark stays on its line.
+    doAssert buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 4))
 
   block readOnly:
     let buf = newTextBuffer()

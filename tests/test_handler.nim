@@ -24,7 +24,7 @@
 ## - Search mode event handling helpers
 
 import std/[unittest, options, tables, os, osproc, times, posix]
-from std/strutils import contains
+from std/strutils import contains, continuesWith
 
 import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
@@ -4500,6 +4500,87 @@ suite "Insert mode Ctrl-A / Ctrl-@":
     check lastCmd.isSome
     check lastCmd.get.kind == lecInsertText
     check lastCmd.get.insertedText == "\nxyz"
+
+suite "Visual-block insert - what the other lines get":
+  # Vim copies what the first line gained, from the block column, when the
+  # insert ends on the first line. Expected lines are measured in Vim.
+  proc keysOf(spec: string): seq[KeyCombo] =
+    const named = {
+      "<C-v>": KeyCombo(isSpecial: false, char: "v", modifiers: {key_bindings.kmCtrl}),
+      "<C-o>": KeyCombo(isSpecial: false, char: "o", modifiers: {key_bindings.kmCtrl}),
+      "<Esc>": KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {}),
+      "<CR>": KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {}),
+      "<BS>": KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {}),
+      "<Del>": KeyCombo(isSpecial: true, special: skDelete, fnNum: 0, modifiers: {}),
+      "<Left>": KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {}),
+      "<Right>": KeyCombo(isSpecial: true, special: skRight, fnNum: 0, modifiers: {}),
+      "<Up>": KeyCombo(isSpecial: true, special: skUp, fnNum: 0, modifiers: {}),
+      "<Down>": KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {}),
+    }
+    var i = 0
+    while i < spec.len:
+      var matched = false
+      for (name, key) in named:
+        if spec.continuesWith(name, i):
+          result.add key
+          i += name.len
+          matched = true
+          break
+      if not matched:
+        result.add KeyCombo(isSpecial: false, char: $spec[i], modifiers: {})
+        inc i
+
+  proc editorAfter(spec: string): Editor =
+    result = createTestEditorWithBuffer("abcdef\nghijkl\nmnopqr")
+    result.syncActiveWindow()
+    result.activeWindow.cursor = BufferPosition(line: 0, column: 1)
+    for key in keysOf(spec):
+      discard result.handleKeyCombo(key)
+
+  proc run(spec: string): seq[string] =
+    let e = editorAfter(spec)
+    for i in 0 ..< e.activeBuffer.len:
+      result.add $e.activeBuffer.getLine(i)
+
+  test "typing only":
+    check run("<C-v>jjIab<Esc>") == @["aabbcdef", "gabhijkl", "mabnopqr"]
+    check run("<C-v>jjAab<Esc>") == @["ababcdef", "ghabijkl", "mnabopqr"]
+    check run("<C-v>jjlcab<Esc>") == @["aabdef", "gabjkl", "mabpqr"]
+
+  test "moving along the first line copies what it gained":
+    check run("<C-v>jjIab<Right><Right>Z<Esc>") ==
+      @["aabbcZdef", "gabbhijkl", "mabbnopqr"]
+    check run("<C-v>jjIab<Left>Z<Esc>") == @["aaZbbcdef", "gaZbhijkl", "maZbnopqr"]
+    check run("<C-v>jjIab<Down><Up>Z<Esc>") == @["aabZbcdef", "gabZhijkl", "mabZnopqr"]
+    check run("<C-v>jjlcab<Right>Z<Esc>") == @["aabdZef", "gabdjkl", "mabdpqr"]
+
+  test "ending off the first line copies nothing":
+    check run("<C-v>jjIab<Down>Z<Esc>") == @["aabbcdef", "ghiZjkl", "mnopqr"]
+    check run("<C-v>jjIab<CR>Z<Esc>") == @["aab", "Zbcdef", "ghijkl", "mnopqr"]
+
+  test "a first line that did not grow copies nothing":
+    check run("<C-v>jjIab<BS><BS><BS><Esc>") == @["bcdef", "ghijkl", "mnopqr"]
+    check run("<C-v>jjI<Del>Z<Esc>") == @["aZcdef", "ghijkl", "mnopqr"]
+
+  test "Ctrl-O ends the block insert":
+    # Vim also moves the cursor to the block start there, so its first line
+    # reads "aaZbbcdef"; only the copies are compared.
+    check run("<C-v>jjIab<C-o>lZ<Esc>")[1 .. 2] == @["gabhijkl", "mabnopqr"]
+
+  test "Ctrl-O to the command line in forced Insert mode ends it too":
+    let e = editorAfter("<C-v>jjIab")
+    e.config.standard.forceInsertMode = true
+    check e.handleKeyCombo(keysOf("<C-o>")[0])
+    check e.state.isCommandOverlay
+    check e.state.editState.visualBlockInsertContext.isNone
+    check $e.activeBuffer.getLine(1) == "gabhijkl"
+    check $e.activeBuffer.getLine(2) == "mabnopqr"
+
+  test "`.` repeats what was typed, not the copies":
+    let lastCmd = editorAfter("<C-v>jjIab<Esc>").state.editState.lastEditCommand
+    check lastCmd.isSome
+    check lastCmd.get.kind == lecInsertText
+    check lastCmd.get.insertedText == "ab"
 
 suite "forced Insert mode":
   let

@@ -288,6 +288,32 @@ suite "InsertModeHandler - Backspace":
     check state.cursor.line == 0
     check state.cursor.column == 5
 
+  test "Backspace joining lines moves marks by the join column, as Vim does":
+    let buf = newTextBuffer("abc\ndefgh")
+    buf.namedMarks['a'] = some(BufferPosition(line: 1, column: 1))
+    buf.namedMarks['b'] = some(BufferPosition(line: 1, column: 4))
+    buf.lastVisual = some(
+      VisualArea(
+        start: BufferPosition(line: 1, column: 0),
+        cursor: BufferPosition(line: 1, column: 1),
+        kind: vskChar,
+      )
+    )
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 0)
+
+    check handler.handleBackspace(buf, state).kind == imrHandled
+
+    check buf.getLine(0) == "abcdefgh"
+    check buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 4))
+    check buf.namedMarks['b'] == some(BufferPosition(line: 0, column: 7))
+    check buf.lastVisual.get.start == BufferPosition(line: 0, column: 3)
+    check buf.lastVisual.get.cursor == BufferPosition(line: 0, column: 4)
+    check buf.undo().isOk
+    check buf.namedMarks['a'] == some(BufferPosition(line: 1, column: 1))
+    check buf.lastVisual.get.start == BufferPosition(line: 1, column: 0)
+
   test "Backspace at start of first line":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")

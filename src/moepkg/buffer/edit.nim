@@ -494,6 +494,20 @@ proc splitLine*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
   ## Returns error if position is out of bounds
   b.insertText(pos, "\n")
 
+proc joinWithNextLine*(b: TextBuffer, line: int): Result[BufferPosition, string] =
+  ## Join `line` and the next by deleting the break alone, so marks follow the
+  ## join. ok is where the next line's text starts, measured after the merge:
+  ## the joined text can complete a character `line` ended part of.
+  if line < 0 or line + 1 >= b.len:
+    return err("No line to join with")
+  let
+    prevLine = b.getLine(line)
+    breakPos = BufferPosition(line: line, column: prevLine.charLen)
+  let deleteResult = b.deleteRange(breakPos, breakPos)
+  if deleteResult.isErr:
+    return err(deleteResult.error)
+  ok(BufferPosition(line: line, column: b.getLine(line).byteToCharPos(prevLine.len)))
+
 proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), string] =
   ## Join lines starting from startLine
   ## count: number of lines to join (default: 1, meaning join current line with next)
@@ -531,7 +545,13 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
 
       # Vim J: separate joined lines with a space, but not when the next line
       # begins with ')'.
-      if trimmedCurrent.len > 0 and trimmedNext.len > 0 and trimmedNext[0] != ')':
+      let separated =
+        trimmedCurrent.len > 0 and trimmedNext.len > 0 and trimmedNext[0] != ')'
+      # Where Vim's J starts the next line's text: it keeps trailing blanks and
+      # then adds no space.
+      let vimNextStart =
+        currentLine.charLen + ord(separated and trimmedCurrent.len == currentLine.len)
+      if separated:
         trimmedCurrent.add(' ')
 
       let joinedLine = trimmedCurrent & trimmedNext
@@ -549,20 +569,22 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
       if insertResult.isErr:
         return err(insertResult.error)
 
-      let lastColumn = max(0, joinedLine.charLen - 1)
+      # Not clamped to the joined line, as in Vim: readers clamp. A column in
+      # the trailing blanks trimmed here goes to the join; one past the line
+      # end stays on the text Vim's J puts there.
       proc joined(pos: BufferPosition): Option[BufferPosition] =
         if pos.line == startLine:
-          some(
-            BufferPosition(
-              line: startLine, column: min(pos.column, min(joinedPrefixLen, lastColumn))
-            )
-          )
+          let column =
+            if pos.column < currentLine.charLen:
+              min(pos.column, joinedPrefixLen)
+            else:
+              pos.column + joinedPrefixLen - vimNextStart
+          some(BufferPosition(line: startLine, column: column))
         elif pos.line == startLine + 1:
           some(
             BufferPosition(
               line: startLine,
-              column:
-                min(joinedPrefixLen + max(0, pos.column - leadingTrim), lastColumn),
+              column: joinedPrefixLen + max(0, pos.column - leadingTrim),
             )
           )
         else:

@@ -721,6 +721,7 @@ type
     startLine*: int # First line of the block selection
     endLine*: int # Last line of the block selection
     insertColumn*: int # Column where text should be inserted/replicated
+    firstLineLen*: int ## Characters on the first line when the insert began
 
   LspLocationItem* = object ## Single location item for LSP results display
     uri*: string # File URI

@@ -78,53 +78,88 @@ proc insertTab*(buffer: TextBuffer, state: EditorState) =
   # Move cursor right after insertion
   state.cursor.column += 1
 
-proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
-  ## Handle backspace key in insert mode
+proc deleteBeforeCursor*(buffer: TextBuffer, state: EditorState): Result[void, string] =
+  ## Backspace in Insert mode: an auto-paired pair, a soft tab stop, a
+  ## character, or the line break before the line.
   let pos = state.cursor
+
   if pos.column > 0:
-    # Delete the character before the cursor; move the cursor only after the
-    # edit succeeds so a failure cannot desync cursor and buffer.
-    let deletePos = BufferPosition(line: pos.line, column: pos.column - 1)
-    let deleteResult = buffer.deleteChar(deletePos)
-    if deleteResult.isErr:
-      state.statusMessage = deleteResult.error
-      return
-    state.cursor.column -= 1
+    if state.autoDeleteParen:
+      let currentLine = buffer.getLine(pos.line)
+
+      try:
+        # Auto-delete adjacent pairs only: cursor must be between open and close
+        # e.g., (|), [|], {|}, "|", '|'
+        if isAdjacentPair(currentLine, pos.column - 1):
+          # Delete the opening char first; the closing char then shifts into the
+          # same column. Move the cursor only after both edits succeed.
+          let pairPos = BufferPosition(line: pos.line, column: pos.column - 1)
+          let openResult = buffer.deleteChar(pairPos)
+          if openResult.isErr:
+            return err(openResult.error)
+          let closeResult = buffer.deleteChar(pairPos)
+          if closeResult.isErr:
+            return err(closeResult.error)
+          state.cursor.column -= 1
+          return ok()
+      except IndexDefect, CatchableError:
+        # If accessing rune fails, fall through to normal backspace
+        discard
+
+    # softTabStop-aware backspace: in leading whitespace, delete back to the
+    # previous boundary; elsewhere one character.
+    var deleteCount = 1
+    if state.expandTab:
+      let upToCursor = buffer.getLine(pos.line).charSubStr(0, pos.column)
+      var allSpaces = upToCursor.charLen == pos.column
+      if allSpaces:
+        for (ch, _) in upToCursor.chars:
+          if ch != Rune(' ') and ch != Rune('\t'):
+            allSpaces = false
+            break
+      if allSpaces:
+        let tabWidth = max(1, effectiveSoftTabStop(state))
+        let remainder = pos.column mod tabWidth
+        deleteCount = min(if remainder == 0: tabWidth else: remainder, pos.column)
+    # Delete from the top down so each position is stable, and move the
+    # cursor only after each edit succeeds.
+    for i in 0 ..< deleteCount:
+      let deletePos = BufferPosition(line: pos.line, column: pos.column - 1 - i)
+      let deleteResult = buffer.deleteChar(deletePos)
+      if deleteResult.isErr:
+        return err(deleteResult.error)
+      state.cursor.column -= 1
   elif pos.line > 0:
     # At start of line, join with previous line
-    let prevLine = buffer.getLine(pos.line - 1)
-    let currentLine = buffer.getLine(pos.line)
-    let prevLineLen = prevLine.charLen
+    let joinResult = buffer.joinWithNextLine(pos.line - 1)
+    if joinResult.isErr:
+      return err(joinResult.error)
+    state.cursor = joinResult.get
 
-    # Delete the current line first
-    let deleteResult = buffer.deleteLine(pos.line)
-    if deleteResult.isErr:
-      state.statusMessage = deleteResult.error
-      return
-    # Append current line content to previous line
-    if currentLine.len > 0:
-      let insertResult = buffer.insertText(
-        BufferPosition(line: pos.line - 1, column: prevLineLen), currentLine
-      )
-      if insertResult.isErr:
-        # The current line is already deleted, so the cursor must still move
-        # to the join point to stay in bounds.
-        state.statusMessage = insertResult.error
+  ok()
 
-    # Move cursor to the join point
-    state.cursor.line -= 1
-    state.cursor.column = prevLineLen
+proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
+  ## Handle backspace key in insert mode
+  let r = deleteBeforeCursor(buffer, state)
+  if r.isErr:
+    state.statusMessage = r.error
 
-proc insertDelete*(buffer: TextBuffer, state: EditorState) =
-  ## Handle delete key in insert mode
+proc deleteAtCursor*(buffer: TextBuffer, state: EditorState): Result[void, string] =
+  ## Delete in Insert mode; nothing at the end of a line.
   let pos = state.cursor
   if pos.line >= 0 and pos.line < buffer.len and
       pos.column >= buffer.getLine(pos.line).charLen:
-    # At end of line: nothing to delete (no-op)
-    return
-  let deleteResult = buffer.deleteChar(pos)
-  if deleteResult.isErr:
-    state.statusMessage = deleteResult.error
+    return ok()
+  let r = buffer.deleteChar(pos)
+  if r.isErr:
+    return err(r.error)
+  ok()
+
+proc insertDelete*(buffer: TextBuffer, state: EditorState) =
+  ## Handle delete key in insert mode
+  let r = deleteAtCursor(buffer, state)
+  if r.isErr:
+    state.statusMessage = r.error
 
 proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   ## Handle newline insertion with optional auto-indentation
