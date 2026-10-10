@@ -35,7 +35,7 @@ import visual_test_helper, clipboard_test_helper
 import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
-    render_utils, clipboard, message_log, frontend_input,
+    render_utils, clipboard, message_log, frontend_input, pending_input, key_router,
   ]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/editor_build_jobs {.all.}
@@ -2004,23 +2004,24 @@ suite "frontend-neutral pointer and scroll input":
     check not e.activeBuffer.inTransaction
     check e.state.visualSelection.active
 
-  test "dragging from Insert-normal commits the Insert transaction":
+  test "a press after Ctrl-o resumes Insert, so a drag starts as from Insert":
+    # Vim reads the press as the command Ctrl-o runs.
     let e = createTestEditorWithBuffer("alpha beta")
     e.state.showTabLine = false
     e.state.showLineNumbers = false
     e.state.showSidebar = false
     e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
-    check e.activeBuffer.beginTransaction("Insert mode edit").isOk
+    check e.handleKeyCombo(parseKeyCombo("i").get)
+    check e.handleKeyCombo(parseKeyCombo("C-o").get)
 
     check e.handlePointerInput(initPointerInput(0, 1))
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
     check e.activeBuffer.inTransaction
     check e.handlePointerInput(initPointerInput(0, 4, action = paDrag))
 
     check e.state.mode == EditorMode.Visual
     check e.state.previousMode == EditorMode.Normal
-    check not e.state.insertNormalMode
     check not e.activeBuffer.inTransaction
     check e.state.editState.insertModeStartPos.isNone
 
@@ -4241,156 +4242,849 @@ suite "handlePasteEvent":
 
     check e.state.input.search.text == "wor"
 
-suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
+suite "handleKeyCombo - Insert resumes after the Ctrl-o command":
+  # Vim 9.2 resumes Insert once the command ends, whether it succeeded, failed
+  # or was cancelled (restart_edit). Each case types `x` afterwards.
   let quitEvent = Event(kind: EventKind.Quit)
 
-  proc createTestEditorForInsertNormal(content: string): Editor =
-    let config = newEditorConfig()
-    config.standard.mouse = true
-    result = newEditor(config)
+  proc createEditorForCtrlO(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
     let buf = newTextBuffer(content)
     result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.motionController.viewportManager.viewport = result.viewport
+    result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
 
-  test "Ctrl-C in Normal mode with insertNormalMode clears flag and commits":
-    let e = createTestEditorForInsertNormal("hello")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 3)
-    e.state.cursor = BufferPosition(line: 0, column: 3)
-    discard e.activeBuffer.beginTransaction("Insert mode edit")
-    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
 
-    discard e.handleEvent(quitEvent)
+  for (name, content, keys, typed) in [
+    ("a motion", "abc def", @["w"], "abc xdef"),
+    ("a counted motion", "a b c", @["2", "w"], "a b xc"),
+    ("an edit", "abc", @["x"], "xbc"),
+    ("an operator and a motion", "abc def", @["d", "w"], "xdef"),
+    ("an operator and a text object", "abc def", @["d", "i", "w"], "x def"),
+    ("a yank", "abc", @["y", "y"], "xabc"),
+    ("a line delete", "abc\ndef", @["d", "d"], "xdef"),
+    ("an unbound key", "abc", @["C-q"], "xabc"),
+    ("a command that fails (unset mark)", "abc", @["'", "z"], "xabc"),
+    ("an operator whose motion fails", "abc", @["d", "'", "z"], "xabc"),
+    ("Escape", "abc", @["Esc"], "xabc"),
+    ("Escape cancelling an operator", "abc", @["d", "Esc"], "xabc"),
+    ("Escape cancelling a count", "abc", @["2", "Esc"], "xabc"),
+    ("Escape cancelling a register", "abc", @["\"", "a", "Esc"], "xabc"),
+    ("Escape cancelling f", "abc", @["f", "Esc"], "xabc"),
+    ("a command line", "abc def", @[":", "n", "o", "h", "Enter"], "xabc def"),
+    ("an empty command line", "abc def", @[":", "Enter"], "xabc def"),
+    ("a cancelled command line", "abc def", @[":", "n", "o", "Esc"], "xabc def"),
+    ("a search", "abc def", @["/", "d", "e", "f", "Enter"], "abc xdef"),
+    ("a cancelled search", "abc def", @["/", "d", "Esc"], "xabc def"),
+  ]:
+    test name:
+      let e = createEditorForCtrlO(content)
 
-    check not e.state.insertNormalMode
+      e.press("i", "C-o")
+      e.press(keys)
+
+      check e.state.mode == EditorMode.Insert
+      check e.state.insertResume == irNone
+      check not e.state.hasOverlay
+      check not e.state.pendingInput.isActive(e.keyRouter.registry)
+      check e.activeBuffer.inTransaction
+
+      e.press("x")
+      check e.activeBuffer.getLine(0) == typed
+
+  for (name, keys) in [
+    ("a count", @["2"]),
+    ("the first key of gg", @["g"]),
+    ("an operator", @["d"]),
+    ("an operator and i", @["d", "i"]),
+    ("a register", @["\"", "a"]),
+    ("q", @["q"]),
+    ("f", @["f"]),
+    ("Ctrl-w", @["C-w"]),
+    ("a command line being typed", @[":", "n"]),
+    ("a search being typed", @["/", "d"]),
+  ]:
+    test name & " keeps Insert waiting":
+      let e = createEditorForCtrlO("abc def")
+
+      e.press("i", "C-o")
+      e.press(keys)
+
+      check e.state.mode == EditorMode.Normal
+      check e.state.insertResume != irNone
+      check not e.activeBuffer.inTransaction
+
+  test "a join resumes Insert":
+    # J opens its own undo step, which the open Insert session used to refuse.
+    let e = createEditorForCtrlO("abc\ndef")
+
+    e.press("i", "C-o", "J")
+
+    check e.activeBuffer.getLine(0) == "abc def"
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+  test "a backward search resumes Insert at the match":
+    let e = createEditorForCtrlO("abc def")
+
+    e.press("A", "C-o", "?", "d", "e", "f", "Enter")
+
+    check e.state.mode == EditorMode.Insert
+    e.press("x")
+    check e.activeBuffer.getLine(0) == "abc xdef"
+
+  test "a command that fails at the end of the line resumes Insert there":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("A", "C-o", "'", "z")
+    check e.state.statusMessage == "Mark not set: z"
+
+    e.press("x")
+    check e.activeBuffer.getLine(0) == "abcx"
+
+  test "a command that fails in a macro stops the macro in Insert":
+    # Vim drops the rest of the register at the error, so "foo" is not typed.
+    let e = createEditorForCtrlO("abc")
+    e.state.pendingInput.macroState.registers['a'] =
+      @["i", "<C-o>", "'", "z", "f", "o", "o"]
+
+    e.press("@", "a")
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+    e.press("x")
+    check e.activeBuffer.getLine(0) == "xabc"
+
+  test "a macro that fails stays in Normal mode, as in Vim":
+    # Vim 9.2 with @a = jx on one line: the error flushes the Insert queued
+    # after the register with the rest of it, so `i<C-o>@a~` toggles a case.
+    let e = createEditorForCtrlO("abcdef")
+    e.state.pendingInput.macroState.registers['a'] = @["'", "z", "x"]
+
+    e.press("i", "C-o", "@", "a")
+
     check e.state.mode == EditorMode.Normal
-    check not e.activeBuffer.inTransaction
-    check e.state.editState.insertModeStartPos.isNone
+    check e.state.insertResume == irNone
 
-  test "Ctrl-C in Normal mode with insertNormalMode at column 0 stays at 0":
-    let e = createTestEditorForInsertNormal("hello")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
-    e.state.cursor = BufferPosition(line: 0, column: 0)
-    discard e.activeBuffer.beginTransaction("Insert mode edit")
-    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    e.press("~")
+    check e.activeBuffer.getLine(0) == "Abcdef"
+
+  test "@: resumes Insert after the repeated command":
+    let e = createEditorForCtrlO("abc")
+    e.press(":", "n", "o", "h", "Enter")
+
+    e.press("i", "C-o", "@", ":")
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+  test "a held mapping key is not typed into the resumed Insert":
+    # Escape reaches the router, which plays the held Space as a Normal key
+    # instead of leaving it to be flushed into Insert.
+    let e = createEditorForCtrlO("abc")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "Space w", "g g").len ==
+      0
+
+    e.press("i", "C-o", "Space", "Esc")
+
+    check not e.keyRouter.isHoldingKeys
+    check e.state.mode == EditorMode.Insert
+
+    e.press("x")
+    check e.activeBuffer.getLine(0) == "xabc"
+
+  test "a held mapping key runs first, then Escape leaves the resumed Insert":
+    # Vim 9.2 with `nmap lw gg`: `li<C-o>l<Esc>` moves right, resumes Insert,
+    # and the Escape ends it one column left.
+    let e = createEditorForCtrlO("abcdef")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "l w", "g g").len ==
+      0
+
+    e.press("l", "i", "C-o", "l", "Esc")
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume == irNone
+    check not e.activeBuffer.inTransaction
+    check e.cursor == BufferPosition(line: 0, column: 1)
+
+    e.press("i", "Z")
+    check e.activeBuffer.getLine(0) == "aZbcdef"
+
+  test "Escape in a macro resumes Insert as when typed":
+    # Vim 9.2 replays `i<C-o>d<Esc>Z<Esc>` as typed, so Z is inserted.
+    let e = createEditorForCtrlO("abc")
+    e.state.pendingInput.macroState.registers['a'] =
+      @["i", "<C-o>", "d", "<Escape>", "Z", "<Escape>"]
+
+    e.press("@", "a")
+
+    check e.activeBuffer.getLine(0) == "Zabc"
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume == irNone
+    check not e.state.pendingInput.isActive(e.keyRouter.registry)
+
+  test "Escape in a mapping resumes Insert as when typed":
+    let e = createEditorForCtrlO("abc")
+    check e.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Normal, "Q", "i C-o d Esc Z"
+    ).len == 0
+
+    e.press("Q")
+
+    check e.activeBuffer.getLine(0) == "Zabc"
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+    check not e.state.pendingInput.isActive(e.keyRouter.registry)
+
+  test "the keys of a mapping after its first command are typed, as in Vim":
+    # Vim 9.2 with `nmap Q xx`: `i<C-o>QZ` deletes one character and types x.
+    let e = createEditorForCtrlO("abcdef")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "Q", "x x").len == 0
+
+    e.press("i", "C-o", "Q", "Z")
+
+    check e.activeBuffer.getLine(0) == "xZbcdef"
+
+  test "a mapping that ends in Ctrl-o leaves Insert waiting, as in Vim":
+    # Vim 9.2 with `nmap Q ax<C-o>`: the x after `i<C-o>Q` deletes.
+    let e = createEditorForCtrlO("abc")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "Q", "a x C-o").len ==
+      0
+
+    e.press("i", "C-o", "Q")
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume != irNone
+
+    e.press("x", "Y")
+    check e.activeBuffer.getLine(0) == "axYc"
+
+  test "the keys of a mapping that starts in Visual mode stay commands, as in Vim":
+    # Vim 9.2 with `xnoremap X dp`: `i<C-o>vlX` puts what d deleted.
+    let e = createEditorForCtrlO("abcdef")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Visual, "X", "d p").len == 0
+
+    e.press("i", "C-o", "v", "l", "X")
+
+    check e.activeBuffer.getLine(0) == "cabdef"
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+  test "a mapping that starts in Visual mode and ends in Ctrl-o leaves Insert waiting, as in Vim":
+    # Vim 9.2 with `xnoremap X c<C-o>`: the l after `i<C-o>vlX` moves.
+    let e = createEditorForCtrlO("abcdef")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Visual, "X", "c C-o").len ==
+      0
+
+    e.press("i", "C-o", "v", "l", "X")
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume != irNone
+
+    e.press("l", "Z")
+    check e.activeBuffer.getLine(0) == "cZdef"
+
+  test "a mapping that starts in Visual mode and leaves the Insert it enters ends the wait, as in Vim":
+    # Vim 9.2 with `xnoremap X cfoo<Esc>`: the x after `li<C-o>vlX` deletes.
+    let e = createEditorForCtrlO("abcdef")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Visual, "X", "c f o o Esc").len ==
+      0
+
+    e.press("l", "i", "C-o", "v", "l", "X")
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume == irNone
+
+    e.press("x")
+    check e.activeBuffer.getLine(0) == "afodef"
+
+  test "a command line a mapping ends on timeout resumes Insert":
+    let e = createEditorForCtrlO("abc")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Command, "Q", "Enter").len ==
+      0
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Command, "Q Q", "Esc").len ==
+      0
+
+    e.press("i", "C-o", ":", "n", "o", "h", "Q")
+    check e.keyRouter.isHoldingKeys
+
+    check e.handleKeyMappingTimeout()
+
+    check not e.state.hasOverlay
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+  test "a macro runs whole before Insert resumes, as in Vim":
+    # Vim 9.2 with @q = xx: `i<C-o>@qZ` deletes two characters.
+    let e = createEditorForCtrlO("abcdef")
+    e.state.pendingInput.macroState.registers['q'] = @["x", "x"]
+
+    e.press("i", "C-o", "@", "q", "Z")
+
+    check e.activeBuffer.getLine(0) == "Zcdef"
+
+  test "a macro that enters and leaves Insert still resumes it, as in Vim":
+    # Vim 9.2 with @q = iX<Esc>: `i<C-o>@qZ` gives ZXabc.
+    let e = createEditorForCtrlO("abc")
+    e.state.pendingInput.macroState.registers['q'] = @["i", "X", "<Escape>"]
+
+    e.press("i", "C-o", "@", "q", "Z")
+
+    check e.activeBuffer.getLine(0) == "ZXabc"
+    check e.state.mode == EditorMode.Insert
+
+  test "a macro that ends in Insert ends the wait, so Escape later leaves Insert":
+    # The router still holds the macro's last key, a mapping prefix, when the
+    # macro ends, which once kept the wait alive into Insert.
+    let e = createEditorForCtrlO("abc")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "j k", "Esc").len ==
+      0
+    e.state.pendingInput.macroState.registers['q'] = @["i", "f", "o", "o", "j"]
+
+    e.press("i", "C-o", "@", "q")
+    check e.keyRouter.isHoldingKeys
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+    e.press("k")
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume == irNone
+    check not e.activeBuffer.inTransaction
+
+  test "Ctrl-o in a macro resumes Insert within it, as in Vim":
+    # Vim 9.2 with @q = ax<C-o>xY: Y is typed once the x has deleted.
+    let e = createEditorForCtrlO("abc")
+    e.state.pendingInput.macroState.registers['q'] = @["a", "x", "<C-o>", "x", "Y"]
+
+    e.press("@", "q")
+
+    check e.activeBuffer.getLine(0) == "axYc"
+    check e.state.mode == EditorMode.Insert
+
+  test "a command that shows another buffer resumes Insert there, as in Vim":
+    let e = createEditorForCtrlO("abc")
+    let first = e.activeBuffer
+    let other = newTextBuffer("xyz")
+    e.addBuffer(first)
+    e.addBuffer(other)
+    e.activeWindow.bufferIds.add(other.id)
+
+    e.press("i", "C-o", ":", "b", "n", "Enter")
+
+    check e.activeBuffer == other
+    check e.state.mode == EditorMode.Insert
+    check not first.inTransaction
+    check other.inTransaction
+
+  test "a paste after Ctrl-o resumes Insert":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("i", "C-o")
+    check e.handlePaste("XY")
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+  test "Ctrl-o leaves Insert without the wait if the session cannot commit":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("i")
+    # The commit fails on a transaction flag left without its record.
+    e.activeBuffer.currentTransaction = none(BufferTransaction)
+    e.press("C-o")
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume == irNone
+    check e.state.statusMessage.contains("Failed to commit transaction")
+
+  test "Ctrl-o that cannot commit past the end of the line leaves the cursor as Escape does":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("A")
+    e.activeBuffer.currentTransaction = none(BufferTransaction)
+    e.press("C-o")
+
+    check e.state.insertResume == irNone
+    check e.cursor.column == 2
+
+  test "a command that sends an LSP request is done once it returns":
+    # What `gd` leaves behind while its response is due; no server runs here.
+    # The keys after it are typed, so none runs as a Normal command.
+    let e = createEditorForCtrlO("abc def")
+
+    e.press("i", "C-o")
+    e.state.lspCache.pending[lrfDefinition] =
+      LspRequestContext(feature: lrfDefinition, validModes: LocationValidModes)
+    e.press("w", "x")
+
+    check e.activeBuffer.getLine(0) == "abc xdef"
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+  test "keys after Ctrl-o gL go to the CodeLens picker until it closes":
+    # The picker answers the command, so Insert resumes once it is gone.
+    let e = createEditorForCtrlO("abc")
+    let path = getTempDir() / "ctrl_o_codelens.unknownlang"
+    e.activeBuffer.filePath = some(path)
+    e.lsp.enabled = true
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true,
+      filePath: path,
+      bufferId: e.activeBuffer.id,
+      itemsByLine: {
+        0: @[
+          CodeLensItem(line: 0, title: "run", command: "run"),
+          CodeLensItem(line: 0, title: "test", command: "test"),
+        ]
+      }.toTable,
+    )
+
+    e.press("i", "C-o", "g", "L")
+    check e.state.lspCache.codeLensPicker.isActive
+    check e.state.mode == EditorMode.Normal
+
+    e.press("j")
+    check e.state.lspCache.codeLensPicker.selectedIndex == 1
+    check e.activeBuffer.getLine(0) == "abc"
+
+    e.press("Esc")
+    check not e.state.lspCache.codeLensPicker.isActive
+    check e.state.mode == EditorMode.Insert
+    e.press("x")
+    check e.activeBuffer.getLine(0) == "xabc"
+
+  test "the command's message stays over the line's syntax error, as in Vim":
+    let e = createEditorForCtrlO("abc")
+    let path = getTempDir() / "ctrl_o_syntax_message.nim"
+    e.activeBuffer.filePath = some(path)
+    e.state.syntaxCheckResults = (
+      path: path,
+      errors: @[
+        SyntaxCheckError(
+          position: BufferPosition(line: 0, column: 0),
+          messageType: SyntaxCheckMessageType.error,
+          message: "bad",
+        )
+      ],
+    )
+
+    e.press("i", "C-o", "'", "z")
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.statusMessage.contains("Mark not set")
+
+  test "a focus change, a pointer move or no text is not the command Ctrl-o waits for":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("i", "C-o")
+    check e.handleEvent(Event(kind: EventKind.FocusIn))
+    discard e.handlePointerInput(initPointerInput(0, 1, action = paMove))
+    discard e.handlePointerInput(initPointerInput(0, 1, action = paRelease))
+    check e.handleTextInput("")
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume != irNone
+
+    e.press("x")
+    check e.activeBuffer.getLine(0) == "bc"
+    check e.state.mode == EditorMode.Insert
+
+  for (name, content, keys, typed) in [
+    ("x deletes the last character", "abc", @["x"], "abZ"),
+    ("h moves off the last character", "abcdef", @["h"], "abcdZef"),
+    ("a command that keeps the cursor leaves it there", "abc", @["z", "z"], "abcZ"),
+    ("j keeps the column", "abc\nxyzw", @["j"], "xyzZw"),
+    ("j onto a shorter line ends past its end", "abcdef\nxy", @["j"], "xyZ"),
+  ]:
+    test "past the end of the line, " & name & ", as in Vim":
+      # Vim 9.2 puts the cursor on the last character at Ctrl-o, and back past
+      # it if Insert resumes there.
+      let e = createEditorForCtrlO(content)
+
+      e.press("A", "C-o")
+      e.press(keys)
+      e.press("Z")
+
+      check e.activeBuffer.getLine(e.cursor.line) == typed
+
+  for (name, content, keys, typed) in [
+    (
+      "a shorter line ends past its end",
+      "abcdef\nxy",
+      @["A", "Left", "Left", "C-o", "j"],
+      "xyZ",
+    ),
+    (
+      "a vertical move before Ctrl-o keeps its column",
+      "abcdefghij\nab\nabcdefghij",
+      @["8", "l", "i", "Down", "C-o", "j"],
+      "abcdefghZij",
+    ),
+    (
+      "typing after a vertical move takes the column again",
+      "abcdefghij\nabcdefghij\nabcdefghij",
+      @["8", "l", "i", "Down", "X", "C-o", "j"],
+      "abcdefghiZj",
+    ),
+    (
+      "typing at the end of a line takes the column there",
+      "abcdefghij\nab\nabcdefghij",
+      @["8", "l", "i", "Down", "X", "C-o", "j"],
+      "abcZdefghij",
+    ),
+    (
+      "Insert takes the column again on entry",
+      "abcdefgh\nabc",
+      @["7", "l", "j", "i", "C-o", "z", "z"],
+      "abZc",
+    ),
+    (
+      "a search takes the column again",
+      "abcdefgh\nxyz",
+      @["A", "C-o", "/", "z", "Enter"],
+      "xyZz",
+    ),
+    (
+      "an edit takes the column again",
+      "abcdefgh\nabcdefghijk",
+      @["A", "C-o", "x", "Down"],
+      "abcdefgZhijk",
+    ),
+  ]:
+    test "the column a vertical move wants: " & name & ", as in Vim":
+      # Vim 9.2 keeps the wanted column (curswant) only across vertical moves,
+      # and resumes Insert past the end of the line if it is right of the cursor.
+      let e = createEditorForCtrlO(content)
+
+      e.press(keys)
+      e.press("Z")
+
+      check e.activeBuffer.getLine(e.cursor.line) == typed
+
+  test "Insert resumed past the end of the line starts its session there":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("A", "C-o", "z", "z")
+
+    check e.cursor == BufferPosition(line: 0, column: 3)
+    check e.state.editState.insertModeStartPos ==
+      some(BufferPosition(line: 0, column: 3))
+
+  test "the cursor stays on a character when Insert cannot resume":
+    let e = createEditorForCtrlO("abc")
+    e.press("A", "C-o")
+    e.activeBuffer.readOnly = true
+
+    e.press("Esc")
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume == irNone
+    check e.cursor == BufferPosition(line: 0, column: 2)
+
+  test "a read-only buffer keeps the message of the command, as in Vim":
+    # Vim 9.2 resumes Insert in a 'nomodifiable' buffer without a word; E21
+    # comes only with the first character typed.
+    let e = createEditorForCtrlO("abc")
+    e.press("i", "C-o")
+    e.activeBuffer.readOnly = true
+
+    e.press("'", "z")
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume == irNone
+    check e.state.statusMessage.contains("Mark not set")
+
+  test "a snippet ends at Ctrl-o, as the Insert session does":
+    let e = createEditorForCtrlO("abc")
+    e.press("i")
+    e.state.snippetSession = SnippetSession(
+      active: true,
+      stops: @[
+        SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 1)),
+        SnippetStop(num: 0, pos: BufferPosition(line: 0, column: 3)),
+      ],
+    )
+
+    e.press("C-o", "o")
+
+    check e.state.mode == EditorMode.Insert
+    check not e.state.snippetSession.active
+
+  for (name, keys, mode) in [
+    ("i", @["i"], EditorMode.Insert),
+    ("a", @["a"], EditorMode.Insert),
+    ("o", @["o"], EditorMode.Insert),
+    ("R", @["R"], EditorMode.Replace),
+  ]:
+    test "a command that enters " & $mode & " (" & name & ") opens its own session":
+      let e = createEditorForCtrlO("abc")
+
+      e.press("i", "C-o")
+      e.press(keys)
+
+      check e.state.mode == mode
+      check e.state.insertResume == irNone
+      check e.activeBuffer.inTransaction
+
+  test "Visual mode entered after Ctrl-o resumes Insert when it ends, as in Vim":
+    let e = createEditorForCtrlO("abc def")
+
+    e.press("i", "C-o", "v")
+    check e.state.mode == EditorMode.Visual
+    check e.state.insertResume != irNone
+
+    e.press("e", "d")
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+    e.press("x")
+    check e.activeBuffer.getLine(0) == "x def"
+
+  test "Escape in Visual mode entered after Ctrl-o resumes Insert":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("i", "C-o", "V", "Esc")
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+
+  test "Insert resumes with the cursor line unfolded":
+    let e = createEditorForCtrlO("aaaa\nbbbb\ncccc\ndddd")
+    e.press("i", "C-o")
+    discard e.activeBuffer.foldState.addFold(1, 2, collapsed = true)
+
+    e.press("j")
+
+    check e.state.mode == EditorMode.Insert
+    check e.cursor.line == 1
+    check not e.activeBuffer.foldState.folds[0].collapsed
+
+  test "Ctrl-C in a command line resumes Insert":
+    let e = createEditorForCtrlO("abc")
+    e.press("i", "C-o", ":", "w")
 
     discard e.handleEvent(quitEvent)
 
-    check not e.state.insertNormalMode
-    check e.windowManager.windows[0].cursor.column == 0
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+    check not e.state.isCommandOverlay
 
-  test "Ctrl-C in Normal mode without insertNormalMode shows exit message":
-    let e = createTestEditorForInsertNormal("hello")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = false
+  test "Ctrl-C in a search resumes Insert":
+    let e = createEditorForCtrlO("abc")
+    e.press("i", "C-o", "/", "b")
+
+    discard e.handleEvent(quitEvent)
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+    check not e.state.isSearchOverlay
+
+  test "Ctrl-C stays in Normal mode, as in Vim":
+    let e = createEditorForCtrlO("abc")
+    e.press("A", "C-o")
+
+    discard e.handleEvent(quitEvent)
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume == irNone
+    check not e.activeBuffer.inTransaction
+    check e.cursor == BufferPosition(line: 0, column: 2)
+    check "qa" notin e.state.statusMessage
+
+  test "Ctrl-C cancels an operator, as in Vim":
+    let e = createEditorForCtrlO("abc def")
+    e.press("i", "C-o", "d")
+
+    discard e.handleEvent(quitEvent)
+
+    check e.state.mode == EditorMode.Normal
+    check not e.state.pendingInput.isActive(e.keyRouter.registry)
+
+    e.press("w")
+    check e.activeBuffer.getLine(0) == "abc def"
+
+  test "Ctrl-C in Visual mode stays in Normal mode, as in Vim":
+    let e = createEditorForCtrlO("abc")
+    e.press("i", "C-o", "v")
+
+    discard e.handleEvent(quitEvent)
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.insertResume == irNone
+
+suite "handleKeyCombo - Ctrl-o ends the Insert session":
+  proc createEditorForCtrlO(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  test "it ends the undo step, as in Vim":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("i", "f", "o", "o", "C-o", "l", "b", "a", "r", "Esc")
+    check e.activeBuffer.getLine(0) == "fooabarbc"
+
+    e.press("u")
+    check e.activeBuffer.getLine(0) == "fooabc"
+    e.press("u")
+    check e.activeBuffer.getLine(0) == "abc"
+
+  test "undo after it takes back the text typed before it":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("i", "f", "o", "o", "C-o", "u")
+
+    check e.activeBuffer.getLine(0) == "abc"
+    check e.state.mode == EditorMode.Insert
+
+  test "dot repeats only what was typed after the command, as in Vim":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("i", "f", "o", "o", "C-o", "l", "b", "a", "r", "Esc")
+
+    let last = e.state.editState.lastEditCommand
+    check last.isSome
+    check last.get.kind == lecInsertText
+    check last.get.insertedText == "bar"
+
+  test "a count is dropped, as in Vim":
+    let e = createEditorForCtrlO("abc")
+
+    e.press("3", "i", "x", "C-o", "Esc", "Esc")
+
+    check e.activeBuffer.getLine(0) == "xabc"
+
+  test "an untouched auto-indent is deleted, as Vim's 'autoindent' does":
+    let e = createEditorForCtrlO("  abc")
+
+    e.press("o", "C-o")
+    check e.activeBuffer.getLine(1) == ""
+
+    e.press("Esc", "x")
+    check e.activeBuffer.getLine(1) == "x"
+
+suite "handleInterrupt - Normal":
+  let quitEvent = Event(kind: EventKind.Quit)
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  test "Ctrl-C tells how to quit":
+    let e = createTestEditorWithBuffer("hello")
 
     discard e.handleEvent(quitEvent)
 
     check e.state.mode == EditorMode.Normal
     check "qa" in e.state.statusMessage
 
-  test "Ctrl-C in search overlay with insertNormalMode returns to Insert":
-    let e = createTestEditorForInsertNormal("hello world")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.state.enterSearchOverlay(Forward)
-    e.state.input.search.text = "world"
+  test "Ctrl-C cancels an operator without telling how to quit, as in Vim":
+    let e = createTestEditorWithBuffer("hello world")
+    e.motionController.bindToWindow(e.activeWindow)
+    e.state.registers = initRegisters()
+    e.press("d")
 
     discard e.handleEvent(quitEvent)
 
-    check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
-    check not e.state.isSearchOverlay
+    check not e.state.pendingInput.isActive(e.keyRouter.registry)
+    check "qa" notin e.state.statusMessage
 
-  test "Ctrl-C in command overlay with insertNormalMode returns to Insert":
-    let e = createTestEditorForInsertNormal("hello")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.state.enterCommandOverlay()
-    e.state.input.commandText = ":w"
+    e.press("w")
+    check e.activeBuffer.getLine(0) == "hello world"
 
-    discard e.handleEvent(quitEvent)
+suite "handleKeyCombo - Escape in Normal mode":
+  proc createEditorForEscape(content: string): Editor =
+    result = createTestEditorWithBuffer(content)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.registers = initRegisters()
 
-    check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
-    check not e.state.isCommandOverlay
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
 
-suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
-  let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
-  let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+  test "Escape cancels an operator before a mapping of it, as in Vim":
+    # Vim 9.2 with `nnoremap <Esc> ...`: `d<Esc>x` deletes one character.
+    let e = createEditorForEscape("abc def")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "Esc", "l l").len ==
+      0
 
-  proc createEditorForCmdOverlay(content: string): Editor =
-    let config = newEditorConfig()
-    config.standard.mouse = true
-    result = newEditor(config)
-    let buf = newTextBuffer(content)
-    result.windowManager.windows[0].setTab(buf)
-    result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.motionController.viewportManager.viewport = result.viewport
-    result.state.mode = EditorMode.Normal
+    e.press("d", "Esc", "x")
 
-  proc setupInsertNormalCommandOverlay(e: Editor) =
-    ## Set up: Insert → Ctrl-O → Normal → ':' (command overlay)
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    discard e.activeBuffer.beginTransaction("Insert mode edit")
-    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
-    e.state.enterCommandOverlay()
-    e.state.input.commandText = ""
-    e.state.input.commandCursor = 0
+    check e.activeBuffer.getLine(0) == "bc def"
 
-  test "Escape in command overlay returns to Insert when insertNormalMode":
-    let e = createEditorForCmdOverlay("hello")
-    e.setupInsertNormalCommandOverlay()
-    e.state.input.commandText = ":partial"
+  test "R carries on a transaction left open, as i does":
+    let e = createEditorForEscape("abc")
+    check e.activeBuffer.beginTransaction("left open").isOk
 
-    discard e.handleCommandModeKeyCombo(escKey)
+    e.press("R")
 
-    check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
-    check not e.state.isCommandOverlay
+    check e.state.mode == EditorMode.Replace
 
-  test "Escape in command overlay stays Normal when insertNormalMode is false":
-    let e = createEditorForCmdOverlay("hello")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = false
-    e.state.enterCommandOverlay()
-    e.state.input.commandText = ":partial"
+  test "Escape plays a held mapping key at once":
+    # Vim 9.2 with `nmap lw gg`: `l<Esc>` moves right without waiting.
+    let e = createEditorForEscape("abcdef")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "l w", "g g").len ==
+      0
 
-    discard e.handleCommandModeKeyCombo(escKey)
+    e.press("l", "Esc")
 
-    check e.state.mode == EditorMode.Normal
-    check not e.state.isCommandOverlay
+    check not e.keyRouter.isHoldingKeys
+    check e.cursor == BufferPosition(line: 0, column: 1)
 
-  test "Empty Enter in command overlay returns to Insert when insertNormalMode":
-    let e = createEditorForCmdOverlay("hello")
-    e.setupInsertNormalCommandOverlay()
-    e.state.input.commandText = ""
+  test "Escape in a macro cancels an operator as when typed":
+    # Vim 9.2 replays `ld<Esc>x` as typed, so x deletes one character.
+    let e = createEditorForEscape("abcdef")
+    e.state.pendingInput.macroState.registers['a'] = @["l", "d", "<Escape>", "x"]
 
-    discard e.handleCommandModeKeyCombo(enterKey)
+    e.press("@", "a")
 
-    check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
-    check not e.state.isCommandOverlay
+    check e.activeBuffer.getLine(0) == "acdef"
+    check not e.state.pendingInput.isActive(e.keyRouter.registry)
 
-  test "Enter with Normal-staying command returns to Insert when insertNormalMode":
-    let e = createEditorForCmdOverlay("hello")
-    e.setupInsertNormalCommandOverlay()
-    # :noh is a simple command that stays in Normal mode
-    e.state.input.commandText = ":noh"
+  test "two Escapes in a row hide search highlighting":
+    let e = createEditorForEscape("abc")
 
-    discard e.handleCommandModeKeyCombo(enterKey)
+    e.press("Esc")
+    check not e.state.input.search.hlsearchTempDisabled
 
-    check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
-    check not e.state.isCommandOverlay
+    e.press("Esc")
+    check e.state.input.search.hlsearchTempDisabled
+
+  test "a mapping that starts with Escape fires with nothing to cancel":
+    let e = createEditorForEscape("abc")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "Esc Esc", "d l").len ==
+      0
+
+    e.press("Esc", "Esc")
+
+    check e.activeBuffer.getLine(0) == "bc"
+
+  test "an Escape that cancels a command does not count toward two":
+    let e = createEditorForEscape("abc")
+
+    e.press("d", "Esc", "Esc")
+    check not e.state.input.search.hlsearchTempDisabled
+
+    e.press("Esc")
+    check e.state.input.search.hlsearchTempDisabled
 
 suite "handleKeyCombo - frontend-neutral input":
   proc charKey(c: string): KeyCombo =
@@ -4658,7 +5352,7 @@ suite "forced Insert mode":
 
     check e.handleKeyCombo(ctrlOKey)
     check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
+    check e.state.insertResume == irNone
     check e.state.isCommandOverlay
     check e.state.input.commandText == ":"
     check e.activeBuffer.inTransaction
@@ -4698,7 +5392,7 @@ suite "forced Insert mode":
 
     check $e.activeBuffer.getLine(0) == ""
     check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
+    check e.state.insertResume == irNone
     check e.activeBuffer.inTransaction
 
     check e.handleKeyCombo(ctrlOKey)
@@ -4706,7 +5400,7 @@ suite "forced Insert mode":
 
     check $e.activeBuffer.getLine(0) == "abc"
     check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
+    check e.state.insertResume == irNone
     check e.activeBuffer.inTransaction
 
   test "Ctrl-C does not replay a counted Insert command":
@@ -5007,9 +5701,8 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
     check e.state.pendingInput.pendingOperator.isNone
     check e.state.pendingInput.pendingTextObject.isNone
 
-  test "Ctrl-o (insert-normal) commits Insert transaction on jump":
-    # Ctrl-o keeps an open Insert transaction while state.mode is Normal;
-    # the mode-branch alone would miss it.
+  test "a click into another window after Ctrl-o resumes Insert there":
+    # As Vim does for any window change the Ctrl-o command makes.
     let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
     e.state.showTabLine = false
     e.state.showStatusLine = true
@@ -5018,16 +5711,17 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
 
     let bufA = e.windowManager.windows[0].buffer
     e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
-    check bufA.beginTransaction("Insert mode edit").isOk
-
-    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
-    check handled == true
-
+    check e.handleKeyCombo(parseKeyCombo("i").get)
+    check e.handleKeyCombo(parseKeyCombo("C-o").get)
     check not bufA.inTransaction
-    check not e.state.insertNormalMode
-    check e.state.editState.insertModeStartPos.isNone
+
+    check e.handleEvent(makeLeftClickEvent(50, 0))
+
+    check e.windowManager.activeWindowIndex == 1
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
+    check not bufA.inTransaction
+    check buf2.inTransaction
 
   test "Click on the same window keeps mode/state intact":
     # The finalize hook must fire only on cross-window jumps.
@@ -5425,7 +6119,7 @@ suite "gn - the match becomes the selection":
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 4)
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 8)
 
-  test "<C-o>gn selects the match and ends the Insert session":
+  test "<C-o>gn selects the match, and Insert resumes after Visual mode":
     let e = createTestEditorWithBuffer("say hello")
     e.state.input.search.last.pattern = "hello"
     check e.handleKeyCombo(charKey("i"))
@@ -5437,10 +6131,16 @@ suite "gn - the match becomes the selection":
     check e.handleKeyCombo(charKey("n"))
 
     check e.state.mode == EditorMode.Visual
-    check not e.state.insertNormalMode
+    check e.state.insertResume != irNone
     check not e.activeBuffer.inTransaction
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 4)
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 8)
+
+    check e.handleKeyCombo(charKey("d"))
+
+    check e.activeBuffer.getLine(0) == "say "
+    check e.state.mode == EditorMode.Insert
+    check e.state.insertResume == irNone
 
 suite "handleInterrupt - Visual":
   test "Ctrl-C leaves Visual like Esc, back to the mode it was entered from":

@@ -246,11 +246,6 @@ proc setMode*(e: Editor, mode: EditorMode) {.inline.} =
   ## Set the current mode in the active window
   e.activeWindow.setMode(mode)
 
-proc resumeInsert*(e: Editor) =
-  ## End a `<C-o>` command by going back to Insert in the active window.
-  e.state.insertNormalMode = false
-  e.activeWindow.resumeInsert()
-
 proc commandWindow(e: Editor): EditorWindow =
   # Ends every input, so an index left out of range must not raise here.
   if e.windowManager.activeWindowIndex in 0 ..< e.windowManager.windows.len:

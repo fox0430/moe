@@ -45,8 +45,6 @@ type
     nmrExecCommand # Signal to handler_manager to execute a Command mode command
     nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
     nmrOpenUri # Signal to handler_manager to open URI/file under cursor
-    nmrUndo # Signal to handler_manager to close an Insert-Normal boundary first
-    nmrRedo # Signal to handler_manager to close an Insert-Normal boundary first
     nmrPassthrough
       # Trivial 1:1 forward to a HandlerResult — payload is the canonical
       # PassthroughKind from command_passthrough.nim.
@@ -76,8 +74,6 @@ type
       nmrJumpColumn*: int # Target column number
     of nmrOpenUri:
       openUri*: string
-    of nmrUndo, nmrRedo:
-      discard
     of nmrPassthrough:
       passthroughKind*: PassthroughKind
 
@@ -529,13 +525,13 @@ proc requestMacroPlayback(keys: seq[string], count: int = 1): NormalModeResult =
   ## dispatch each key to the appropriate mode handler
   NormalModeResult(kind: nmrPlaybackMacro, macroKeys: keys, macroCount: count)
 
-proc stopRecording(m: var MacroState, fromInsertNormal: bool) =
+proc stopRecording(m: var MacroState, afterCtrlO: bool) =
   ## Save the recording into its register without the typed key that stopped
   ## it, `q` itself or a mapping that runs it, as Vim does.
   var keys = move(m.recordedKeys)
   keys.setLen(m.typedKeyStart.get(keys.len))
   # Like Vim, stopping with `<C-o>q` from Insert mode drops the `<C-o>` too.
-  if fromInsertNormal and keys.len > 0:
+  if afterCtrlO and keys.len > 0:
     let last = stringToKeyCombo(keys[^1])
     if last.isSome and last.get.isCtrlO:
       keys.setLen(keys.len - 1)
@@ -717,8 +713,6 @@ proc handleNormalModeKey*(
       return handler.handleInsertModeEntry(buffer, state, "open-above", cmd.count)
     # dd, yy, cc are handled by operator doubling in command_registry
     of "edit.undo":
-      if state.insertNormalMode and buffer.inTransaction:
-        return NormalModeResult(kind: nmrUndo)
       let r = buffer.undo()
       if r.isOk:
         state.cursor = r.value
@@ -736,8 +730,6 @@ proc handleNormalModeKey*(
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
     of "edit.redo":
-      if state.insertNormalMode and buffer.inTransaction:
-        return NormalModeResult(kind: nmrRedo)
       let r = buffer.redo()
       if r.isOk:
         state.cursor = r.value
@@ -761,7 +753,7 @@ proc handleNormalModeKey*(
           state.pendingInput.macroState.executingDepth > 0:
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       if state.pendingInput.macroState.isRecording:
-        state.pendingInput.macroState.stopRecording(state.insertNormalMode)
+        state.pendingInput.macroState.stopRecording(state.resumesInsert)
         state.statusMessage = ""
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       state.pendingInput.macroState.waitingForRegister = true

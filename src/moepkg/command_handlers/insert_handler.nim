@@ -55,6 +55,7 @@ type
       modeTransition*: Option[EditorMode]
       overlayTransition*: Option[OverlayKind]
       isInterruptExit*: bool
+      isCtrlOExit*: bool # Leaves for one Normal mode command (Ctrl-o)
     of imrUnhandled:
       discard
     of imrExecCommand:
@@ -1347,8 +1348,9 @@ proc handleInsertModeKey*(
   if keyCombo.isCtrlO:
     # Ctrl+O - execute one Normal mode command then return to Insert mode
     handler.closeInsertPopups()
-    state.insertNormalMode = true
-    return InsertModeResult(kind: imrHandled, modeTransition: some(EditorMode.Normal))
+    return InsertModeResult(
+      kind: imrHandled, modeTransition: some(EditorMode.Normal), isCtrlOExit: true
+    )
 
   if keyCombo.isCtrlI:
     # Ctrl+I - insert tab

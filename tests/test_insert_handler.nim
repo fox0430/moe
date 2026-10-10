@@ -2236,7 +2236,7 @@ suite "InsertModeHandler - Command mode command alias bridge":
     check r.execCommandText == "bd"
 
 suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
-  test "Ctrl+O switches to Normal mode and sets insertNormalMode":
+  test "Ctrl+O leaves for one Normal mode command":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
@@ -2249,7 +2249,7 @@ suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
     check r.kind == imrHandled
     check r.modeTransition.isSome
     check r.modeTransition.get == EditorMode.Normal
-    check state.insertNormalMode == true
+    check r.isCtrlOExit
 
   test "Ctrl+O cancels completion":
     let buf = newTextBuffer()
@@ -2266,7 +2266,7 @@ suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
 
     check r.kind == imrHandled
     check r.modeTransition.get == EditorMode.Normal
-    check state.insertNormalMode == true
+    check r.isCtrlOExit
 
 suite "InsertModeHandler - completion commit":
   test "Cycling previews into the buffer; Enter commits via textEdit":

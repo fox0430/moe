@@ -626,7 +626,7 @@ suite "StatusLine - buildRuler":
     for mode in [EditorMode.Normal, EditorMode.VisualBlock]:
       state.mode = mode
       check activeRuler(state, textBuffer, mode, config).fieldWidth ==
-        "(insert) NORMAL".len
+        "(insert) VISUAL BLOCK".len
 
   test "The field fits git counts up to WidestNumber":
     var state = createTestState()
@@ -870,7 +870,7 @@ suite "StatusLine - renderWindowStatusLine":
     state.multiStatusLine = true
     state.cursor.line = 3999
     state.overlay = some(okCommand)
-    state.insertNormalMode = true
+    state.insertResume = irWaiting
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createMultiLineBuffer(10, "/a/file.nim")
@@ -894,6 +894,33 @@ suite "StatusLine - renderWindowStatusLine":
     let line = getBufferLine(displayBuffer, 10)[0 ..< 60]
     check line.startsWith(" NORMAL  /a/file.nim ")
     check line.endsWith(" 3/10 NORMAL ")
+
+  test "Only the active window shows Insert waiting after Ctrl-o":
+    var state = createTestState()
+    state.showStatusLine = true
+    state.multiStatusLine = true
+    state.insertResume = irWaiting
+
+    var displayBuffer = createTestBuffer()
+    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
+    var config = createTestStatusLineConfig()
+    config.mode = true
+    config.showModeInactive = true
+    config.filename = true
+    config.directory = false
+
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, state.cursor,
+      config,
+    )
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 11, 0, 80, false, state.mode, state.cursor,
+      config,
+    )
+
+    check "(insert) NORMAL" in getBufferLine(displayBuffer, 10)
+    check "(insert)" notin getBufferLine(displayBuffer, 11)
+    check "NORMAL" in getBufferLine(displayBuffer, 11)
 
   test "Does not render mode for inactive window without showModeInactive":
     var state = createTestState()

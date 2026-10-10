@@ -172,8 +172,8 @@ proc beginInsertModeSession*(
     buffer: TextBuffer, state: EditorState, replayCount = 0, replayLineEntry = false
 ): Result[void, string] =
   ## Begin the transaction and tracking shared by all ordinary Insert entries.
-  ## An existing transaction belongs to Insert-Normal or an entry command that
-  ## edited the buffer before returning its mode transition.
+  ## An existing transaction belongs to an entry command that edited the buffer
+  ## before returning its mode transition.
   if not buffer.inTransaction:
     let transactionResult =
       buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
@@ -264,18 +264,21 @@ proc replicateBlockInsert*(buffer: TextBuffer, state: EditorState): string =
   ""
 
 proc finalizeInsertExit*(
-    buffer: TextBuffer, state: EditorState
+    buffer: TextBuffer, state: EditorState, ctrlO = false
 ): Result[string, string] =
   ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, `.`-repeat +
   ## `[count]i` bookkeeping, visual-block replication, insert-state reset, and
-  ## transaction commit. Called by both the Escape path and the imap ->
-  ## Command-mode alias bridge so the bridge does not skip the cleanup.
+  ## transaction commit. Called by the Escape path, the imap -> Command-mode
+  ## alias bridge, and Ctrl-o, so none of them skips the cleanup. Ctrl-o drops
+  ## the count, as Vim does.
   ##
   ## ok carries a non-fatal warning to surface (empty when clean): the
   ## transaction is committed at that point, so the message must not block the
   ## mode transition or a pending aliased command. err is a fatal commit
   ## failure.
   state.snippetSession.active = false
+  if ctrlO:
+    state.editState.insertReplayCount = 0
 
   clearAutoIndentIfUnedited(buffer, state)
 
@@ -317,6 +320,21 @@ proc finalizeInsertInterrupt*(
   state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
   commitInsertModeBoundary(buffer, state)
 
+proc leaveInsertForCtrlO(state: EditorState, buffer: TextBuffer) =
+  ## Past the end of the line, Vim's Ctrl-o puts the cursor on the last
+  ## character for the Normal command, keeping its column for vertical
+  ## motions, and Insert goes back past the end if it resumes there
+  ## (ins_at_eol). Elsewhere the cursor stays where it is.
+  let lineLen = buffer.getLine(state.cursor.line).charLen
+  if state.cursor.column < lineLen:
+    state.insertResumeLineEnd = none(int)
+    return
+  state.insertResumeLineEnd = some(state.cursor.line)
+  if lineLen > 0:
+    let wanted = state.aimedColumn
+    state.cursor.column = lineLen - 1
+    state.preferredColumn = wanted
+
 proc handleInsertMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
@@ -328,32 +346,36 @@ proc handleInsertMode*(
   of imrHandled:
     # Check if we're leaving Insert mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
-      # Ctrl-o ends a Visual-block insert, as in Vim.
-      var replicationMessage = ""
-      if state.insertNormalMode:
-        let replicationError = replicateBlockInsert(buffer, state)
-        if replicationError.len > 0:
-          replicationMessage =
-            "Failed to replicate visual block insert: " & replicationError
-
       # Forced Insert mode uses Ctrl-o as its built-in route to Command mode.
-      if state.config.standard.forceInsertMode and state.insertNormalMode and
-          r.modeTransition.get == EditorMode.Normal:
-        state.insertNormalMode = false
+      # It ends a Visual-block insert, as in Vim.
+      if state.config.standard.forceInsertMode and r.isCtrlOExit:
+        let replicationError = replicateBlockInsert(buffer, state)
         return HandlerResult(
           kind: hrHandled,
           modeTransition: none(EditorMode),
           overlayTransition: some(OverlayKind.okCommand),
-          statusMessage: replicationMessage,
+          statusMessage:
+            if replicationError.len > 0:
+              "Failed to replicate visual block insert: " & replicationError
+            else:
+              "",
         )
 
-      # Ctrl-o (insert-normal mode): skip transaction commit/cleanup,
-      # keep insert state intact so we can resume after one Normal command
-      if state.insertNormalMode:
+      # Ctrl-o ends Insert for one Normal command, as Vim's does, and Insert
+      # resumes with a new session once it is done (settleInsertResume). A
+      # session that cannot commit leaves Insert as Escape does, cursor and
+      # all, without the wait, so Insert does not resume over the open
+      # transaction.
+      if r.isCtrlOExit:
+        let finalizeResult = finalizeInsertExit(buffer, state, ctrlO = true)
+        if finalizeResult.isOk:
+          state.leaveInsertForCtrlO(buffer)
+          state.insertResume = irWaiting
         return HandlerResult(
           kind: hrHandled,
           modeTransition: r.modeTransition,
-          statusMessage: replicationMessage,
+          statusMessage:
+            if finalizeResult.isErr: finalizeResult.error else: finalizeResult.get,
         )
 
       # Resolve the keybinding before applying Ctrl-C's interrupt semantics so

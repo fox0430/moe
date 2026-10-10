@@ -261,12 +261,7 @@ let Invariants = @[
     skipFiles: @[],
     match: matchStartPosNone,
     allow: @[
-      ("moepkg/editor_mode.nim", 2),
-      ("moepkg/handler.nim", 1),
-      ("moepkg/command_handlers/command_mode_handler.nim", 1),
-      ("moepkg/command_handlers/handler_manager.nim", 1),
-      ("moepkg/command_handlers/mode_dispatchers.nim", 2),
-      ("moepkg/command_handlers/result_processor.nim", 1),
+      ("moepkg/editor_mode.nim", 2), ("moepkg/command_handlers/mode_dispatchers.nim", 2)
     ],
   ),
   Invariant(
@@ -277,7 +272,7 @@ let Invariants = @[
     skipFiles: @[],
     match: matchSessionBeginTransaction,
     allow: @[
-      ("moepkg/command_handlers/handler_manager.nim", 2),
+      ("moepkg/command_handlers/handler_manager.nim", 1),
       ("moepkg/command_handlers/mode_dispatchers.nim", 1),
       ("moepkg/command_handlers/normal_handler.nim", 2),
       ("moepkg/command_registry/edit.nim", 2),

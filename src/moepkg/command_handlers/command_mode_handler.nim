@@ -31,9 +31,8 @@ import ../celina_backend as celina
 import
   ../[
     editor, key_bindings, modes, buffer, types, command_line, command_completion,
-    unicode_utils, key_router, logger,
+    unicode_utils, key_router,
   ]
-import handler_manager
 import ./editor_ops
 import ./result_processor
 export editor_ops
@@ -202,9 +201,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     # Exit overlay and restore base mode
     e.state.exitOverlay()
     e.setMode(e.state.mode) # Sync window mode
-    # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
-    if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-      e.resumeInsert()
     return true
 
   # Handle Tab key for command completion
@@ -290,10 +286,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       # Otherwise, fall through to execute the command immediately
 
     if e.state.input.commandText.len > 1: # Must have something after :
-      # Full-lifecycle dispatch (pre-teardown, side effects, post-teardown,
-      # Insert-Normal recovery) is centralised in executeCommandOverlay so
-      # the Command overlay Enter path and hrExecCommand (@:) share a single
-      # entry point.
+      # Full-lifecycle dispatch (pre-teardown, side effects, post-teardown)
+      # is centralised in executeCommandOverlay so the Command overlay Enter
+      # path and hrExecCommand (@:) share a single entry point.
       return e.executeCommandOverlay(e.state.input.commandText)
 
     # Empty command (just ":"): no dispatch, just return to base mode.
@@ -301,22 +296,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     e.setMode(e.state.mode)
     e.state.input.commandText = ""
     e.state.input.commandCursor = 0
-    if e.state.insertNormalMode:
-      if e.state.mode == EditorMode.Normal:
-        e.resumeInsert()
-      elif e.state.mode != EditorMode.Insert:
-        e.state.insertNormalMode = false
-        let activeBuffer = e.activeBuffer()
-        if activeBuffer.inTransaction:
-          clearAutoIndentIfUnedited(activeBuffer, e.state)
-          let commitResult = activeBuffer.commitTransaction()
-          if commitResult.isErr:
-            logError "command_mode_handler",
-              "Failed to commit transaction: " & commitResult.error
-            e.state.statusMessage =
-              "Failed to commit transaction: " & commitResult.error
-        e.state.editState.insertModeStartPos = none(BufferPosition)
-        e.state.editState.substituteContext = none(types.SubstituteContext)
     return true
 
   # Handle Left arrow - move cursor left

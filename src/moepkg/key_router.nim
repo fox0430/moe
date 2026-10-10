@@ -77,11 +77,15 @@ proc nextTimeoutMs*(router: KeyRouter): int =
     return router.policy.timeoutlen
   return 0
 
+proc isHoldingKeys*(router: KeyRouter): bool =
+  ## True while runtime-mapping keys wait for the rest of a mapping.
+  router.dispatchState.keys.len > 0
+
 proc cancel*(router: KeyRouter): bool {.discardable.} =
   ## Cancel pending dispatch state that Escape should clear. Currently this
   ## is the built-in multi-key sequence accumulator only; the runtime mapping
-  ## accumulator is left for the timeout path (matches today's behaviour).
-  ## Returns true iff something was cleared.
+  ## accumulator has already played its keys by the time Escape reaches the
+  ## handlers. Returns true iff something was cleared.
   router.registry.clearAllPending()
 
 proc clearBuiltinSequence*(router: KeyRouter): bool {.discardable.} =
