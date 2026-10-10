@@ -220,10 +220,9 @@ proc handleMotion*(
   ## Handle motion commands in replace mode
   let motionCmd = MotionCommand(motion: motion, count: 1)
 
-  let r = handler.motionController.executeMotion(motionCmd, state.cursor)
+  let r = handler.motionController.moveCursorByMotion(state, motionCmd)
   if r.isErr:
     return ReplaceModeResult(kind: rmrError, errorMessage: r.error)
-  state.cursor = r.value
   return ReplaceModeResult(kind: rmrHandled, modeTransition: none(EditorMode))
 
 proc handleModeSwitch*(

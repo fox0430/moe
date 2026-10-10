@@ -58,6 +58,15 @@ type
     newMode*: Option[EditorMode]
     handled*: bool
 
+proc maxCursorColumn*(lineCharLen: int, mode: EditorMode): int =
+  ## Rightmost column the cursor may occupy on a line of `lineCharLen`
+  ## characters. Insert/Replace let it rest one past the last character (end of
+  ## line); other modes stop on the last character.
+  if mode in {EditorMode.Insert, EditorMode.Replace}:
+    lineCharLen
+  else:
+    max(0, lineCharLen - 1)
+
 proc isFileEditMode*(m: EditorMode): bool =
   ## Returns true if the mode is a file editing mode where syntax highlighting applies
   ## Special modes (Filer, Help, Config, etc.) return false

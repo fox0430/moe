@@ -28,8 +28,8 @@ import pkg/[results, chronos]
 import
   ../[
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
-    syntax_checker, cursor_util, quick_run_utils, command_completion, key_bindings,
-    key_router, lsp_integration, command_registry, command_line, editor_window_state,
+    syntax_checker, quick_run_utils, command_completion, key_bindings, key_router,
+    lsp_integration, command_registry, command_line, editor_window_state,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -150,8 +150,7 @@ proc processHistoryResult(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
       e.state.statusMessage = "Failed to begin transaction: " & beginResult.error
 
   if wasInsertNormal:
-    e.state.insertNormalMode = false
-    e.setMode(EditorMode.Insert)
+    e.resumeInsert()
 
   true
 
@@ -346,21 +345,19 @@ proc processResultEpilogue(
     elif not focused:
       e.setMode(newMode)
 
-      # Adjust cursor when transitioning from Insert to Normal mode
+      # Adjust cursor when transitioning from Insert or Replace to Normal mode
       # Skip cursor adjustment for insert-normal mode (Ctrl-o) since we'll return to Insert
-      if oldMode == EditorMode.Insert and newMode == EditorMode.Normal and
-          not e.state.insertNormalMode:
-        let
-          lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
-          oldColumn = e.activeWindow.cursor.column
+      if oldMode in {EditorMode.Insert, EditorMode.Replace} and
+          newMode == EditorMode.Normal and not e.state.insertNormalMode:
+        let oldColumn = e.activeWindow.cursor.column
 
         logDebug(
           "handler",
-          "Insert→Normal transition: line=" & $e.activeWindow.cursor.line &
-            " oldColumn=" & $oldColumn & " lineCharLen=" & $lineCharLen,
+          $oldMode & "→Normal transition: line=" & $e.activeWindow.cursor.line &
+            " oldColumn=" & $oldColumn,
         )
 
-        adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+        e.activeWindow.adjustCursorAfterInsertExit()
 
         if oldColumn != e.activeWindow.cursor.column:
           logDebug(
@@ -445,8 +442,7 @@ proc processReplayedResult*(
     let state = e.state
     if state.insertNormalMode and state.mode == EditorMode.Normal and
         not hasPendingBuiltinInput(e):
-      state.insertNormalMode = false
-      e.setMode(EditorMode.Insert)
+      e.resumeInsert()
     return roContinue
   let queued = e.hostResultRequestCount
   let shouldContinue = e.processResult(r, activeBuffer)
@@ -571,13 +567,9 @@ proc checkRuntimeKeySeqMapping*(
       return some(outcome)
     return none(ReplayOutcome)
 
-proc runNestedKeyCombo*(
+proc dispatchNestedKeyCombo(
     manager: HandlerManager, e: Editor, keyCombo: KeyCombo
 ): ReplayOutcome =
-  ## Single entry point that fuses precheck (runtime key-sequence mapping) with
-  ## dispatch and full processResult side effects. Both the top-level event
-  ## loop and nested-playback loops (macro, mapping RHS, timeout batch) call
-  ## this so every kind's side effect fires exactly once.
   # When an overlay is active the live loop routes through the overlay handler;
   # replay must do the same or recorded overlay keys hit the base-mode handler.
   if not overlayPlaybackHook.isNil:
@@ -591,11 +583,21 @@ proc runNestedKeyCombo*(
     let expand = checkRuntimeKeySeqMapping(manager, e, keyCombo)
     if expand.isSome:
       return expand.get
-  let
-    r = manager.handleKeyCombo(e, keyCombo)
-    outcome = processReplayedResult(e, r, e.activeBuffer)
+  let r = manager.handleKeyCombo(e, keyCombo)
+  result = processReplayedResult(e, r, e.activeBuffer)
   e.enforceModePolicy()
-  outcome
+
+proc runNestedKeyCombo*(
+    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): ReplayOutcome =
+  ## Single entry point that fuses precheck (runtime key-sequence mapping) with
+  ## dispatch and full processResult side effects. Both the top-level event
+  ## loop and nested-playback loops (macro, mapping RHS, timeout batch) call
+  ## this so every kind's side effect fires exactly once.
+  # Before the command starts, so the jump is not counted as its move.
+  e.completeScrollAnimation()
+  e.asCommand:
+    result = manager.dispatchNestedKeyCombo(e, keyCombo)
 
 proc outcomeToHandlerResult(e: Editor, outcome: ReplayOutcome): HandlerResult =
   ## Fold a ReplayOutcome into the HandlerResult shape test-facing wrappers
@@ -672,8 +674,7 @@ proc handleInsertNormalReturn(e: Editor) =
   if not e.state.insertNormalMode:
     return
   if e.state.mode == EditorMode.Normal:
-    e.state.insertNormalMode = false
-    e.setMode(EditorMode.Insert)
+    e.resumeInsert()
   elif e.state.mode != EditorMode.Insert:
     e.state.insertNormalMode = false
     let activeBuffer = e.activeBuffer()

@@ -24,13 +24,13 @@
 ## - Search mode event handling helpers
 
 import std/[unittest, options, tables, os, osproc, times, posix]
-from std/strutils import contains, continuesWith
+from std/strutils import contains, continuesWith, repeat
 
 import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
 
 import config_test_helper
-import visual_test_helper
+import visual_test_helper, clipboard_test_helper
 
 import
   ../src/moepkg/[
@@ -56,7 +56,6 @@ proc createTestState(): EditorState =
     cursor: BufferPosition(line: 0, column: 0),
     mode: EditorMode.Normal,
     previousMode: EditorMode.Normal,
-    preferredColumn: -1,
     screenCursor: CursorPosition(x: 0, y: 0),
   )
 
@@ -4761,7 +4760,7 @@ suite "forced Insert mode":
     e.typeKeys(".")
 
     check e.state.editState.substituteContext.isNone
-    check $e.activeBuffer.getLine(0) == "yQQ"
+    check $e.activeBuffer.getLine(0) == "QQy"
 
   test "marking the first -R buffer leaves it in Normal mode":
     let e = createForcedInsertEditor()
@@ -5565,7 +5564,6 @@ suite "middleClickPaste - the click picks the target":
       cursor: BufferPosition(line: 0, column: 0),
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
-      preferredColumn: -1,
       screenCursor: CursorPosition(x: 0, y: 0),
       active: false,
       wrapCountCache: WrapCountCache(),
@@ -5606,7 +5604,6 @@ suite "middleClickPaste - the click picks the target":
         cursor: BufferPosition(line: 0, column: 0),
         mode: EditorMode.Normal,
         previousMode: EditorMode.Normal,
-        preferredColumn: -1,
         screenCursor: CursorPosition(x: 0, y: 0),
         active: false,
         wrapCountCache: WrapCountCache(),
@@ -5922,3 +5919,449 @@ suite "windowIndexAtCell":
 
     check e.windowIndexAtCell(11, 10) == 0
     check e.windowIndexAtCell(23, 10) == -1
+
+suite "handleKeyCombo - the column vertical moves want":
+  # Vim 9.2 keeps it across vertical moves, scrolls and commands that leave the
+  # cursor and text alone, and takes it from the cursor again after any other
+  # move, an edit, an operator, entering Insert or Replace, or leaving Visual
+  # (curswant).
+  proc createEditorForColumn(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+
+  for (name, content, keys, typed) in [
+    (
+      "Insert keeps it across vertical moves",
+      "abcdefghij\nab\nabcdefghij",
+      @["8", "l", "i", "Down", "Down"],
+      "abcdefghZij",
+    ),
+    (
+      "Insert takes it again on entry",
+      "abcdefgh\nabc\nabcdefgh",
+      @["7", "l", "j", "i", "Down"],
+      "abZcdefgh",
+    ),
+    (
+      "Insert takes it again after typing",
+      "abcdefghij\nab\nabcdefghij",
+      @["8", "l", "i", "Down", "X", "Down"],
+      "abcZdefghij",
+    ),
+    (
+      "Replace takes it again on entry",
+      "abcdefgh\nabc\nabcdefgh",
+      @["7", "l", "j", "R", "Down"],
+      "abZdefgh",
+    ),
+    (
+      "Replace takes it again after typing",
+      "abcdefghij\nab\nabcdefghij",
+      @["8", "l", "R", "Down", "X", "Down"],
+      "abcZefghij",
+    ),
+    (
+      "a search takes it again",
+      "abcdefgh\nxyz\nabcdefgh",
+      @["$", "j", "?", "y", "Enter", "j", "i"],
+      "aZbcdefgh",
+    ),
+    (
+      "an edit takes it again",
+      "abcdefgh\nabc\nabcdefgh",
+      @["$", "j", "x", "j", "i"],
+      "aZbcdefgh",
+    ),
+    (
+      "an edit that keeps the cursor takes it again",
+      "abcdefgh\nabc\nabcdefgh",
+      @["$", "j", "r", "X", "j", "i"],
+      "abZcdefgh",
+    ),
+    (
+      "a scroll that moves the cursor keeps it",
+      "ab\nabcdefgh\n".repeat(15),
+      @["j", "$", "k", "C-e", "j", "j", "i"],
+      "abcdefgZh",
+    ),
+    (
+      "a scroll that pushes the cursor puts it on the column",
+      "ab\nabcdefgh\n".repeat(15),
+      @["j", "$", "k", "C-e", "i"],
+      "abcdefgZh",
+    ),
+    (
+      "a scroll that pushes the cursor keeps the column it had",
+      "abcdefgh\nab\nabcdefgh\n" & "x\n".repeat(30),
+      @["7", "l", "C-e", "C-e", "i"],
+      "abcdefgZh",
+    ),
+    (
+      "a vertical move after a scroll that pushed the cursor keeps it",
+      "abcdefgh\nab\nabcdefgh\n" & "x\n".repeat(30),
+      @["7", "l", "C-e", "j", "i"],
+      "abcdefgZh",
+    ),
+    (
+      "leaving Insert takes it again",
+      "abcdefghij\n\nabcdefghij",
+      @["8", "l", "i", "Down", "Escape", "j", "i"],
+      "Zabcdefghij",
+    ),
+    (
+      "leaving Replace takes it again",
+      "abcdefgh\nabcde\nabcdefgh",
+      @["7", "l", "R", "Down", "Escape", "j", "i"],
+      "abcdZefgh",
+    ),
+    (
+      "going back to Insert after a <C-o> command keeps it",
+      "abcdefghij\nab\nabcdefghij",
+      @["8", "l", "i", "C-o", "j", "Down"],
+      "abcdefghZij",
+    ),
+    (
+      "entering Insert with a <C-o> command takes it again",
+      "abcdefghij\nab\nabcdefghij",
+      @["8", "l", "i", "C-o", "j", "C-o", "i", "Down"],
+      "aZbcdefghij",
+    ),
+    (
+      "going back to Insert from a cancelled <C-o> command line keeps it",
+      "abcdefghij\nab\nabcdefghij",
+      @["8", "l", "i", "Down", "C-o", ":", "Escape", "Down"],
+      "abcdefghZij",
+    ),
+    # The preview moves the cursor as Vim's incsearch does.
+    (
+      "a cancelled :s whose preview moved the cursor takes it again",
+      "abcdefghij\nab\nabcdefghij",
+      @["7", "l", "j", ":", "s", "/", "a", "/", "b", "Escape", "j", "i"],
+      "aZbcdefghij",
+    ),
+    (
+      "a cancelled search whose preview moved the cursor takes it again",
+      "abcdefgh\nab\nabcdefgh",
+      @["7", "l", "j", "/", "c", "Escape", "j", "i"],
+      "aZbcdefgh",
+    ),
+    (
+      "a yank of lines takes it again",
+      "abcdefgh\nab\nabcdefgh",
+      @["7", "l", "j", "y", "y", "j", "i"],
+      "aZbcdefgh",
+    ),
+    (
+      "a yank that leaves the cursor takes it again",
+      "abcdefgh\nab\nabcdefgh",
+      @["7", "l", "j", "y", "l", "j", "i"],
+      "aZbcdefgh",
+    ),
+    (
+      "leaving Visual takes it again",
+      "abcdefgh\nab\nabcdefgh",
+      @["7", "l", "j", "v", "Escape", "j", "i"],
+      "aZbcdefgh",
+    ),
+    (
+      "leaving Visual Line takes it again",
+      "abcdefgh\nab\nabcdefgh",
+      @["7", "l", "j", "V", "Escape", "j", "i"],
+      "aZbcdefgh",
+    ),
+    (
+      "0 in place takes it again",
+      "abcdefgh\n\nabcdefgh",
+      @["7", "l", "j", "0", "j", "i"],
+      "Zabcdefgh",
+    ),
+    (
+      "a command that leaves the cursor and text alone keeps it",
+      "abcdefgh\nab\nabcdefgh",
+      @["7", "l", "j", "z", "z", "m", "a", "j", "i"],
+      "abcdefgZh",
+    ),
+    (
+      "a move that fails in place keeps it",
+      "abcdefgh\nab\nabcdefgh",
+      @["7", "l", "j", "l", "f", "z", "j", "i"],
+      "abcdefgZh",
+    ),
+    (
+      "an operator whose motion fails keeps it",
+      "abcdefgh\nab\nabcdefgh",
+      @["7", "l", "j", "d", "f", "z", "j", "i"],
+      "abcdefgZh",
+    ),
+    (
+      "a cancelled operator keeps it",
+      "abcdefgh\nab\nabcdefgh",
+      @["7", "l", "j", "d", "Escape", "j", "i"],
+      "abcdefgZh",
+    ),
+    (
+      "a macro that moves after its vertical move takes it again",
+      "abcdefgh\nab\nabcdefgh\nabcdefgh",
+      @[
+        "7", "l", "q", "a", "j", "/", "c", "Enter", "q", "g", "g", "7", "l", "@", "a",
+        "j", "i",
+      ],
+      "abZcdefgh",
+    ),
+    (
+      "a macro keeps the column its last vertical move kept",
+      "abcdefghij\nab\nabcdefghij",
+      @["q", "a", "l", "j", "q", "k", "4", "l", "@", "a", "j", "i"],
+      "abcdefZghij",
+    ),
+  ]:
+    test name & ", as in Vim":
+      let e = createEditorForColumn(content)
+
+      for key in keys & @["Z"]:
+        check e.handleKeyCombo(parseKeyCombo(key).get)
+
+      check e.activeBuffer.getLine(e.cursor.line) == typed
+
+  test "a smooth half-page scroll keeps it as the plain one does":
+    let e = createEditorForColumn("ab\n" & "abcdefgh\n".repeat(60))
+    check e.config.smoothScroll.enable
+    for key in ["j", "$", "k", "C-d"]:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+    let frame = newBuffer(80, 24)
+    var frames = 0
+    while e.state.windowDisplay.scrollAnimation.active and frames < 10_000:
+      discard e.updateForFrame(frame)
+      inc frames
+    check not e.state.windowDisplay.scrollAnimation.active
+    check e.cursor.line > 1
+
+    for key in ["j", "i", "Z"]:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+    check e.activeBuffer.getLine(e.cursor.line) == "abcdefgZh"
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  test "a smooth half-page scroll moves the cursor onto the column it aims for":
+    let e = createEditorForColumn("abcdefgh\n" & "ab\n".repeat(60))
+    e.press("$", "C-d")
+    check e.state.windowDisplay.scrollAnimation.active
+
+    let frame = newBuffer(80, 24)
+    var frames = 0
+    while e.state.windowDisplay.scrollAnimation.active and frames < 10_000:
+      discard e.updateForFrame(frame)
+      inc frames
+      check e.cursor.column <= max(0, e.activeBuffer.getLineLen(e.cursor.line) - 1)
+    check e.cursor.line > 1
+    e.press("i", "Z")
+
+    check e.activeBuffer.getLine(e.cursor.line) == "aZb"
+
+  test "a new split window takes it from the cursor when the window split has none":
+    let e = createEditorForColumn("abcdefgh\nabcdefgh")
+    e.press("3", "l")
+    check e.hsplit().isOk
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(1) == "abcZdefgh"
+
+  test "a new split window takes it from the window split, as in Vim":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    e.press("7", "l", "j")
+    check e.hsplit().isOk
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(2) == "abcdefgZh"
+
+  test "a split by a command keeps it in the new window":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    let origin = e.activeWindow
+    e.press("7", "l", "j", ":", "s", "p", "Enter")
+    check e.activeWindow != origin
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(2) == "abcdefgZh"
+
+  test "a command that splits and jumps takes it again in the new window":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    e.press("7", "l", "j")
+    e.asCommand:
+      check e.hsplit().isOk
+      e.activeWindow.cursor = BufferPosition(line: 1, column: 0)
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(2) == "Zabcdefgh"
+
+  test "an edit from another window keeps it, as in Vim":
+    # Vim drops curswant only for the window's own commands.
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    e.press("$", "j")
+    check e.hsplit().isOk
+    e.press("k", "x")
+    e.press("C-w", "w")
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(0) == "abcdefg"
+    check e.activeBuffer.getLine(2) == "abcdefgZh"
+
+  test "the window's own edit before it is left takes it again":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    e.press("$", "j", "r", "X")
+    check e.hsplit().isOk
+    e.press("C-w", "w")
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(2) == "aZbcdefgh"
+
+  test "a command that puts another buffer in the window takes it again":
+    let e = createEditorForColumn("abcdefgh\nab")
+    e.press("$", "j")
+    let win = e.activeWindow
+    let at = win.cursor
+    require win.preferredColumn == 7
+    let other = newTextBuffer("ab\nab")
+    require other.contentVersion == win.buffer.contentVersion
+
+    e.asCommand:
+      win.setTab(other)
+      win.cursor = at
+
+    check win.preferredColumn == -1
+
+  test "a move away and a jump back take it again, as in Vim":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    e.press("$", "j")
+    let at = e.cursor
+    e.press("/", "b", "Enter")
+    check e.cursor != at
+    e.press("C-o")
+    check e.cursor == at
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(2) == "aZbcdefgh"
+
+  test "a click that moves the cursor takes it again":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    e.config.standard.mouse = true
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.press("$", "j")
+    check e.handlePointerInput(initPointerInput(1, 0))
+    check e.cursor == BufferPosition(line: 1, column: 0)
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(2) == "Zabcdefgh"
+
+  test "a middle-click paste in Insert takes it again":
+    when defined(posix):
+      let fakeDir = installFakeClipboardTool("XY")
+      defer:
+        removeFakeClipboardTool(fakeDir)
+      let e = createEditorForColumn("abcdefghij\nab\nabcdefghij")
+      e.config.clipboard.enable = true
+      e.config.clipboard.tool = cbtXclip
+      e.press("8", "l", "i", "Down")
+      check e.handleEvent(makeMiddleClickEvent(5, 2))
+      check e.activeBuffer.getLine(1) == "abXY"
+      e.press("Down", "Z")
+
+      check e.activeBuffer.getLine(2) == "abcdZefghij"
+
+  test "a macro's edit from another window keeps it where the macro began, as in Vim":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh\nxyz")
+    e.press("7", "l", "j")
+    check e.hsplit().isOk
+    e.press("G", "C-w", "w")
+    e.press("q", "a", "C-w", "w", "x", "C-w", "w", "q")
+    e.press("@", "a")
+    check e.activeBuffer.getLine(3) == "z"
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(2) == "abcdefgZh"
+
+  test "an edit after a command run inside it changed windows keeps it in the window left, as in Vim":
+    # As `:execute "normal! \<C-w>w" | s/x/X/` edits only the window entered.
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh\nxyz")
+    e.press("7", "l", "j")
+    check e.hsplit().isOk
+    e.press("G", "C-w", "w")
+    e.asCommand:
+      e.press("C-w", "w")
+      let buf = e.activeBuffer
+      check buf.beginTransaction("test").isOk
+      check buf.insertTextEnd(BufferPosition(line: 3, column: 0), "X").isOk
+      check buf.commitTransaction().isOk
+    e.press("C-w", "w", "j", "i", "Z")
+
+    check e.activeBuffer.getLine(2) == "abcdefgZh"
+
+  test "a command that keeps it and then moves takes it again":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    e.press("$", "j")
+    let win = e.activeWindow
+    e.asCommand:
+      win.scrollCursor(BufferPosition(line: 2, column: 7))
+      win.cursor = BufferPosition(line: 2, column: 2)
+
+    check win.preferredColumn == -1
+
+  test "a move before a command run inside another takes it again, as in Vim":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    e.press("$", "j")
+    e.asCommand:
+      e.activeWindow.cursor = BufferPosition(line: 0, column: 2)
+      e.press("j")
+    e.press("j", "i", "Z")
+
+    check e.activeBuffer.getLine(2) == "abZcdefgh"
+
+  test "a command that raises takes it again":
+    let e = createEditorForColumn("abcdefgh\nab\nabcdefgh")
+    e.press("$", "j")
+    let win = e.activeWindow
+    expect ValueError:
+      e.asCommand:
+        win.cursor = BufferPosition(line: 0, column: 0)
+        raise newException(ValueError, "failed")
+
+    check win.preferredColumn == -1
+
+  for smooth in [false, true]:
+    test "a half-page scroll onto a closed fold keeps it (smooth: " & $smooth & ")":
+      let e = createEditorForColumn("ab\n" & "abcdefgh\n".repeat(60))
+      e.config.smoothScroll.enable = smooth
+      e.press("j", "$", "k")
+      # Where the scroll lands without folds, so a fold there takes its start.
+      let target = block:
+        let probe = createEditorForColumn("ab\n" & "abcdefgh\n".repeat(60))
+        probe.config.smoothScroll.enable = false
+        probe.press("C-d")
+        probe.cursor.line
+      require target > 1
+      check e.activeBuffer.foldState.addFold(target, target + 3)
+      e.press("C-d")
+
+      let frame = newBuffer(80, 24)
+      var frames = 0
+      while frames < 10_000:
+        discard e.updateForFrame(frame)
+        inc frames
+        if not e.state.windowDisplay.scrollAnimation.active:
+          break
+      check e.cursor == BufferPosition(line: target, column: 0)
+      e.press("j", "i", "Z")
+
+      check e.cursor.line == target + 4
+      check e.activeBuffer.getLine(target + 4) == "abcdefgZh"

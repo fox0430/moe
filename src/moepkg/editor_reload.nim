@@ -80,7 +80,7 @@ proc invalidatePositionStateForBuffer*(e: Editor, buf: TextBuffer) =
       some(window.mode),
     )
     window.cursor = BufferPosition(line: clamped.y, column: clamped.x)
-    window.preferredColumn = window.cursor.column
+    window.preferredColumn = -1
 
     # The selection anchor names text the reload dropped and cannot be
     # re-derived, so the mode goes with it.

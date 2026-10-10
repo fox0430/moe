@@ -192,10 +192,10 @@ proc applyNormalModePostProcessing(
         return normalResult
       elif normalResult.modeTransition.isNone or
           normalResult.modeTransition.get == EditorMode.Normal:
-        state.insertNormalMode = false
+        editor.resumeInsert()
         return HandlerResult(
           kind: hrHandled,
-          modeTransition: some(EditorMode.Insert),
+          modeTransition: none(EditorMode),
           statusMessage: normalResult.statusMessage,
         )
       else:
@@ -310,20 +310,22 @@ proc handleNormalMode*(
     # case exhaustiveness.
     return HandlerResult(kind: hrUnhandled)
 
-proc handleKeyCombo*(
-    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
-): HandlerResult =
-  ## Pure per-mode dispatcher. The runtime key-sequence mapping precheck lives
-  ## in `runNestedKeyCombo` (result_processor.nim) so this proc can be reused
-  ## verbatim by macro/mapping-RHS replay without re-entering the precheck.
-
-  # Complete any active scroll animation on key input (instant jump to target)
+proc completeScrollAnimation*(e: Editor) =
+  ## Jump an active scroll animation to its target, so a replayed key runs
+  ## where the scroll ends. A typed key stops it instead (`prepareForInput`).
   if e.state.windowDisplay.scrollAnimation.active:
     let (completed, cursorLine) =
       completeScrollAnimation(e.state.windowDisplay.scrollAnimation)
     if completed:
-      e.state.cursor.line = cursorLine
+      e.state.activeWindow.scrollCursor(cursorLine)
 
+proc handleKeyCombo*(
+    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): HandlerResult =
+  ## Pure per-mode dispatcher. The runtime key-sequence mapping precheck and
+  ## the scroll animation jump live in `runNestedKeyCombo` (result_processor.nim)
+  ## so this proc can be reused verbatim by macro/mapping-RHS replay without
+  ## re-entering the precheck.
   let res =
     case e.state.mode
     of EditorMode.Normal:

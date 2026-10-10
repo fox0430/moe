@@ -60,10 +60,9 @@ proc registerMotionCommand*(
         else:
           1
       let cmd = MotionCommand(motion: motion, count: count)
-      let r = ctx.motionController.executeMotion(cmd, ctx.cursor)
+      let r = ctx.motionController.moveCursorByMotion(ctx.state, cmd)
       if r.isErr:
         return err(r.error)
-      ctx.cursor = r.value
       return Result[(), string].ok (),
     0,
     maxArgs,
@@ -144,42 +143,65 @@ proc maxScrollTop(
         layout.lineRows(bottomLine) - 1
   layout.walkBackRows(bottomLine, bottomOffset, visibleHeight - 1)
 
-proc moveCursorToRow(ctx: CommandContext, layout: RowLayout, row: VisibleRow) =
-  let
-    viewport = ctx.motionController.viewportManager.viewport
-    (_, cursorCellX) =
-      layout.cursorCell(ctx.cursor.line, ctx.cursor.column, viewport.leftColumn)
-  ctx.cursor.line = row.line
-  ctx.cursor.column =
-    if row.fold.isSome:
-      0
-    else:
-      layout.cellToColumn(row.line, row.wrapSeg, cursorCellX, viewport.leftColumn)
-
-proc keepCursorInScrolledViewport(
-    ctx: CommandContext, layout: RowLayout, visibleHeight: int
-) =
+proc cursorRow(ctx: CommandContext, layout: RowLayout, visibleHeight: int): int =
+  ## The cursor's screen row: negative above the viewport, `visibleHeight` or
+  ## more below it.
   let
     viewport = ctx.motionController.viewportManager.viewport
     (cursorOffset, _) =
       layout.cursorCell(ctx.cursor.line, ctx.cursor.column, viewport.leftColumn)
-    cursorPosition = (line: ctx.cursor.line, offset: cursorOffset)
-    topPosition = (line: viewport.topLine, offset: viewport.topWrapOffset)
+  if scrollPositionAbove(
+    (line: ctx.cursor.line, offset: cursorOffset),
+    (line: viewport.topLine, offset: viewport.topWrapOffset),
+  ):
+    return -1
+  layout.rowOfLine(
+    viewport.topLine, viewport.topWrapOffset, ctx.cursor.line, visibleHeight
+  ) + cursorOffset
 
-  if scrollPositionAbove(cursorPosition, topPosition):
-    let topRow = layout.rowAt(viewport.topLine, viewport.topWrapOffset, 0)
-    if topRow.isSome:
-      ctx.moveCursorToRow(layout, topRow.get)
+proc moveCursorToRow(
+    ctx: CommandContext, layout: RowLayout, row: VisibleRow, visibleHeight: int
+) =
+  let
+    win = ctx.state.activeWindow
+    leftColumn = ctx.motionController.viewportManager.viewport.leftColumn
+  template sameScreenColumn(): BufferPosition =
+    let (_, cellX) = layout.cursorCell(win.cursor.line, win.cursor.column, leftColumn)
+    BufferPosition(
+      line: row.line,
+      column: layout.cellToColumn(row.line, row.wrapSeg, cellX, leftColumn),
+    )
+
+  if row.fold.isSome:
+    win.scrollCursor(BufferPosition(line: row.line, column: 0))
+  elif win.preferredColumn < 0:
+    # With no column kept, Vim aims for the cursor's screen column.
+    win.scrollCursor(sameScreenColumn())
   else:
-    let cursorRow =
-      layout.rowOfLine(
-        viewport.topLine, viewport.topWrapOffset, ctx.cursor.line, visibleHeight
-      ) + cursorOffset
-    if cursorRow >= visibleHeight:
-      let bottomRow =
-        layout.rowAt(viewport.topLine, viewport.topWrapOffset, visibleHeight - 1)
-      if bottomRow.isSome:
-        ctx.moveCursorToRow(layout, bottomRow.get)
+    win.scrollCursor(row.line)
+    # A wrapped line may show only some of its rows: off them, stay on the row
+    # at the same screen column.
+    if ctx.cursorRow(layout, visibleHeight) notin 0 ..< visibleHeight:
+      win.scrollCursor(sameScreenColumn())
+
+proc keepCursorInScrolledViewport(
+    ctx: CommandContext, layout: RowLayout, visibleHeight: int
+) =
+  let cursorRow = ctx.cursorRow(layout, visibleHeight)
+  if cursorRow in 0 ..< visibleHeight:
+    return
+  let
+    viewport = ctx.motionController.viewportManager.viewport
+    row = layout.rowAt(
+      viewport.topLine,
+      viewport.topWrapOffset,
+      if cursorRow < 0:
+        0
+      else:
+        visibleHeight - 1,
+    )
+  if row.isSome:
+    ctx.moveCursorToRow(layout, row.get, visibleHeight)
 
 proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Scroll viewport down by screen rows (Ctrl-E). Keeps cursor visible.

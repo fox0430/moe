@@ -236,6 +236,19 @@ proc splitOrigin(e: Editor): tuple[viewport: ViewPort, cursor: BufferPosition] =
   let origin = e.viewerOrigin(entry, e.tabBuffer(win), EditorMode.Normal)
   (ViewPort(topLine: origin.topLine, leftColumn: entry.originLeftColumn), origin.cursor)
 
+proc startSplitWindow(e: Editor, newWindow, origin: EditorWindow) =
+  ## Bring up the window a split of `origin` made: in the mode its tab derives,
+  ## and on the same buffer wanting the column `origin` wants, as Vim's
+  ## win_init copies curswant.
+  if newWindow.buffer == origin.buffer:
+    newWindow.takeWantedColumn(origin)
+  e.syncActiveWindow()
+  e.deriveTabMode(newWindow)
+  newWindow.previousMode = EditorMode.Normal
+  # Update cursor position immediately to avoid visual glitch
+  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    e.setActiveWindowScreenCursor(e.activeWindow)
+
 const MinNewWindowWidth* = 10
   ## Minimum width (in columns) required when spawning a new split window.
 
@@ -327,7 +340,9 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   e.saveActiveWindowState()
 
   # Split the tab, not a mode-swapped view.
-  let origin = e.splitOrigin()
+  let
+    origin = e.splitOrigin()
+    originWindow = e.activeWindow
   let bufferResult =
     e.windowManager.vsplit(e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor)
   if bufferResult.isErr:
@@ -338,16 +353,7 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   # Add the new buffer to the global buffer list if it's not already there
   e.registerSplitBuffer(newBuffer, applyConfig = true, context = "vsplit")
 
-  # Sync active window state (buffer, viewport, cursor) with executor
-  e.syncActiveWindow()
-
-  # Derive the new window's mode from its tab.
-  e.deriveTabMode(e.activeWindow)
-  e.state.previousMode = EditorMode.Normal
-
-  # Update cursor position immediately to avoid visual glitch
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.setActiveWindowScreenCursor(e.activeWindow)
+  e.startSplitWindow(e.activeWindow, originWindow)
 
   ok(())
 
@@ -356,7 +362,9 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   # Save current window state before splitting
   e.saveActiveWindowState()
 
-  let origin = e.splitOrigin()
+  let
+    origin = e.splitOrigin()
+    originWindow = e.activeWindow
   let bufferResult = e.windowManager.vsplitWithBuffer(
     e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, buffer
   )
@@ -368,16 +376,7 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   # Add the new buffer to the buffer list if it's not already there
   e.registerSplitBuffer(newBuffer, applyConfig = false, context = "vsplitWithBuffer")
 
-  # Sync active window state (buffer, viewport, cursor) with executor
-  e.syncActiveWindow()
-
-  # Derive the new window's mode from its tab.
-  e.deriveTabMode(e.activeWindow)
-  e.state.previousMode = EditorMode.Normal
-
-  # Update cursor position immediately to avoid visual glitch
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.setActiveWindowScreenCursor(e.activeWindow)
+  e.startSplitWindow(e.activeWindow, originWindow)
 
   ok(())
 
@@ -394,7 +393,9 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   e.saveActiveWindowState()
 
   # Split the tab, not a mode-swapped view.
-  let origin = e.splitOrigin()
+  let
+    origin = e.splitOrigin()
+    originWindow = e.activeWindow
   let bufferResult = e.windowManager.hsplit(
     e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, e.multiStatusLine
   )
@@ -406,16 +407,7 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   # Add the new buffer to the buffer list if it's not already there
   e.registerSplitBuffer(newBuffer, applyConfig = true, context = "hsplit")
 
-  # Sync active window state (buffer, viewport, cursor) with executor
-  e.syncActiveWindow()
-
-  # Derive the new window's mode from its tab.
-  e.deriveTabMode(e.activeWindow)
-  e.state.previousMode = EditorMode.Normal
-
-  # Update cursor position immediately to avoid visual glitch
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.setActiveWindowScreenCursor(e.activeWindow)
+  e.startSplitWindow(e.activeWindow, originWindow)
 
   ok(())
 
@@ -458,16 +450,7 @@ proc hsplitWithBuffer*(
     e.windowManager.activateWindow(e.windowManager.windows.find(originWindow))
     e.windowManager.previousWindow = previousWindow
 
-  # Sync active window state (buffer, viewport, cursor) with executor
-  e.syncActiveWindow()
-
-  # Derive the new window's mode from its tab.
-  e.deriveTabMode(newWindow)
-  newWindow.previousMode = EditorMode.Normal
-
-  # Update cursor position immediately to avoid visual glitch
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.setActiveWindowScreenCursor(e.activeWindow)
+  e.startSplitWindow(newWindow, originWindow)
 
   ok(())
 

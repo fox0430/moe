@@ -37,7 +37,6 @@ proc createTestState(): EditorState =
     cursor: BufferPosition(line: 0, column: 0),
     mode: EditorMode.Normal,
     previousMode: EditorMode.Normal,
-    preferredColumn: -1,
     screenCursor: CursorPosition(x: 0, y: 0),
   )
   EditorState(

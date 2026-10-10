@@ -42,7 +42,6 @@ proc newTestEditorState(): EditorState =
     cursor: BufferPosition(line: 0, column: 0),
     mode: EditorMode.LogViewer,
     previousMode: EditorMode.Normal,
-    preferredColumn: -1,
     screenCursor: CursorPosition(x: 0, y: 0),
   )
   result = EditorState(

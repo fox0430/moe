@@ -54,7 +54,7 @@ when not defined(moe.embedded):
   import types/terminal_mode_types
 
 from lsp/protocol/types import SemanticTokensLegend
-from cursor_util import clampCursorToLastChar
+from cursor_util import clampCursorToLastChar, adjustCursorAfterInsertExit
 
 export
   buffer.LineMarkerKind, registers_types, command_completion_types, filer_types,
@@ -229,13 +229,20 @@ type
       # Current mode for this window. Enter a Visual mode through `setMode`,
       # which puts the anchor on the cursor.
     previousMode*: EditorMode # Previous mode for ESC handling
-    preferredColumn*: int # Preferred column for vertical movement (vim's $ behavior)
+    wantedColumn: Option[int] # Read through `preferredColumn`
+    wantedColumnSince: WindowSpot
+      # Where the window stood when its command began or it last kept a column.
     screenCursor*: CursorPosition # Screen cursor position (x/y)
     modeState*: ModeState # Per-window mode-specific state (variant)
     viewerEntry*: Option[ViewerEntry]
       # Set by enterViewerMode, consumed by leaveViewerMode.
     fixedWidth*: Option[int] # Fixed width for sidebar windows (skips equalize)
     wrapCountCache*: WrapCountCache
+
+  WindowSpot = object
+    cursor: BufferPosition
+    buffer: TextBuffer
+    version: int
 
   SearchDirection* = enum
     Forward # Search forward (/)
@@ -1192,21 +1199,113 @@ proc settleLastVisual*(win: EditorWindow, replaced: Option[VisualArea]) =
   if win.mode.isVisualAllMode and not win.buffer.isNil:
     win.buffer.lastVisual = replaced
 
+proc spot(win: EditorWindow): WindowSpot =
+  WindowSpot(
+    cursor: win.cursor,
+    buffer: win.buffer,
+    version: if win.buffer.isNil: 0 else: win.buffer.contentVersion,
+  )
+
+proc preferredColumn*(win: EditorWindow): int =
+  ## The column vertical moves aim for (Vim's curswant), or -1 to take the
+  ## cursor's.
+  win.wantedColumn.get(-1)
+
+proc `preferredColumn=`*(win: EditorWindow, column: int) =
+  ## Keep `column` for vertical moves; -1 drops it.
+  if column < 0:
+    win.wantedColumn = none(int)
+  else:
+    win.wantedColumn = some(column)
+    win.wantedColumnSince = win.spot
+
+proc aimedColumn*(win: EditorWindow): int =
+  ## The column vertical moves and scrolls aim for: the one kept, else the
+  ## cursor's, as Vim's update_curswant.
+  let wanted = win.preferredColumn
+  if wanted < 0: win.cursor.column else: wanted
+
+proc scrollCursor*(win: EditorWindow, to: BufferPosition) =
+  ## Move the cursor as a scroll does, which keeps the column it aimed for as
+  ## the one vertical moves want, as Vim keeps curswant.
+  if to == win.cursor:
+    return
+  let aimed = win.aimedColumn
+  win.cursor = to
+  win.preferredColumn = aimed
+
+proc scrollCursor*(win: EditorWindow, line: int) =
+  ## Move the cursor to `line` as a scroll does: onto the column it aims for,
+  ## as Vim's coladvance(curswant).
+  let lineLen =
+    if win.buffer.isNil or line < 0 or line >= win.buffer.len:
+      0
+    else:
+      win.buffer.getLineLen(line)
+  win.scrollCursor(
+    BufferPosition(
+      line: line, column: min(win.aimedColumn, maxCursorColumn(lineLen, win.mode))
+    )
+  )
+
+proc takeWantedColumn*(win, src: EditorWindow) =
+  ## Start with the column `src` wants, as Vim's win_init copies curswant into
+  ## a new window, and from where `src` stood when its command began.
+  win.wantedColumn = src.wantedColumn
+  win.wantedColumnSince = src.wantedColumnSince
+
+proc adjustCursorAfterInsertExit*(win: EditorWindow) =
+  ## Put the cursor where leaving Insert leaves it, and take the column
+  ## vertical moves want from it again, as Vim's ins_esc.
+  if win.buffer.isNil or win.cursor.line >= win.buffer.len:
+    return
+  win.cursor.adjustCursorAfterInsertExit(win.buffer.getLineLen(win.cursor.line))
+  win.preferredColumn = -1
+
+proc noteCommandStart*(win: EditorWindow) =
+  ## Note where `win` stands as a command, or the rest of one, begins.
+  win.wantedColumnSince = win.spot
+
+proc settleWantedColumn*(win: EditorWindow, ranIn: bool) =
+  ## End a command for `win`. As Vim's commands drop curswant, one that moved
+  ## the cursor or put another buffer in the window drops the column vertical
+  ## moves want, and so does an edit by a command run in it (`ranIn`). What
+  ## happened before the command last kept a column does not count.
+  let since = win.wantedColumnSince
+  let edited =
+    ranIn and not win.buffer.isNil and win.buffer.contentVersion != since.version
+  if edited or win.cursor != since.cursor or win.buffer != since.buffer:
+    win.preferredColumn = -1
+
 proc setMode*(win: EditorWindow, m: EditorMode) =
   ## Set the window's mode. Entering a Visual mode from outside starts the
   ## selection at the cursor, so no entry path can resume a stale anchor.
-  ## Leaving Visual saves the selection for `gv`, as Vim does, and for a mode
-  ## other than Insert or Replace brings the cursor back onto the line, off the
-  ## end `$` left it at.
+  ## Entering Insert or Replace and leaving Visual take the column vertical
+  ## moves want from the cursor again, as Vim's edit() and Esc do. Leaving
+  ## Visual saves the selection for `gv`, as Vim does, and for a mode other
+  ## than Insert or Replace brings the cursor back onto the line, off the end
+  ## `$` left it at.
   let leavingVisual = win.mode.isVisualAllMode and not m.isVisualAllMode
   if m.isVisualAllMode and not win.mode.isVisualAllMode:
     win.visualAnchor = win.cursor
+  if leavingVisual or (
+    m in {EditorMode.Insert, EditorMode.Replace} and
+    win.mode notin {EditorMode.Insert, EditorMode.Replace}
+  ):
+    win.preferredColumn = -1
   if leavingVisual and not win.holdLastVisual:
     win.saveLastVisual()
   win.mode = m
   if leavingVisual and m notin {EditorMode.Insert, EditorMode.Replace} and
       not win.buffer.isNil and win.cursor.line < win.buffer.len:
     win.cursor.clampCursorToLastChar(win.buffer.getLineLen(win.cursor.line))
+
+proc resumeInsert*(win: EditorWindow) =
+  ## Go back to Insert from the Normal mode of a `<C-o>` command. Unlike
+  ## entering Insert, this keeps the column vertical moves want, as Vim's
+  ## restart_edit does.
+  win.previousMode = win.mode
+  win.mode = EditorMode.Insert
 
 func modeAfterVisual(win: EditorWindow): EditorMode =
   ## The mode Visual was entered from. Never another Visual mode, which would
@@ -1245,6 +1344,9 @@ proc preferredColumn*(s: EditorState): int =
 proc `preferredColumn=`*(s: EditorState, v: int) =
   ## Set preferred column on the active window
   s.activeWindow.preferredColumn = v
+
+proc aimedColumn*(s: EditorState): int =
+  s.activeWindow.aimedColumn
 
 proc screenCursor*(s: EditorState): var CursorPosition =
   ## Get screen cursor from the active window (returns var for in-place mutation)

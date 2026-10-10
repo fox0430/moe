@@ -162,10 +162,9 @@ proc handleMotionCommand*(
 ): Result[(), string] =
   ## Handle motion commands (h, j, k, l, w, b, etc.)
   let motionCmd = MotionCommand(motion: motion, count: count)
-  let r = handler.motionController.executeMotion(motionCmd, state.cursor)
+  let r = handler.motionController.moveCursorByMotion(state, motionCmd)
   if r.isErr:
     return err(r.error)
-  state.cursor = r.value
   return Result[(), string].ok ()
 
 proc findMatchContainingCursor(
@@ -464,10 +463,9 @@ proc handleInsertModeEntry*(
   of "insert-first-non-blank":
     # Move to first non-blank character and insert
     let motionCmd = MotionCommand(motion: Motion.FirstNonBlank, count: 1)
-    let r = handler.motionController.executeMotion(motionCmd, state.cursor)
+    let r = handler.motionController.moveCursorByMotion(state, motionCmd)
     if r.isErr:
       return NormalModeResult(kind: nmrError, errorMessage: r.error)
-    state.cursor = r.value
   of "append":
     # Move cursor right if not at end of line
     let lineContent = buffer.getLine(state.cursor.line)

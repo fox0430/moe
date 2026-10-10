@@ -101,6 +101,10 @@ type
     xHostCommandRequests: seq[ParsedCommand]
     xHostResultRequests: seq[handler_result_types.HandlerResult]
     xHostResultRequestCount: int
+    commandDepth: int # Commands running, counting those run inside others
+    commandRanIn: EditorWindow
+      # The window the innermost command, or its rest after one run inside it,
+      # began in.
     when not defined(moe.embedded):
       terminalStates*: Table[BufferId, TerminalState]
         ## Live Terminal sessions keyed by their buffer id. The window's
@@ -241,6 +245,57 @@ proc `cursor=`*(e: Editor, pos: BufferPosition) {.inline.} =
 proc setMode*(e: Editor, mode: EditorMode) {.inline.} =
   ## Set the current mode in the active window
   e.activeWindow.setMode(mode)
+
+proc resumeInsert*(e: Editor) =
+  ## End a `<C-o>` command by going back to Insert in the active window.
+  e.state.insertNormalMode = false
+  e.activeWindow.resumeInsert()
+
+proc commandWindow(e: Editor): EditorWindow =
+  # Ends every input, so an index left out of range must not raise here.
+  if e.windowManager.activeWindowIndex in 0 ..< e.windowManager.windows.len:
+    e.activeWindow
+  else:
+    nil
+
+proc startCommandPart(e: Editor) =
+  e.commandRanIn = e.commandWindow
+  for win in e.windowManager.windows:
+    win.noteCommandStart()
+
+proc settleCommandPart(e: Editor) =
+  ## Only the window the command ran in and the one it ended in are its own:
+  ## edits from other windows keep theirs, as in Vim.
+  let endedIn = e.commandWindow
+  if not e.commandRanIn.isNil:
+    e.commandRanIn.settleWantedColumn(ranIn = true)
+  if not endedIn.isNil and endedIn != e.commandRanIn:
+    endedIn.settleWantedColumn(ranIn = false)
+
+proc beginCommand(e: Editor) =
+  # A command run inside another, such as a macro's key, ends the part of the
+  # other before it.
+  if e.commandDepth > 0:
+    e.settleCommandPart()
+  inc e.commandDepth
+  e.startCommandPart()
+
+proc endCommand(e: Editor) =
+  e.settleCommandPart()
+  dec e.commandDepth
+  if e.commandDepth > 0:
+    e.startCommandPart()
+
+template asCommand*(e: Editor, body: untyped) =
+  ## Run `body` as one command for the column vertical moves want: see
+  ## `settleWantedColumn`. Commands run inside it judge their own moves, and it
+  ## judges only the rest. Each public input entry point runs its input as one.
+  ## `body` must not await.
+  e.beginCommand()
+  try:
+    body
+  finally:
+    e.endCommand()
 
 # Editor-based config pull-type accessors. State-based ones live in types.nim.
 

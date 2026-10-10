@@ -211,10 +211,9 @@ proc executeFindCharMotion(
         ctx.cursor = skipDest.get
         skipped = true
     if not skipped:
-      let r = ctx.motionController.executeMotion(motionCmd, ctx.cursor)
+      let r = ctx.motionController.moveCursorByMotion(ctx.state, motionCmd)
       if r.isErr:
         return err(r.error)
-      ctx.cursor = r.value
 
     # Highlight all matching characters on cursor line
     ctx.state.ui.findCharMatchLine = ctx.cursor.line
@@ -379,8 +378,8 @@ proc executeCommand*(
       # For smooth scroll motions, don't update viewport in executeMotion
       # The animation will handle viewport updates
       let skipViewportUpdate = isScrollMotion and ctx.smoothScrollConfig.enable
-      let r = ctx.motionController.executeMotion(
-        motionCmd, ctx.cursor, updateViewport = not skipViewportUpdate
+      let r = ctx.motionController.moveCursorByMotion(
+        ctx.state, motionCmd, updateViewport = not skipViewportUpdate
       )
       if r.isErr:
         return err(r.error)
@@ -392,22 +391,14 @@ proc executeCommand*(
       let targetCursorLine = r.value.line
 
       # Start smooth scroll animation if this was a scroll motion
-      if isScrollMotion and ctx.smoothScrollConfig.enable:
-        if targetCursorLine != prevCursorLine:
-          # Restore original cursor position - animation will interpolate from here
-          ctx.cursor.line = prevCursorLine
-          startScrollAnimation(
-            ctx.state.windowDisplay.scrollAnimation, prevCursorLine, targetCursorLine,
-            ctx.smoothScrollConfig,
-          )
-        else:
-          # No scroll needed, just update cursor
-          ctx.cursor = r.value
-      elif isScrollMotion:
-        # Smooth scroll disabled, just update cursor
-        ctx.cursor = r.value
-      else:
-        ctx.cursor = r.value
+      if skipViewportUpdate and targetCursorLine != prevCursorLine:
+        # Scroll the cursor back to where the animation starts, keeping the
+        # column the move aimed for.
+        ctx.state.activeWindow.scrollCursor(prevCursorLine)
+        startScrollAnimation(
+          ctx.state.windowDisplay.scrollAnimation, prevCursorLine, targetCursorLine,
+          ctx.smoothScrollConfig,
+        )
 
       logDebug(
         "command",

@@ -253,6 +253,9 @@ proc executeOperatorOnRange*(
     ctx.state.pendingInput.pendingRegister = none(char)
     return ok(())
 
+  # Vim's operators drop curswant, even ones that leave the cursor and text.
+  ctx.state.preferredColumn = -1
+
   case operatorType
   of OpYank:
     # Yank (copy) the range

@@ -271,12 +271,14 @@ proc tickLsp(e: Editor) =
   e.pollLspCompletion()
   e.pollLspHover()
   e.maybeAutoHoverDiagnostic()
-  e.pollLspLocationRequest()
-  e.pollLspCallHierarchy()
-  e.pollLspSelectionRange()
-  e.pollLspDocumentSymbols()
-  e.pollLspDocumentLinks()
-  e.pollLspDocumentLinkResolve()
+  # A response that jumps ends the command that asked for it.
+  e.asCommand:
+    e.pollLspLocationRequest()
+    e.pollLspCallHierarchy()
+    e.pollLspSelectionRange()
+    e.pollLspDocumentSymbols()
+    e.pollLspDocumentLinks()
+    e.pollLspDocumentLinkResolve()
 
   # Reclaim abandoned (timed-out, no longer polled) requests. Runs last so
   # active consumers process their own responses above before the sweep.
@@ -386,7 +388,7 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
       e.state.windowDisplay.scrollAnimation, e.config.smoothScroll, reservedLines,
       bufferLen,
     )
-    e.activeWindow.cursor.line = cursorLine
+    e.activeWindow.scrollCursor(cursorLine)
 
   # Keep the active cursor off lines hidden inside a collapsed fold. Many cursor
   # moves (search, :N, LSP jumps, mouse clicks, cursor restore on open) bypass

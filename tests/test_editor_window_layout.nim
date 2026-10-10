@@ -121,7 +121,6 @@ suite "minimumTerminalAreaDimensions":
       viewport: viewport,
       mode: EditorMode.Terminal,
       previousMode: EditorMode.Terminal,
-      preferredColumn: -1,
       tabBufferId: id,
       modeState: terminalModeState(),
     )
