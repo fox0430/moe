@@ -691,27 +691,6 @@ suite "Editor - Display toggle functions":
     e.setStatusLineVisible(true)
     check e.state.showStatusLine == true
 
-  test "Toggle line count visibility":
-    let e = createTestEditor()
-
-    let initial = e.state.display.showLineCount
-    e.toggleLineCount()
-    check e.state.display.showLineCount == not initial
-
-  test "Toggle line percentage visibility":
-    let e = createTestEditor()
-
-    let initial = e.state.display.showLinePercentage
-    e.toggleLinePercentage()
-    check e.state.display.showLinePercentage == not initial
-
-  test "Toggle encoding visibility":
-    let e = createTestEditor()
-
-    let initial = e.state.display.showEncoding
-    e.toggleEncoding()
-    check e.state.display.showEncoding == not initial
-
   test "Toggle line wrap":
     let e = createTestEditor()
 

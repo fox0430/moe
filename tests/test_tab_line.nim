@@ -37,8 +37,6 @@ proc createTestState(): EditorState =
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
     ),
-    display:
-      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     pendingInput: PendingInputState(

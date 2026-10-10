@@ -68,6 +68,14 @@ proc detectClipboardTool*(): ClipboardTool =
   # Default fallback
   return cbtXsel
 
+const DefaultStatusLineSetupText* =
+  "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType}"
+
+proc effectiveSetupText*(config: StatusLineConfig): string =
+  ## The format the status line's ruler draws: an empty setupText takes the
+  ## default.
+  if config.setupText.len > 0: config.setupText else: DefaultStatusLineSetupText
+
 proc newEditorConfig*(): EditorConfig =
   ## Create a new configuration with default values
   result = EditorConfig(
@@ -128,8 +136,7 @@ proc newEditorConfig*(): EditorConfig =
       gitBranchName: true,
       showGitInactive: false,
       showModeInactive: false,
-      setupText:
-        "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType}",
+      setupText: DefaultStatusLineSetupText,
     ),
     highlight: HighlightConfig(
       backend: hbBuiltin,

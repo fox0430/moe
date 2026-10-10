@@ -166,48 +166,6 @@ suite "editor_display - status line":
     e.setStatusLineVisible(true)
     check e.showStatusLine == true
 
-suite "editor_display - line count":
-  test "toggleLineCount flips the display flag":
-    let e = createTestEditor()
-    let before = e.state.display.showLineCount
-    e.toggleLineCount()
-    check e.state.display.showLineCount == not before
-
-  test "setLineCountVisible sets the display flag":
-    let e = createTestEditor()
-    e.setLineCountVisible(false)
-    check e.state.display.showLineCount == false
-    e.setLineCountVisible(true)
-    check e.state.display.showLineCount == true
-
-suite "editor_display - line percentage":
-  test "toggleLinePercentage flips the display flag":
-    let e = createTestEditor()
-    let before = e.state.display.showLinePercentage
-    e.toggleLinePercentage()
-    check e.state.display.showLinePercentage == not before
-
-  test "setLinePercentageVisible sets the display flag":
-    let e = createTestEditor()
-    e.setLinePercentageVisible(false)
-    check e.state.display.showLinePercentage == false
-    e.setLinePercentageVisible(true)
-    check e.state.display.showLinePercentage == true
-
-suite "editor_display - encoding":
-  test "toggleEncoding flips the display flag":
-    let e = createTestEditor()
-    let before = e.state.display.showEncoding
-    e.toggleEncoding()
-    check e.state.display.showEncoding == not before
-
-  test "setEncodingVisible sets the display flag":
-    let e = createTestEditor()
-    e.setEncodingVisible(false)
-    check e.state.display.showEncoding == false
-    e.setEncodingVisible(true)
-    check e.state.display.showEncoding == true
-
 suite "editor_display - line wrap":
   test "toggleLineWrap flips the config flag":
     let e = createTestEditor()

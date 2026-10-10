@@ -46,7 +46,7 @@ import
   visual_selection
 
 import
-  git_cache, render_utils, logger, message_log, debug_viewer, completion,
+  config, git_cache, render_utils, logger, message_log, debug_viewer, completion,
   signature_help, hover_popup, notification_popup, unicode_utils, motion, buffer,
   lsp_integration, editor_window_layout, editor_notify
 
@@ -298,7 +298,7 @@ proc tickGitCache(e: Editor) =
   let
     sl = e.config.statusLine
     frontendWantsGit = e.state.frontendSubscriptions.gitStatus
-  let setup = if e.showStatusLine: sl.setupText else: ""
+  let setup = if e.showStatusLine: sl.effectiveSetupText else: ""
   let wantsDiff =
     frontendWantsGit or e.showGitDiff or (e.showStatusLine and sl.gitChangedLines) or
     "{gitChanges}" in setup

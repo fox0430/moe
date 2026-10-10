@@ -22,7 +22,7 @@
 
 import std/options
 
-import types/editor_types, status_line, git_cache
+import types/editor_types, git_cache
 
 export GitRefreshMode
 
@@ -109,30 +109,6 @@ proc toggleStatusLine*(e: Editor) =
 
 proc setStatusLineVisible*(e: Editor, visible: bool) =
   e.showStatusLine = visible
-
-proc toggleLineCount*(e: Editor) =
-  ## Toggle the visibility of line count in status line
-  e.state.toggleLineCount()
-
-proc setLineCountVisible*(e: Editor, visible: bool) =
-  ## Set the visibility of line count in status line
-  e.state.setLineCountVisible(visible)
-
-proc toggleLinePercentage*(e: Editor) =
-  ## Toggle the visibility of line percentage in status line
-  e.state.toggleLinePercentage()
-
-proc setLinePercentageVisible*(e: Editor, visible: bool) =
-  ## Set the visibility of line percentage in status line
-  e.state.setLinePercentageVisible(visible)
-
-proc toggleEncoding*(e: Editor) =
-  ## Toggle the visibility of encoding in status line
-  e.state.toggleEncoding()
-
-proc setEncodingVisible*(e: Editor, visible: bool) =
-  ## Set the visibility of encoding in status line
-  e.state.setEncodingVisible(visible)
 
 proc toggleLineWrap*(e: Editor) =
   e.lineWrap = not e.lineWrap
