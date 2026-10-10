@@ -25,11 +25,15 @@
 ## Editor parameter) without forming a cycle through editor_types' need to know
 ## the HandlerManager field type.
 
+import std/options
+
 import
   ../[
     motion, key_bindings, command_registry, command_line, command_config, completion,
-    signature_help, lsp_integration,
+    signature_help, lsp_integration, primitives,
   ]
+import ../buffer/core
+from ../types import EditorWindow
 
 proc textObjectCommandIdFor*(ch: string): string =
   ## Map a text-object key (the char after i/a) to its registered command id,
@@ -56,6 +60,15 @@ type
     keyBindingRegistry*: KeyBindingRegistry
     commandRegistry*: CommandRegistry
 
+  AutoTriggerMark* = object
+    ## Where a typed character left the cursor. The popup opens there only if
+    ## nothing has moved or changed by the next frame.
+    window*: EditorWindow
+      # Another window on the same buffer may have its cursor at the same place
+    bufferId*: BufferId
+    cursor*: BufferPosition
+    contentVersion*: int
+
   InsertModeHandler* = ref object
     keyBindingRegistry*: KeyBindingRegistry
     motionController*: MotionController
@@ -63,6 +76,8 @@ type
     completionManager*: CompletionManager
     signatureHelpManager*: SignatureHelpManager
     lsp*: LspIntegration
+    autoTrigger*: Option[AutoTriggerMark]
+      # Set by the last key when it typed a character, consumed by the frame
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
     parser*: CommandLineParser

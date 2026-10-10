@@ -117,6 +117,10 @@ proc maybeAutoHoverDiagnostic*(e: Editor) =
   if e.state.overlay.isSome:
     return
 
+  # The popup takes Escape, which a replay of the recording would not meet.
+  if e.state.pendingInput.macroState.isRecording:
+    return
+
   let cursorLine = e.activeWindow.cursor.line
   let cursorCol = e.activeWindow.cursor.column
 

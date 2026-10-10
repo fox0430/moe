@@ -259,6 +259,28 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
     check e.state.lspCache.hoverPopup.isActive
     check e.state.lspCache.hoverPopup.display.lines[0] == "[Error] test error"
 
+  test "Does nothing while a macro is recorded":
+    # The popup takes Escape, which the replay would not meet.
+    let e = createTestEditorForAutoHover()
+    e.activeBuffer().diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 10,
+        severity: bdsError,
+        message: "test error",
+      )
+    ]
+    e.state.lspCache.autoHoverPoll.cursorLine = -1
+    e.state.lspCache.autoHoverPoll.cursorColumn = -1
+    e.cursor = BufferPosition(line: 0, column: 3)
+    e.state.pendingInput.macroState.isRecording = true
+
+    e.maybeAutoHoverDiagnostic()
+
+    check not e.state.lspCache.hoverPopup.isActive
+
   test "Hides popup when cursor moves off diagnostic":
     let e = createTestEditorForAutoHover()
     e.activeBuffer().diagnostics = @[
