@@ -69,6 +69,7 @@ import
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
     result_processor, command_passthrough,
   ]
+from command_handlers/insert_handler import closeInsertPopups
 export command_mode_handler, search_mode_handler, cursor_util, frontend_input
 
 # Wire the playback overlay hook so nested key replay routes to the overlay
@@ -1198,6 +1199,8 @@ proc handleInterruptCore(e: Editor): bool =
     # Ctrl-C records the insert for dot-repeat, but does not run Escape-only
     # counted-insert replay or visual-block replication.
     if e.state.mode == EditorMode.Insert:
+      # Leaving Insert ends completion and signature help, as on Escape.
+      e.handlerManager.insertHandler.closeInsertPopups()
       let finalizeResult = finalizeInsertInterrupt(activeBuffer, e.state)
       if finalizeResult.isErr:
         e.state.statusMessage = finalizeResult.error

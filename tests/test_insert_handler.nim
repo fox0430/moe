@@ -97,6 +97,13 @@ proc createTestHandler(buf: TextBuffer): InsertModeHandler =
 
   newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
+proc typeAndFrame(
+    handler: InsertModeHandler, buf: TextBuffer, state: EditorState, keyCombo: KeyCombo
+): InsertModeResult =
+  ## A key followed by the frame, which opens the popup for a typed character.
+  result = handler.handleInsertModeKey(buf, state, keyCombo)
+  handler.runAutoTrigger(buf, state)
+
 suite "InsertModeHandler - Constructor":
   test "Create InsertModeHandler with default config":
     let buf = newTextBuffer()
@@ -1580,7 +1587,8 @@ suite "InsertModeHandler - Completion Active Key Handling":
     check r.modeTransition.get == EditorMode.Normal
     check handler.completionManager.isActive() == false
 
-  test "Enter when completion active":
+  test "Enter with nothing highlighted closes the popup and breaks the line":
+    # As in Vim, Enter picks only an item the user moved to.
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nhel")
@@ -1588,21 +1596,19 @@ suite "InsertModeHandler - Completion Active Key Handling":
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 3)
 
-    # Trigger completion
     handler.completionManager.triggerCompletion(
       buf, state.cursor.line, state.cursor.column, langNone
     )
+    check handler.completionManager.isActive()
 
-    if handler.completionManager.isActive():
-      # Press Enter
-      let keyCombo =
-        KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
-      let r = handler.handleInsertModeKey(buf, state, keyCombo)
+    let keyCombo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
-      check r.kind == imrHandled
-      check handler.completionManager.isActive() == false
-    else:
-      check true
+    check r.kind == imrHandled
+    check not handler.completionManager.isActive()
+    check buf.getLine(1) == "hel"
+    check buf.getLine(2) == ""
+    check state.cursor == BufferPosition(line: 2, column: 0)
 
   test "Backspace when completion active":
     let buf = newTextBuffer()
@@ -1826,7 +1832,7 @@ suite "InsertModeHandler - Path completion":
 
     # Type "/" character
     let keyCombo = KeyCombo(isSpecial: false, char: "/", modifiers: {})
-    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+    let r = handler.typeAndFrame(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check handler.completionManager.isPathCompletion
@@ -1842,7 +1848,7 @@ suite "InsertModeHandler - Path completion":
 
     # Then type "/"
     let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
-    let r = handler.handleInsertModeKey(buf, state, slashKey)
+    let r = handler.typeAndFrame(buf, state, slashKey)
 
     check r.kind == imrHandled
     check handler.completionManager.isPathCompletion
@@ -2008,7 +2014,7 @@ suite "InsertModeHandler - Path completion":
 
     # Type "/" to trigger path completion
     let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
-    discard handler.handleInsertModeKey(buf, state, slashKey)
+    discard handler.typeAndFrame(buf, state, slashKey)
     check handler.completionManager.isPathCompletion
 
     # Press Escape
@@ -2030,7 +2036,7 @@ suite "InsertModeHandler - Path completion":
 
     # Type "/"
     let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
-    discard handler.handleInsertModeKey(buf, state, slashKey)
+    discard handler.typeAndFrame(buf, state, slashKey)
 
     check handler.completionManager.isPathCompletion
     check buf.getLine(0) == "~/"
@@ -3458,11 +3464,11 @@ suite "InsertModeHandler - snippet session":
     discard handler.commitCompletion(buf, state)
     # Type over the default first so Enter splits between the arguments.
     let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    discard handler.handleInsertModeKey(buf, state, zKey)
+    discard handler.typeAndFrame(buf, state, zKey)
     check state.cursor == BufferPosition(line: 0, column: 13)
-    # Typing re-triggered the popup ("z" fuzzy-matches "size_type"); close it
-    # so Enter reaches the session instead of dismissing the popup.
-    handler.completionManager.cancelCompletion()
+    # "z" fuzzy-matches "size_type". Nothing is highlighted, so Enter ends the
+    # completion and still reaches the session.
+    check handler.completionManager.isActive()
 
     let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
     discard handler.handleInsertModeKey(buf, state, enterKey)
@@ -3508,7 +3514,7 @@ suite "InsertModeHandler - snippet session":
     discard handler.commitCompletion(buf, state)
 
     let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    discard handler.handleInsertModeKey(buf, state, zKey)
+    discard handler.typeAndFrame(buf, state, zKey)
     # The popup re-opened; leave it open so Backspace goes through it.
     check handler.completionManager.isActive()
     check state.snippetSession.stops[1].pos.column == 15
@@ -3752,7 +3758,7 @@ suite "InsertModeHandler - LSP debounce prefix staleness":
 
     # Type 't' at col 0 of a fresh line — first call, no debounce
     let typeT = KeyCombo(isSpecial: false, char: "t", modifiers: {})
-    discard handler.handleInsertModeKey(buf, state, typeT)
+    discard handler.typeAndFrame(buf, state, typeT)
     check handler.completionManager.isActive()
     check handler.completionManager.menu.prefix == "t"
 
@@ -3961,6 +3967,221 @@ suite "InsertModeHandler - LSP completion request retirement":
     handler.triggerLspCompletionRequest(buf, state)
 
     check handler.completionManager.getLspRequestId.isNone
+    check not handler.completionManager.isPendingLsp
+
+  test "while recording, completion takes buffer words and leaves the server alone":
+    # LSP candidates would arrive between the recorded keys.
+    let path = getTempDir() / "test_insert_handler_completion_recording.nim"
+    let buf = newTextBuffer("hello\nhel", some(path))
+
+    let lsp = newLspIntegration("")
+    lsp.enabled = true
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(completionProvider: some(CompletionOptions()))
+    lsp.documents[normalizedPath(absolutePath(path))] =
+      initLspDocumentState(1, buf.getTextString(), delivered = true)
+
+    let keyBindingRegistry = newKeyBindingRegistry()
+    setupDefaultBindings(keyBindingRegistry)
+    let commandRegistry = newCommandRegistry()
+    registerBuiltinCommands(commandRegistry)
+    let motionController =
+      newMotionController(buf, createTestState(), createTestViewport())
+    let handler =
+      newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
+
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 3)
+    state.config.autocomplete.enable = true
+    state.config.lsp.completion.enable = true
+    state.pendingInput.macroState.isRecording = true
+
+    # Its answer and the candidates from before recording would differ in a
+    # replay, so both go though no new request replaces them.
+    handler.completionManager.setLspRequestPending(42)
+    handler.completionManager.lspItems = @[CompletionItem(label: "help")]
+
+    handler.triggerLspCompletionRequest(buf, state)
+
+    check handler.completionManager.isActive()
+    check handler.completionManager.menu.prefix == "hel"
+    check handler.completionManager.menu.entries.len == 1
+    check handler.completionManager.getLspRequestId.isNone
+
+proc answerHandler(buf: TextBuffer): InsertModeHandler =
+  ## A handler whose LSP answers come from `pendingResponses`.
+  let lsp = newLspIntegration("")
+  lsp.enabled = true
+  let keyBindingRegistry = newKeyBindingRegistry()
+  setupDefaultBindings(keyBindingRegistry)
+  let commandRegistry = newCommandRegistry()
+  registerBuiltinCommands(commandRegistry)
+  let motionController =
+    newMotionController(buf, createTestState(), createTestViewport())
+  newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
+
+suite "InsertModeHandler - an LSP answer while the user picks":
+  privateAccess(LspService)
+
+  proc pickWhileAsking(): (TextBuffer, InsertModeHandler, EditorState) =
+    ## "foobaz" highlighted from the buffer words, with the server's answer
+    ## waiting for the next poll.
+    let buf = newTextBuffer("foobaz\nfo")
+    let handler = answerHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 2)
+    handler.completionManager.triggerCompletion(buf, 1, 2, langNone)
+    handler.completionManager.setLspRequestPending(42)
+    handler.lsp.service.pendingResponses[42] =
+      (result: some("""[{"label": "foobar"}]"""), error: none(string))
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check handler.completionManager.menu.hasSelection
+    check buf.getLine(1) == "foobaz"
+    (buf, handler, state)
+
+  test "the answer leaves the list on screen alone, so Enter takes the pick":
+    let (buf, handler, state) = pickWhileAsking()
+
+    handler.pollLspCompletion(state)
+    check handler.completionManager.menu.hasSelection
+    check not handler.completionManager.isPendingLsp
+
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
+    check buf.len == 2
+    check buf.getLine(1) == "foobaz"
+
+  test "taking the pick stops the server's work on the answer":
+    let (buf, handler, state) = pickWhileAsking()
+
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
+
+    check 42 notin handler.lsp.service.pendingResponses
+
+suite "InsertModeHandler - a completion that shows nothing yet":
+  ## While its LSP request is in flight a completion shows nothing, so there is
+  ## nothing to pick: keys do what they do without one, and end it.
+  privateAccess(LspService)
+
+  proc askAt(handler: InsertModeHandler, buf: TextBuffer, state: EditorState) =
+    ## A request for the word before the cursor, with no buffer word to show,
+    ## and the server's answer waiting for the next poll.
+    handler.completionManager.triggerCompletion(
+      buf, state.cursor.line, state.cursor.column, langNone
+    )
+    check handler.completionManager.menu.entries.len == 0
+    handler.completionManager.setLspRequestPending(42)
+    check handler.completionManager.isActive()
+    handler.lsp.service.pendingResponses[42] =
+      (result: some("""[{"label": "foobar"}]"""), error: none(string))
+
+  test "keys that would pick do what they do without one, and end it":
+    let keys = [
+      ("Enter", KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})),
+      ("Tab", KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})),
+      (
+        "BackTab",
+        KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0, modifiers: {}),
+      ),
+      ("Up", KeyCombo(isSpecial: true, special: skUp, fnNum: 0, modifiers: {})),
+      ("Down", KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})),
+      ("Delete", KeyCombo(isSpecial: true, special: skDelete, fnNum: 0, modifiers: {})),
+    ]
+    for (name, key) in keys:
+      let buf = newTextBuffer("fo!\nbar")
+      let handler = answerHandler(buf)
+      let state = createTestState()
+      state.cursor = BufferPosition(line: 0, column: 2)
+      handler.askAt(buf, state)
+      discard handler.handleInsertModeKey(buf, state, key)
+
+      let plain = newTextBuffer("fo!\nbar")
+      let plainHandler = answerHandler(plain)
+      let plainState = createTestState()
+      plainState.cursor = BufferPosition(line: 0, column: 2)
+      discard plainHandler.handleInsertModeKey(plain, plainState, key)
+
+      checkpoint name
+      check buf.getTextString() == plain.getTextString()
+      check state.cursor == plainState.cursor
+      check not handler.completionManager.isPendingLsp
+
+  test "Ctrl-N and Ctrl-P keep it waiting, since it is what they would start":
+    for name in ["n", "p"]:
+      let buf = newTextBuffer("fo")
+      let handler = answerHandler(buf)
+      let state = createTestState()
+      state.cursor = BufferPosition(line: 0, column: 2)
+      handler.askAt(buf, state)
+      # Within the debounce a restart would send no new request.
+      handler.completionManager.lastLspRequestTime = getMonoTime()
+
+      let key = KeyCombo(isSpecial: false, char: name, modifiers: {kmCtrl})
+      discard handler.handleInsertModeKey(buf, state, key)
+      handler.pollLspCompletion(state)
+
+      checkpoint "C-" & name
+      check handler.completionManager.isActive()
+      check handler.completionManager.menu.entries[0].word == "foobar"
+
+  test "a character typed within the debounce keeps it waiting":
+    let buf = newTextBuffer("fo")
+    let handler = answerHandler(buf)
+    let state = createTestState()
+    state.config.autocomplete.enable = true
+    state.config.lsp.completion.enable = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+    handler.askAt(buf, state)
+    handler.completionManager.lastLspRequestTime = getMonoTime()
+
+    let oKey = KeyCombo(isSpecial: false, char: "o", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, oKey)
+    check handler.completionManager.isPendingLsp
+    handler.pollLspCompletion(state)
+
+    check handler.completionManager.isActive()
+    check handler.completionManager.menu.prefix == "foo"
+    check handler.completionManager.menu.entries[0].word == "foobar"
+
+  test "the answer opens the popup for the word it was asked about":
+    let buf = newTextBuffer("fo")
+    let handler = answerHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+    handler.askAt(buf, state)
+
+    handler.pollLspCompletion(state)
+
+    check handler.completionManager.isActive()
+    check handler.completionManager.menu.entries[0].word == "foobar"
+
+  test "a space ends it, and the server's work on the answer":
+    let buf = newTextBuffer("foo")
+    let handler = answerHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+    handler.askAt(buf, state)
+
+    let space = KeyCombo(isSpecial: false, char: " ", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, space)
+
+    check not handler.completionManager.isActive()
+    check not handler.completionManager.isPendingLsp
+    check 42 notin handler.lsp.service.pendingResponses
+
+  test "Backspace that empties the word ends it":
+    let buf = newTextBuffer("f")
+    let handler = answerHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 1)
+    handler.askAt(buf, state)
+
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+
+    check not handler.completionManager.isActive()
     check not handler.completionManager.isPendingLsp
 
 suite "InsertModeHandler - LSP resolve poll/trigger (NT-09)":

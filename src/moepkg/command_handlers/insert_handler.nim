@@ -71,11 +71,15 @@ proc newInsertModeHandler*(
     lsp: LspIntegration = nil,
 ): InsertModeHandler =
   ## NotificationConfig is pulled live from `state.config` via CommandContext getter.
+  let completionManager = newCompletionManager()
+  if not lsp.isNil:
+    completionManager.cancelLspRequest = proc(requestId: int) =
+      lsp.cancelRequest(requestId)
   InsertModeHandler(
     keyBindingRegistry: keyBindingRegistry,
     motionController: motionController,
     commandRegistry: commandRegistry,
-    completionManager: newCompletionManager(),
+    completionManager: completionManager,
     signatureHelpManager: newSignatureHelpManager(),
     lsp: lsp,
   )
@@ -218,13 +222,16 @@ proc handleMotion*(
   state.editState.insertReplayLineEntry = false
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
+proc closeInsertPopups*(handler: InsertModeHandler) =
+  ## Leaving Insert mode ends completion and signature help.
+  handler.completionManager.cancelCompletion()
+  handler.signatureHelpManager.hide()
+
 proc handleModeSwitch*(
     handler: InsertModeHandler, targetMode: EditorMode, isInterruptExit = false
 ): InsertModeResult =
   ## Handle mode switching from insert mode
-  # Cancel completion and signature help when leaving insert mode
-  handler.completionManager.cancelCompletion()
-  handler.signatureHelpManager.hide()
+  handler.closeInsertPopups()
   return InsertModeResult(
     kind: imrHandled, modeTransition: some(targetMode), isInterruptExit: isInterruptExit
   )
@@ -705,6 +712,13 @@ proc commitCompletion*(
     handler.completionManager.cancelCompletion()
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
+proc lspCompletionAllowed(handler: InsertModeHandler, state: EditorState): bool =
+  ## While recording, LSP candidates would arrive between the typed keys and
+  ## change what the next key picks, which a replay cannot reproduce. Buffer
+  ## words are collected at once, so they stay.
+  not handler.lsp.isNil and handler.lsp.isEnabled and state.config.lsp.completion.enable and
+    not state.pendingInput.macroState.isRecording
+
 proc triggerLspCompletionRequest*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ) =
@@ -719,8 +733,7 @@ proc triggerLspCompletionRequest*(
   let line = buffer.getLine(state.cursor.line)
   let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
 
-  if not handler.lsp.isNil and handler.lsp.isEnabled and
-      state.config.lsp.completion.enable:
+  if handler.lspCompletionAllowed(state):
     # If LSP completion is available, check whether we can skip the request and
     # filter client-side. The skip check must run BEFORE the fallback
     # triggerCompletion below, which recollects buffer words. When
@@ -751,24 +764,25 @@ proc triggerLspCompletionRequest*(
         )
       return
 
+  # Without LSP (as while recording) the candidates it gave earlier go too.
+  if not handler.lspCompletionAllowed(state):
+    handler.completionManager.lspItems = @[]
+
   # First, show buffer completions immediately for instant feedback
   handler.completionManager.triggerCompletion(
     buffer, state.cursor.line, state.cursor.column, buffer.language
   )
 
-  if not handler.lsp.isNil and handler.lsp.isEnabled and
-      state.config.lsp.completion.enable and
+  # Cancel the in-flight request; its answer is stale. Also when no new request
+  # follows: recording must not take candidates a replay will not get.
+  handler.completionManager.clearLspRequestPending()
+
+  if handler.lspCompletionAllowed(state) and
       # If LSP completion is available and the server advertises completion support,
       # start an async request in background. The capability gate lives here (not in
       # the skip branch above) because that branch only filters already-received
       # lspItems client-side and never issues a fresh request.
       handler.lsp.hasCompletionSupport(buffer):
-    # Cancel the in-flight request; its answer is stale.
-    let staleReqId = handler.completionManager.getLspRequestId
-    if staleReqId.isSome:
-      handler.lsp.cancelRequest(staleReqId.get)
-      handler.completionManager.clearLspRequestPending()
-
     # Sync first; skip if behind (automatic trigger, no respawn on keystroke).
     if handler.lsp.requestSyncGate(buffer, lrfCompletion, lrtAutomatic).isSome:
       return
@@ -783,12 +797,58 @@ proc triggerLspCompletionRequest*(
     else:
       logLspDegraded("Completion request failed", reqResult.error)
 
+proc markAutoTrigger(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+) =
+  handler.autoTrigger = some(
+    AutoTriggerMark(
+      window: state.activeWindow,
+      bufferId: buffer.id,
+      cursor: state.cursor,
+      contentVersion: buffer.contentVersion,
+    )
+  )
+
+proc completeTypedWord(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+): bool =
+  ## Offer candidates for the path or word before the cursor, as typing does.
+  ## False when the word is too short to offer any.
+  let line = buffer.getLine(state.cursor.line)
+  if extractPathPrefixBeforeCursor(line, state.cursor.column).len > 0:
+    handler.completionManager.triggerPathCompletion(
+      buffer, state.cursor.line, state.cursor.column
+    )
+    return true
+  if extractPrefixBeforeCursor(line, state.cursor.column).len < AutoTriggerPrefixLength:
+    return false
+  # Show buffer completions immediately, LSP will update when ready
+  handler.triggerLspCompletionRequest(buffer, state)
+  true
+
+proc runAutoTrigger*(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+) =
+  ## Open the popup for the last typed character once all pending keys are
+  ## processed, like Vim's TextChangedI. A replay runs within one key, so it
+  ## never meets a popup it opened; recording opens none, so the replay of a
+  ## recorded key does what it did then.
+  let mark = handler.autoTrigger
+  handler.autoTrigger = none(AutoTriggerMark)
+  if mark.isNone or not state.config.autocomplete.enable or
+      state.pendingInput.macroState.isRecording:
+    return
+  if state.mode != EditorMode.Insert or handler.completionManager.isActive():
+    return
+  if state.activeWindow != mark.get.window or buffer.id != mark.get.bufferId or
+      buffer.contentVersion != mark.get.contentVersion or state.cursor != mark.get.cursor:
+    return
+
+  discard handler.completeTypedWord(buffer, state)
+
 proc pollLspCompletion*(handler: InsertModeHandler, state: EditorState) =
   ## Poll for pending LSP completion response
   if handler.lsp.isNil or not handler.lsp.isEnabled:
-    return
-
-  if not handler.completionManager.isPendingLsp:
     return
 
   let reqIdOpt = handler.completionManager.getLspRequestId
@@ -802,22 +862,25 @@ proc pollLspCompletion*(handler: InsertModeHandler, state: EditorState) =
   # CompletionItems with jsony (parseCompletionResponse), avoiding an
   # intermediate JsonNode tree for what can be a very large completion list.
   let (status, rawOpt, errorOpt) = handler.lsp.checkResponseRaw(reqIdOpt.get)
-
-  case status
-  of lrsPending:
-    discard # Still waiting
-  of lrsSuccess:
-    if rawOpt.isSome:
-      let (items, isIncomplete) = parseCompletionResponse(rawOpt.get)
-      # A fresh completion list obsoletes any resolve targeted at the previous
-      # list's selection: without this cancel, a slow resolve response could
-      # be applied to whatever entry now occupies `resolvedIndex`.
-      cancelPendingRequest(handler.lsp, state.lspCache, lrfCompletionResolve)
-      handler.completionManager.setLspItems(items, isIncomplete)
-  of lrsError, lrsTimeout:
-    # Clear pending state on error/timeout
+  if status == lrsPending or (status == lrsSuccess and rawOpt.isNone):
+    return
+  if status != lrsSuccess:
     logLspDegraded("Completion", status, errorOpt.get(""))
-    cancelPendingRequest(handler.lsp, state.lspCache, lrfCompletionResolve)
+
+  if handler.completionManager.menu.hasSelection:
+    # The user already picks from the list on screen: the answer must not
+    # change it under them. It is answered, so there is nothing to cancel.
+    handler.completionManager.lspRequestId = none(int)
+    return
+
+  # A fresh completion list obsoletes any resolve targeted at the previous
+  # list's selection: without this cancel, a slow resolve response could be
+  # applied to whatever entry now occupies `resolvedIndex`.
+  cancelPendingRequest(handler.lsp, state.lspCache, lrfCompletionResolve)
+  if status == lrsSuccess:
+    let (items, isIncomplete) = parseCompletionResponse(rawOpt.get)
+    handler.completionManager.setLspItems(items, isIncomplete)
+  else:
     handler.completionManager.setLspItems(@[])
 
 proc triggerResolveRequest*(
@@ -963,16 +1026,22 @@ proc handleInsertModeKey*(
   ## Main entry point for handling Insert mode key presses.
   ## Macro recording is captured centrally in `handler.handleKeyCombo`.
 
-  let completionActive = handler.completionManager.isActive()
+  # Only the last key of a batch counts for the frame's auto-trigger.
+  handler.autoTrigger = none(AutoTriggerMark)
+  # A completion under way sees every key first. It takes the keys that pick
+  # from what it shows or edit the word; while a request is still in flight it
+  # shows nothing, so there is nothing to pick.
+  if handler.completionManager.isActive():
+    let shown = handler.completionManager.menu.entries.len > 0
 
-  # Handle completion-specific keys when completion is active
-  if completionActive:
     # Ctrl+N, Down, or Tab - highlight the next item and preview it into the
     # buffer (replacing any previous preview). The final commit (Enter / typing)
     # re-applies the textEdit range and additionalTextEdits.
-    if keyCombo.isCtrlN or (keyCombo.isSpecial and keyCombo.special == skDown) or (
-      keyCombo.isSpecial and keyCombo.special == skTab and
-      kmShift notin keyCombo.modifiers
+    if shown and (
+      keyCombo.isCtrlN or (keyCombo.isSpecial and keyCombo.special == skDown) or (
+        keyCombo.isSpecial and keyCombo.special == skTab and
+        kmShift notin keyCombo.modifiers
+      )
     ):
       # First Tab activates selection mode (highlights item 0)
       if not handler.completionManager.menu.hasSelection:
@@ -984,9 +1053,12 @@ proc handleInsertModeKey*(
       handler.triggerResolveRequest(buffer, state)
       return res
 
-    if keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or (
-      keyCombo.isSpecial and keyCombo.special == skTab and kmShift in keyCombo.modifiers
-    ) or (keyCombo.isSpecial and keyCombo.special == skBackTab):
+    if shown and (
+      keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or (
+        keyCombo.isSpecial and keyCombo.special == skTab and
+        kmShift in keyCombo.modifiers
+      ) or (keyCombo.isSpecial and keyCombo.special == skBackTab)
+    ):
       # Ctrl+P, Up, or Shift+Tab/BackTab - highlight the previous item and preview
       # it into the buffer (same as forward cycling).
       # First Shift+Tab activates selection mode (highlights item 0)
@@ -999,18 +1071,16 @@ proc handleInsertModeKey*(
       handler.triggerResolveRequest(buffer, state)
       return res
 
-    if keyCombo.isSpecial and keyCombo.special == skEnter:
-      # Enter - confirm the highlighted item (if any), otherwise just dismiss the
-      # popup without inserting a newline (press Enter again for a newline).
-      if handler.completionManager.menu.hasSelection:
-        return handler.commitCompletion(buffer, state)
-      handler.completionManager.cancelCompletion()
-      return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+    if shown and handler.completionManager.menu.hasSelection and keyCombo.isSpecial and
+        keyCombo.special == skEnter:
+      # Enter confirms the highlighted item. With none highlighted it ends the
+      # completion below and breaks the line, as in Vim.
+      return handler.commitCompletion(buffer, state)
 
-    if keyCombo.isSpecial and keyCombo.special == skEscape:
-      # Escape - cancel completion and leave insert mode
-      handler.completionManager.cancelCompletion()
-      return handler.handleModeSwitch(EditorMode.Normal)
+    if not shown and handler.completionManager.isPendingLsp and
+        (keyCombo.isCtrlN or keyCombo.isCtrlP):
+      # The completion Ctrl+N/Ctrl+P would start is already under way.
+      return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
     if keyCombo.isSpecial and keyCombo.special == skBackspace:
       # Backspace - update filter or cancel if prefix is empty. This popup
@@ -1071,20 +1141,13 @@ proc handleInsertModeKey*(
         return insertResult
 
       # Re-trigger completion with new prefix
-      let line = buffer.getLine(state.cursor.line)
-      let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
-      if pathPrefix.len > 0:
-        handler.completionManager.triggerPathCompletion(
-          buffer, state.cursor.line, state.cursor.column
-        )
-      else:
-        let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
-        if newPrefix.len >= AutoTriggerPrefixLength:
-          # Show buffer completions immediately, LSP will update when ready
-          handler.triggerLspCompletionRequest(buffer, state)
-        else:
-          handler.completionManager.cancelCompletion()
+      if not handler.completeTypedWord(buffer, state):
+        handler.completionManager.cancelCompletion()
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+    # Any other key ends the completion and is handled as if no popup were
+    # open, as in Vim.
+    handler.completionManager.cancelCompletion()
 
   if state.snippetSession.active:
     # Snippet tabstop session. The completion popup's keys above take
@@ -1126,17 +1189,7 @@ proc handleInsertModeKey*(
         return insertResult
       # Mirror the normal character path's auto-completion trigger so the
       # popup keeps working inside placeholders.
-      if state.config.autocomplete.enable:
-        let line = buffer.getLine(state.cursor.line)
-        let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
-        if pathPrefix.len > 0:
-          handler.completionManager.triggerPathCompletion(
-            buffer, state.cursor.line, state.cursor.column
-          )
-        else:
-          let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
-          if prefix.len >= AutoTriggerPrefixLength:
-            handler.triggerLspCompletionRequest(buffer, state)
+      handler.markAutoTrigger(buffer, state)
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
     if keyCombo.isSpecial and keyCombo.special == skBackspace:
@@ -1213,13 +1266,13 @@ proc handleInsertModeKey*(
     # session and is handled normally below.
     session.active = false
 
-  if keyCombo.isCtrlN and not completionActive:
-    # Ctrl+N - trigger completion (when not active)
+  if keyCombo.isCtrlN:
+    # Ctrl+N - start a completion
     # Show buffer completions immediately, LSP will update when ready
     handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  if keyCombo.isCtrlP and not completionActive:
+  if keyCombo.isCtrlP:
     # Ctrl+P - trigger completion like Ctrl+N
     # Show buffer completions immediately, LSP will update when ready
     handler.triggerLspCompletionRequest(buffer, state)
@@ -1294,8 +1347,7 @@ proc handleInsertModeKey*(
 
   if keyCombo.isCtrlO:
     # Ctrl+O - execute one Normal mode command then return to Insert mode
-    handler.completionManager.cancelCompletion()
-    handler.signatureHelpManager.hide()
+    handler.closeInsertPopups()
     state.insertNormalMode = true
     return InsertModeResult(kind: imrHandled, modeTransition: some(EditorMode.Normal))
 
@@ -1360,26 +1412,11 @@ proc handleInsertModeKey*(
       return InsertModeResult(kind: imrUnhandled)
 
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-    # Handle regular character insertion with auto-completion trigger
+    # Handle regular character insertion; the frame opens the popup for it
     let insertResult = handler.handleCharacterInsertion(buffer, state, keyCombo.char)
     if insertResult.kind != imrHandled:
       return insertResult
-    # All auto-triggering (path and word completion alike) is gated on
-    # autocomplete.enable so the flag governs both consistently.
-    if state.config.autocomplete.enable:
-      # Check for path completion first
-      let line = buffer.getLine(state.cursor.line)
-      let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
-      if pathPrefix.len > 0:
-        handler.completionManager.triggerPathCompletion(
-          buffer, state.cursor.line, state.cursor.column
-        )
-      else:
-        # Auto-trigger word completion after typing (when prefix is long enough)
-        let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
-        if prefix.len >= AutoTriggerPrefixLength:
-          # Show buffer completions immediately, LSP will update when ready
-          handler.triggerLspCompletionRequest(buffer, state)
+    handler.markAutoTrigger(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Handle special keys

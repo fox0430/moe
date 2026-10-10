@@ -45,6 +45,8 @@ import
   editor_render,
   visual_selection
 
+from command_handlers/insert_handler import runAutoTrigger
+
 import
   config, git_cache, render_utils, logger, message_log, debug_viewer, completion,
   signature_help, hover_popup, notification_popup, unicode_utils, motion, buffer,
@@ -264,6 +266,8 @@ proc tickLsp(e: Editor) =
   e.updateInlayHintCache()
   # Note: updateSemanticTokensCache is called in updateForFrame after updateHighlight
   e.requestSignatureHelpFromLsp()
+  # After maybeUpdateLsp, so a completion request sees the typed text.
+  e.handlerManager.insertHandler.runAutoTrigger(e.activeBuffer, e.state)
   e.pollLspCompletion()
   e.pollLspHover()
   e.maybeAutoHoverDiagnostic()

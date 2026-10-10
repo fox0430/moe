@@ -41,9 +41,9 @@ export lspTypes
 
 type
   CompletionState* = enum
-    csIdle ## No completion active
-    csActive ## Popup visible, items available
-    csPendingLsp ## Waiting for LSP response
+    ## Whether a list is under way. Waiting for the server is `lspRequestId`.
+    csIdle ## No list
+    csActive ## A list, possibly filtered down to nothing
 
   CompletionSource* = enum
     csBuffer ## From buffer words
@@ -94,6 +94,8 @@ type
       ## (id, contentVersion) of every scanned buffer; empty until the first
       ## scan, so an unmodified buffer skips re-scanning on the next trigger.
     lspRequestId*: Option[int] ## Pending LSP request ID
+    cancelLspRequest*: proc(requestId: int)
+      ## Tells the server a request is no longer wanted. Nil without LSP.
     lspItems*: seq[CompletionItem] ## Raw LSP completion items
     otherBuffers*: seq[TextBuffer]
       ## Other FileEditMode buffers for multi-buffer completion
@@ -339,6 +341,12 @@ proc newCompletionManager*(): CompletionManager =
     pathBasePath: "",
     pathOriginalPrefix: "",
   )
+
+proc dropLspRequest(mgr: CompletionManager) =
+  ## Forget the in-flight request, and stop the server's work on it.
+  if mgr.lspRequestId.isSome and not mgr.cancelLspRequest.isNil:
+    mgr.cancelLspRequest(mgr.lspRequestId.get)
+  mgr.lspRequestId = none(int)
 
 proc getDocumentationText(doc: JsonNode): Option[string] =
   ## Extract documentation text from LSP documentation field
@@ -907,7 +915,7 @@ proc triggerPathCompletion*(
 
   # Clear LSP and schema state
   mgr.lspItems = @[]
-  mgr.lspRequestId = none(int)
+  mgr.dropLspRequest()
   mgr.schemaEntries = @[]
 
   # Collect and filter entries
@@ -1016,7 +1024,7 @@ proc cancelCompletion*(mgr: CompletionManager) =
   mgr.menu.scrollOffset = 0
   mgr.menu.prefix = ""
   mgr.menu.hasSelection = false
-  mgr.lspRequestId = none(int)
+  mgr.dropLspRequest()
   mgr.lspItems = @[]
   mgr.schemaEntries = @[]
   mgr.isPathCompletion = false
@@ -1065,8 +1073,8 @@ proc getSelectedEntry*(mgr: CompletionManager): Option[CompletionEntry] =
   return some(mgr.menu.entries[mgr.menu.selectedIndex])
 
 proc isActive*(mgr: CompletionManager): bool =
-  ## Check if completion popup is active (including while waiting for LSP)
-  mgr.state in {csActive, csPendingLsp}
+  ## A completion is under way: it has a list or awaits the server's answer.
+  mgr.state == csActive or mgr.lspRequestId.isSome
 
 proc calculateMaxWordWidth*(entries: seq[CompletionEntry]): int =
   ## Calculate the maximum displayed word width (in terminal columns) in the entries
@@ -1316,17 +1324,14 @@ proc renderDocPanel*(termBuffer: var Buffer, docPanel: DocPanel, pos: PopupPosit
 proc setLspRequestPending*(mgr: CompletionManager, requestId: int) =
   ## Set the pending LSP request ID
   mgr.lspRequestId = some(requestId)
-  mgr.state = csPendingLsp
 
 proc clearLspRequestPending*(mgr: CompletionManager) =
   ## Forget the in-flight request. Its answer targets an old prefix and cursor.
-  mgr.lspRequestId = none(int)
-  if mgr.state == csPendingLsp:
-    mgr.state = csIdle
+  mgr.dropLspRequest()
 
 proc isPendingLsp*(mgr: CompletionManager): bool =
   ## Check if waiting for LSP response
-  mgr.state == csPendingLsp and mgr.lspRequestId.isSome
+  mgr.lspRequestId.isSome
 
 proc getLspRequestId*(mgr: CompletionManager): Option[int] =
   ## Get the pending LSP request ID
