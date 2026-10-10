@@ -168,12 +168,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     state: EditorState(
       # activeWindow will be set after window creation below
       cursorVisible: true,
-      display: DisplaySettings(
-        showLineCount: true,
-        showLinePercentage: true,
-        showEncoding: true,
-        showLineEnding: true,
-      ),
       config: editorConfig,
       windowDisplay: WindowDisplayState(
         viewportReservedLines: steadyBottomAreaHeight(), # Status+command share same row

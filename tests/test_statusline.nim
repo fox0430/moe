@@ -19,7 +19,7 @@
 
 ## Tests for status_line.nim - Status line rendering for moe editor
 
-import std/[unittest, options, tables, strutils, os]
+import std/[unittest, options, tables, strutils, os, importutils]
 
 import pkg/celina
 
@@ -27,6 +27,9 @@ import ../src/moepkg/[types, modes, registers, config, git_cache, unicode_utils]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/status_line {.all.}
+
+privateAccess(StatusItem)
+privateAccess(Ruler)
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -40,8 +43,6 @@ proc createTestState(): EditorState =
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
     ),
-    display:
-      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: cfg,
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     pendingInput: PendingInputState(
@@ -100,6 +101,34 @@ proc createTestStatusLineConfig(): StatusLineConfig =
     setupText: "",
   )
 
+proc activeSetupText(
+    state: EditorState, textBuffer: TextBuffer, setupText: string
+): string =
+  ## `setupText` with the active window's values.
+  parseSetupText(
+    state.git,
+    textBuffer,
+    state.cursor,
+    state.windowModeText(state.mode, true),
+    setupText,
+  )
+
+proc activeRuler(
+    state: EditorState,
+    textBuffer: TextBuffer,
+    mode: EditorMode,
+    config: StatusLineConfig,
+): Ruler =
+  ## The active window's ruler.
+  buildRuler(
+    state.git, textBuffer, state.cursor, state.windowModeText(mode, true), mode, config
+  )
+
+proc joined(items: openArray[StatusItem]): string =
+  ## The parts' text as one line shows them with room for all.
+  for item in items:
+    result.add item.text
+
 proc getBufferLine(buffer: celina.Buffer, y: int): string =
   ## Extract a line from celina Buffer as string
   result = ""
@@ -157,125 +186,6 @@ suite "StatusLine - setStatusLineVisible":
 
     check state.showStatusLine == true
 
-suite "StatusLine - toggleLineCount":
-  test "Toggle from true to false":
-    var state = createTestState()
-    check state.display.showLineCount == true
-
-    toggleLineCount(state)
-
-    check state.display.showLineCount == false
-
-  test "Toggle from false to true":
-    var state = createTestState()
-    state.display.showLineCount = false
-
-    toggleLineCount(state)
-
-    check state.display.showLineCount == true
-
-suite "StatusLine - setLineCountVisible":
-  test "Set visible to true":
-    var state = createTestState()
-    state.display.showLineCount = false
-
-    setLineCountVisible(state, true)
-
-    check state.display.showLineCount == true
-
-  test "Set visible to false":
-    var state = createTestState()
-    state.display.showLineCount = true
-
-    setLineCountVisible(state, false)
-
-    check state.display.showLineCount == false
-
-suite "StatusLine - toggleLinePercentage":
-  test "Toggle from true to false":
-    var state = createTestState()
-    check state.display.showLinePercentage == true
-
-    toggleLinePercentage(state)
-
-    check state.display.showLinePercentage == false
-
-  test "Toggle from false to true":
-    var state = createTestState()
-    state.display.showLinePercentage = false
-
-    toggleLinePercentage(state)
-
-    check state.display.showLinePercentage == true
-
-suite "StatusLine - setLinePercentageVisible":
-  test "Set visible to true":
-    var state = createTestState()
-    state.display.showLinePercentage = false
-
-    setLinePercentageVisible(state, true)
-
-    check state.display.showLinePercentage == true
-
-  test "Set visible to false":
-    var state = createTestState()
-    state.display.showLinePercentage = true
-
-    setLinePercentageVisible(state, false)
-
-    check state.display.showLinePercentage == false
-
-suite "StatusLine - toggleEncoding":
-  test "Toggle from true to false":
-    var state = createTestState()
-    check state.display.showEncoding == true
-
-    toggleEncoding(state)
-
-    check state.display.showEncoding == false
-
-  test "Toggle from false to true":
-    var state = createTestState()
-    state.display.showEncoding = false
-
-    toggleEncoding(state)
-
-    check state.display.showEncoding == true
-
-suite "StatusLine - setEncodingVisible":
-  test "Set visible to true":
-    var state = createTestState()
-    state.display.showEncoding = false
-
-    setEncodingVisible(state, true)
-
-    check state.display.showEncoding == true
-
-  test "Set visible to false":
-    var state = createTestState()
-    state.display.showEncoding = true
-
-    setEncodingVisible(state, false)
-
-    check state.display.showEncoding == false
-
-suite "StatusLine - setLineEndingVisible":
-  test "Set visible to true":
-    var state = createTestState()
-    state.display.showLineEnding = false
-
-    setLineEndingVisible(state, true)
-
-    check state.display.showLineEnding == true
-
-  test "Set visible to false":
-    var state = createTestState()
-    state.display.showLineEnding = true
-
-    setLineEndingVisible(state, false)
-
-    check state.display.showLineEnding == false
-
 suite "StatusLine - toggleMultiStatusLine":
   test "Toggle from false to true":
     var state = createTestState()
@@ -317,8 +227,9 @@ suite "StatusLine - buildFileDisplay":
     config.directory = false
     config.changedMark = false
 
-    let result =
-      buildFileDisplay(textBuffer, EditorMode.Normal, config, owesPreservedWork = true)
+    let result = buildFileDisplay(
+      textBuffer, EditorMode.Normal, config, owesPreservedWork = true
+    ).joined
 
     check result == " " & PreservedWorkMark & " file.nim"
 
@@ -328,8 +239,9 @@ suite "StatusLine - buildFileDisplay":
     var config = createTestStatusLineConfig()
     config.directory = false
 
-    let result =
-      buildFileDisplay(textBuffer, EditorMode.Normal, config, owesPreservedWork = true)
+    let result = buildFileDisplay(
+      textBuffer, EditorMode.Normal, config, owesPreservedWork = true
+    ).joined
 
     check result == " " & PreservedWorkMark & " file.nim [+]"
 
@@ -340,8 +252,9 @@ suite "StatusLine - buildFileDisplay":
     config.filename = false
     config.changedMark = false
 
-    let result =
-      buildFileDisplay(textBuffer, EditorMode.Normal, config, owesPreservedWork = true)
+    let result = buildFileDisplay(
+      textBuffer, EditorMode.Normal, config, owesPreservedWork = true
+    ).joined
 
     check result == " " & PreservedWorkMark
 
@@ -351,7 +264,7 @@ suite "StatusLine - buildFileDisplay":
     var config = createTestStatusLineConfig()
     config.directory = false
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     check result == " notes  [+]"
 
@@ -359,8 +272,9 @@ suite "StatusLine - buildFileDisplay":
     let textBuffer = createTestTextBuffer("/path/to/file.nim")
     let config = createTestStatusLineConfig()
 
-    let result =
-      buildFileDisplay(textBuffer, EditorMode.Help, config, owesPreservedWork = true)
+    let result = buildFileDisplay(
+      textBuffer, EditorMode.Help, config, owesPreservedWork = true
+    ).joined
 
     check PreservedWorkMark notin result
 
@@ -368,7 +282,7 @@ suite "StatusLine - buildFileDisplay":
     let textBuffer = createTestTextBuffer()
     let config = createTestStatusLineConfig()
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     check result == " [No Name]"
 
@@ -377,7 +291,7 @@ suite "StatusLine - buildFileDisplay":
     var config = createTestStatusLineConfig()
     config.directory = true
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     check result == " /path/to/file.nim"
 
@@ -387,7 +301,7 @@ suite "StatusLine - buildFileDisplay":
     config.directory = false
     config.filename = true
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     check result == " file.nim"
 
@@ -397,7 +311,7 @@ suite "StatusLine - buildFileDisplay":
     config.directory = false
     config.changedMark = true
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     check result == " file.nim [+]"
 
@@ -407,7 +321,7 @@ suite "StatusLine - buildFileDisplay":
     config.directory = false
     config.changedMark = false
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     check result == " file.nim"
 
@@ -417,7 +331,7 @@ suite "StatusLine - buildFileDisplay":
     config.directory = false
     config.changedMark = true
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     check result == " file.nim"
 
@@ -427,7 +341,7 @@ suite "StatusLine - buildFileDisplay":
     let textBuffer = createTestTextBuffer(absPath)
     let config = createTestStatusLineConfig()
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Filer, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Filer, config).joined
 
     check result == " " & absPath & "/"
 
@@ -435,35 +349,35 @@ suite "StatusLine - buildFileDisplay":
     let textBuffer = createTestTextBuffer()
     let config = createTestStatusLineConfig()
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Filer, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Filer, config).joined
 
     check result == ""
 
-  test "Display empty when both directory and filename disabled, not modified":
+  test "Nothing when both directory and filename disabled, not modified":
     let textBuffer = createTestTextBuffer("/path/to/file.nim")
     var config = createTestStatusLineConfig()
     config.directory = false
     config.filename = false
     config.changedMark = false
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
-    check result == " "
+    check result == ""
     check "file.nim" notin result
     check "/path/to" notin result
 
-  test "Display only space when both directory and filename disabled, bug fix regression":
+  test "Nothing when both directory and filename disabled, bug fix regression":
     let textBuffer = createTestTextBuffer("/path/to/file.nim")
     var config = createTestStatusLineConfig()
     config.directory = false
     config.filename = false
     config.changedMark = false
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     # Before fix, else branch incorrectly did extractFilename() so result was " file.nim"
     check result != " file.nim"
-    check result == " "
+    check result == ""
 
   test "Display only changed mark when both directory and filename disabled but modified":
     let textBuffer = createTestTextBuffer("/path/to/file.nim", modified = true)
@@ -472,7 +386,7 @@ suite "StatusLine - buildFileDisplay":
     config.filename = false
     config.changedMark = true
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     check result == " [+]"
     check "file.nim" notin result
@@ -484,9 +398,9 @@ suite "StatusLine - buildFileDisplay":
     config.filename = false
     config.changedMark = false
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
-    check result == " "
+    check result == ""
     check "[+]" notin result
 
   test "Directory takes precedence over filename flag":
@@ -495,7 +409,7 @@ suite "StatusLine - buildFileDisplay":
     config.directory = true
     config.filename = false
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config).joined
 
     check result == " /path/to/file.nim"
 
@@ -508,9 +422,9 @@ suite "StatusLine - buildFileDisplay":
     config2.directory = true
     config2.filename = false
 
-    check buildFileDisplay(textBuffer, EditorMode.Normal, config1) ==
-      buildFileDisplay(textBuffer, EditorMode.Normal, config2)
-    check buildFileDisplay(textBuffer, EditorMode.Normal, config1) ==
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config1).joined ==
+      buildFileDisplay(textBuffer, EditorMode.Normal, config2).joined
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config1).joined ==
       " /path/to/file.nim"
 
   test "All combinations of directory/filename for Normal mode":
@@ -520,19 +434,19 @@ suite "StatusLine - buildFileDisplay":
     # directory=true, filename=true -> full path
     config.directory = true
     config.filename = true
-    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " /a/b/c.nim"
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config).joined == " /a/b/c.nim"
     # directory=true, filename=false -> still full path
     config.directory = true
     config.filename = false
-    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " /a/b/c.nim"
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config).joined == " /a/b/c.nim"
     # directory=false, filename=true -> filename only
     config.directory = false
     config.filename = true
-    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " c.nim"
-    # directory=false, filename=false -> space only
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config).joined == " c.nim"
+    # directory=false, filename=false -> nothing
     config.directory = false
     config.filename = false
-    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " "
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config).joined == ""
 
 suite "StatusLine - parseSetupText":
   test "Parse lineNumber placeholder":
@@ -541,7 +455,7 @@ suite "StatusLine - parseSetupText":
 
     let textBuffer = createMultiLineBuffer(20)
 
-    let result = parseSetupText(state, textBuffer, "{lineNumber}")
+    let result = activeSetupText(state, textBuffer, "{lineNumber}")
 
     check result == "10"
 
@@ -550,7 +464,7 @@ suite "StatusLine - parseSetupText":
 
     let textBuffer = createMultiLineBuffer(25)
 
-    let result = parseSetupText(state, textBuffer, "{totalLines}")
+    let result = activeSetupText(state, textBuffer, "{totalLines}")
 
     check result == "25"
 
@@ -560,7 +474,7 @@ suite "StatusLine - parseSetupText":
 
     let textBuffer = createTestTextBuffer("", false, "Hello World")
 
-    let result = parseSetupText(state, textBuffer, "{columnNumber}")
+    let result = activeSetupText(state, textBuffer, "{columnNumber}")
 
     check result == "5"
 
@@ -570,7 +484,7 @@ suite "StatusLine - parseSetupText":
 
     let textBuffer = createMultiLineBuffer(100)
 
-    let result = parseSetupText(state, textBuffer, "{percentage}")
+    let result = activeSetupText(state, textBuffer, "{percentage}")
 
     check result == "50%"
 
@@ -580,7 +494,7 @@ suite "StatusLine - parseSetupText":
 
     let textBuffer = createTestTextBuffer("", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{mode}")
+    let result = activeSetupText(state, textBuffer, "{mode}")
 
     check result == "NORMAL"
 
@@ -590,7 +504,7 @@ suite "StatusLine - parseSetupText":
 
     let textBuffer = createTestTextBuffer("", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{mode}")
+    let result = activeSetupText(state, textBuffer, "{mode}")
 
     check result == "INSERT"
 
@@ -600,7 +514,7 @@ suite "StatusLine - parseSetupText":
 
     let textBuffer = createTestTextBuffer("", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{mode}")
+    let result = activeSetupText(state, textBuffer, "{mode}")
 
     check result == "COMMAND"
 
@@ -608,7 +522,7 @@ suite "StatusLine - parseSetupText":
     var state = createTestState()
     let textBuffer = createTestTextBuffer("/path/to/myfile.nim", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{filename}")
+    let result = activeSetupText(state, textBuffer, "{filename}")
 
     check result == "myfile.nim"
 
@@ -616,7 +530,7 @@ suite "StatusLine - parseSetupText":
     var state = createTestState()
     let textBuffer = createTestTextBuffer("/path/to/myfile.nim", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{directory}")
+    let result = activeSetupText(state, textBuffer, "{directory}")
 
     check result == "/path/to"
 
@@ -624,7 +538,7 @@ suite "StatusLine - parseSetupText":
     var state = createTestState()
     let textBuffer = createTestTextBuffer("/path/to/myfile.nim", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{filePath}")
+    let result = activeSetupText(state, textBuffer, "{filePath}")
 
     check result == "/path/to/myfile.nim"
 
@@ -636,7 +550,7 @@ suite "StatusLine - parseSetupText":
     let textBuffer = createMultiLineBuffer(10, "/path/to/file.nim")
 
     let result =
-      parseSetupText(state, textBuffer, "{lineNumber}/{totalLines} {columnNumber}")
+      activeSetupText(state, textBuffer, "{lineNumber}/{totalLines} {columnNumber}")
 
     check result == "5/10 10"
 
@@ -644,37 +558,87 @@ suite "StatusLine - parseSetupText":
     var state = createTestState()
     let textBuffer = createTestTextBuffer("", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{filename} {directory}")
+    let result = activeSetupText(state, textBuffer, "{filename} {directory}")
 
     check result == " "
 
-suite "StatusLine - buildRightSideInfo":
-  test "Returns custom format when setupText is set":
+suite "StatusLine - buildRuler":
+  test "Shows the setupText format":
     var state = createTestState()
-    state.cursor.line = 0
-
     let textBuffer = createTestTextBuffer("", false, "test line")
 
     var config = createTestStatusLineConfig()
     config.setupText = "{lineNumber}/{totalLines}"
 
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
+    check activeRuler(state, textBuffer, state.mode, config).text == "1/1"
 
-    check result == " 1/1"
-
-  test "Returns empty string for empty setupText result":
+  test "An empty setupText takes the default format":
     var state = createTestState()
-    let textBuffer = createTestTextBuffer("", false, "test")
+    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test")
+    textBuffer.language = SourceLanguage.langNim
 
     var config = createTestStatusLineConfig()
     config.setupText = ""
 
-    # With empty setupText, default format is used
-    # Default format depends on display settings
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
+    check activeRuler(state, textBuffer, state.mode, config).text ==
+      "1/1 1/4 UTF-8 LF Nim"
 
-    # Result should contain percentage and line count based on display settings
-    check "1/1" in result or "100%" in result
+  test "No ruler in FileTree mode":
+    var state = createTestState()
+    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test")
+    let config = createTestStatusLineConfig()
+
+    let ruler = activeRuler(state, textBuffer, EditorMode.FileTree, config)
+    check ruler.text == ""
+    check ruler.fieldWidth == 0
+
+  test "The field fits the last line and columns up to WidestNumber":
+    var state = createTestState()
+    state.cursor.line = 8
+    let textBuffer = createMultiLineBuffer(120)
+
+    var config = createTestStatusLineConfig()
+    config.setupText =
+      "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {percentage}"
+
+    let ruler = activeRuler(state, textBuffer, state.mode, config)
+    check ruler.text == "9/120 1/5 7%"
+    check ruler.fieldWidth == "120/120 999/999 100%".len
+
+  test "A line longer than WidestNumber keeps the field":
+    var state = createTestState()
+    state.cursor.column = 1100
+    let textBuffer = createTestTextBuffer("", false, "x".repeat(1200))
+
+    var config = createTestStatusLineConfig()
+    config.setupText = "{columnNumber}/{totalColumns}"
+
+    let ruler = activeRuler(state, textBuffer, state.mode, config)
+    check ruler.text == "1101/1200"
+    check ruler.fieldWidth == "999/999".len
+
+  test "The field fits the widest mode":
+    var state = createTestState()
+    let textBuffer = createTestTextBuffer("", false, "test")
+
+    var config = createTestStatusLineConfig()
+    config.setupText = "{mode}"
+
+    for mode in [EditorMode.Normal, EditorMode.VisualBlock]:
+      state.mode = mode
+      check activeRuler(state, textBuffer, mode, config).fieldWidth ==
+        "(insert) NORMAL".len
+
+  test "The field fits git counts up to WidestNumber":
+    var state = createTestState()
+    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test")
+
+    var config = createTestStatusLineConfig()
+    config.setupText = "{gitChanges}"
+
+    let ruler = activeRuler(state, textBuffer, state.mode, config)
+    check ruler.text == "+0 ~0 -0"
+    check ruler.fieldWidth == "+999 ~999 -999".len
 
 suite "StatusLine - renderStatusLine":
   test "Does nothing when showStatusLine is false":
@@ -816,13 +780,14 @@ suite "StatusLine - renderWindowStatusLine":
       40,
       true,
       state.mode,
+      state.cursor,
       config,
       owesPreservedWork = true,
     )
 
-    let line = getBufferLine(displayBuffer, 10)
-    check PreservedWorkMark in line
-    check "file.nim" notin line
+    # The ruler's field takes the right half, the marks the rest
+    check getBufferLine(displayBuffer, 10)[0 ..< 40] ==
+      " NORMAL  [recover]    1/1 1/12 UTF-8 LF "
 
   test "Does nothing when showStatusLine is false":
     var state = createTestState()
@@ -834,7 +799,8 @@ suite "StatusLine - renderWindowStatusLine":
     let config = createTestStatusLineConfig()
 
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, state.cursor,
+      config,
     )
 
     let line = getBufferLine(displayBuffer, 10)
@@ -850,7 +816,8 @@ suite "StatusLine - renderWindowStatusLine":
     let config = createTestStatusLineConfig()
 
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, state.cursor,
+      config,
     )
 
     let line = getBufferLine(displayBuffer, 10)
@@ -869,7 +836,8 @@ suite "StatusLine - renderWindowStatusLine":
     config.directory = false
 
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, state.cursor,
+      config,
     )
 
     let line = getBufferLine(displayBuffer, 10)
@@ -890,11 +858,43 @@ suite "StatusLine - renderWindowStatusLine":
     config.directory = false
 
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, false, state.mode, config
+      state, textBuffer, displayBuffer, 10, 0, 80, false, state.mode, state.cursor,
+      config,
     )
 
     let line = getBufferLine(displayBuffer, 10)
     check "NORMAL" in line
+
+  test "An inactive window's ruler shows its own cursor and mode":
+    var state = createTestState()
+    state.showStatusLine = true
+    state.multiStatusLine = true
+    state.cursor.line = 3999
+    state.overlay = some(okCommand)
+    state.insertNormalMode = true
+
+    var displayBuffer = createTestBuffer()
+    let textBuffer = createMultiLineBuffer(10, "/a/file.nim")
+    var config = createTestStatusLineConfig()
+    config.showModeInactive = true
+    config.setupText = "{lineNumber}/{totalLines} {mode}"
+
+    renderWindowStatusLine(
+      state,
+      textBuffer,
+      displayBuffer,
+      10,
+      0,
+      60,
+      false,
+      EditorMode.Normal,
+      BufferPosition(line: 2, column: 0),
+      config,
+    )
+
+    let line = getBufferLine(displayBuffer, 10)[0 ..< 60]
+    check line.startsWith(" NORMAL  /a/file.nim ")
+    check line.endsWith(" 3/10 NORMAL ")
 
   test "Does not render mode for inactive window without showModeInactive":
     var state = createTestState()
@@ -910,7 +910,8 @@ suite "StatusLine - renderWindowStatusLine":
     config.directory = false
 
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, false, state.mode, config
+      state, textBuffer, displayBuffer, 10, 0, 80, false, state.mode, state.cursor,
+      config,
     )
 
     let line = getBufferLine(displayBuffer, 10)
@@ -927,7 +928,8 @@ suite "StatusLine - renderWindowStatusLine":
     config.directory = false
 
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 15, 10, 60, true, state.mode, config
+      state, textBuffer, displayBuffer, 15, 10, 60, true, state.mode, state.cursor,
+      config,
     )
 
     let line = getBufferLine(displayBuffer, 15)
@@ -953,12 +955,209 @@ suite "StatusLine - renderWindowStatusLine":
 
     # Use a narrow width to force truncation
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 30, true, state.mode, config
+      state, textBuffer, displayBuffer, 10, 0, 30, true, state.mode, state.cursor,
+      config,
     )
 
     let line = getBufferLine(displayBuffer, 10)
     # Should not crash and should render something
     check line.len > 0
+
+suite "StatusLine - narrow lines":
+  proc defaultConfig(): StatusLineConfig =
+    result = newEditorConfig().statusLine
+    result.gitChangedLines = false # Needs a git repository
+    result.gitBranchName = false
+
+  proc drawnWindow(width: int): string =
+    var state = createTestState()
+    state.showStatusLine = true
+    state.multiStatusLine = true
+    var displayBuffer = createTestBuffer()
+    let textBuffer =
+      createTestTextBuffer("/path/to/src/moepkg/status_line.nim", false, "test content")
+    textBuffer.language = SourceLanguage.langNim
+    renderWindowStatusLine(
+      state,
+      textBuffer,
+      displayBuffer,
+      10,
+      0,
+      width,
+      true,
+      state.mode,
+      state.cursor,
+      defaultConfig(),
+    )
+    getBufferLine(displayBuffer, 10)[0 ..< width]
+
+  test "The default config keeps the mode label and cuts the path from the left":
+    check drawnWindow(60) ==
+      " NORMAL  <c/moepkg/status_line.nim    1/1 1/12 UTF-8 LF Nim "
+
+  test "The default config's ruler stays right of the middle and loses its end":
+    check drawnWindow(40) == " NORMAL  <s_line.nim  1/1 1/12 UTF-8 LF "
+
+  test "renderStatusLine cuts a long path from the left":
+    var state = createTestState()
+    state.showStatusLine = true
+
+    var displayBuffer = createTestBuffer()
+    let textBuffer =
+      createTestTextBuffer("/" & "dir/".repeat(20) & "file.nim", false, "test content")
+    let config = createTestStatusLineConfig()
+
+    renderStatusLine(state, textBuffer, displayBuffer, 23, config)
+
+    let line = getBufferLine(displayBuffer, 23)
+    check line.startsWith(" NORMAL  <")
+    check line.endsWith("dir/file.nim    1/1 1/12 UTF-8 LF ")
+
+  test "setupText loses its end as Vim's ruler does":
+    var state = createTestState()
+    state.showStatusLine = true
+
+    var displayBuffer = createTestBuffer()
+    displayBuffer.area.width = 20
+    let textBuffer = createTestTextBuffer("/file.nim", false, "test content")
+    var config = createTestStatusLineConfig()
+    config.mode = false
+    config.setupText = "{lineNumber}/{totalLines} {filePath} {encoding}"
+
+    renderStatusLine(state, textBuffer, displayBuffer, 23, config)
+
+    check getBufferLine(displayBuffer, 23) == " /file.nim 1/1 /fil "
+
+suite "StatusLine - layoutStatusLine":
+  proc fitted(text: string): Ruler =
+    ## A ruler whose field is as wide as its text.
+    Ruler(text: text, fieldWidth: charDisplayWidth(text))
+
+  let
+    mode = part(" NORMAL ", srLabel)
+    longName = part(" src/moepkg/status_line.nim", srName)
+    ruler = fitted("123/456 7/80 UTF-8 LF Nim")
+
+  proc drawn(left: openArray[StatusItem], ruler: Ruler, width: int): string =
+    ## The status line `drawStatusLineRow` draws `width` columns wide.
+    var buffer = createTestBuffer()
+    buffer.drawStatusLineRow(0, 0, width, left, ruler, Style(), Style())
+    for x in 0 ..< width:
+      result.add buffer[x, 0].symbol
+
+  test "Shows every part when they fit":
+    check layoutStatusLine([mode, part(" file.nim", srName)], ruler, 80) ==
+      (left: @[" NORMAL ", " file.nim"], ruler: ruler.text, rulerCol: 54)
+
+  test "The ruler stays right of the middle and loses its end":
+    check layoutStatusLine([mode, longName], ruler, 40) ==
+      (left: @[" NORMAL ", " <s_line.nim"], ruler: "123/456 7/80 UTF-8", rulerCol: 21)
+
+  test "Keeps the mode label while the name is cut":
+    check layoutStatusLine([mode, longName], ruler, 21) ==
+      (left: @[" NORMAL ", " <m"], ruler: "123/456", rulerCol: 13)
+
+  test "Cuts the labels only when they alone are wider than the window":
+    check layoutStatusLine([mode], ruler, 6) ==
+      (left: @[" NORMA"], ruler: "", rulerCol: 0)
+
+  test "Extras go, the last first, before the name is cut":
+    let left = [
+      mode,
+      part(" +1 ~0 -0", srExtra),
+      part(" ᚠ main", srExtra),
+      part(" file.nim", srName),
+      part("  Indexing ", srExtra),
+    ]
+    check layoutStatusLine(left, fitted("1/1"), 49).left ==
+      @[" NORMAL ", " +1 ~0 -0", " ᚠ main", " file.nim", "  Indexing "]
+    check layoutStatusLine(left, fitted("1/1"), 48).left ==
+      @[" NORMAL ", " +1 ~0 -0", " ᚠ main", " file.nim", ""]
+    check layoutStatusLine(left, fitted("1/1"), 36).left ==
+      @[" NORMAL ", " +1 ~0 -0", "", " file.nim", ""]
+    check layoutStatusLine(left, fitted("1/1"), 25).left ==
+      @[" NORMAL ", "", "", " file.nim", ""]
+
+  test "Extras stay while the name is cut to its last path component":
+    let left = [
+      mode,
+      part(" +1 ~0 -0", srExtra),
+      part(" ᚠ main", srExtra),
+      part(" /home/user/src/file.nim", srName),
+    ]
+    check layoutStatusLine(left, fitted("1/1"), 52).left ==
+      @[" NORMAL ", " +1 ~0 -0", " ᚠ main", " <ome/user/src/file.nim"]
+    check layoutStatusLine(left, fitted("1/1"), 39).left ==
+      @[" NORMAL ", " +1 ~0 -0", " ᚠ main", " <file.nim"]
+    check layoutStatusLine(left, fitted("1/1"), 38).left ==
+      @[" NORMAL ", " +1 ~0 -0", "", " <r/src/file.nim"]
+
+  test "Keeps the marks while the name is cut":
+    let left =
+      [part(" [recover]", srMark), part(" file.nim", srName), part(" [+]", srMark)]
+    check layoutStatusLine(left, Ruler(), 20).left == @[" [recover]", " <.nim", " [+]"]
+    check layoutStatusLine(left, Ruler(), 16).left == @[" [recover]", "", " [+]"]
+
+  test "The marks lose their start once the name is gone":
+    let left =
+      [part(" [recover]", srMark), part(" file.nim", srName), part(" [+]", srMark)]
+    check layoutStatusLine(left, Ruler(), 12).left == @[" <cover]", "", " [+]"]
+    check layoutStatusLine(left, Ruler(), 4).left == @["", "", " [+]"]
+    check layoutStatusLine(left, Ruler(), 3).left == @["", "", " <]"]
+    check layoutStatusLine(left, Ruler(), 2).left == @["", "", ""]
+
+  test "The changed mark outlasts the recover mark beside the mode label":
+    let left = [
+      mode, part(" [recover]", srMark), part(" file.nim", srName), part(" [+]", srMark)
+    ]
+    check layoutStatusLine(left, ruler, 23) ==
+      (left: @[" NORMAL ", "", "", " [+]"], ruler: "123/456 7", rulerCol: 13)
+
+  test "A ruler as wide as its field ends a blank column before the right edge":
+    check drawn([part(" file.nim", srName)], fitted("1/1"), 16) == " file.nim   1/1 "
+
+  test "Draws the ruler flush right in its field":
+    check drawn([part(" file.nim", srName)], Ruler(text: "1/1", fieldWidth: 5), 16) ==
+      " file.nim   1/1 "
+
+  test "The name keeps its cut while the ruler changes within its field":
+    let
+      before = Ruler(text: "9/120 1/0", fieldWidth: 15)
+      after = Ruler(text: "10/120 1/45", fieldWidth: 15)
+    check layoutStatusLine([mode, longName], before, 40) ==
+      (left: @[" NORMAL ", " <atus_line.nim"], ruler: before.text, rulerCol: 30)
+    check layoutStatusLine([mode, longName], after, 40) ==
+      (left: @[" NORMAL ", " <atus_line.nim"], ruler: after.text, rulerCol: 28)
+
+  test "A wide character at the cut leaves no gap before the next part":
+    let left = [part(" 日本語ファイル.nim", srName), part(" [+]", srMark)]
+    check drawn(left, Ruler(), 11) == " <.nim [+] "
+
+suite "StatusLine - keptWidth":
+  test "Keeps the last path component behind the cut":
+    check keptWidth(" /home/user/file.nim") == " <file.nim".len
+    check keptWidth(" /a/b/dir/") == " <dir/".len
+
+  test "Keeps a name no wider than that whole":
+    check keptWidth(" file.nim") == " file.nim".len
+    check keptWidth(" /a.nim") == " /a.nim".len
+
+suite "StatusLine - cutFromLeft":
+  test "Keeps a text that fits":
+    check cutFromLeft(" file.nim", 9) == " file.nim"
+
+  test "Cuts the start with < and keeps the separator":
+    check cutFromLeft(" /a/b/file.nim", 10) == " <file.nim"
+
+  test "Does not split a wide character":
+    check cutFromLeft(" a漢字", 5) == " <字"
+
+  test "Drops zero-width marks with the character they combine with":
+    check cutFromLeft(" cafe\u0301/file.nim", 11) == " </file.nim"
+
+  test "Shows nothing narrower than MinCutWidth":
+    check cutFromLeft(" file.nim", MinCutWidth) == " <m"
+    check cutFromLeft(" file.nim", MinCutWidth - 1) == ""
 
 suite "StatusLine - parseSetupText additional placeholders":
   test "Parse totalColumns placeholder":
@@ -968,7 +1167,7 @@ suite "StatusLine - parseSetupText additional placeholders":
 
     let textBuffer = createTestTextBuffer("", false, "Hello World")
 
-    let result = parseSetupText(state, textBuffer, "{totalColumns}")
+    let result = activeSetupText(state, textBuffer, "{totalColumns}")
 
     check result == "11" # "Hello World" has 11 characters
 
@@ -976,7 +1175,7 @@ suite "StatusLine - parseSetupText additional placeholders":
     var state = createTestState()
     let textBuffer = createTestTextBuffer("", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{encoding}")
+    let result = activeSetupText(state, textBuffer, "{encoding}")
 
     check result == "UTF-8"
 
@@ -985,7 +1184,7 @@ suite "StatusLine - parseSetupText additional placeholders":
     let textBuffer = createTestTextBuffer("", false, "test")
     textBuffer.lineEnding = LF
 
-    let result = parseSetupText(state, textBuffer, "{lineEnding}")
+    let result = activeSetupText(state, textBuffer, "{lineEnding}")
 
     check result == "LF"
 
@@ -997,7 +1196,7 @@ suite "StatusLine - parseSetupText additional placeholders":
     textBuffer.lineEnding = CRLF
     textBuffer.keepRaw = true
 
-    let result = parseSetupText(state, textBuffer, "{lineEnding}")
+    let result = activeSetupText(state, textBuffer, "{lineEnding}")
 
     check result == "RAW"
 
@@ -1006,7 +1205,7 @@ suite "StatusLine - parseSetupText additional placeholders":
     let textBuffer = createTestTextBuffer("", false, "test")
     textBuffer.lineEnding = CRLF
 
-    let result = parseSetupText(state, textBuffer, "{lineEnding}")
+    let result = activeSetupText(state, textBuffer, "{lineEnding}")
 
     check result == "CRLF"
 
@@ -1015,7 +1214,7 @@ suite "StatusLine - parseSetupText additional placeholders":
     let textBuffer = createTestTextBuffer("", false, "test")
     textBuffer.lineEnding = CR
 
-    let result = parseSetupText(state, textBuffer, "{lineEnding}")
+    let result = activeSetupText(state, textBuffer, "{lineEnding}")
 
     check result == "CR"
 
@@ -1024,7 +1223,7 @@ suite "StatusLine - parseSetupText additional placeholders":
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "echo \"hello\"")
     textBuffer.language = SourceLanguage.langNim
 
-    let result = parseSetupText(state, textBuffer, "{fileType}")
+    let result = activeSetupText(state, textBuffer, "{fileType}")
 
     check result == "Nim"
 
@@ -1032,7 +1231,7 @@ suite "StatusLine - parseSetupText additional placeholders":
     var state = createTestState()
     let textBuffer = createTestTextBuffer("", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{fileType}")
+    let result = activeSetupText(state, textBuffer, "{fileType}")
 
     check result == ""
 
@@ -1040,7 +1239,7 @@ suite "StatusLine - parseSetupText additional placeholders":
     var state = createTestState()
     let textBuffer = newTextBuffer("")
 
-    let result = parseSetupText(state, textBuffer, "{percentage}")
+    let result = activeSetupText(state, textBuffer, "{percentage}")
 
     # Empty buffer with cursor at line 0 shows 100% (line 1 of 1)
     # since newTextBuffer creates at least one line
@@ -1052,7 +1251,7 @@ suite "StatusLine - parseSetupText additional placeholders":
 
     let textBuffer = createMultiLineBuffer(10)
 
-    let result = parseSetupText(state, textBuffer, "{percentage}")
+    let result = activeSetupText(state, textBuffer, "{percentage}")
 
     check result == "10%" # Line 1 of 10 = 10%
 
@@ -1062,7 +1261,7 @@ suite "StatusLine - parseSetupText additional placeholders":
 
     let textBuffer = createMultiLineBuffer(10)
 
-    let result = parseSetupText(state, textBuffer, "{percentage}")
+    let result = activeSetupText(state, textBuffer, "{percentage}")
 
     check result == "100%" # Line 10 of 10 = 100%
 
@@ -1072,7 +1271,7 @@ suite "StatusLine - parseSetupText additional placeholders":
 
     let textBuffer = createTestTextBuffer("", false, "test")
 
-    let result = parseSetupText(state, textBuffer, "{totalColumns}")
+    let result = activeSetupText(state, textBuffer, "{totalColumns}")
 
     check result == "0" # Should return 0 for invalid cursor position
 
@@ -1083,7 +1282,7 @@ suite "StatusLine - parseSetupText additional placeholders":
 
     let textBuffer = createTestTextBuffer("", false, "あいうえお")
 
-    let result = parseSetupText(state, textBuffer, "{totalColumns}")
+    let result = activeSetupText(state, textBuffer, "{totalColumns}")
 
     check result == "5" # 5 characters, not 15 bytes
 
@@ -1194,140 +1393,6 @@ suite "StatusLine - renderStatusLine additional modes":
     let line = getBufferLine(displayBuffer, 23)
     check "Loading..." in line
 
-suite "StatusLine - buildRightSideInfo default format":
-  test "Returns file type in default format":
-    var state = createTestState()
-    state.display.showEncoding = false
-    state.display.showLineCount = false
-    state.display.showLinePercentage = false
-
-    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test")
-    textBuffer.language = SourceLanguage.langNim
-
-    var config = createTestStatusLineConfig()
-    config.setupText = ""
-
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
-
-    check "Nim" in result
-
-  test "Returns encoding in default format":
-    var state = createTestState()
-    state.display.showEncoding = true
-    state.display.showLineCount = false
-    state.display.showLinePercentage = false
-
-    let textBuffer = createTestTextBuffer("", false, "test")
-
-    var config = createTestStatusLineConfig()
-    config.setupText = ""
-
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
-
-    check "UTF-8" in result
-
-  test "Returns line percentage in default format":
-    var state = createTestState()
-    state.display.showEncoding = false
-    state.display.showLineCount = false
-    state.display.showLinePercentage = true
-    state.cursor.line = 0
-
-    let textBuffer = createTestTextBuffer("", false, "test")
-
-    var config = createTestStatusLineConfig()
-    config.setupText = ""
-
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
-
-    check "100%" in result
-
-  test "Returns line count in default format":
-    var state = createTestState()
-    state.display.showEncoding = false
-    state.display.showLineCount = true
-    state.display.showLinePercentage = false
-    state.cursor.line = 0
-
-    let textBuffer = createTestTextBuffer("", false, "test")
-
-    var config = createTestStatusLineConfig()
-    config.setupText = ""
-
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
-
-    check "1/1" in result
-
-  test "Returns line ending LF in default format":
-    var state = createTestState()
-    state.display.showEncoding = false
-    state.display.showLineCount = false
-    state.display.showLinePercentage = false
-    state.display.showLineEnding = true
-
-    let textBuffer = createTestTextBuffer("", false, "test")
-    textBuffer.lineEnding = LF
-    textBuffer.language = SourceLanguage.langNone
-
-    var config = createTestStatusLineConfig()
-    config.setupText = ""
-
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
-
-    check result == " LF"
-
-  test "Returns line ending CRLF in default format":
-    var state = createTestState()
-    state.display.showEncoding = false
-    state.display.showLineCount = false
-    state.display.showLinePercentage = false
-    state.display.showLineEnding = true
-
-    let textBuffer = createTestTextBuffer("", false, "test")
-    textBuffer.lineEnding = CRLF
-    textBuffer.language = SourceLanguage.langNone
-
-    var config = createTestStatusLineConfig()
-    config.setupText = ""
-
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
-
-    check result == " CRLF"
-
-  test "Does not return line ending when showLineEnding is false":
-    var state = createTestState()
-    state.display.showEncoding = false
-    state.display.showLineCount = false
-    state.display.showLinePercentage = false
-    state.display.showLineEnding = false
-
-    let textBuffer = createTestTextBuffer("", false, "test")
-    textBuffer.language = SourceLanguage.langNone
-
-    var config = createTestStatusLineConfig()
-    config.setupText = ""
-
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
-
-    check result == ""
-
-  test "Returns empty when all display options are disabled":
-    var state = createTestState()
-    state.display.showEncoding = false
-    state.display.showLineCount = false
-    state.display.showLinePercentage = false
-
-    let textBuffer = createTestTextBuffer("", false, "test")
-    # Ensure no file type
-    textBuffer.language = SourceLanguage.langNone
-
-    var config = createTestStatusLineConfig()
-    config.setupText = ""
-
-    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
-
-    check result == ""
-
 suite "StatusLine - renderWindowStatusLine additional":
   test "Renders with overlay in window":
     var state = createTestState()
@@ -1341,7 +1406,8 @@ suite "StatusLine - renderWindowStatusLine additional":
     config.mode = true
 
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, state.cursor,
+      config,
     )
 
     let line = getBufferLine(displayBuffer, 10)
@@ -1360,7 +1426,8 @@ suite "StatusLine - renderWindowStatusLine additional":
 
     # Active window should show progress
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, state.cursor,
+      config,
     )
 
     let activeLine = getBufferLine(displayBuffer, 10)
@@ -1369,7 +1436,8 @@ suite "StatusLine - renderWindowStatusLine additional":
     # Reset buffer for inactive window test
     displayBuffer = createTestBuffer()
     renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, false, state.mode, config
+      state, textBuffer, displayBuffer, 10, 0, 80, false, state.mode, state.cursor,
+      config,
     )
 
     let inactiveLine = getBufferLine(displayBuffer, 10)
@@ -1383,7 +1451,7 @@ suite "StatusLine - buildGitInfo":
     config.gitBranchName = false
 
     let result =
-      buildGitInfo(GitCacheState(), textBuffer, EditorMode.Normal, config, true)
+      buildGitInfo(GitCacheState(), textBuffer, EditorMode.Normal, config, true).joined
 
     check result == ""
 
@@ -1394,7 +1462,7 @@ suite "StatusLine - buildGitInfo":
     config.gitBranchName = true
 
     let result =
-      buildGitInfo(GitCacheState(), textBuffer, EditorMode.Normal, config, true)
+      buildGitInfo(GitCacheState(), textBuffer, EditorMode.Normal, config, true).joined
 
     check result == ""
 
@@ -1409,7 +1477,7 @@ suite "StatusLine - buildGitInfo":
     # (unless showGitInactive is true)
     # This test verifies the condition check
     let result =
-      buildGitInfo(GitCacheState(), textBuffer, EditorMode.Normal, config, false)
+      buildGitInfo(GitCacheState(), textBuffer, EditorMode.Normal, config, false).joined
       # isActiveWindow = false
 
     # Result should be empty because showGitInactive is false
@@ -1426,7 +1494,7 @@ suite "StatusLine - sanitize control characters":
     let tb = createTestTextBuffer("/tmp/a\x1B[2J/b\x00c.nim")
     var cfg = createTestStatusLineConfig()
     cfg.directory = true
-    let res = buildFileDisplay(tb, EditorMode.Normal, cfg)
+    let res = buildFileDisplay(tb, EditorMode.Normal, cfg).joined
     check not hasControl(res)
     check "\x1B" notin res
     check "\x00" notin res
@@ -1440,7 +1508,7 @@ suite "StatusLine - sanitize control characters":
     var cfg = createTestStatusLineConfig()
     cfg.directory = false
     cfg.filename = true
-    let res = buildFileDisplay(tb, EditorMode.Normal, cfg)
+    let res = buildFileDisplay(tb, EditorMode.Normal, cfg).joined
     check not hasControl(res)
     check "file name.nim" in res
 
@@ -1448,7 +1516,7 @@ suite "StatusLine - sanitize control characters":
     let tb = createTestTextBuffer("/tmp/漢\x00字🎉\x1B.nim")
     var cfg = createTestStatusLineConfig()
     cfg.directory = true
-    let res = buildFileDisplay(tb, EditorMode.Normal, cfg)
+    let res = buildFileDisplay(tb, EditorMode.Normal, cfg).joined
     check not hasControl(res)
     check "漢 字" in res
     check "🎉 " in res
@@ -1457,7 +1525,7 @@ suite "StatusLine - sanitize control characters":
   test "buildFileDisplay Filer mode sanitizes directory path":
     let tb = createTestTextBuffer("/tmp/\x00bad\x1Bdir")
     let cfg = createTestStatusLineConfig()
-    let res = buildFileDisplay(tb, EditorMode.Filer, cfg)
+    let res = buildFileDisplay(tb, EditorMode.Filer, cfg).joined
     check not hasControl(res)
     check "bad dir" in res
 
@@ -1465,13 +1533,13 @@ suite "StatusLine - sanitize control characters":
     # sanitized display differs but dirExists uses raw path - verify no crash and sanitized
     let tb = createTestTextBuffer(getCurrentDir() & "/\x00test")
     let cfg = createTestStatusLineConfig()
-    let res = buildFileDisplay(tb, EditorMode.Filer, cfg)
+    let res = buildFileDisplay(tb, EditorMode.Filer, cfg).joined
     check not hasControl(res)
 
   test "parseSetupText sanitizes filePath placeholder":
     var state = createTestState()
     let tb = createTestTextBuffer("/path/to/\x1Bfile\x00name.nim", false, "test")
-    let res = parseSetupText(state, tb, "{filePath}")
+    let res = activeSetupText(state, tb, "{filePath}")
     check not hasControl(res)
     check " file name.nim" in res or "file name.nim" in res
     check res == sanitizeForDisplay("/path/to/\x1Bfile\x00name.nim")
@@ -1479,8 +1547,8 @@ suite "StatusLine - sanitize control characters":
   test "parseSetupText sanitizes filename and directory derived from filePath":
     var state = createTestState()
     let tb = createTestTextBuffer("/tmp/\x1Bdir/file\x00name.nim", false, "test")
-    let resFile = parseSetupText(state, tb, "{filename}")
-    let resDir = parseSetupText(state, tb, "{directory}")
+    let resFile = activeSetupText(state, tb, "{filename}")
+    let resDir = activeSetupText(state, tb, "{directory}")
     check not hasControl(resFile)
     check not hasControl(resDir)
     check "file name.nim" in resFile
@@ -1489,7 +1557,7 @@ suite "StatusLine - sanitize control characters":
   test "parseSetupText sanitizes literal control characters in setupText template":
     var state = createTestState()
     let tb = createTestTextBuffer("/path/file.nim", false, "test")
-    let res = parseSetupText(state, tb, "pre\x1B[2J\x00mid {filePath} suf\x7F")
+    let res = activeSetupText(state, tb, "pre\x1B[2J\x00mid {filePath} suf\x7F")
     check not hasControl(res)
     check "\x1B" notin res
     check "\x00" notin res
@@ -1500,14 +1568,14 @@ suite "StatusLine - sanitize control characters":
   test "parseSetupText sanitizes multiple placeholders with controls":
     var state = createTestState()
     let tb = createTestTextBuffer("/a/\x1Bb/c\x00d.nim", false, "test")
-    let res = parseSetupText(state, tb, "{filename} {directory} {filePath}")
+    let res = activeSetupText(state, tb, "{filename} {directory} {filePath}")
     check not hasControl(res)
     check displayWidth(res) == displayWidth(sanitizeForDisplay(res))
 
   test "parseSetupText with unnamed buffer still sanitizes template controls":
     var state = createTestState()
     let tb = createTestTextBuffer("", false, "test")
-    let res = parseSetupText(state, tb, "pre\x1Bmid\x00suf")
+    let res = activeSetupText(state, tb, "pre\x1Bmid\x00suf")
     check not hasControl(res)
     check res == "pre mid suf"
 
@@ -1551,11 +1619,15 @@ suite "StatusLine - sanitize control characters":
     cfg.directory = false
     var bufActive = createTestBuffer()
     let tb = createTestTextBuffer("/path/file.nim", false, "test")
-    renderWindowStatusLine(state, tb, bufActive, 10, 0, 80, true, state.mode, cfg)
+    renderWindowStatusLine(
+      state, tb, bufActive, 10, 0, 80, true, state.mode, state.cursor, cfg
+    )
     check not hasControl(getBufferLine(bufActive, 10))
     check "Prog ress" in getBufferLine(bufActive, 10)
     var bufInactive = createTestBuffer()
-    renderWindowStatusLine(state, tb, bufInactive, 10, 0, 80, false, state.mode, cfg)
+    renderWindowStatusLine(
+      state, tb, bufInactive, 10, 0, 80, false, state.mode, state.cursor, cfg
+    )
     check "Prog" notin getBufferLine(bufInactive, 10)
     check not hasControl(getBufferLine(bufInactive, 10))
 
@@ -1563,7 +1635,7 @@ suite "StatusLine - sanitize control characters":
     let tb = createTestTextBuffer("/tmp/\x1B漢\x00test\x7F.nim")
     var cfg = createTestStatusLineConfig()
     cfg.directory = true
-    let res = buildFileDisplay(tb, EditorMode.Normal, cfg)
+    let res = buildFileDisplay(tb, EditorMode.Normal, cfg).joined
     # sanitizeForDisplay already applied, so rendering via setString will match
     var buf = createTestBuffer()
     var state = createTestState()
@@ -1584,7 +1656,7 @@ suite "StatusLine - sanitize control characters":
     var cfg = createTestStatusLineConfig()
     cfg.gitBranchName = true
     cfg.showGitInactive = true
-    let res = buildGitInfo(gc, tb, EditorMode.Normal, cfg, true)
+    let res = buildGitInfo(gc, tb, EditorMode.Normal, cfg, true).joined
     check not hasControl(res)
     check "\x1B" notin res
     check "feat" in res
@@ -1598,7 +1670,7 @@ suite "StatusLine - sanitize control characters":
     )
     state.git.repositories["/path"] =
       GitRepositoryCacheEntry(name: "fix\x00/awful\x1Bbranch", populated: true)
-    let res = parseSetupText(state, tb, "{gitBranch}")
+    let res = activeSetupText(state, tb, "{gitBranch}")
     check not hasControl(res)
     check "fix /awful branch" in res or "fix" in res
     check "\x1B" notin res
@@ -1613,6 +1685,6 @@ suite "StatusLine - sanitize control characters":
       GitRepositoryCacheEntry(name: "a\x1Bb\x00c漢\x7F", populated: true)
     var cfg = createTestStatusLineConfig()
     cfg.gitBranchName = true
-    let res = buildGitInfo(gc, tb, EditorMode.Normal, cfg, true)
+    let res = buildGitInfo(gc, tb, EditorMode.Normal, cfg, true).joined
     check not hasControl(res)
     check displayWidth(res) == displayWidth(sanitizeForDisplay(res))

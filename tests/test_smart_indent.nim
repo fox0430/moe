@@ -43,7 +43,6 @@ proc createSmartIndentState(): EditorState =
   cfg.standard.expandTab = true
   EditorState(
     activeWindow: window,
-    display: DisplaySettings(),
     config: cfg,
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     pendingInput: PendingInputState(

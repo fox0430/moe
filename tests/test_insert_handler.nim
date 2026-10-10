@@ -62,8 +62,6 @@ proc createTestState(): EditorState =
   cfg.standard.autoIndent = true
   EditorState(
     activeWindow: window,
-    display:
-      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: cfg,
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     pendingInput: PendingInputState(

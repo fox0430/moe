@@ -39,8 +39,6 @@ proc createTestState(): EditorState =
   )
   EditorState(
     activeWindow: window,
-    display:
-      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: newEditorConfig(),
     editState: EditState(replaceHistory: @[]),
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),

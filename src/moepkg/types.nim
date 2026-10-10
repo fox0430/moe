@@ -304,13 +304,6 @@ type
       # True when Insert was entered via o/O, so each replay opens a fresh line
       # (newline + the entry line's indent) instead of inserting inline.
 
-  DisplaySettings* = object
-    ## Session-only display overrides; config-derived flags are pull accessors.
-    showLineCount*: bool
-    showLinePercentage*: bool
-    showEncoding*: bool
-    showLineEnding*: bool
-
   PendingSemanticTokensRequest* = object
     ## Semantic-tokens-specific extras (legend, viewport, range) captured at
     ## request-send time. The generic stale-guard snapshot (request-id,
@@ -926,7 +919,6 @@ type
     pointerSelection*: PointerSelectionGesture
       ## Primary-button gesture currently owned by the editor.
     snippetSession*: SnippetSession # Snippet tabstop cycling state (Insert mode)
-    display*: DisplaySettings
     config*: EditorConfig ## Aliases `Editor.config`; never reassigned.
     timing*: TimingState
     git*: GitCacheState # Per-buffer git diff/branch cache (see git_cache.nim)

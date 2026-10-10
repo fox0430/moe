@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, options, strutils, os, unicode]
+import std/[strformat, options, strutils, os]
 
 import celina_backend as celina
 
@@ -35,34 +35,6 @@ proc toggleMultiStatusLine*(state: var EditorState) =
 
 proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
   state.multiStatusLine = enabled
-
-proc toggleLineCount*(state: var EditorState) =
-  ## Toggle the visibility of line count in status line
-  state.display.showLineCount = not state.display.showLineCount
-
-proc setLineCountVisible*(state: var EditorState, visible: bool) =
-  ## Set the visibility of line count in status line
-  state.display.showLineCount = visible
-
-proc toggleLinePercentage*(state: var EditorState) =
-  ## Toggle the visibility of line percentage in status line
-  state.display.showLinePercentage = not state.display.showLinePercentage
-
-proc setLinePercentageVisible*(state: var EditorState, visible: bool) =
-  ## Set the visibility of line percentage in status line
-  state.display.showLinePercentage = visible
-
-proc toggleEncoding*(state: var EditorState) =
-  ## Toggle the visibility of encoding in status line
-  state.display.showEncoding = not state.display.showEncoding
-
-proc setEncodingVisible*(state: var EditorState, visible: bool) =
-  ## Set the visibility of encoding in status line
-  state.display.showEncoding = visible
-
-proc setLineEndingVisible*(state: var EditorState, visible: bool) =
-  ## Set the visibility of line ending in status line
-  state.display.showLineEnding = visible
 
 static:
   # Verify the `statusLine<Mode>Mode` → `statusLine<Mode>ModeLabel` →
@@ -149,41 +121,65 @@ proc getOverlayLabelStyle(overlay: OverlayKind): Style =
 const PreservedWorkMark* = "[recover]"
   ## A crash preserved work for this file that nobody has dealt with yet.
 
+type
+  StatusRole = enum
+    ## How a part left of the ruler gives way in a narrow status line, after
+    ## what stands for it in Vim.
+    srLabel
+      ## Vim's mode message, on the command line: kept at any width, drawn in
+      ## the mode label's style
+    srExtra
+      ## Not in Vim's status line: goes, last first, before the name loses its
+      ## last path component
+    srMark
+      ## A flag by Vim's file name: kept while the name is cut, then the flags
+      ## lose their start as Vim's do
+    srName ## Vim's file name: loses its start, `<` marking the cut
+
+  StatusItem = object ## One part of a status line left of the ruler.
+    text: string
+    role: StatusRole
+
+  Ruler = object
+    text: string
+    fieldWidth: int
+      ## Columns kept for `text` wherever the cursor is, as Vim's ruler width:
+      ## the file name is cut against them, not against `text`
+
+proc part(text: string, role: StatusRole): StatusItem =
+  StatusItem(text: text, role: role)
+
 proc buildFileDisplay(
     textBuffer: TextBuffer,
     mode: EditorMode,
     config: StatusLineConfig,
     owesPreservedWork = false,
-): string =
-  ## Build the file display text based on config settings
-  ## For special modes (non-file-edit modes), show mode label instead of filename
-  ## Includes filename, directory, and changed mark as configured
+): seq[StatusItem] =
+  ## The file display parts as config settings choose them: the file name,
+  ## directory, and changed mark. Special modes (non-file-edit modes) show
+  ## none, since the mode label stands for them.
 
   # Filer mode: show directory path
   if mode == EditorMode.Filer:
     if textBuffer.filePath.isSome:
       let path = sanitizeForDisplay(textBuffer.filePath.get())
       if dirExists(textBuffer.filePath.get()):
-        return " " & path & "/"
-      return " " & path
-    return ""
+        return @[part(" " & path & "/", srName)]
+      return @[part(" " & path, srName)]
+    return
 
   # For other special modes, the mode label is already shown separately
   if not mode.isFileEditMode:
-    return ""
+    return
 
   if textBuffer.filePath.isNone:
-    return " [No Name]"
+    return @[part(" [No Name]", srName)]
 
   let filePath = sanitizeForDisplay(textBuffer.filePath.get())
 
-  # Joined, not padded: a file name's own trailing spaces are part of it.
-  var parts: seq[string]
-
-  # Not behind a setting: it stands for text that exists nowhere else. Ahead
-  # of the path, since a narrow window cuts the file display from the right.
+  # Not behind a setting: it stands for text that exists nowhere else.
   if owesPreservedWork:
-    parts.add PreservedWorkMark
+    result.add part(" " & PreservedWorkMark, srMark)
 
   # Show directory if enabled
   let name =
@@ -194,15 +190,13 @@ proc buildFileDisplay(
       filePath.extractFilename()
     else:
       ""
+  # Not padded: a file name's own trailing spaces are part of it.
   if name.len > 0:
-    parts.add name
+    result.add part(" " & name, srName)
 
   # Add changed mark if enabled and buffer is modified
   if config.changedMark and textBuffer.isModified:
-    parts.add "[+]"
-
-  let displayText = " " & parts.join(" ")
-  return sanitizeForDisplay(displayText)
+    result.add part(" [+]", srMark)
 
 proc buildGitInfo(
     gc: GitCacheState,
@@ -210,32 +204,27 @@ proc buildGitInfo(
     mode: EditorMode,
     config: StatusLineConfig,
     isActiveWindow: bool,
-): string =
-  ## Build git info text (branch name and changed lines) for display before filename
+): seq[StatusItem] =
+  ## Git parts (changed lines and branch name) shown ahead of the file name
 
   if mode == EditorMode.FileTree:
-    return ""
-
-  var parts: seq[string] = @[]
+    return
 
   # Git changed lines count (if enabled and active window or showGitInactive)
   if config.gitChangedLines and (isActiveWindow or config.showGitInactive):
     if textBuffer.filePath.isSome:
       let counts = gc.gitDiffCounts(textBuffer)
       # Always show +N ~N -N format
-      parts.add(" +" & $counts.added & " ~" & $counts.modified & " -" & $counts.deleted)
+      result.add part(
+        " +" & $counts.added & " ~" & $counts.modified & " -" & $counts.deleted, srExtra
+      )
 
   # Git branch name (if enabled and active window or showGitInactive)
   if config.gitBranchName and (isActiveWindow or config.showGitInactive):
     if textBuffer.filePath.isSome:
       let branch = sanitizeForDisplay(gc.gitBranchName(textBuffer))
       if branch.len > 0:
-        parts.add("ᚠ " & branch)
-
-  if parts.len > 0:
-    return parts.join(" ")
-  else:
-    return ""
+        result.add part(" ᚠ " & branch, srExtra)
 
 proc lineEndingLabel(textBuffer: TextBuffer): string =
   ## Raw buffer: `lineEnding` is unused; report RAW.
@@ -244,10 +233,40 @@ proc lineEndingLabel(textBuffer: TextBuffer): string =
   else:
     $textBuffer.lineEnding
 
-proc parseSetupText(
-    state: EditorState, textBuffer: TextBuffer, setupText: string
+const
+  WidestNumber = 999 ## The ruler's field fits columns and git counts up to this
+  WidestModeText = block:
+    var widest = ""
+    for mode in EditorMode:
+      for insertNormal in [false, true]:
+        if modeLabel(mode, insertNormal).len > widest.len:
+          widest = modeLabel(mode, insertNormal)
+    for overlay in OverlayKind:
+      if overlayLabel(overlay).len > widest.len:
+        widest = overlayLabel(overlay)
+    widest
+
+proc windowModeText(
+    state: EditorState, mode: EditorMode, isActiveWindow: bool
 ): string =
-  ## Parse setupText format string and replace placeholders with actual values.
+  ## The mode a window's status line names. Only the active window has an
+  ## overlay or a pending Insert.
+  if isActiveWindow and state.overlay.isSome:
+    overlayLabel(state.overlay.get)
+  else:
+    modeLabel(mode, isActiveWindow and state.insertNormalMode)
+
+proc parseSetupText(
+    gc: GitCacheState,
+    textBuffer: TextBuffer,
+    cursor: BufferPosition,
+    modeText, setupText: string,
+    widest = false,
+): string =
+  ## Parse setupText format string and replace placeholders with the values of
+  ## the window showing `textBuffer`. `widest` puts what changes without the
+  ## buffer changing at its widest, for the ruler's field: the last line, the
+  ## widest mode, and columns and git counts up to `WidestNumber`.
   ## Supported placeholders:
   ##   {lineNumber}    - Current line number (1-indexed)
   ##   {totalLines}    - Total lines in buffer
@@ -264,12 +283,23 @@ proc parseSetupText(
   ##   {gitBranch}     - Git branch name
   ##   {gitChanges}    - Git changes (+N ~N -N)
   let
-    currentLine = state.cursor.line + 1
     totalLines = textBuffer.len
-    currentCol = state.cursor.column + 1
+    # The last line also has the widest percentage
+    currentLine =
+      if widest:
+        totalLines
+      else:
+        cursor.line + 1
+    currentCol =
+      if widest:
+        WidestNumber
+      else:
+        cursor.column + 1
     totalCols =
-      if textBuffer.len > 0 and state.cursor.line < textBuffer.len:
-        textBuffer.getLineLen(state.cursor.line)
+      if widest:
+        WidestNumber
+      elif textBuffer.len > 0 and cursor.line < textBuffer.len:
+        textBuffer.getLineLen(cursor.line)
       else:
         0
     percentage =
@@ -283,11 +313,7 @@ proc parseSetupText(
       else:
         ""
     encoding = encodingToString(textBuffer.encoding)
-    modeStr =
-      if state.overlay.isSome:
-        overlayLabel(state.overlay.get())
-      else:
-        modeLabel(state.mode, state.insertNormalMode)
+    modeStr = if widest: WidestModeText else: modeText
     filePath =
       if textBuffer.filePath.isSome:
         sanitizeForDisplay(textBuffer.filePath.get())
@@ -308,8 +334,12 @@ proc parseSetupText(
   var gitBranch = ""
   var gitChanges = ""
   if textBuffer.filePath.isSome:
-    gitBranch = sanitizeForDisplay(state.git.gitBranchName(textBuffer))
-    let counts = state.git.gitDiffCounts(textBuffer)
+    gitBranch = sanitizeForDisplay(gc.gitBranchName(textBuffer))
+    let counts =
+      if widest:
+        (added: WidestNumber, modified: WidestNumber, deleted: WidestNumber)
+      else:
+        gc.gitDiffCounts(textBuffer)
     gitChanges = "+" & $counts.added & " ~" & $counts.modified & " -" & $counts.deleted
 
   result = setupText
@@ -329,66 +359,196 @@ proc parseSetupText(
   result = result.replace("{gitChanges}", gitChanges)
   result = sanitizeForDisplay(result)
 
-proc buildRightSideInfo(
-    state: EditorState,
+proc buildRuler(
+    gc: GitCacheState,
     textBuffer: TextBuffer,
+    cursor: BufferPosition,
+    modeText: string,
     mode: EditorMode,
     config: StatusLineConfig,
-    isActiveWindow: bool,
-): string =
-  ## Build the right-side status line info (file type, encoding, line count, etc.)
-  ## If setupText is configured, use custom format; otherwise use default format.
-
-  # Hide right-side info in FileTree mode
+): Ruler =
+  ## The ruler of the window showing `textBuffer` in `mode`, in the setupText
+  ## format as Vim's 'rulerformat'. Not padded: the layout spaces it.
   if mode == EditorMode.FileTree:
-    return ""
+    return
+  let format = config.effectiveSetupText
+  Ruler(
+    text: parseSetupText(gc, textBuffer, cursor, modeText, format).strip(),
+    fieldWidth: charDisplayWidth(
+      parseSetupText(gc, textBuffer, cursor, modeText, format, widest = true).strip()
+    ),
+  )
 
-  # Use custom format if setupText is configured
-  if config.setupText.len > 0:
-    let customText = parseSetupText(state, textBuffer, config.setupText)
-    if customText.len > 0:
-      return " " & customText
-    else:
-      return ""
+const MinCutWidth = 3 ## Narrower, a cut file name shows nothing but its mark
 
-  # Default format
-  var parts: seq[string] = @[]
+proc cutFromLeft(text: string, width: int): string =
+  ## `text` in `width` columns, losing its start with `<` marking the cut, or
+  ## nothing when that leaves less than `MinCutWidth`. A leading separator
+  ## space stays.
+  if charDisplayWidth(text) <= width:
+    return text
+  if width < MinCutWidth:
+    return
+  let
+    lead = if text.startsWith(' '): " " else: ""
+    body = text[lead.len .. ^1]
+    budget = width - lead.len - 1
+  var
+    shownWidth = charDisplayWidth(body)
+    byteOff = 0
+  # Zero-width marks go with the character they combine with
+  while byteOff < body.len:
+    let (r, size) = body.charAtByte(byteOff)
+    if shownWidth <= budget and r.charWidth > 0:
+      break
+    shownWidth -= r.charWidth
+    byteOff += size
+  lead & "<" & body[byteOff .. ^1]
 
-  # File type (language)
-  if textBuffer.language != SourceLanguage.langNone:
-    parts.add(sourceLanguageToStr[textBuffer.language])
-
-  # Encoding
-  if state.display.showEncoding:
-    parts.add(encodingToString(textBuffer.encoding))
-
-  # Line ending
-  if state.display.showLineEnding:
-    parts.add(lineEndingLabel(textBuffer))
-
-  # Line percentage
-  if state.display.showLinePercentage:
-    let
-      currentLine = state.cursor.line + 1
-      totalLines = textBuffer.len
-      percentage =
-        if totalLines > 0:
-          int((currentLine.float / totalLines.float) * 100.0)
-        else:
-          0
-    parts.add(fmt"{percentage}%")
-
-  # Line count
-  if state.display.showLineCount:
-    let
-      currentLine = state.cursor.line + 1
-      totalLines = textBuffer.len
-    parts.add(fmt"{currentLine}/{totalLines}")
-
-  if parts.len > 0:
-    return " " & parts.join(" ")
+proc keptWidth(name: string): int =
+  ## Columns `name` keeps before extras go: its last path component, behind
+  ## the `<` of the cut.
+  let
+    lead = if name.startsWith(' '): 1 else: 0
+    path =
+      if name.endsWith('/'):
+        name[0 ..< ^1]
+      else:
+        name
+    slash = path.rfind('/')
+  if slash < 0:
+    charDisplayWidth(name)
   else:
-    return ""
+    min(charDisplayWidth(name), lead + 1 + charDisplayWidth(name[slash + 1 .. ^1]))
+
+proc layoutStatusLine(
+    left: openArray[StatusItem], ruler: Ruler, width: int
+): tuple[left: seq[string], ruler: string, rulerCol: int] =
+  ## What of `left` and `ruler` a status line `width` columns wide shows, and
+  ## the column the ruler starts at, laid out as Vim lays out a file name and
+  ## a ruler: the ruler's field stays right of the middle and its text, flush
+  ## right in it, loses its end, and the name gets the columns left of the field, losing its
+  ## start. Labels keep their columns, extras go before the name loses its
+  ## last path component, and the marks lose their start once the name is
+  ## gone.
+  var
+    widths = newSeq[int](left.len)
+    labelWidth, extraWidth, markWidth, nameKept = 0
+  for i, item in left:
+    widths[i] = charDisplayWidth(item.text)
+    case item.role
+    of srLabel:
+      labelWidth += widths[i]
+    of srExtra:
+      extraWidth += widths[i]
+    of srMark:
+      markWidth += widths[i]
+    of srName:
+      nameKept += keptWidth(item.text)
+
+  # A blank column on each side of the ruler's field
+  let field =
+    min(ruler.fieldWidth, min(width div 2, width - min(labelWidth, width)) - 2)
+  result.ruler = truncateToWidthWithSuffix(ruler.text, field, "").strip(leading = false)
+  var room = width
+  if result.ruler.len > 0:
+    room = width - field - 2
+    # Flush right: the field's spare columns go left of the ruler
+    result.rulerCol = width - charDisplayWidth(result.ruler) - 1
+
+  var dropped = newSeq[bool](left.len)
+  for i in countdown(left.high, 0):
+    if labelWidth + extraWidth + markWidth + nameKept <= room:
+      break
+    if left[i].role == srExtra:
+      dropped[i] = true
+      extraWidth -= widths[i]
+
+  let
+    fileRoom = room - labelWidth - extraWidth
+    nameRoom = fileRoom - markWidth
+  var
+    marksAfter = markWidth
+    used = 0
+  result.left = newSeq[string](left.len)
+  for i, item in left:
+    if dropped[i]:
+      continue
+    result.left[i] =
+      case item.role
+      of srLabel, srExtra:
+        # Kept extras fit: only labels wider than the window lose their end
+        truncateToWidthWithSuffix(item.text, room - used, "")
+      of srName:
+        cutFromLeft(item.text, nameRoom)
+      of srMark:
+        # The marks after this one keep their columns, as Vim's trailing flags
+        marksAfter -= widths[i]
+        cutFromLeft(item.text, fileRoom - marksAfter)
+    used += charDisplayWidth(result.left[i])
+
+proc drawStatusLineRow(
+    buffer: var Buffer,
+    x, y, width: int,
+    left: openArray[StatusItem],
+    ruler: Ruler,
+    labelStyle, lineStyle: Style,
+) =
+  ## Draw one status line in `width` columns from `x`, `left` from its left
+  ## edge and `ruler` in its field by the right edge, as `layoutStatusLine`
+  ## lays them out.
+  let shown = layoutStatusLine(left, ruler, width)
+  if width > 0:
+    buffer.setString(x, y, " ".repeat(width), lineStyle)
+
+  var leftX = x
+  for i, item in left:
+    if shown.left[i].len > 0:
+      let style = if item.role == srLabel: labelStyle else: lineStyle
+      leftX = buffer.setCharString(leftX, y, shown.left[i], style)
+
+  if shown.ruler.len > 0:
+    discard buffer.setCharString(x + shown.rulerCol, y, shown.ruler, lineStyle)
+
+proc drawStatusLine(
+    state: EditorState,
+    textBuffer: TextBuffer,
+    cursor: BufferPosition,
+    buffer: var Buffer,
+    x, y, width: int,
+    mode: EditorMode,
+    config: StatusLineConfig,
+    isActiveWindow, showMode, owesPreservedWork: bool,
+) =
+  ## Draw the status line of a window in `mode` with its cursor at `cursor`.
+  ## Only the active window shows an overlay and LSP progress.
+  let modeText = state.windowModeText(mode, isActiveWindow)
+
+  # Use overlay styles if an overlay is active, otherwise use mode styles
+  let (labelStyle, lineStyle) =
+    if isActiveWindow and state.overlay.isSome:
+      (getOverlayLabelStyle(state.overlay.get), getOverlayStyle(state.overlay.get))
+    else:
+      (getStatusLineModeLabelStyle(mode), getStatusLineModeStyle(mode))
+
+  var left: seq[StatusItem]
+  if showMode:
+    left.add part(fmt" {modeText} ", srLabel)
+  left.add buildGitInfo(state.git, textBuffer, mode, config, isActiveWindow)
+  left.add buildFileDisplay(textBuffer, mode, config, owesPreservedWork)
+  if isActiveWindow and state.ui.lspProgressText.len > 0:
+    # A blank column apart from the file name
+    left.add part(fmt"  {sanitizeForDisplay(state.ui.lspProgressText)} ", srExtra)
+
+  buffer.drawStatusLineRow(
+    x,
+    y,
+    width,
+    left,
+    buildRuler(state.git, textBuffer, cursor, modeText, mode, config),
+    labelStyle,
+    lineStyle,
+  )
 
 proc renderStatusLine*(
     state: EditorState,
@@ -402,85 +562,19 @@ proc renderStatusLine*(
   if not state.showStatusLine:
     return
 
-  # Use overlay styles if an overlay is active, otherwise use mode styles
-  let (modeLabelStyle, statusLineStyle, modeLabelText) =
-    if state.overlay.isSome:
-      let overlayKind = state.overlay.get()
-      let labelStyle = getOverlayLabelStyle(overlayKind)
-      let lineStyle = getOverlayStyle(overlayKind)
-      let labelText =
-        if config.mode:
-          fmt" {overlayLabel(overlayKind)} "
-        else:
-          ""
-      (labelStyle, lineStyle, labelText)
-    else:
-      let labelStyle = getStatusLineModeLabelStyle(state.mode)
-      let lineStyle = getStatusLineModeStyle(state.mode)
-      let labelText =
-        if config.mode:
-          fmt" {modeLabel(state.mode, state.insertNormalMode)} "
-        else:
-          ""
-      (labelStyle, lineStyle, labelText)
-
-  # Build git info (displayed before filename)
-  let gitInfoText = buildGitInfo(state.git, textBuffer, state.mode, config, true)
-
-  # Build file display text
-  let filePathText = buildFileDisplay(textBuffer, state.mode, config, owesPreservedWork)
-
-  let statusLeftWidth =
-    displayWidth(modeLabelText) + displayWidth(gitInfoText) + displayWidth(filePathText)
-
-  var currentX = buffer.area.x
-
-  # Draw mode label
-  if modeLabelText.len > 0:
-    buffer.setString(currentX, statusLineY, modeLabelText, modeLabelStyle)
-    currentX += displayWidth(modeLabelText)
-
-  # Draw git info (same style as filename)
-  if gitInfoText.len > 0:
-    buffer.setString(currentX, statusLineY, gitInfoText, statusLineStyle)
-    currentX += displayWidth(gitInfoText)
-
-  # Draw file path
-  buffer.setString(currentX, statusLineY, filePathText, statusLineStyle)
-  currentX += displayWidth(filePathText)
-
-  # Build right side info
-  let rightSideText = buildRightSideInfo(state, textBuffer, state.mode, config, true)
-  let rightSideWidth = displayWidth(rightSideText)
-
-  # Build LSP progress text (displayed in the middle section)
-  let progressText =
-    if state.ui.lspProgressText.len > 0:
-      " " & sanitizeForDisplay(state.ui.lspProgressText) & " "
-    else:
-      ""
-  let progressWidth = displayWidth(progressText)
-
-  # Fill the rest of the line with background
-  let remainingWidth = max(0, buffer.area.width - statusLeftWidth)
-  if remainingWidth > 0:
-    let background = " ".repeat(remainingWidth)
-    buffer.setString(currentX, statusLineY, background, statusLineStyle)
-
-  # Draw LSP progress (in the middle, after left side content)
-  if progressText.len > 0:
-    let progressX = currentX + 1 # Add some padding after file path
-    if progressX + progressWidth < buffer.area.x + buffer.area.width - rightSideWidth - 2:
-      buffer.setString(progressX, statusLineY, progressText, statusLineStyle)
-
-  # Draw right side info
-  if rightSideText.len > 0 and buffer.area.width >= rightSideWidth + 1:
-    buffer.setString(
-      buffer.area.x + buffer.area.width - rightSideWidth - 1,
-      statusLineY,
-      rightSideText,
-      statusLineStyle,
-    )
+  state.drawStatusLine(
+    textBuffer,
+    state.cursor,
+    buffer,
+    buffer.area.x,
+    statusLineY,
+    buffer.area.width,
+    state.mode,
+    config,
+    isActiveWindow = true,
+    showMode = config.mode,
+    owesPreservedWork,
+  )
 
 proc renderWindowStatusLine*(
     state: EditorState,
@@ -491,6 +585,7 @@ proc renderWindowStatusLine*(
     statusLineWidth: int,
     isActiveWindow: bool,
     windowMode: EditorMode,
+    windowCursor: BufferPosition,
     config: StatusLineConfig,
     owesPreservedWork = false,
 ) =
@@ -498,100 +593,17 @@ proc renderWindowStatusLine*(
   if not state.showStatusLine or not state.multiStatusLine:
     return
 
-  # Build mode label (show for active window, or inactive if showModeInactive)
-  let showMode = config.mode and (isActiveWindow or config.showModeInactive)
-
-  # Use overlay styles if an overlay is active, otherwise use mode styles
-  let (modeLabelStyle, statusLineStyle, modeLabelText) =
-    if isActiveWindow and state.overlay.isSome:
-      let overlayKind = state.overlay.get()
-      let labelStyle = getOverlayLabelStyle(overlayKind)
-      let lineStyle = getOverlayStyle(overlayKind)
-      let labelText =
-        if showMode:
-          fmt" {overlayLabel(overlayKind)} "
-        else:
-          ""
-      (labelStyle, lineStyle, labelText)
-    else:
-      let labelStyle = getStatusLineModeLabelStyle(windowMode)
-      let lineStyle = getStatusLineModeStyle(windowMode)
-      let labelText =
-        if showMode:
-          fmt" {modeLabel(windowMode, state.insertNormalMode)} "
-        else:
-          ""
-      (labelStyle, lineStyle, labelText)
-
-  # Build git info (displayed before filename)
-  let gitInfoText =
-    buildGitInfo(state.git, textBuffer, windowMode, config, isActiveWindow)
-
-  # Build file display text
-  let filePathText = buildFileDisplay(textBuffer, windowMode, config, owesPreservedWork)
-
-  # Draw mode label with white background
-  var currentX = statusLineX
-  if modeLabelText.len > 0:
-    buffer.setString(currentX, statusLineY, modeLabelText, modeLabelStyle)
-    currentX += displayWidth(modeLabelText)
-
-  # Draw git info (same style as filename)
-  if gitInfoText.len > 0:
-    buffer.setString(currentX, statusLineY, gitInfoText, statusLineStyle)
-    currentX += displayWidth(gitInfoText)
-
-  # Build and draw file path (with truncation if needed)
-  let
-    maxFilePathWidth = statusLineWidth - (currentX - statusLineX) - 1
-    filePathWidth = displayWidth(filePathText)
-    truncatedFilePath =
-      if filePathWidth > maxFilePathWidth:
-        let (charCount, _) = displayWidthSubstr(filePathText, 0, maxFilePathWidth)
-        var s = ""
-        var i = 0
-        for r in filePathText.runes:
-          if i >= charCount:
-            break
-          s.add($r)
-          i.inc
-        s
-      else:
-        filePathText
-
-  buffer.setString(currentX, statusLineY, truncatedFilePath, statusLineStyle)
-  currentX += displayWidth(truncatedFilePath)
-
-  # Build right side info
-  let rightSideText =
-    buildRightSideInfo(state, textBuffer, windowMode, config, isActiveWindow)
-  let rightSideWidth = displayWidth(rightSideText)
-
-  # Build LSP progress text (displayed in the middle section, only for active window)
-  let progressText =
-    if isActiveWindow and state.ui.lspProgressText.len > 0:
-      " " & sanitizeForDisplay(state.ui.lspProgressText) & " "
-    else:
-      ""
-  let progressWidth = displayWidth(progressText)
-
-  # Fill the rest of the line with background
-  let remainingWidth = max(0, (statusLineX + statusLineWidth) - currentX)
-  if remainingWidth > 0:
-    let background = " ".repeat(remainingWidth)
-    buffer.setString(currentX, statusLineY, background, statusLineStyle)
-
-  # Draw LSP progress (in the middle, after left side content)
-  if progressText.len > 0:
-    let progressX = currentX + 1 # Add some padding after file path
-    if progressX + progressWidth < statusLineX + statusLineWidth - rightSideWidth - 2:
-      buffer.setString(progressX, statusLineY, progressText, statusLineStyle)
-
-  # Draw right side info
-  if rightSideText.len > 0 and statusLineWidth >= rightSideWidth + 1:
-    buffer.setString(
-      statusLineX + statusLineWidth - rightSideWidth - 1,
-      statusLineY,
-      rightSideText,
-      statusLineStyle,
-    )
+  state.drawStatusLine(
+    textBuffer,
+    windowCursor,
+    buffer,
+    statusLineX,
+    statusLineY,
+    statusLineWidth,
+    windowMode,
+    config,
+    isActiveWindow,
+    # Show mode for active window, or inactive if showModeInactive
+    showMode = config.mode and (isActiveWindow or config.showModeInactive),
+    owesPreservedWork,
+  )

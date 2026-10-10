@@ -446,6 +446,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
         window.viewport.width,
         layout.isActiveWindow,
         window.mode,
+        window.cursor,
         e.config.statusLine,
         e.owesPreservedWork(window.buffer),
       )
