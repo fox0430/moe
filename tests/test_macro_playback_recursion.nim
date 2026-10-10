@@ -352,9 +352,9 @@ suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
 
 suite "withPlaybackGuard - exception safety":
   test "playback state is restored when the body raises":
-    # The try/finally wiring itself: a raising body must restore both
-    # isRecording and playbackDepth before the exception escapes, or the
-    # next replay starts from a corrupted depth.
+    # The try/finally wiring itself: a raising body must restore playbackDepth
+    # and executingDepth before the exception escapes, or the next replay
+    # starts from a corrupted depth.
     let manager = newTestManager()
     let buffer = newTextBuffer()
     let state = newTestState()
@@ -366,7 +366,10 @@ suite "withPlaybackGuard - exception safety":
 
     var raised = false
     try:
-      discard withPlaybackGuard(editor):
+      discard withPlaybackGuard(editor, executesRegister = true):
+        check state.pendingInput.macroState.executingDepth == 1
+        # Replayed keys never reach the recorder, so recording stays on.
+        check state.pendingInput.macroState.isRecording
         outcome = roContinue
         raise newException(ValueError, "boom")
     except ValueError:
@@ -374,6 +377,7 @@ suite "withPlaybackGuard - exception safety":
     check raised
     check state.pendingInput.macroState.playbackDepth == 1
     check state.pendingInput.macroState.isRecording
+    check state.pendingInput.macroState.executingDepth == 0
 
   test "recursion limit guard still applies before the body runs":
     let manager = newTestManager()
@@ -386,7 +390,7 @@ suite "withPlaybackGuard - exception safety":
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     var bodyRan = false
-    let outcome = withPlaybackGuard(editor):
+    let outcome = withPlaybackGuard(editor, executesRegister = true):
       bodyRan = true
       outcome = roContinue
 
@@ -394,3 +398,4 @@ suite "withPlaybackGuard - exception safety":
     check not bodyRan
     check state.pendingInput.macroState.playbackDepth == MaxMacroRecursionDepth
     check state.pendingInput.macroState.isRecording
+    check state.pendingInput.macroState.executingDepth == 0

@@ -93,7 +93,8 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
       debugLines, e.state.pendingInput.macroState.isRecording,
       e.state.pendingInput.macroState.register,
       e.state.pendingInput.macroState.registers.len,
-      e.state.pendingInput.macroState.playbackDepth, debugConfig.macroState.enable,
+      e.state.pendingInput.macroState.playbackDepth,
+      e.state.pendingInput.macroState.executingDepth, debugConfig.macroState.enable,
     )
     let sel = e.activeWindow.visualSelection
     generateVisualInfo(

@@ -465,6 +465,10 @@ proc isDigitKey*(combo: KeyCombo): bool =
   let ch = combo.char.asciiChar
   ch.isSome and ch.get in '0' .. '9'
 
+proc isCtrlO*(combo: KeyCombo): bool =
+  ## Ctrl-O, which runs one Normal mode command from Insert mode.
+  not combo.isSpecial and kmCtrl in combo.modifiers and combo.char.toLowerAscii == "o"
+
 proc getNumericPrefix*(registry: KeyBindingRegistry): int =
   ## Get the numeric prefix as integer, defaulting to 1
   logDebug(

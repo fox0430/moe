@@ -4800,7 +4800,6 @@ suite "Macro recording - Command / Search overlay keys":
     e.state.pendingInput.macroState.isRecording = true
     e.state.pendingInput.macroState.register = register
     e.state.pendingInput.macroState.recordedKeys = @[]
-    e.state.pendingInput.macroState.recordStartKey = "q"
 
   test "Command overlay: keys after ':' land in recordedKeys":
     let e = createEditorForOverlayRecord("hello foo bar")
@@ -4838,17 +4837,15 @@ suite "Macro recording - Command / Search overlay keys":
     check e.state.pendingInput.macroState.recordedKeys == @["a", "b", "<Escape>"]
     check not e.state.isCommandOverlay
 
-  test "Recording paused during playback (withPlaybackGuard)":
-    # Sanity: replayed keys must not re-enter recordedKeys.
+  test "q typed into the command line is recorded":
     let e = createEditorForOverlayRecord("hello")
     e.startRecording('a')
     e.state.enterCommandOverlay()
-    e.state.pendingInput.macroState.playbackDepth = 1
-    e.state.pendingInput.macroState.isRecording = false # withPlaybackGuard mirror
 
-    discard e.handleEvent(makeCharEvent("x"))
+    discard e.handleEvent(makeCharEvent("q"))
 
-    check e.state.pendingInput.macroState.recordedKeys.len == 0
+    check e.state.pendingInput.macroState.isRecording
+    check e.state.pendingInput.macroState.recordedKeys == @["q"]
 
 suite "Macro playback - overlay-aware routing":
   # Regression: nested key replay dispatched by state.mode, so overlay-mode keys
