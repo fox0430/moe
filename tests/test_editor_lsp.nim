@@ -642,7 +642,7 @@ suite "editor_lsp - clearDisabledLspState":
     let e = createTestEditor()
     e.lsp.enabled = true
     let completionManager = e.handlerManager.insertHandler.completionManager
-    completionManager.setLspRequestPending(42)
+    completionManager.setLspRequestPending(42, e.activeBuffer().id)
 
     e.clearDisabledLspState()
     check completionManager.isPendingLsp
@@ -650,6 +650,81 @@ suite "editor_lsp - clearDisabledLspState":
     e.config.lsp.completion.enable = false
     e.clearDisabledLspState()
     check not completionManager.isPendingLsp
+
+  test "judges the in-flight completion request by the buffer it was sent for":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let nimBuf = e.activeBuffer()
+    nimBuf.filePath = some(getTempDir() / "moe_test_lang_completion.nim")
+    let rustBuf =
+      newTextBuffer("fn main() {}", some(getTempDir() / "moe_test_lang_completion.rs"))
+    e.addBuffer(rustBuf)
+    let completionManager = e.handlerManager.insertHandler.completionManager
+    e.config.lsp.languageFeatures["rust"] = {"Completion": false}.toTable
+
+    completionManager.setLspRequestPending(42, nimBuf.id)
+    e.clearDisabledLspState()
+    check completionManager.isPendingLsp
+
+    # The active buffer is still the nim one.
+    completionManager.setLspRequestPending(43, rustBuf.id)
+    e.clearDisabledLspState()
+    check not completionManager.isPendingLsp
+
+  test "clears diagnostics only from buffers of a language that disables them":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let nimPath = getTempDir() / "moe_test_lang_diag.nim"
+    let rustPath = getTempDir() / "moe_test_lang_diag.rs"
+    let nimBuf = e.activeBuffer()
+    nimBuf.filePath = some(nimPath)
+    let rustBuf = newTextBuffer("fn main() {}", some(rustPath))
+    e.addBuffer(rustBuf)
+
+    let diag = @[
+      lspTypes.Diagnostic(
+        `range`: lspTypes.newRange(0, 0, 0, 1),
+        severity: some(lspTypes.dsError),
+        message: "boom",
+      )
+    ]
+    e.applyDiagnosticsForUri(pathToUri(nimPath), diag, none(int))
+    e.applyDiagnosticsForUri(pathToUri(rustPath), diag, none(int))
+
+    e.config.lsp.languageFeatures["nim"] = {"Diagnostics": false}.toTable
+    e.clearDisabledLspState()
+
+    check nimBuf.diagnostics.len == 0
+    check nimBuf.getLineMarker(0).isNone
+    check rustBuf.diagnostics.len == 1
+    check rustBuf.getLineMarker(0).isSome
+
+  test "keeps the document highlights of a language that still has them":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let nimBuf = e.activeBuffer()
+    nimBuf.filePath = some(getTempDir() / "moe_test_lang_dochl.nim")
+    let rustBuf =
+      newTextBuffer("fn main() {}", some(getTempDir() / "moe_test_lang_dochl.rs"))
+    e.addBuffer(rustBuf)
+    e.config.lsp.languageFeatures["nim"] = {"DocumentHighlight": false}.toTable
+
+    proc highlightsOf(buf: TextBuffer): DocumentHighlightCache =
+      DocumentHighlightCache(
+        itemsByLine: {
+          0: @[DocumentHighlightItem(line: 0, startColumn: 0, endColumn: 2, kind: 1)]
+        }.toTable,
+        bufferId: buf.id,
+        isValid: true,
+      )
+
+    e.state.lspCache.documentHighlightCache = highlightsOf(rustBuf)
+    e.clearDisabledLspState()
+    check e.state.lspCache.documentHighlightCache.isValid
+
+    e.state.lspCache.documentHighlightCache = highlightsOf(nimBuf)
+    e.clearDisabledLspState()
+    check not e.state.lspCache.documentHighlightCache.isValid
 
 suite "editor_lsp - pollLspCompletion":
   test "Does nothing when LSP is disabled":
@@ -860,6 +935,65 @@ suite "editor_lsp - per-feature config gates":
 
     check not waitFor e.requestLspFormat()
     check e.state.statusMessage == "LSP document formatting is not supported"
+
+suite "editor_lsp - per-language feature gates":
+  proc langEditor(): (Editor, TextBuffer, TextBuffer) =
+    ## An LSP-enabled editor holding a nim buffer and a rust buffer.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let nimBuf = e.activeBuffer()
+    nimBuf.filePath = some(getTempDir() / "moe_test_lang_gate.nim")
+    let rustBuf =
+      newTextBuffer("fn main() {}", some(getTempDir() / "moe_test_lang_gate.rs"))
+    e.addBuffer(rustBuf)
+    (e, nimBuf, rustBuf)
+
+  test "a language can turn on a feature that is off globally":
+    let (e, nimBuf, rustBuf) = langEditor()
+    e.config.lsp.codeLens.enable = false
+    e.config.lsp.languageFeatures["rust"] = {"CodeLens": true}.toTable
+
+    check e.lsp.lspFeatureEnabled(e.config.lsp, rustBuf, codeLens)
+    check not e.lsp.lspFeatureEnabled(e.config.lsp, nimBuf, codeLens)
+
+  test "a language can turn off a feature that is on globally":
+    let (e, nimBuf, rustBuf) = langEditor()
+    e.config.lsp.hover.enable = true
+    e.config.lsp.languageFeatures["nim"] = {"Hover": false}.toTable
+
+    check not e.lsp.lspFeatureEnabled(e.config.lsp, nimBuf, hover)
+    check e.lsp.lspFeatureEnabled(e.config.lsp, rustBuf, hover)
+
+  test "features a language does not name follow the global setting":
+    let (e, nimBuf, _) = langEditor()
+    e.config.lsp.languageFeatures["nim"] = {"Hover": false}.toTable
+
+    check e.lsp.lspFeatureEnabled(e.config.lsp, nimBuf, completion)
+    e.config.lsp.completion.enable = false
+    check not e.lsp.lspFeatureEnabled(e.config.lsp, nimBuf, completion)
+
+  test "buffers with no language follow the global setting":
+    let (e, _, _) = langEditor()
+    e.config.lsp.languageFeatures["nim"] = {"Hover": false}.toTable
+    let pathless = newTextBuffer("text")
+    let unknown = newTextBuffer("text", some(getTempDir() / "moe_test_lang_gate.xyz"))
+
+    check e.lsp.lspFeatureEnabled(e.config.lsp, pathless, hover)
+    check e.lsp.lspFeatureEnabled(e.config.lsp, unknown, hover)
+
+  test "[Lsp] enable = false still wins over a language override":
+    let (e, _, rustBuf) = langEditor()
+    e.config.lsp.languageFeatures["rust"] = {"CodeLens": true}.toTable
+    e.lsp.enabled = false
+
+    check not e.lsp.lspFeatureEnabled(e.config.lsp, rustBuf, codeLens)
+
+  test "request kinds resolve through the language override":
+    let (e, nimBuf, rustBuf) = langEditor()
+    e.config.lsp.languageFeatures["nim"] = {"CodeLens": true}.toTable
+
+    check e.lsp.lspRequestEnabled(e.config.lsp, nimBuf, lrfCodeLensResolve)
+    check not e.lsp.lspRequestEnabled(e.config.lsp, rustBuf, lrfCodeLensResolve)
 
 suite "editor_lsp - applyWorkspaceEditFromServer staleness":
   proc replaceFirstThree(path: string): lspTypes.WorkspaceEdit =

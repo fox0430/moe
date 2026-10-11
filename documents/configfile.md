@@ -1216,6 +1216,34 @@ The same commands as `[KeyMapping]` are available. See [Available commands](#ava
 | rustAnalyzerDebugSingle | bool | false | `rust-analyzer.debugSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
 
 
+### Lsp.{languageId}.{Feature} table
+
+Turns an LSP feature on or off for one language. `{Feature}` is the name of any `Lsp.{Feature}` table above (e.g. `Completion`, `CodeLens`, `Diagnostics`).
+
+| Name | Type | Default Value | Description |
+|:---|:---|:---|:---|
+| enable | bool | | Enable the feature for this language. When omitted, `Lsp.{Feature}.enable` applies |
+
+- Only `enable` can be set per language. The other keys (`openWindow`, `autoHover`, `autoHoverDelay`) are global only.
+- The per-language value takes precedence over `Lsp.{Feature}.enable`, whether it turns the feature on or off.
+- `Lsp.enable = false` still turns every feature off.
+- The language of a file is decided by the `extensions` of its `Lsp.{languageId}` table (or the built-in default).
+- `{languageId}` must be a built-in language (`nim`, `rust`, `python`, `typescript`, `javascript`, `lua`, `go`, `c`, `cpp`) or be configured by its own `Lsp.{languageId}` table (`command`, `extensions`, ...). Any other name is reported as an unknown key.
+
+```toml
+[Lsp.CodeLens]
+enable = false
+
+# Code Lens for rust only
+[Lsp.rust.CodeLens]
+enable = true
+
+# Completion for every language but nim
+[Lsp.nim.Completion]
+enable = false
+```
+
+
 Please check more [details](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)
 
 ### StartUp.FileOpen table

@@ -711,8 +711,9 @@ type
     rustAnalyzerDebugSingle*: bool
 
   # LSP settings. A section group: loader, known-key list, serializer, UI and
-  # docs are all derived from this declaration; `servers` absorbs the dynamic
-  # [Lsp.<languageId>] space and is the only hand-written part.
+  # docs are all derived from this declaration; `servers` and
+  # `languageFeatures` absorb the dynamic [Lsp.<languageId>] space and are the
+  # only hand-written part.
   LspConfig* {.cfgGroup: "Lsp".} = object
     enable* {.cfg, cfgDocDescription: "LSP (Language Server Protocol) Client".}: bool
     timeout* {.
@@ -779,6 +780,10 @@ type
     .}: LspFeatureConfig
     # Language server configs (language name -> config)
     servers*: Table[string, LspServerConfig]
+    languageFeatures*: Table[string, Table[string, bool]]
+      ## `[Lsp.<languageId>.<Feature>] enable`: language ID -> sub-table name
+      ## (e.g. "Completion") -> enable. Overrides `[Lsp.<Feature>]` for that
+      ## language. Kept apart from `servers` so it never touches server launch.
 
   # Key mapping settings
   KeyMappingEntry* = object

@@ -22,6 +22,7 @@
 
 import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
 from std/os import fileExists, isAbsolute
+from std/macros import getCustomPragmaVal
 
 import pkg/[results, chronos]
 
@@ -430,12 +431,42 @@ proc lspParticipation*(lsp: LspIntegration, buffer: TextBuffer): LspParticipatio
     return lpNoServer
   lpParticipates
 
+proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
+  ## Resolve language ID for buffer, or none if unavailable.
+  if not lsp.enabled or buffer.filePath.isNone:
+    return none(string)
+  lsp.service.getLanguageIdFromPath(buffer.filePath.get)
+
+proc languageFeatureEnabled(
+    lsp: LspIntegration,
+    cfg: LspConfig,
+    buffer: TextBuffer,
+    feature: string,
+    globalEnable: bool,
+): bool =
+  ## `[Lsp.<languageId>.<feature>] enable` for `buffer`'s language, falling
+  ## back to `globalEnable`.
+  if cfg.languageFeatures.len == 0 or buffer.isNil:
+    return globalEnable
+  let langId = requireLangId(lsp, buffer)
+  if langId.isNone or langId.get notin cfg.languageFeatures:
+    return globalEnable
+  # `[]` borrows the table where `getOrDefault` would copy it; the key is there.
+  try:
+    cfg.languageFeatures[langId.get].getOrDefault(feature, globalEnable)
+  except KeyError:
+    globalEnable
+
 template lspFeatureEnabled*(
     lsp: LspIntegration, cfg: LspConfig, buffer: TextBuffer, feature: untyped
 ): bool =
   ## Whether the `LspConfig` feature `feature` (e.g. `hover`) is on for
-  ## `buffer`, under `[Lsp] enable`. Every feature gate goes through here.
-  lsp.enabled and cfg.feature.enable
+  ## `buffer`'s language, under `[Lsp] enable`. Every feature gate goes
+  ## through here.
+  lsp.enabled and
+    lsp.languageFeatureEnabled(
+      cfg, buffer, cfg.feature.getCustomPragmaVal(cfgSubSection), cfg.feature.enable
+    )
 
 proc lspRequestEnabled*(
     lsp: LspIntegration, cfg: LspConfig, buffer: TextBuffer, feature: LspRequestFeature
@@ -1305,12 +1336,6 @@ proc resolveLspPathForRequest(
   if refusal.isSome:
     return err(refusal.get)
   pathRes
-
-proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
-  ## Resolve language ID for buffer, or none if unavailable.
-  if not lsp.enabled or buffer.filePath.isNone:
-    return none(string)
-  lsp.service.getLanguageIdFromPath(buffer.filePath.get)
 
 template defineSupportCheck(name: untyped) =
   ## Generate capability predicate wrapper.

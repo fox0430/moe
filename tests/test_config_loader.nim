@@ -756,6 +756,136 @@ autoHoverDelay = -1
     check "Lsp.Diagnostics.autoHoverDelay" in vr.errors[0].name
     check config.lsp.diagnostics.autoHoverDelay == 300 # Default value
 
+suite "Config Validation - Lsp per-language feature tables":
+  test "Feature tables under a language load as overrides":
+    let tomlStr = """
+[Lsp.rust.CodeLens]
+enable = true
+
+[Lsp.nim.Completion]
+enable = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.lsp.languageFeatures["rust"] == {"CodeLens": true}.toTable
+    check config.lsp.languageFeatures["nim"] == {"Completion": false}.toTable
+    # No server key, so the server launch config is left alone.
+    check not config.lsp.servers.hasKey("rust")
+    check not config.lsp.servers.hasKey("nim")
+    check not config.lsp.codeLens.enable
+
+  test "Every feature name is accepted under a language":
+    var tomlStr = ""
+    for name in LspFeatureTableNames:
+      tomlStr &= "[Lsp.rust." & name & "]\nenable = false\n\n"
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.lsp.languageFeatures["rust"].len == LspFeatureTableNames.len
+
+  test "Server keys and feature tables share a language entry":
+    let tomlStr = """
+[Lsp.rust]
+command = "ra"
+
+[Lsp.rust.CodeLens]
+enable = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.lsp.servers["rust"].command == "ra"
+    check config.lsp.languageFeatures["rust"] == {"CodeLens": true}.toTable
+
+  test "Feature tables under an unknown language are reported":
+    let tomlStr = """
+[Lsp.rsut.CodeLens]
+enable = true
+
+[Lsp.Rust.Hover]
+enable = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.anyIt(it.kind == sikUnknownKey and it.name == "Lsp.rsut")
+    check vr.errors.anyIt(it.kind == sikUnknownKey and it.name == "Lsp.Rust")
+    check config.lsp.languageFeatures.len == 0
+    check config.lsp.servers.len == 0
+
+  test "Feature tables under a language with its own server load":
+    let tomlStr = """
+[Lsp.zig]
+command = "zls"
+extensions = ["zig"]
+
+[Lsp.zig.Hover]
+enable = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.lsp.languageFeatures["zig"] == {"Hover": false}.toTable
+
+  test "Misspelled feature name under a language is reported":
+    let tomlStr = """
+[Lsp.rust.Completin]
+enable = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.anyIt(it.kind == sikUnknownKey and it.name == "Lsp.rust.Completin")
+    check not config.lsp.languageFeatures.hasKey("rust")
+    check not config.lsp.servers.hasKey("rust")
+
+  test "Keys other than enable are global only":
+    let tomlStr = """
+[Lsp.rust.Definition]
+enable = false
+openWindow = true
+
+[Lsp.rust.Diagnostics]
+autoHover = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.anyIt(
+      it.kind == sikUnknownKey and it.name == "Lsp.rust.Definition.openWindow"
+    )
+    check vr.errors.anyIt(
+      it.kind == sikUnknownKey and it.name == "Lsp.rust.Diagnostics.autoHover"
+    )
+    check config.lsp.languageFeatures["rust"] == {"Definition": false}.toTable
+
+  test "Non-boolean enable is reported and sets nothing":
+    let tomlStr = """
+[Lsp.rust.Hover]
+enable = "no"
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.anyIt(
+      it.kind == sikInvalidValue and it.name == "Lsp.rust.Hover.enable"
+    )
+    check not config.lsp.languageFeatures.hasKey("rust")
+
+  test "Scalar where a feature table is expected is reported":
+    let tomlStr = """
+[Lsp.rust]
+command = "ra"
+Hover = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.anyIt(
+      it.kind == sikInvalidValue and it.name == "Lsp.rust.Hover" and
+        it.expected == "table"
+    )
+    check not config.lsp.languageFeatures.hasKey("rust")
+
+  test "Unknown scalar beside a feature table is reported under the language":
+    let tomlStr = """
+[Lsp.rust]
+extension = ["rs"]
+
+[Lsp.rust.Hover]
+enable = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.anyIt(it.kind == sikUnknownKey and it.name == "Lsp.rust.extension")
+    check config.lsp.languageFeatures["rust"] == {"Hover": false}.toTable
+
 suite "Config Validation - Multiple errors":
   test "Multiple errors are collected":
     let tomlStr = """
@@ -2186,7 +2316,8 @@ suite "Config - saveConfigToToml round-trip completeness":
         value = some("test_value")
       elif value is seq[string]:
         value.add("test_entry")
-      elif value is Table[string, LspServerConfig]:
+      elif value is Table[string, LspServerConfig] or
+          value is Table[string, Table[string, bool]]:
         discard # handled separately
       elif value is enum:
         if ord(value) < ord(high(typeof(value))):
@@ -2251,6 +2382,9 @@ suite "Config - saveConfigToToml round-trip completeness":
       rustAnalyzerRunSingle: true,
       rustAnalyzerDebugSingle: true,
     )
+
+    config.lsp.languageFeatures["testLang"] = {"Hover": false}.toTable
+    config.lsp.languageFeatures["go"] = {"CodeLens": true}.toTable
 
     # Add command aliases and shell commands
     config.commandAliases["x"] = UserCommandEntry(command: "quit")
@@ -4200,6 +4334,42 @@ suite "Config - Lsp feature tables round-trip":
         if saved != reloaded:
           echo "Lsp feature table did not round-trip: " & name
         check saved == reloaded
+
+suite "Config - Lsp per-language feature tables round-trip":
+  test "Written per language, after its server block, sorted":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_lsp_lang_features_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.lsp.servers["rust"] = LspServerConfig(command: "ra")
+    config.lsp.languageFeatures["rust"] = {"Hover": false, "CodeLens": true}.toTable
+    config.lsp.languageFeatures["nim"] = {"Completion": false}.toTable
+
+    check saveConfigToToml(config, testFile).isOk
+
+    let content = readFile(testFile)
+    let
+      nimCompletion = content.find("[Lsp.nim.Completion]\nenable = false\n")
+      rustServer = content.find("[Lsp.rust]\n")
+      rustCodeLens = content.find("[Lsp.rust.CodeLens]\nenable = true\n")
+      rustHover = content.find("[Lsp.rust.Hover]\nenable = false\n")
+    check nimCompletion >= 0
+    check nimCompletion < rustServer
+    check rustServer < rustCodeLens
+    check rustCodeLens < rustHover
+    check "[Lsp.nim]\n" notin content
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.lsp.languageFeatures == config.lsp.languageFeatures
+    check not loaded.lsp.servers.hasKey("nim")
 
 suite "Config - Lsp server settings round-trip":
   proc roundTripSettings(settingsJson: string): string =

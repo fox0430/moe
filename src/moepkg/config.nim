@@ -303,6 +303,7 @@ proc newEditorConfig*(): EditorConfig =
       semanticTokens: LspFeatureConfig(enable: true),
       executeCommand: LspFeatureConfig(enable: true),
       servers: initTable[string, LspServerConfig](),
+      languageFeatures: initTable[string, Table[string, bool]](),
     ),
     keyMapping: KeyMappingConfig(),
     shellCommands: initTable[string, UserCommandEntry](),
