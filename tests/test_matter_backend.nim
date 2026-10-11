@@ -1,5 +1,5 @@
 when defined(moe.matter) or defined(features.moe.matter):
-  import std/[sequtils, unittest]
+  import std/[sequtils, strutils, unittest]
   import ../src/moepkg/syntax/[matter_backend, tokenizer]
   import matter_test_grammars
 
@@ -41,9 +41,170 @@ when defined(moe.matter) or defined(features.moe.matter):
       check grammars.matterSupports(langNim)
       check grammars.matterSupports(langJsonc)
       check grammars.matterSupports(langMarkdown)
+      check grammars.matterSupports(langHtml)
       check not grammars.matterSupports(langRust)
       check not grammars.matterSupports(langDiff)
       check not grammars.matterSupports(langLog)
+
+    test "HTML tags, attributes, values, and text retain distinct categories":
+      let line =
+        "<nk-window id=\"main\"><span class='muted'>Plain text</span></nk-window>"
+      let parsed = tokenizeMatterLine(
+        line, langHtml, timeLimitMs = 0, grammars = newTestMatterGrammarSet()
+      )
+      require not parsed.nextState.failed
+      for (fragment, expected) in [
+        ("nk-window", mccBuiltin),
+        ("id", mccProperty),
+        ("main", mccString),
+        ("span", mccBuiltin),
+        ("class", mccProperty),
+        ("muted", mccString),
+        ("Plain text", mccDefault),
+      ]:
+        checkpoint(fragment)
+        let offset = line.find(fragment)
+        let spans =
+          parsed.spans.filterIt(it.firstByte <= offset and offset < it.lastByte)
+        require spans.len == 1
+        check spans[0].category == expected
+
+    test "common semantic scopes use the existing theme categories":
+      # Vocabulary from Matter's bundled grammar catalog, including embedded
+      # CSS and NIF roots that hosts can associate with a Moe language explicitly.
+      for (scope, expected) in [
+        ("entity.name.tag.html", mccBuiltin),
+        ("entity.name.tag.localname.xml", mccBuiltin),
+        ("entity.name.tag.tsx", mccBuiltin),
+        ("entity.name.tag.css", mccBuiltin),
+        ("entity.name.tag.nif", mccBuiltin),
+        ("entity.other.attribute-name.html", mccProperty),
+        ("entity.other.attribute-name.localname.xml", mccProperty),
+        ("entity.other.attribute-name.tsx", mccProperty),
+        ("entity.other.attribute-name.pseudo-class.css", mccProperty),
+        ("entity.name.tag.yaml", mccProperty),
+        ("support.type.vendored.property-name.css", mccProperty),
+        ("support.variable.property.js", mccProperty),
+        ("variable.object.property.ts", mccProperty),
+        ("variable.other.object.property.java", mccProperty),
+        ("variable.other.constant.property.js", mccProperty),
+        ("variable.other.constant.object.property.ts", mccProperty),
+        ("variable.other.member.hcl", mccProperty),
+        ("entity.name.variable.property.cs", mccProperty),
+        ("entity.name.variable.field.cs", mccProperty),
+        ("variable.property.name.tcl", mccProperty),
+        ("entity.function.property.name.tcl", mccProperty),
+        ("entity.name.class.lua", mccType),
+        ("entity.other.inherited-class.python", mccType),
+        ("entity.name.namespace.cpp", mccType),
+        ("entity.name.module.rust", mccType),
+        ("entity.name.package.haskell", mccType),
+        ("entity.name.scope-resolution.cpp", mccType),
+        ("variable.other.generic-type.haskell", mccType),
+        ("entity.name.command.shell", mccFunction),
+        ("entity.name.operator.cpp", mccOperator),
+        ("constant.other.operator.haskell", mccOperator),
+        ("entity.name.other.preprocessor.macro.predefined.cpp", mccPreprocessor),
+        ("entity.name.function.preprocessor.cpp", mccPreprocessor),
+        ("support.constant.property-value.css", mccBuiltin),
+        ("support.variable.magic.python", mccBuiltin),
+        ("variable.language.this.js", mccBuiltin),
+        ("variable.parameter.function.language.special.self.python", mccBuiltin),
+        ("variable.legacy.builtin.python", mccBuiltin),
+        ("variable.other.constant.cs", mccBuiltin),
+        ("variable.other.enummember.ts", mccBuiltin),
+        ("entity.name.variable.enum-member.cs", mccBuiltin),
+        ("constant.other.caps.rust", mccBuiltin),
+        ("constant.other.haskell", mccBuiltin),
+        ("constant.other.color.rgb-value.hex.css", mccNumber),
+        ("constant.other.time.datetime.offset.toml", mccNumber),
+        ("constant.other.timestamp.yaml", mccNumber),
+        ("constant.other.location.nif", mccNumber),
+        ("constant.language.infinity.js", mccNumber),
+        ("constant.language.nan.ts", mccNumber),
+        ("constant.language.null.js", mccBuiltin),
+        ("constant.language.undefined.ts", mccBuiltin),
+        ("constant.language.empty.nif", mccBuiltin),
+        ("constant.language.symbol.commonlisp", mccBuiltin),
+        ("constant.character.entity.named.amp.html", mccString),
+        ("constant.character.escape.python", mccString),
+        ("constant.other.rune.go", mccString),
+        ("entity.name.variable.local.cs", mccIdentifier),
+        ("entity.name.symbol.nif", mccIdentifier),
+        ("markup.heading.markdown", mccBuiltin),
+        ("entity.name.section.markdown", mccBuiltin),
+      ]:
+        checkpoint(scope)
+        let parsed = tokenizeMatterLine(
+          "token",
+          langNim,
+          timeLimitMs = 0,
+          grammars = newScopedTestMatterGrammarSet([scope]),
+        )
+        require not parsed.nextState.failed
+        require parsed.spans.len == 1
+        check parsed.spans[0].scopes[^1] == scope
+        check parsed.spans[0].category == expected
+
+    test "mapping keys preserve more specific embedded expressions":
+      for (scopes, expected) in [
+        (
+          @["meta.structure.dictionary.key.json", "string.quoted.double.json"],
+          mccProperty,
+        ),
+        (@["meta.mapping.key.hcl", "variable.other.readwrite.hcl"], mccProperty),
+        (@["meta.mapping.key.hcl", "string.quoted.double.hcl"], mccProperty),
+        (@["variable.declaration.hcl", "variable.other.readwrite.hcl"], mccProperty),
+        (
+          @[
+            "meta.mapping.key.hcl", "string.quoted.double.hcl",
+            "variable.other.readwrite.hcl",
+          ],
+          mccIdentifier,
+        ),
+        (@["string.quoted.double.js", "support.variable.property.js"], mccProperty),
+        (@["string.quoted.double.cs", "entity.name.variable.local.cs"], mccIdentifier),
+        (@["markup.heading.markdown", "markup.inline.raw.string.markdown"], mccString),
+        (
+          @["comment.block.documentation.java", "entity.name.type.class.java"],
+          mccComment,
+        ),
+      ]:
+        checkpoint(scopes.join(" > "))
+        let parsed = tokenizeMatterLine(
+          "token",
+          langNim,
+          timeLimitMs = 0,
+          grammars = newScopedTestMatterGrammarSet(scopes),
+        )
+        require not parsed.nextState.failed
+        require parsed.spans.len == 1
+        check parsed.spans[0].category == expected
+
+    test "scope matching respects component boundaries and unknown metadata":
+      for (scope, expected) in [
+        ("entity.name.tagged.html", mccDefault),
+        ("entity.other.attribute-names.html", mccDefault),
+        ("entity.name.classification.lua", mccDefault),
+        ("entity.name.namespaceish.cpp", mccDefault),
+        ("constant.otherwise.css", mccDefault),
+        ("support.constantish.css", mccDefault),
+        ("meta.tag.html", mccDefault),
+        ("punctuation.definition.tag.begin.html", mccDefault),
+        ("source.string.language", mccDefault),
+        ("variable.languageish.js", mccIdentifier),
+        ("keyword.operatorish.cpp", mccKeyword),
+      ]:
+        checkpoint(scope)
+        let parsed = tokenizeMatterLine(
+          "token",
+          langNim,
+          timeLimitMs = 0,
+          grammars = newScopedTestMatterGrammarSet([scope]),
+        )
+        require not parsed.nextState.failed
+        require parsed.spans.len == 1
+        check parsed.spans[0].category == expected
 
     test "multiline resume uses completed structurally equal states":
       let lines = ["#[ outer", "  #[ nested ]#", "still comment", "]#", "let x = true"]

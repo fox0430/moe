@@ -221,6 +221,28 @@ Config-loaded roots are matched to Moe languages by their declared TextMate
 overload associates the supplied root with its `SourceLanguage` explicitly, so
 custom scope names are supported there.
 
+TextMate scopes select the existing Moe theme slots. Common mappings include:
+
+| Scope family or role | Moe theme slot |
+| --- | --- |
+| HTML/XML/JSX/Astro/NIF tags and CSS element selectors | `builtin` |
+| Markup attributes, CSS class/id selectors, object properties and fields | `property` |
+| JSON/HCL keys, YAML key tags, TOML/CSS property names | `property` |
+| Class/type names, inherited classes, namespaces, modules and packages | `typeName` |
+| Functions and shell command names | `functionName` |
+| Named constants, enum members, built-in variables, `self`/`this`, null/undefined | `builtin` |
+| Numeric literals, CSS hex colors, dates/timestamps, NaN/infinity | `decNumber` |
+| Strings, character escapes/entities and Go runes | `stringLit` |
+| C/C++ macro names | `preprocessor` |
+| Markdown headings and section names | `builtin` |
+
+The most specific recognized scope wins, including expressions embedded in
+strings and quoted mapping keys. Comment scopes take priority so reserved-word
+highlighting stays available inside documentation comments. Unknown scopes and
+unclassified punctuation retain the default foreground. These mappings reuse
+the current palette and apply to caller-supplied grammars as well as grammars
+from Matter's catalog.
+
 The existing `[Standard] syntax` toggle enables/disables rendering for either
 backend. Reloading config switches existing buffers and invalidates their syntax
 caches. A binary compiled without either Matter define uses builtin highlighting
