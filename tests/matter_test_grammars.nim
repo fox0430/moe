@@ -3,8 +3,7 @@ when defined(moe.matter) or defined(features.moe.matter):
   import ../src/moepkg/syntax/[matter_backend, tokenizer]
 
   const
-    NimMatterGrammar* =
-      """
+    NimMatterGrammar* = """
 {
   "name": "Nim test grammar",
   "scopeName": "source.nim",
@@ -26,8 +25,7 @@ when defined(moe.matter) or defined(features.moe.matter):
 }
 """
 
-    JsoncMatterGrammar* =
-      """
+    JsoncMatterGrammar* = """
 {
   "name": "JSONC test grammar",
   "scopeName": "source.json.comments",
@@ -38,8 +36,7 @@ when defined(moe.matter) or defined(features.moe.matter):
 }
 """
 
-    MarkdownMatterGrammar* =
-      """
+    MarkdownMatterGrammar* = """
 {
   "name": "Markdown test grammar",
   "scopeName": "text.html.markdown",
@@ -53,8 +50,7 @@ when defined(moe.matter) or defined(features.moe.matter):
 }
 """
 
-    HtmlMatterGrammar* =
-      """
+    HtmlMatterGrammar* = """
 {
   "name": "HTML test grammar",
   "scopeName": "text.html.basic",
@@ -81,11 +77,10 @@ when defined(moe.matter) or defined(features.moe.matter):
   proc newScopedTestMatterGrammarSet*(scopes: openArray[string]): MatterGrammarSet =
     ## TextMate permits multiple scope names on a rule, from outermost to innermost.
     ## Exercise classification through the public tokenizer without bundling grammars.
-    let grammar =
-      %*{
-        "scopeName": "source.scope-test",
-        "patterns": [{"match": "token", "name": scopes.join(" ")}],
-      }
+    let grammar = %*{
+      "scopeName": "source.scope-test",
+      "patterns": [{"match": "token", "name": scopes.join(" ")}],
+    }
     newMatterGrammarSet(
       [
         MatterGrammarSource(

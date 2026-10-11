@@ -9,11 +9,10 @@ when defined(moe.matter) or defined(features.moe.matter):
 
   suite "Matter incremental highlight":
     test "HTML categories reach distinct editor theme slots across Unicode columns":
-      let lines =
-        @[
-          "<nk-window id=\"main\">", "λ <span class='muted'>Plain text</span>",
-          "</nk-window>",
-        ]
+      let lines = @[
+        "<nk-window id=\"main\">", "λ <span class='muted'>Plain text</span>",
+        "</nk-window>",
+      ]
       let (segments, states) = initHighlightIncremental(
         lines,
         0,

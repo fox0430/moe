@@ -243,6 +243,11 @@ unclassified punctuation retain the default foreground. These mappings reuse
 the current palette and apply to caller-supplied grammars as well as grammars
 from Matter's catalog.
 
+C/C++ pragma argument and section-label captures retain the surrounding
+`preprocessor` color. Regexp character classes, named groups/backreferences,
+and format placeholders retain their surrounding `stringLit` color instead of
+being treated as markup tags or named constants.
+
 The existing `[Standard] syntax` toggle enables/disables rendering for either
 backend. Reloading config switches existing buffers and invalidates their syntax
 caches. A binary compiled without either Matter define uses builtin highlighting

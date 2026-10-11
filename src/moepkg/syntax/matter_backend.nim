@@ -104,6 +104,11 @@ proc category(scopes: openArray[string]): MatterColorCategory =
   # strings. Match scope components, not substrings in language names.
   for i in countdown(scopes.high, 0):
     let scope = scopes[i]
+    # These captures name pragma arguments/section labels, not markup. Let
+    # the enclosing meta.preprocessor scope supply their existing colour.
+    if scope.scopeMatches("entity.other.attribute-name.pragma") or
+        scope.scopeMatches("entity.name.tag.pragma-mark"):
+      continue
     if scope.scopeMatches("comment"):
       return mccComment
     if scope.scopeMatchesAny(
@@ -174,15 +179,22 @@ proc category(scopes: openArray[string]): MatterColorCategory =
       return mccKeyword
     # Reuse the builtin palette for named constants and markup tags. This
     # keeps existing themes and embedding clients' category switches valid.
-    if scope.scopeMatchesAny(
-      [
-        "support.function", "support.class", "support.constant", "support.variable",
-        "variable.language", "variable.parameter.function.language",
-        "variable.legacy.builtin", "variable.other.constant",
-        "variable.other.enummember", "entity.name.variable.enum-member",
-        "constant.other", "entity.name.tag", "entity.name.section", "markup.heading",
-      ]
-    ):
+    # Regexp captures and printf placeholders belong to their enclosing
+    # string instead. Match a complete regexp component, including descendants.
+    let namedConstantOrTag =
+      scope.scopeMatchesAny(["constant.other", "entity.name.tag"]) and
+      not scope.scopeMatches("constant.other.placeholder") and
+      not (scope.endsWith(".regexp") or scope.contains(".regexp."))
+    if namedConstantOrTag or
+        scope.scopeMatchesAny(
+          [
+            "support.function", "support.class", "support.constant", "support.variable",
+            "variable.language", "variable.parameter.function.language",
+            "variable.legacy.builtin", "variable.other.constant",
+            "variable.other.enummember", "entity.name.variable.enum-member",
+            "entity.name.section", "markup.heading",
+          ]
+        ):
       return mccBuiltin
     if scope.scopeMatches("variable") or scope.scopeMatches("entity.name.variable") or
         scope.scopeMatches("entity.name.symbol"):

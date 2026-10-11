@@ -181,6 +181,46 @@ when defined(moe.matter) or defined(features.moe.matter):
         require parsed.spans.len == 1
         check parsed.spans[0].category == expected
 
+    test "pragma captures retain their surrounding preprocessor category":
+      for language in ["c", "cpp"]:
+        for capture in [
+          "entity.other.attribute-name.pragma.preprocessor.",
+          "entity.name.tag.pragma-mark.",
+        ]:
+          let scopes = @["meta.preprocessor.pragma." & language, capture & language]
+          checkpoint(scopes.join(" > "))
+          let parsed = tokenizeMatterLine(
+            "token",
+            langNim,
+            timeLimitMs = 0,
+            grammars = newScopedTestMatterGrammarSet(scopes),
+          )
+          require not parsed.nextState.failed
+          require parsed.spans.len == 1
+          check parsed.spans[0].category == mccPreprocessor
+
+    test "regexp captures and format placeholders retain surrounding string colors":
+      for capture in [
+        "constant.other.character-class.regexp",
+        "constant.other.character-class.set.regexp",
+        "constant.other.character-class.range.regexp", "constant.other.set.regexp",
+        "entity.name.tag.named.group.regexp",
+        "entity.name.tag.named.backreference.regexp",
+        "entity.name.tag.backreference.regexp", "constant.other.placeholder",
+        "constant.other.placeholder.c", "constant.other.placeholder.go",
+      ]:
+        checkpoint(capture)
+        for outer in ["string.regexp.js", "string.quoted.double.c"]:
+          let parsed = tokenizeMatterLine(
+            "token",
+            langNim,
+            timeLimitMs = 0,
+            grammars = newScopedTestMatterGrammarSet([outer, capture]),
+          )
+          require not parsed.nextState.failed
+          require parsed.spans.len == 1
+          check parsed.spans[0].category == mccString
+
     test "scope matching respects component boundaries and unknown metadata":
       for (scope, expected) in [
         ("entity.name.tagged.html", mccDefault),
@@ -194,6 +234,11 @@ when defined(moe.matter) or defined(features.moe.matter):
         ("source.string.language", mccDefault),
         ("variable.languageish.js", mccIdentifier),
         ("keyword.operatorish.cpp", mccKeyword),
+        ("entity.other.attribute-name.pragmaish.c", mccProperty),
+        ("entity.name.tag.pragma-marked.c", mccBuiltin),
+        ("constant.other.placeholderish.c", mccBuiltin),
+        ("constant.other.character-class.regexpish", mccBuiltin),
+        ("constant.other.character-class.regexp.js", mccDefault),
       ]:
         checkpoint(scope)
         let parsed = tokenizeMatterLine(
