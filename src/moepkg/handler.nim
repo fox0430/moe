@@ -74,12 +74,12 @@ export command_mode_handler, search_mode_handler, cursor_util, frontend_input
 
 # Wire the playback overlay hook so nested key replay routes to the overlay
 # handler when Command / Search overlay is active.
-overlayPlaybackHook = proc(e: Editor, keyCombo: KeyCombo): Option[bool] =
+overlayPlaybackHook = proc(e: Editor, key: KeyInput): Option[ReplayOutcome] =
   if e.state.isCommandOverlay:
-    return some(e.handleCommandModeKeyCombo(keyCombo))
+    return some(e.handleCommandModeKeyCombo(key))
   if e.state.isSearchOverlay:
-    return some(e.handleSearchModeKeyCombo(keyCombo))
-  return none(bool)
+    return some(if e.handleSearchModeKeyCombo(key.combo): roContinue else: roQuit)
+  return none(ReplayOutcome)
 
 proc addRunningProcess*(e: Editor, p: BackgroundProcess, label = "", path = "") =
   e.runningBackgroundProcesses.add RunningCommand(
@@ -1265,7 +1265,7 @@ proc handleOverlayKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## Dispatch overlay modes (Command, Search, Rename) and Debug mode.
   ## Returns some(result) if handled, none otherwise.
   if e.state.isCommandOverlay:
-    return some(e.handleCommandModeKeyCombo(keyCombo))
+    return some(e.handleCommandModeKeyCombo(typedKey(keyCombo)) != roQuit)
   if e.state.isSearchOverlay:
     return some(e.handleSearchModeKeyCombo(keyCombo))
   if e.state.isRenameOverlay:
@@ -1469,7 +1469,7 @@ proc dispatchKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   e.updateViewportReservedLines()
   e.syncCompletionOtherBuffers(activeBuffer)
 
-  let outcome = e.handlerManager.runNestedKeyCombo(e, keyCombo)
+  let outcome = e.handlerManager.runNestedKeyCombo(e, typedKey(keyCombo))
 
   # In Config mode, sync display state only when a value was actually mutated.
   # Plain cursor movement leaves pendingApply false, avoiding a theme reread and
@@ -1808,79 +1808,42 @@ proc handlePendingAsyncOperations*(
 
 proc dispatchKeyMappingTimeout(e: Editor): bool =
   ## Called when the key mapping timeout fires.
-  ## Matching is delegated to `KeyRouter.flushTimeout`; this proc only chooses
-  ## the dispatch mode (base vs Command overlay) and executes the plan.
-  ## Command overlay and base mode use different executors (the former replays
-  ## via `handleCommandModeKeyCombo` and historically does not honour
-  ## rmkCommand; the latter uses `executeCommandDirect` / `playbackMacro` /
-  ## `handleKeyCombo`).
-  ## Returns true to continue running, false to quit.
+  ## Matching is delegated to `KeyRouter.flushTimeout`; this proc only picks
+  ## the table (base mode vs Command overlay) and runs the plan with the same
+  ## executors a typed key uses. Returns true to continue running, false to
+  ## quit.
 
   let inCommandOverlay = e.state.isCommandOverlay
   let routerMode = if inCommandOverlay: EditorMode.Command else: e.state.mode
 
   let route = e.keyRouter.flushTimeout(routerMode)
-  var shouldContinue = true
+  let outcome =
+    case route.kind
+    of rrCancelled:
+      # `flushTimeout` returns rrCancelled when the accumulator was already
+      # empty; nothing to do, do not request a redraw.
+      return true
+    of rrUnhandled, rrWaiting, rrCommand:
+      # `flushTimeout` never returns these variants; guard for exhaustiveness.
+      return true
+    of rrExecuteRuntimeCommand:
+      # `mappingsFor(Command)` filters rmkCommand out, so `flushTimeout(Command)`
+      # cannot return this variant. If the invariant is ever broken, prefer a
+      # loud failure over a silent drop that would swallow the mapping.
+      doAssert not inCommandOverlay,
+        "flushTimeout(Command) returned rrExecuteRuntimeCommand; " &
+          "mappingsFor(Command) must filter rmkCommand out (see key_router.mappingsFor)"
+      # Through `processReplayedResult`, so a bridge-produced `hrExecCommand`
+      # (`K = "bdelete"`) runs as on an immediate match.
+      e.handlerManager.runRuntimeCommand(e, route.commandName).get(roContinue)
+    of rrExecuteRuntimeKeySequence:
+      e.handlerManager.replayRuntimeKeySequence(
+        e, route.triggerKeys, route.targetKeys, route.noremap
+      )
+    of rrReleaseHeld:
+      e.handlerManager.releaseHeldKeys(e, route.keys, route.leading)
 
-  case route.kind
-  of rrCancelled:
-    # `flushTimeout` returns rrCancelled when the accumulator was already
-    # empty; nothing to do, do not request a redraw.
-    return true
-  of rrUnhandled, rrWaiting, rrCommand:
-    # `flushTimeout` never returns these variants; guard for exhaustiveness.
-    return true
-  of rrExecuteRuntimeCommand:
-    # `mappingsFor(Command)` filters rmkCommand out, so `flushTimeout(Command)`
-    # cannot return this variant. If the invariant is ever broken, prefer a
-    # loud failure over a silent drop that would swallow the mapping.
-    doAssert not inCommandOverlay,
-      "flushTimeout(Command) returned rrExecuteRuntimeCommand; " &
-        "mappingsFor(Command) must filter rmkCommand out (see key_router.mappingsFor)"
-    let cmdResult = e.handlerManager.executeCommandDirect(route.commandName)
-    if cmdResult.isSome:
-      # Route through `processResult` so bridge-produced `hrExecCommand`
-      # (and other non-trivial kinds) are dispatched the same way as in the
-      # main feedKey path. Without this, `K = "bdelete"` would silently no-op
-      # when fired via timeout flush.
-      shouldContinue = e.processResult(cmdResult.get, e.activeBuffer)
-  of rrExecuteRuntimeKeySequence:
-    if inCommandOverlay:
-      # Command overlay replays through a different dispatcher
-      # (handleCommandModeKeyCombo) that has no mapping-expansion precheck, so it
-      # stays non-recursive regardless of noremap (known limitation).
-      e.keyRouter.withReplay:
-        for k in route.targetKeys:
-          if not e.handleCommandModeKeyCombo(k):
-            shouldContinue = false
-            break
-    else:
-      # Base mode: honour noremap so a timeout-fired mapping expands the same way
-      # as an immediate match (recursive for :map, verbatim for :noremap).
-      let outcome =
-        e.handlerManager.replayRuntimeKeySequence(e, route.targetKeys, route.noremap)
-      if outcome == roQuit:
-        shouldContinue = false
-  of rrUnhandledBatch:
-    if inCommandOverlay:
-      e.keyRouter.withReplay:
-        for k in route.keys:
-          if not e.handleCommandModeKeyCombo(k):
-            shouldContinue = false
-            break
-    else:
-      e.keyRouter.withReplay:
-        for k in route.keys:
-          case e.handlerManager.runNestedKeyCombo(e, k)
-          of roContinue:
-            discard
-          of roQuit:
-            shouldContinue = false
-            break
-          of roAbort:
-            break
-
-  return shouldContinue
+  return outcome != roQuit
 
 proc noteQuit(e: Editor, goesOn: bool): bool =
   ## Every quit reaches the frontend through here, so it is noted once.

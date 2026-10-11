@@ -331,13 +331,8 @@ proc runEditor(
           # Otherwise the tick ends the session once the owed hooks are done.
           return if editor.exitWaitState == ewsReady: erQuit else: erContinue
 
-        # Key mapping timeout control — delegated to KeyRouter so policy
-        # (enabled/timeoutlen) and accumulator state are queried in one place.
-        let routerTimeout = editor.keyRouter.nextTimeoutMs()
-        if routerTimeout > 0 and app.getApplicationTimeout() == 0:
-          app.setApplicationTimeout(routerTimeout)
-        elif routerTimeout == 0 and app.getApplicationTimeout() > 0:
-          app.setApplicationTimeout(0)
+        # Armed while the router holds keys; it owns policy and the held keys.
+        app.setApplicationTimeout(editor.keyRouter.nextTimeoutMs())
 
         return erContinue
 
@@ -345,7 +340,8 @@ proc runEditor(
       editorCallback(editor, app, cmdLineConfig, log):
         discard editor.handleKeyMappingTimeout()
         editor.applyFrontendRequests(app)
-        app.setApplicationTimeout(0) # One-shot: disable until next prefix match
+        # Keys let go can be held again, and they wait anew.
+        app.setApplicationTimeout(editor.keyRouter.nextTimeoutMs())
         await editor.handlePendingAsyncOperations(frontendHooks)
         if editor.exitWaitState == ewsReady:
           return trQuit

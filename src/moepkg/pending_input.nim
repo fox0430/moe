@@ -31,6 +31,15 @@ proc isActive*(pi: PendingInputState, registry: KeyBindingRegistry): bool =
     pi.pendingTextObject.isSome or pi.pendingRegister.isSome or
     pi.pendingCommand != PendingNone or registry.hasActiveSequence()
 
+proc waitsForOperand*(pi: PendingInputState, registry: KeyBindingRegistry): bool =
+  ## The next key ends a command already begun: a later key of a sequence
+  ## (`gg`, `<C-w>j`) or its argument (f/t/r, a register, a text object), which
+  ## Vim reads without mappings. After a count or an operator comes a command
+  ## of its own, which mappings may take.
+  pi.macroState.waitingForRegister or pi.pendingTextObject.isSome or
+    pi.pendingCommand != PendingNone or registry.isWaitingForChar or
+    registry.isMidSequence
+
 proc cancelOperatorPending*(pi: var PendingInputState): bool {.discardable.} =
   ## Drop the operator-pending gesture whole, as Vim's clearop does: the
   ## operator, the text object that is the second half of it, and the register

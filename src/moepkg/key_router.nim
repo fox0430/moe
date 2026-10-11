@@ -102,18 +102,6 @@ proc hasActiveBuiltinSequence*(router: KeyRouter): bool {.inline.} =
   ## (f/t/r) is currently in progress.
   router.registry.hasActiveSequence()
 
-template withReplay*(router: KeyRouter, body: untyped) =
-  ## Execute `body` with `isReplayingMapping` set to true, guaranteeing the
-  ## flag is restored on exit even if `body` raises or returns from the
-  ## enclosing proc. Callers replaying buffered keys must wrap the loop in
-  ## this template so re-entrant feedKey calls see the flag and skip mapping
-  ## expansion (noremap behaviour).
-  router.registry.isReplayingMapping = true
-  try:
-    body
-  finally:
-    router.registry.isReplayingMapping = false
-
 proc mappingsFor(router: KeyRouter, mode: EditorMode): seq[RuntimeKeyMapping] =
   ## Pick the appropriate mapping table for `mode`. File-edit modes and the
   ## Command overlay only consider key-sequence mappings (rmkCommand bindings
@@ -132,6 +120,7 @@ proc decisionToRoute(decision: RuntimeMappingDecision, key: KeyCombo): RouteResu
   of rmdExecuteKeySequence:
     RouteResult(
       kind: rrExecuteRuntimeKeySequence,
+      triggerKeys: decision.triggerKeys,
       targetKeys: decision.targetKeys,
       noremap: decision.noremap,
     )
@@ -140,21 +129,32 @@ proc decisionToRoute(decision: RuntimeMappingDecision, key: KeyCombo): RouteResu
   of rmdNoMatchPassThrough:
     RouteResult(kind: rrUnhandled, key: key)
   of rmdNoMatchFlush:
-    RouteResult(kind: rrUnhandledBatch, keys: decision.accumulatedKeys)
+    RouteResult(
+      kind: rrReleaseHeld, keys: decision.accumulatedKeys, leading: decision.leading
+    )
 
-proc feedKey*(router: KeyRouter, mode: EditorMode, keyCombo: KeyCombo): RouteResult =
-  ## Hand `keyCombo` to the router for runtime-mapping resolution. The result
-  ## tells the caller what to do next: execute a runtime mapping, wait for
-  ## more keys, replay the accumulator, or fall through to normal handling.
+proc feedKey*(
+    router: KeyRouter, mode: EditorMode, key: KeyInput, literal: bool
+): RouteResult =
+  ## Hand `key` to the router for runtime-mapping resolution. The result tells
+  ## the caller what to do next: execute a runtime mapping, wait for more keys,
+  ## let the held keys go, or fall through to normal handling. A key comes here
+  ## unless a layer in front of the router takes it, such as a popup or a
+  ## viewer's Ctrl-W; only such a key can run before the keys held ahead of it.
+  ## `literal` is true when the command being built reads `key` as it is (an
+  ## operand, an Escape that ends it). That is the command before the held
+  ## keys, so it counts only while none are held; the key meets it again once
+  ## they are let go.
+  if not router.isHoldingKeys and (literal or not key.remap):
+    return RouteResult(kind: rrUnhandled, key: key.combo)
   let mappings = router.mappingsFor(mode)
-  let decision = routeRuntimeMapping(router.dispatchState, keyCombo, mappings)
-  result = decisionToRoute(decision, keyCombo)
+  let decision = routeRuntimeMapping(router.dispatchState, key, mappings)
+  result = decisionToRoute(decision, key.combo)
 
 proc flushTimeout*(router: KeyRouter, mode: EditorMode): RouteResult =
   ## Called when the key-mapping timeout fires. Inspect the accumulated keys
   ## against `mode`'s runtime mappings: if there is an exact match, fire the
-  ## mapping; otherwise the caller must replay the accumulator one key at a
-  ## time (mode dispatch differs between base mode and Command overlay).
+  ## mapping; otherwise the caller lets them go as on `rrReleaseHeld`.
   let mappings = router.mappingsFor(mode)
   let plan = flushRuntimeMapping(router.dispatchState, mappings)
   case plan.kind
@@ -165,11 +165,12 @@ proc flushTimeout*(router: KeyRouter, mode: EditorMode): RouteResult =
   of rmfExecuteKeySequence:
     RouteResult(
       kind: rrExecuteRuntimeKeySequence,
+      triggerKeys: plan.triggerKeys,
       targetKeys: plan.targetKeys,
       noremap: plan.noremap,
     )
   of rmfReplayPerKey:
-    RouteResult(kind: rrUnhandledBatch, keys: plan.keysToReplay)
+    RouteResult(kind: rrReleaseHeld, keys: plan.keysToReplay, leading: plan.leading)
 
 proc resolveBuiltin*(
     registry: KeyBindingRegistry, mode: EditorMode, combo: KeyCombo

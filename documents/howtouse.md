@@ -873,10 +873,11 @@ bool, open the enum popup, or start editing an int/float/string/color.
   <summary>Runtime key mapping commands</summary>
 
 Map, unmap, and clear runtime key mappings. The `:map`-family commands expand the
-right-hand side recursively (a remapped key on the RHS is itself re-expanded),
-while the `:noremap`-family commands map keys verbatim (non-recursive). Unmapping
-with `:unmap` or clearing with `:mapclear` restores the built-in default for the
-affected keys.
+right-hand side recursively (a remapped key on the RHS is itself re-expanded,
+except the first key of an RHS that starts with the LHS, so `:nmap a ab` is not
+recursive, as in Vim), while the `:noremap`-family commands map keys verbatim
+(non-recursive). Unmapping with `:unmap` or clearing with `:mapclear` restores
+the built-in default for the affected keys.
 Mappings are session-only and not persisted across restarts.
 For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml`. See [configfile.md](configfile.md#keymapping-table).
 

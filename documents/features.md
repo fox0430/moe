@@ -152,7 +152,7 @@ moe supports Vim-like runtime key mapping commands. You can remap keys during an
 - `:cmap {lhs} {rhs}` - Map keys in Command mode
 - `:map {lhs} {rhs}` - Map keys in all modes (except Command mode)
 
-The `:map` family expands the right-hand side recursively, like Vim's `:map`. The `:noremap` family (`:noremap`, `:nnoremap`, `:inoremap`, `:vnoremap`, `:cnoremap`) maps keys non-recursively (the right-hand side is replayed verbatim). Unmapping (`:unmap`) or clearing (`:mapclear`) restores the built-in default for the affected keys.
+The `:map` family expands the right-hand side recursively, like Vim's `:map` (a right-hand side that starts with the left-hand side does not expand its first key again, so `:nmap a ab` is not recursive). The `:noremap` family (`:noremap`, `:nnoremap`, `:inoremap`, `:vnoremap`, `:cnoremap`) maps keys non-recursively (the right-hand side is replayed verbatim). Unmapping (`:unmap`) or clearing (`:mapclear`) restores the built-in default for the affected keys.
 
 The right-hand side can be a command name, a command with arguments (`<command> <args...>`), a key sequence, a mode switch (`mode_switch <mode>`), or an overlay switch (`overlay_switch command|search|rename`). For example, `:nmap C-e mode_switch insert` makes Ctrl-E enter Insert mode. The same forms are accepted in the `[KeyMapping]` config section.
 

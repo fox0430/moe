@@ -59,9 +59,11 @@ type
       ## `resolveBuiltin`: the key may already have been *consumed* as an
       ## invalid-sequence terminator — see that proc's note; do not blindly
       ## re-process `key`.
-    rrUnhandledBatch
-      ## Accumulator was flushed without a match. Caller replays these keys
-      ## one by one with `isReplayingMapping = true`.
+    rrReleaseHeld
+      ## The held keys broke the mapping they started. The caller lets them go
+      ## as Vim does: `leading` (the mapping the first keys complete) runs, or
+      ## else the first key runs unmapped, and the keys after it are fed again,
+      ## so they can still start or complete a mapping.
     rrCommand
       ## A built-in binding/sequence was resolved. `command` carries the
       ## resolved `Command`; the caller executes it (Normal-mode dispatcher).
@@ -71,6 +73,7 @@ type
     of rrExecuteRuntimeCommand:
       commandName*: string
     of rrExecuteRuntimeKeySequence:
+      triggerKeys*: seq[KeyCombo]
       targetKeys*: seq[KeyCombo]
       noremap*: bool
         ## When false the replayed keys are re-expanded through the mapping
@@ -79,8 +82,9 @@ type
       waitsForTimeout*: bool
     of rrUnhandled:
       key*: KeyCombo
-    of rrUnhandledBatch:
-      keys*: seq[KeyCombo]
+    of rrReleaseHeld:
+      keys*: seq[KeyInput]
+      leading*: Option[RuntimeKeyMapping]
     of rrCancelled:
       discard
     of rrCommand:
@@ -93,5 +97,5 @@ type
       ## Runtime-mapping key accumulator, owned by the router (no longer borrowed
       ## from the registry). See `key_bindings/registry.DispatchState`.
     mapExpandDepth*: int
-      ## Recursion depth for `:map` (noremap=false) replay. Guards against cyclic
-      ## mappings via `MaxMapRecursionDepth`.
+      ## Recursion depth for `:map` (noremap=false) replay and for held keys
+      ## let go. Guards against cyclic mappings via `MaxMapRecursionDepth`.
