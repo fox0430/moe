@@ -348,6 +348,15 @@ when defined(moe.matter) or defined(features.moe.matter):
       check scopedCategory(["string.quoted"], rules) == mccString
       check scopedCategory(["string.outer", "string.inner"], rules) == mccNumber
 
+    test "unrecognized descendants cannot satisfy an outer rule's ancestor selector":
+      let rules =
+        [MatterScopeRule(scope: "string", within: "meta.embedded", category: mccNumber)]
+      check scopedCategory(["string.quoted", "meta.embedded.expression"], rules) ==
+        mccString
+      check scopedCategory(
+        ["meta.embedded.expression", "string.quoted", "meta.unrecognized"], rules
+      ) == mccNumber
+
     test "later matching rules override earlier rules and builtin exceptions":
       let rules = [
         MatterScopeRule(scope: "constant.other.placeholder", category: mccNumber),
@@ -390,6 +399,58 @@ when defined(moe.matter) or defined(features.moe.matter):
         require not parsed.nextState.failed
         require parsed.spans.len == 1
         check parsed.spans[0].category == mccType
+
+    test "line states retain rules after the caller releases its grammar set":
+      proc detachedState(tokenized: bool): MatterLineState =
+        let grammars = newScopedTestMatterGrammarSet(
+          ["constant.other.custom"],
+          [MatterScopeRule(scope: "constant.other.custom", category: mccType)],
+        )
+        if tokenized:
+          let first =
+            tokenizeMatterLine("token", langNim, timeLimitMs = 0, grammars = grammars)
+          require not first.nextState.failed
+          return first.nextState
+        grammars.initialMatterState(langNim)
+
+      for tokenized in [false, true]:
+        checkpoint("tokenized: " & $tokenized)
+        # The helper's grammar set and tokenization result are out of scope.
+        var state = detachedState(tokenized)
+        for _ in 0 .. 1:
+          let parsed = tokenizeMatterLine("token", langNim, state, timeLimitMs = 0)
+          require not parsed.nextState.failed
+          require parsed.spans.len == 1
+          check parsed.spans[0].category == mccType
+          state = parsed.nextState
+
+    test "grammar sets snapshot caller-owned scope rules":
+      let scopes = ["string.quoted", "constant.other.custom"]
+      var rules = @[
+        MatterScopeRule(
+          scope: "constant.other.custom", within: "string", category: mccType
+        )
+      ]
+      let grammars = newScopedTestMatterGrammarSet(scopes, rules)
+      let expected = newScopedTestMatterGrammarSet(
+        scopes,
+        [
+          MatterScopeRule(
+            scope: "constant.other.custom", within: "string", category: mccType
+          )
+        ],
+      )
+      rules[0].scope.add(".changed")
+      rules[0].within.add(" - string")
+      rules[0].action = MatterScopeAction.inheritParent
+      rules[0].category = mccNumber
+      rules.add(MatterScopeRule(scope: "string", category: mccNumber))
+      check grammars == expected
+      let parsed =
+        tokenizeMatterLine("token", langNim, timeLimitMs = 0, grammars = grammars)
+      require not parsed.nextState.failed
+      require parsed.spans.len == 1
+      check parsed.spans[0].category == mccType
 
     test "derived rule sets preserve sources and leave existing sets and states unchanged":
       let
