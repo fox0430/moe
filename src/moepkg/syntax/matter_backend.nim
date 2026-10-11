@@ -6,7 +6,7 @@ when not (defined(moe.matter) or defined(features.moe.matter)):
   {.error: "moepkg/syntax/matter_backend requires the Matter feature".}
 
 import std/[sets, strutils, tables]
-import matter/[engine, grammarpackages, rawgrammar]
+import matter/[engine, grammarpackages, rawgrammar, selectors]
 
 import tokenizer
 import ../[logger, unicode_utils]
@@ -35,6 +35,24 @@ type
     mccIdentifier
     mccProperty
 
+  MatterScopeAction* {.pure.} = enum
+    ## Resolve the current scope directly or continue with its ancestors.
+    useCategory
+    inheritParent
+
+  MatterScopeRule* = object
+    ## An override for one scope prefix, matched on complete dotted components.
+    ## `within` is an optional Matter selector matched against ancestors only.
+    ## Later matching rules win at the same scope. `inheritParent` skips that
+    ## scope's default mapping; `category` is used only by `useCategory`.
+    scope*, within*: string
+    action*: MatterScopeAction
+    category*: MatterColorCategory
+
+  CompiledMatterScopeRule = object
+    source: MatterScopeRule
+    within: seq[ScopeSelector]
+
   MatterSpan* = object ## Half-open UTF-8 byte range in the original input line.
     firstByte*, lastByte*: int
     scopes*: seq[string]
@@ -57,11 +75,14 @@ type
     languageScopes: Table[SourceLanguage, string]
     grammarCache: Table[SourceLanguage, Grammar]
     unavailableLanguages: HashSet[SourceLanguage]
+    scopeRules: seq[MatterScopeRule]
+    compiledScopeRules: seq[CompiledMatterScopeRule]
 
   MatterLineState* = object
     ## Completed state entering the next line. A failure is sticky so a slow
     ## or invalid grammar cannot be retried on every subsequent line/frame.
     grammar: Grammar
+    grammars: MatterGrammarSet
     stack*: StateStack
     failed*: bool
 
@@ -73,10 +94,10 @@ proc `==`*(a, b: MatterGrammarSet): bool =
   if cast[pointer](a) == cast[pointer](b):
     return true
   if a.isNil:
-    return b.sources.len == 0
+    return b.sources.len == 0 and b.scopeRules.len == 0
   if b.isNil:
-    return a.sources.len == 0
-  a.sources == b.sources
+    return a.sources.len == 0 and a.scopeRules.len == 0
+  a.sources == b.sources and a.scopeRules == b.scopeRules
 
 func scopeMatches(scope, prefix: string): bool =
   scope == prefix or
@@ -94,7 +115,21 @@ proc isMatterCodeBlock*(state: MatterLineState): bool =
     state.stack.hasActiveScope("markup.raw.block")
   )
 
-proc category(scopes: openArray[string]): MatterColorCategory =
+proc matchesWithin(
+    rule: CompiledMatterScopeRule, scopes: openArray[string], index: int
+): bool =
+  if rule.source.within.len == 0:
+    return true
+  for selector in rule.within:
+    if index == 0:
+      if selector.matches([]):
+        return true
+    elif selector.matches(scopes.toOpenArray(0, index - 1)):
+      return true
+
+proc category(
+    scopes: openArray[string], rules: openArray[CompiledMatterScopeRule]
+): MatterColorCategory =
   # Keep comment captures in the comment channel so Moe can apply its own
   # configurable reserved words, even when a grammar marks TODO specially.
   for scope in scopes:
@@ -104,6 +139,18 @@ proc category(scopes: openArray[string]): MatterColorCategory =
   # strings. Match scope components, not substrings in language names.
   for i in countdown(scopes.high, 0):
     let scope = scopes[i]
+    var inheritParent = false
+    for index in countdown(rules.high, 0):
+      if scope.scopeMatches(rules[index].source.scope) and
+          rules[index].matchesWithin(scopes, i):
+        case rules[index].source.action
+        of MatterScopeAction.useCategory:
+          return rules[index].source.category
+        of MatterScopeAction.inheritParent:
+          inheritParent = true
+        break
+    if inheritParent:
+      continue
     # These captures name pragma arguments/section labels, not markup. Let
     # the enclosing meta.preprocessor scope supply their existing colour.
     if scope.scopeMatches("entity.other.attribute-name.pragma") or
@@ -221,11 +268,23 @@ proc newMatterGrammarSet*(): MatterGrammarSet =
     unavailableLanguages: initHashSet[SourceLanguage](),
   )
 
-proc newMatterGrammarSet*(sources: openArray[MatterGrammarSource]): MatterGrammarSet =
+proc newMatterGrammarSet*(
+    sources: openArray[MatterGrammarSource], scopeRules: openArray[MatterScopeRule] = []
+): MatterGrammarSet =
   ## Parse and register caller-provided grammar text. All sources are added
   ## before any root is compiled, so they may provide external includes for
-  ## one another. Parse errors are reported to the caller.
+  ## one another. Scope selectors are compiled once. Grammar errors and empty
+  ## rule scope prefixes raise TextMateGrammarError. Comment scopes retain
+  ## their reserved-word channel before overrides are considered.
   result = newMatterGrammarSet()
+  for rule in scopeRules:
+    if rule.scope.len == 0:
+      raise
+        newException(TextMateGrammarError, "Matter scope rule requires a scope prefix")
+    result.scopeRules.add(rule)
+    result.compiledScopeRules.add(
+      CompiledMatterScopeRule(source: rule, within: parseScopeSelectors(rule.within))
+    )
   for source in sources:
     let path = if source.path.len > 0: source.path else: "grammar.tmLanguage.json"
     let raw =
@@ -245,6 +304,16 @@ proc newMatterGrammarSet*(sources: openArray[MatterGrammarSource]): MatterGramma
     )
     if source.language != langNone:
       result.languageScopes[source.language] = raw.scopeName
+
+proc withMatterScopeRules*(
+    grammars: MatterGrammarSet, rules: openArray[MatterScopeRule]
+): MatterGrammarSet =
+  ## Derive a set with replacement scope rules, retaining all grammar sources.
+  ## The original set and its tokenization states keep their existing rules.
+  if grammars.isNil:
+    newMatterGrammarSet([], rules)
+  else:
+    newMatterGrammarSet(grammars.sources, rules)
 
 proc grammarFor(grammars: MatterGrammarSet, language: SourceLanguage): Grammar =
   if grammars.isNil or language in {langNone, langDiff, langLog} or
@@ -298,7 +367,11 @@ proc withMatterGrammar*(
       if source.language != language:
         sources.add(source)
   sources.add(MatterGrammarSource(content: content, path: path, language: language))
-  result = newMatterGrammarSet(sources)
+  result =
+    if grammars.isNil:
+      newMatterGrammarSet(sources)
+    else:
+      newMatterGrammarSet(sources, grammars.scopeRules)
   if result.grammarFor(language).isNil:
     raise newException(
       TextMateGrammarError, "TextMate grammar could not be compiled for " & $language
@@ -308,7 +381,7 @@ proc initialMatterState*(
     grammars: MatterGrammarSet, language: SourceLanguage
 ): MatterLineState =
   ## Create a fresh line state for a grammar set/language pair.
-  MatterLineState(grammar: grammars.grammarFor(language))
+  MatterLineState(grammar: grammars.grammarFor(language), grammars: grammars)
 
 proc sanitizeInvalidUtf8(line: string): string =
   ## Replace only malformed high bytes with spaces, preserving byte positions
@@ -343,6 +416,8 @@ proc tokenizeMatterLine*(
     result.nextState.failed = true
     return
   result.nextState.grammar = grammar
+  let owner = if previous.grammar.isNil: grammars else: previous.grammars
+  result.nextState.grammars = owner
   try:
     let parsed =
       grammar.tokenizeLine(sanitizeInvalidUtf8(line), previous.stack, timeLimitMs)
@@ -362,7 +437,7 @@ proc tokenizeMatterLine*(
             firstByte: token.startIndex,
             lastByte: token.endIndex,
             scopes: token.scopes,
-            category: category(token.scopes),
+            category: category(token.scopes, owner.compiledScopeRules),
           )
         )
   except CatchableError as error:
