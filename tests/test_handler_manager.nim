@@ -1299,8 +1299,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.isSome
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
 
@@ -1321,7 +1320,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
     # 'h' was deleted (cursor at 0)
@@ -1343,7 +1342,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
 
   test "Pending operator (d) waits and does not return to Insert":
@@ -1428,7 +1427,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
 
@@ -1546,10 +1545,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     # Ctrl-O → 'w' (move word) → back to Insert
     manager.ctrlOToNormal(buffer, state)
     let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let r = manager.handleKeyCombo(
+    discard manager.handleKeyCombo(
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), wKey
     )
-    state.mode = r.modeTransition.get # Insert
+    check state.mode == EditorMode.Insert
 
     # Type 'y' in Insert mode
     let yKey = KeyCombo(isSpecial: false, char: "y", modifiers: {})
@@ -1594,7 +1593,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check result2.kind == hrHandled
-    check result2.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     # Cursor should have moved 2 words forward
     check state.cursor.column > 0
@@ -1627,7 +1626,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check result2.kind == hrHandled
-    check result2.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     check state.cursor.line == 0 # moved to first line
 
@@ -1773,7 +1772,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
 
   test "'a' (append) during insert-normal clears flag and stays in Insert":
@@ -1793,7 +1792,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
 
@@ -1822,7 +1821,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check result2.kind == hrHandled
-    check result2.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
     # "hello " should be deleted, leaving "world"
@@ -1845,11 +1844,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     # First Ctrl-O → 'w' → back to Insert
     manager.ctrlOToNormal(buffer, state)
     let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let r1 = manager.handleKeyCombo(
+    discard manager.handleKeyCombo(
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), wKey
     )
-    check r1.modeTransition.get == EditorMode.Insert
-    state.mode = EditorMode.Insert
+    check state.mode == EditorMode.Insert
 
     # Type 'b'
     let bChar = KeyCombo(isSpecial: false, char: "b", modifiers: {})
@@ -1859,11 +1857,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Second Ctrl-O → 'w' → back to Insert
     manager.ctrlOToNormal(buffer, state)
-    let r2 = manager.handleKeyCombo(
+    discard manager.handleKeyCombo(
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), wKey
     )
-    check r2.modeTransition.get == EditorMode.Insert
-    state.mode = EditorMode.Insert
+    check state.mode == EditorMode.Insert
 
     # Type 'c'
     let cChar = KeyCombo(isSpecial: false, char: "c", modifiers: {})
@@ -2135,7 +2132,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
     # "hello" should be deleted
@@ -2191,7 +2188,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), yKey
     )
     check result2.kind == hrHandled
-    check result2.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     # Buffer unchanged
     check buffer.getLine(0) == "hello world"
@@ -2214,7 +2211,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     check state.cursor.line == 2
 
@@ -2237,7 +2234,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
 

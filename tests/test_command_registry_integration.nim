@@ -3127,6 +3127,30 @@ suite "Handler - Scroll operations":
       viewport.topLine > 4 or (viewport.topLine == 4 and viewport.topWrapOffset >= 2)
     )
 
+  test "scroll line down puts a pushed cursor on the column it aims for under lineWrap (Ctrl-E)":
+    # Line 1 wraps to rows of columns 0-9, 10-19 and 20-29 at width 10. Two
+    # presses put its second row on top.
+    let buffer = newTextBuffer("ab\n" & ("x".repeat(30) & "\n").repeat(5))
+
+    proc pushedCursor(aimed: int): BufferPosition =
+      let ctx = createTestContext(buffer)
+      ctx.state.activeWindow.setTab(buffer)
+      ctx.state.config.standard.lineWrap = true
+      ctx.cursor = BufferPosition(line: 0, column: 1)
+      ctx.state.preferredColumn = aimed
+      let viewport = ctx.motionController.viewportManager.viewport
+      viewport.width = 10 + viewportOffsetFor(buffer, ctx.state)
+      viewport.height = 8
+      ctx.state.windowDisplay.viewportReservedLines = 2
+      check createTestRegistry().execute(ctx, builtin(bcScrollLineDown), @["2"]).isOk
+      check ctx.state.preferredColumn == aimed
+      ctx.cursor
+
+    # On a row in view, the column itself.
+    check pushedCursor(25) == BufferPosition(line: 1, column: 25)
+    # On the row scrolled off, the same screen column of the top row.
+    check pushedCursor(5) == BufferPosition(line: 1, column: 15)
+
 suite "Handler - Visual mode operations":
   test "visual delete":
     let buffer = newTextBuffer("hello world")

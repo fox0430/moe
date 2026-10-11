@@ -213,10 +213,9 @@ proc handleMotion*(
   ## Handle motion commands in insert mode
   let motionCmd = MotionCommand(motion: motion, count: 1)
 
-  let r = handler.motionController.executeMotion(motionCmd, state.cursor)
+  let r = handler.motionController.moveCursorByMotion(state, motionCmd)
   if r.isErr:
     return InsertModeResult(kind: imrError, errorMessage: r.error)
-  state.cursor = r.value
   # Cursor movement invalidates the [count]i/a/o replay range; cancel it.
   state.editState.insertReplayCount = 0
   state.editState.insertReplayLineEntry = false

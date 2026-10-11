@@ -188,8 +188,7 @@ proc finalizeSearch(e: Editor) =
 
   # Insert-Normal mode (Ctrl-o): return to Insert after the search completes
   if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-    e.state.insertNormalMode = false
-    e.setMode(EditorMode.Insert)
+    e.resumeInsert()
 
 proc cancelSearch(e: Editor) =
   ## Cancel search and return to base mode
@@ -217,8 +216,7 @@ proc cancelSearch(e: Editor) =
 
   # Insert-Normal mode (Ctrl-o): return to Insert after the search is cancelled
   if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-    e.state.insertNormalMode = false
-    e.setMode(EditorMode.Insert)
+    e.resumeInsert()
 
 proc performIncrementalSearch(e: Editor) =
   ## Perform incremental search and update cursor position dynamically

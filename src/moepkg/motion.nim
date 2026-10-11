@@ -65,15 +65,6 @@ const tagScanInitialRadius = 128
 proc newMotionExecutor*(buffer: core.TextBuffer): MotionExecutor =
   MotionExecutor(buffer: buffer)
 
-proc maxCursorColumn(lineCharLen: int, mode: EditorMode): int =
-  ## Rightmost column the cursor may occupy on a line of `lineCharLen`
-  ## characters. Insert/Replace let it rest one past the last character (end of
-  ## line); other modes stop on the last character.
-  if mode in {EditorMode.Insert, EditorMode.Replace}:
-    lineCharLen
-  else:
-    max(0, lineCharLen - 1)
-
 proc moveLeft(
     e: MotionExecutor, currentPos: CursorPosition, count: int
 ): CursorPosition =
@@ -1234,25 +1225,31 @@ proc newMotionController*(
     cursorManager: newCursorManager(state),
   )
 
+const
+  VerticalMotions = {
+    Motion.Up, Motion.Down, Motion.PageUp, Motion.PageDown, Motion.HalfPageUp,
+    Motion.HalfPageDown,
+  } ## Motions that aim for the wanted column (Vim's curswant).
+  LineEdgeMotions = {
+    Motion.Home, Motion.FirstNonBlank, Motion.End, Motion.FirstLine, Motion.LastLine,
+    Motion.ViewportHigh, Motion.ViewportMiddle, Motion.ViewportLow,
+    Motion.NextLineFirstNonBlank, Motion.PreviousLineFirstNonBlank,
+  } ## Motions onto a line's start or end.
+
 proc executeMotion*(
     controller: MotionController,
     cmd: MotionCommand,
     currentCursorPos: BufferPosition,
     updateViewport: bool = true,
+    aimedColumn = -1,
 ): Result[BufferPosition, string] =
-  ## Execute motion and return new cursor position.
-
-  # Check if this is a vertical motion (preserves preferred column)
-  let isVerticalMotion =
-    cmd.motion in {
-      Motion.Up, Motion.Down, Motion.PageUp, Motion.PageDown, Motion.HalfPageUp,
-      Motion.HalfPageDown,
-    }
-
-  # For vertical motion, use preferredColumn if set (>= 0)
-  var effectiveX = currentCursorPos.column
-  if isVerticalMotion and controller.cursorManager.state.preferredColumn >= 0:
-    effectiveX = controller.cursorManager.state.preferredColumn
+  ## Execute motion and return new cursor position. A vertical motion aims for
+  ## `aimedColumn`, or for the column of `currentCursorPos` when it is -1.
+  let effectiveX =
+    if cmd.motion in VerticalMotions and aimedColumn >= 0:
+      aimedColumn
+    else:
+      currentCursorPos.column
 
   # Convert to CursorPosition for internal calculations
   let currentPos = CursorPosition(x: effectiveX, y: currentCursorPos.line)
@@ -1289,13 +1286,29 @@ proc executeMotion*(
   if lineWrap:
     controller.viewportManager.viewport.leftColumn = 0
 
-  if isVerticalMotion:
-    if controller.cursorManager.state.preferredColumn < 0:
-      controller.cursorManager.state.preferredColumn = currentCursorPos.column
-  else:
-    controller.cursorManager.state.preferredColumn = -1
-
   return ok(BufferPosition(line: newPos.y, column: newPos.x))
+
+proc moveCursorByMotion*(
+    controller: MotionController,
+    state: EditorState,
+    cmd: MotionCommand,
+    updateViewport: bool = true,
+): Result[BufferPosition, string] =
+  ## Move the cursor of `state` by `cmd`. A vertical motion keeps the column it
+  ## aimed for, as Vim keeps curswant. Another motion drops it when it moves the
+  ## cursor, or even in place onto a line's start or end, as Vim's beginline
+  ## does; one that fails in place keeps it. `$` drops it too, where Vim makes
+  ## vertical moves stick to line ends.
+  let
+    start = state.cursor
+    aimed = state.aimedColumn
+  result = controller.executeMotion(cmd, start, updateViewport, aimed)
+  if result.isOk:
+    state.cursor = result.get
+    if cmd.motion in VerticalMotions:
+      state.preferredColumn = aimed
+    elif result.get != start or cmd.motion in LineEdgeMotions:
+      state.preferredColumn = -1
 
 ## Operator+motion classification. Linewise / exclusive / inclusive
 ## determines operator+motion range. Use `isLinewiseMotion`/`isExclusiveMotion`.

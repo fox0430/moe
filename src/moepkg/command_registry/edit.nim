@@ -869,6 +869,8 @@ proc handleYankLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## count: number of lines to yank (default: 1)
 
   logDebug("yank", "handleYankLine called with count=" & $count)
+  # The cursor stays, but Vim's operators drop curswant.
+  ctx.state.preferredColumn = -1
   let (startLine, endLine, lineCount) = ctx.cursorLineRange(count)
   logDebug("yank", "lineCount=" & $lineCount)
 
@@ -975,7 +977,8 @@ proc handleOperatorYank*(ctx: CommandContext, count: int = 1): Result[(), string
   # Check if same operator was pressed (yy for yank line)
   if ctx.state.pendingInput.pendingOperator.isSome and
       ctx.state.pendingInput.pendingOperator.get.operatorType == OpYank:
-    # Execute line yank
+    # Execute line yank. The cursor stays, but Vim's operators drop curswant.
+    ctx.state.preferredColumn = -1
     let startLine = ctx.cursor.line
     let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)

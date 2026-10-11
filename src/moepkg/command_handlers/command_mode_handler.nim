@@ -204,8 +204,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     e.setMode(e.state.mode) # Sync window mode
     # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
     if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-      e.state.insertNormalMode = false
-      e.setMode(EditorMode.Insert)
+      e.resumeInsert()
     return true
 
   # Handle Tab key for command completion
@@ -304,8 +303,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     e.state.input.commandCursor = 0
     if e.state.insertNormalMode:
       if e.state.mode == EditorMode.Normal:
-        e.state.insertNormalMode = false
-        e.setMode(EditorMode.Insert)
+        e.resumeInsert()
       elif e.state.mode != EditorMode.Insert:
         e.state.insertNormalMode = false
         let activeBuffer = e.activeBuffer()

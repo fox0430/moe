@@ -447,8 +447,7 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
 
   if wasInInsert:
     # The finalizer leaves the cursor alone; Insert/Replace parks it one left.
-    let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
-    adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+    e.activeWindow.adjustCursorAfterInsertExit()
 
   e.state.leaveVisual()
 
@@ -1066,7 +1065,8 @@ proc handlePaste*(e: Editor, text: string): bool =
   e.prepareForInput(false)
   if e.windowManager.windows.len > 0:
     e.activeWindow.viewport.detachedFromCursor = false
-  e.handlePasteText(text)
+  e.asCommand:
+    result = e.handlePasteText(text)
 
 proc handlePasteEvent*(e: Editor, event: Event): bool =
   ## Compatibility adapter for Celina bracketed-paste events.
@@ -1079,14 +1079,16 @@ proc handlePointerInput*(e: Editor, input: PointerInput): bool =
   ## Middle-click paste is intentionally a host policy: GUI frontends should
   ## obtain the selection text and pass it to `handlePaste`.
   e.prepareForInput(false)
-  result = e.handlePointerInputCore(input)
+  e.asCommand:
+    result = e.handlePointerInputCore(input)
   e.enforceModePolicy()
 
 proc handleScrollInput*(e: Editor, input: ScrollInput): ScrollOutcome =
   ## Handle a vertical scroll expressed as a signed number of physical lines
   ## and return the movement/region metadata needed for GUI repainting.
   e.prepareForInput(false)
-  e.handleScrollInputCore(input)
+  e.asCommand:
+    result = e.handleScrollInputCore(input)
 
 proc celinaMouseModifiers(
     modifiers: set[celina.KeyModifier]
@@ -1098,8 +1100,7 @@ proc celinaMouseModifiers(
   if celina.KeyModifier.Shift in modifiers:
     result.incl(kmShift)
 
-proc handleMouseEvent*(e: Editor, event: Event): bool =
-  ## Compatibility adapter from Celina mouse events to Moe input values.
+proc handleMouseEventCore(e: Editor, event: Event): bool =
   e.prepareForInput(false)
   if event.kind != EventKind.Mouse:
     return false
@@ -1123,6 +1124,11 @@ proc handleMouseEvent*(e: Editor, event: Event): bool =
   else:
     result = false
   e.enforceModePolicy()
+
+proc handleMouseEvent*(e: Editor, event: Event): bool =
+  ## Compatibility adapter from Celina mouse events to Moe input values.
+  e.asCommand:
+    result = e.handleMouseEventCore(event)
 
 proc handleInterruptCore(e: Editor): bool =
   ## Handle Ctrl-C. Behaviour depends on the
@@ -1153,8 +1159,7 @@ proc handleInterruptCore(e: Editor): bool =
     e.setMode(e.state.mode)
     # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
     if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-      e.state.insertNormalMode = false
-      e.setMode(EditorMode.Insert)
+      e.resumeInsert()
     return true
 
   # Command overlay: clear command line and exit overlay
@@ -1165,8 +1170,7 @@ proc handleInterruptCore(e: Editor): bool =
     e.setMode(e.state.mode)
     # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
     if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-      e.state.insertNormalMode = false
-      e.setMode(EditorMode.Insert)
+      e.resumeInsert()
     return true
 
   if e.state.mode == EditorMode.Normal:
@@ -1182,8 +1186,7 @@ proc handleInterruptCore(e: Editor): bool =
           e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
       e.state.editState.insertModeStartPos = none(BufferPosition)
       e.state.editState.substituteContext = none(types.SubstituteContext)
-      let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
-      adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+      e.activeWindow.adjustCursorAfterInsertExit()
       return true
     # Normal mode: show exit message like Vim
     e.state.statusMessage = "Type :qa and press <Enter> to exit"
@@ -1221,15 +1224,15 @@ proc handleInterruptCore(e: Editor): bool =
     # Adjust the cursor only when the transition really entered Normal mode.
     # Forced Insert mode redirects it into a fresh Insert session instead.
     if e.state.mode == EditorMode.Normal:
-      let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
-      adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+      e.activeWindow.adjustCursorAfterInsertExit()
 
   return true
 
 proc handleInterrupt*(e: Editor): bool =
   ## Handle a frontend interrupt request, such as Ctrl-C in a terminal.
   e.prepareForInput(false)
-  e.handleInterruptCore()
+  e.asCommand:
+    result = e.handleInterruptCore()
 
 proc dismissTempMessagesKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Dismiss temporary messages (e.g. :jumps output) on any key.
@@ -1917,17 +1920,21 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   ## GUI frontends can call this directly after translating their native key
   ## input into Moe's `KeyCombo` type. Terminal-specific events such as Quit,
   ## paste, and mouse input remain handled by `handleEvent`.
-  e.noteQuit(e.dispatchKeyCombo(keyCombo))
+  e.asCommand:
+    result = e.noteQuit(e.dispatchKeyCombo(keyCombo))
 
 proc handleTextInput*(e: Editor, text: string): bool =
   ## Handle committed text from a GUI text-input protocol. False when the
   ## editor decided to quit.
-  e.noteQuit(e.dispatchTextInput(text))
+  e.asCommand:
+    result = e.noteQuit(e.dispatchTextInput(text))
 
 proc handleEvent*(e: Editor, event: Event): bool =
   ## Handle `event`. False when the editor decided to quit.
-  e.noteQuit(e.dispatchEvent(event))
+  e.asCommand:
+    result = e.noteQuit(e.dispatchEvent(event))
 
 proc handleKeyMappingTimeout*(e: Editor): bool =
   ## Handle the key mapping timeout. False when the editor decided to quit.
-  e.noteQuit(e.dispatchKeyMappingTimeout())
+  e.asCommand:
+    result = e.noteQuit(e.dispatchKeyMappingTimeout())
