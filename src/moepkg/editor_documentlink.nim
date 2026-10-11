@@ -115,7 +115,7 @@ proc startLspDocumentLinks*(e: Editor): bool =
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  if not e.config.lsp.documentLink.enable:
+  if not e.lspFeatureEnabled(e.activeBuffer(), documentLink):
     e.state.statusMessage = "LSP document link is disabled"
     return false
 

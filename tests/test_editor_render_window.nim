@@ -2318,7 +2318,6 @@ suite "getSelectionStyle - Cursor line":
     let e = createTestEditor()
     e.state.showCursorLine = true
     e.state.showSyntax = false
-    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
@@ -2351,7 +2350,6 @@ suite "getSelectionStyle - Cursor line":
     let e = createTestEditor()
     e.state.showCursorLine = true
     e.state.showSyntax = true
-    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # Set up highlight with searchResult color on columns 0-4
@@ -2385,7 +2383,6 @@ suite "getSelectionStyle - Cursor line":
     let e = createTestEditor()
     e.state.showCursorLine = true
     e.state.showSyntax = true
-    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # Set up highlight with a normal (non-searchResult) color
@@ -2420,7 +2417,6 @@ suite "getSelectionStyle - Cursor column":
     e.state.showCursorColumn = true
     e.state.showCursorLine = false
     e.state.showSyntax = false
-    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
@@ -2478,7 +2474,6 @@ suite "getSelectionStyle - Cursor column":
     e.state.showCursorColumn = true
     e.state.showCursorLine = true
     e.state.showSyntax = false
-    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # At intersection (same line AND same column): cursorLine wins
@@ -2871,7 +2866,6 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
 
 # Helpers for priority-chain tests.
 proc setupDocumentHighlight(e: Editor, line, startCol, endCol, kind: int) =
-  e.state.showDocumentHighlight = true
   e.state.lspCache.documentHighlightCache.isValid = true
   e.state.lspCache.documentHighlightCache.itemsByLine = {
     line: @[
@@ -3820,7 +3814,8 @@ suite "End-of-line virtual text - cursor line highlight":
     e.state.showSyntax = false
     e.state.showCursorLine = false
     e.state.showIndentationLines = false
-    e.state.showInlayHint = true
+    e.lsp.enabled = true
+    e.config.lsp.inlayHint.enable = true
     e.activeBuffer().filePath = some("/test/file.nim")
 
     # Populate the inlay hint cache so the real provider yields text.

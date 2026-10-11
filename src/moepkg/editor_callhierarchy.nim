@@ -50,7 +50,7 @@ proc startCallHierarchyRequest(e: Editor, kind: CallHierarchyRequestKind): bool 
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  if not e.config.lsp.callHierarchy.enable:
+  if not e.lspFeatureEnabled(e.activeBuffer(), callHierarchy):
     e.state.statusMessage = "LSP call hierarchy is disabled"
     return false
 

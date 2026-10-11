@@ -25,6 +25,10 @@ import pkg/results
 
 import types/editor_types, lsp_integration
 
+template lspFeatureEnabled*(e: Editor, buffer: TextBuffer, feature: untyped): bool =
+  ## `lspFeatureEnabled` against the editor's own config.
+  e.lsp.lspFeatureEnabled(e.config.lsp, buffer, feature)
+
 proc cancelPendingRequest*(
     lsp: LspIntegration, cache: var LspCacheState, feature: LspRequestFeature
 ) =

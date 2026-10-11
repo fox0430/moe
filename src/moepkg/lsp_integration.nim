@@ -29,7 +29,7 @@ import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger
 import path_key
 import lsp/protocol/types as lspTypes
 
-import types/lsp_integration_types
+import types/[lsp_integration_types, config_types]
 export lsp_integration_types
 
 const MaxEditPathDisplayCount* = 10
@@ -429,6 +429,60 @@ proc lspParticipation*(lsp: LspIntegration, buffer: TextBuffer): LspParticipatio
   if lsp.service.getLanguageIdFromPath(buffer.filePath.get).isNone:
     return lpNoServer
   lpParticipates
+
+template lspFeatureEnabled*(
+    lsp: LspIntegration, cfg: LspConfig, buffer: TextBuffer, feature: untyped
+): bool =
+  ## Whether the `LspConfig` feature `feature` (e.g. `hover`) is on for
+  ## `buffer`, under `[Lsp] enable`. Every feature gate goes through here.
+  lsp.enabled and cfg.feature.enable
+
+proc lspRequestEnabled*(
+    lsp: LspIntegration, cfg: LspConfig, buffer: TextBuffer, feature: LspRequestFeature
+): bool =
+  ## `lspFeatureEnabled` for the feature a request of kind `feature` serves.
+  case feature
+  of lrfHover:
+    lsp.lspFeatureEnabled(cfg, buffer, hover)
+  of lrfSignatureHelp:
+    lsp.lspFeatureEnabled(cfg, buffer, signatureHelp)
+  of lrfCompletion, lrfCompletionResolve:
+    lsp.lspFeatureEnabled(cfg, buffer, completion)
+  of lrfSelectionRange:
+    lsp.lspFeatureEnabled(cfg, buffer, selectionRange)
+  of lrfDocumentSymbol:
+    lsp.lspFeatureEnabled(cfg, buffer, documentSymbol)
+  of lrfDocumentLink, lrfDocumentLinkResolve:
+    lsp.lspFeatureEnabled(cfg, buffer, documentLink)
+  of lrfDefinition:
+    lsp.lspFeatureEnabled(cfg, buffer, definition)
+  of lrfDeclaration:
+    lsp.lspFeatureEnabled(cfg, buffer, declaration)
+  of lrfReferences:
+    lsp.lspFeatureEnabled(cfg, buffer, references)
+  of lrfTypeDefinition:
+    lsp.lspFeatureEnabled(cfg, buffer, typeDefinition)
+  of lrfImplementation:
+    lsp.lspFeatureEnabled(cfg, buffer, implementation)
+  of lrfCodeLens, lrfCodeLensResolve:
+    lsp.lspFeatureEnabled(cfg, buffer, codeLens)
+  of lrfInlayHint:
+    lsp.lspFeatureEnabled(cfg, buffer, inlayHint)
+  of lrfDocumentHighlight:
+    lsp.lspFeatureEnabled(cfg, buffer, documentHighlight)
+  of lrfSemanticTokens:
+    lsp.lspFeatureEnabled(cfg, buffer, semanticTokens)
+  of lrfCallHierarchyPrepareIncoming, lrfCallHierarchyPrepareOutgoing,
+      lrfCallHierarchyIncoming, lrfCallHierarchyOutgoing:
+    lsp.lspFeatureEnabled(cfg, buffer, callHierarchy)
+  of lrfFormatting:
+    lsp.lspFeatureEnabled(cfg, buffer, documentFormatting)
+  of lrfRename:
+    lsp.lspFeatureEnabled(cfg, buffer, rename)
+  of lrfFoldingRange:
+    lsp.lspFeatureEnabled(cfg, buffer, foldingRange)
+  of lrfExecuteCommand:
+    lsp.lspFeatureEnabled(cfg, buffer, executeCommand)
 
 proc syncLogLabel(buffer: TextBuffer): string =
   ## Single label for document-sync degradation, so dedup by message stays stable.

@@ -1052,13 +1052,6 @@ template flag2(name: untyped, T: typedesc, s1, f: untyped) =
   proc `name=`*(s: EditorState, v: T) =
     s.config.s1.f = v
 
-template flag3(name: untyped, T: typedesc, s1, s2, f: untyped) =
-  proc name*(s: EditorState): T =
-    s.config.s1.s2.f
-
-  proc `name=`*(s: EditorState, v: T) =
-    s.config.s1.s2.f = v
-
 flag2(showTabLine, bool, tabLine, enable)
 flag2(showStatusLine, bool, standard, statusLine)
 flag2(multiStatusLine, bool, statusLine, multipleStatusLine)
@@ -1074,9 +1067,6 @@ flag2(scrollbarWidth, int, standard, scrollbarWidth)
 flag2(showModifiedLines, bool, standard, showModifiedLines)
 flag2(showGitDiff, bool, git, showChangedLine)
 flag2(showSyntaxChecker, bool, syntaxChecker, enable)
-flag3(showCodeLens, bool, lsp, codeLens, enable)
-flag3(showDocumentHighlight, bool, lsp, documentHighlight, enable)
-flag3(showInlayHint, bool, lsp, inlayHint, enable)
 flag2(lineWrap, bool, standard, lineWrap)
 flag2(softTabStop, int, standard, softTabStop)
 

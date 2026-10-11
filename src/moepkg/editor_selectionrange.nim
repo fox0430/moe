@@ -133,7 +133,7 @@ proc startLspSelectionRange*(e: Editor): bool =
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  if not e.config.lsp.selectionRange.enable:
+  if not e.lspFeatureEnabled(e.activeBuffer(), selectionRange):
     e.state.statusMessage = "LSP selection range is disabled"
     return false
 

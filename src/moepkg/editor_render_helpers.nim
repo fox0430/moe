@@ -82,7 +82,7 @@ proc isPositionInDocumentHighlight*(
   ##
   ## The cache holds one buffer's highlights at a time, keyed by line, so it
   ## only applies to the buffer it was built from.
-  if not state.showDocumentHighlight or not state.lspCache.documentHighlightCache.isValid or
+  if not state.lspCache.documentHighlightCache.isValid or
       state.lspCache.documentHighlightCache.bufferId != bufferId:
     return none(int)
 

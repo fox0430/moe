@@ -368,19 +368,25 @@ proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
     of lrkImplementation: "implementation"
     of lrkNone: ""
 
+  let activeBuffer = e.activeBuffer()
+
   let featureEnabled =
     case kind
-    of lrkDefinition: e.config.lsp.definition.enable
-    of lrkDeclaration: e.config.lsp.declaration.enable
-    of lrkReferences: e.config.lsp.references.enable
-    of lrkTypeDefinition: e.config.lsp.typeDefinition.enable
-    of lrkImplementation: e.config.lsp.implementation.enable
-    of lrkNone: false
+    of lrkDefinition:
+      e.lspFeatureEnabled(activeBuffer, definition)
+    of lrkDeclaration:
+      e.lspFeatureEnabled(activeBuffer, declaration)
+    of lrkReferences:
+      e.lspFeatureEnabled(activeBuffer, references)
+    of lrkTypeDefinition:
+      e.lspFeatureEnabled(activeBuffer, typeDefinition)
+    of lrkImplementation:
+      e.lspFeatureEnabled(activeBuffer, implementation)
+    of lrkNone:
+      false
   if not featureEnabled:
     e.state.statusMessage = "LSP " & kindName & " is disabled"
     return false
-
-  let activeBuffer = e.activeBuffer()
 
   # Guard against unsupported servers so we report "not supported" immediately
   # instead of issuing a request that only fails after the response timeout.

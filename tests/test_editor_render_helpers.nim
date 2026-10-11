@@ -128,20 +128,8 @@ suite "isVisualAllMode - Comprehensive":
     check isVisualAllMode(EditorMode.Debug) == false
 
 suite "isPositionInDocumentHighlight - Detailed":
-  test "Returns none when disabled":
-    let e = createTestEditor()
-    e.state.showDocumentHighlight = false
-    e.state.lspCache.documentHighlightCache.isValid = true
-    e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
-
-    let result = e.state.isPositionInDocumentHighlight(
-      e.activeBuffer.id, BufferPosition(line: 0, column: 5)
-    )
-    check result.isNone
-
   test "Returns none when cache invalid":
     let e = createTestEditor()
-    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = false
 
     let result = e.state.isPositionInDocumentHighlight(
@@ -151,7 +139,6 @@ suite "isPositionInDocumentHighlight - Detailed":
 
   test "Returns none for line without highlights":
     let e = createTestEditor()
-    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
     e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
     e.state.lspCache.documentHighlightCache.itemsByLine =
@@ -164,7 +151,6 @@ suite "isPositionInDocumentHighlight - Detailed":
 
   test "Returns kind for position in range":
     let e = createTestEditor()
-    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
     e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
     e.state.lspCache.documentHighlightCache.itemsByLine =
@@ -178,7 +164,6 @@ suite "isPositionInDocumentHighlight - Detailed":
 
   test "Exclusive end column":
     let e = createTestEditor()
-    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
     e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
     e.state.lspCache.documentHighlightCache.itemsByLine =
@@ -198,7 +183,6 @@ suite "isPositionInDocumentHighlight - Detailed":
 
   test "Multiple highlights on same line":
     let e = createTestEditor()
-    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
     e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
     e.state.lspCache.documentHighlightCache.itemsByLine = {
