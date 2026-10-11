@@ -57,6 +57,18 @@ suite "editor_documentlink - startLspDocumentLinks":
     check not result
     check e.state.statusMessage == "No file path for current buffer"
 
+  test "Returns false when document link is disabled in config":
+    let config = newEditorConfig()
+    config.lsp.documentLink.enable = false
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.lsp.enabled = true
+
+    let result = e.startLspDocumentLinks()
+
+    check not result
+    check e.state.statusMessage == "LSP document link is disabled"
+
 suite "editor_documentlink - requestLspDocumentLinks":
   test "Returns false when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
