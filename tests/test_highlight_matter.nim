@@ -1,5 +1,5 @@
 when defined(moe.matter) or defined(features.moe.matter):
-  import std/[sequtils, unittest]
+  import std/[sequtils, strutils, unicode, unittest]
   import pkg/results
   import ../src/moepkg/[config, highlight, highlight_config, syntax/tokenizer]
   import ../src/moepkg/buffer {.all.}
@@ -8,6 +8,37 @@ when defined(moe.matter) or defined(features.moe.matter):
   import matter_test_grammars
 
   suite "Matter incremental highlight":
+    test "HTML categories reach distinct editor theme slots across Unicode columns":
+      let lines = @[
+        "<nk-window id=\"main\">", "λ <span class='muted'>Plain text</span>",
+        "</nk-window>",
+      ]
+      let (segments, states) = initHighlightIncremental(
+        lines,
+        0,
+        lines.high,
+        newTokenizerState(hbMatter, langHtml, newTestMatterGrammarSet()),
+        @[],
+        langHtml,
+      )
+      check states.len == lines.len
+      let h = Highlight(colorSegments: segments)
+      for (row, fragment, expected) in [
+        (0, "nk-window", builtin),
+        (0, "id", property),
+        (0, "main", stringLit),
+        (1, "span", builtin),
+        (1, "class", property),
+        (1, "muted", stringLit),
+        (1, "Plain text", EditorColorPairIndex.default),
+        (2, "nk-window", builtin),
+      ]:
+        checkpoint(fragment)
+        let byteIndex = lines[row].find(fragment)
+        require byteIndex >= 0
+        let column = lines[row][0 ..< byteIndex].runeLen
+        check h.getColorPair(row, column) == expected
+
     test "Matter seed produces one state per line":
       let grammars = newTestMatterGrammarSet()
       let lines = @["proc hello() =", "  discard", "# note"]

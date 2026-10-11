@@ -79,7 +79,13 @@ proc `==`*(a, b: MatterGrammarSet): bool =
   a.sources == b.sources
 
 func scopeMatches(scope, prefix: string): bool =
-  scope == prefix or scope.startsWith(prefix & ".")
+  scope == prefix or
+    (scope.len > prefix.len and scope.startsWith(prefix) and scope[prefix.len] == '.')
+
+func scopeMatchesAny(scope: string, prefixes: openArray[string]): bool =
+  for prefix in prefixes:
+    if scope.scopeMatches(prefix):
+      return true
 
 proc isMatterCodeBlock*(state: MatterLineState): bool =
   ## Whether a completed Markdown state is inside a fenced or indented block.
@@ -98,31 +104,100 @@ proc category(scopes: openArray[string]): MatterColorCategory =
   # strings. Match scope components, not substrings in language names.
   for i in countdown(scopes.high, 0):
     let scope = scopes[i]
+    # These captures name pragma arguments/section labels, not markup. Let
+    # the enclosing meta.preprocessor scope supply their existing colour.
+    if scope.scopeMatches("entity.other.attribute-name.pragma") or
+        scope.scopeMatches("entity.name.tag.pragma-mark"):
+      continue
     if scope.scopeMatches("comment"):
       return mccComment
-    if scope.scopeMatches("constant.numeric"):
+    if scope.scopeMatchesAny(
+      [
+        "constant.numeric", "constant.other.color", "constant.other.time",
+        "constant.other.timestamp", "constant.other.location", "constant.language.nan",
+        "constant.language.infinity",
+      ]
+    ):
       return mccNumber
+    if scope.scopeMatches("constant.character") or
+        scope.scopeMatches("constant.other.rune"):
+      return mccString
+    if scope.scopeMatchesAny(
+      [
+        "constant.language.null", "constant.language.undefined",
+        "constant.language.empty", "constant.language.symbol",
+      ]
+    ):
+      return mccBuiltin
     if scope.scopeMatches("constant.language") or scope.scopeMatches("constant.boolean"):
       return mccBoolean
-    if scope.scopeMatches("entity.name.function"):
+    if scope.scopeMatches("entity.name.other.preprocessor") or
+        scope.scopeMatches("entity.name.function.preprocessor"):
+      return mccPreprocessor
+    if scope.scopeMatches("entity.name.function") or
+        scope.scopeMatches("entity.name.command"):
       return mccFunction
-    if scope.scopeMatches("variable.other.property") or
-        scope.scopeMatches("support.type.property-name") or
-        scope.scopeMatches("string.quoted.double.json") and
-        "meta.structure.dictionary.key.json" in scopes:
+    # HCL keys may also carry string/variable scopes. Only the direct key
+    # child gets the property colour; an interpolated expression inside a
+    # quoted key must keep its own more specific category.
+    let directMappingKey =
+      i > 0 and (
+        scopes[i - 1].scopeMatches("meta.mapping.key") or
+        scopes[i - 1].scopeMatches("meta.structure.dictionary.key") or
+        scopes[i - 1].scopeMatches("variable.declaration.hcl")
+      )
+    if scope.scopeMatchesAny(
+      [
+        "variable.other.property", "variable.other.object.property",
+        "variable.other.constant.property", "variable.other.constant.object.property",
+        "variable.object.property", "variable.other.member", "variable.property.name",
+        "support.variable.property", "entity.name.variable.property",
+        "entity.name.variable.field", "entity.function.property.name",
+        "entity.other.attribute-name", "entity.name.tag.yaml",
+        "support.type.property-name", "support.type.vendored.property-name",
+      ]
+    ) or
+        directMappingKey and
+        (scope.scopeMatches("string") or scope.scopeMatches("variable.other.readwrite")):
       return mccProperty
-    if scope.scopeMatches("entity.name.type") or scope.scopeMatches("support.type"):
+    if scope.scopeMatchesAny(
+      [
+        "entity.name.type", "entity.name.class", "entity.other.inherited-class",
+        "entity.name.namespace", "entity.name.module", "entity.name.package",
+        "entity.name.scope-resolution", "variable.other.generic-type", "support.type",
+      ]
+    ):
       return mccType
-    if scope.scopeMatches("keyword.operator"):
+    if scope.scopeMatches("keyword.operator") or
+        scope.scopeMatches("entity.name.operator") or
+        scope.scopeMatches("constant.other.operator"):
       return mccOperator
     if scope.scopeMatches("meta.preprocessor") or
         scope.scopeMatches("keyword.control.directive"):
       return mccPreprocessor
     if scope.scopeMatches("keyword") or scope.scopeMatches("storage"):
       return mccKeyword
-    if scope.scopeMatches("support.function") or scope.scopeMatches("support.class"):
+    # Reuse the builtin palette for named constants and markup tags. This
+    # keeps existing themes and embedding clients' category switches valid.
+    # Regexp captures and printf placeholders belong to their enclosing
+    # string instead. Match a complete regexp component, including descendants.
+    let namedConstantOrTag =
+      scope.scopeMatchesAny(["constant.other", "entity.name.tag"]) and
+      not scope.scopeMatches("constant.other.placeholder") and
+      not (scope.endsWith(".regexp") or scope.contains(".regexp."))
+    if namedConstantOrTag or
+        scope.scopeMatchesAny(
+          [
+            "support.function", "support.class", "support.constant", "support.variable",
+            "variable.language", "variable.parameter.function.language",
+            "variable.legacy.builtin", "variable.other.constant",
+            "variable.other.enummember", "entity.name.variable.enum-member",
+            "entity.name.section", "markup.heading",
+          ]
+        ):
       return mccBuiltin
-    if scope.scopeMatches("variable"):
+    if scope.scopeMatches("variable") or scope.scopeMatches("entity.name.variable") or
+        scope.scopeMatches("entity.name.symbol"):
       return mccIdentifier
     if scope.scopeMatches("string") or scope.scopeMatches("markup.inline.raw"):
       return mccString
