@@ -94,6 +94,7 @@ type
       ## (id, contentVersion) of every scanned buffer; empty until the first
       ## scan, so an unmodified buffer skips re-scanning on the next trigger.
     lspRequestId*: Option[int] ## Pending LSP request ID
+    lspRequestBufferId*: BufferId ## Buffer the pending request was sent for
     cancelLspRequest*: proc(requestId: int)
       ## Tells the server a request is no longer wanted. Nil without LSP.
     lspItems*: seq[CompletionItem] ## Raw LSP completion items
@@ -1321,9 +1322,10 @@ proc renderDocPanel*(termBuffer: var Buffer, docPanel: DocPanel, pos: PopupPosit
 
 # LSP completion support
 
-proc setLspRequestPending*(mgr: CompletionManager, requestId: int) =
-  ## Set the pending LSP request ID
+proc setLspRequestPending*(mgr: CompletionManager, requestId: int, bufferId: BufferId) =
+  ## Set the pending LSP request ID and the buffer it was sent for
   mgr.lspRequestId = some(requestId)
+  mgr.lspRequestBufferId = bufferId
 
 proc clearLspRequestPending*(mgr: CompletionManager) =
   ## Forget the in-flight request. Its answer targets an old prefix and cursor.

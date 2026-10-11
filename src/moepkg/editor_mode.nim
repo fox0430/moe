@@ -26,6 +26,7 @@ import pkg/results
 import types/editor_types, buffer, logger
 import command_handlers/mode_dispatchers
 import command_handlers/insert_commands
+from command_handlers/insert_handler import closeInsertPopups
 
 func forceInsertMode(e: Editor): bool =
   not e.isNil and not e.config.isNil and e.config.standard.forceInsertMode
@@ -50,8 +51,9 @@ proc clearInsertSessionTracking(e: Editor) =
 proc finalizeInsertSessionForBufferSwitch*(e: Editor, oldBuffer: TextBuffer) =
   ## Abandon the Insert session before the active window is repointed at
   ## another buffer or window. Call before reassigning `window.buffer`, passing
-  ## the buffer that owns the session. Handles Insert/Replace, committing
-  ## `oldBuffer`'s transaction and clearing all Insert tracking state. A no-op
+  ## the buffer that owns the session. Handles Insert/Replace, closing the
+  ## Insert popups, committing `oldBuffer`'s transaction and clearing all
+  ## Insert tracking state. A no-op
   ## when no Insert session is active. Insert waiting after Ctrl-o has no
   ## session to abandon; it resumes in the window moved to, as in Vim.
   ##
@@ -59,6 +61,9 @@ proc finalizeInsertSessionForBufferSwitch*(e: Editor, oldBuffer: TextBuffer) =
   ## dot-repeat: abandoning a session is not a deliberate Insert exit.
   if e.state.mode notin {EditorMode.Insert, EditorMode.Replace}:
     return
+
+  if not e.handlerManager.isNil:
+    e.handlerManager.insertHandler.closeInsertPopups()
 
   # Abort snippet and auto-indent inside the transaction so `replaceLine`
   # joins the same undo group.

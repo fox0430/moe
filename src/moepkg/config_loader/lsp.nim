@@ -31,18 +31,27 @@ import std/[algorithm, json, sequtils, strformat, tables]
 import pkg/parsetoml
 
 import ../[config, config_macros, logger]
+import ../lsp/default_servers
 
 import base, save_base
 
 # Top-level TOML section name handled by this module, from the type itself.
 const LspSectionName* = cfgGroupName(LspConfig)
 
-# Keys accepted inside an `[Lsp.<languageId>]` table. Also the probe for
-# telling a language server from a typo'd feature name.
+# Server keys accepted inside an `[Lsp.<languageId>]` table.
 const LspServerConfigKeys = [
   "extensions", "command", "trace", "settings", "rustAnalyzerRunSingle",
   "rustAnalyzerDebugSingle",
 ]
+
+# `[Lsp.<Feature>]` names, also accepted as `[Lsp.<languageId>.<Feature>]`.
+const LspFeatureNames = generateSectionGroupChildNames(LspConfig)
+
+# Keys accepted inside an `[Lsp.<languageId>]` table.
+const LspLanguageKeys = @LspServerConfigKeys & @LspFeatureNames
+
+# The only key a `[Lsp.<languageId>.<Feature>]` table takes.
+const LspLanguageFeatureKey = "enable"
 
 proc tomlValueToJson*(v: TomlValueRef): JsonNode =
   case v.kind
@@ -71,7 +80,6 @@ proc tomlValueToJson*(v: TomlValueRef): JsonNode =
 proc loadLspServerConfig*(
     table: TomlTableRef, vr: var ValidationResult, section: string
 ): LspServerConfig =
-  checkUnknownKeys(table, LspServerConfigKeys, section, vr)
   result = LspServerConfig(
     extensions: @[],
     command: "",
@@ -96,33 +104,57 @@ proc loadLspServerConfig*(
     table, "rustAnalyzerDebugSingle", result.rustAnalyzerDebugSingle, vr, section
   )
 
+proc loadLspLanguageFeatures(
+    table: TomlTableRef, vr: var ValidationResult, section: string
+): Table[string, bool] =
+  ## The `[<section>.<Feature>]` tables of a language entry, by feature name.
+  ## A table without a valid `enable` sets nothing.
+  for name in LspFeatureNames:
+    if not expectTable(table, name, vr, section):
+      continue
+    let
+      featureSection = fullKey(section, name)
+      featureTable = table[name].getTable()
+    checkUnknownKeys(featureTable, [LspLanguageFeatureKey], featureSection, vr)
+    if featureTable.hasKey(LspLanguageFeatureKey):
+      var enable = false
+      loadBool(featureTable, LspLanguageFeatureKey, enable, vr, featureSection)
+      if featureTable[LspLanguageFeatureKey].kind == TomlValueKind.Bool:
+        result[name] = enable
+
 proc loadLspConfig*(
     table: TomlTableRef, config: var LspConfig, vr: var ValidationResult
 ) =
   const section = LspSectionName
   generateSectionGroupLoader(table, config, vr, LspConfig)
 
-  # Language server configs (any key that's not a known feature is a language server)
+  # Any other key is a language entry: server keys and/or feature sub-tables.
   const knownKeys = generateSectionGroupKeys(LspConfig)
   for key, value in table:
-    if key notin knownKeys:
-      if value.kind == TomlValueKind.Table:
-        let serverTable = value.getTable()
-        # A language-server entry must declare at least one server config key.
-        # Otherwise treat it as a typo'd feature name (e.g. `[Lsp.Completin]`)
-        # rather than silently absorbing it as a server config.
-        var isServerConfig = false
-        for k in LspServerConfigKeys:
-          if serverTable.hasKey(k):
-            isServerConfig = true
-            break
-        if isServerConfig:
-          config.servers[key] =
-            loadLspServerConfig(serverTable, vr, fullKey(section, key))
-        else:
-          vr.addUnknownKey(fullKey(section, key))
-      else:
-        vr.addUnknownKey(fullKey(section, key))
+    if key in knownKeys:
+      continue
+    let langSection = fullKey(section, key)
+    if value.kind != TomlValueKind.Table:
+      vr.addUnknownKey(langSection)
+      continue
+    let langTable = value.getTable()
+    var hasServerKey, hasSubTable = false
+    for k, v in langTable:
+      if k in LspServerConfigKeys:
+        hasServerKey = true
+      elif v.kind == TomlValueKind.Table:
+        hasSubTable = true
+    # Not a language: a typo'd feature name (e.g. `[Lsp.Completin]`), or
+    # feature tables under a language with no server (e.g. `[Lsp.rsut.Hover]`).
+    if not hasServerKey and not (hasSubTable and isDefaultLspLanguage(key)):
+      vr.addUnknownKey(langSection)
+      continue
+    checkUnknownKeys(langTable, LspLanguageKeys, langSection, vr)
+    if hasServerKey:
+      config.servers[key] = loadLspServerConfig(langTable, vr, langSection)
+    let features = loadLspLanguageFeatures(langTable, vr, langSection)
+    if features.len > 0:
+      config.languageFeatures[key] = features
 
 # Serializer
 
@@ -161,21 +193,36 @@ proc jsonToTomlInline*(n: JsonNode): string =
   of JNull:
     result = "\"\""
 
+proc appendLspServerToml(
+    lines: var seq[string], name: string, server: LspServerConfig
+) =
+  lines.add "[Lsp." & name & "]"
+  lines.add "extensions = " & toTomlStringArray(server.extensions)
+  lines.add "command = " & toTomlString(server.command)
+  lines.add "trace = " & toTomlString($server.trace)
+  if server.settings.len > 0:
+    try:
+      lines.add "settings = " & jsonToTomlInline(parseJson(server.settings))
+    except JsonParsingError as e:
+      logWarn("config_loader/lsp", &"Invalid JSON in settings for '{name}': {e.msg}")
+  lines.add "rustAnalyzerRunSingle = " & toTomlBool(server.rustAnalyzerRunSingle)
+  lines.add "rustAnalyzerDebugSingle = " & toTomlBool(server.rustAnalyzerDebugSingle)
+  lines.add ""
+
 proc appendLspToml*(lines: var seq[string], cfg: LspConfig) =
   generateSectionGroupSerializer(lines, cfg, LspConfig)
 
-  # Lsp language server configs (sorted for deterministic output)
-  for name in toSeq(cfg.servers.keys).sorted:
-    let server = cfg.servers[name]
-    lines.add "[Lsp." & name & "]"
-    lines.add "extensions = " & toTomlStringArray(server.extensions)
-    lines.add "command = " & toTomlString(server.command)
-    lines.add "trace = " & toTomlString($server.trace)
-    if server.settings.len > 0:
-      try:
-        lines.add "settings = " & jsonToTomlInline(parseJson(server.settings))
-      except JsonParsingError as e:
-        logWarn("config_loader/lsp", &"Invalid JSON in settings for '{name}': {e.msg}")
-    lines.add "rustAnalyzerRunSingle = " & toTomlBool(server.rustAnalyzerRunSingle)
-    lines.add "rustAnalyzerDebugSingle = " & toTomlBool(server.rustAnalyzerDebugSingle)
-    lines.add ""
+  # Language entries, sorted for deterministic output
+  var names = toSeq(cfg.servers.keys)
+  for name in cfg.languageFeatures.keys:
+    if name notin cfg.servers:
+      names.add name
+  for name in names.sorted:
+    if name in cfg.servers:
+      lines.appendLspServerToml(name, cfg.servers[name])
+    if name in cfg.languageFeatures:
+      let features = cfg.languageFeatures[name]
+      for feature in toSeq(features.keys).sorted:
+        lines.add "[Lsp." & name & "." & feature & "]"
+        lines.add LspLanguageFeatureKey & " = " & toTomlBool(features[feature])
+        lines.add ""

@@ -187,10 +187,12 @@ proc clearDisabledLspState*(e: Editor) =
   for feature in disabled:
     e.cancelIfPending(feature)
 
-  # Completion keeps its request id outside `pending`, for the active buffer.
-  let completionOff = not e.lspFeatureEnabled(e.activeBuffer(), completion)
-  if completionOff and not e.handlerManager.isNil:
-    e.handlerManager.insertHandler.completionManager.clearLspRequestPending()
+  # Completion keeps its request id outside `pending`.
+  if not e.handlerManager.isNil:
+    let completionManager = e.handlerManager.insertHandler.completionManager
+    let owner = e.bufferById(completionManager.lspRequestBufferId)
+    if owner.isSome and not e.lspFeatureEnabled(owner.get, completion):
+      completionManager.clearLspRequestPending()
 
 proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer) =
   ## Sync after edit; failures report themselves.

@@ -44,6 +44,7 @@ import ../src/moepkg/command_handlers/insert_handler
 import ../src/moepkg/lsp_service {.all.}
 import ../src/moepkg/lsp/protocol/types as lsp_protocol_types
 import ../src/moepkg/types/lsp_integration_types
+import ../src/moepkg/lsp/worker
 from std/importutils import privateAccess
 from std/os import getTempDir, absolutePath, normalizedPath, `/`
 
@@ -3960,7 +3961,7 @@ suite "InsertModeHandler - LSP completion request retirement":
     state.config.autocomplete.enable = true
     state.config.lsp.completion.enable = true
 
-    handler.completionManager.setLspRequestPending(42)
+    handler.completionManager.setLspRequestPending(42, buf.id)
     check handler.completionManager.isPendingLsp
 
     handler.triggerLspCompletionRequest(buf, state)
@@ -3997,7 +3998,7 @@ suite "InsertModeHandler - LSP completion request retirement":
 
     # Its answer and the candidates from before recording would differ in a
     # replay, so both go though no new request replaces them.
-    handler.completionManager.setLspRequestPending(42)
+    handler.completionManager.setLspRequestPending(42, buf.id)
     handler.completionManager.lspItems = @[CompletionItem(label: "help")]
 
     handler.triggerLspCompletionRequest(buf, state)
@@ -4030,7 +4031,7 @@ suite "InsertModeHandler - an LSP answer while the user picks":
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 2)
     handler.completionManager.triggerCompletion(buf, 1, 2, langNone)
-    handler.completionManager.setLspRequestPending(42)
+    handler.completionManager.setLspRequestPending(42, buf.id)
     handler.lsp.service.pendingResponses[42] =
       (result: some("""[{"label": "foobar"}]"""), error: none(string))
     let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
@@ -4071,7 +4072,7 @@ suite "InsertModeHandler - a completion that shows nothing yet":
       buf, state.cursor.line, state.cursor.column, langNone
     )
     check handler.completionManager.menu.entries.len == 0
-    handler.completionManager.setLspRequestPending(42)
+    handler.completionManager.setLspRequestPending(42, buf.id)
     check handler.completionManager.isActive()
     handler.lsp.service.pendingResponses[42] =
       (result: some("""[{"label": "foobar"}]"""), error: none(string))
@@ -4306,4 +4307,108 @@ suite "InsertModeHandler - LSP resolve poll/trigger (NT-09)":
 
     handler.triggerResolveRequest(buf, state)
 
+    check lrfCompletionResolve notin state.lspCache.pending
+
+suite "InsertModeHandler - Ctrl+R signature help gate":
+  privateAccess(LspService)
+
+  proc ctrlRSetup(): (TextBuffer, InsertModeHandler, EditorState, LspWorker) =
+    ## Inside `f(` of a nim buffer the server has seen, with a worker whose
+    ## queue stands in for the server.
+    let path = getTempDir() / "test_insert_handler_ctrl_r.nim"
+    let buf = newTextBuffer("f(", some(path))
+    let handler = answerHandler(buf)
+    let worker = newLspWorker("nim").get
+    worker.setStateForTest(lwsRunning)
+    handler.lsp.service.workers["nim"] = worker
+    handler.lsp.documents[normalizedPath(absolutePath(path))] =
+      initLspDocumentState(1, buf.getTextString(), delivered = true)
+    let state = createTestState()
+    state.lspCache.pending = initTable[LspRequestFeature, LspRequestContext]()
+    state.cursor = BufferPosition(line: 0, column: 2)
+    (buf, handler, state, worker)
+
+  proc signatureHelpSent(worker: LspWorker): bool =
+    for cmd in worker.pendingCommandsForTest():
+      if cmd.kind == lcmdRequest and cmd.reqMethod == "textDocument/signatureHelp":
+        return true
+    false
+
+  let ctrlR = KeyCombo(isSpecial: false, char: "r", modifiers: {kmCtrl})
+
+  test "Ctrl+R asks the server for signature help":
+    let (buf, handler, state, worker) = ctrlRSetup()
+
+    check handler.handleInsertModeKey(buf, state, ctrlR).kind == imrHandled
+    check worker.signatureHelpSent
+    check lrfSignatureHelp in state.lspCache.pending
+
+  test "Ctrl+R sends nothing when signature help is off for the language":
+    let (buf, handler, state, worker) = ctrlRSetup()
+    state.config.lsp.languageFeatures["nim"] = {"SignatureHelp": false}.toTable
+
+    check handler.handleInsertModeKey(buf, state, ctrlR).kind == imrHandled
+    check not worker.signatureHelpSent
+    check lrfSignatureHelp notin state.lspCache.pending
+
+  test "Ctrl+R sends nothing when signature help is off globally":
+    let (buf, handler, state, worker) = ctrlRSetup()
+    state.config.lsp.signatureHelp.enable = false
+
+    check handler.handleInsertModeKey(buf, state, ctrlR).kind == imrHandled
+    check not worker.signatureHelpSent
+    check lrfSignatureHelp notin state.lspCache.pending
+
+suite "InsertModeHandler - completionItem/resolve gate":
+  privateAccess(LspService)
+
+  proc resolveSetup(): (TextBuffer, InsertModeHandler, EditorState, LspWorker) =
+    ## An LSP candidate without details selected in a nim buffer the server has
+    ## seen, with a worker whose queue stands in for the server.
+    let path = getTempDir() / "test_insert_handler_resolve.nim"
+    let buf = newTextBuffer("fo", some(path))
+    let handler = answerHandler(buf)
+    let worker = newLspWorker("nim").get
+    worker.setStateForTest(lwsRunning)
+    handler.lsp.service.workers["nim"] = worker
+    handler.lsp.documents[normalizedPath(absolutePath(path))] =
+      initLspDocumentState(1, buf.getTextString(), delivered = true)
+    handler.completionManager.lspItems = @[CompletionItem(label: "foo")]
+    handler.completionManager.menu.entries =
+      @[CompletionEntry(word: "foo", matchScore: 0, source: csLsp, lspItemIndex: 0)]
+    handler.completionManager.menu.hasSelection = true
+    let state = createTestState()
+    state.lspCache.pending = initTable[LspRequestFeature, LspRequestContext]()
+    (buf, handler, state, worker)
+
+  proc resolveSent(worker: LspWorker): bool =
+    for cmd in worker.pendingCommandsForTest():
+      if cmd.kind == lcmdRequest and cmd.reqMethod == "completionItem/resolve":
+        return true
+    false
+
+  test "resolve asks the server for the selected candidate":
+    let (buf, handler, state, worker) = resolveSetup()
+
+    handler.triggerResolveRequest(buf, state)
+
+    check worker.resolveSent
+    check lrfCompletionResolve in state.lspCache.pending
+
+  test "resolve sends nothing when completion is off for the language":
+    let (buf, handler, state, worker) = resolveSetup()
+    state.config.lsp.languageFeatures["nim"] = {"Completion": false}.toTable
+
+    handler.triggerResolveRequest(buf, state)
+
+    check not worker.resolveSent
+    check lrfCompletionResolve notin state.lspCache.pending
+
+  test "resolve sends nothing when completion is off globally":
+    let (buf, handler, state, worker) = resolveSetup()
+    state.config.lsp.completion.enable = false
+
+    handler.triggerResolveRequest(buf, state)
+
+    check not worker.resolveSent
     check lrfCompletionResolve notin state.lspCache.pending

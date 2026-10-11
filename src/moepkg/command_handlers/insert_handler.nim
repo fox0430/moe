@@ -796,7 +796,7 @@ proc triggerLspCompletionRequest*(
     if reqResult.isOk:
       handler.completionManager.lastLspRequestTime = getMonoTime()
       handler.completionManager.lastLspPrefix = prefix
-      handler.completionManager.setLspRequestPending(reqResult.get)
+      handler.completionManager.setLspRequestPending(reqResult.get, buffer.id)
     else:
       logLspDegraded("Completion request failed", reqResult.error)
 
@@ -890,7 +890,8 @@ proc triggerResolveRequest*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ) =
   ## Trigger a completionItem/resolve request for the selected item
-  if handler.lsp.isNil or not handler.lsp.isEnabled:
+  if handler.lsp.isNil or
+      not handler.lsp.lspFeatureEnabled(state.config.lsp, buffer, completion):
     return
   if not handler.completionManager.needsResolve():
     return
@@ -1324,7 +1325,8 @@ proc handleInsertModeKey*(
   if keyCombo.isCtrlR:
     # Ctrl+R - trigger signature help (LSP)
     handler.completionManager.cancelCompletion()
-    if not handler.lsp.isNil and handler.lsp.isEnabled:
+    if not handler.lsp.isNil and
+        handler.lsp.lspFeatureEnabled(state.config.lsp, buffer, signatureHelp):
       let cursorLine = state.cursor.line
       let cursorCol = state.cursor.column
       let ctxRes = startContextualRequestOnCache(

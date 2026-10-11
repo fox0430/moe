@@ -24,7 +24,8 @@ import pkg/results
 import
   ../src/moepkg/[
     editor, window_manager, editor_window_state, path_key, config, types, buffer, modes,
-    help_viewer, filer, backup_manager, diff_viewer, render_utils,
+    help_viewer, filer, backup_manager, diff_viewer, render_utils, completion,
+    signature_help,
   ]
 import ../src/moepkg/editor_window {.all.}
 import visual_test_helper
@@ -981,6 +982,23 @@ suite "moveWindowToTab - Visual":
 
     check e.state.visualSelection.active
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 4)
+
+suite "moveWindowToTab - Insert":
+  test "the active window that moves closes completion and signature help":
+    let e = createTestEditor()
+    let other = newTextBuffer("other tab")
+    e.addBuffer(other)
+    let insertHandler = e.handlerManager.insertHandler
+    e.state.mode = EditorMode.Insert
+    insertHandler.completionManager.state = csActive
+    insertHandler.completionManager.setLspRequestPending(7, e.activeBuffer.id)
+    insertHandler.signatureHelpManager.state = shsActive
+
+    check e.moveWindowToTab(e.activeWindow, other) == tabMoved
+
+    check not insertHandler.completionManager.isActive
+    check not insertHandler.completionManager.isPendingLsp
+    check insertHandler.signatureHelpManager.state == shsIdle
 
 suite "Visual and the focus":
   test "the window that loses the focus leaves Visual":

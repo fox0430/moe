@@ -36,6 +36,7 @@ import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
     render_utils, clipboard, message_log, frontend_input, pending_input, key_router,
+    completion, signature_help,
   ]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/editor_build_jobs {.all.}
@@ -5654,6 +5655,27 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
     check not bufA.inTransaction
     check e.state.editState.insertModeStartPos.isNone
     check e.state.mode == EditorMode.Normal
+
+  test "Completion and signature help close on the jump":
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("xxx\nyyy\nzzz")
+    e.addSecondWindow(buf2)
+
+    let bufA = e.windowManager.windows[0].buffer
+    let insertHandler = e.handlerManager.insertHandler
+    e.state.mode = EditorMode.Insert
+    insertHandler.completionManager.state = csActive
+    insertHandler.completionManager.setLspRequestPending(7, bufA.id)
+    insertHandler.signatureHelpManager.state = shsActive
+
+    check e.handleMouseEvent(makeLeftClickEvent(50, 1))
+
+    check e.windowManager.activeWindowIndex == 1
+    check not insertHandler.completionManager.isActive
+    check not insertHandler.completionManager.isPendingLsp
+    check insertHandler.signatureHelpManager.state == shsIdle
 
   test "Visual selection is cleared before touching new buffer":
     # Anchor line 5 on a 6-line buf, click into a 2-line buf: a surviving

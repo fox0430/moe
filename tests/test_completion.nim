@@ -372,10 +372,11 @@ suite "Completion - calculateMaxWordWidth":
 suite "Completion - LSP support":
   test "setLspRequestPending records the request":
     let mgr = newCompletionManager()
-    mgr.setLspRequestPending(42)
+    mgr.setLspRequestPending(42, BufferId(1))
 
     check mgr.isPendingLsp == true
     check mgr.getLspRequestId().get() == 42
+    check mgr.lspRequestBufferId == BufferId(1)
 
   test "Forgetting a request tells the server, answering it does not":
     var cancelled: seq[int]
@@ -385,13 +386,13 @@ suite "Completion - LSP support":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "./")
 
-    mgr.setLspRequestPending(1)
+    mgr.setLspRequestPending(1, BufferId(1))
     mgr.clearLspRequestPending()
-    mgr.setLspRequestPending(2)
+    mgr.setLspRequestPending(2, BufferId(1))
     mgr.cancelCompletion()
-    mgr.setLspRequestPending(3)
+    mgr.setLspRequestPending(3, BufferId(1))
     mgr.triggerPathCompletion(buf, 0, 2)
-    mgr.setLspRequestPending(4)
+    mgr.setLspRequestPending(4, BufferId(1))
     mgr.setLspItems(@[])
 
     check cancelled == @[1, 2, 3]
@@ -399,7 +400,7 @@ suite "Completion - LSP support":
   test "clearLspRequestPending retires a request nothing will replace":
     # Retired request stops polling; its answer is stale.
     let mgr = newCompletionManager()
-    mgr.setLspRequestPending(42)
+    mgr.setLspRequestPending(42, BufferId(1))
 
     mgr.clearLspRequestPending()
 
@@ -415,13 +416,13 @@ suite "Completion - LSP support":
     check mgr.isActive == true
 
     mgr.state = csIdle
-    mgr.setLspRequestPending(1)
+    mgr.setLspRequestPending(1, BufferId(1))
     check mgr.isActive == true
 
   test "a list that comes back empty keeps it waiting for the answer":
     # Buffer words are refreshed while the request is in flight.
     let mgr = newCompletionManager()
-    mgr.setLspRequestPending(1)
+    mgr.setLspRequestPending(1, BufferId(1))
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "zq")
 
@@ -434,7 +435,7 @@ suite "Completion - LSP support":
   test "setLspItems updates menu":
     let mgr = newCompletionManager()
     mgr.menu.prefix = "tes"
-    mgr.setLspRequestPending(1)
+    mgr.setLspRequestPending(1, BufferId(1))
 
     let items = @[
       CompletionItem(label: "test", kind: some(cikFunction)),
@@ -877,7 +878,7 @@ suite "Completion - hasSelection reset":
   test "setLspItems resets hasSelection":
     let mgr = newCompletionManager()
     mgr.menu.prefix = "tes"
-    mgr.setLspRequestPending(1)
+    mgr.setLspRequestPending(1, BufferId(1))
     mgr.menu.hasSelection = true
 
     let items = @[
@@ -1247,7 +1248,7 @@ suite "Completion - setLspItems with isIncomplete":
   test "setLspItems stores isIncomplete flag":
     let mgr = newCompletionManager()
     mgr.menu.prefix = "te"
-    mgr.setLspRequestPending(1)
+    mgr.setLspRequestPending(1, BufferId(1))
 
     let items = @[CompletionItem(label: "test")]
     mgr.setLspItems(items, isIncomplete = true)
@@ -1258,7 +1259,7 @@ suite "Completion - setLspItems with isIncomplete":
   test "setLspItems defaults isIncomplete to false":
     let mgr = newCompletionManager()
     mgr.menu.prefix = "te"
-    mgr.setLspRequestPending(1)
+    mgr.setLspRequestPending(1, BufferId(1))
 
     let items = @[CompletionItem(label: "test")]
     mgr.setLspItems(items)
@@ -1500,7 +1501,7 @@ suite "Completion - resolve support":
   test "setLspItems stores typed items for resolve re-serialization":
     let mgr = newCompletionManager()
     mgr.menu.prefix = "te"
-    mgr.setLspRequestPending(1)
+    mgr.setLspRequestPending(1, BufferId(1))
 
     let items = @[CompletionItem(label: "test", data: some(%*42))]
     mgr.setLspItems(items)

@@ -88,6 +88,21 @@ command = "rust-analyzer"
 trace = "messages"
 ```
 
+Each feature can also be turned on or off per language with `[Lsp.{languageId}.{Feature}]`.
+It takes precedence over the global `[Lsp.{Feature}]`. Only `enable` can be set per language.
+```toml
+[Lsp.CodeLens]
+enable = false
+
+# Code Lens for rust only
+[Lsp.rust.CodeLens]
+enable = true
+
+# Completion for every language but nim
+[Lsp.nim.Completion]
+enable = false
+```
+
 ## Features
 
 ### Hover

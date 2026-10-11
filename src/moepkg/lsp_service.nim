@@ -25,7 +25,7 @@ import std/[algorithm, tables, sets, options, os, strutils, json, times, uri]
 
 import pkg/[results, chronos, jsony]
 
-import lsp/worker
+import lsp/[worker, default_servers]
 import lsp/protocol/types
 import buffer/undo
 import logger
@@ -176,57 +176,13 @@ proc defaultLanguageServerConfigs*(): Table[string, LanguageServerConfig] =
   ## scratch on live reload, letting removed [Lsp.<lang>] user sections revert
   ## to defaults instead of leaving stale overrides in place.
   result = initTable[string, LanguageServerConfig]()
-
-  result["nim"] = LanguageServerConfig(
-    command: "nimlangserver",
-    args: @[],
-    extensions: @["nim", "nims", "nimble"],
-    enabled: true,
-  )
-
-  result["rust"] = LanguageServerConfig(
-    command: "rust-analyzer", args: @[], extensions: @["rs"], enabled: true
-  )
-
-  result["python"] = LanguageServerConfig(
-    command: "pylsp", args: @[], extensions: @["py", "pyw"], enabled: true
-  )
-
-  result["typescript"] = LanguageServerConfig(
-    command: "typescript-language-server",
-    args: @["--stdio"],
-    extensions: @["ts", "tsx"],
-    enabled: true,
-  )
-
-  result["javascript"] = LanguageServerConfig(
-    command: "typescript-language-server",
-    args: @["--stdio"],
-    extensions: @["js", "jsx", "mjs"],
-    enabled: true,
-  )
-
-  result["lua"] = LanguageServerConfig(
-    command: "lua-language-server",
-    args: @[],
-    extensions: @["lua", "luau", "rockspec"],
-    enabled: true,
-  )
-
-  result["go"] = LanguageServerConfig(
-    command: "gopls", args: @[], extensions: @["go"], enabled: true
-  )
-
-  result["c"] = LanguageServerConfig(
-    command: "clangd", args: @[], extensions: @["c", "h"], enabled: true
-  )
-
-  result["cpp"] = LanguageServerConfig(
-    command: "clangd",
-    args: @[],
-    extensions: @["cpp", "hpp", "cc", "hh", "cxx", "hxx"],
-    enabled: true,
-  )
+  for server in DefaultLspServers:
+    result[server.langId] = LanguageServerConfig(
+      command: server.command,
+      args: server.args,
+      extensions: server.extensions,
+      enabled: true,
+    )
 
 proc rebuildExtIndex(svc: LspService) =
   ## On duplicate extensions the alphabetically-first langId wins for stability.

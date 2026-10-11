@@ -1881,6 +1881,13 @@ macro generateSectionGroupKeys*(T: typedesc): untyped =
   buildTableKeys(groupTree(T), arr)
   result = arr
 
+macro generateSectionGroupChildNames*(T: typedesc): untyped =
+  ## Return an array literal of the group's child-table names only, in
+  ## declaration order.
+  result = newNimNode(nnkBracket)
+  for name in groupTree(T).childNames:
+    result.add newLit(name)
+
 macro generateSectionGroupSerializer*(lines, cfgVar: typed, T: typedesc): untyped =
   ## Emit the serializer for a section group: the `[Parent]` header and its
   ## scalar keys, then one block per child table. Dynamic entries are appended
