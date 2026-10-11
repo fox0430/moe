@@ -47,6 +47,15 @@ suite "Modes - modeLabel":
   test "VisualLine mode":
     check modeLabel(EditorMode.VisualLine) == "VISUAL LINE"
 
+  test "modes that return to Insert after Ctrl-o are marked, as Vim shows them":
+    check modeLabel(EditorMode.Normal, resumesInsert = true) == "(insert) NORMAL"
+    check modeLabel(EditorMode.Visual, resumesInsert = true) == "(insert) VISUAL"
+    check modeLabel(EditorMode.VisualLine, resumesInsert = true) ==
+      "(insert) VISUAL LINE"
+    check modeLabel(EditorMode.VisualBlock, resumesInsert = true) ==
+      "(insert) VISUAL BLOCK"
+    check modeLabel(EditorMode.Insert, resumesInsert = true) == "INSERT"
+
   test "Replace mode":
     check modeLabel(EditorMode.Replace) == "REPLACE"
 
@@ -86,13 +95,13 @@ suite "Modes - modeLabel":
   test "CallHierarchy mode":
     check modeLabel(EditorMode.CallHierarchy) == "CALL HIERARCHY"
 
-  test "Normal mode with insertNormal":
+  test "Normal mode with resumesInsert":
     check modeLabel(EditorMode.Normal, true) == "(insert) NORMAL"
 
-  test "Normal mode with insertNormal=false":
+  test "Normal mode with resumesInsert=false":
     check modeLabel(EditorMode.Normal, false) == "NORMAL"
 
-  test "Insert mode ignores insertNormal":
+  test "Insert mode ignores resumesInsert":
     check modeLabel(EditorMode.Insert, true) == "INSERT"
 
 suite "Modes - isFileEditMode":

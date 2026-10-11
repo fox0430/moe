@@ -167,81 +167,27 @@ suite "Search prompt - invalid bytes use the buffer character model":
     check e.state.input.search.text == "\xE2\x82\xAC"
     check e.state.input.search.cursor == 1
 
-suite "Search mode - Insert-Normal mode (Ctrl-O)":
-  test "finalizeSearch returns to Insert when insertNormalMode is set":
+suite "Search mode - leaving the overlay":
+  test "finalizeSearch returns to the base mode":
     let e = createTestEditorWithBuffer("hello world")
     e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.state.enterSearchOverlay(Forward)
-    e.setSearchText("world")
-
-    finalizeSearch(e)
-
-    check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
-    check not e.state.isSearchOverlay
-
-  test "cancelSearch returns to Insert when insertNormalMode is set":
-    let e = createTestEditorWithBuffer("hello world")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.state.enterSearchOverlay(Forward)
-    e.setSearchText("world")
-
-    cancelSearch(e)
-
-    check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
-    check not e.state.isSearchOverlay
-
-  test "finalizeSearch stays in Normal when insertNormalMode is false":
-    let e = createTestEditorWithBuffer("hello world")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = false
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("world")
 
     finalizeSearch(e)
 
     check e.state.mode == EditorMode.Normal
-    check not e.state.insertNormalMode
+    check not e.state.isSearchOverlay
 
-  test "cancelSearch stays in Normal when insertNormalMode is false":
+  test "cancelSearch returns to the base mode":
     let e = createTestEditorWithBuffer("hello world")
     e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = false
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("world")
 
     cancelSearch(e)
 
     check e.state.mode == EditorMode.Normal
-    check not e.state.insertNormalMode
-
-  test "finalizeSearch with Backward direction returns to Insert when insertNormalMode":
-    let e = createTestEditorWithBuffer("hello world")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.state.enterSearchOverlay(Backward)
-    e.setSearchText("hello")
-
-    finalizeSearch(e)
-
-    check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
-    check not e.state.isSearchOverlay
-
-  test "cancelSearch with Backward direction returns to Insert when insertNormalMode":
-    let e = createTestEditorWithBuffer("hello world")
-    e.state.mode = EditorMode.Normal
-    e.state.insertNormalMode = true
-    e.state.enterSearchOverlay(Backward)
-    e.setSearchText("hello")
-
-    cancelSearch(e)
-
-    check e.state.mode == EditorMode.Insert
-    check not e.state.insertNormalMode
     check not e.state.isSearchOverlay
 
 suite "Search mode - Help mode incremental search sync":

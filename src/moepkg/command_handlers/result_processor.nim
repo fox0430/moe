@@ -109,9 +109,7 @@ proc processHistoryResult(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
   ## Execute undo/redo at a committed Insert boundary. Buffer history rejects
   ## open transactions, so commands such as forced-Insert `Ctrl-o :undo` first
   ## turn the current typing group into an ordinary undo entry.
-  let
-    wasInsertNormal = e.state.insertNormalMode
-    resumeInsert = e.state.mode == EditorMode.Insert or wasInsertNormal
+  let resumeInsert = e.state.mode == EditorMode.Insert
 
   var boundaryResult = Result[void, string].ok()
   if activeBuffer.inTransaction:
@@ -148,9 +146,6 @@ proc processHistoryResult(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     let beginResult = beginInsertModeSession(activeBuffer, e.state)
     if beginResult.isErr:
       e.state.statusMessage = "Failed to begin transaction: " & beginResult.error
-
-  if wasInsertNormal:
-    e.resumeInsert()
 
   true
 
@@ -346,9 +341,9 @@ proc processResultEpilogue(
       e.setMode(newMode)
 
       # Adjust cursor when transitioning from Insert or Replace to Normal mode
-      # Skip cursor adjustment for insert-normal mode (Ctrl-o) since we'll return to Insert
+      # Ctrl-o has placed the cursor itself (leaveInsertForCtrlO)
       if oldMode in {EditorMode.Insert, EditorMode.Replace} and
-          newMode == EditorMode.Normal and not e.state.insertNormalMode:
+          newMode == EditorMode.Normal and not e.state.resumesInsert:
         let oldColumn = e.activeWindow.cursor.column
 
         logDebug(
@@ -407,6 +402,72 @@ proc processResultEpilogue(
 
   return true # Continue running
 
+proc armInsertResume*(state: EditorState) =
+  ## A command input starts: a key, typed or replayed, a paste, a pointer press,
+  ## a scroll or Ctrl-C. Once it is done, it ends the wait Ctrl-o set before
+  ## it, but not one it sets itself (Vim's CA_COMMAND_BUSY).
+  if state.insertResume == irWaiting:
+    state.insertResume = irArmed
+
+proc settleInsertResume*(e: Editor) =
+  ## Vim checks restart_edit at the end of each Normal command; this runs at
+  ## the end of each input, typed or replayed. A command is done once it
+  ## returns: one that sends an LSP request does not wait for the response,
+  ## so no later key runs as a Normal command. Once the command Ctrl-o waits
+  ## for is done, Insert resumes from Normal mode, Visual mode keeps waiting,
+  ## and any other mode ends the wait. Nothing resumes once the editor has
+  ## decided to quit.
+  let state = e.state
+  if state.insertResume == irNone:
+    return
+  # Vim's edit() clears restart_edit, so Insert or Replace entered anyhow, in
+  # a held mapping or a macro too, ends the wait.
+  if state.mode in {EditorMode.Insert, EditorMode.Replace}:
+    state.insertResume = irNone
+    return
+  # The CodeLens picker the command opens takes keys, so the command goes on
+  # until it closes.
+  if state.insertResume != irArmed or state.quitDecided or state.hasOverlay or
+      hasPendingBuiltinInput(e) or e.keyRouter.isHoldingKeys or
+      state.mode.isVisualAllMode or state.lspCache.codeLensPicker.isActive:
+    return
+  state.insertResume = irNone
+  # Vim resumes Insert silently in a buffer it cannot change, so the command's
+  # message stays; Insert cannot hold such a buffer here.
+  if state.mode != EditorMode.Normal or e.activeBuffer.readOnly:
+    return
+  # Vim resumes past the end of the line if the cursor is on its last character
+  # and either Ctrl-o left that line there (ins_at_eol) or the column vertical
+  # moves want is right of it. It keeps that column (arrow_used).
+  let
+    wanted = state.preferredColumn
+    lastColumn = e.activeBuffer.getLine(state.cursor.line).charLen - 1
+    append =
+      state.cursor.column == lastColumn and
+      (state.insertResumeLineEnd == some(state.cursor.line) or wanted > lastColumn)
+    message = state.statusMessage
+  discard e.processResult(e.handlerManager.runInsertCommand(e, append), e.activeBuffer)
+  state.preferredColumn = wanted
+  # The command's message stays, as in Vim, over the syntax check's.
+  if message.len > 0:
+    state.statusMessage = message
+
+template withInsertResumeAside(e: Editor, body: untyped): ReplayOutcome =
+  ## Run a macro with the Insert Ctrl-o waits for set aside, so none of its
+  ## keys resumes it, and put it back once the macro is done, as Vim queues
+  ## `i` after the register (put_reedit_in_typebuf). A macro that aborts drops
+  ## it with the rest of the register.
+  let waiting = e.state.insertResume
+  e.state.insertResume = irNone
+  var replayed = roContinue
+  try:
+    replayed = block:
+      body
+  finally:
+    if waiting != irNone and replayed == roContinue:
+      e.state.insertResume = waiting
+  replayed
+
 const MaxMacroRecursionDepth* = 100
   ## Macro recursion depth guard (@a inside @a...) before abort.
 
@@ -431,19 +492,16 @@ proc processReplayedResult*(
   ## loop should keep going. `hrPlaybackMacro` is intercepted here and drives
   ## the nested `playbackMacroImpl` loop count times.
   if r.kind == hrPlaybackMacro:
-    for _ in 0 ..< r.playbackMacroCount:
-      let outcome = playbackMacroImpl(e, r.playbackMacroKeys)
-      if outcome != roContinue:
-        return outcome
-    # Finalize insert-normal after the macro. applyNormalModePostProcessing
-    # skips hrPlaybackMacro's clean-up branch so the OUTER insertNormalMode
-    # survives the propagation; if the macro's own keys never cleared it
-    # (empty macro, all keys stayed pending), fold it back into Insert here.
-    let state = e.state
-    if state.insertNormalMode and state.mode == EditorMode.Normal and
-        not hasPendingBuiltinInput(e):
-      e.resumeInsert()
-    return roContinue
+    # Vim queues the Insert that Ctrl-o waits for after the register's keys
+    # (put_reedit_in_typebuf), so the whole macro runs before it resumes, and
+    # an error flushes it with the rest of the register.
+    return e.withInsertResumeAside:
+      var outcome = roContinue
+      for _ in 0 ..< r.playbackMacroCount:
+        outcome = playbackMacroImpl(e, r.playbackMacroKeys)
+        if outcome != roContinue:
+          break
+      outcome
   let queued = e.hostResultRequestCount
   let shouldContinue = e.processResult(r, activeBuffer)
   if e.hostResultRequestCount > queued or r.kind == hrError:
@@ -506,13 +564,13 @@ proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
       if outcome != roContinue:
         break
 
-proc replayRuntimeKeySequence*(
-    manager: HandlerManager, editor: Editor, targetKeys: seq[KeyCombo], noremap: bool
+proc replayMappingKeys(
+    editor: Editor, targetKeys: seq[KeyCombo], noremap: bool
 ): ReplayOutcome =
-  ## Replay the RHS of a fired runtime key-sequence mapping. `:noremap` runs
-  ## verbatim under `withReplay` (isReplayingMapping suppresses re-expansion);
-  ## `:map` runs without withReplay so each replayed key re-enters the
-  ## precheck, bounded by `mapExpandDepth` / `MaxMapRecursionDepth`.
+  ## `:noremap` runs verbatim under `withReplay` (isReplayingMapping suppresses
+  ## re-expansion); `:map` runs without withReplay so each replayed key
+  ## re-enters the precheck, bounded by `mapExpandDepth` /
+  ## `MaxMapRecursionDepth`.
   if noremap:
     var outcome = roContinue
     editor.keyRouter.withReplay:
@@ -527,6 +585,24 @@ proc replayRuntimeKeySequence*(
     result = playbackKeyCombosImpl(editor, targetKeys)
   finally:
     editor.keyRouter.mapExpandDepth -= 1
+
+proc replayRuntimeKeySequence*(
+    manager: HandlerManager, editor: Editor, targetKeys: seq[KeyCombo], noremap: bool
+): ReplayOutcome =
+  ## Replay the RHS of a fired runtime key-sequence mapping. Vim resumes the
+  ## Insert Ctrl-o waits for in the middle of a mapping, but not of one that
+  ## starts in Visual mode (old_mapped_len): its keys after the one that leaves
+  ## Visual are still Normal mode commands. Entering Insert in it still ends
+  ## the wait, and a Ctrl-o in it waits anew.
+  let waiting = editor.state.insertResume
+  if waiting == irNone or not editor.state.mode.isVisualAllMode:
+    return editor.replayMappingKeys(targetKeys, noremap)
+  editor.state.insertResume = irHeld
+  try:
+    result = editor.replayMappingKeys(targetKeys, noremap)
+  finally:
+    if editor.state.insertResume == irHeld:
+      editor.state.insertResume = waiting
 
 proc checkRuntimeKeySeqMapping*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
@@ -567,6 +643,15 @@ proc checkRuntimeKeySeqMapping*(
       return some(outcome)
     return none(ReplayOutcome)
 
+proc escapeEndsCommand(e: Editor, keyCombo: KeyCombo): bool =
+  ## Escape ends a Normal mode command being built before a Normal mode
+  ## mapping can take it: Vim uses none for an operator's motion or a character
+  ## argument. Mapping keys the router holds still get the Escape, so they play
+  ## first.
+  keyCombo.isSpecial and keyCombo.special == skEscape and
+    e.state.mode == EditorMode.Normal and not e.keyRouter.isHoldingKeys and
+    hasPendingBuiltinInput(e)
+
 proc dispatchNestedKeyCombo(
     manager: HandlerManager, e: Editor, keyCombo: KeyCombo
 ): ReplayOutcome =
@@ -579,7 +664,8 @@ proc dispatchNestedKeyCombo(
       if not overlayResult.get:
         return roQuit
       return if e.hostResultRequestCount > queued: roAbort else: roContinue
-  if not manager.keyBindingRegistry.isReplayingMapping:
+  if not manager.keyBindingRegistry.isReplayingMapping and
+      not e.escapeEndsCommand(keyCombo):
     let expand = checkRuntimeKeySeqMapping(manager, e, keyCombo)
     if expand.isSome:
       return expand.get
@@ -593,11 +679,18 @@ proc runNestedKeyCombo*(
   ## Single entry point that fuses precheck (runtime key-sequence mapping) with
   ## dispatch and full processResult side effects. Both the top-level event
   ## loop and nested-playback loops (macro, mapping RHS, timeout batch) call
-  ## this so every kind's side effect fires exactly once.
+  ## this so every kind's side effect fires exactly once. Each key may finish
+  ## the command Ctrl-o waits for, so Insert may resume after it, in the
+  ## middle of a mapping too, as in Vim.
   # Before the command starts, so the jump is not counted as its move.
   e.completeScrollAnimation()
+  e.state.armInsertResume()
   e.asCommand:
     result = manager.dispatchNestedKeyCombo(e, keyCombo)
+  # Once the command has dropped the column vertical moves want, if it does,
+  # so Insert resumes past the end only as Vim's would.
+  if result != roQuit:
+    e.settleInsertResume()
 
 proc outcomeToHandlerResult(e: Editor, outcome: ReplayOutcome): HandlerResult =
   ## Fold a ReplayOutcome into the HandlerResult shape test-facing wrappers
@@ -667,32 +760,10 @@ proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
   e.setMode(EditorMode.Normal)
   return true
 
-proc handleInsertNormalReturn(e: Editor) =
-  ## After a Command overlay completes, if we were in insert-normal mode
-  ## (Ctrl-o), return to Insert (for :w/:set) or commit the Insert transaction
-  ## (when the command switched to a non-Normal/Insert mode).
-  if not e.state.insertNormalMode:
-    return
-  if e.state.mode == EditorMode.Normal:
-    e.resumeInsert()
-  elif e.state.mode != EditorMode.Insert:
-    e.state.insertNormalMode = false
-    let activeBuffer = e.activeBuffer()
-    if activeBuffer.inTransaction:
-      clearAutoIndentIfUnedited(activeBuffer, e.state)
-      let commitResult = activeBuffer.commitTransaction()
-      if commitResult.isErr:
-        logError "result_processor",
-          "Failed to commit transaction: " & commitResult.error
-        e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
-    e.state.editState.insertModeStartPos = none(BufferPosition)
-    e.state.editState.substituteContext = none(types.SubstituteContext)
-
 proc executeCommandOverlay*(e: Editor, commandText: string): bool =
   ## Full lifecycle of a Command-overlay Enter: pre-teardown, dispatch,
-  ## side effects via processResult, teardown driven by `r.group`, then
-  ## Insert-Normal recovery. Returns false when the caller should stop the
-  ## main loop (app quit).
+  ## side effects via processResult, and teardown driven by `r.group`.
+  ## Returns false when the caller should stop the main loop (app quit).
   # 1. pre-teardown (kind-independent)
   # A command line runs outside Visual, as `:` leaves it in Vim; a Visual
   # mapping that runs one directly gets here without the overlay.
@@ -731,7 +802,6 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
 
   # 3. requestQuickRun poll (set independently of r.kind by buffer-mode keys)
   if e.tryHandleQuickRunRequest(activeBuffer):
-    e.handleInsertNormalReturn()
     return true
 
   # 4. side effects
@@ -744,7 +814,6 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
     # through the original result's group after its side effects were skipped.
     e.state.exitOverlay()
     e.setMode(e.state.mode)
-    e.handleInsertNormalReturn()
     return true
 
   # 5. teardown
@@ -773,7 +842,4 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
   let statusMsg = r.getStatusMessage()
   if statusMsg.len > 0:
     e.state.statusMessage = statusMsg
-
-  # 7. Insert-Normal recovery (Ctrl-o)
-  e.handleInsertNormalReturn()
   return true

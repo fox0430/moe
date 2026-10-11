@@ -311,7 +311,7 @@ suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
     let manager = newTestManager()
     let buffer = newTextBuffer()
     let state = newTestState(EditorMode.Normal)
-    state.insertNormalMode = true
+    state.insertResume = irWaiting
     let viewport = newTestViewport()
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
@@ -324,7 +324,7 @@ suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
     discard manager.runKeyCombo(editor, a)
 
     check state.mode == EditorMode.Insert
-    check not state.insertNormalMode
+    check state.insertResume == irNone
 
   test "pending-operand macro key leaves insert-normal intact":
     # A macro whose only key parks the FSM in waiting-for-operand (`f`
@@ -334,7 +334,7 @@ suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "abcdef")
     let state = newTestState(EditorMode.Normal)
-    state.insertNormalMode = true
+    state.insertResume = irWaiting
     let viewport = newTestViewport()
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
@@ -347,7 +347,7 @@ suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
     discard manager.runKeyCombo(editor, a)
 
     check state.mode == EditorMode.Normal
-    check state.insertNormalMode
+    check state.insertResume != irNone
     check manager.keyBindingRegistry.isWaitingForChar()
 
 suite "withPlaybackGuard - exception safety":

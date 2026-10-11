@@ -154,83 +154,23 @@ proc executeCommandDirect*(
     return none(HandlerResult)
 
 proc hasPendingBuiltinInput*(editor: Editor): bool =
-  ## True while any built-in multi-step input is still building. Callers use
-  ## this to decide whether Ctrl-o insert-normal is safe to finalize.
+  ## True while any built-in multi-step input is still building.
   editor.state.pendingInput.isActive(editor.keyRouter.registry)
 
-proc endInsertNormalSession(buffer: TextBuffer, state: EditorState) =
-  ## Commit the pending Insert transaction (if any) and reset all insert-session
-  ## tracking that carries over across a Ctrl-o boundary. Shared teardown so
-  ## every insert-normal exit path clears the same set of fields.
-  state.insertNormalMode = false
-  if buffer.inTransaction:
-    clearAutoIndentIfUnedited(buffer, state)
-    let commitResult = buffer.commitTransaction()
-    if commitResult.isErr:
-      logError "handler_manager", "Failed to commit transaction: " & commitResult.error
-      state.statusMessage = "Failed to commit transaction: " & commitResult.error
-  state.editState.insertModeStartPos = none(BufferPosition)
-  state.editState.insertReplayCount = 0
-  state.editState.insertReplayLineEntry = false
-  state.editState.substituteContext = none(types.SubstituteContext)
+proc cancelPendingCommand*(editor: Editor): bool =
+  ## End the command being built (an operator, a count, a register), as
+  ## Escape and Ctrl-C do in Normal mode. True when there was one.
+  result = editor.state.pendingInput.cancelAll(editor.keyRouter.registry)
+  if result:
+    editor.state.statusMessage = ""
 
-proc applyNormalModePostProcessing(
-    manager: HandlerManager, editor: Editor, normalResult: HandlerResult
+proc applyNormalModeResult(
+    manager: HandlerManager, editor: Editor, r: NormalModeResult
 ): HandlerResult =
-  ## Insert-Normal (Ctrl-o) bookkeeping run after a Normal mode command
-  ## completes. Decides whether to return to Insert mode, commit the pending
-  ## Insert transaction, or pass the result through unchanged.
+  ## Turn a Normal mode command's result into a HandlerResult, starting the
+  ## Insert or Replace session the command enters.
   let buffer = editor.activeBuffer
   let state = editor.state
-
-  if state.insertNormalMode and normalResult.kind == hrHandled:
-    let hasOverlay = normalResult.overlayTransition.isSome
-    if not hasPendingBuiltinInput(editor) and not hasOverlay:
-      if normalResult.modeTransition.isSome and
-          normalResult.modeTransition.get == EditorMode.Insert:
-        state.insertNormalMode = false
-        return normalResult
-      elif normalResult.modeTransition.isNone or
-          normalResult.modeTransition.get == EditorMode.Normal:
-        editor.resumeInsert()
-        return HandlerResult(
-          kind: hrHandled,
-          modeTransition: none(EditorMode),
-          statusMessage: normalResult.statusMessage,
-        )
-      else:
-        endInsertNormalSession(buffer, state)
-        let newMode = normalResult.modeTransition.get
-        if newMode == EditorMode.Replace:
-          let beginResult = buffer.beginTransaction("Replace mode edit")
-          if beginResult.isErr:
-            return HandlerResult(
-              kind: hrError,
-              errorMessage: "Failed to begin transaction: " & beginResult.error,
-            )
-        return normalResult
-
-  if state.insertNormalMode and normalResult.kind in {hrUndo, hrRedo}:
-    return normalResult
-
-  if state.insertNormalMode and
-      normalResult.kind notin {hrHandled, hrUnhandled, hrError, hrPlaybackMacro}:
-    endInsertNormalSession(buffer, state)
-
-  # hrPlaybackMacro defers the return-to-Insert finalization to the
-  # nested-playback processor so it fires after the macro's own keys run
-  # (an empty macro or one whose keys never satisfy the "clean command"
-  # criteria would otherwise leave insert-normal state stuck).
-  return normalResult
-
-proc handleNormalMode*(
-    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
-): HandlerResult =
-  ## Handle Normal mode input
-  let buffer = editor.activeBuffer
-  let state = editor.state
-  let r =
-    manager.normalHandler.handleNormalModeKey(buffer, state, editor.viewport, keyCombo)
 
   # Trivial passthrough variants (window.*, file.*, buffer.*.tab, lsp.*
   # custom) collapse into a single shared translation table.
@@ -252,8 +192,7 @@ proc handleNormalMode*(
             errorMessage: "Failed to begin transaction: " & transactionResult.error,
           )
       elif targetMode == EditorMode.Replace:
-        # Begin a transaction when entering Replace mode
-        # Guard: during insert-normal mode a transaction is already open
+        # As for Insert, a transaction a failed commit left open carries on.
         if not buffer.inTransaction:
           let transactionResult =
             buffer.beginTransaction("Replace mode edit", cursorPos = some(state.cursor))
@@ -273,6 +212,9 @@ proc handleNormalMode*(
   of nmrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of nmrError:
+    # An error ends the command, so nothing it was building (an operator, a
+    # count, a register) carries over to the next key.
+    state.pendingInput.cancelAll(editor.keyRouter.registry)
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
   of nmrPlaybackMacro:
     # Hand macro playback to the nested-playback processor (result_processor.nim)
@@ -301,14 +243,52 @@ proc handleNormalMode*(
     )
   of nmrOpenUri:
     return HandlerResult(kind: hrOpenUri, openUri: r.openUri)
-  of nmrUndo:
-    return HandlerResult(kind: hrUndo)
-  of nmrRedo:
-    return HandlerResult(kind: hrRedo)
   of nmrPassthrough:
     # Unreachable: captured by the early return above. Listed to satisfy
     # case exhaustiveness.
     return HandlerResult(kind: hrUnhandled)
+
+proc handleNormalMode*(
+    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Normal mode input
+  let buffer = editor.activeBuffer
+  let state = editor.state
+
+  # Escape ends the command being built. Typed and replayed keys both come
+  # here, after the router has played any mapping keys it held, so a macro or
+  # mapping cancels as the keys typed would. With nothing to cancel, a second
+  # Escape in a row hides search highlighting.
+  if keyCombo.isSpecial and keyCombo.special == skEscape:
+    if editor.cancelPendingCommand() or state.resumesInsert:
+      state.lastKeyWasEscape = false
+    elif state.lastKeyWasEscape:
+      state.input.search.hlsearchTempDisabled = true
+      state.lastKeyWasEscape = false
+    else:
+      state.lastKeyWasEscape = true
+    return HandlerResult(kind: hrHandled)
+  state.lastKeyWasEscape = false
+
+  let r =
+    manager.normalHandler.handleNormalModeKey(buffer, state, editor.viewport, keyCombo)
+  manager.applyNormalModeResult(editor, r)
+
+proc keepCursorLineUnfolded(e: Editor, res: HandlerResult) =
+  ## Typing lands on the cursor line, so Insert and Replace never leave it
+  ## folded. Held after dispatch to cover both mode entry (several handlers, some
+  ## via a transition) and an edit that moves the cursor into a closed fold.
+  let effectiveMode =
+    if res.getModeTransition().isSome:
+      res.getModeTransition().get
+    else:
+      e.state.mode
+  # Only for a dispatch that did something: a rejected key must not open a fold.
+  if res.kind notin {hrError, hrUnhandled} and
+      effectiveMode in {EditorMode.Insert, EditorMode.Replace} and e.activeBuffer != nil:
+    discard e.activeBuffer.foldState.openFoldsInRange(
+      e.state.cursor.line, e.state.cursor.line
+    )
 
 proc completeScrollAnimation*(e: Editor) =
   ## Jump an active scroll animation to its target, so a replayed key runs
@@ -329,8 +309,7 @@ proc handleKeyCombo*(
   let res =
     case e.state.mode
     of EditorMode.Normal:
-      let normalResult = manager.handleNormalMode(e, keyCombo)
-      manager.applyNormalModePostProcessing(e, normalResult)
+      manager.handleNormalMode(e, keyCombo)
     of EditorMode.Insert:
       manager.handleInsertMode(e, keyCombo)
     of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
@@ -340,19 +319,17 @@ proc handleKeyCombo*(
     else:
       manager.dispatchSubStateMode(e, keyCombo)
 
-  # Typing lands on the cursor line, so Insert and Replace never leave it
-  # folded. Held after dispatch to cover both mode entry (several handlers, some
-  # via a transition) and an edit that moves the cursor into a closed fold.
-  let effectiveMode =
-    if res.getModeTransition().isSome:
-      res.getModeTransition().get
-    else:
-      e.state.mode
-  # Only for a dispatch that did something: a rejected key must not open a fold.
-  if res.kind notin {hrError, hrUnhandled} and
-      effectiveMode in {EditorMode.Insert, EditorMode.Replace} and e.activeBuffer != nil:
-    discard e.activeBuffer.foldState.openFoldsInRange(
-      e.state.cursor.line, e.state.cursor.line
-    )
-
+  e.keepCursorLineUnfolded(res)
   return res
+
+proc runInsertCommand*(
+    manager: HandlerManager, e: Editor, append: bool
+): HandlerResult =
+  ## The `i` command, or `a` if `append`, whatever keys they are bound to. Vim
+  ## resumes Insert after Ctrl-o by queueing `i` (unmapped), past the end of
+  ## the line if need be, which is `a` on its last character.
+  let r = manager.normalHandler.handleInsertModeEntry(
+    e.activeBuffer, e.state, if append: "append" else: "insert"
+  )
+  result = manager.applyNormalModeResult(e, r)
+  e.keepCursorLineUnfolded(result)

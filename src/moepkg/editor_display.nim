@@ -44,7 +44,7 @@ proc statusModeLabel*(e: Editor): string =
   if e.state.overlay.isSome:
     overlayLabel(e.state.overlay.get)
   else:
-    modeLabel(e.currentMode, e.state.insertNormalMode)
+    modeLabel(e.currentMode, e.state.resumesInsert)
 
 proc currentStatusMessage*(e: Editor): string =
   ## Return the current transient status message.

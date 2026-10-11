@@ -50,7 +50,7 @@ suite "Editor display status queries":
   test "statusModeLabel preserves the insert-normal label":
     let e = createTestEditor()
     e.setMode(EditorMode.Normal)
-    e.state.insertNormalMode = true
+    e.state.insertResume = irWaiting
 
     check e.statusModeLabel == "(insert) NORMAL"
 

@@ -75,18 +75,21 @@ proc isFileEditMode*(m: EditorMode): bool =
     EditorMode.VisualLine, EditorMode.Replace,
   }
 
-proc modeLabel*(m: EditorMode, insertNormal: bool = false): string =
+proc modeLabel*(m: EditorMode, resumesInsert: bool = false): string =
+  ## `resumesInsert` marks the modes that return to Insert after Ctrl-o, as Vim
+  ## shows them.
+  let prefix = if resumesInsert: "(insert) " else: ""
   case m
   of EditorMode.Normal:
-    if insertNormal: "(insert) NORMAL" else: "NORMAL"
+    prefix & "NORMAL"
   of EditorMode.Insert:
     "INSERT"
   of EditorMode.Visual:
-    "VISUAL"
+    prefix & "VISUAL"
   of EditorMode.VisualBlock:
-    "VISUAL BLOCK"
+    prefix & "VISUAL BLOCK"
   of EditorMode.VisualLine:
-    "VISUAL LINE"
+    prefix & "VISUAL LINE"
   of EditorMode.Replace:
     "REPLACE"
   of EditorMode.Command:

@@ -323,6 +323,7 @@ proc resolvePasteSink(e: Editor): PasteSink =
 
 proc handlePasteText(e: Editor, text: string): bool =
   ## Insert pasted text without triggering auto-indentation.
+  e.state.armInsertResume()
   case e.resolvePasteSink()
   of psOverlay:
     # Single-line character fields, so normalize unconditionally.
@@ -536,6 +537,7 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
     return
   if e.windowManager.windows.len == 0:
     return
+  e.state.armInsertResume()
 
   # Handle Filer mode scroll.
   if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
@@ -706,6 +708,7 @@ proc middleClickPaste(e: Editor, row, col: int) =
   ## Paste the PRIMARY selection for a middle-click at this screen cell.
   if not e.config.clipboard.enable:
     return
+  e.state.armInsertResume()
 
   # An overlay owns the keys wherever the click landed, so it keeps the focus.
   # Otherwise the click picks the target window, not the focused one.
@@ -871,8 +874,7 @@ func visualMode(granularity: PointerSelectionGranularity): EditorMode =
 proc enterPointerVisualMode(e: Editor, granularity: PointerSelectionGranularity) =
   if not e.state.mode.isVisualAllMode:
     let previousMode = e.state.mode
-    if previousMode in {EditorMode.Insert, EditorMode.Replace} or
-        e.state.insertNormalMode:
+    if previousMode in {EditorMode.Insert, EditorMode.Replace}:
       e.finalizeCurrentWindowForMouseJump()
       e.state.previousMode = EditorMode.Normal
     else:
@@ -979,6 +981,7 @@ proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
   if input.action != paPress:
     return false
 
+  e.state.armInsertResume()
   e.state.pointerSelection.active = false
 
   # Handle pointer selection in text editing modes.
@@ -1060,12 +1063,22 @@ proc prepareForKeyCombo(e: Editor) =
   ## Per-input setup for frontend-neutral key handling.
   e.prepareForInput(true)
 
+template asInput(e: Editor, body: untyped) =
+  ## Run a public input entry as one command (`asCommand`). Whichever way the
+  ## input went (a mode, an overlay, the pointer, a mapping timeout), Insert
+  ## then resumes if it ended the command Ctrl-o waits for, with the column
+  ## vertical moves want as the command leaves it. Only the inputs that are
+  ## commands start one (armInsertResume), so the others leave the wait alone.
+  e.asCommand:
+    body
+  e.settleInsertResume()
+
 proc handlePaste*(e: Editor, text: string): bool =
   ## Handle pasted text supplied by any frontend.
   e.prepareForInput(false)
   if e.windowManager.windows.len > 0:
     e.activeWindow.viewport.detachedFromCursor = false
-  e.asCommand:
+  e.asInput:
     result = e.handlePasteText(text)
 
 proc handlePasteEvent*(e: Editor, event: Event): bool =
@@ -1079,7 +1092,7 @@ proc handlePointerInput*(e: Editor, input: PointerInput): bool =
   ## Middle-click paste is intentionally a host policy: GUI frontends should
   ## obtain the selection text and pass it to `handlePaste`.
   e.prepareForInput(false)
-  e.asCommand:
+  e.asInput:
     result = e.handlePointerInputCore(input)
   e.enforceModePolicy()
 
@@ -1087,7 +1100,7 @@ proc handleScrollInput*(e: Editor, input: ScrollInput): ScrollOutcome =
   ## Handle a vertical scroll expressed as a signed number of physical lines
   ## and return the movement/region metadata needed for GUI repainting.
   e.prepareForInput(false)
-  e.asCommand:
+  e.asInput:
     result = e.handleScrollInputCore(input)
 
 proc celinaMouseModifiers(
@@ -1127,13 +1140,14 @@ proc handleMouseEventCore(e: Editor, event: Event): bool =
 
 proc handleMouseEvent*(e: Editor, event: Event): bool =
   ## Compatibility adapter from Celina mouse events to Moe input values.
-  e.asCommand:
+  e.asInput:
     result = e.handleMouseEventCore(event)
 
 proc handleInterruptCore(e: Editor): bool =
   ## Handle Ctrl-C. Behaviour depends on the
-  ## current mode/overlay: forward to Terminal PTY, cancel overlays, exit
-  ## Insert-Normal, or transition file-edit modes back to Normal.
+  ## current mode/overlay: forward to Terminal PTY, cancel overlays, give up
+  ## resuming Insert after Ctrl-o, or transition file-edit modes back to Normal.
+  e.state.armInsertResume()
 
   when not defined(moe.embedded):
     # An overlay opened over Terminal still owns Ctrl-C; the session gets it
@@ -1157,9 +1171,6 @@ proc handleInterruptCore(e: Editor): bool =
       e.cursor = e.state.input.search.startPos
     e.state.exitOverlay()
     e.setMode(e.state.mode)
-    # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
-    if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-      e.resumeInsert()
     return true
 
   # Command overlay: clear command line and exit overlay
@@ -1168,31 +1179,21 @@ proc handleInterruptCore(e: Editor): bool =
     e.cancelSubstitutePreview()
     e.state.exitOverlay()
     e.setMode(e.state.mode)
-    # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
-    if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-      e.resumeInsert()
     return true
 
   if e.state.mode == EditorMode.Normal:
-    # Insert-Normal mode (Ctrl-o): Ctrl-C cancels and stays in Normal mode
-    if e.state.insertNormalMode:
-      e.state.insertNormalMode = false
-      let activeBuffer = e.activeBuffer()
-      if activeBuffer.inTransaction:
-        clearAutoIndentIfUnedited(activeBuffer, e.state)
-        let commitResult = activeBuffer.commitTransaction()
-        if commitResult.isErr:
-          logError "handler", "Failed to commit transaction: " & commitResult.error
-          e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
-      e.state.editState.insertModeStartPos = none(BufferPosition)
-      e.state.editState.substituteContext = none(types.SubstituteContext)
-      e.activeWindow.adjustCursorAfterInsertExit()
-      return true
-    # Normal mode: show exit message like Vim
-    e.state.statusMessage = "Type :qa and press <Enter> to exit"
+    # As in Vim, Ctrl-C ends the command being built and stays in Normal
+    # mode after Ctrl-o. Only a bare Ctrl-C tells how to quit.
+    let cancelled = e.cancelPendingCommand()
+    if e.state.resumesInsert:
+      e.state.insertResume = irNone
+    elif not cancelled:
+      e.state.statusMessage = "Type :qa and press <Enter> to exit"
   elif e.state.mode.isVisualAllMode:
     # As Esc: back to the mode Visual was entered from, which may be a viewer.
+    # Unlike Esc, it stays there after Ctrl-o, as in Vim.
     discard e.state.pendingInput.cancelAll(e.keyRouter.registry)
+    e.state.insertResume = irNone
     e.state.leaveVisual()
     e.enforceModePolicy()
   elif e.state.mode.isFileEditMode:
@@ -1231,7 +1232,7 @@ proc handleInterruptCore(e: Editor): bool =
 proc handleInterrupt*(e: Editor): bool =
   ## Handle a frontend interrupt request, such as Ctrl-C in a terminal.
   e.prepareForInput(false)
-  e.asCommand:
+  e.asInput:
     result = e.handleInterruptCore()
 
 proc dismissTempMessagesKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
@@ -1365,28 +1366,6 @@ proc handlePopupKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
 
   return none(bool)
 
-proc handleEscapeCancellationKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
-  ## In Normal mode, Escape clears every pending-input FSM via cancelAll and
-  ## otherwise falls through to the double-Escape hlsearch toggle.
-  if e.state.mode != EditorMode.Normal:
-    return false
-
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
-    if e.state.pendingInput.cancelAll(e.keyRouter.registry):
-      e.state.statusMessage = ""
-      return true
-
-    # No pending state - handle double-Escape to clear search highlight
-    if e.state.lastKeyWasEscape:
-      e.state.input.search.hlsearchTempDisabled = true
-      e.state.lastKeyWasEscape = false
-    else:
-      e.state.lastKeyWasEscape = true
-    return true
-  else:
-    e.state.lastKeyWasEscape = false
-    return false
-
 proc handleSpecialModeWindowCommandKeyCombo(
     e: Editor, keyCombo: KeyCombo
 ): Option[bool] =
@@ -1446,6 +1425,7 @@ proc dispatchKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Public entry points (`handleKeyCombo`, `handleTextInput`, `handleEvent`)
   ## record the result through `noteQuit`.
   e.prepareForKeyCombo()
+  e.state.armInsertResume()
 
   when not defined(moe.embedded):
     # Before any dispatch, so a key the editor consumes never leaves a Ctrl-\
@@ -1473,10 +1453,6 @@ proc dispatchKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   let popupResult = e.handlePopupKeyCombo(keyCombo)
   if popupResult.isSome:
     return popupResult.get
-
-  # In Normal mode, Escape cancels pending multi-key state
-  if e.handleEscapeCancellationKeyCombo(keyCombo):
-    return true
 
   # Ctrl-W window commands for special/viewer modes
   let winResult = e.handleSpecialModeWindowCommandKeyCombo(keyCombo)
@@ -1920,21 +1896,21 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   ## GUI frontends can call this directly after translating their native key
   ## input into Moe's `KeyCombo` type. Terminal-specific events such as Quit,
   ## paste, and mouse input remain handled by `handleEvent`.
-  e.asCommand:
+  e.asInput:
     result = e.noteQuit(e.dispatchKeyCombo(keyCombo))
 
 proc handleTextInput*(e: Editor, text: string): bool =
   ## Handle committed text from a GUI text-input protocol. False when the
   ## editor decided to quit.
-  e.asCommand:
+  e.asInput:
     result = e.noteQuit(e.dispatchTextInput(text))
 
 proc handleEvent*(e: Editor, event: Event): bool =
   ## Handle `event`. False when the editor decided to quit.
-  e.asCommand:
+  e.asInput:
     result = e.noteQuit(e.dispatchEvent(event))
 
 proc handleKeyMappingTimeout*(e: Editor): bool =
   ## Handle the key mapping timeout. False when the editor decided to quit.
-  e.asCommand:
+  e.asInput:
     result = e.noteQuit(e.dispatchKeyMappingTimeout())

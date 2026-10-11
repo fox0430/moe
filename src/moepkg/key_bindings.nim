@@ -77,8 +77,8 @@ proc isWaitingForChar*(registry: KeyBindingRegistry): bool =
 proc clearAllPending*(registry: KeyBindingRegistry): bool {.discardable.} =
   ## Clear all key-dispatch pending state that Escape should cancel. Currently
   ## this only covers the built-in multi-key sequence accumulator; the runtime
-  ## mapping accumulator is intentionally left untouched so that Escape inside
-  ## a `:nmap` prefix retains today's behaviour (the timeout path flushes it).
+  ## mapping accumulator is left alone, since the router plays the keys it
+  ## holds before an Escape reaches the handlers, as Vim does.
   ## Returns true iff something was cleared. Centralising this call lets
   ## handler.nim stop reaching into registry internals; future phases extend
   ## the body without revisiting handler.nim.

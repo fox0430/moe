@@ -238,9 +238,9 @@ const
   WidestModeText = block:
     var widest = ""
     for mode in EditorMode:
-      for insertNormal in [false, true]:
-        if modeLabel(mode, insertNormal).len > widest.len:
-          widest = modeLabel(mode, insertNormal)
+      for resumesInsert in [false, true]:
+        if modeLabel(mode, resumesInsert).len > widest.len:
+          widest = modeLabel(mode, resumesInsert)
     for overlay in OverlayKind:
       if overlayLabel(overlay).len > widest.len:
         widest = overlayLabel(overlay)
@@ -254,7 +254,7 @@ proc windowModeText(
   if isActiveWindow and state.overlay.isSome:
     overlayLabel(state.overlay.get)
   else:
-    modeLabel(mode, isActiveWindow and state.insertNormalMode)
+    modeLabel(mode, isActiveWindow and state.resumesInsert)
 
 proc parseSetupText(
     gc: GitCacheState,

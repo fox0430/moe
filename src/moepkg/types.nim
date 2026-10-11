@@ -688,6 +688,13 @@ type
       # Current stop's default is untouched (= selected); the next typed
       # character or Backspace replaces/deletes the whole default range
 
+  InsertResume* = enum
+    ## Insert to resume after the Normal command Ctrl-o runs (Vim's restart_edit).
+    irNone # Nothing to resume
+    irWaiting # Set by Ctrl-o; the command it waits for has not started
+    irArmed # That command has started; Insert resumes once it is done
+    irHeld # Kept through a mapping that started in Visual mode (old_mapped_len)
+
   ReplaceHistoryEntryKind* = enum
     rheReplace # Character replacement (or end-of-line insertion)
     rheNewline # Line split via Enter
@@ -950,8 +957,10 @@ type
     # Overlay state for transient modes (Command, Search, Rename)
     # When set, the editor displays an overlay on top of the base mode
     overlay*: Option[OverlayKind]
-    # Insert-Normal mode (Ctrl-o): execute one Normal command then return to Insert
-    insertNormalMode*: bool
+    # Set by Ctrl-o until Insert resumes or is given up (settleInsertResume)
+    insertResume*: InsertResume
+    # Line Ctrl-o was typed past the end of (Vim's ins_at_eol)
+    insertResumeLineEnd*: Option[int]
     # Startup window actions completed (runs once on first render)
     startUpWindowsDone*: bool
     # Notification popup manager
@@ -1300,13 +1309,6 @@ proc setMode*(win: EditorWindow, m: EditorMode) =
       not win.buffer.isNil and win.cursor.line < win.buffer.len:
     win.cursor.clampCursorToLastChar(win.buffer.getLineLen(win.cursor.line))
 
-proc resumeInsert*(win: EditorWindow) =
-  ## Go back to Insert from the Normal mode of a `<C-o>` command. Unlike
-  ## entering Insert, this keeps the column vertical moves want, as Vim's
-  ## restart_edit does.
-  win.previousMode = win.mode
-  win.mode = EditorMode.Insert
-
 func modeAfterVisual(win: EditorWindow): EditorMode =
   ## The mode Visual was entered from. Never another Visual mode, which would
   ## resume this selection instead of ending it, and never Insert or Replace:
@@ -1429,6 +1431,10 @@ proc statusMessageLineCount*(state: EditorState): int =
 proc hasOverlay*(state: EditorState): bool =
   ## Check if an overlay is currently active
   state.overlay.isSome
+
+proc resumesInsert*(state: EditorState): bool =
+  ## True while Insert waits to resume after Ctrl-o.
+  state.insertResume != irNone
 
 proc isCommandOverlay*(state: EditorState): bool =
   ## Check if command overlay is active

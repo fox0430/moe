@@ -50,15 +50,14 @@ proc clearInsertSessionTracking(e: Editor) =
 proc finalizeInsertSessionForBufferSwitch*(e: Editor, oldBuffer: TextBuffer) =
   ## Abandon the Insert session before the active window is repointed at
   ## another buffer or window. Call before reassigning `window.buffer`, passing
-  ## the buffer that owns the session. Handles Insert/Replace and Insert-Normal
-  ## (Ctrl-O), committing `oldBuffer`'s transaction and clearing all Insert
-  ## tracking state. A no-op when no Insert session is active.
+  ## the buffer that owns the session. Handles Insert/Replace, committing
+  ## `oldBuffer`'s transaction and clearing all Insert tracking state. A no-op
+  ## when no Insert session is active. Insert waiting after Ctrl-o has no
+  ## session to abandon; it resumes in the window moved to, as in Vim.
   ##
   ## The typed text stays in the undo history but is not recorded for
   ## dot-repeat: abandoning a session is not a deliberate Insert exit.
-  let inInsert = e.state.mode in {EditorMode.Insert, EditorMode.Replace}
-  let inInsertNormal = e.state.insertNormalMode
-  if not (inInsert or inInsertNormal):
+  if e.state.mode notin {EditorMode.Insert, EditorMode.Replace}:
     return
 
   # Abort snippet and auto-indent inside the transaction so `replaceLine`
@@ -81,11 +80,8 @@ proc finalizeInsertSessionForBufferSwitch*(e: Editor, oldBuffer: TextBuffer) =
   e.state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
   e.state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
 
-  if inInsert:
-    e.state.previousMode = e.state.mode
-    e.state.mode = EditorMode.Normal
-  if inInsertNormal:
-    e.state.insertNormalMode = false
+  e.state.previousMode = e.state.mode
+  e.state.mode = EditorMode.Normal
 
 proc enforceModePolicy*(e: Editor) =
   ## Keep an editable window in a valid Insert session when Normal mode is disabled.

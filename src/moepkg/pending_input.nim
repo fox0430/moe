@@ -18,8 +18,8 @@
 #[############################################################################]#
 
 ## Single-entry API for the aggregated pending-input FSMs. Callers must not
-## poke individual fields when resetting; use cancelAll to avoid the two-place
-## enumeration that plagued the old handleEscapeCancellationKeyCombo path.
+## poke individual fields when resetting; cancelAll keeps the list in one place
+## for Escape, Ctrl-C and a failed command.
 
 import std/options
 
