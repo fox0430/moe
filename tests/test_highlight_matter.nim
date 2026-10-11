@@ -4,10 +4,31 @@ when defined(moe.matter) or defined(features.moe.matter):
   import ../src/moepkg/[config, highlight, highlight_config, syntax/tokenizer]
   import ../src/moepkg/buffer {.all.}
   import ../src/moepkg/types/highlight_types
+  import ../src/moepkg/syntax/matter_backend
   import pkg/celina
   import matter_test_grammars
 
   suite "Matter incremental highlight":
+    test "changing only scope rules invalidates buffer highlighting":
+      let original = newTestMatterGrammarSet()
+      var buffer = newTextBuffer("proc answer = 42")
+      buffer.language = langNim
+      buffer.setHighlightBackend(hbMatter)
+      buffer.setMatterGrammarSet(original)
+      discard buffer.updateHighlight()
+      check buffer.highlight.getColorPair(0, 0) == keyword
+      let changed = original.withMatterScopeRules(
+        [MatterScopeRule(scope: "keyword", category: mccType)]
+      )
+      buffer.setMatterGrammarSet(changed)
+      check buffer.incrementalHighlight.isNil
+      check buffer.highlightNeedsUpdate
+      discard buffer.updateHighlight()
+      check buffer.highlight.getColorPair(0, 0) == typeName
+      buffer.setMatterGrammarSet(original)
+      discard buffer.updateHighlight()
+      check buffer.highlight.getColorPair(0, 0) == keyword
+
     test "HTML categories reach distinct editor theme slots across Unicode columns":
       let lines = @[
         "<nk-window id=\"main\">", "λ <span class='muted'>Plain text</span>",

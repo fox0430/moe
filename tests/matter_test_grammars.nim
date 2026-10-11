@@ -74,7 +74,9 @@ when defined(moe.matter) or defined(features.moe.matter):
 }
 """
 
-  proc newScopedTestMatterGrammarSet*(scopes: openArray[string]): MatterGrammarSet =
+  proc newScopedTestMatterGrammarSet*(
+      scopes: openArray[string], scopeRules: openArray[MatterScopeRule] = []
+  ): MatterGrammarSet =
     ## TextMate permits multiple scope names on a rule, from outermost to innermost.
     ## Exercise classification through the public tokenizer without bundling grammars.
     let grammar = %*{
@@ -86,7 +88,8 @@ when defined(moe.matter) or defined(features.moe.matter):
         MatterGrammarSource(
           content: $grammar, path: "scopes.tmLanguage.json", language: langNim
         )
-      ]
+      ],
+      scopeRules,
     )
 
   proc newTestMatterGrammarSet*(): MatterGrammarSet =

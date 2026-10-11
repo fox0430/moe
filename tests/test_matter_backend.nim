@@ -1,7 +1,21 @@
 when defined(moe.matter) or defined(features.moe.matter):
   import std/[sequtils, strutils, unittest]
   import ../src/moepkg/syntax/[matter_backend, tokenizer]
+  import ../src/moepkg/types/highlight_types
   import matter_test_grammars
+
+  proc scopedCategory(
+      scopes: openArray[string], rules: openArray[MatterScopeRule]
+  ): MatterColorCategory =
+    let parsed = tokenizeMatterLine(
+      "token",
+      langNim,
+      timeLimitMs = 0,
+      grammars = newScopedTestMatterGrammarSet(scopes, rules),
+    )
+    require not parsed.nextState.failed
+    require parsed.spans.len == 1
+    parsed.spans[0].category
 
   suite "Matter syntax backend":
     test "no grammar is available until the caller supplies one":
@@ -250,6 +264,260 @@ when defined(moe.matter) or defined(features.moe.matter):
         require not parsed.nextState.failed
         require parsed.spans.len == 1
         check parsed.spans[0].category == expected
+
+    test "scope overrides assign categories only to the current scope":
+      let rules = [MatterScopeRule(scope: "string", category: mccNumber)]
+      check scopedCategory(["string.quoted.js"], rules) == mccNumber
+      check scopedCategory(["string.quoted.js", "support.variable.property.js"], rules) ==
+        mccProperty
+      check scopedCategory(["string.quoted.cs", "entity.name.variable.local.cs"], rules) ==
+        mccIdentifier
+      # Astro puts this embedded marker outside the attribute's string scope.
+      check scopedCategory(
+        ["meta.embedded.line.js", "string.quoted.astro", "constant.other.caps.js"],
+        rules,
+      ) == mccBuiltin
+
+    test "inherit rules defer to strings and preprocessors without flattening expressions":
+      let rules = [
+        MatterScopeRule(
+          scope: "constant.other.vendor-placeholder",
+          within: "string",
+          action: MatterScopeAction.inheritParent,
+        ),
+        MatterScopeRule(
+          scope: "entity.other.attribute-name.vendor-pragma",
+          within: "meta.preprocessor",
+          action: MatterScopeAction.inheritParent,
+        ),
+      ]
+      check scopedCategory(
+        ["string.quoted.double.c", "constant.other.vendor-placeholder.c"], rules
+      ) == mccString
+      check scopedCategory(["constant.other.vendor-placeholder.c"], rules) == mccBuiltin
+      check scopedCategory(
+        ["constant.other.vendor-placeholder.c"],
+        [
+          MatterScopeRule(
+            scope: "constant.other.vendor-placeholder",
+            action: MatterScopeAction.inheritParent,
+          )
+        ],
+      ) == mccDefault
+      check scopedCategory(
+        ["meta.preprocessor.c", "entity.other.attribute-name.vendor-pragma.c"], rules
+      ) == mccPreprocessor
+      check scopedCategory(["entity.other.attribute-name.vendor-pragma.c"], rules) ==
+        mccProperty
+      check scopedCategory(
+        [
+          "string.quoted.js", "constant.other.vendor-placeholder",
+          "variable.other.readwrite.js",
+        ],
+        rules,
+      ) == mccIdentifier
+      check scopedCategory(
+        [
+          "meta.preprocessor.c", "entity.other.attribute-name.vendor-pragma",
+          "constant.numeric.c",
+        ],
+        rules,
+      ) == mccNumber
+
+    test "ancestor selectors support ordered paths alternatives and exclusions":
+      let rules = [
+        MatterScopeRule(
+          scope: "constant.other.vendor",
+          within: "source.scope-test string - meta.interpolation, meta.preprocessor",
+          action: MatterScopeAction.inheritParent,
+        )
+      ]
+      check scopedCategory(["string.quoted", "constant.other.vendor"], rules) ==
+        mccString
+      check scopedCategory(
+        ["string.quoted", "meta.interpolation", "constant.other.vendor"], rules
+      ) == mccBuiltin
+      check scopedCategory(["meta.preprocessor", "constant.other.vendor"], rules) ==
+        mccPreprocessor
+      check scopedCategory(["constant.other.vendor", "string.quoted"], rules) ==
+        mccString
+
+    test "ancestor alternatives accept commas and grouped pipes":
+      for within in ["string, meta.preprocessor", "(string | meta.preprocessor)"]:
+        let rules = [
+          MatterScopeRule(
+            scope: "constant.other.vendor", within: within, category: mccType
+          )
+        ]
+        check scopedCategory(["string.quoted", "constant.other.vendor"], rules) ==
+          mccType
+        check scopedCategory(["meta.preprocessor", "constant.other.vendor"], rules) ==
+          mccType
+        check scopedCategory(["constant.other.vendor"], rules) == mccBuiltin
+        check scopedCategory(["meta.expression", "constant.other.vendor"], rules) ==
+          mccBuiltin
+
+    test "non-empty ancestor conditions must parse to at least one selector":
+      let grammars = newScopedTestMatterGrammarSet(["constant.other.vendor"])
+      for within in ["  ", "\t\n", "*", ">?"]:
+        let rules = [
+          MatterScopeRule(
+            scope: "constant.other.vendor", within: within, category: mccType
+          )
+        ]
+        expect TextMateGrammarError:
+          discard newMatterGrammarSet([], rules)
+        expect TextMateGrammarError:
+          discard grammars.withMatterScopeRules(rules)
+      check scopedCategory(
+        ["constant.other.vendor"],
+        [MatterScopeRule(scope: "constant.other.vendor", within: "", category: mccType)],
+      ) == mccType
+
+    test "within selectors exclude the current scope and its descendants":
+      let rules =
+        [MatterScopeRule(scope: "string", within: "string", category: mccNumber)]
+      check scopedCategory(["string.quoted"], rules) == mccString
+      check scopedCategory(["string.outer", "string.inner"], rules) == mccNumber
+
+    test "unrecognized descendants cannot satisfy an outer rule's ancestor selector":
+      let rules =
+        [MatterScopeRule(scope: "string", within: "meta.embedded", category: mccNumber)]
+      check scopedCategory(["string.quoted", "meta.embedded.expression"], rules) ==
+        mccString
+      check scopedCategory(
+        ["meta.embedded.expression", "string.quoted", "meta.unrecognized"], rules
+      ) == mccNumber
+
+    test "later matching rules override earlier rules and builtin exceptions":
+      let rules = [
+        MatterScopeRule(scope: "constant.other.placeholder", category: mccNumber),
+        MatterScopeRule(
+          scope: "constant.other.placeholder",
+          within: "string",
+          action: MatterScopeAction.inheritParent,
+        ),
+      ]
+      check scopedCategory(["string.quoted.c", "constant.other.placeholder.c"], rules) ==
+        mccString
+      check scopedCategory(["constant.other.placeholder.c"], rules) == mccNumber
+      check scopedCategory(
+        ["string.quoted.c", "constant.other.placeholder.c"], [rules[1], rules[0]]
+      ) == mccNumber
+
+    test "override scope prefixes respect dotted component boundaries":
+      let rules = [MatterScopeRule(scope: "entity.name.tag", category: mccType)]
+      check scopedCategory(["entity.name.tag.custom"], rules) == mccType
+      check scopedCategory(["entity.name.tagged.custom"], rules) == mccDefault
+
+    test "comments retain reserved word coloring before scope overrides":
+      let rules = [MatterScopeRule(scope: "entity.name.type", category: mccNumber)]
+      check scopedCategory(["comment.documentation", "entity.name.type"], rules) ==
+        mccComment
+
+    test "continuation and initial states retain scope rules without repeating the set":
+      let grammars = newScopedTestMatterGrammarSet(
+        ["constant.other.custom"],
+        [MatterScopeRule(scope: "constant.other.custom", category: mccType)],
+      )
+      let first =
+        tokenizeMatterLine("token", langNim, timeLimitMs = 0, grammars = grammars)
+      let second =
+        tokenizeMatterLine("token", langNim, first.nextState, timeLimitMs = 0)
+      let initial = tokenizeMatterLine(
+        "token", langNim, grammars.initialMatterState(langNim), timeLimitMs = 0
+      )
+      for parsed in [first, second, initial]:
+        require not parsed.nextState.failed
+        require parsed.spans.len == 1
+        check parsed.spans[0].category == mccType
+
+    test "line states retain rules after the caller releases its grammar set":
+      proc detachedState(tokenized: bool): MatterLineState =
+        let grammars = newScopedTestMatterGrammarSet(
+          ["constant.other.custom"],
+          [MatterScopeRule(scope: "constant.other.custom", category: mccType)],
+        )
+        if tokenized:
+          let first =
+            tokenizeMatterLine("token", langNim, timeLimitMs = 0, grammars = grammars)
+          require not first.nextState.failed
+          return first.nextState
+        grammars.initialMatterState(langNim)
+
+      for tokenized in [false, true]:
+        checkpoint("tokenized: " & $tokenized)
+        # The helper's grammar set and tokenization result are out of scope.
+        var state = detachedState(tokenized)
+        for _ in 0 .. 1:
+          let parsed = tokenizeMatterLine("token", langNim, state, timeLimitMs = 0)
+          require not parsed.nextState.failed
+          require parsed.spans.len == 1
+          check parsed.spans[0].category == mccType
+          state = parsed.nextState
+
+    test "grammar sets snapshot caller-owned scope rules":
+      let scopes = ["string.quoted", "constant.other.custom"]
+      var rules = @[
+        MatterScopeRule(
+          scope: "constant.other.custom", within: "string", category: mccType
+        )
+      ]
+      let grammars = newScopedTestMatterGrammarSet(scopes, rules)
+      let expected = newScopedTestMatterGrammarSet(
+        scopes,
+        [
+          MatterScopeRule(
+            scope: "constant.other.custom", within: "string", category: mccType
+          )
+        ],
+      )
+      rules[0].scope.add(".changed")
+      rules[0].within.add(" - string")
+      rules[0].action = MatterScopeAction.inheritParent
+      rules[0].category = mccNumber
+      rules.add(MatterScopeRule(scope: "string", category: mccNumber))
+      check grammars == expected
+      let parsed =
+        tokenizeMatterLine("token", langNim, timeLimitMs = 0, grammars = grammars)
+      require not parsed.nextState.failed
+      require parsed.spans.len == 1
+      check parsed.spans[0].category == mccType
+
+    test "derived rule sets preserve sources and leave existing sets and states unchanged":
+      let
+        original = newScopedTestMatterGrammarSet(["constant.other.custom"])
+        first = tokenizeMatterLine("token", langNim, grammars = original)
+        rules = [MatterScopeRule(scope: "constant.other.custom", category: mccType)]
+        derived = original.withMatterScopeRules(rules)
+        equivalent = original.withMatterScopeRules(rules)
+      check original != derived
+      check derived == equivalent
+      check derived.withMatterScopeRules([]) == original
+      let changed = tokenizeMatterLine("token", langNim, grammars = derived)
+      let unchanged = tokenizeMatterLine("token", langNim, first.nextState)
+      require changed.spans.len == 1
+      require unchanged.spans.len == 1
+      check changed.spans[0].category == mccType
+      check unchanged.spans[0].category == mccBuiltin
+      let replaced = derived.withMatterGrammar(langNim, NimMatterGrammar)
+      check replaced != original.withMatterGrammar(langNim, NimMatterGrammar)
+      let keywordRules = replaced
+        .withMatterScopeRules([MatterScopeRule(scope: "keyword", category: mccNumber)])
+        .withMatterGrammar(langNim, NimMatterGrammar)
+      let keyword = tokenizeMatterLine("proc", langNim, grammars = keywordRules)
+      require keyword.spans.len == 1
+      check keyword.spans[0].category == mccNumber
+
+    test "rule-only sets are distinct from nil and reject empty scope prefixes":
+      let empty: MatterGrammarSet = nil
+      check empty == newMatterGrammarSet()
+      check empty !=
+        empty.withMatterScopeRules(
+          [MatterScopeRule(scope: "string", category: mccNumber)]
+        )
+      expect TextMateGrammarError:
+        discard empty.withMatterScopeRules([MatterScopeRule()])
 
     test "multiline resume uses completed structurally equal states":
       let lines = ["#[ outer", "  #[ nested ]#", "still comment", "]#", "let x = true"]

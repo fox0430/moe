@@ -248,6 +248,64 @@ C/C++ pragma argument and section-label captures retain the surrounding
 and format placeholders retain their surrounding `stringLit` color instead of
 being treated as markup tags or named constants.
 
+Embedders can add scope-category overrides to a grammar set:
+
+```nim
+import moepkg/syntax/[matter_backend, tokenizer]
+import moepkg/types/highlight_types
+
+let rules = [
+  MatterScopeRule(
+    scope: "constant.other.placeholder",
+    within: "string",
+    action: MatterScopeAction.inheritParent,
+  ),
+  MatterScopeRule(
+    scope: "entity.name.custom",
+    category: mccType, # useCategory is the default action
+  ),
+]
+let grammars = newMatterGrammarSet(
+  [MatterGrammarSource(content: grammar, language: langNim)],
+  scopeRules = rules,
+)
+buffer.setMatterGrammarSet(grammars)
+buffer.setHighlightBackend(hbMatter)
+```
+
+`scope` matches the current scope or its dotted descendants; it is not a
+wildcard pattern. `within` is optional and uses Matter's scope-selector syntax,
+including ordered ancestor paths, alternatives and exclusions. It is matched
+against ancestors only, excluding the current scope and its descendants.
+Selectors are parsed once when the grammar set is created.
+
+Use commas for top-level alternatives (`"string, meta.preprocessor"`), or put
+pipe alternatives inside parentheses (`"(string | meta.preprocessor)"`). Matter's
+parser is permissive: unknown characters are ignored, an empty alternative such
+as `", string"` matches unconditionally, and a top-level pipe in
+`"string | meta.preprocessor"` discards the pipe and everything after it. Avoid
+empty alternatives and unsupported characters; Moe does not fully validate
+selector syntax. A non-empty `within` that produces no selectors, such as
+whitespace alone or `"*"`, raises `TextMateGrammarError`. Use `within: ""` (or
+omit the field) for an unrestricted rule.
+
+Resolution still proceeds from inner to outer. At each scope, the last matching
+override wins before the default mapping. `useCategory` assigns a category;
+`inheritParent` skips that scope and continues outward, returning the default
+category if no ancestor supplies one. An override on an outer string therefore
+does not suppress a recognized identifier or property inside an expression.
+Comment scopes retain priority so Moe's reserved-word highlighting stays active.
+With no rules, existing mappings are unchanged.
+
+Use `grammars.withMatterScopeRules(rules)` to derive a set with replacement
+rules, or pass `[]` to remove overrides. The original set and existing line
+states retain their rules. Grammar replacement through `withMatterGrammar`
+preserves overrides. Install the derived set on a buffer to invalidate its
+highlight cache; rule changes participate in grammar-set configuration equality.
+The API performs no filesystem access and an empty `scope` prefix raises
+`TextMateGrammarError`. Overrides select existing theme categories; this API
+does not supply custom RGB colors or change the theme palette.
+
 The existing `[Standard] syntax` toggle enables/disables rendering for either
 backend. Reloading config switches existing buffers and invalidates their syntax
 caches. A binary compiled without either Matter define uses builtin highlighting
