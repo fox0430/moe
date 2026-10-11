@@ -1254,43 +1254,11 @@ suite "Editor - applyConfigSettings syncs display state":
     e.applyConfigSettings(e.config)
     check e.state.showSyntax == false
 
-  test "Syncs showDocumentHighlight from config.lsp.documentHighlight.enable":
-    let e = createTestEditor()
-
-    e.config.lsp.documentHighlight.enable = false
-    e.applyConfigSettings(e.config)
-    check e.state.showDocumentHighlight == false
-
-    e.config.lsp.documentHighlight.enable = true
-    e.applyConfigSettings(e.config)
-    check e.state.showDocumentHighlight == true
-
-  test "Syncs showCodeLens from config.lsp.codeLens.enable":
-    let e = createTestEditor()
-
-    e.config.lsp.codeLens.enable = true
-    e.applyConfigSettings(e.config)
-    check e.state.showCodeLens == true
-
-    e.config.lsp.codeLens.enable = false
-    e.applyConfigSettings(e.config)
-    check e.state.showCodeLens == false
-
-  test "Syncs showInlayHint from config.lsp.inlayHint.enable":
-    let e = createTestEditor()
-
-    e.config.lsp.inlayHint.enable = false
-    e.applyConfigSettings(e.config)
-    check e.state.showInlayHint == false
-
-    e.config.lsp.inlayHint.enable = true
-    e.applyConfigSettings(e.config)
-    check e.state.showInlayHint == true
-
   test "Disabling diagnostics clears stored diagnostics and markers":
     # Diagnostics are server-push, so disabling only stops future updates;
     # the reload path must clear what was already applied.
     let e = createTestEditor()
+    e.config.lsp.enable = true
     let buf = e.activeBuffer()
     buf.setLineMarker(0, LineMarkerKind.SyntaxError)
     buf.diagnostics.add(
@@ -1309,6 +1277,95 @@ suite "Editor - applyConfigSettings syncs display state":
 
     check buf.diagnostics.len == 0
     check buf.getLineMarker(0).isNone
+
+  test "Keeps stored diagnostics while diagnostics stay enabled":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
+    buf.diagnostics.add(
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsError,
+        message: "boom",
+      )
+    )
+
+    e.config.lsp.enable = true
+    e.applyConfigSettings(e.config)
+
+    check buf.diagnostics.len == 1
+    check buf.getLineMarker(0).isSome
+
+  test "Turning LSP off clears stored diagnostics and markers":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
+    buf.diagnostics.add(
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsError,
+        message: "boom",
+      )
+    )
+
+    e.config.lsp.enable = false
+    e.applyConfigSettings(e.config)
+
+    check buf.diagnostics.len == 0
+    check buf.getLineMarker(0).isNone
+
+  proc fillOverlayCaches(e: Editor) =
+    let id = e.activeBuffer().id
+    e.state.lspCache.codeLensCache.isValid = true
+    e.state.lspCache.codeLensCache.bufferId = id
+    e.state.lspCache.documentHighlightCache.isValid = true
+    e.state.lspCache.documentHighlightCache.bufferId = id
+    e.state.lspCache.inlayHintCache.isValid = true
+    e.state.lspCache.inlayHintCache.bufferId = id
+
+  test "Drops only the overlay cache of a disabled feature":
+    let e = createTestEditor()
+    e.config.lsp.enable = true
+    e.fillOverlayCaches()
+
+    e.config.lsp.codeLens.enable = false
+    e.applyConfigSettings(e.config)
+
+    check not e.state.lspCache.codeLensCache.isValid
+    check e.state.lspCache.documentHighlightCache.isValid
+    check e.state.lspCache.inlayHintCache.isValid
+
+  test "Keeps the overlay caches when an unrelated setting changes":
+    let e = createTestEditor()
+    e.config.lsp.enable = true
+    e.config.lsp.codeLens.enable = true
+    e.fillOverlayCaches()
+
+    e.config.standard.lineWrap = not e.config.standard.lineWrap
+    e.applyConfigSettings(e.config)
+
+    check e.state.lspCache.codeLensCache.isValid
+    check e.state.lspCache.documentHighlightCache.isValid
+    check e.state.lspCache.inlayHintCache.isValid
+
+  test "Turning LSP off drops every overlay cache":
+    let e = createTestEditor()
+    e.config.lsp.enable = true
+    e.applyConfigSettings(e.config)
+    e.fillOverlayCaches()
+
+    e.config.lsp.enable = false
+    e.applyConfigSettings(e.config)
+
+    check not e.state.lspCache.codeLensCache.isValid
+    check not e.state.lspCache.documentHighlightCache.isValid
+    check not e.state.lspCache.inlayHintCache.isValid
 
   test "Syncs showIndentationLines from config.standard.indentationLines":
     let e = createTestEditor()

@@ -32,7 +32,7 @@ import
   path_key
 import command_handlers/[handler_manager, insert_handler]
 import buffer/[undo, file_io]
-import logger, message_log
+import logger, message_log, completion
 
 export lsp_request_context
 
@@ -134,16 +134,15 @@ proc applyLspServerConfigs*(e: Editor) =
       "; run :lspRestart to apply"
 
 proc applyDiagnosticsForUri*(
-    e: Editor, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    e: Editor, uri: string, diags: seq[Diagnostic], version: Option[int]
 ) =
   ## Route publishDiagnostics to target buffer; drop stale or raw-buffer frames.
-  if not e.config.lsp.diagnostics.enable:
-    return
-
   let path = pathKey(uriToPath(uri))
   for buf in e.buffers:
     if buf.filePath.isNone or not buf.bufferHoldsFile(path):
       continue
+    if not e.lspFeatureEnabled(buf, diagnostics):
+      return
     # Version is the didOpen key (buffer spelling), not the publish URI.
     # A server that names the real path still compares against the holder.
     if version.isSome:
@@ -153,18 +152,45 @@ proc applyDiagnosticsForUri*(
     # Raw buffer has no version; drop diagnostics computed from decoded text.
     if not buf.isLspEligible:
       return
-    applyDiagnosticsToBuffer(buf, diagnostics)
+    applyDiagnosticsToBuffer(buf, diags)
     return
   # No matching open buffer: drop. The server only publishes for documents
   # we opened (didOpen), so this is the closed-in-the-meantime case.
 
-proc clearAllDiagnostics*(e: Editor) =
-  ## Drop stored diagnostics and their line markers from every buffer.
-  ## Used when Lsp.Diagnostics is disabled on a config reload: the server
-  ## keeps pushing (and applyDiagnosticsForUri keeps dropping), but what was
-  ## already applied has to be removed explicitly.
+proc clearDisabledLspState*(e: Editor) =
+  ## Drop what each buffer holds for the LSP features now off for it, and
+  ## cancel requests sent for them. Used on a config reload: the gates stop any
+  ## refill, but what was already applied or sent stays until removed here.
+  ## Features still on are left alone.
   for buf in e.buffers:
-    applyDiagnosticsToBuffer(buf, @[])
+    # With none stored, clearing would only wipe the syntax checker's markers.
+    if not e.lspFeatureEnabled(buf, diagnostics) and buf.diagnostics.len > 0:
+      applyDiagnosticsToBuffer(buf, @[])
+    let scope = some(buf.id)
+    if not e.lspFeatureEnabled(buf, semanticTokens):
+      invalidateSemanticTokensCache(e.lsp, e.state.lspCache, scope)
+      if not buf.highlight.isNil and buf.highlight.semantic.len > 0:
+        buf.highlight.semantic.clear()
+        buf.highlight.semanticContentVersion = -1
+    if not e.lspFeatureEnabled(buf, inlayHint):
+      invalidateInlayHintCache(e.lsp, e.state.lspCache, scope)
+    if not e.lspFeatureEnabled(buf, documentHighlight):
+      invalidateDocumentHighlightCache(e.lsp, e.state.lspCache, scope)
+    if not e.lspFeatureEnabled(buf, codeLens):
+      invalidateCodeLensCache(e.lsp, e.state.lspCache, scope)
+
+  var disabled: seq[LspRequestFeature]
+  for feature, ctx in e.state.lspCache.pending:
+    let owner = e.bufferById(ctx.bufferId)
+    if owner.isSome and not e.lsp.lspRequestEnabled(e.config.lsp, owner.get, feature):
+      disabled.add feature
+  for feature in disabled:
+    e.cancelIfPending(feature)
+
+  # Completion keeps its request id outside `pending`, for the active buffer.
+  let completionOff = not e.lspFeatureEnabled(e.activeBuffer(), completion)
+  if completionOff and not e.handlerManager.isNil:
+    e.handlerManager.insertHandler.completionManager.clearLspRequestPending()
 
 proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer) =
   ## Sync after edit; failures report themselves.
@@ -309,7 +335,7 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
         e.state.statusMessage = "LSP not enabled"
         return false
 
-      if not e.config.lsp.documentFormatting.enable:
+      if not e.lspFeatureEnabled(e.activeBuffer(), documentFormatting):
         e.state.statusMessage = "LSP document formatting is disabled"
         return false
 
@@ -370,7 +396,7 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
     if not e.lsp.enabled:
       e.state.statusMessage = "LSP not enabled"
       return
-    if not e.config.lsp.foldingRange.enable:
+    if not e.lspFeatureEnabled(e.activeBuffer(), foldingRange):
       e.state.statusMessage = "LSP folding range is disabled"
       return
 
@@ -499,7 +525,7 @@ proc requestLspExecuteCommand*(
         e.state.statusMessage = "LSP not enabled"
         return
 
-      if not e.config.lsp.executeCommand.enable:
+      if not e.lspFeatureEnabled(e.activeBuffer(), executeCommand):
         e.state.statusMessage = "LSP execute command is disabled"
         return
 

@@ -90,11 +90,6 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## `newConfig` is copied into `e.config` in place, so all holders stay current.
   ## Other runtime state still needs manual apply.
 
-  if not newConfig.lsp.diagnostics.enable:
-    # Diagnostics are server-push; drop applied markers/hover so a disable
-    # takes effect visually too.
-    e.clearAllDiagnostics()
-
   # Update search settings
   e.state.input.search.ignorecase = newConfig.standard.ignorecase
   e.state.input.search.smartcase = newConfig.standard.smartcase
@@ -173,6 +168,9 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   # command/args/trace/rust-analyzer edits. Already-running workers keep
   # their old command until they restart (out of scope here).
   e.applyLspServerConfigs()
+
+  # Needs the path-to-language map set just above.
+  e.clearDisabledLspState()
 
 proc maybeReloadConfig*(e: Editor) =
   ## Check if config file was modified and reload if:

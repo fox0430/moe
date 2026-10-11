@@ -192,10 +192,10 @@ proc updateCodeLensCache*(e: Editor) =
   ## Update the CodeLens cache for the current buffer (with debouncing)
   ## Only updates if enough time has passed since last update and buffer changed
   ## Uses non-blocking async pattern to avoid freezing the UI
-  if not e.lsp.enabled or not e.showCodeLens:
+  let activeBuffer = e.activeBuffer()
+  if not e.lspFeatureEnabled(activeBuffer, codeLens):
     return
 
-  let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     return
 
@@ -470,7 +470,7 @@ proc updateDocumentHighlightCache*(e: Editor) =
   ## Called during render to update highlights when cursor moves
   ## Only updates in Normal/Visual modes - cleared in Insert/Replace modes
   ## Uses non-blocking async pattern to avoid freezing the UI
-  if not e.lsp.enabled or not e.showDocumentHighlight:
+  if not e.lspFeatureEnabled(e.activeBuffer(), documentHighlight):
     return
 
   # In Insert/Replace modes, clear highlights to avoid distraction.
@@ -720,13 +720,10 @@ proc updateSemanticTokensCache*(e: Editor) =
   ## Update the semantic tokens cache (with debouncing)
   ## Called during render to update LSP-based syntax highlighting
   ## Uses non-blocking async pattern to avoid freezing the UI
-  if not e.lsp.enabled:
-    return
-
-  if not e.config.lsp.semanticTokens.enable:
-    return
-
   let activeBuffer = e.activeBuffer()
+  if not e.lspFeatureEnabled(activeBuffer, semanticTokens):
+    return
+
   if activeBuffer.filePath.isNone:
     return
 
@@ -903,10 +900,10 @@ proc doUpdateInlayHintCache(e: Editor) =
 proc updateInlayHintCache*(e: Editor) =
   ## Update the inlay hint cache (with debouncing)
   ## Called from tickLsp. Uses non-blocking async pattern to avoid freezing the UI.
-  if not e.lsp.enabled or not e.showInlayHint:
+  let activeBuffer = e.activeBuffer()
+  if not e.lspFeatureEnabled(activeBuffer, inlayHint):
     return
 
-  let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     return
 
@@ -970,7 +967,7 @@ proc buildVirtualTextProviders*(e: Editor): seq[VirtualTextProvider] =
   ## Assemble the virtual text providers for the currently enabled features.
   ## New features (inline diagnostics, git blame, ...) push their own provider
   ## here; the renderer stays feature-agnostic.
-  if e.showInlayHint:
+  if e.lspFeatureEnabled(e.activeBuffer(), inlayHint):
     # The cache is keyed by file but read per line number, so right after a
     # buffer switch (before the highlightChanged invalidation in updateForFrame
     # runs) it can still hold the previous file's hints. Gate on the owning
@@ -980,7 +977,7 @@ proc buildVirtualTextProviders*(e: Editor): seq[VirtualTextProvider] =
         some(cache.filePath) == e.activeBuffer().filePath:
       result.add e.inlayHintVirtualTextProvider()
 
-  if e.showCodeLens:
+  if e.lspFeatureEnabled(e.activeBuffer(), codeLens):
     # Same per-file gate as inlay hints: the cache is line-keyed, so right after
     # a buffer switch it can still hold the previous file's lenses. Gate on the
     # owning file once per frame instead of per line.
@@ -1085,7 +1082,7 @@ proc executeCurrentLineCodeLens*(e: Editor): Future[void] {.async: (raises: []).
     # whose response lands frames later via the updateCodeLensCache polling path,
     # so reading the cache right after would see stale data anyway (and the new
     # request would orphan any in-flight poll request by overwriting its id).
-    # While showCodeLens is on the cache is kept fresh by that polling, which now
+    # While CodeLens is on the cache is kept fresh by that polling, which now
     # also feeds the inline renderer, so the explicit refresh is unnecessary.
     if not e.state.lspCache.codeLensCache.isValid:
       e.state.statusMessage = "No CodeLens available"

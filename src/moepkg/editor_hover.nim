@@ -40,7 +40,7 @@ proc startLspHover*(e: Editor): bool =
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  if not e.config.lsp.hover.enable:
+  if not e.lspFeatureEnabled(e.activeBuffer(), hover):
     e.state.statusMessage = "LSP hover is disabled"
     return false
 
@@ -104,7 +104,7 @@ proc requestLspHover*(e: Editor): bool =
 proc maybeAutoHoverDiagnostic*(e: Editor) =
   ## Automatically show diagnostic hover when cursor moves onto a diagnostic.
   ## Called from tick(). Requires Lsp.Diagnostics.autoHover = true.
-  if not e.lsp.enabled or not e.config.lsp.diagnostics.enable or
+  if not e.lspFeatureEnabled(e.activeBuffer(), diagnostics) or
       not e.config.lsp.diagnostics.autoHover:
     return
 

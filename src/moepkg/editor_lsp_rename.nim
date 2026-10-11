@@ -89,7 +89,7 @@ proc requestLspRename*(
         e.state.statusMessage = "LSP not enabled"
         return
 
-      if not e.config.lsp.rename.enable:
+      if not e.lspFeatureEnabled(e.activeBuffer(), rename):
         e.state.statusMessage = "LSP rename is disabled"
         return
 

@@ -36,7 +36,7 @@ proc startLspDocumentSymbols*(e: Editor): bool =
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  if not e.config.lsp.documentSymbol.enable:
+  if not e.lspFeatureEnabled(e.activeBuffer(), documentSymbol):
     e.state.statusMessage = "LSP document symbol is disabled"
     return false
 

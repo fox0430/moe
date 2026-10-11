@@ -712,11 +712,14 @@ proc commitCompletion*(
     handler.completionManager.cancelCompletion()
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-proc lspCompletionAllowed(handler: InsertModeHandler, state: EditorState): bool =
+proc lspCompletionAllowed(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+): bool =
   ## While recording, LSP candidates would arrive between the typed keys and
   ## change what the next key picks, which a replay cannot reproduce. Buffer
   ## words are collected at once, so they stay.
-  not handler.lsp.isNil and handler.lsp.isEnabled and state.config.lsp.completion.enable and
+  not handler.lsp.isNil and handler.lsp.isEnabled and
+    handler.lsp.lspFeatureEnabled(state.config.lsp, buffer, completion) and
     not state.pendingInput.macroState.isRecording
 
 proc triggerLspCompletionRequest*(
@@ -733,7 +736,7 @@ proc triggerLspCompletionRequest*(
   let line = buffer.getLine(state.cursor.line)
   let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
 
-  if handler.lspCompletionAllowed(state):
+  if handler.lspCompletionAllowed(buffer, state):
     # If LSP completion is available, check whether we can skip the request and
     # filter client-side. The skip check must run BEFORE the fallback
     # triggerCompletion below, which recollects buffer words. When
@@ -765,7 +768,7 @@ proc triggerLspCompletionRequest*(
       return
 
   # Without LSP (as while recording) the candidates it gave earlier go too.
-  if not handler.lspCompletionAllowed(state):
+  if not handler.lspCompletionAllowed(buffer, state):
     handler.completionManager.lspItems = @[]
 
   # First, show buffer completions immediately for instant feedback
@@ -777,7 +780,7 @@ proc triggerLspCompletionRequest*(
   # follows: recording must not take candidates a replay will not get.
   handler.completionManager.clearLspRequestPending()
 
-  if handler.lspCompletionAllowed(state) and
+  if handler.lspCompletionAllowed(buffer, state) and
       # If LSP completion is available and the server advertises completion support,
       # start an async request in background. The capability gate lives here (not in
       # the skip branch above) because that branch only filters already-received

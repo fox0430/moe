@@ -33,10 +33,7 @@ const SignatureHelpValidModes* = {EditorMode.Insert}
 proc requestSignatureHelpFromLsp*(e: Editor) =
   ## Request signature help from LSP if in insert mode with paren depth > 0
   ## Uses non-blocking async pattern to avoid freezing the UI
-  if not e.lsp.enabled:
-    return
-
-  if not e.config.lsp.signatureHelp.enable:
+  if not e.lspFeatureEnabled(e.activeBuffer(), signatureHelp):
     return
 
   if e.state.mode != EditorMode.Insert:

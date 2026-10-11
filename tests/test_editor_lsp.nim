@@ -23,7 +23,9 @@ import std/[unittest, os, options, strutils, tables, importutils, json, unicode]
 
 import pkg/[chronos, results]
 
-import ../src/moepkg/[editor, buffer, config, config_loader, message_log, types]
+import
+  ../src/moepkg/
+    [editor, buffer, config, config_loader, message_log, types, completion, highlight]
 import ../src/moepkg/editor_lsp {.all.}
 import ../src/moepkg/editor_lsp_rename {.all.}
 import ../src/moepkg/lsp_integration {.all.}
@@ -552,8 +554,8 @@ suite "editor_lsp - applyDiagnosticsForUri":
     else:
       skip()
 
-suite "editor_lsp - clearAllDiagnostics":
-  test "clears stored diagnostics and markers from all buffers":
+suite "editor_lsp - clearDisabledLspState":
+  test "clears stored diagnostics and markers from all buffers when disabled":
     let e = createTestEditor()
     e.lsp.enabled = true
     let activeBuffer = e.activeBuffer()
@@ -578,12 +580,76 @@ suite "editor_lsp - clearAllDiagnostics":
     check activeBuffer.getLineMarker(0).isSome
     check other.getLineMarker(0).isSome
 
-    e.clearAllDiagnostics()
+    e.clearDisabledLspState()
+    check activeBuffer.diagnostics.len == 1
+    check other.diagnostics.len == 1
+
+    e.config.lsp.diagnostics.enable = false
+    e.clearDisabledLspState()
 
     check activeBuffer.diagnostics.len == 0
     check other.diagnostics.len == 0
     check activeBuffer.getLineMarker(0).isNone
     check other.getLineMarker(0).isNone
+
+  test "keeps syntax checker markers when no LSP diagnostics are stored":
+    let e = createTestEditorWithLspDisabled()
+    let buf = e.activeBuffer()
+    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
+    buf.diagnosticsDirty = false
+
+    e.clearDisabledLspState()
+
+    check buf.getLineMarker(0) == some(LineMarkerKind.SyntaxError)
+    check not buf.diagnosticsDirty
+
+  test "drops the painted semantic overlay when semantic tokens are disabled":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let buf = e.activeBuffer()
+    if buf.highlight.isNil:
+      buf.highlight = Highlight(colorSegments: @[])
+    buf.highlight.semantic[0] = SemanticOverlayLine(tokens: @[])
+    buf.highlight.semanticContentVersion = buf.contentVersion
+
+    e.clearDisabledLspState()
+    check buf.highlight.semantic.len == 1
+
+    e.config.lsp.semanticTokens.enable = false
+    e.clearDisabledLspState()
+    check buf.highlight.semantic.len == 0
+    check buf.highlight.semanticContentVersion == -1
+
+  proc pendingFor(buf: TextBuffer, feature: LspRequestFeature): LspRequestContext =
+    LspRequestContext(feature: feature, bufferId: buf.id, cursorLine: -1, cursorCol: -1)
+
+  test "cancels only the pending requests of disabled features":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let buf = e.activeBuffer()
+    for feature in [lrfHover, lrfCodeLensResolve, lrfDefinition]:
+      e.state.lspCache.pending[feature] = pendingFor(buf, feature)
+
+    e.config.lsp.hover.enable = false
+    e.config.lsp.codeLens.enable = false
+    e.clearDisabledLspState()
+
+    check not e.state.lspCache.pending.hasKey(lrfHover)
+    check not e.state.lspCache.pending.hasKey(lrfCodeLensResolve)
+    check e.state.lspCache.pending.hasKey(lrfDefinition)
+
+  test "drops the in-flight completion request when completion is disabled":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let completionManager = e.handlerManager.insertHandler.completionManager
+    completionManager.setLspRequestPending(42)
+
+    e.clearDisabledLspState()
+    check completionManager.isPendingLsp
+
+    e.config.lsp.completion.enable = false
+    e.clearDisabledLspState()
+    check not completionManager.isPendingLsp
 
 suite "editor_lsp - pollLspCompletion":
   test "Does nothing when LSP is disabled":

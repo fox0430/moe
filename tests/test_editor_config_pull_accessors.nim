@@ -140,27 +140,6 @@ suite "Editor - config pull accessors (Phase 1)":
     e.config.syntaxChecker.enable = true
     check e.showSyntaxChecker == true
 
-  test "showCodeLens reads lsp.codeLens.enable":
-    let e = mkEditor()
-    e.config.lsp.codeLens.enable = false
-    check e.showCodeLens == false
-    e.config.lsp.codeLens.enable = true
-    check e.showCodeLens == true
-
-  test "showDocumentHighlight reads lsp.documentHighlight.enable":
-    let e = mkEditor()
-    e.config.lsp.documentHighlight.enable = false
-    check e.showDocumentHighlight == false
-    e.config.lsp.documentHighlight.enable = true
-    check e.showDocumentHighlight == true
-
-  test "showInlayHint reads lsp.inlayHint.enable":
-    let e = mkEditor()
-    e.config.lsp.inlayHint.enable = false
-    check e.showInlayHint == false
-    e.config.lsp.inlayHint.enable = true
-    check e.showInlayHint == true
-
   test "lineWrap reads standard.lineWrap":
     let e = mkEditor()
     e.config.standard.lineWrap = false
