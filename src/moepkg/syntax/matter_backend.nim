@@ -273,18 +273,25 @@ proc newMatterGrammarSet*(
 ): MatterGrammarSet =
   ## Parse and register caller-provided grammar text. All sources are added
   ## before any root is compiled, so they may provide external includes for
-  ## one another. Scope selectors are compiled once. Grammar errors and empty
-  ## rule scope prefixes raise TextMateGrammarError. Comment scopes retain
-  ## their reserved-word channel before overrides are considered.
+  ## one another. Scope selectors are compiled once. Grammar errors, empty
+  ## rule scope prefixes, and non-empty `within` values that parse to no
+  ## selectors raise TextMateGrammarError. Other selector syntax follows
+  ## Matter's permissive parser. Comment scopes retain their reserved-word
+  ## channel before overrides are considered.
   result = newMatterGrammarSet()
   for rule in scopeRules:
     if rule.scope.len == 0:
       raise
         newException(TextMateGrammarError, "Matter scope rule requires a scope prefix")
+    let within = parseScopeSelectors(rule.within)
+    if rule.within.len > 0 and within.len == 0:
+      raise newException(
+        TextMateGrammarError,
+        "Matter scope rule '" & rule.scope &
+          "' has a non-empty within that parses to no selectors",
+      )
     result.scopeRules.add(rule)
-    result.compiledScopeRules.add(
-      CompiledMatterScopeRule(source: rule, within: parseScopeSelectors(rule.within))
-    )
+    result.compiledScopeRules.add(CompiledMatterScopeRule(source: rule, within: within))
   for source in sources:
     let path = if source.path.len > 0: source.path else: "grammar.tmLanguage.json"
     let raw =

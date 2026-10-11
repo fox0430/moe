@@ -279,6 +279,16 @@ including ordered ancestor paths, alternatives and exclusions. It is matched
 against ancestors only, excluding the current scope and its descendants.
 Selectors are parsed once when the grammar set is created.
 
+Use commas for top-level alternatives (`"string, meta.preprocessor"`), or put
+pipe alternatives inside parentheses (`"(string | meta.preprocessor)"`). Matter's
+parser is permissive: unknown characters are ignored, an empty alternative such
+as `", string"` matches unconditionally, and a top-level pipe in
+`"string | meta.preprocessor"` discards the pipe and everything after it. Avoid
+empty alternatives and unsupported characters; Moe does not fully validate
+selector syntax. A non-empty `within` that produces no selectors, such as
+whitespace alone or `"*"`, raises `TextMateGrammarError`. Use `within: ""` (or
+omit the field) for an unrestricted rule.
+
 Resolution still proceeds from inner to outer. At each scope, the last matching
 override wins before the default mapping. `useCategory` assigns a category;
 `inheritParent` skips that scope and continues outward, returning the default

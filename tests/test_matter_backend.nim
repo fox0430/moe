@@ -342,6 +342,38 @@ when defined(moe.matter) or defined(features.moe.matter):
       check scopedCategory(["constant.other.vendor", "string.quoted"], rules) ==
         mccString
 
+    test "ancestor alternatives accept commas and grouped pipes":
+      for within in ["string, meta.preprocessor", "(string | meta.preprocessor)"]:
+        let rules = [
+          MatterScopeRule(
+            scope: "constant.other.vendor", within: within, category: mccType
+          )
+        ]
+        check scopedCategory(["string.quoted", "constant.other.vendor"], rules) ==
+          mccType
+        check scopedCategory(["meta.preprocessor", "constant.other.vendor"], rules) ==
+          mccType
+        check scopedCategory(["constant.other.vendor"], rules) == mccBuiltin
+        check scopedCategory(["meta.expression", "constant.other.vendor"], rules) ==
+          mccBuiltin
+
+    test "non-empty ancestor conditions must parse to at least one selector":
+      let grammars = newScopedTestMatterGrammarSet(["constant.other.vendor"])
+      for within in ["  ", "\t\n", "*", ">?"]:
+        let rules = [
+          MatterScopeRule(
+            scope: "constant.other.vendor", within: within, category: mccType
+          )
+        ]
+        expect TextMateGrammarError:
+          discard newMatterGrammarSet([], rules)
+        expect TextMateGrammarError:
+          discard grammars.withMatterScopeRules(rules)
+      check scopedCategory(
+        ["constant.other.vendor"],
+        [MatterScopeRule(scope: "constant.other.vendor", within: "", category: mccType)],
+      ) == mccType
+
     test "within selectors exclude the current scope and its descendants":
       let rules =
         [MatterScopeRule(scope: "string", within: "string", category: mccNumber)]
