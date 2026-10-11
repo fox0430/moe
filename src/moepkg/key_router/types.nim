@@ -69,6 +69,9 @@ type
       ## resolved `Command`; the caller executes it (Normal-mode dispatcher).
 
   RouteResult* = object
+    lhsKeys*: seq[KeyInput]
+      ## For a fired mapping, the keys its left-hand side took. The first key
+      ## of its right-hand side or its command stands for their typed keys.
     case kind*: RouteResultKind
     of rrExecuteRuntimeCommand:
       commandName*: string

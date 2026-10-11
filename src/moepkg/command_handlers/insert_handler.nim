@@ -35,6 +35,7 @@ import
   ../[
     types, buffer, config, modes, key_bindings, motion, command_registry, unicode_utils,
     completion, signature_help, lsp_integration, lsp_request_context, key_router,
+    macro_recording,
   ]
 import handler_types, insert_commands
 import ../types/editor_types

@@ -46,14 +46,8 @@ proc createTestState(): EditorState =
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     pendingInput: PendingInputState(
       macroState: MacroState(
-        isRecording: false,
-        register: '\0',
-        recordedKeys: @[],
         registers: initTable[char, seq[string]](),
         lastRegister: none(char),
-        waitingForRegister: false,
-        commandType: "",
-        pendingCount: 0,
         playbackDepth: 0,
       )
     ),
@@ -758,6 +752,79 @@ suite "StatusLine - renderStatusLine":
     let line = getBufferLine(displayBuffer, 23)
     check "NORMAL" notin line
 
+suite "StatusLine - recording label":
+  test "renderStatusLine shows it after the mode label in the label style":
+    var state = createTestState()
+    state.showStatusLine = true
+
+    var displayBuffer = createTestBuffer()
+    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
+    var config = createTestStatusLineConfig()
+    config.mode = true
+
+    renderStatusLine(
+      state, textBuffer, displayBuffer, 23, config, recordingLabel = "recording @a"
+    )
+
+    check getBufferLine(displayBuffer, 23).startsWith(" NORMAL  recording @a ")
+    check displayBuffer[10, 23].style == getStatusLineModeLabelStyle(state.mode)
+
+  test "Shows it with the mode label off, as Vim does with noshowmode":
+    var state = createTestState()
+    state.showStatusLine = true
+
+    var displayBuffer = createTestBuffer()
+    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
+    var config = createTestStatusLineConfig()
+    config.mode = false
+
+    renderStatusLine(
+      state, textBuffer, displayBuffer, 23, config, recordingLabel = "recording @a"
+    )
+
+    check getBufferLine(displayBuffer, 23).startsWith(" recording @a ")
+
+  test "renderWindowStatusLine shows it only in the active window":
+    var state = createTestState()
+    state.showStatusLine = true
+    state.multiStatusLine = true
+
+    var activeBuf = createTestBuffer()
+    var inactiveBuf = createTestBuffer()
+    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
+    var config = createTestStatusLineConfig()
+    config.mode = true
+
+    renderWindowStatusLine(
+      state,
+      textBuffer,
+      activeBuf,
+      10,
+      0,
+      80,
+      true,
+      state.mode,
+      state.cursor,
+      config,
+      recordingLabel = "recording @a",
+    )
+    renderWindowStatusLine(
+      state,
+      textBuffer,
+      inactiveBuf,
+      10,
+      0,
+      80,
+      false,
+      state.mode,
+      state.cursor,
+      config,
+      recordingLabel = "recording @a",
+    )
+
+    check getBufferLine(activeBuf, 10).startsWith(" NORMAL  recording @a ")
+    check "recording" notin getBufferLine(inactiveBuf, 10)
+
 suite "StatusLine - renderWindowStatusLine":
   test "A narrow window keeps the preserved-work mark over the path":
     var state = createTestState()
@@ -1082,6 +1149,11 @@ suite "StatusLine - layoutStatusLine":
   test "Keeps the mode label while the name is cut":
     check layoutStatusLine([mode, longName], ruler, 21) ==
       (left: @[" NORMAL ", " <m"], ruler: "123/456", rulerCol: 13)
+
+  test "Keeps the recording label, as the mode label, while the name is cut":
+    let recording = part(" recording @a ", srLabel)
+    check layoutStatusLine([mode, recording, longName], ruler, 50).left ==
+      @[" NORMAL ", " recording @a ", " <m"]
 
   test "Cuts the labels only when they alone are wider than the window":
     check layoutStatusLine([mode], ruler, 6) ==

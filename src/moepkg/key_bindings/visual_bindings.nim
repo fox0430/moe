@@ -19,7 +19,7 @@
 
 ## Default Visual / VisualBlock / VisualLine mode key bindings.
 ##
-## The three modes share 47 bindings, so they live in `SharedVisualBindings`
+## The three modes share 48 bindings, so they live in `SharedVisualBindings`
 ## and are replayed against each mode in turn. The three differences observed
 ## in the original code are kept separate:
 ##
@@ -76,6 +76,8 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   ("g P", "visual-paste-end"),
   # Fold
   ("z f", "fold-create"),
+  # Macro
+  ("q", "macro-record"),
   # Adjust + LSP
   ("C-a", "increment-number"),
   ("C-x", "decrement-number"),

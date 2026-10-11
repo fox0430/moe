@@ -275,7 +275,7 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
     e.state.lspCache.autoHoverPoll.cursorLine = -1
     e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
-    e.state.pendingInput.macroState.isRecording = true
+    e.state.pendingInput.macroState.recording = some(MacroRecording(register: 'a'))
 
     e.maybeAutoHoverDiagnostic()
 

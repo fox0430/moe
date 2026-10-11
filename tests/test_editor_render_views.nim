@@ -26,7 +26,7 @@ import pkg/celina
 import
   ../src/moepkg/[
     editor, config, config_loader, config_mode, modes, types, buffer, render_utils,
-    editor_window, editor_window_layout,
+    editor_window, editor_window_layout, macro_recording,
   ]
 import ../src/moepkg/editor_render_views {.all.}
 
@@ -631,6 +631,83 @@ suite "renderBottomLines - Status line visibility":
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
+
+suite "renderBottomLines - Recording label":
+  test "Stays on the status line while it is shown":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.multiStatusLine = false
+    e.state.pendingInput.macroState.startRecording('a')
+
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+
+    check rowText(buffer, 23, 80).count("recording @a") == 1
+
+  test "Stays off the command line while a window status line holds it":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.multiStatusLine = true
+    e.state.pendingInput.macroState.startRecording('a')
+
+    e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+
+    check rowText(buffer, 23, 80).count("recording @a") == 1
+    check rowText(buffer, 23, 8) == " NORMAL "
+
+  test "Takes the command line while the status line is hidden":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.showStatusLine = false
+    e.state.pendingInput.macroState.startRecording('a')
+
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+
+    check rowText(buffer, 23, 13) == "recording @a "
+    check buffer[79, 23].style == commandStyle()
+
+  test "Leaves out a label wider than the screen":
+    let e = createTestEditor()
+    var buffer = newBuffer(10, 24)
+    buffer.area = Rect(x: 0, y: 0, width: 10, height: 24)
+
+    e.viewport.width = 10
+    e.viewport.height = 24
+    e.state.showStatusLine = false
+    e.state.pendingInput.macroState.startRecording('a')
+
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+
+    check rowText(buffer, 23, 10).strip() == ""
+
+  test "Gives the command line to a message":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.showStatusLine = false
+    e.state.pendingInput.macroState.startRecording('a')
+    e.state.statusMessage = "written"
+
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+
+    check rowText(buffer, 23, 7) == "written"
+    check "recording" notin rowText(buffer, 23, 80)
 
 suite "renderTempMessages - Basic behavior":
   test "Render with no temp messages":

@@ -23,106 +23,79 @@
 
 import std/[unittest, options, tables]
 
-import ../src/moepkg/types
-import ../src/moepkg/modes
+import ../src/moepkg/[types, modes, macro_recording, key_bindings]
+
+proc record(m: var MacroState, keys: varargs[string]) =
+  ## Record `keys` as typed keys that have run.
+  for key in keys:
+    m.recordTypedKeys([stringToKeyCombo(key).get])
 
 suite "Macro Recording":
   test "start macro recording (qa)":
-    var state = EditorState(activeWindow: EditorWindow())
-    state.mode = EditorMode.Normal
-    state.pendingInput.macroState.isRecording = false
-    state.pendingInput.macroState.waitingForRegister = false
-    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
+    var m = MacroState()
+    m.startRecording('a')
 
-    # Simulate: q (start recording)
-    state.pendingInput.macroState.waitingForRegister = true
-    state.pendingInput.macroState.commandType = "record"
-
-    # Then: a (register name)
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'a'
-    state.pendingInput.macroState.recordedKeys = @[]
-
-    check state.pendingInput.macroState.isRecording == true
-    check state.pendingInput.macroState.register == 'a'
-    check state.pendingInput.macroState.recordedKeys.len == 0
+    check m.isRecording
+    check m.recordingRegister == some('a')
+    check m.recording.get.keys.len == 0
 
   test "record keys during macro recording":
-    var state = EditorState(activeWindow: EditorWindow())
-    state.mode = EditorMode.Normal
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'a'
-    state.pendingInput.macroState.recordedKeys = @[]
-    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
+    var m = MacroState()
+    m.startRecording('a')
+    m.record("d", "d")
 
-    # Simulate recording: d, d
-    state.pendingInput.macroState.recordedKeys.add("d")
-    state.pendingInput.macroState.recordedKeys.add("d")
+    check m.recording.get.keys == @["d", "d"]
 
-    check state.pendingInput.macroState.recordedKeys == @["d", "d"]
+  test "keys typed while not recording are not recorded":
+    var m = MacroState()
+    m.record("d")
 
-  test "stop macro recording (q)":
-    var state = EditorState(activeWindow: EditorWindow())
-    state.mode = EditorMode.Normal
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'a'
-    state.pendingInput.macroState.recordedKeys = @["d", "d"]
-    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
+    check not m.isRecording
 
-    # Simulate: q (stop recording)
-    state.pendingInput.macroState.registers[state.pendingInput.macroState.register] =
-      state.pendingInput.macroState.recordedKeys
-    state.pendingInput.macroState.isRecording = false
-    state.pendingInput.macroState.recordedKeys = @[]
+  test "stop macro recording (q) saves the recorded keys":
+    var m = MacroState()
+    m.startRecording('a')
+    m.record("d", "d")
+    m.stopRecording(afterCtrlO = false)
 
-    check state.pendingInput.macroState.isRecording == false
-    check state.pendingInput.macroState.registers.hasKey('a')
-    check state.pendingInput.macroState.registers['a'] == @["d", "d"]
-    check state.pendingInput.macroState.recordedKeys.len == 0
+    check not m.isRecording
+    check m.registers['a'] == @["d", "d"]
+
+  test "stopping without a recording does nothing":
+    var m = MacroState()
+    m.stopRecording(afterCtrlO = false)
+
+    check m.registers.len == 0
 
   test "record macro to different registers":
-    var state = EditorState(activeWindow: EditorWindow())
-    state.mode = EditorMode.Normal
-    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
+    var m = MacroState()
+    for (register, keys) in [('a', @["d", "d"]), ('b', @["j", "j"])]:
+      m.startRecording(register)
+      m.record(keys)
+      m.stopRecording(afterCtrlO = false)
 
-    # Record to register 'a'
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'a'
-    state.pendingInput.macroState.recordedKeys = @["d", "d"]
-    state.pendingInput.macroState.registers['a'] =
-      state.pendingInput.macroState.recordedKeys
-    state.pendingInput.macroState.isRecording = false
-
-    # Record to register 'b'
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'b'
-    state.pendingInput.macroState.recordedKeys = @["j", "j"]
-    state.pendingInput.macroState.registers['b'] =
-      state.pendingInput.macroState.recordedKeys
-    state.pendingInput.macroState.isRecording = false
-
-    check state.pendingInput.macroState.registers.hasKey('a')
-    check state.pendingInput.macroState.registers.hasKey('b')
-    check state.pendingInput.macroState.registers['a'] == @["d", "d"]
-    check state.pendingInput.macroState.registers['b'] == @["j", "j"]
+    check m.registers['a'] == @["d", "d"]
+    check m.registers['b'] == @["j", "j"]
 
   test "overwrite existing macro":
-    var state = EditorState(activeWindow: EditorWindow())
-    state.mode = EditorMode.Normal
-    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
+    var m = MacroState()
+    m.registers['a'] = @["d", "d"]
+    m.startRecording('a')
+    m.record("x", "x", "x")
+    m.stopRecording(afterCtrlO = false)
 
-    # Record first macro
-    state.pendingInput.macroState.registers['a'] = @["d", "d"]
+    check m.registers['a'] == @["x", "x", "x"]
 
-    # Overwrite with new macro
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'a'
-    state.pendingInput.macroState.recordedKeys = @["x", "x", "x"]
-    state.pendingInput.macroState.registers['a'] =
-      state.pendingInput.macroState.recordedKeys
-    state.pendingInput.macroState.isRecording = false
-
-    check state.pendingInput.macroState.registers['a'] == @["x", "x", "x"]
+  test "<C-o> before the stop is dropped only after Ctrl-o":
+    var m = MacroState()
+    for afterCtrlO in [true, false]:
+      m.startRecording('a')
+      m.record("i", "f", "<C-o>")
+      m.stopRecording(afterCtrlO)
+      if afterCtrlO:
+        check m.registers['a'] == @["i", "f"]
+      else:
+        check m.registers['a'] == @["i", "f", "<C-o>"]
 
 suite "Macro Playback":
   test "playback simple macro (@a)":
@@ -180,40 +153,17 @@ suite "Macro Playback":
     check state.pendingInput.macroState.lastRegister.isNone
 
 suite "Macro Edge Cases":
-  test "cannot start recording while already recording":
-    var state = EditorState(activeWindow: EditorWindow())
-    state.mode = EditorMode.Normal
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'a'
-    state.pendingInput.macroState.recordedKeys = @["d"]
-
-    # Attempt to start another recording should be ignored
-    # The implementation prevents this by checking isRecording
-    check state.pendingInput.macroState.isRecording == true
-
   test "empty macro":
-    var state = EditorState(activeWindow: EditorWindow())
-    state.mode = EditorMode.Normal
-    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
+    var m = MacroState()
+    m.startRecording('a')
+    m.stopRecording(afterCtrlO = false)
 
-    # Record empty macro (just qa then q immediately)
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'a'
-    state.pendingInput.macroState.recordedKeys = @[]
-    state.pendingInput.macroState.registers['a'] =
-      state.pendingInput.macroState.recordedKeys
-    state.pendingInput.macroState.isRecording = false
-
-    check state.pendingInput.macroState.registers['a'].len == 0
+    check m.registers['a'].len == 0
 
   test "macro with special keys":
-    var state = EditorState(activeWindow: EditorWindow())
-    state.mode = EditorMode.Normal
-    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
+    var m = MacroState()
+    m.startRecording('a')
+    m.record("d", "d", "<Enter>", "j")
+    m.stopRecording(afterCtrlO = false)
 
-    # Record macro with special keys
-    state.pendingInput.macroState.recordedKeys = @["d", "d", "<Enter>", "j"]
-    state.pendingInput.macroState.registers['a'] =
-      state.pendingInput.macroState.recordedKeys
-
-    check state.pendingInput.macroState.registers['a'] == @["d", "d", "<Enter>", "j"]
+    check m.registers['a'] == @["d", "d", "<Enter>", "j"]

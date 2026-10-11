@@ -169,6 +169,11 @@ type
     typed*: bool
       ## Typed by the user, not produced by a mapping or a register. An error
       ## drops the keys mappings produced but keeps these, as in Vim.
+    standsFor*: seq[KeyCombo]
+      ## The typed keys a recording takes once this key has run: itself when
+      ## typed, the typed left-hand side for the first key of a mapping's
+      ## right-hand side, none for other keys. Not `typed`: that first key
+      ## stands for typed keys without being one.
 
   ## Result of matching a single key against the runtime mapping table.
   ## `routeRuntimeMapping` returns this; the caller executes the decision.

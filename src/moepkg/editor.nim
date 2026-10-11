@@ -221,15 +221,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       ),
       pendingInput: PendingInputState(
         macroState: MacroState(
-          isRecording: false,
-          register: '\0',
-          recordedKeys: @[],
-          registers: initTable[char, seq[string]](),
-          lastRegister: none(char),
-          waitingForRegister: false,
-          commandType: "",
-          pendingCount: 1,
-          playbackDepth: 0,
+          registers: initTable[char, seq[string]](), lastRegister: none(char)
         ),
         pendingOperator: none(PendingOperator),
         pendingTextObject: none(PendingTextObject),

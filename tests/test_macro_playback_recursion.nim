@@ -30,7 +30,8 @@ import std/[unittest, tables, options]
 
 import
   ../src/moepkg/[
-    key_router, modes, buffer, motion, command_registry, registers, key_bindings, types
+    key_router, modes, buffer, motion, command_registry, registers, key_bindings, types,
+    macro_recording,
   ]
 import
   ../src/moepkg/command_handlers/[
@@ -50,14 +51,8 @@ proc newTestState(mode = EditorMode.Normal): EditorState =
     ),
     pendingInput: PendingInputState(
       macroState: MacroState(
-        isRecording: false,
-        register: '\0',
-        recordedKeys: @[],
         registers: initTable[char, seq[string]](),
         lastRegister: none(char),
-        waitingForRegister: false,
-        commandType: "",
-        pendingCount: 0,
         playbackDepth: 0,
       )
     ),
@@ -353,21 +348,20 @@ suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
 suite "withPlaybackGuard - exception safety":
   test "playback state is restored when the body raises":
     # The try/finally wiring itself: a raising body must restore playbackDepth
-    # and executingDepth before the exception escapes, or the next replay
-    # starts from a corrupted depth.
+    # before the exception escapes, or the next replay starts from a corrupted
+    # depth.
     let manager = newTestManager()
     let buffer = newTextBuffer()
     let state = newTestState()
     state.pendingInput.macroState.playbackDepth = 1
-    state.pendingInput.macroState.isRecording = true
+    state.pendingInput.macroState.recording = some(MacroRecording(register: 'a'))
     let viewport = newTestViewport()
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     var raised = false
     try:
-      discard withPlaybackGuard(editor, executesRegister = true):
-        check state.pendingInput.macroState.executingDepth == 1
+      discard withPlaybackGuard(editor):
         # Replayed keys never reach the recorder, so recording stays on.
         check state.pendingInput.macroState.isRecording
         outcome = roContinue
@@ -377,20 +371,19 @@ suite "withPlaybackGuard - exception safety":
     check raised
     check state.pendingInput.macroState.playbackDepth == 1
     check state.pendingInput.macroState.isRecording
-    check state.pendingInput.macroState.executingDepth == 0
 
   test "recursion limit guard still applies before the body runs":
     let manager = newTestManager()
     let buffer = newTextBuffer()
     let state = newTestState()
     state.pendingInput.macroState.playbackDepth = MaxMacroRecursionDepth
-    state.pendingInput.macroState.isRecording = true
+    state.pendingInput.macroState.recording = some(MacroRecording(register: 'a'))
     let viewport = newTestViewport()
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     var bodyRan = false
-    let outcome = withPlaybackGuard(editor, executesRegister = true):
+    let outcome = withPlaybackGuard(editor):
       bodyRan = true
       outcome = roContinue
 
@@ -398,4 +391,3 @@ suite "withPlaybackGuard - exception safety":
     check not bodyRan
     check state.pendingInput.macroState.playbackDepth == MaxMacroRecursionDepth
     check state.pendingInput.macroState.isRecording
-    check state.pendingInput.macroState.executingDepth == 0

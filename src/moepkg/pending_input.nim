@@ -27,8 +27,7 @@ import types, key_bindings
 
 proc isActive*(pi: PendingInputState, registry: KeyBindingRegistry): bool =
   ## True iff any pending-input FSM is active.
-  pi.macroState.waitingForRegister or pi.pendingOperator.isSome or
-    pi.pendingTextObject.isSome or pi.pendingRegister.isSome or
+  pi.pendingOperator.isSome or pi.pendingTextObject.isSome or pi.pendingRegister.isSome or
     pi.pendingCommand != PendingNone or registry.hasActiveSequence()
 
 proc waitsForOperand*(pi: PendingInputState, registry: KeyBindingRegistry): bool =
@@ -36,9 +35,8 @@ proc waitsForOperand*(pi: PendingInputState, registry: KeyBindingRegistry): bool
   ## (`gg`, `<C-w>j`) or its argument (f/t/r, a register, a text object), which
   ## Vim reads without mappings. After a count or an operator comes a command
   ## of its own, which mappings may take.
-  pi.macroState.waitingForRegister or pi.pendingTextObject.isSome or
-    pi.pendingCommand != PendingNone or registry.isWaitingForChar or
-    registry.isMidSequence
+  pi.pendingTextObject.isSome or pi.pendingCommand != PendingNone or
+    registry.isWaitingForChar or registry.isMidSequence
 
 proc cancelOperatorPending*(pi: var PendingInputState): bool {.discardable.} =
   ## Drop the operator-pending gesture whole, as Vim's clearop does: the
@@ -61,11 +59,6 @@ proc cancelAll*(
   ## Reset every pending-input FSM. Returns true iff something was actually
   ## cleared (callers use this for double-Escape UX).
   var cleared = false
-  if pi.macroState.waitingForRegister:
-    pi.macroState.waitingForRegister = false
-    pi.macroState.commandType = ""
-    pi.macroState.pendingCount = 0
-    cleared = true
   if pi.cancelOperatorPending():
     cleared = true
   if pi.pendingRegister.isSome:

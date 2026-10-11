@@ -304,6 +304,8 @@
 | <kbd>**I**</kbd> | Insert character, multiple lines |
 | <kbd>**z**</kbd> <kbd>**f**</kbd> | Fold selected lines |
 | <kbd>**g**</kbd> <kbd>**v**</kbd> | Exchange the selection with the previous Visual area |
+| <kbd>**q**</kbd> <kbd>**Any key**</kbd> | Start recording operations for Macros |
+| <kbd>**q**</kbd> | Stop recording operations |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd> | Selection Range (LSP) |
 | <kbd>**Esc**</kbd> | Go to Normal mode |
 <!-- AUTO-GEN:end VisualMode -->

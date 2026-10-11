@@ -60,7 +60,8 @@ import
   editor_command_output,
   job_lanes,
   highlight,
-  visual_selection
+  visual_selection,
+  macro_recording
 
 when not defined(moe.embedded):
   import terminal_mode
@@ -71,15 +72,6 @@ import
   ]
 from command_handlers/insert_handler import closeInsertPopups
 export command_mode_handler, search_mode_handler, cursor_util, frontend_input
-
-# Wire the playback overlay hook so nested key replay routes to the overlay
-# handler when Command / Search overlay is active.
-overlayPlaybackHook = proc(e: Editor, key: KeyInput): Option[ReplayOutcome] =
-  if e.state.isCommandOverlay:
-    return some(e.handleCommandModeKeyCombo(key))
-  if e.state.isSearchOverlay:
-    return some(if e.handleSearchModeKeyCombo(key.combo): roContinue else: roQuit)
-  return none(ReplayOutcome)
 
 proc addRunningProcess*(e: Editor, p: BackgroundProcess, label = "", path = "") =
   e.runningBackgroundProcesses.add RunningCommand(
@@ -456,10 +448,6 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
   e.state.pendingInput.pendingTextObject = none(PendingTextObject)
   e.state.pendingInput.pendingRegister = none(char)
   discard e.keyRouter.cancel()
-  if e.state.pendingInput.macroState.waitingForRegister:
-    e.state.pendingInput.macroState.waitingForRegister = false
-    e.state.pendingInput.macroState.commandType = ""
-    e.state.pendingInput.macroState.pendingCount = 0
 
   # state.mode aliases activeWindow.mode; the subsequent swap re-aliases to
   # the target window's own saved mode. Only an edit mode is rewound: Normal
@@ -1149,6 +1137,11 @@ proc handleInterruptCore(e: Editor): bool =
   ## resuming Insert after Ctrl-o, or transition file-edit modes back to Normal.
   e.state.armInsertResume()
 
+  # As at Vim's hit-enter prompt, Ctrl-C only dismisses the messages.
+  if e.state.ui.tempMessages.len > 0:
+    e.state.ui.tempMessages = @[]
+    return true
+
   when not defined(moe.embedded):
     # An overlay opened over Terminal still owns Ctrl-C; the session gets it
     # only while the keys are the window's own, in either sub-mode.
@@ -1236,36 +1229,27 @@ proc handleInterrupt*(e: Editor): bool =
     result = e.handleInterruptCore()
 
 proc dismissTempMessagesKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
-  ## Dismiss temporary messages (e.g. :jumps output) on any key.
-  ## Returns true when a message was dismissed (event consumed).
+  ## Dismiss temporary messages (e.g. :jump output) on any key, as Vim's
+  ## hit-enter prompt does. True when that uses the key up: Enter, Space,
+  ## Ctrl-J and Ctrl-C only dismiss, and `:` opens the command line. Any other
+  ## key goes on to run, so the keys after `:jump<CR>` in a mapping do too.
   if e.state.ui.tempMessages.len == 0:
     return false
 
   e.state.ui.tempMessages = @[]
 
-  # If ":" was pressed, enter command overlay
-  if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == ":":
-    e.state.enterCommandOverlay()
-  # Otherwise just dismiss and stay in current mode
-  return true
-
-proc recordUserKey(e: Editor, keyCombo: KeyCombo) =
-  ## Append a top-level keystroke to the active macro register. Called once
-  ## per user key at `handleKeyCombo` entry so every mode records uniformly
-  ## (overlays, popups, viewers, Normal/Insert/Visual/Replace). Playback loops
-  ## bypass `handleKeyCombo`. If this key stops the recording, directly or
-  ## through a mapping, the stop drops it again from `typedKeyStart`.
-  if not e.state.pendingInput.macroState.isRecording:
-    return
-  let macroState = addr e.state.pendingInput.macroState
-  macroState.typedKeyStart = some(macroState.recordedKeys.len)
-  macroState.recordedKeys.add(keyComboToString(keyCombo))
+  if keyCombo.isSpecial:
+    return keyCombo.special == skEnter and keyCombo.modifiers == {}
+  if keyCombo.modifiers == {}:
+    if keyCombo.char == ":":
+      e.state.enterCommandOverlay()
+      return true
+    return keyCombo.char == " "
+  keyCombo.modifiers == {kmCtrl} and keyCombo.char.toLowerAscii in ["c", "j"]
 
 proc handleOverlayKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
-  ## Dispatch overlay modes (Command, Search, Rename) and Debug mode.
-  ## Returns some(result) if handled, none otherwise.
-  if e.state.isCommandOverlay:
-    return some(e.handleCommandModeKeyCombo(typedKey(keyCombo)) != roQuit)
+  ## Dispatch the Search and Rename overlays and Debug mode. Returns
+  ## some(result) if handled, none otherwise.
   if e.state.isSearchOverlay:
     return some(e.handleSearchModeKeyCombo(keyCombo))
   if e.state.isRenameOverlay:
@@ -1420,6 +1404,64 @@ proc syncCompletionOtherBuffers(e: Editor, activeBuffer: TextBuffer) =
       otherBufs.add(win.buffer)
   e.handlerManager.insertHandler.completionManager.otherBuffers = otherBufs
 
+proc handleUnmappedLayers(e: Editor, keyCombo: KeyCombo): Option[bool] =
+  ## The layers in front of the mode handlers that take no mappings: the
+  ## Search and Rename overlays, Debug mode, LSP popups, a viewer's Ctrl-W and
+  ## Recent File mode. Returns some(result) if handled, none otherwise.
+
+  # Handle overlay modes (Search, Rename) + Debug mode
+  let overlayResult = e.handleOverlayKeyCombo(keyCombo)
+  if overlayResult.isSome:
+    e.enforceModePolicy()
+    return overlayResult
+
+  # Handle LSP popups (CodeLens picker, Hover popup); some keys fall through
+  let popupResult = e.handlePopupKeyCombo(keyCombo)
+  if popupResult.isSome:
+    return popupResult
+
+  # Ctrl-W window commands for special/viewer modes
+  let winResult = e.handleSpecialModeWindowCommandKeyCombo(keyCombo)
+  if winResult.isSome:
+    return winResult
+
+  # Handle Recent File mode input (after Ctrl-W window commands)
+  if e.state.mode == EditorMode.RecentFile:
+    return some(e.handleRecentFileModeKeyCombo(keyCombo))
+
+  none(bool)
+
+proc dispatchFrontLayers(e: Editor, key: KeyInput): Option[ReplayOutcome] =
+  ## The layers in front of the runtime mappings and the mode handlers. Typed
+  ## and replayed keys both come here through `runNestedKeyCombo`. `none`
+  ## falls through to them. A layer here runs the key as it is, so a recording
+  ## takes the typed keys it stands for once it has run; the command line has
+  ## mappings of its own and records the keys it runs itself.
+  let recording = e.state.pendingInput.macroState.isRecording
+  let queued = e.hostResultRequestCount
+  var handled = none(bool)
+  if e.dismissTempMessagesKeyCombo(key.combo):
+    handled = some(true)
+  elif e.state.isCommandOverlay:
+    result = some(e.handleCommandModeKeyCombo(key))
+    e.enforceModePolicy()
+    return
+  else:
+    handled = e.handleUnmappedLayers(key.combo)
+  if handled.isNone:
+    return none(ReplayOutcome)
+  if recording:
+    e.state.pendingInput.macroState.recordTypedKeys(key.standsFor)
+  if not handled.get:
+    some(roQuit)
+  elif e.hostResultRequestCount > queued:
+    some(roAbort)
+  else:
+    some(roContinue)
+
+frontLayerHook = proc(e: Editor, key: KeyInput): Option[ReplayOutcome] =
+  e.dispatchFrontLayers(key)
+
 proc dispatchKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle one frontend-neutral key combination, without noting a quit.
   ## Public entry points (`handleKeyCombo`, `handleTextInput`, `handleEvent`)
@@ -1434,41 +1476,12 @@ proc dispatchKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       if win.modeState.kind == mskTerminal:
         win.modeState.terminal.releaseHeldQuitForKey(keyCombo)
 
-  # Single point where a user-driven keystroke is appended to the active
-  # macro register. Playback loops enter `runNestedKeyCombo` directly and
-  # never reach here, so they naturally skip recording.
-  e.recordUserKey(keyCombo)
-
-  # Handle temporary messages (like :jumps output) - dismiss on any key
-  if e.dismissTempMessagesKeyCombo(keyCombo):
-    return true
-
-  # Handle overlay modes (Command, Search, Rename) + Debug mode
-  let overlayResult = e.handleOverlayKeyCombo(keyCombo)
-  if overlayResult.isSome:
-    e.enforceModePolicy()
-    return overlayResult.get
-
-  # Handle LSP popups (CodeLens picker, Hover popup); some keys fall through
-  let popupResult = e.handlePopupKeyCombo(keyCombo)
-  if popupResult.isSome:
-    return popupResult.get
-
-  # Ctrl-W window commands for special/viewer modes
-  let winResult = e.handleSpecialModeWindowCommandKeyCombo(keyCombo)
-  if winResult.isSome:
-    return winResult.get
-
-  # Handle Recent File mode input (after Ctrl-W window commands)
-  if e.state.mode == EditorMode.RecentFile:
-    return e.handleRecentFileModeKeyCombo(keyCombo)
-
-  # For other modes, use the unified handler manager with active buffer
-  let activeBuffer = e.activeBuffer
-
   e.updateViewportReservedLines()
-  e.syncCompletionOtherBuffers(activeBuffer)
+  e.syncCompletionOtherBuffers(e.activeBuffer)
 
+  # The one place a key enters as typed, so every mode records it alike.
+  # Playback loops enter `runNestedKeyCombo` directly and stand for no typed
+  # keys.
   let outcome = e.handlerManager.runNestedKeyCombo(e, typedKey(keyCombo))
 
   # In Config mode, sync display state only when a value was actually mutated.
@@ -1833,12 +1846,12 @@ proc dispatchKeyMappingTimeout(e: Editor): bool =
       doAssert not inCommandOverlay,
         "flushTimeout(Command) returned rrExecuteRuntimeCommand; " &
           "mappingsFor(Command) must filter rmkCommand out (see key_router.mappingsFor)"
-      # Through `processReplayedResult`, so a bridge-produced `hrExecCommand`
-      # (`K = "bdelete"`) runs as on an immediate match.
-      e.handlerManager.runRuntimeCommand(e, route.commandName).get(roContinue)
+      # As on an immediate match: a bridge-produced `hrExecCommand`
+      # (`K = "bdelete"`) runs, and keys whose command cannot run here go on.
+      e.handlerManager.runCommandMapping(e, route.commandName, route.lhsKeys)
     of rrExecuteRuntimeKeySequence:
       e.handlerManager.replayRuntimeKeySequence(
-        e, route.triggerKeys, route.targetKeys, route.noremap
+        e, route.triggerKeys, route.targetKeys, route.lhsKeys.standsFor, route.noremap
       )
     of rrReleaseHeld:
       e.handlerManager.releaseHeldKeys(e, route.keys, route.leading)

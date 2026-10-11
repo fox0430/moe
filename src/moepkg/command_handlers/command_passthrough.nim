@@ -25,9 +25,9 @@
 ##   * handler_manager.nim:executeCommandDirect — Special mode runtime mapping
 ##   * handler_manager.nim:handleNormalMode — Normal mode result translation
 ##
-## Stateful commandIds (changelist.*, bookmark.*, jump.*, macro.record,
-## editor.open.uri, insert.*, edit.{undo,redo}) are NOT handled here and remain
-## in normal_handler.nim with full editor context.
+## Stateful commandIds (changelist.*, bookmark.*, jump.*, editor.open.uri,
+## insert.*, edit.{undo,redo}) are NOT handled here and remain in
+## normal_handler.nim with full editor context.
 
 import std/options
 
