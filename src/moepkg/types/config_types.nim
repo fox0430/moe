@@ -45,6 +45,10 @@ const DefaultHookExitWaitTimeout* = 10
   ## `exitWaitTimeout = 0` opts out.
   ## Lives here so `cfgDocDefault` can name it.
 
+const LspLanguageFeatureKey* = "enable"
+  ## The only key a `[Lsp.<languageId>.<Feature>]` table takes. Lives here so
+  ## the loader and the completion schema share it.
+
 const DefaultBackupDir* = "~/.cache/moe/backups"
   ## Effective default for `AutoBackupConfig.backupDir` when the field is
   ## `none`. Lives here (not in `backup.nim`) so it can be referenced by

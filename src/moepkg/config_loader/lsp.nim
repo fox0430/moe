@@ -50,9 +50,6 @@ const LspFeatureNames = generateSectionGroupChildNames(LspConfig)
 # Keys accepted inside an `[Lsp.<languageId>]` table.
 const LspLanguageKeys = @LspServerConfigKeys & @LspFeatureNames
 
-# The only key a `[Lsp.<languageId>.<Feature>]` table takes.
-const LspLanguageFeatureKey = "enable"
-
 proc tomlValueToJson*(v: TomlValueRef): JsonNode =
   case v.kind
   of TomlValueKind.None:
