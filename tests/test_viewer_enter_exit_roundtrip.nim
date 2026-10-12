@@ -835,7 +835,7 @@ suite "Viewer round-trip - split-window viewers":
       check e.state.mode == EditorMode.Config
       let scratchId = e.activeWindow.buffer.id
 
-      check e.executeCommandOverlay(commandText)
+      check e.executeCommandOverlay(commandText) != roQuit
       check e.state.mode == EditorMode.Normal
       check e.windowManager.windows.len == windowsBefore
       check e.activeWindow == origWin
@@ -1191,8 +1191,8 @@ suite "Host command interception":
     e.hostCommandFilter = proc(hostEditor: Editor, command: ParsedCommand): bool =
       command.action == claHelp
 
-    check e.executeCommandOverlay(":help overview")
-    check e.executeCommandOverlay(":h keys")
+    check e.executeCommandOverlay(":help overview") != roQuit
+    check e.executeCommandOverlay(":h keys") != roQuit
     check e.state.mode == EditorMode.Normal
     check e.activeWindow == origWin
     check e.activeBuffer() == origBuf
@@ -1217,9 +1217,9 @@ suite "Host command interception":
     e.hostCommandFilter = proc(hostEditor: Editor, command: ParsedCommand): bool =
       command.action in {claDeleteLines, claUnknown}
 
-    check e.executeCommandOverlay(":d")
+    check e.executeCommandOverlay(":d") != roQuit
     check e.activeBuffer().getTextString() == originalText
-    check e.executeCommandOverlay(":hostaction arg")
+    check e.executeCommandOverlay(":hostaction arg") != roQuit
     let deleted = e.takeHostCommandRequest()
     let custom = e.takeHostCommandRequest()
     check deleted.isSome
@@ -1238,6 +1238,6 @@ suite "Host command interception":
     e.hostCommandFilter = proc(hostEditor: Editor, command: ParsedCommand): bool =
       false
 
-    check e.executeCommandOverlay(":d")
+    check e.executeCommandOverlay(":d") != roQuit
     check e.activeBuffer().getLine(0) == "bbbb"
     check e.takeHostCommandRequest().isNone

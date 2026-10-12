@@ -29,7 +29,7 @@ import
   ../[
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
     syntax_checker, quick_run_utils, command_completion, key_bindings, key_router,
-    lsp_integration, command_registry, command_line, editor_window_state,
+    lsp_integration, command_registry, command_line, editor_window_state, pending_input,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -43,11 +43,11 @@ type
     roQuit ## hrQuit / hrCquit — main loop terminates
     roAbort ## Error or queued host result — loop stops, app continues
 
-  OverlayPlaybackHook* = proc(e: Editor, keyCombo: KeyCombo): Option[bool] {.closure.}
-    ## Playback overlay dispatch. `none` = no overlay, fall through; `some(true)`
-    ## = handled, continue unless a host result was queued;
-    ## `some(false)` = handled, requested app exit. Wired
-    ## from handler.nim to avoid an import cycle (overlay handlers import here).
+  OverlayPlaybackHook* =
+    proc(e: Editor, key: KeyInput): Option[ReplayOutcome] {.closure.}
+    ## Playback overlay dispatch. `none` = no overlay, fall through; `some` =
+    ## handled, with its outcome. Wired from handler.nim to avoid an import
+    ## cycle (overlay handlers import here).
 
 const ModesNeedingContext = {
   EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
@@ -58,7 +58,7 @@ const ModesNeedingContext = {
 
 var overlayPlaybackHook*: OverlayPlaybackHook = nil
 
-proc executeCommandOverlay*(e: Editor, commandText: string): bool
+proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome
 
 proc processResultEpilogue(
   e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
@@ -219,13 +219,6 @@ proc processResultWithHost(
       hrEnterBufferManager, hrEnterBookmarkManager, hrEnterBackupManager,
       hrEnterRecoveryManager, hrEnterTerminal:
     return e.processViewerResult(r)
-  of hrExecCommand:
-    # @: - repeat last Command mode command via the shared overlay wrapper.
-    let count = r.execCommandCount
-    let commandText = ":" & r.execCommandText
-    for i in 0 ..< count:
-      if not e.executeCommandOverlay(commandText):
-        return false
   of hrSave:
     e.processSaveResult(r, activeBuffer)
     return true # Unified: ops-moved kinds keep their own status message
@@ -269,10 +262,10 @@ proc processResultWithHost(
         " (folded by handleCommandMode)",
     )
     discard # Folded to hrHandled/hrError by handleCommandMode; unreachable here.
-  of hrPlaybackMacro:
+  of hrPlaybackMacro, hrExecCommand:
     logWarn(
       "result_processor",
-      "unreachable kind reached processResult: hrPlaybackMacro" &
+      "unreachable kind reached processResult: " & $r.kind &
         " (intercepted by processReplayedResult)",
     )
     discard # Consumed by processReplayedResult; only reaches here defensively.
@@ -283,7 +276,7 @@ proc processResultEpilogue(
     e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
 ): bool =
   ## Post-processing for falling-through arms (hrHandled / hrUnhandled /
-  ## hrError / hrExecCommand): overlay and mode transitions, viewer buffer
+  ## hrError): overlay and mode transitions, viewer buffer
   ## regeneration, status messages. Returns true to continue the main loop.
   #
   # Handle overlay transitions
@@ -472,25 +465,38 @@ const MaxMacroRecursionDepth* = 100
   ## Macro recursion depth guard (@a inside @a...) before abort.
 
 const MaxMapRecursionDepth = 50
-  ## `:map` (noremap=false) expansion depth guard. Kept below
-  ## MaxMacroRecursionDepth so a cyclic mapping reports "recursive mapping"
-  ## before the macro depth guard fires.
+  ## Depth guard for `:map` (noremap=false) expansion and held keys let go.
+  ## Kept below MaxMacroRecursionDepth so a cyclic mapping reports "recursive
+  ## mapping" before the macro depth guard fires.
 
 proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome
-proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome
+proc playbackKeyCombosImpl(
+  e: Editor, combos: seq[KeyCombo], remapFrom: int
+): ReplayOutcome
 
 proc runNestedKeyCombo*(
-  manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+  manager: HandlerManager, e: Editor, key: KeyInput
 ): ReplayOutcome
 
 proc processReplayedResult*(
     e: Editor, r: HandlerResult, activeBuffer: TextBuffer
 ): ReplayOutcome =
   ## Mini processor for keys fired from a nested replay context (macro,
-  ## mapping RHS, timeout batch). Applies full side effects via
+  ## mapping RHS, held keys let go). Applies full side effects via
   ## `processResult` — no kind is silently dropped — and returns whether the
-  ## loop should keep going. `hrPlaybackMacro` is intercepted here and drives
-  ## the nested `playbackMacroImpl` loop count times.
+  ## loop should keep going. `hrPlaybackMacro` and `hrExecCommand` run their
+  ## keys or command line here count times, so a failure stops the rest and
+  ## the keys after them.
+  if r.kind == hrExecCommand:
+    # Vim stuffs the command line count times and an error flushes the rest.
+    if e.interceptHostResult(r):
+      return roAbort
+    var outcome = roContinue
+    for _ in 0 ..< r.execCommandCount:
+      outcome = e.executeCommandOverlay(":" & r.execCommandText)
+      if outcome != roContinue:
+        break
+    return outcome
   if r.kind == hrPlaybackMacro:
     # Vim queues the Insert that Ctrl-o waits for after the register's keys
     # (put_reedit_in_typebuf), so the whole macro runs before it resumes, and
@@ -540,12 +546,17 @@ template withPlaybackGuard*(
         state.pendingInput.macroState.playbackDepth -= 1
       outcome
 
-proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome =
+proc playbackKeyCombosImpl(
+    e: Editor, combos: seq[KeyCombo], remapFrom: int
+): ReplayOutcome =
   ## Iterate `combos` through `runNestedKeyCombo` — no per-key parse. Used by
   ## runtime key-sequence mappings whose RHS is pre-parsed at registration.
+  ## Mappings take the keys from `remapFrom` on.
   withPlaybackGuard(e, executesRegister = false):
-    for k in combos:
-      outcome = runNestedKeyCombo(e.handlerManager, e, k)
+    for i, k in combos:
+      outcome = runNestedKeyCombo(
+        e.handlerManager, e, KeyInput(combo: k, remap: i >= remapFrom, typed: false)
+      )
       if outcome != roContinue:
         break
 
@@ -560,34 +571,42 @@ proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
         e.state.statusMessage = "Invalid key in macro: " & keyStr
         outcome = roAbort
         break
-      outcome = runNestedKeyCombo(e.handlerManager, e, keyComboOpt.get)
+      outcome = runNestedKeyCombo(
+        e.handlerManager, e, KeyInput(combo: keyComboOpt.get, remap: true, typed: false)
+      )
       if outcome != roContinue:
         break
 
+proc stopRecursiveMapping(editor: Editor): ReplayOutcome =
+  ## End a mapping that keeps expanding, as Vim's E223 does.
+  editor.state.statusMessage = "recursive mapping (max " & $MaxMapRecursionDepth & ")"
+  roAbort
+
 proc replayMappingKeys(
-    editor: Editor, targetKeys: seq[KeyCombo], noremap: bool
+    editor: Editor, triggerKeys, targetKeys: seq[KeyCombo], noremap: bool
 ): ReplayOutcome =
-  ## `:noremap` runs verbatim under `withReplay` (isReplayingMapping suppresses
-  ## re-expansion); `:map` runs without withReplay so each replayed key
-  ## re-enters the precheck, bounded by `mapExpandDepth` /
-  ## `MaxMapRecursionDepth`.
+  ## `:noremap` keys run unmapped; `:map` keys meet the mappings again,
+  ## bounded by `mapExpandDepth` / `MaxMapRecursionDepth`, all but the first
+  ## when they start with the left-hand side, so `:map a ab` does not recur, as
+  ## in Vim. Either way only the keys themselves: a register they run is mapped
+  ## as when typed, as in Vim.
   if noremap:
-    var outcome = roContinue
-    editor.keyRouter.withReplay:
-      outcome = playbackKeyCombosImpl(editor, targetKeys)
-    return outcome
+    return playbackKeyCombosImpl(editor, targetKeys, remapFrom = targetKeys.len)
 
   if editor.keyRouter.mapExpandDepth >= MaxMapRecursionDepth:
-    editor.state.statusMessage = "recursive mapping (max " & $MaxMapRecursionDepth & ")"
-    return roAbort
+    return editor.stopRecursiveMapping()
+  let remapFrom = if targetKeys.startsWith(triggerKeys): 1 else: 0
   editor.keyRouter.mapExpandDepth += 1
   try:
-    result = playbackKeyCombosImpl(editor, targetKeys)
+    result = playbackKeyCombosImpl(editor, targetKeys, remapFrom)
   finally:
     editor.keyRouter.mapExpandDepth -= 1
 
 proc replayRuntimeKeySequence*(
-    manager: HandlerManager, editor: Editor, targetKeys: seq[KeyCombo], noremap: bool
+    manager: HandlerManager,
+    editor: Editor,
+    triggerKeys, targetKeys: seq[KeyCombo],
+    noremap: bool,
 ): ReplayOutcome =
   ## Replay the RHS of a fired runtime key-sequence mapping. Vim resumes the
   ## Insert Ctrl-o waits for in the middle of a mapping, but not of one that
@@ -596,97 +615,167 @@ proc replayRuntimeKeySequence*(
   ## the wait, and a Ctrl-o in it waits anew.
   let waiting = editor.state.insertResume
   if waiting == irNone or not editor.state.mode.isVisualAllMode:
-    return editor.replayMappingKeys(targetKeys, noremap)
+    return editor.replayMappingKeys(triggerKeys, targetKeys, noremap)
   editor.state.insertResume = irHeld
   try:
-    result = editor.replayMappingKeys(targetKeys, noremap)
+    result = editor.replayMappingKeys(triggerKeys, targetKeys, noremap)
   finally:
     if editor.state.insertResume == irHeld:
       editor.state.insertResume = waiting
 
-proc checkRuntimeKeySeqMapping*(
-    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
+proc runRuntimeCommand*(
+    manager: HandlerManager, editor: Editor, commandName: string
 ): Option[ReplayOutcome] =
-  ## Ask the KeyRouter whether `keyCombo` is part of a runtime mapping. Returns
-  ## `none` to let the caller fall through to built-in resolution, or `some`
-  ## outcome when the mapping fired (or is still building).
-  ##
-  ## Flush semantics: rrUnhandledBatch replays accumulated keys *except* the
-  ## current one; the caller re-processes the current key normally. The
-  ## Command overlay path lives in `command_mode_handler.handleCommandModeKeyCombo`.
-  let state = editor.state
-  let route = editor.keyRouter.feedKey(state.mode, keyCombo)
+  ## Run the command an `rmkCommand` mapping names. `none` when it names none.
+  let cmdResult = manager.executeCommandDirect(commandName)
+  if cmdResult.isSome:
+    return some(processReplayedResult(editor, cmdResult.get, editor.activeBuffer))
+  none(ReplayOutcome)
+
+proc feedHeldKeys(
+    manager: HandlerManager,
+    editor: Editor,
+    keys: seq[KeyInput],
+    outcome: ReplayOutcome,
+    remap = true,
+): ReplayOutcome =
+  ## Feed `keys` again after the keys before them ended with `outcome`. After an
+  ## error only the typed ones go on, as Vim drops the keys mappings produced
+  ## but keeps those typed, and the error still stops what the keys came from.
+  ## Mappings take none of them unless `remap`.
+  result = outcome
+  for k in keys:
+    if result == roQuit:
+      break
+    if result == roAbort and not k.typed:
+      continue
+    let fed = runNestedKeyCombo(
+      manager,
+      editor,
+      KeyInput(combo: k.combo, remap: remap and k.remap, typed: k.typed),
+    )
+    if fed == roQuit or result == roContinue:
+      result = fed
+
+proc releaseHeldKeys*(
+    manager: HandlerManager,
+    editor: Editor,
+    keys: seq[KeyInput],
+    leading: Option[RuntimeKeyMapping],
+): ReplayOutcome =
+  ## Let go of the keys the router held for a mapping they broke, as Vim does:
+  ## the mapping the first keys complete runs, or else the first key runs
+  ## unmapped, and the keys after it are fed again, so they can still start or
+  ## complete a mapping. A leading command mapping that cannot run here counts
+  ## as none, as when it matches at once. Letting go is one expansion, so keys
+  ## that keep breaking a mapping they start again end as a recursive one.
+  let router = editor.keyRouter
+  if router.mapExpandDepth >= MaxMapRecursionDepth:
+    # Unmapped, so the typed keys cannot start the cycle again.
+    return
+      manager.feedHeldKeys(editor, keys, editor.stopRecursiveMapping(), remap = false)
+  router.mapExpandDepth += 1
+  try:
+    var first = none(ReplayOutcome)
+    var next = 1
+    if leading.isSome:
+      let mapping = leading.get
+      first =
+        case mapping.kind
+        of rmkCommand:
+          manager.runRuntimeCommand(editor, mapping.commandName)
+        of rmkKeySequence:
+          some(
+            manager.replayRuntimeKeySequence(
+              editor, mapping.triggerKeys, mapping.targetKeys, mapping.noremap
+            )
+          )
+      if first.isSome:
+        next = mapping.triggerKeys.len
+    if first.isNone:
+      first = some(
+        runNestedKeyCombo(
+          manager,
+          editor,
+          KeyInput(combo: keys[0].combo, remap: false, typed: keys[0].typed),
+        )
+      )
+    result = manager.feedHeldKeys(editor, keys[next .. ^1], first.get)
+  finally:
+    router.mapExpandDepth -= 1
+
+proc checkRuntimeKeySeqMapping*(
+    manager: HandlerManager,
+    editor: Editor,
+    mode: EditorMode,
+    key: KeyInput,
+    literal: bool,
+): Option[ReplayOutcome] =
+  ## Ask the KeyRouter whether `key` is part of one of `mode`'s runtime
+  ## mappings. Returns `none` to let the caller fall through to built-in
+  ## resolution, or `some` outcome when the mapping fired (or is still
+  ## building), or when the held keys were let go, `key` with them. `literal`
+  ## is as for `KeyRouter.feedKey`.
+  let route = editor.keyRouter.feedKey(mode, key, literal)
   case route.kind
   of rrUnhandled, rrCancelled, rrCommand:
     # rrCommand is produced only by resolveBuiltin (Normal dispatcher), never by
     # feedKey; listed for exhaustiveness. Fall through to built-in resolution.
     return none(ReplayOutcome)
   of rrExecuteRuntimeCommand:
-    let cmdResult = manager.executeCommandDirect(route.commandName)
-    if cmdResult.isSome:
-      return some(processReplayedResult(editor, cmdResult.get, editor.activeBuffer))
-    return none(ReplayOutcome)
+    return manager.runRuntimeCommand(editor, route.commandName)
   of rrExecuteRuntimeKeySequence:
-    return
-      some(replayRuntimeKeySequence(manager, editor, route.targetKeys, route.noremap))
+    return some(
+      replayRuntimeKeySequence(
+        manager, editor, route.triggerKeys, route.targetKeys, route.noremap
+      )
+    )
   of rrWaiting:
     return some(roContinue)
-  of rrUnhandledBatch:
-    let keysToFlush = route.keys[0 ..< route.keys.len - 1]
-    var outcome = roContinue
-    editor.keyRouter.withReplay:
-      for k in keysToFlush:
-        outcome = runNestedKeyCombo(manager, editor, k)
-        if outcome != roContinue:
-          break
-    if outcome != roContinue:
-      return some(outcome)
-    return none(ReplayOutcome)
+  of rrReleaseHeld:
+    return some(manager.releaseHeldKeys(editor, route.keys, route.leading))
 
 proc escapeEndsCommand(e: Editor, keyCombo: KeyCombo): bool =
   ## Escape ends a Normal mode command being built before a Normal mode
   ## mapping can take it: Vim uses none for an operator's motion or a character
-  ## argument. Mapping keys the router holds still get the Escape, so they play
-  ## first.
+  ## argument.
   keyCombo.isSpecial and keyCombo.special == skEscape and
-    e.state.mode == EditorMode.Normal and not e.keyRouter.isHoldingKeys and
-    hasPendingBuiltinInput(e)
+    e.state.mode == EditorMode.Normal and hasPendingBuiltinInput(e)
 
 proc dispatchNestedKeyCombo(
-    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+    manager: HandlerManager, e: Editor, key: KeyInput
 ): ReplayOutcome =
   # When an overlay is active the live loop routes through the overlay handler;
   # replay must do the same or recorded overlay keys hit the base-mode handler.
   if not overlayPlaybackHook.isNil:
-    let queued = e.hostResultRequestCount
-    let overlayResult = overlayPlaybackHook(e, keyCombo)
+    let overlayResult = overlayPlaybackHook(e, key)
     if overlayResult.isSome:
-      if not overlayResult.get:
-        return roQuit
-      return if e.hostResultRequestCount > queued: roAbort else: roContinue
-  if not manager.keyBindingRegistry.isReplayingMapping and
-      not e.escapeEndsCommand(keyCombo):
-    let expand = checkRuntimeKeySeqMapping(manager, e, keyCombo)
-    if expand.isSome:
-      return expand.get
-  let r = manager.handleKeyCombo(e, keyCombo)
+      return overlayResult.get
+  let literal =
+    e.state.pendingInput.waitsForOperand(manager.keyBindingRegistry) or
+    e.escapeEndsCommand(key.combo)
+  let expand = checkRuntimeKeySeqMapping(manager, e, e.state.mode, key, literal)
+  if expand.isSome:
+    return expand.get
+  let r = manager.handleKeyCombo(e, key.combo)
   result = processReplayedResult(e, r, e.activeBuffer)
   e.enforceModePolicy()
 
 proc runNestedKeyCombo*(
-    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+    manager: HandlerManager, e: Editor, key: KeyInput
 ): ReplayOutcome =
   ## Single entry point that fuses precheck (runtime key-sequence mapping) with
   ## dispatch and full processResult side effects. Both the top-level event
-  ## loop and nested-playback loops (macro, mapping RHS, timeout batch) call
+  ## loop and nested-playback loops (macro, mapping RHS, held keys let go) call
   ## this so every kind's side effect fires exactly once. Each key may finish
   ## the command Ctrl-o waits for, so Insert may resume after it, in the
-  ## middle of a mapping too, as in Vim.
+  ## middle of a mapping too, as in Vim. `key.remap` covers this key alone, not
+  ## the keys of a register it runs.
   # Before the command starts, so the jump is not counted as its move.
   e.completeScrollAnimation()
   e.state.armInsertResume()
   e.asCommand:
-    result = manager.dispatchNestedKeyCombo(e, keyCombo)
+    result = manager.dispatchNestedKeyCombo(e, key)
   # Once the command has dropped the column vertical moves want, if it does,
   # so Insert resumes past the end only as Vim's would.
   if result != roQuit:
@@ -713,13 +802,16 @@ proc playbackMacro*(editor: Editor, keys: seq[string]): HandlerResult =
   ## `playbackMacroImpl`; the returned HandlerResult is a status signal.
   outcomeToHandlerResult(editor, playbackMacroImpl(editor, keys))
 
-proc playbackKeyCombos*(editor: Editor, combos: seq[KeyCombo]): HandlerResult =
+proc playbackKeyCombos*(
+    editor: Editor, combos: seq[KeyCombo], remap = true
+): HandlerResult =
   ## Test-facing wrapper for the pre-parsed variant. Used by tests that
   ## execute a `RuntimeKeyMapping.targetKeys` (now seq[KeyCombo]) directly.
-  outcomeToHandlerResult(editor, playbackKeyCombosImpl(editor, combos))
+  let remapFrom = if remap: 0 else: combos.len
+  outcomeToHandlerResult(editor, playbackKeyCombosImpl(editor, combos, remapFrom))
 
 proc runKeyCombo*(
-    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+    manager: HandlerManager, e: Editor, keyCombo: KeyCombo, remap = true
 ): HandlerResult =
   ## HandlerResult-returning form of `runNestedKeyCombo`, for tests that
   ## inspect kind/errorMessage. Full processResult side effects fire on every
@@ -728,7 +820,10 @@ proc runKeyCombo*(
   ## returned HandlerResult is a status signal (hrHandled/hrQuit/hrError),
   ## not the raw dispatched result — inspect `state.mode`, `state.overlay`,
   ## and other mutations directly.
-  outcomeToHandlerResult(e, runNestedKeyCombo(manager, e, keyCombo))
+  outcomeToHandlerResult(
+    e,
+    runNestedKeyCombo(manager, e, KeyInput(combo: keyCombo, remap: remap, typed: false)),
+  )
 
 proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
   ## Consume `state.requestQuickRun` (set by buffer-mode key handlers) and
@@ -760,10 +855,11 @@ proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
   e.setMode(EditorMode.Normal)
   return true
 
-proc executeCommandOverlay*(e: Editor, commandText: string): bool =
+proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
   ## Full lifecycle of a Command-overlay Enter: pre-teardown, dispatch,
   ## side effects via processResult, and teardown driven by `r.group`.
-  ## Returns false when the caller should stop the main loop (app quit).
+  ## `roAbort` when the command fails or the host takes its result, so the
+  ## keys after it stop as after any replayed key that does.
   # 1. pre-teardown (kind-independent)
   # A command line runs outside Visual, as `:` leaves it in Vim; a Visual
   # mapping that runs one directly gets here without the overlay.
@@ -802,24 +898,27 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
 
   # 3. requestQuickRun poll (set independently of r.kind by buffer-mode keys)
   if e.tryHandleQuickRunRequest(activeBuffer):
-    return true
+    return roContinue
 
   # 4. side effects
+  let queued = e.hostResultRequestCount
   var hostHandled: bool
   let shouldContinue = e.processResultWithHost(r, activeBuffer, hostHandled)
   if not shouldContinue:
-    return false
+    return roQuit
+  result =
+    if e.hostResultRequestCount > queued or r.kind == hrError: roAbort else: roContinue
   if hostHandled:
     # A host-owned result must not quit or re-apply a synthesized mode switch
     # through the original result's group after its side effects were skipped.
     e.state.exitOverlay()
     e.setMode(e.state.mode)
-    return true
+    return
 
   # 5. teardown
   case r.group
   of hrgAppExit:
-    return false # unreachable — processResult would have returned false
+    return roQuit # unreachable — processResult would have returned false
   of hrgExitToNormal:
     e.state.exitOverlay()
     e.setMode(EditorMode.Normal)
@@ -842,4 +941,3 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
   let statusMsg = r.getStatusMessage()
   if statusMsg.len > 0:
     e.state.statusMessage = statusMsg
-  return true

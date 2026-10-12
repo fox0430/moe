@@ -94,7 +94,7 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
     elif e.state.ui.substitutePreview.isActive:
       e.cancelSubstitutePreview()
 
-proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool
+proc handleCommandModeKeyCombo*(e: Editor, key: KeyInput): ReplayOutcome
 
 proc insertPastedTextInCommand*(e: Editor, text: string) =
   ## Insert pasted text at the current command-line cursor.
@@ -139,7 +139,7 @@ proc handleCommandModeEvent*(e: Editor, event: Event): bool =
   if keyComboOpt.isNone:
     return true
 
-  return e.handleCommandModeKeyCombo(keyComboOpt.get)
+  return e.handleCommandModeKeyCombo(typedKey(keyComboOpt.get)) != roQuit
 
 proc findHistoryMatch(
     history: seq[string], prefix: string, startIndex, step: int
@@ -153,45 +153,18 @@ proc findHistoryMatch(
     i += step
   return -1
 
-proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
-  ## Handle a KeyCombo in command-line mode, with runtime mapping support.
-  ##
-  ## Runtime-mapping routing is delegated to `KeyRouter.feedKey`. Command
-  ## overlay execution differs from base mode in one way: on no-match flush
-  ## we replay *all* accumulated keys (including the current one) and return
-  ## without falling through.
-  if not e.keyBindingRegistry.isReplayingMapping:
-    let route = e.keyRouter.feedKey(EditorMode.Command, keyCombo)
-    case route.kind
-    of rrUnhandled, rrCancelled, rrCommand:
-      discard # Fall through to normal handling (rrCommand never from feedKey)
-    of rrExecuteRuntimeCommand:
-      # Unreachable: the Command overlay's mappings table is filtered to
-      # key-seq only (see `KeyRouter.mappingsFor`), so `feedKey` never
-      # returns rrExecuteRuntimeCommand for `EditorMode.Command`. Guarded
-      # for case exhaustiveness; keep the historical no-op for safety.
-      return true
-    of rrExecuteRuntimeKeySequence:
-      # Command overlay always replays verbatim (non-recursive), even for a
-      # :cmap. handleCommandModeKeyCombo has no mapping-expansion precheck, so
-      # noremap is not honoured here (known limitation).
-      var replayResult = true
-      e.keyRouter.withReplay:
-        for k in route.targetKeys:
-          if not e.handleCommandModeKeyCombo(k):
-            replayResult = false
-            break
-      return replayResult
-    of rrWaiting:
-      return true
-    of rrUnhandledBatch:
-      var flushResult = true
-      e.keyRouter.withReplay:
-        for k in route.keys:
-          if not e.handleCommandModeKeyCombo(k):
-            flushResult = false
-            break
-      return flushResult
+proc handleCommandModeKeyCombo*(e: Editor, key: KeyInput): ReplayOutcome =
+  ## Handle a key in command-line mode, with runtime mapping support. A
+  ## mapping's keys and the held keys let go run as keys of their own, so the
+  ## ones after an Enter that ends the command line reach the mode it returns
+  ## to.
+  let routed = e.handlerManager.checkRuntimeKeySeqMapping(
+    e, EditorMode.Command, key, literal = false
+  )
+  if routed.isSome:
+    return routed.get
+
+  let keyCombo = key.combo
 
   # Handle Escape to exit Command mode and return to previous (base) mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
@@ -201,7 +174,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     # Exit overlay and restore base mode
     e.state.exitOverlay()
     e.setMode(e.state.mode) # Sync window mode
-    return true
+    return roContinue
 
   # Handle Tab key for command completion
   if keyCombo.isSpecial and (keyCombo.special == skTab or keyCombo.special == skBackTab):
@@ -254,7 +227,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
         else:
           mgr.triggerCompletion(e.commandLineParser, e.state.input.commandText)
-    return true
+    return roContinue
 
   # Handle Enter to execute command
   let isEnter =
@@ -279,10 +252,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       # If directory was confirmed, re-trigger completion for its contents
       if isDir:
         mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
-        return true
+        return roContinue
       # If not a no-argument command, wait for more input
       if not shouldExecuteNow:
-        return true
+        return roContinue
       # Otherwise, fall through to execute the command immediately
 
     if e.state.input.commandText.len > 1: # Must have something after :
@@ -296,14 +269,14 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     e.setMode(e.state.mode)
     e.state.input.commandText = ""
     e.state.input.commandCursor = 0
-    return true
+    return roContinue
 
   # Handle Left arrow - move cursor left
   if keyCombo.isSpecial and keyCombo.special == skLeft:
     if e.state.input.commandCursor > 0:
       e.state.input.commandCursor -= 1
       e.state.commandCompletionManager.cancelCompletion()
-    return true
+    return roContinue
 
   # Handle Right arrow - move cursor right
   if keyCombo.isSpecial and keyCombo.special == skRight:
@@ -312,7 +285,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     if e.state.input.commandCursor < maxPos:
       e.state.input.commandCursor += 1
       e.state.commandCompletionManager.cancelCompletion()
-    return true
+    return roContinue
 
   # Handle Backspace - delete character before cursor
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
@@ -331,7 +304,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         let prefix = extractCommandPrefix(e.state.input.commandText)
         mgr.updateFilter(prefix)
       e.updateSubstitutePreviewIfNeeded()
-    return true
+    return roContinue
 
   # Handle Delete - delete character at cursor
   if keyCombo.isSpecial and keyCombo.special == skDelete:
@@ -348,19 +321,19 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         let prefix = extractCommandPrefix(e.state.input.commandText)
         mgr.updateFilter(prefix)
       e.updateSubstitutePreviewIfNeeded()
-    return true
+    return roContinue
 
   # Handle Home - move cursor to beginning
   if keyCombo.isSpecial and keyCombo.special == skHome:
     e.state.input.commandCursor = 0
     e.state.commandCompletionManager.cancelCompletion()
-    return true
+    return roContinue
 
   # Handle End - move cursor to end
   if keyCombo.isSpecial and keyCombo.special == skEnd:
     e.state.input.commandCursor = e.state.input.commandText.charLen - 1
     e.state.commandCompletionManager.cancelCompletion()
-    return true
+    return roContinue
 
   # Up arrow: Navigate to previous (older) command in history, restricted to
   # entries starting with the prefix captured when navigation began.
@@ -383,7 +356,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         e.state.input.commandCursor = e.state.input.commandText.charLen - 1
         e.state.commandCompletionManager.cancelCompletion()
         e.updateSubstitutePreviewIfNeeded()
-    return true
+    return roContinue
 
   # Down arrow: Navigate to next (newer) command in history, restricted to
   # entries starting with the locked prefix. Falling off the newest match
@@ -407,7 +380,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         e.state.input.commandCursor = e.state.input.commandState.historyPrefix.charLen
       e.state.commandCompletionManager.cancelCompletion()
       e.updateSubstitutePreviewIfNeeded()
-    return true
+    return roContinue
 
   # Handle character input - insert at cursor position
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
@@ -442,7 +415,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       # Auto-trigger command completion on first character
       mgr.triggerCompletion(e.commandLineParser, e.state.input.commandText)
     e.updateSubstitutePreviewIfNeeded()
-    return true
+    return roContinue
 
   # Ignore other special keys
-  return true
+  return roContinue

@@ -74,6 +74,11 @@ proc isWaitingForChar*(registry: KeyBindingRegistry): bool =
   ## `clearNumericPrefix`.
   registry.sequenceState.waitingForChar
 
+proc isMidSequence*(registry: KeyBindingRegistry): bool =
+  ## True while `processKey` holds the first keys of a multi-key sequence
+  ## (the `g` of `gg`). Named API for the same reason as `clearNumericPrefix`.
+  registry.sequenceState.keys.len > 0
+
 proc clearAllPending*(registry: KeyBindingRegistry): bool {.discardable.} =
   ## Clear all key-dispatch pending state that Escape should cancel. Currently
   ## this only covers the built-in multi-key sequence accumulator; the runtime
@@ -352,47 +357,78 @@ proc getAllRuntimeMappings*(
     return @[]
   return registry.runtimeMappings[mode]
 
+proc startsWith*(keys, prefix: openArray[KeyCombo]): bool =
+  ## True when `keys` begin with `prefix`.
+  if prefix.len > keys.len:
+    return false
+  for i in 0 ..< prefix.len:
+    if keys[i] != prefix[i]:
+      return false
+  true
+
+proc combos*(keys: openArray[KeyInput]): seq[KeyCombo] =
+  ## The keys alone, without where they came from.
+  for k in keys:
+    result.add(k.combo)
+
+proc typedKey*(combo: KeyCombo): KeyInput =
+  ## A key the user typed, which mappings may take.
+  KeyInput(combo: combo, remap: true, typed: true)
+
+proc leadingMapping(
+    keys: seq[KeyCombo], mappings: seq[RuntimeKeyMapping]
+): Option[RuntimeKeyMapping] =
+  ## The mapping with the longest left-hand side that `keys` start with and go
+  ## past, which Vim runs when the keys after it break a longer mapping.
+  for m in mappings:
+    let n = m.triggerKeys.len
+    if n < keys.len and keys.startsWith(m.triggerKeys) and
+        (result.isNone or n > result.get.triggerKeys.len):
+      result = some(m)
+
 proc routeRuntimeMapping*(
-    state: var DispatchState, keyCombo: KeyCombo, mappings: seq[RuntimeKeyMapping]
+    state: var DispatchState, key: KeyInput, mappings: seq[RuntimeKeyMapping]
 ): RuntimeMappingDecision =
-  ## Decide what to do with `keyCombo` given the runtime mapping table for the
+  ## Decide what to do with `key` given the runtime mapping table for the
   ## current mode. The accumulator (`state`, owned by the `KeyRouter`) is mutated
   ## as appropriate:
   ## - on exact match or no-match flush: cleared before returning
-  ## - on prefix match: extended with `keyCombo`
+  ## - on prefix match: extended with `key`
   ## - on empty `mappings` with no prior accumulation: untouched
   ##
   ## This is a pure routing decision; the caller executes the result.
-  ## Historically there are two execution styles — base mode (handler_manager)
-  ## replays accumulatedKeys[0..^2] and re-processes the current key, while
-  ## the Command overlay replays the full accumulatedKeys and stops. Both can
-  ## be expressed from the same decision.
 
   if mappings.len == 0:
     if state.keys.len > 0:
       # Mappings unbound mid-sequence: flush the stale accumulator + current
       # key so the caller can replay them instead of dropping input.
-      let flushed = state.keys & @[keyCombo]
+      let flushed = state.keys & @[key]
       clearRuntimeMappingState(state)
       return RuntimeMappingDecision(kind: rmdNoMatchFlush, accumulatedKeys: flushed)
     return RuntimeMappingDecision(kind: rmdNoMatchPassThrough)
 
-  state.keys.add(keyCombo)
-  let accKeys = state.keys
+  if not key.remap:
+    # Vim neither starts nor completes a mapping with it, so it ends the keys
+    # held before it.
+    let flushed = state.keys & @[key]
+    clearRuntimeMappingState(state)
+    return RuntimeMappingDecision(
+      kind: rmdNoMatchFlush,
+      accumulatedKeys: flushed,
+      leading: leadingMapping(flushed.combos, mappings),
+    )
+
+  state.keys.add(key)
+  let held = state.keys
+  let accKeys = held.combos
 
   var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
   var hasLongerMatch = false
   for m in mappings:
     if m.triggerKeys == accKeys:
       exactMatch = some(m)
-    elif m.triggerKeys.len > accKeys.len:
-      var isPrefix = true
-      for i in 0 ..< accKeys.len:
-        if m.triggerKeys[i] != accKeys[i]:
-          isPrefix = false
-          break
-      if isPrefix:
-        hasLongerMatch = true
+    elif m.triggerKeys.len > accKeys.len and m.triggerKeys.startsWith(accKeys):
+      hasLongerMatch = true
 
   if exactMatch.isSome and not hasLongerMatch:
     let matched = exactMatch.get
@@ -405,6 +441,7 @@ proc routeRuntimeMapping*(
     of rmkKeySequence:
       return RuntimeMappingDecision(
         kind: rmdExecuteKeySequence,
+        triggerKeys: matched.triggerKeys,
         targetKeys: matched.targetKeys,
         noremap: matched.noremap,
       )
@@ -419,9 +456,12 @@ proc routeRuntimeMapping*(
     clearRuntimeMappingState(state)
     return RuntimeMappingDecision(kind: rmdNoMatchPassThrough)
 
-  let flushed = accKeys
   clearRuntimeMappingState(state)
-  return RuntimeMappingDecision(kind: rmdNoMatchFlush, accumulatedKeys: flushed)
+  return RuntimeMappingDecision(
+    kind: rmdNoMatchFlush,
+    accumulatedKeys: held,
+    leading: leadingMapping(accKeys, mappings),
+  )
 
 proc flushRuntimeMapping*(
     state: var DispatchState, mappings: seq[RuntimeKeyMapping]
@@ -433,7 +473,8 @@ proc flushRuntimeMapping*(
   if state.keys.len == 0:
     return RuntimeMappingFlushPlan(kind: rmfNothing)
 
-  let accKeys = state.keys
+  let held = state.keys
+  let accKeys = held.combos
   var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
   for m in mappings:
     if m.triggerKeys == accKeys:
@@ -452,11 +493,16 @@ proc flushRuntimeMapping*(
     of rmkKeySequence:
       return RuntimeMappingFlushPlan(
         kind: rmfExecuteKeySequence,
+        triggerKeys: matched.triggerKeys,
         targetKeys: matched.targetKeys,
         noremap: matched.noremap,
       )
 
-  return RuntimeMappingFlushPlan(kind: rmfReplayPerKey, keysToReplay: accKeys)
+  return RuntimeMappingFlushPlan(
+    kind: rmfReplayPerKey,
+    keysToReplay: held,
+    leading: leadingMapping(accKeys, mappings),
+  )
 
 proc isDigitKey*(combo: KeyCombo): bool =
   ## Check if the key combination is a digit (0-9)

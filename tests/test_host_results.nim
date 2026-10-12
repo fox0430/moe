@@ -15,7 +15,7 @@ suite "Host result interception":
     let e = testEditor()
     defer:
       e.releaseExternalResources()
-    check e.executeCommandOverlay(":split")
+    check e.executeCommandOverlay(":split") != roQuit
     check e.windowManager.windows.len == 2
     check e.takeHostResultRequest().isNone
 
@@ -30,9 +30,9 @@ suite "Host result interception":
       check host == e
       inc calls
       r.kind in {hrHSplit, hrVSplit, hrConfig}
-    check e.executeCommandOverlay(":split first.txt")
-    check e.executeCommandOverlay(":vsplit second.txt")
-    check e.executeCommandOverlay(":config")
+    check e.executeCommandOverlay(":split first.txt") != roQuit
+    check e.executeCommandOverlay(":vsplit second.txt") != roQuit
+    check e.executeCommandOverlay(":config") != roQuit
     check calls == 3
     check e.hostResultRequestCount == 3
     check e.windowManager.windows.len == 1
@@ -59,7 +59,7 @@ suite "Host result interception":
     var calls = 0
     e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
       inc calls
-    check e.executeCommandOverlay(":split")
+    check e.executeCommandOverlay(":split") != roQuit
     check calls == 1
     check e.hostResultRequestCount == 0
     check e.windowManager.windows.len == 2
@@ -167,7 +167,7 @@ suite "Host result interception":
     e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
       r.kind in {hrCloseWindow, hrQuit}
     for (command, kind) in [(":q", hrCloseWindow), (":qa", hrQuit)]:
-      check e.executeCommandOverlay(command)
+      check e.executeCommandOverlay(command) != roQuit
       check not e.state.isCommandOverlay
       check e.activeWindow.mode == EditorMode.Normal
       check e.windowManager.windows.len == 1
@@ -183,12 +183,12 @@ suite "Host result interception":
       command.action == claUnknown
     e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
       r.kind == hrHSplit
-    check e.executeCommandOverlay(":host-action arg")
+    check e.executeCommandOverlay(":host-action arg") != roQuit
     let command = e.takeHostCommandRequest()
     require command.isSome
     check command.get.rawText == ":host-action arg"
     check e.takeHostResultRequest().isNone
-    check e.executeCommandOverlay(":split")
+    check e.executeCommandOverlay(":split") != roQuit
     check e.takeHostResultRequest().isSome
 
   test "a host-owned replay error still aborts the replay":
@@ -230,7 +230,7 @@ suite "Host result interception":
       e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
         r.kind in {hrNew, hrHSplit}
       if rhs == "@ : i X Esc":
-        require e.executeCommandOverlay(":split x")
+        require e.executeCommandOverlay(":split x") != roQuit
         require e.takeHostResultRequest().isSome
       require e.keyBindingRegistry.addRuntimeMappingExpanded(Normal, "C-y", rhs).len == 0
       require e.key("C-y")
@@ -288,4 +288,19 @@ suite "Host result interception":
     let request = e.takeHostResultRequest()
     require request.isSome
     check request.get.kind == hrNew
+    check e.takeHostResultRequest().isNone
+
+  test "a host-owned command line stops the rest of a counted @:":
+    let e = testEditor()
+    defer:
+      e.releaseExternalResources()
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      r.kind == hrHSplit
+    require e.executeCommandOverlay(":split x") != roQuit
+    require e.takeHostResultRequest().isSome
+    for k in ["3", "@", ":"]:
+      require e.key(k)
+    let request = e.takeHostResultRequest()
+    require request.isSome
+    check request.get.kind == hrHSplit
     check e.takeHostResultRequest().isNone

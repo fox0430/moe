@@ -589,7 +589,7 @@ A bare string value (`"jj" = "Escape"`) is shorthand: it is bound to a registere
 | `command` | string | Bind the key to a registered command. Mutually exclusive with `keys`. |
 | `keys` | string | Force a key sequence: the right-hand side is always replayed as keys, never resolved as a command. Mutually exclusive with `command`. |
 | `args` | array of strings | Arguments passed to `command` (may contain spaces, unlike the bare `"<command> <args>"` form). Only valid together with `command`. |
-| `noremap` | bool (default `true`) | `true` replays the target verbatim (Vim `:noremap`); `false` expands it recursively through other user mappings (Vim `:map`). Recursion is depth-bounded, so cyclic mappings fail with an error instead of hanging. |
+| `noremap` | bool (default `true`) | `true` replays the target verbatim (Vim `:noremap`); `false` expands it recursively through other user mappings (Vim `:map`), except the first key of a target that starts with the key itself, so `"a" = { keys = "ab", noremap = false }` is not recursive, as in Vim. Recursion is depth-bounded, so cyclic mappings fail with an error instead of hanging. |
 
 ```toml
 [KeyMapping.Normal]

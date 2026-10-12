@@ -158,7 +158,17 @@ type
   ## low-level module so both the router and the routing helpers can name it
   ## without an import cycle.
   DispatchState* = object
-    keys*: seq[KeyCombo] ## Runtime-mapping keys accumulated so far
+    keys*: seq[KeyInput] ## Runtime-mapping keys accumulated so far
+
+  ## A key on its way to the mappings, with where it came from.
+  KeyInput* = object
+    combo*: KeyCombo
+    remap*: bool
+      ## Mappings may take it: false for a key a `:noremap` produced or one let
+      ## go unmapped. Such a key ends the keys held before it, as in Vim.
+    typed*: bool
+      ## Typed by the user, not produced by a mapping or a register. An error
+      ## drops the keys mappings produced but keeps these, as in Vim.
 
   ## Result of matching a single key against the runtime mapping table.
   ## `routeRuntimeMapping` returns this; the caller executes the decision.
@@ -170,31 +180,32 @@ type
       ## Either the table is empty, or the only key accumulated has no match.
       ## Caller should process the current key as if no mapping existed.
     rmdNoMatchFlush
-      ## Two or more keys accumulated and none match. Caller must replay
-      ## the accumulated keys (with `isReplayingMapping = true`); whether the
-      ## current key is part of the replay or processed separately is up to
-      ## the caller (base mode and Command overlay differ here historically).
+      ## Two or more keys accumulated and none match. The caller lets them go
+      ## as Vim does: `leading` (the mapping the first keys complete) runs, or
+      ## else the first key runs unmapped, and the keys after it are fed again.
 
   RuntimeMappingDecision* = object
     case kind*: RuntimeMappingDecisionKind
     of rmdExecuteCommand:
       commandName*: string
     of rmdExecuteKeySequence:
+      triggerKeys*: seq[KeyCombo]
       targetKeys*: seq[KeyCombo]
       noremap*: bool
     of rmdWaitForMore, rmdNoMatchPassThrough:
       discard
     of rmdNoMatchFlush:
-      accumulatedKeys*: seq[KeyCombo]
+      accumulatedKeys*: seq[KeyInput]
+      leading*: Option[RuntimeKeyMapping]
 
   ## Plan returned by `flushRuntimeMapping` when the key-mapping timeout fires
   ## with a non-empty accumulator. The caller is responsible for executing the
-  ## plan (Command overlay and base mode use different executors).
+  ## plan.
   RuntimeMappingFlushKind* = enum
     rmfNothing ## Accumulator was already empty
     rmfExecuteCommand ## Exact match with rmkCommand
     rmfExecuteKeySequence ## Exact match with rmkKeySequence
-    rmfReplayPerKey ## No exact match: replay each accumulated key individually
+    rmfReplayPerKey ## No exact match: let the keys go as `rmdNoMatchFlush` does
 
   RuntimeMappingFlushPlan* = object
     case kind*: RuntimeMappingFlushKind
@@ -203,10 +214,12 @@ type
     of rmfExecuteCommand:
       commandName*: string
     of rmfExecuteKeySequence:
+      triggerKeys*: seq[KeyCombo]
       targetKeys*: seq[KeyCombo]
       noremap*: bool
     of rmfReplayPerKey:
-      keysToReplay*: seq[KeyCombo]
+      keysToReplay*: seq[KeyInput]
+      leading*: Option[RuntimeKeyMapping]
 
   ## Registry for all key_bindings
   KeyBindingRegistry* = ref object
@@ -223,7 +236,6 @@ type
     commandRegistry*: Table[string, Command]
     sequenceState*: KeySequenceState ## Current built-in sequence being built
     runtimeMappings*: Table[EditorMode, seq[RuntimeKeyMapping]]
-    isReplayingMapping*: bool ## When true, skip mapping expansion (noremap)
 
 proc `==`*(a, b: KeyCombo): bool =
   if a.isSpecial != b.isSpecial:
@@ -589,7 +601,6 @@ proc newKeyBindingRegistry*(): KeyBindingRegistry =
       numericPrefix: "",
     ),
     runtimeMappings: initTable[EditorMode, seq[RuntimeKeyMapping]](),
-    isReplayingMapping: false,
   )
 
   # Initialize empty binding lists for each mode

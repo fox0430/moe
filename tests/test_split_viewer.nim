@@ -1381,7 +1381,7 @@ suite "Tab commands from the FileTree sidebar":
         writeFile(second.filePath.get, "changed\n")
         discard second.insertText(BufferPosition(line: 0, column: 0), "typed ")
 
-        check e.executeCommandOverlay(command)
+        check e.executeCommandOverlay(command) != roQuit
 
         # Regression: the listing's root directory was "reloaded", and from a
         # lone sidebar the last opened buffer lost its unsaved changes.
@@ -1403,11 +1403,11 @@ suite "Tab commands from the FileTree sidebar":
     let width = tree.viewport.width
 
     # Regression: `:w <name>` wrote the listing's text to the file.
-    check e.executeCommandOverlay(":w " & dst)
+    check e.executeCommandOverlay(":w " & dst) != roQuit
     check not fileExists(dst)
     check e.state.statusMessage.contains("Cannot write a listing")
 
-    check e.executeCommandOverlay(":w")
+    check e.executeCommandOverlay(":w") != roQuit
     check e.state.statusMessage.contains("Cannot write a listing")
     check e.activeWindow == tree
     e.checkUntouched(tree, width)

@@ -786,7 +786,7 @@ suite "clearRuntimeMappingState":
     # The runtime-mapping accumulator is now a router-owned DispatchState.
     var state = DispatchState(keys: @[])
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    state.keys.add(j)
+    state.keys.add(KeyInput(combo: j))
     check state.keys.len == 1
 
     clearRuntimeMappingState(state)
@@ -1249,7 +1249,7 @@ suite "Integration - noremap verification":
     ## Register two key-seq mappings in Insert mode:
     ##   C-a → C-b, C-b → Escape
     ## Pressing C-a should replay C-b literally (as if typed),
-    ## but since isReplayingMapping is true during the replay,
+    ## but since the replayed keys run unmapped,
     ## C-b should NOT be expanded to Escape.
     let manager = createTestManager()
     let buffer = newTextBuffer()
@@ -1272,15 +1272,11 @@ suite "Integration - noremap verification":
       keyA,
     )
     check r.kind == hrHandled
-    # isReplayingMapping should be false after completion
-    check manager.keyBindingRegistry.isReplayingMapping == false
     # If C-b were recursively expanded to Escape, mode would have switched to Normal.
     # Since noremap prevents that, we should still be in Insert mode.
     check state.mode == EditorMode.Insert
 
-  test "isReplayingMapping prevents expansion during playback":
-    ## Directly verify that when isReplayingMapping is set,
-    ## handleKeyCombo skips the mapping precheck
+  test "a key run with remap = false skips the mapping precheck":
     let manager = createTestManager()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
@@ -1291,16 +1287,13 @@ suite "Integration - noremap verification":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "C-a", "Escape")
     check err == ""
 
-    # With isReplayingMapping = true, handleKeyCombo should skip mapping precheck
-    manager.keyBindingRegistry.isReplayingMapping = true
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
-    discard manager.runKeyCombo(editor, keyA)
+    discard manager.runKeyCombo(editor, keyA, remap = false)
     # The key should have been processed normally (not consumed by mapping)
-    # Accumulator should remain empty
+    check state.mode == EditorMode.Insert
     check editor.keyRouter.dispatchState.keys.len == 0
-    manager.keyBindingRegistry.isReplayingMapping = false
 
   test "Mapping does not expand in wrong mode":
     let manager = createTestManager()
@@ -1346,17 +1339,21 @@ suite "Integration - recursive map (noremap=false)":
     # C-a → C-b → Escape: recursion reaches Escape, so we land in Normal mode.
     check state.mode == EditorMode.Normal
     check editor.keyRouter.mapExpandDepth == 0
-    check manager.keyBindingRegistry.isReplayingMapping == false
 
-  test "Cyclic mapping A→A errors at the depth limit without hanging":
+  test "Cyclic mapping A→B→A errors at the depth limit without hanging":
     let manager = createTestManager()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState(EditorMode.Insert)
     let viewport = createTestViewport()
 
+    # Not A→A: Vim leaves the first key of a right-hand side that starts with
+    # the left-hand side unmapped.
     check manager.keyBindingRegistry.addRuntimeMapping(
-      Insert, "C-a", "C-a", noremap = false
+      Insert, "C-a", "C-b", noremap = false
+    ) == ""
+    check manager.keyBindingRegistry.addRuntimeMapping(
+      Insert, "C-b", "C-a", noremap = false
     ) == ""
 
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
@@ -1714,15 +1711,13 @@ suite "Timeout flush - exact match with longer match pending":
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    editor.keyRouter.dispatchState.keys = @[j]
+    editor.keyRouter.dispatchState.keys = @[KeyInput(combo: j, remap: true)]
 
     let rr = editor.keyRouter.flushTimeout(state.mode)
     check rr.kind == rrExecuteRuntimeKeySequence
     check rr.targetKeys == @[toKeyCombo('a')]
 
-    manager.keyBindingRegistry.isReplayingMapping = true
-    let r = playbackKeyCombos(editor, rr.targetKeys)
-    manager.keyBindingRegistry.isReplayingMapping = false
+    let r = playbackKeyCombos(editor, rr.targetKeys, remap = false)
     check r.kind == hrHandled
     check state.mode == EditorMode.Insert
 
@@ -1742,14 +1737,12 @@ suite "Timeout flush - exact match with longer match pending":
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    editor.keyRouter.dispatchState.keys = @[j]
+    editor.keyRouter.dispatchState.keys = @[KeyInput(combo: j, remap: true)]
 
     let rr = editor.keyRouter.flushTimeout(state.mode)
     check rr.kind == rrExecuteRuntimeKeySequence
 
-    manager.keyBindingRegistry.isReplayingMapping = true
-    discard playbackKeyCombos(editor, rr.targetKeys)
-    manager.keyBindingRegistry.isReplayingMapping = false
+    discard playbackKeyCombos(editor, rr.targetKeys, remap = false)
 
     check state.mode == EditorMode.Normal
 
@@ -1767,21 +1760,44 @@ suite "Timeout flush - exact match with longer match pending":
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    editor.keyRouter.dispatchState.keys = @[j]
+    editor.keyRouter.dispatchState.keys = @[KeyInput(combo: j, remap: true)]
 
     let rr = editor.keyRouter.flushTimeout(state.mode)
-    check rr.kind == rrUnhandledBatch
-    check rr.keys == @[j]
+    check rr.kind == rrReleaseHeld
+    check rr.keys.combos == @[j]
 
-    manager.keyBindingRegistry.isReplayingMapping = true
-    for k in rr.keys:
-      let r = manager.runKeyCombo(editor, k)
-      check r.kind == hrHandled
-    manager.keyBindingRegistry.isReplayingMapping = false
+    check manager.releaseHeldKeys(editor, rr.keys, rr.leading) == roContinue
 
     check state.mode == EditorMode.Insert
     let line = buffer.getLine(0)
     check $line == "jhello"
+
+  test "Past the depth limit only the typed held keys run, unmapped":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState(EditorMode.Insert)
+    let viewport = createTestViewport()
+
+    check manager.keyBindingRegistry.addRuntimeMapping(Insert, "j", "a b") == ""
+    check manager.keyBindingRegistry.addRuntimeMapping(Insert, "jk", "Escape") == ""
+
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+    editor.keyRouter.mapExpandDepth = 50 # MaxMapRecursionDepth
+
+    # Mapped, the typed j's would hold each other again and never end.
+    let keys = @[
+      KeyInput(combo: toKeyCombo('j'), remap: true, typed: true),
+      KeyInput(combo: toKeyCombo('q'), remap: true, typed: false),
+      KeyInput(combo: toKeyCombo('j'), remap: true, typed: true),
+    ]
+    check manager.releaseHeldKeys(editor, keys, none(RuntimeKeyMapping)) == roAbort
+
+    check "recursive mapping" in state.statusMessage
+    check $buffer.getLine(0) == "jjhello"
+    check not editor.keyRouter.isHoldingKeys
+    check editor.keyRouter.mapExpandDepth == 50
 
   test "Empty accumulated keys: timeout flush is no-op":
     let manager = createTestManager()
@@ -1794,7 +1810,7 @@ suite "Timeout flush - exact match with longer match pending":
 
 suite "Nested playback mini processor":
   test "processReplayedResult on hrError sets statusMessage and returns roAbort":
-    # Pre-fix, rrUnhandledBatch broke on hrError but never routed
+    # Pre-fix, the held-key release broke on hrError but never routed
     # errorMessage onto state.statusMessage; the user saw no diagnostic.
     let manager = createTestManager()
     let buffer = newTextBuffer()

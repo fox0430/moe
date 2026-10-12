@@ -34,6 +34,10 @@ proc newRouter(): KeyRouter =
   let reg = newKeyBindingRegistry()
   newKeyRouter(reg, TimeoutPolicy(timeoutlen: 100, enabled: true))
 
+proc feedKey(router: KeyRouter, mode: EditorMode, combo: KeyCombo): RouteResult =
+  ## A key mappings may take, which no command being built reads as it is.
+  router.feedKey(mode, KeyInput(combo: combo, remap: true), literal = false)
+
 proc addKeySeqMapping(reg: KeyBindingRegistry, mode: EditorMode, lhs, rhs: string) =
   ## Register a runtime key-sequence mapping (lhs → rhs key string).
   discard reg.addRuntimeMapping(mode, lhs, rhs)
@@ -70,11 +74,89 @@ suite "KeyRouter - feedKey runtime key-sequence mapping":
     discard router.feedKey(EditorMode.Insert, toKeyCombo('j')) # rrWaiting
     let route = router.feedKey(EditorMode.Insert, toKeyCombo('k'))
 
-    check route.kind == rrUnhandledBatch
+    check route.kind == rrReleaseHeld
     check route.keys.len == 2
-    check route.keys[0] == toKeyCombo('j')
-    check route.keys[1] == toKeyCombo('k')
+    check route.keys[0].combo == toKeyCombo('j')
+    check route.keys[1].combo == toKeyCombo('k')
+    check route.leading.isNone
     check router.dispatchState.keys.len == 0
+
+  test "a key that breaks a longer mapping hands over the one the held keys complete":
+    # Vim 9.2 with `nmap a …` and `nmap abc …`: `abx` runs the `a` mapping,
+    # then b and x.
+    let router = newRouter()
+    router.registry.addKeySeqMapping(EditorMode.Normal, "a", "Escape")
+    router.registry.addKeySeqMapping(EditorMode.Normal, "abc", "Escape")
+
+    discard router.feedKey(EditorMode.Normal, toKeyCombo('a')) # rrWaiting
+    discard router.feedKey(EditorMode.Normal, toKeyCombo('b')) # rrWaiting
+    let route = router.feedKey(EditorMode.Normal, toKeyCombo('x'))
+
+    check route.kind == rrReleaseHeld
+    check route.keys.combos == @[toKeyCombo('a'), toKeyCombo('b'), toKeyCombo('x')]
+    check route.leading.isSome
+    check route.leading.get.triggerKeys == @[toKeyCombo('a')]
+
+  test "the longest mapping the held keys complete is handed over":
+    let router = newRouter()
+    router.registry.addKeySeqMapping(EditorMode.Normal, "a", "Escape")
+    router.registry.addKeySeqMapping(EditorMode.Normal, "ab", "Escape")
+    router.registry.addKeySeqMapping(EditorMode.Normal, "abcd", "Escape")
+
+    for c in "abc":
+      discard router.feedKey(EditorMode.Normal, toKeyCombo(c)) # rrWaiting
+    let route = router.feedKey(EditorMode.Normal, toKeyCombo('x'))
+
+    check route.kind == rrReleaseHeld
+    check route.leading.isSome
+    check route.leading.get.triggerKeys == @[toKeyCombo('a'), toKeyCombo('b')]
+
+  test "a key mappings may not take ends the held keys and completes none":
+    # Vim 9.2 with `nmap j …` and `nmap ja …`: a held j and a noremap a run the
+    # j mapping, then a.
+    let router = newRouter()
+    router.registry.addKeySeqMapping(EditorMode.Normal, "j", "Escape")
+    router.registry.addKeySeqMapping(EditorMode.Normal, "ja", "Escape")
+
+    discard router.feedKey(EditorMode.Normal, toKeyCombo('j')) # rrWaiting
+    let route = router.feedKey(
+      EditorMode.Normal, KeyInput(combo: toKeyCombo('a'), remap: false), literal = false
+    )
+
+    check route.kind == rrReleaseHeld
+    check route.keys.combos == @[toKeyCombo('j'), toKeyCombo('a')]
+    check not route.keys[1].remap
+    check route.leading.isSome
+    check route.leading.get.triggerKeys == @[toKeyCombo('j')]
+    check not router.isHoldingKeys
+
+  test "a key mappings may not take passes through when nothing is held":
+    let router = newRouter()
+    router.registry.addKeySeqMapping(EditorMode.Normal, "ja", "Escape")
+
+    let route = router.feedKey(
+      EditorMode.Normal, KeyInput(combo: toKeyCombo('j'), remap: false), literal = false
+    )
+
+    check route.kind == rrUnhandled
+    check not router.isHoldingKeys
+
+  test "a key a command reads as it is meets the mappings while keys are held":
+    # The command is the one before the held keys, so it does not read this key.
+    let router = newRouter()
+    router.registry.addKeySeqMapping(EditorMode.Normal, "ja", "Escape")
+
+    let alone = router.feedKey(
+      EditorMode.Normal, KeyInput(combo: toKeyCombo('j'), remap: true), literal = true
+    )
+    check alone.kind == rrUnhandled
+    check not router.isHoldingKeys
+
+    discard router.feedKey(EditorMode.Normal, toKeyCombo('j')) # rrWaiting
+    let route = router.feedKey(
+      EditorMode.Normal, KeyInput(combo: toKeyCombo('a'), remap: true), literal = true
+    )
+    check route.kind == rrExecuteRuntimeKeySequence
 
   test "key with no mapping passes through (rrUnhandled)":
     let router = newRouter()
@@ -122,22 +204,36 @@ suite "KeyRouter - flushTimeout":
     discard router.feedKey(EditorMode.Insert, toKeyCombo('j')) # rrWaiting
 
     # Manually accumulate the second 'j' so timeout finds an exact match
-    router.dispatchState.keys.add(toKeyCombo('j'))
+    router.dispatchState.keys.add(KeyInput(combo: toKeyCombo('j')))
 
     let route = router.flushTimeout(EditorMode.Insert)
     check route.kind == rrExecuteRuntimeKeySequence
     check route.targetKeys == @[toSpecialKeyCombo(skEscape)]
     check router.dispatchState.keys.len == 0
 
-  test "no exact match returns rrUnhandledBatch":
+  test "no exact match lets the held keys go (rrReleaseHeld)":
     let router = newRouter()
     router.registry.addKeySeqMapping(EditorMode.Insert, "jjk", "Escape")
     discard router.feedKey(EditorMode.Insert, toKeyCombo('j')) # rrWaiting
 
     let route = router.flushTimeout(EditorMode.Insert)
-    check route.kind == rrUnhandledBatch
-    check route.keys == @[toKeyCombo('j')]
+    check route.kind == rrReleaseHeld
+    check route.keys.combos == @[toKeyCombo('j')]
+    check route.leading.isNone
     check router.dispatchState.keys.len == 0
+
+  test "timeout hands over the mapping the held keys complete":
+    let router = newRouter()
+    router.registry.addKeySeqMapping(EditorMode.Normal, "a", "Escape")
+    router.registry.addKeySeqMapping(EditorMode.Normal, "abc", "Escape")
+    discard router.feedKey(EditorMode.Normal, toKeyCombo('a')) # rrWaiting
+    discard router.feedKey(EditorMode.Normal, toKeyCombo('b')) # rrWaiting
+
+    let route = router.flushTimeout(EditorMode.Normal)
+    check route.kind == rrReleaseHeld
+    check route.keys.combos == @[toKeyCombo('a'), toKeyCombo('b')]
+    check route.leading.isSome
+    check route.leading.get.triggerKeys == @[toKeyCombo('a')]
 
   test "noremap flag propagates through immediate match and flushTimeout":
     let router = newRouter()
@@ -154,7 +250,7 @@ suite "KeyRouter - flushTimeout":
       EditorMode.Insert, "yy", "Escape", noremap = true
     )
     discard router.feedKey(EditorMode.Insert, toKeyCombo('y')) # rrWaiting
-    router.dispatchState.keys.add(toKeyCombo('y'))
+    router.dispatchState.keys.add(KeyInput(combo: toKeyCombo('y')))
     let flushed = router.flushTimeout(EditorMode.Insert)
     check flushed.kind == rrExecuteRuntimeKeySequence
     check flushed.noremap == true
@@ -272,26 +368,7 @@ suite "KeyRouter - rmkCommand routing":
     let r = router.feedKey(EditorMode.Command, toKeyCombo('j', ctrl = true))
     check r.kind == rrUnhandled
 
-suite "KeyRouter - withReplay":
-  test "withReplay sets and clears isReplayingMapping":
-    let router = newRouter()
-    check router.registry.isReplayingMapping == false
-    router.withReplay:
-      check router.registry.isReplayingMapping == true
-    check router.registry.isReplayingMapping == false
-
-  test "withReplay restores the flag even when the body raises":
-    let router = newRouter()
-    var raised = false
-    try:
-      router.withReplay:
-        check router.registry.isReplayingMapping == true
-        raise newException(ValueError, "boom")
-    except ValueError:
-      raised = true
-    check raised == true
-    check router.registry.isReplayingMapping == false
-
+suite "KeyRouter - stale accumulator":
   test "feedKey flushes stale accumulator when mappings table becomes empty":
     let router = newRouter()
     router.registry.addKeySeqMapping(EditorMode.Insert, "jk", "Escape")
@@ -299,8 +376,8 @@ suite "KeyRouter - withReplay":
     check waiting.kind == rrWaiting
     router.registry.clearRuntimeMappings(EditorMode.Insert)
     let flushed = router.feedKey(EditorMode.Insert, toKeyCombo('x'))
-    check flushed.kind == rrUnhandledBatch
-    check flushed.keys == @[toKeyCombo('j'), toKeyCombo('x')]
+    check flushed.kind == rrReleaseHeld
+    check flushed.keys.combos == @[toKeyCombo('j'), toKeyCombo('x')]
     check router.dispatchState.keys.len == 0
 
 proc newBuiltinRegistry(): KeyBindingRegistry =

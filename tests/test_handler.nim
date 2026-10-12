@@ -7087,3 +7087,333 @@ suite "handleKeyCombo - the column vertical moves want":
 
       check e.cursor.line == target + 4
       check e.activeBuffer.getLine(target + 4) == "abcdefgZh"
+
+suite "handleKeyCombo - which keys a mapping takes, as in Vim":
+  proc createEditorForMappings(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc map(e: Editor, mode: EditorMode, lhs, rhs: string, noremap = true) =
+    check e.keyBindingRegistry.addRuntimeMapping(mode, lhs, rhs, noremap).len == 0
+
+  test "the keys after a held one that breaks a mapping are mapped again":
+    # Vim 9.2 with `nmap ,a …` and `nmap xy …`: `,xy` runs the xy mapping.
+    let e = createEditorForMappings("abc\ndef")
+    e.map(EditorMode.Normal, "l a", "G")
+    e.map(EditorMode.Normal, "x y", "d d")
+
+    e.press("l", "x", "y")
+
+    check e.activeBuffer.len == 1
+    check e.activeBuffer.getLine(0) == "def"
+
+  test "a mapping the held keys complete runs when a later key breaks a longer one":
+    # Vim 9.2 with `nmap a …` and `nmap ab …`: `ax` runs the a mapping, then x.
+    let e = createEditorForMappings("abc\ndef\nghi")
+    e.map(EditorMode.Normal, "a", "G")
+    e.map(EditorMode.Normal, "a b", "g g")
+
+    e.press("a", "x")
+
+    check e.state.mode == EditorMode.Normal
+    check e.activeBuffer.getLine(2) == "hi"
+
+  test "the timeout runs the mapping the held keys complete, then the rest":
+    let e = createEditorForMappings("abc\ndef\nghi")
+    e.map(EditorMode.Normal, "a", "G")
+    e.map(EditorMode.Normal, "a b c", "g g")
+
+    e.press("a", "b")
+    check e.keyRouter.isHoldingKeys
+
+    check e.handleKeyMappingTimeout()
+
+    check not e.keyRouter.isHoldingKeys
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "an Insert mapping can start on the second of two held keys":
+    # Vim 9.2 with `inoremap jk <Esc>`: `ijjk` types one j and leaves Insert.
+    let e = createEditorForMappings("abc")
+    e.map(EditorMode.Insert, "j k", "Esc")
+
+    e.press("i", "j", "j", "k")
+
+    check e.state.mode == EditorMode.Normal
+    check e.activeBuffer.getLine(0) == "jabc"
+
+  test "a register a noremap mapping runs is mapped as when typed":
+    # Vim 9.2 with `nmap Z …`, @a = Z and `nnoremap ,q @a`: `,q` runs Z's mapping.
+    let e = createEditorForMappings("abc\ndef")
+    e.state.pendingInput.macroState.registers['a'] = @["Z"]
+    e.map(EditorMode.Normal, "Z", "d d")
+    e.map(EditorMode.Normal, "Q", "@ a")
+
+    e.press("Q")
+
+    check e.activeBuffer.len == 1
+    check e.activeBuffer.getLine(0) == "def"
+
+  test "a register run after a held key is mapped as when typed":
+    # Vim 9.2 with `nmap @x …`, `nmap Z …` and @a = Z: `@a` runs Z's mapping.
+    let e = createEditorForMappings("abc\ndef")
+    e.state.pendingInput.macroState.registers['a'] = @["Z"]
+    e.map(EditorMode.Normal, "@ x", "G")
+    e.map(EditorMode.Normal, "Z", "d d")
+
+    e.press("@", "a")
+
+    check e.activeBuffer.len == 1
+    check e.activeBuffer.getLine(0) == "def"
+
+  test "the keys after an Enter in a command-line mapping reach Normal mode":
+    # Vim 9.2 with `cnoremap ,, call …<CR>x`: the x deletes a character.
+    let e = createEditorForMappings("abc")
+    e.map(EditorMode.Command, "Q", "n o h Enter x")
+
+    e.press(":", "Q")
+
+    check not e.state.hasOverlay
+    check e.activeBuffer.getLine(0) == "bc"
+
+  test "a :cmap right-hand side is mapped again, a :cnoremap one is not":
+    # Vim 9.2 with `cmap W …`: `cmap Q W` runs W's mapping, `cnoremap Q W` types W.
+    let mapped = createEditorForMappings("abc")
+    mapped.map(EditorMode.Command, "Q", "W", noremap = false)
+    mapped.map(EditorMode.Command, "W", "n o h")
+    mapped.press(":", "Q")
+    check mapped.state.input.commandText == ":noh"
+
+    let typed = createEditorForMappings("abc")
+    typed.map(EditorMode.Command, "Q", "W")
+    typed.map(EditorMode.Command, "W", "n o h")
+    typed.press(":", "Q")
+    check typed.state.input.commandText == ":W"
+
+  test "a recursive :cmap stops the keys after it":
+    # Vim 9.2 with `cmap a bx` and `cmap b a`: `:a` gives E223 and types no x.
+    let e = createEditorForMappings("abc")
+    e.map(EditorMode.Command, "a", "b x", noremap = false)
+    e.map(EditorMode.Command, "b", "a", noremap = false)
+
+    e.press(":", "a")
+
+    check "recursive mapping" in e.state.statusMessage
+    check e.state.isCommandOverlay
+    check e.state.input.commandText == ":"
+    check e.keyRouter.mapExpandDepth == 0
+
+  test "a command line that fails in a mapping stops the keys after it":
+    # Vim 9.2 with `nmap Q :badcmd<CR>x` or `cmap Q badcmd<CR>x`: E492, no x.
+    let normal = createEditorForMappings("abc")
+    normal.map(EditorMode.Normal, "Q", ": b a d Enter x")
+    normal.press("Q")
+    check "Not an editor command" in normal.state.statusMessage
+    check normal.activeBuffer.getLine(0) == "abc"
+
+    let command = createEditorForMappings("abc")
+    command.map(EditorMode.Command, "Q", "b a d Enter x")
+    command.press(":", "Q")
+    check "Not an editor command" in command.state.statusMessage
+    check command.activeBuffer.getLine(0) == "abc"
+
+  test "a command line @: repeats that fails stops the keys after it":
+    # Vim 9.2 with `nmap X @:j` after `:badcmd`: E492, no j.
+    let e = createEditorForMappings("one\ntwo")
+    e.map(EditorMode.Normal, "X", "@ : j")
+    e.press(":", "b", "a", "d", "Enter")
+
+    e.press("X")
+
+    check "Not an editor command" in e.state.statusMessage
+    check e.cursor.line == 0
+
+  test "the character after f is not mapped":
+    # Vim 9.2 with `nnoremap l …`: `fl` finds the l.
+    let e = createEditorForMappings("hello")
+    e.map(EditorMode.Normal, "l", "d d")
+
+    e.press("f", "l")
+
+    check e.cursor == BufferPosition(line: 0, column: 2)
+    check e.activeBuffer.getLine(0) == "hello"
+
+  test "the register after q is not mapped":
+    # Vim 9.2 with `nnoremap a …`: `qaxq` records x into a.
+    let e = createEditorForMappings("hello")
+    e.map(EditorMode.Normal, "a", "j j")
+
+    e.press("q", "a", "x", "q")
+
+    check e.state.pendingInput.macroState.registers.getOrDefault('a') == @["x"]
+    check 'j' notin e.state.pendingInput.macroState.registers
+
+  test "the register after @ is not mapped":
+    # Vim 9.2 with `nnoremap a …` and @a = x: `@a` deletes a character.
+    let e = createEditorForMappings("hello")
+    e.state.pendingInput.macroState.registers['a'] = @["x"]
+    e.map(EditorMode.Normal, "a", "d d")
+
+    e.press("@", "a")
+
+    check e.activeBuffer.getLine(0) == "ello"
+
+  test "a held key that begins a built-in sequence takes the next key at once":
+    # Vim 9.2 with `nmap gx …`: `gg` goes to the first line.
+    let e = createEditorForMappings("abc\ndef\nghi")
+    e.map(EditorMode.Normal, "g x", "d d")
+
+    e.press("G", "g", "g")
+
+    check not e.keyRouter.isHoldingKeys
+    check e.cursor.line == 0
+    check e.activeBuffer.len == 3
+
+  test "the second key of a built-in sequence is not mapped":
+    # Vim 9.2 with `nnoremap _ dd`: `g_` goes to the last non-blank.
+    let e = createEditorForMappings("abc  ")
+    e.map(EditorMode.Normal, "_", "d d")
+
+    e.press("g", "_")
+
+    check e.cursor == BufferPosition(line: 0, column: 2)
+    check e.activeBuffer.getLine(0) == "abc  "
+
+  test "the key after Ctrl-w is not mapped":
+    # Vim 9.2 with `nnoremap j dd`: `<C-w>j` goes to the window below.
+    let e = createEditorForMappings("abc\ndef")
+    e.map(EditorMode.Normal, "j", "d d")
+    check e.hsplit().isOk
+    e.press("C-w", "k")
+    let upper = e.windowManager.activeWindowIndex
+
+    e.press("C-w", "j")
+
+    check e.windowManager.activeWindowIndex != upper
+    check e.activeBuffer.len == 2
+
+  test "the character of a text object is not mapped":
+    # Vim 9.2 with `nnoremap w b`: `diw` deletes the word.
+    let e = createEditorForMappings("abc def")
+    e.map(EditorMode.Normal, "w", "b")
+
+    e.press("d", "i", "w")
+
+    check e.activeBuffer.getLine(0) == " def"
+
+  test "the first key of a right-hand side that starts with its left-hand side is not mapped again":
+    # Vim 9.2 with `nmap a ab`: `a` appends a b.
+    let e = createEditorForMappings("abc")
+    e.map(EditorMode.Normal, "a", "a b", noremap = false)
+
+    e.press("a")
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(0) == "abbc"
+
+  test "held keys a mapping starting with its left-hand side holds again go on":
+    # Vim 9.2 with `nmap a ab` and `nmap abc G`: `ax` types bx after the a.
+    let e = createEditorForMappings("abc")
+    e.map(EditorMode.Normal, "a", "a b", noremap = false)
+    e.map(EditorMode.Normal, "a b c", "G")
+
+    e.press("a", "x")
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(0) == "abxbc"
+
+  test "held keys that keep breaking the mapping they start again end as recursive":
+    # Vim 9.2 with `nmap a Qb`, `nmap Q a` and `nmap abc G`: `ax` gives E223,
+    # then x deletes the a.
+    let e = createEditorForMappings("abc")
+    e.map(EditorMode.Normal, "a", "Q b", noremap = false)
+    e.map(EditorMode.Normal, "Q", "a", noremap = false)
+    e.map(EditorMode.Normal, "a b c", "G")
+
+    e.press("a", "x")
+
+    check "recursive mapping" in e.state.statusMessage
+    check e.activeBuffer.getLine(0) == "bc"
+    check e.keyRouter.mapExpandDepth == 0
+    check not e.keyRouter.isHoldingKeys
+
+  test "a typed key held with one that fails still runs":
+    # Vim 9.2 with `nmap na G`: `njx` gives E35, then j and x run.
+    let e = createEditorForMappings("abc\ndef\nghi")
+    e.map(EditorMode.Normal, "n a", "G")
+
+    e.press("n", "j", "x")
+
+    check e.cursor.line == 1
+    check e.activeBuffer.getLine(1) == "ef"
+
+  test "a typed key held after a mapping that fails still runs":
+    # Vim 9.2 with `nmap a n` and `nmap ab G`: `ajx` gives E35, then j and x run.
+    let e = createEditorForMappings("abc\ndef\nghi")
+    e.map(EditorMode.Normal, "a", "n")
+    e.map(EditorMode.Normal, "a b", "G")
+
+    e.press("a", "j", "x")
+
+    check e.cursor.line == 1
+    check e.activeBuffer.getLine(1) == "ef"
+
+  test "a leading command mapping that cannot run here lets its key go unmapped":
+    # As when it matches at once: a motion cannot run in a viewer.
+    let e = createEditorForMappings("")
+    e.state.mode = EditorMode.Filer
+    var filerState =
+      FilerState(currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false)
+    for i in 0 ..< 3:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
+    e.map(EditorMode.Filer, "j", "move-down")
+    e.map(EditorMode.Filer, "j k", "window-prev")
+
+    e.press("j", "j")
+
+    check e.activeWindow.modeState.filer.selectedIndex == 1
+
+  test "a noremap key after a key a register left held lets it go first":
+    # Vim 9.2 with `nmap ja dd`, @q = j and `nnoremap Z @qa`: Z runs j, then a.
+    let e = createEditorForMappings("one\ntwo\nthree")
+    e.state.pendingInput.macroState.registers['q'] = @["j"]
+    e.map(EditorMode.Normal, "j a", "d d")
+    e.map(EditorMode.Normal, "Z", "@ q a")
+
+    e.press("Z")
+
+    check not e.keyRouter.isHoldingKeys
+    check e.state.mode == EditorMode.Insert
+    check e.cursor == BufferPosition(line: 1, column: 1)
+    check e.activeBuffer.len == 3
+
+  test "keys the timeout lets go can be held again and wait anew":
+    # Vim 9.2 with `nmap jkx G` and `nmap kd dd`: after `jk` the j runs at the
+    # timeout, and the k one timeout later.
+    let e = createEditorForMappings("one\ntwo\nthree")
+    e.map(EditorMode.Normal, "j k x", "G")
+    e.map(EditorMode.Normal, "k d", "d d")
+
+    e.press("j", "k")
+    check e.handleKeyMappingTimeout()
+
+    check e.cursor.line == 1
+    check e.keyRouter.isHoldingKeys
+    check e.keyRouter.nextTimeoutMs() > 0
+
+    check e.handleKeyMappingTimeout()
+
+    check e.cursor.line == 0
+    check not e.keyRouter.isHoldingKeys
+    check e.activeBuffer.len == 3
