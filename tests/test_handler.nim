@@ -6199,12 +6199,12 @@ suite "handleInterrupt - Visual":
     e.state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
-    e.state.pendingInput.pendingRegister = some('a')
+    e.keyRouter.registry.sequenceState.register = some('a')
 
     check e.handleInterrupt()
 
     check e.state.mode == EditorMode.Normal
-    check e.state.pendingInput.pendingRegister.isNone
+    check e.keyRouter.registry.sequenceState.register.isNone
 
   proc typeChars(e: Editor, keys: string) =
     for key in keys:
@@ -7739,3 +7739,264 @@ suite "handleKeyCombo - the mappings come before the layers that run a key":
       # Insert mode pastes at the cursor, after the j let go.
       check not e.keyRouter.isHoldingKeys
       check e.activeBuffer.getLine(0) == "jXYabc"
+
+suite "handleKeyCombo - the register named for a command, as Vim's regname":
+  # Vim drops the register after a command that neither starts nor finishes an
+  # operator (normal_cmd). Expectations are Vim 9.2's.
+  proc createEditorForRegisters(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc register(e: Editor, name: char): string =
+    e.state.registers.getRegisterContent(name)
+
+  test "a motion drops it":
+    let e = createEditorForRegisters("abc\ndef")
+
+    e.press("\"", "a", "j", "x")
+
+    check e.register('a') == ""
+    check e.register('"') == "d"
+
+  test "a text object that fails drops it":
+    let e = createEditorForRegisters("abc def")
+
+    e.press("\"", "b", "c", "i", "q", "x")
+
+    check e.register('b') == ""
+    check e.register('"') == "a"
+    check e.activeBuffer.getLine(0) == "bc def"
+
+  test "a special key that ends a text object is used up and drops it":
+    let e = createEditorForRegisters("abc def")
+    e.press("l", "l", "l")
+
+    e.press("\"", "b", "d", "i", "Left", "x")
+
+    check e.register('b') == ""
+    check e.register('"') == " "
+    check e.activeBuffer.getLine(0) == "abcdef"
+
+  test "stopping a recording drops it":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("q", "a", "x", "\"", "a", "q", "x")
+
+    check e.state.pendingInput.macroState.registers['a'] == @["x", "\"", "a"]
+    check e.register('a') == ""
+    check e.register('"') == "b"
+
+  test "entering Visual drops it":
+    let e = createEditorForRegisters("abc")
+
+    e.press("\"", "a", "v", "l", "y")
+
+    check e.register('a') == ""
+    check e.register('"') == "ab"
+
+  test "Visual mode names a register as Normal mode does":
+    let e = createEditorForRegisters("abc")
+
+    e.press("v", "l", "\"", "a", "y")
+
+    check e.register('a') == "ab"
+
+  test "naming it again keeps it":
+    let e = createEditorForRegisters("abc")
+
+    e.press("\"", "a", "\"", "a", "x")
+
+    check e.register('a') == "a"
+
+  test "a count keeps it":
+    let e = createEditorForRegisters("abcd")
+
+    e.press("\"", "a", "3", "x")
+
+    check e.register('a') == "abc"
+
+  test "a macro the command runs meets no register":
+    let e = createEditorForRegisters("abc")
+    e.state.pendingInput.macroState.registers['q'] = @["x"]
+
+    e.press("\"", "a", "@", "q")
+
+    check e.register('a') == ""
+    check e.register('"') == "a"
+
+  test "Insert resumes after a Ctrl-o command that drops it":
+    let e = createEditorForRegisters("abc\nxyz")
+
+    e.press("i", "C-o", "\"", "a", "j", "x")
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(1) == "xxyz"
+    check e.register('a') == ""
+
+  test "a special key that ends a Visual text object is used up":
+    let e = createEditorForRegisters("abc def")
+    e.press("l", "l", "l")
+
+    e.press("v", "i", "Left")
+
+    check e.state.mode == EditorMode.Visual
+    check e.cursor.column == 3
+
+  test "a count before it carries over to the command":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("3", "\"", "a", "x")
+
+    check e.register('a') == "abc"
+    check e.activeBuffer.getLine(0) == "def"
+
+  test "a count before it multiplies the count after it":
+    let e = createEditorForRegisters("abcdefghij")
+
+    e.press("3", "\"", "a", "2", "x")
+
+    check e.register('a') == "abcdef"
+
+  test "naming another register keeps the counts":
+    let e = createEditorForRegisters("abcdefghij")
+
+    e.press("\"", "a", "2", "\"", "b", "3", "x")
+
+    check e.register('a') == ""
+    check e.register('b') == "abcdef"
+
+  test "a count before it reaches the operator":
+    let e = createEditorForRegisters("a b c d e f g h")
+
+    e.press("3", "\"", "a", "d", "2", "w")
+
+    check e.register('a') == "a b c d e f "
+    check e.activeBuffer.getLine(0) == "g h"
+
+  test "a special key as the name drops the one named before":
+    let e = createEditorForRegisters("abcdef")
+    e.press("l", "l")
+
+    e.press("\"", "a", "\"", "Left")
+    check e.cursor.column == 2
+
+    e.press("x")
+    check e.register('a') == ""
+    check e.register('"') == "c"
+
+  test "an invalid name drops the one named before":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("\"", "a", "\"", "!")
+    check e.state.statusMessage == "Invalid register"
+
+    e.press("x")
+    check e.register('a') == ""
+    check e.register('"') == "a"
+
+  test "a key with no binding drops it and the count":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("\"", "a", "F5", "x")
+    check e.register('a') == ""
+    check e.register('"') == "a"
+
+    e.press("3", "F5", "x")
+    check e.activeBuffer.getLine(0) == "cdef"
+
+  test "a key with no binding in Visual drops it and the count":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("v", "l", "\"", "a", "F5", "y")
+    check e.register('a') == ""
+    check e.register('"') == "ab"
+
+    e.press("v", "l", "3", "F5", "l")
+    check e.cursor.column == 2
+
+  test "a Visual binding that VisualLine falls back to runs with it":
+    let e = createEditorForRegisters("abc\ndef")
+    e.keyBindingRegistry.bindKey(EditorMode.Visual, "Z", "visual-yank")
+
+    e.press("V", "\"", "a", "Z")
+
+    check e.state.registers.isRegisterLinewise('a')
+    check e.state.registers.getRegister('a').buffer[0] == "abc"
+
+  test "a special key as an operand cancels the operator":
+    let e = createEditorForRegisters("abc def")
+
+    e.press("d", "f", "Left", "w")
+
+    check e.activeBuffer.getLine(0) == "abc def"
+    check e.cursor.column == 4
+
+  test "naming one while an operator waits cancels the operator":
+    let e = createEditorForRegisters("abc def")
+
+    e.press("d", "\"", "a", "w")
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(0) == "awbc def"
+    check e.register('a') == ""
+
+  test "Escape after it in Visual drops it and stays in Visual":
+    let e = createEditorForRegisters("abc")
+
+    e.press("v", "\"", "a", "Escape")
+    check e.state.mode == EditorMode.Visual
+
+    e.press("y")
+    check e.register('a') == ""
+    check e.register('"') == "a"
+
+  test "Ctrl-c after it or a count leaves Visual":
+    for prefix in [@["\"", "a"], @["3"]]:
+      let e = createEditorForRegisters("abc")
+
+      e.press("v")
+      e.press(prefix)
+      e.press("C-c")
+
+      check e.state.mode == EditorMode.Normal
+
+  test "Escape and Ctrl-c that end a Visual text object stay in Visual":
+    for key in ["Escape", "C-c"]:
+      let e = createEditorForRegisters("abc def")
+      e.press("l")
+
+      e.press("v", "i", key)
+
+      check e.state.mode == EditorMode.Visual
+
+  test "a mapping after it runs with it":
+    let e = createEditorForRegisters("abc\ndef")
+    let error = e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "X", "d d")
+    check error.len == 0
+
+    e.press("\"", "a", "X")
+
+    check e.state.registers.isRegisterLinewise('a')
+    check e.state.registers.getRegister('a').buffer[0] == "abc"
+    check e.activeBuffer.getLine(0) == "def"
+
+  test "Insert waits for the command after it from Ctrl-o":
+    let e = createEditorForRegisters("abcdef")
+    check e.state.registers.setNamedRegister('a', "XY", false).isOk
+    e.state.registers.setYankedRegister("Q", false)
+
+    e.press("i", "C-o", "\"", "a", "p")
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(0) == "aXYbcdef"

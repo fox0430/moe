@@ -31,10 +31,10 @@ import std/[monotimes, options, strutils, tables, times]
 
 import pkg/results
 
-import config, clipboard_backend, logger
+import config, clipboard_backend, logger, register_names
 import types/registers_types
 
-export registers_types
+export registers_types, register_names
 
 proc initRegisters*(): Registers =
   ## Initialize a new register set
@@ -68,35 +68,6 @@ proc setClipboardTool*(r: Registers, tool: ClipboardTool) =
   r.primaryReadOutcome = croNotAttempted
   r.primaryReadError = ""
   r.primaryReadValue = ""
-
-proc isNamedRegisterName*(c: char): bool =
-  ## Check if character is a valid named register name (a-z or A-Z)
-  c in {'a' .. 'z', 'A' .. 'Z'}
-
-proc isNumberRegisterName*(c: char): bool =
-  ## Check if character is a valid number register name (0-9)
-  c in {'0' .. '9'}
-
-proc isSmallDeleteRegisterName*(c: char): bool =
-  ## Check if character is the small delete register name (-)
-  c == '-'
-
-proc isPrimarySelectionRegisterName*(c: char): bool =
-  ## Check if character is the primary selection register name (*)
-  c == '*'
-
-proc isClipboardSelectionRegisterName*(c: char): bool =
-  ## Check if character is the clipboard selection register name (+, ~)
-  c in {'+', '~'}
-
-proc isClipboardRegisterName*(c: char): bool =
-  ## Check if character is any clipboard register name (*, +, ~)
-  c.isPrimarySelectionRegisterName or c.isClipboardSelectionRegisterName
-
-proc isValidRegisterName*(c: char): bool =
-  ## Check if character is any valid register name
-  c.isNamedRegisterName or c.isNumberRegisterName or c.isSmallDeleteRegisterName or
-    c.isClipboardRegisterName or c == '"'
 
 proc isEmpty*(r: Register): bool =
   ## Check if register is empty.
@@ -314,6 +285,24 @@ proc setClipboardRegister*(r: Registers, name: char, content: string, isLine: bo
 proc setClipboardRegister*(r: Registers, content: string, isLine: bool) =
   ## Set clipboard register (defaults to CLIPBOARD selection '+')
   r.setClipboardRegister('+', content, isLine)
+
+proc storeYanked*(r: Registers, name: Option[char], content: string, isLine: bool) =
+  ## Store yanked text in the register `"x` named, else in the yank register.
+  if name.isSome and name.get.isNamedRegisterName:
+    discard r.setNamedRegister(name.get, content, isLine)
+  elif name.isSome and name.get.isClipboardRegisterName:
+    r.setClipboardRegister(name.get, content, isLine)
+  else:
+    r.setYankedRegister(content, isLine)
+
+proc storeDeleted*(r: Registers, name: Option[char], content: string, isLine: bool) =
+  ## Store deleted text in the register `"x` named, else in the delete registers.
+  if name.isSome and name.get.isNamedRegisterName:
+    discard r.setNamedRegister(name.get, content, isLine)
+  elif name.isSome and name.get.isClipboardRegisterName:
+    r.setClipboardRegister(name.get, content, isLine)
+  else:
+    r.setDeletedRegister(content, isLine)
 
 proc setRegister*(
     r: Registers, name: char, content: string, isLine: bool

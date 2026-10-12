@@ -441,11 +441,9 @@ proc executeCommand*(
       let op = ctx.state.pendingInput.pendingOperator
       ctx.state.pendingInput.pendingOperator = none(PendingOperator)
       if cmd.targetChar.len != 1 or cmd.targetChar[0] notin {'a' .. 'z'}:
-        ctx.state.pendingInput.pendingRegister = none(char)
         return err("Invalid mark (use a-z)")
       let name = cmd.targetChar[0]
       if cmd.operatorType == "mark-set":
-        ctx.state.pendingInput.pendingRegister = none(char)
         if op.isSome:
           return err("Mark setting is not a motion")
         ctx.buffer.namedMarks[name] = some(ctx.cursor)
@@ -465,7 +463,6 @@ proc executeCommand*(
             )
           )
         return r
-      ctx.state.pendingInput.pendingRegister = none(char)
       let dest = ctx.namedMarkPosition(name)
       if dest.isErr:
         return err(dest.error)
@@ -627,6 +624,11 @@ proc executeCommand*(
       return ok(())
     of "macro-record":
       return startMacroRecording(ctx, cmd.targetChar)
+    of "register-select":
+      # The key router keeps a valid `"x` as a prefix of the next command, so
+      # only an invalid name comes here. Vim beeps and runs the keys after it.
+      ctx.state.statusMessage = "Invalid register"
+      return ok(())
     else:
       return Result[(), string].err "Unknown operator type: " & cmd.operatorType
   of ctAction, ctTextObject, ctOperator, ctCustom:

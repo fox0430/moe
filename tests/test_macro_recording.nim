@@ -333,7 +333,6 @@ suite "q after an operator":
     let e = newTestEditor("abc def")
     e.press("\"", "b", "d", "q", "x")
 
-    check e.state.pendingInput.pendingRegister.isNone
     check e.state.registers.getNamedRegister('b').buffer.len == 0
     check e.activeBuffer.getLine(0) == "bc def"
 

@@ -67,46 +67,16 @@ proc rollbackPasteOnException*(
     )
   err("Paste failed: " & excMsg)
 
-## Helper for register dispatch
-## These helpers check pendingRegister and route content to the correct register.
-
 proc storeYankedText*(ctx: CommandContext, text: string, isLine: bool) =
-  ## Store yanked text in the appropriate register, respecting pendingRegister.
-  ## Also writes to the system clipboard when appropriate.
-  if ctx.state.registers.isNil:
-    return
-
-  if ctx.state.pendingInput.pendingRegister.isSome and
-      ctx.state.pendingInput.pendingRegister.get != '\0':
-    let regName = ctx.state.pendingInput.pendingRegister.get
-    if regName.isNamedRegisterName:
-      discard ctx.state.registers.setNamedRegister(regName, text, isLine)
-    elif regName.isClipboardRegisterName:
-      ctx.state.registers.setClipboardRegister(regName, text, isLine)
-    else:
-      ctx.state.registers.setYankedRegister(text, isLine)
-    ctx.state.pendingInput.pendingRegister = none(char)
-  else:
-    ctx.state.registers.setYankedRegister(text, isLine)
+  ## Store yanked text in the register this command names, else the yank register.
+  if not ctx.state.registers.isNil:
+    ctx.state.registers.storeYanked(ctx.register, text, isLine)
 
 proc storeDeletedText*(ctx: CommandContext, text: string, isLine: bool) =
-  ## Store deleted text in the appropriate register, respecting pendingRegister.
-  ## Also writes to the system clipboard when appropriate.
-  if ctx.state.registers.isNil:
-    return
-
-  if ctx.state.pendingInput.pendingRegister.isSome and
-      ctx.state.pendingInput.pendingRegister.get != '\0':
-    let regName = ctx.state.pendingInput.pendingRegister.get
-    if regName.isNamedRegisterName:
-      discard ctx.state.registers.setNamedRegister(regName, text, isLine)
-    elif regName.isClipboardRegisterName:
-      ctx.state.registers.setClipboardRegister(regName, text, isLine)
-    else:
-      ctx.state.registers.setDeletedRegister(text, isLine)
-    ctx.state.pendingInput.pendingRegister = none(char)
-  else:
-    ctx.state.registers.setDeletedRegister(text, isLine)
+  ## Store deleted text in the register this command names, else the delete
+  ## registers.
+  if not ctx.state.registers.isNil:
+    ctx.state.registers.storeDeleted(ctx.register, text, isLine)
 
 proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
   ## Put the cursor on the first non-blank of `lineNum` (vim's `^`), clamped to
@@ -145,7 +115,6 @@ proc refuseOnRawBytes(ctx: CommandContext, operatorType: OperatorType): Option[s
   if action.isNone or ctx.buffer.allowsTextTransforms:
     return none(string)
 
-  ctx.state.pendingInput.pendingRegister = none(char)
   some(rawBytesRejection(action.get))
 
 proc applyCaseOperator(
@@ -248,9 +217,6 @@ proc executeOperatorOnRange*(
     # spans no characters, so every operator is a no-op and the registers stay
     # untouched. Only `c` still acts -- it drops into Insert between the
     # delimiters -- so OpChange falls through to its branch below.
-    # The operator command still completes, so consume any pending register
-    # prefix (e.g. `"ayit`) rather than leaking it into the next command.
-    ctx.state.pendingInput.pendingRegister = none(char)
     return ok(())
 
   # Vim's operators drop curswant, even ones that leave the cursor and text.
@@ -261,7 +227,6 @@ proc executeOperatorOnRange*(
     # Yank (copy) the range
     let text = extractRangeText(ctx.buffer, range)
 
-    # Store in register system (respects pendingRegister)
     storeYankedText(ctx, text, range.isLinewise)
 
     let lineCount =
@@ -326,12 +291,6 @@ proc executeOperatorOnRange*(
   of OpChange:
     # Change the range (delete and enter insert mode)
     let text = extractRangeText(ctx.buffer, range)
-
-    if range.isEmpty:
-      # Empty change still completes the operator command (it drops into Insert
-      # between the delimiters), so consume any pending register prefix rather
-      # than leaking it into the next command.
-      ctx.state.pendingInput.pendingRegister = none(char)
 
     # Begin transaction for all change operations (delete + insert mode input)
     let transactionResult = ctx.buffer.beginTransaction("Change operation")
@@ -488,7 +447,10 @@ proc setPendingOperator*(
     ctx.motionController.viewportManager.viewport.topLine
   ctx.state.pendingInput.pendingOperator = some(
     PendingOperator(
-      operatorType: operatorType, operatorCount: count, startPos: ctx.cursor
+      operatorType: operatorType,
+      operatorCount: count,
+      startPos: ctx.cursor,
+      register: ctx.register,
     )
   )
   ctx.state.statusMessage = statusMsg
@@ -512,7 +474,6 @@ proc applyOperatorToMark*(
   ## Apply an operator to a named mark; backtick motions exclude the endpoint.
   let dest = ctx.namedMarkPosition(name)
   if dest.isErr:
-    ctx.state.pendingInput.pendingRegister = none(char)
     return err(dest.error)
   var range = calculateOperatorRange(
     ctx.buffer, op.startPos, dest.get, if linewise: Motion.Down else: Motion.Right

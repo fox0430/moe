@@ -549,6 +549,7 @@ type
     operatorType*: OperatorType
     operatorCount*: int # Count before operator (2d3w の "2")
     startPos*: BufferPosition # Position where operator was invoked
+    register*: Option[char] # Register named by `"x` before the operator
 
   TextObjectKind* = enum
     ## Types of text objects
@@ -904,7 +905,6 @@ type
     macroState*: MacroState
     pendingOperator*: Option[PendingOperator]
     pendingTextObject*: Option[PendingTextObject]
-    pendingRegister*: Option[char] # "a-style register selector
     pendingCommand*: PendingCommand # Ctrl-W etc.
 
   InputState* = object ## Command-line / search input state grouped together.

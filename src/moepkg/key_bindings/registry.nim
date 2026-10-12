@@ -92,6 +92,7 @@ type
     description*: string
     count*: int ## Numeric prefix (e.g., 2 in "2w"), defaults to 1
     hasCount*: bool ## True iff the user typed a numeric prefix; lets `1G` mean line 1.
+    register*: Option[char] ## Register named by a `"x` prefix
     case kind*: CommandType
     of ctMotion:
       motion*: Motion
@@ -124,6 +125,11 @@ type
       ## Non-empty iff a count prefix is active — there is deliberately no
       ## separate bool; "0" alone is never accumulated (vim treats it as a
       ## command), so `len > 0` is the single source of truth.
+    register*: Option[char] ## Register named by `"x` for the next command
+    registerCount*: int
+      ## Count typed before `"x`, 0 when none. Multiplies the count typed
+      ## after it, as Vim's opcount does (`3"a2x` deletes 6).
+    unbound*: bool ## The last key had no binding and ran nothing
 
   ## Kind of runtime key mapping
   RuntimeMappingKind* = enum

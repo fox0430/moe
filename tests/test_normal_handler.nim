@@ -522,8 +522,11 @@ suite "NormalModeHandler - Register Selection":
     let r = handler.handleNormalModeKey(buf, state, viewport, aKey)
 
     check r.kind == nmrHandled
-    check state.pendingInput.pendingRegister.isSome
-    check state.pendingInput.pendingRegister.get == 'a'
+    # The router holds it until the next command, which takes it.
+    check handler.keyBindingRegistry.sequenceState.register == some('a')
+    let lKey = KeyCombo(isSpecial: false, char: "l", modifiers: {})
+    discard handler.handleNormalModeKey(buf, state, viewport, lKey)
+    check handler.keyBindingRegistry.sequenceState.register.isNone
 
   test "Register selection cancelled on invalid register":
     let buf = newTextBuffer()
@@ -539,7 +542,8 @@ suite "NormalModeHandler - Register Selection":
     let r = handler.handleNormalModeKey(buf, state, viewport, bangKey)
 
     check r.kind == nmrHandled
-    check state.pendingInput.pendingRegister.isNone
+    check state.statusMessage == "Invalid register"
+    check handler.keyBindingRegistry.sequenceState.register.isNone
 
   test "Register selection cancelled on special key":
     let buf = newTextBuffer()
@@ -555,7 +559,7 @@ suite "NormalModeHandler - Register Selection":
     let r = handler.handleNormalModeKey(buf, state, viewport, escKey)
 
     check r.kind == nmrHandled
-    check state.pendingInput.pendingRegister.isNone
+    check not handler.keyBindingRegistry.hasActiveSequence()
 
 suite "NormalModeHandler - Special Results":
   test "nmrPassthrough(ptSaveAndQuit) result":
@@ -1685,7 +1689,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let r2 = handler.handleNormalModeKey(buf, state, viewport, aKey)
     check r2.kind == nmrPlaybackMacro
 
-  test "register-select (\"a) sets pendingRegister":
+  test "register-select (\"a) names the register of the next command":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1701,7 +1705,12 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let aKey = KeyCombo(isSpecial: false, char: "a")
     let r2 = handler.handleNormalModeKey(buf, state, viewport, aKey)
     check r2.kind == nmrHandled
-    check state.pendingInput.pendingRegister == some('a')
+    check handler.keyBindingRegistry.sequenceState.register == some('a')
+
+    let xKey = KeyCombo(isSpecial: false, char: "x")
+    discard handler.handleNormalModeKey(buf, state, viewport, xKey)
+    check state.registers.getNamedRegister('a').getContent() == "H"
+    check not handler.keyBindingRegistry.hasActiveSequence()
 
   test "macro recording rejects a multi-character register name":
     # "ab" must not be read as register 'a' via its first byte.
@@ -1750,7 +1759,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let abKey = KeyCombo(isSpecial: false, char: "ab")
     let r2 = handler.handleNormalModeKey(buf, state, viewport, abKey)
     check r2.kind == nmrHandled
-    check state.pendingInput.pendingRegister.isNone
+    check handler.keyBindingRegistry.sequenceState.register.isNone
 
   test "macro recording rejects single multibyte and empty register names":
     for ch in @["あ", "é", ""]:
@@ -1791,7 +1800,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
       let key = KeyCombo(isSpecial: false, char: ch)
       let r2 = handler.handleNormalModeKey(buf, state, viewport, key)
       check r2.kind == nmrHandled
-      check state.pendingInput.pendingRegister.isNone
+      check handler.keyBindingRegistry.sequenceState.register.isNone
 
   test "quickrun (\\r) returns ptQuickRun":
     let buf = newTextBuffer()
@@ -2933,22 +2942,22 @@ block namedMarks:
     doAssert press(handler, buf, state, "j").kind == nmrHandled
     doAssert state.cursor.line == 1
 
-  block markCommandsConsumePendingRegister:
+  block markCommandsConsumeRegister:
     let buf = newTextBuffer()
     doAssert buf.insertText(BufferPosition(), "one\ntwo").isOk
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.cursor.line = 1
     doAssert press(handler, buf, state, "\"amb").kind == nmrHandled
-    doAssert state.pendingInput.pendingRegister.isNone
+    doAssert not handler.keyBindingRegistry.hasActiveSequence()
     state.cursor.line = 0
     doAssert press(handler, buf, state, "\"c'b").kind == nmrHandled
-    doAssert state.pendingInput.pendingRegister.isNone
+    doAssert not handler.keyBindingRegistry.hasActiveSequence()
     doAssert state.cursor.line == 1
     doAssert press(handler, buf, state, "\"c'z").kind == nmrError
-    doAssert state.pendingInput.pendingRegister.isNone
+    doAssert not handler.keyBindingRegistry.hasActiveSequence()
 
-  block markOperatorsUsePendingRegister:
+  block markOperatorsUseRegister:
     for operator in ["d", "y", "c"]:
       for motion in ["'", "`"]:
         let buf = newTextBuffer("one\ntwo\nthree")
@@ -2964,17 +2973,17 @@ block namedMarks:
         doAssert state.registers.getNamedRegister('q').getContent() == expected,
           operator & motion & repr(state.registers.getNamedRegister('q').getContent())
         doAssert state.registers.isRegisterLinewise('q') == (motion == "'")
-        doAssert state.pendingInput.pendingRegister.isNone
+        doAssert not handler.keyBindingRegistry.hasActiveSequence()
         doAssert state.pendingInput.pendingOperator.isNone
 
-  block failedMarkOperatorsConsumePendingRegister:
+  block failedMarkOperatorsConsumeRegister:
     for motion in ["'", "`"]:
       for name in ["z", "1"]:
         let buf = newTextBuffer("one\ntwo")
         let handler = createTestHandler(buf)
         let state = createTestState()
         doAssert press(handler, buf, state, "\"qd" & motion & name).kind == nmrError
-        doAssert state.pendingInput.pendingRegister.isNone
+        doAssert not handler.keyBindingRegistry.hasActiveSequence()
         doAssert state.pendingInput.pendingOperator.isNone
         doAssert buf.getLine(0) == "one"
         doAssert buf.len == 2

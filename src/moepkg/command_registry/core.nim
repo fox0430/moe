@@ -140,6 +140,8 @@ type
     viewport*: ViewPort
     motionController*: MotionController
     keyBindingRegistry*: key_bindings.KeyBindingRegistry
+    register*: Option[char]
+      ## Register named by `"x` for this command, or for the operator it ends
 
   ## Function signature for command handlers
   CommandHandler* =
@@ -159,6 +161,27 @@ type
     commands*: Table[string, RegisteredCommand]
     builtinCommands*: array[BuiltinCommandId, RegisteredCommand]
       ## Fast access for builtins
+
+proc newCommandContext*(
+    buffer: core.TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    motionController: MotionController,
+    keyBindingRegistry: key_bindings.KeyBindingRegistry,
+    register = none(char),
+): CommandContext =
+  ## Context for a command `"x` named `register` for. A command that ends a
+  ## waiting operator uses the operator's register (`"adw`): a `"` typed while
+  ## the operator waits cancels it, so the command names none of its own.
+  let op = state.pendingInput.pendingOperator
+  CommandContext(
+    buffer: buffer,
+    state: state,
+    viewport: viewport,
+    motionController: motionController,
+    keyBindingRegistry: keyBindingRegistry,
+    register: if op.isSome: op.get.register else: register,
+  )
 
 proc cursor*(ctx: CommandContext): var BufferPosition {.inline.} =
   ## Cursor position forwarded to EditorState (which delegates to activeWindow)

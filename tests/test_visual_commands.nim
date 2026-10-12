@@ -386,12 +386,10 @@ suite "Visual Commands - visualYank":
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
-    state.pendingInput.pendingRegister = some('a')
 
-    visualYank(buf, state)
+    visualYank(buf, state, register = some('a'))
 
     check state.registers.getRegisterContent('a') == "hello"
-    check state.pendingInput.pendingRegister.isNone
 
   test "Yank multiline clamps cursor column to line length":
     # When selection starts on a long line and extends downward to a shorter line,
@@ -519,68 +517,60 @@ suite "Visual Commands - visualDelete":
     check state.registers.getNoNamedRegister().getContent() == "bc\nde"
     check state.registers.getNoNamedRegister().isLine == false
 
-  test "Delete charwise selection into named pending register":
+  test "Delete charwise selection into named register":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.pendingInput.pendingRegister = some('a')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
-    visualDelete(buf, state)
+    visualDelete(buf, state, register = some('a'))
 
     check buf.getLine(0) == " world"
     check state.registers.getNamedRegister('a').getContent() == "hello"
-    check state.pendingInput.pendingRegister.isNone
 
-  test "Delete linewise selection into named pending register":
+  test "Delete linewise selection into named register":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     let state = createTestState()
     state.mode = EditorMode.VisualLine
-    state.pendingInput.pendingRegister = some('a')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
 
-    visualDelete(buf, state)
+    visualDelete(buf, state, register = some('a'))
 
     check state.registers.getNamedRegister('a').getContent() == "line 1\nline 2"
     check state.registers.getNamedRegister('a').isLine == true
-    check state.pendingInput.pendingRegister.isNone
 
-  test "Delete blockwise selection into named pending register":
+  test "Delete blockwise selection into named register":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
     discard buf.insertText(BufferPosition(line: 0, column: 3), "\ndef")
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
-    state.pendingInput.pendingRegister = some('a')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 1), vskBlock
     )
 
-    visualDelete(buf, state)
+    visualDelete(buf, state, register = some('a'))
 
     check state.registers.getNamedRegister('a').getContent() == "ab\nde"
-    check state.pendingInput.pendingRegister.isNone
 
-  test "Delete charwise selection into clipboard pending register":
+  test "Delete charwise selection into clipboard register":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.pendingInput.pendingRegister = some('+')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
-    visualDelete(buf, state)
+    visualDelete(buf, state, register = some('+'))
 
     check buf.getLine(0) == " world"
     check state.registers.getClipboardRegister('+').getContent() == "hello"
-    check state.pendingInput.pendingRegister.isNone
 
 suite "Visual Commands - visualReplace character counting":
   test "one replacement character per character, not per byte":
@@ -1350,53 +1340,47 @@ suite "Visual Commands - visualChange":
     check buf.len == 2 # empty line + line 3
     check state.mode == EditorMode.Insert
 
-  test "Change char selection stores deleted text into named pending register and consumes it":
+  test "Change char selection stores deleted text into named register":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.pendingInput.pendingRegister = some('a')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
-    visualChange(buf, state)
+    visualChange(buf, state, register = some('a'))
 
     check buf.getLine(0) == " world"
     check state.registers.getNamedRegister('a').getContent() == "hello"
-    check state.pendingInput.pendingRegister.isNone
 
-  test "Change line selection stores deleted text into named pending register and consumes it":
+  test "Change line selection stores deleted text into named register":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     let state = createTestState()
     state.mode = EditorMode.VisualLine
-    state.pendingInput.pendingRegister = some('a')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
 
-    visualChange(buf, state)
+    visualChange(buf, state, register = some('a'))
 
     check state.registers.getNamedRegister('a').getContent() == "line 1\nline 2"
     check state.registers.getNamedRegister('a').isLine == true
-    check state.pendingInput.pendingRegister.isNone
 
-  test "Change block selection stores deleted text into named pending register and consumes it":
+  test "Change block selection stores deleted text into named register":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
     discard buf.insertText(BufferPosition(line: 0, column: 3), "\ndef")
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
-    state.pendingInput.pendingRegister = some('a')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 1), vskBlock
     )
 
-    visualChange(buf, state)
+    visualChange(buf, state, register = some('a'))
 
     check state.registers.getNamedRegister('a').getContent() == "ab\nde"
-    check state.pendingInput.pendingRegister.isNone
 
   test "Change char selection stores deleted text into unnamed register":
     let buf = newTextBuffer()
@@ -1687,15 +1671,13 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     discard state.registers.setNamedRegister('a', "NAMED", false)
-    state.pendingInput.pendingRegister = some('a')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
-    discard visualPaste(buf, state)
+    discard visualPaste(buf, state, register = some('a'))
 
     check buf.getLine(0) == "NAMED world"
-    check state.pendingInput.pendingRegister.isNone
 
   test "Paste block selection from named register preserves register content":
     let buf = newTextBuffer()
@@ -1705,17 +1687,15 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
     discard state.registers.setNamedRegister('a', "REG_A_CONTENT", false)
-    state.pendingInput.pendingRegister = some('a')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 2), vskBlock
     )
 
-    discard visualPaste(buf, state)
+    discard visualPaste(buf, state, register = some('a'))
 
     # Bug: deleteBlockSelection must NOT overwrite named register 'a'
     # with the deleted block text.
     check state.registers.getNamedRegister('a').getContent() == "REG_A_CONTENT"
-    check state.pendingInput.pendingRegister.isNone
     check state.visualSelection.active == false
 
   test "V-mode paste of linewise empty register replaces line with blank line":
@@ -2806,31 +2786,16 @@ suite "Visual delete - register/buffer atomicity":
     check state.registers.getNumberRegister(1).getContent() == "SEED_LINE\n"
     check buf.getLine(0) == "hello world"
 
-  test "named pending register survives a failed visual delete":
+  test "named register survives a failed visual delete":
     let (buf, state) = newReadOnlyState()
     state.mode = EditorMode.Visual
-    state.pendingInput.pendingRegister = some('a')
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
 
-    visualDelete(buf, state)
+    visualDelete(buf, state, register = some('a'))
 
     check state.registers.getNamedRegister('a').getContent() == "SEED_A"
-
-  test "pending register selector is consumed even when the delete fails":
-    let (buf, state) = newReadOnlyState()
-    state.mode = EditorMode.Visual
-    state.pendingInput.pendingRegister = some('a')
-    state.selectVisual(
-      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
-    )
-
-    visualDelete(buf, state)
-
-    # The selector is captured and cleared before the edit, so a failed delete
-    # must not leak it into the next yank/delete.
-    check state.pendingInput.pendingRegister.isNone
 
   test "charwise visual paste keeps registers when the delete fails":
     let (buf, state) = newReadOnlyState()

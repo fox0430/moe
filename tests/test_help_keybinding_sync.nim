@@ -239,6 +239,8 @@ suite "help / keybinding consistency":
         "switch-to-normal",
         # VisualBlock-only block append.
         "visual-block-append",
+        # Register prefix: documented with an "any" placeholder (`" any`).
+        "register-select",
       ]
     )
     let allVisual =

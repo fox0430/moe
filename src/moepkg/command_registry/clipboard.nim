@@ -88,7 +88,7 @@ proc handleClipboardCut*(ctx: CommandContext): Result[(), string] =
   let sel = ctx.state.operandSelection(ctx.buffer)
   # Copy first; a copy failure must not cancel the delete half.
   let copyResult = copySelection(ctx, sel)
-  visualDelete(ctx.buffer, ctx.state, sel)
+  visualDelete(ctx.buffer, ctx.state, sel, ctx.register)
 
   if copyResult.isErr:
     return copyResult

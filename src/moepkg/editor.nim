@@ -225,7 +225,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         ),
         pendingOperator: none(PendingOperator),
         pendingTextObject: none(PendingTextObject),
-        pendingRegister: none(char),
       ),
       lastKeyWasEscape: false,
       editState: EditState(

@@ -511,6 +511,9 @@ const VisualModeCommands*: HelpGroup = HelpGroup(
     ),
     HelpEntry(syntax: "q any", description: "Start recording operations for Macros"),
     HelpEntry(syntax: "q", description: "Stop recording operations"),
+    HelpEntry(
+      syntax: "\" any", description: "Use a named register for the next command"
+    ),
     HelpEntry(syntax: "Ctrl-s", description: "Selection Range (LSP)"),
     HelpEntry(syntax: "Esc", description: "Go to Normal mode"),
   ],

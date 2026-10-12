@@ -306,6 +306,7 @@
 | <kbd>**g**</kbd> <kbd>**v**</kbd> | Exchange the selection with the previous Visual area |
 | <kbd>**q**</kbd> <kbd>**Any key**</kbd> | Start recording operations for Macros |
 | <kbd>**q**</kbd> | Stop recording operations |
+| <kbd>**"**</kbd> <kbd>**Any key**</kbd> | Use a named register for the next command |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd> | Selection Range (LSP) |
 | <kbd>**Esc**</kbd> | Go to Normal mode |
 <!-- AUTO-GEN:end VisualMode -->

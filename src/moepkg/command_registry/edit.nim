@@ -73,16 +73,14 @@ proc handlePasteAfter*(
   var registerEmpty: bool
   var usedRegister = '"' # Track register for fallback cache.
 
-  if ctx.state.pendingInput.pendingRegister.isSome and
-      ctx.state.pendingInput.pendingRegister.get != '\0':
+  if ctx.register.isSome:
     # User specified a register with "
-    let regName = ctx.state.pendingInput.pendingRegister.get
+    let regName = ctx.register.get
     usedRegister = regName
     let reg = ctx.state.registers.getRegister(regName)
     pasteText = reg.getContent()
     isFullLine = reg.isLine
     registerEmpty = reg.isEmpty
-    ctx.state.pendingInput.pendingRegister = none(char)
     ctx.state.statusMessage = ""
     logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
   else:
@@ -228,16 +226,14 @@ proc handlePasteBefore*(
   var registerEmpty: bool
   var usedRegister = '"' # Track register for fallback cache.
 
-  if ctx.state.pendingInput.pendingRegister.isSome and
-      ctx.state.pendingInput.pendingRegister.get != '\0':
+  if ctx.register.isSome:
     # User specified a register with "
-    let regName = ctx.state.pendingInput.pendingRegister.get
+    let regName = ctx.register.get
     usedRegister = regName
     let reg = ctx.state.registers.getRegister(regName)
     pasteText = reg.getContent()
     isFullLine = reg.isLine
     registerEmpty = reg.isEmpty
-    ctx.state.pendingInput.pendingRegister = none(char)
     ctx.state.statusMessage = ""
     logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
   else:
@@ -890,7 +886,6 @@ proc handleYankLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
 
   # An empty yankText here means a single empty line was yanked — still valid
   # in Vim (the register holds one blank line, pasteable via p/P).
-  # Store in register system (respects pendingRegister)
   storeYankedText(ctx, yankText, true)
 
   let storedReg = ctx.state.registers.getNoNamedRegister()
@@ -992,7 +987,6 @@ proc handleOperatorYank*(ctx: CommandContext, count: int = 1): Result[(), string
         if lineContent.len == 0 or lineContent[^1] != '\n':
           text.add("\n")
 
-    # Store in register system (respects pendingRegister)
     storeYankedText(ctx, text, true)
 
     # Clear operator state
@@ -1741,6 +1735,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
             operatorType: lastCmd.operator,
             operatorCount: lastCmd.operatorCount,
             startPos: ctx.cursor,
+            register: ctx.register,
           )
         )
         # Save viewport position for restoration after operator
@@ -2361,10 +2356,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
           # The object could not be resolved (e.g. dit outside a tag, dis on a
           # blank line). Discard the pending operator too so a following motion
           # is not silently consumed by a still-armed operator (a stray delete).
-          # Also drop any pending register prefix (e.g. `"adit`) rather than
-          # leaking it into the next command.
           ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-          ctx.state.pendingInput.pendingRegister = none(char)
           return err(rangeResult.error)
 
         let toRange = rangeResult.value
