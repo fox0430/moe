@@ -271,17 +271,6 @@ proc searchMatchAndOperate(
 
   # Get text in the match range
   let selectedText = buffer.getTextInRange(pos, matchEnd)
-  let isMultiLine = pos.line != matchEnd.line
-
-  # Store in register only after the buffer change succeeded (registers are not
-  # covered by the buffer transaction, so a rollback would not undo them)
-  proc storeMatchText() =
-    if op.register.isSome and op.register.get.isNamedRegisterName:
-      discard state.registers.setNamedRegister(op.register.get, selectedText, false)
-    elif op.register.isSome and op.register.get.isClipboardRegisterName:
-      state.registers.setClipboardRegister(op.register.get, selectedText, false)
-    else:
-      state.registers.setDeletedRegister(selectedText, isMultiLine)
 
   case op.operatorType
   of OpDelete, OpChange:
@@ -304,7 +293,9 @@ proc searchMatchAndOperate(
         kind: nmrError, errorMessage: "Transaction failed: " & txr.error
       )
 
-    storeMatchText()
+    # Store in register only after the buffer change succeeded (registers are
+    # not covered by the buffer transaction, so a rollback would not undo them)
+    state.registers.storeDeleted(op.register, selectedText, false)
 
     # Move cursor to start of deleted range and clamp
     state.cursor = pos
@@ -322,7 +313,7 @@ proc searchMatchAndOperate(
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   of OpYank:
     # Yank only - no deletion, move cursor to match start
-    storeMatchText()
+    state.registers.storeYanked(op.register, selectedText, false)
     state.cursor = pos
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   else:

@@ -8000,3 +8000,35 @@ suite "handleKeyCombo - the register named for a command, as Vim's regname":
 
     check e.state.mode == EditorMode.Insert
     check e.activeBuffer.getLine(0) == "aXYbcdef"
+
+  test "a command a mapping names takes it":
+    let e = createEditorForRegisters("abc\ndef\nghi")
+    let error =
+      e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "F2", "move-down")
+    check error.len == 0
+
+    e.press("\"", "a", "F2", "d", "d")
+
+    check e.register('a') == ""
+    check e.state.registers.getRegister('"').buffer[0] == "def"
+
+  test "gn yanks the match into the yank register":
+    let e = createEditorForRegisters("foo bar foo")
+    e.state.input.search.last.pattern = "bar"
+
+    e.press("y", "g", "n")
+
+    check e.register('0') == "bar"
+    check e.register('"') == "bar"
+    check e.register('-') == ""
+
+  test "gn takes the register named for the operator":
+    for op in ["y", "d"]:
+      let e = createEditorForRegisters("foo bar foo")
+      e.state.input.search.last.pattern = "bar"
+
+      e.press("\"", "a", op, "g", "n")
+
+      check e.register('a') == "bar"
+      check e.register('-') == ""
+      check e.register('0') == ""
