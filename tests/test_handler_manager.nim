@@ -202,14 +202,8 @@ proc createVisualTestState(mode: EditorMode): EditorState =
     config: newEditorConfig(),
     pendingInput: PendingInputState(
       macroState: MacroState(
-        isRecording: false,
-        register: '\0',
-        recordedKeys: @[],
         registers: initTable[char, seq[string]](),
         lastRegister: none(char),
-        waitingForRegister: false,
-        commandType: "",
-        pendingCount: 0,
         playbackDepth: 0,
       )
     ),
@@ -354,14 +348,8 @@ proc createBlockVisualTestState(
     config: newEditorConfig(),
     pendingInput: PendingInputState(
       macroState: MacroState(
-        isRecording: false,
-        register: '\0',
-        recordedKeys: @[],
         registers: initTable[char, seq[string]](),
         lastRegister: none(char),
-        waitingForRegister: false,
-        commandType: "",
-        pendingCount: 0,
         playbackDepth: 0,
       )
     ),

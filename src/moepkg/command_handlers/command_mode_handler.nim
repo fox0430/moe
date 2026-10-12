@@ -153,18 +153,8 @@ proc findHistoryMatch(
     i += step
   return -1
 
-proc handleCommandModeKeyCombo*(e: Editor, key: KeyInput): ReplayOutcome =
-  ## Handle a key in command-line mode, with runtime mapping support. A
-  ## mapping's keys and the held keys let go run as keys of their own, so the
-  ## ones after an Enter that ends the command line reach the mode it returns
-  ## to.
-  let routed = e.handlerManager.checkRuntimeKeySeqMapping(
-    e, EditorMode.Command, key, literal = false
-  )
-  if routed.isSome:
-    return routed.get
-
-  let keyCombo = key.combo
+proc runCommandLineKey(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
+  ## Run `keyCombo` on the command line, no mapping applied.
 
   # Handle Escape to exit Command mode and return to previous (base) mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
@@ -419,3 +409,16 @@ proc handleCommandModeKeyCombo*(e: Editor, key: KeyInput): ReplayOutcome =
 
   # Ignore other special keys
   return roContinue
+
+proc handleCommandModeKeyCombo*(e: Editor, key: KeyInput): ReplayOutcome =
+  ## Handle a key in command-line mode, with runtime mapping support. A
+  ## mapping's keys and the held keys let go run as keys of their own, so the
+  ## ones after an Enter that ends the command line reach the mode it returns
+  ## to.
+  let routed = e.handlerManager.checkRuntimeKeySeqMapping(
+    e, EditorMode.Command, key, literal = false
+  )
+  if routed.isSome:
+    return routed.get
+  e.recordingAfter(key.standsFor):
+    result = e.runCommandLineKey(key.combo)

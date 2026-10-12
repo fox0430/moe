@@ -216,7 +216,12 @@ proc handleVisualModeKey*(
   # nothing to say (`rrUnhandled`). Falling back on `rrWaiting` would drive
   # `processKey` a second time and complete a one-key-short sequence early
   # (e.g. a single `g` in VisualBlock firing `gg`).
+  let endsPendingKeys = handler.keyBindingRegistry.hasPendingKeys
   var route = handler.keyBindingRegistry.resolveBuiltin(state.mode, keyCombo)
+  if route.kind == rrUnhandled and endsPendingKeys:
+    # A key that ends an operand wait or a sequence is used up there even when
+    # invalid (`q<Down>`, `gx`), as in Normal mode, so it runs nothing else.
+    return VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
   if route.kind == rrUnhandled and state.mode != EditorMode.Visual:
     route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Visual, keyCombo)
 

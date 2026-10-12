@@ -56,10 +56,14 @@ proc clearSequence*(registry: KeyBindingRegistry) =
   registry.sequenceState.waitingForChar = false
   registry.sequenceState.numericPrefix = ""
 
+proc hasPendingKeys*(registry: KeyBindingRegistry): bool =
+  ## A sequence prefix or an operand wait is pending, so the next key ends it.
+  ## A count alone does not count.
+  registry.sequenceState.keys.len > 0 or registry.sequenceState.waitingForChar
+
 proc hasActiveSequence*(registry: KeyBindingRegistry): bool =
   ## Check if there is an active key sequence in progress
-  registry.sequenceState.keys.len > 0 or registry.sequenceState.waitingForChar or
-    registry.sequenceState.numericPrefix.len > 0
+  registry.hasPendingKeys or registry.sequenceState.numericPrefix.len > 0
 
 proc clearNumericPrefix*(registry: KeyBindingRegistry) =
   ## Clear the accumulated count prefix once a command has consumed it.
@@ -78,6 +82,14 @@ proc isMidSequence*(registry: KeyBindingRegistry): bool =
   ## True while `processKey` holds the first keys of a multi-key sequence
   ## (the `g` of `gg`). Named API for the same reason as `clearNumericPrefix`.
   registry.sequenceState.keys.len > 0
+
+proc awaitOperand*(registry: KeyBindingRegistry, command: Command) =
+  ## Make the next key the operand of `command`, for a command that takes one
+  ## only sometimes (`q` takes a register unless it stops a recording).
+  registry.sequenceState.keys = @[]
+  registry.sequenceState.possibleSequences = @[]
+  registry.sequenceState.pendingCommand = some(command)
+  registry.sequenceState.waitingForChar = true
 
 proc clearAllPending*(registry: KeyBindingRegistry): bool {.discardable.} =
   ## Clear all key-dispatch pending state that Escape should cancel. Currently
@@ -373,7 +385,13 @@ proc combos*(keys: openArray[KeyInput]): seq[KeyCombo] =
 
 proc typedKey*(combo: KeyCombo): KeyInput =
   ## A key the user typed, which mappings may take.
-  KeyInput(combo: combo, remap: true, typed: true)
+  KeyInput(combo: combo, remap: true, typed: true, standsFor: @[combo])
+
+proc standsFor*(keys: openArray[KeyInput]): seq[KeyCombo] =
+  ## The typed keys `keys` stand for together, as the left-hand side of a
+  ## mapping they complete.
+  for k in keys:
+    result.add(k.standsFor)
 
 proc leadingMapping(
     keys: seq[KeyCombo], mappings: seq[RuntimeKeyMapping]

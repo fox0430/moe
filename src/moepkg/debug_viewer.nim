@@ -353,8 +353,7 @@ proc generateDisplayInfo*(
 
 proc generateMacroInfo*(
     lines: var seq[string],
-    isRecording: bool,
-    register: char,
+    recordingRegister: Option[char],
     registersCount: int,
     playbackDepth: int,
     executingDepth: int,
@@ -364,8 +363,14 @@ proc generateMacroInfo*(
   if not enabled:
     return
   lines.addSection("MacroState")
-  lines.addField("isRecording", formatBool(isRecording))
-  lines.addField("register", $register)
+  lines.addField("isRecording", formatBool(recordingRegister.isSome))
+  lines.addField(
+    "register",
+    if recordingRegister.isSome:
+      $recordingRegister.get
+    else:
+      "",
+  )
   lines.addField("registersCount", $registersCount)
   lines.addField("playbackDepth", $playbackDepth)
   lines.addField("executingDepth", $executingDepth)

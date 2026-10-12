@@ -34,8 +34,9 @@ import buffer/[core, edit, undo]
 import command_handlers/visual_commands
 
 import
-  command_registry/[core, operator_engine, clipboard, motion_scroll, visual, edit, misc]
-export core, operator_engine, clipboard, motion_scroll, visual, edit, misc
+  command_registry/
+    [core, operator_engine, clipboard, motion_scroll, visual, edit, misc, macro_record]
+export core, operator_engine, clipboard, motion_scroll, visual, edit, misc, macro_record
 
 const EditCommandIds = [
   "delete.char", "delete.char.before", "delete.line", "delete.word",
@@ -624,6 +625,8 @@ proc executeCommand*(
         return err(exc.msg & " (buffer state may be inconsistent)")
 
       return ok(())
+    of "macro-record":
+      return startMacroRecording(ctx, cmd.targetChar)
     else:
       return Result[(), string].err "Unknown operator type: " & cmd.operatorType
   of ctAction, ctTextObject, ctOperator, ctCustom:
@@ -663,3 +666,4 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
   registry.registerEditCommands()
   registry.registerClipboardCommands()
   registry.registerMiscCommands()
+  registry.registerMacroCommands()

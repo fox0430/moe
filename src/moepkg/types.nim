@@ -277,19 +277,16 @@ type
       # Prefix captured when history navigation started; only entries starting
       # with this prefix are surfaced by Up/Down. Empty means "match any".
 
+  MacroRecording* = object ## One `q<reg>...q` session
+    register*: char # Register (a-z) being recorded to
+    keys*: seq[string] # Typed keys so far
+
   MacroState* = object ## Macro recording and playback state grouped together
-    isRecording*: bool # Whether currently recording a macro
-    register*: char # Which register (a-z) is being recorded to
-    recordedKeys*: seq[string] # Keys being recorded in current macro session
+    recording*: Option[MacroRecording]
     registers*: Table[char, seq[string]] # Saved macros by register
     lastRegister*: Option[char] # Last executed macro register for @@
-    waitingForRegister*: bool # Waiting for register name after q
-    commandType*: string # "record" or empty
-    pendingCount*: int # Numeric prefix for macro playback
     playbackDepth*: int # Current macro recursion depth
     executingDepth*: int # Registers (`@x`) being run, like Vim's reg_executing
-    typedKeyStart*: Option[int]
-      # Where the latest typed key begins in recordedKeys, so stopping drops it
 
   LastFindChar* = object
     ## Last f/F/t/T motion, replayed by ; (same direction) and , (reversed)

@@ -8444,10 +8444,10 @@ suite "executeCommand - read-only gate allowlists stay in sync":
     # other direction: a new visual binding fails until it is gated or listed.
     const VisualNonEditCommandIds = [
       # Selection-only or non-buffer commands: safe on a read-only buffer.
-      "fold.create", "lsp.selection.range", "textobject.around", "textobject.inner",
-      "visual.move.down", "visual.move.end", "visual.move.firstline",
-      "visual.move.firstnonblank", "visual.move.home", "visual.move.lastline",
-      "visual.move.left", "visual.move.paragraph.backward",
+      "fold.create", "lsp.selection.range", "macro.record", "textobject.around",
+      "textobject.inner", "visual.move.down", "visual.move.end",
+      "visual.move.firstline", "visual.move.firstnonblank", "visual.move.home",
+      "visual.move.lastline", "visual.move.left", "visual.move.paragraph.backward",
       "visual.move.paragraph.forward", "visual.move.right", "visual.move.up",
       "visual.move.word", "visual.move.word.back", "visual.move.word.end",
       "visual.move.word.end.backward", "visual.reselect", "visual.swap.selection",

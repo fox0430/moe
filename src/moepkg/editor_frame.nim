@@ -50,7 +50,7 @@ from command_handlers/insert_handler import runAutoTrigger
 import
   config, git_cache, render_utils, logger, message_log, debug_viewer, completion,
   signature_help, hover_popup, notification_popup, unicode_utils, motion, buffer,
-  lsp_integration, editor_window_layout, editor_notify
+  lsp_integration, editor_window_layout, editor_notify, macro_recording
 
 export editor_notify
 
@@ -139,8 +139,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
   )
 
   generateMacroInfo(
-    debugLines, e.state.pendingInput.macroState.isRecording,
-    e.state.pendingInput.macroState.register,
+    debugLines, e.state.pendingInput.macroState.recordingRegister,
     e.state.pendingInput.macroState.registers.len,
     e.state.pendingInput.macroState.playbackDepth,
     e.state.pendingInput.macroState.executingDepth, debugConfig.macroState.enable,

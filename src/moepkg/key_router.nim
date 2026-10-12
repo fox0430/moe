@@ -144,30 +144,38 @@ proc feedKey*(
   ## `literal` is true when the command being built reads `key` as it is (an
   ## operand, an Escape that ends it). That is the command before the held
   ## keys, so it counts only while none are held; the key meets it again once
-  ## they are let go.
+  ## they are let go. The typed keys `key` stands for go where it goes: held
+  ## with it, to the mapping it completes, or let go with it.
   if not router.isHoldingKeys and (literal or not key.remap):
     return RouteResult(kind: rrUnhandled, key: key.combo)
   let mappings = router.mappingsFor(mode)
+  let held = router.dispatchState.keys
   let decision = routeRuntimeMapping(router.dispatchState, key, mappings)
   result = decisionToRoute(decision, key.combo)
+  if result.kind in {rrExecuteRuntimeCommand, rrExecuteRuntimeKeySequence}:
+    result.lhsKeys = held & key
 
 proc flushTimeout*(router: KeyRouter, mode: EditorMode): RouteResult =
   ## Called when the key-mapping timeout fires. Inspect the accumulated keys
   ## against `mode`'s runtime mappings: if there is an exact match, fire the
   ## mapping; otherwise the caller lets them go as on `rrReleaseHeld`.
   let mappings = router.mappingsFor(mode)
+  let held = router.dispatchState.keys
   let plan = flushRuntimeMapping(router.dispatchState, mappings)
   case plan.kind
   of rmfNothing:
     RouteResult(kind: rrCancelled)
   of rmfExecuteCommand:
-    RouteResult(kind: rrExecuteRuntimeCommand, commandName: plan.commandName)
+    RouteResult(
+      kind: rrExecuteRuntimeCommand, commandName: plan.commandName, lhsKeys: held
+    )
   of rmfExecuteKeySequence:
     RouteResult(
       kind: rrExecuteRuntimeKeySequence,
       triggerKeys: plan.triggerKeys,
       targetKeys: plan.targetKeys,
       noremap: plan.noremap,
+      lhsKeys: held,
     )
   of rmfReplayPerKey:
     RouteResult(kind: rrReleaseHeld, keys: plan.keysToReplay, leading: plan.leading)
@@ -192,8 +200,9 @@ proc resolveBuiltin*(
   ## through to char input", so this is harmless today; a caller must NOT feed
   ## `route.key` back into built-in processing or it would double-handle the
   ## terminator key. The one place that re-routes — the VisualBlock/VisualLine
-  ## fallback to shared Visual bindings — gates on `rrUnhandled` only, never
-  ## `rrWaiting`, so it never drives `processKey` twice over a pending sequence.
+  ## fallback to shared Visual bindings — gates on `rrUnhandled` for a key that
+  ## ended no pending keys (`hasPendingKeys`), so it never drives `processKey`
+  ## twice over one key.
   ##
   ## Lives in the router module (not `key_bindings`) because it returns the
   ## router-owned `RouteResult`; moving it into `key_bindings` would require

@@ -24,7 +24,7 @@ import std/[monotimes, tables]
 
 import pkg/results
 
-import ../[debug_viewer, editor, types, viewer_mode, visual_selection]
+import ../[debug_viewer, editor, types, viewer_mode, visual_selection, macro_recording]
 
 import handler_result
 
@@ -90,8 +90,7 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
       debugConfig.editorView.enable,
     )
     generateMacroInfo(
-      debugLines, e.state.pendingInput.macroState.isRecording,
-      e.state.pendingInput.macroState.register,
+      debugLines, e.state.pendingInput.macroState.recordingRegister,
       e.state.pendingInput.macroState.registers.len,
       e.state.pendingInput.macroState.playbackDepth,
       e.state.pendingInput.macroState.executingDepth, debugConfig.macroState.enable,

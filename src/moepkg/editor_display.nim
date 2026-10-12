@@ -22,7 +22,7 @@
 
 import std/options
 
-import types/editor_types, git_cache
+import types/editor_types, git_cache, macro_recording
 
 export GitRefreshMode
 
@@ -34,6 +34,7 @@ type
   FrontendStatus* = object
     ## Frontend-neutral status values for an embedding host to display.
     modeLabel*: string
+    recordingLabel*: string
     message*: string
     git*: ActiveGitStatus
 
@@ -66,6 +67,7 @@ proc frontendStatus*(e: Editor): FrontendStatus =
   ## Return one consistent snapshot of the active editor status.
   FrontendStatus(
     modeLabel: e.statusModeLabel,
+    recordingLabel: e.state.pendingInput.macroState.recordingLabel,
     message: e.currentStatusMessage,
     git: e.activeGitStatus,
   )

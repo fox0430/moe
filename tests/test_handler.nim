@@ -36,7 +36,7 @@ import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
     render_utils, clipboard, message_log, frontend_input, pending_input, key_router,
-    completion, signature_help,
+    completion, signature_help, macro_recording,
   ]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/editor_build_jobs {.all.}
@@ -66,14 +66,8 @@ proc createTestState(): EditorState =
     windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
     pendingInput: PendingInputState(
       macroState: MacroState(
-        isRecording: false,
-        register: '\0',
-        recordedKeys: @[],
         registers: initTable[char, seq[string]](),
         lastRegister: none(char),
-        waitingForRegister: false,
-        commandType: "",
-        pendingCount: 0,
         playbackDepth: 0,
       )
     ),
@@ -5491,11 +5485,9 @@ suite "Macro recording - Command / Search overlay keys":
     result.state.mode = EditorMode.Normal
 
   proc startRecording(e: Editor, register: char) =
-    e.state.pendingInput.macroState.isRecording = true
-    e.state.pendingInput.macroState.register = register
-    e.state.pendingInput.macroState.recordedKeys = @[]
+    e.state.pendingInput.macroState.recording = some(MacroRecording(register: register))
 
-  test "Command overlay: keys after ':' land in recordedKeys":
+  test "Command overlay: keys after ':' are recorded":
     let e = createEditorForOverlayRecord("hello foo bar")
     e.startRecording('a')
     e.state.enterCommandOverlay()
@@ -5504,7 +5496,7 @@ suite "Macro recording - Command / Search overlay keys":
       discard e.handleEvent(makeCharEvent($ch))
     discard e.handleEvent(makeEnterEvent())
 
-    check e.state.pendingInput.macroState.recordedKeys ==
+    check e.state.pendingInput.macroState.recording.get.keys ==
       @["s", "/", "f", "o", "o", "/", "b", "a", "r", "/", "<Enter>"]
 
   test "Search overlay: pattern and Enter recorded":
@@ -5516,7 +5508,8 @@ suite "Macro recording - Command / Search overlay keys":
       discard e.handleEvent(makeCharEvent($ch))
     discard e.handleEvent(makeEnterEvent())
 
-    check e.state.pendingInput.macroState.recordedKeys == @["w", "o", "r", "<Enter>"]
+    check e.state.pendingInput.macroState.recording.get.keys ==
+      @["w", "o", "r", "<Enter>"]
 
   test "Command overlay Escape recorded so playback replays cancel":
     let e = createEditorForOverlayRecord("hello")
@@ -5528,7 +5521,7 @@ suite "Macro recording - Command / Search overlay keys":
     discard
       e.handleEvent(Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Escape)))
 
-    check e.state.pendingInput.macroState.recordedKeys == @["a", "b", "<Escape>"]
+    check e.state.pendingInput.macroState.recording.get.keys == @["a", "b", "<Escape>"]
     check not e.state.isCommandOverlay
 
   test "q typed into the command line is recorded":
@@ -5539,12 +5532,12 @@ suite "Macro recording - Command / Search overlay keys":
     discard e.handleEvent(makeCharEvent("q"))
 
     check e.state.pendingInput.macroState.isRecording
-    check e.state.pendingInput.macroState.recordedKeys == @["q"]
+    check e.state.pendingInput.macroState.recording.get.keys == @["q"]
 
 suite "Macro playback - overlay-aware routing":
   # Regression: nested key replay dispatched by state.mode, so overlay-mode keys
   # were mis-interpreted by the base handler. runNestedKeyCombo now consults
-  # `overlayPlaybackHook` (wired from handler.nim) to route via the overlay handler.
+  # `frontLayerHook` (wired from handler.nim) to route via the overlay handler.
   proc createEditorForOverlayPlayback(content: string): Editor =
     let config = newEditorConfig()
     result = newEditor(config)
@@ -7384,6 +7377,53 @@ suite "handleKeyCombo - which keys a mapping takes, as in Vim":
 
     check e.activeWindow.modeState.filer.selectedIndex == 1
 
+  proc enterFiler(e: Editor) =
+    e.state.mode = EditorMode.Filer
+    var filerState =
+      FilerState(currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false)
+    for i in 0 ..< 3:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
+
+  test "the keys of a command mapping that cannot run here go on unmapped":
+    # As when held keys are let go, the key after the first can start the
+    # mapping again. The first was lost before.
+    let e = createEditorForMappings("")
+    e.enterFiler()
+    e.map(EditorMode.Filer, "j j", "move-down")
+
+    e.press("j", "j")
+
+    check e.activeWindow.modeState.filer.selectedIndex == 1
+    check e.keyRouter.isHoldingKeys
+
+    check e.handleKeyMappingTimeout()
+
+    check e.activeWindow.modeState.filer.selectedIndex == 2
+
+  test "the timeout lets the keys of a command mapping that cannot run go":
+    let e = createEditorForMappings("")
+    e.enterFiler()
+    e.map(EditorMode.Filer, "j", "move-down")
+    e.map(EditorMode.Filer, "j k", "window-prev")
+
+    e.press("j")
+    check e.handleKeyMappingTimeout()
+
+    check not e.keyRouter.isHoldingKeys
+    check e.activeWindow.modeState.filer.selectedIndex == 1
+
+  test "the keys of a command mapping that cannot run stay in the recording":
+    let e = createEditorForMappings("")
+    e.press("q", "a")
+    e.enterFiler()
+    e.map(EditorMode.Filer, "j j", "move-down")
+
+    e.press("j", "j")
+    check e.handleKeyMappingTimeout()
+
+    check e.state.pendingInput.macroState.recording.get.keys == @["j", "j"]
+
   test "a noremap key after a key a register left held lets it go first":
     # Vim 9.2 with `nmap ja dd`, @q = j and `nnoremap Z @qa`: Z runs j, then a.
     let e = createEditorForMappings("one\ntwo\nthree")
@@ -7417,3 +7457,58 @@ suite "handleKeyCombo - which keys a mapping takes, as in Vim":
     check e.cursor.line == 0
     check not e.keyRouter.isHoldingKeys
     check e.activeBuffer.len == 3
+
+suite "handleKeyCombo - temporary messages, as at Vim's hit-enter prompt":
+  proc createEditorWithMessages(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.state.ui.tempMessages = @["message"]
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  test "Enter, Space and Ctrl-J only dismiss them":
+    for key in ["Enter", "Space", "C-j"]:
+      let e = createEditorWithMessages("abc\ndef")
+
+      e.press(key)
+
+      check e.state.ui.tempMessages.len == 0
+      check e.cursor == BufferPosition(line: 0, column: 0)
+
+  test "Ctrl-C only dismisses them":
+    let e = createEditorWithMessages("abc")
+    check e.handleInterrupt()
+
+    check e.state.ui.tempMessages.len == 0
+    check e.state.statusMessage == ""
+
+  test "another key dismisses them and runs":
+    let e = createEditorWithMessages("abc\ndef")
+
+    e.press("j")
+
+    check e.state.ui.tempMessages.len == 0
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "the keys after a mapping's command that shows them run":
+    # Vim 9.2 with `nnoremap Q :echo "a\nb"<CR>j`: the j runs after hit-enter.
+    let e = createEditorWithMessages("abc\ndef\nghi")
+    e.state.ui.tempMessages = @[]
+    e.press("G", "g", "g")
+    check e.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Normal, "Q", ": j u m p Enter j", true
+    ).len == 0
+
+    e.press("Q")
+
+    check e.state.ui.tempMessages.len == 0
+    check e.cursor == BufferPosition(line: 1, column: 0)

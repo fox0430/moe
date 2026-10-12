@@ -42,14 +42,8 @@ proc createTestState(): EditorState =
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     pendingInput: PendingInputState(
       macroState: MacroState(
-        isRecording: false,
-        register: '\0',
-        recordedKeys: @[],
         registers: initTable[char, seq[string]](),
         lastRegister: none(char),
-        waitingForRegister: false,
-        commandType: "",
-        pendingCount: 0,
         playbackDepth: 0,
       )
     ),
@@ -304,15 +298,13 @@ suite "VisualModeHandler - handleVisualModeKey":
     let state = createTestState()
     state.mode = EditorMode.Visual
     state.visualAnchor = state.cursor
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'a'
-    state.pendingInput.macroState.recordedKeys = @[]
+    state.pendingInput.macroState.recording = some(MacroRecording(register: 'a'))
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
     discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
-    check state.pendingInput.macroState.recordedKeys.len == 0
+    check state.pendingInput.macroState.recording.get.keys.len == 0
 
 suite "VisualModeHandler - sequence dispatch (M7 regression)":
   # `gg`/`ge`/`zf` are bound as multi-key sequences to all three Visual modes.
@@ -420,6 +412,64 @@ suite "VisualModeHandler - sequence dispatch (M7 regression)":
     let r = handler.handleVisualModeKey(buf, state, viewport, xKey)
     check r.kind in {vmrHandled, vmrUnhandled}
     check buf.getLine(0)[0] == 'x'
+
+  # A key that ends a pending operand wait or sequence is used up there, as in
+  # Normal mode: it must not fall back to the shared Visual bindings or run as
+  # a command of its own.
+  let
+    downKey = KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})
+    ctrlCKey = KeyCombo(isSpecial: false, char: "c", modifiers: {kmCtrl})
+    jKey = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+
+  for mode in [EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]:
+    for (operandKey, endKey, endName) in [
+      ("q", downKey, "<Down>"), ("r", downKey, "<Down>"), ("q", ctrlCKey, "<C-c>")
+    ]:
+      test operandKey & endName & " only cancels the " & operandKey & " in " & $mode:
+        let buf = newTextBuffer()
+        discard
+          buf.insertText(BufferPosition(line: 0, column: 0), "line0\nline1\nline2")
+        let handler = createTestHandler(buf)
+        let state = createTestState()
+        state.mode = mode
+        state.visualAnchor = state.cursor
+        let viewport = createTestViewport()
+
+        let opKey = KeyCombo(isSpecial: false, char: operandKey, modifiers: {})
+        discard handler.handleVisualModeKey(buf, state, viewport, opKey)
+        check handler.keyBindingRegistry.isWaitingForChar
+
+        let r = handler.handleVisualModeKey(buf, state, viewport, endKey)
+        check r.kind == vmrHandled
+        check r.modeTransition.isNone
+        check state.mode == mode
+        check state.cursor.line == 0
+        check not handler.keyBindingRegistry.isWaitingForChar
+        check buf.getLine(0) == "line0"
+
+        # The wait is gone, so the next key is a command again.
+        discard handler.handleVisualModeKey(buf, state, viewport, jKey)
+        check state.cursor.line == 1
+
+  for subMode in [EditorMode.VisualBlock, EditorMode.VisualLine]:
+    test "An invalid sequence end does not run alone in " & $subMode:
+      # `g x` is unbound; the `x` ends the `g`, it is not Visual's delete.
+      let buf = newTextBuffer()
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "line0\nline1")
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.mode = subMode
+      state.visualAnchor = state.cursor
+      let viewport = createTestViewport()
+
+      check handler.handleVisualModeKey(buf, state, viewport, gKey).kind ==
+        vmrWaitingForInput
+      let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+      let r = handler.handleVisualModeKey(buf, state, viewport, xKey)
+      check r.kind == vmrHandled
+      check state.mode == subMode
+      check buf.getLine(0) == "line0"
+      check buf.len == 2
 
   test "Handle Visual mode fallback to VisualLine":
     let buf = newTextBuffer()
@@ -729,25 +779,3 @@ suite "VisualModeHandler - Escape returns to previousMode":
     check r.kind == vmrHandled
     check state.mode == EditorMode.Normal
     check state.pendingInput.pendingRegister.isNone
-
-  test "Escape from Visual clears pending macro register wait (q<Esc> leak)":
-    # `q` in Normal arms macroState.waitingForRegister for the register name.
-    # Entering Visual and Escaping must not leave the FSM waiting; otherwise
-    # the next `q` in Normal is interpreted as the register name instead of
-    # re-arming.
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    state.mode = EditorMode.Visual
-    state.previousMode = EditorMode.Normal
-    state.pendingInput.macroState.waitingForRegister = true
-    state.pendingInput.macroState.commandType = "record"
-    state.visualAnchor = state.cursor
-    let viewport = createTestViewport()
-
-    let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
-    discard handler.handleVisualModeKey(buf, state, viewport, esc)
-
-    check not state.pendingInput.macroState.waitingForRegister
-    check state.pendingInput.macroState.commandType == ""

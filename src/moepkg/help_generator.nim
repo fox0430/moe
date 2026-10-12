@@ -509,6 +509,8 @@ const VisualModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(
       syntax: "gv", description: "Exchange the selection with the previous Visual area"
     ),
+    HelpEntry(syntax: "q any", description: "Start recording operations for Macros"),
+    HelpEntry(syntax: "q", description: "Stop recording operations"),
     HelpEntry(syntax: "Ctrl-s", description: "Selection Range (LSP)"),
     HelpEntry(syntax: "Esc", description: "Go to Normal mode"),
   ],

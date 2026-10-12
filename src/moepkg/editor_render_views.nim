@@ -33,6 +33,7 @@ import
   render_utils,
   visible_rows,
   status_line,
+  macro_recording,
   tab_line,
   buffer/core,
   unicode_utils,
@@ -350,6 +351,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
   let
     maxBottomY = findMaxBottomY(e.windowManager.windows)
     tabLineOffset = if e.showTabLine: TabLineHeight else: 0
+    recording = e.state.pendingInput.macroState.recordingLabel
 
   for i, window in e.windowManager.windows:
     let layout = e.computeWindowLayout(window, i, maxBottomY, tabLineOffset)
@@ -449,6 +451,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
         window.cursor,
         e.config.statusLine,
         e.owesPreservedWork(window.buffer),
+        recording,
       )
 
     # Draw separator between windows (except for last window)
@@ -509,6 +512,7 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     areaH = min(e.state.commandLineAreaHeight(width), buffer.area.height)
     areaTopY = screenBottomY - areaH + 1
     grown = areaH > 1
+    recording = e.state.pendingInput.macroState.recordingLabel
 
   # Render global status line:
   # - When multiStatusLine is disabled: single status line for all windows
@@ -527,6 +531,7 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
           statusY,
           e.config.statusLine,
           e.owesPreservedWork(e.activeBuffer()),
+          recording,
         )
     else:
       e.state.renderStatusLine(
@@ -535,6 +540,7 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
         screenBottomY,
         e.config.statusLine,
         e.owesPreservedWork(e.activeBuffer()),
+        recording,
       )
 
   if e.state.hasOverlay:
@@ -587,6 +593,14 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
         buffer.setString(
           buffer.area.x, areaTopY + i, sanitizeForDisplay(line), commandStyle()
         )
+    elif not e.showStatusLine and recording.len > 0 and
+        charDisplayWidth(recording) <= width:
+      # With no status line to carry it, it takes the command line as in Vim
+      buffer.fill(
+        Rect(x: buffer.area.x, y: screenBottomY, width: width, height: 1),
+        cell(" ", commandStyle()),
+      )
+      buffer.setString(buffer.area.x, screenBottomY, recording, commandStyle())
 
 proc renderTempMessages*(e: Editor, buffer: var Buffer) =
   ## Render temporary messages at the bottom of screen (like Vim's :jumps output)

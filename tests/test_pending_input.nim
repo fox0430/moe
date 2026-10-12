@@ -42,11 +42,6 @@ suite "PendingInputState - isActive":
     let (pi, registry) = newTestState()
     check isActive(pi, registry) == false
 
-  test "isActive with waitingForRegister":
-    var (pi, registry) = newTestState()
-    pi.macroState.waitingForRegister = true
-    check isActive(pi, registry) == true
-
   test "isActive with pendingOperator":
     var (pi, registry) = newTestState()
     pi.pendingOperator = some(
@@ -80,16 +75,6 @@ suite "PendingInputState - cancelAll":
   test "cancelAll returns false when nothing is pending":
     var (pi, registry) = newTestState()
     check cancelAll(pi, registry) == false
-
-  test "cancelAll clears waitingForRegister and related fields":
-    var (pi, registry) = newTestState()
-    pi.macroState.waitingForRegister = true
-    pi.macroState.commandType = "record"
-    pi.macroState.pendingCount = 3
-    check cancelAll(pi, registry) == true
-    check pi.macroState.waitingForRegister == false
-    check pi.macroState.commandType == ""
-    check pi.macroState.pendingCount == 0
 
   test "cancelAll clears pendingOperator":
     var (pi, registry) = newTestState()
@@ -127,7 +112,6 @@ suite "PendingInputState - cancelAll":
 
   test "cancelAll clears everything at once":
     var (pi, registry) = newTestState()
-    pi.macroState.waitingForRegister = true
     pi.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete, operatorCount: 1, startPos: BufferPosition()

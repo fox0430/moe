@@ -25,8 +25,11 @@
 import std/[unittest, options, tables]
 
 import
-  ../src/moepkg/
-    [types, editor, handler, buffer, config, key_bindings, keybind_config, registers]
+  ../src/moepkg/[
+    types, editor, handler, buffer, config, key_bindings, keybind_config, registers,
+    editor_display, macro_recording,
+  ]
+import ../src/moepkg/command_handlers/[result_processor, handler_result]
 
 proc newTestEditor(content: string): Editor =
   result = newEditor(newEditorConfig())
@@ -89,7 +92,7 @@ suite "q from a mapping":
     e.press(",")
 
     check e.macroState.isRecording
-    check e.macroState.register == 'z'
+    check e.macroState.recordingRegister == some('z')
 
   test "stops the recording and leaves the mapping key out of the register":
     let e = newTestEditor("abc")
@@ -104,6 +107,125 @@ suite "q from a mapping":
     check e.macroState.registers['a'] == @["x"]
     check e.activeBuffer.getLine(0) == "bc"
 
+  test "a mapping with a longer left-hand side drops all of it":
+    let e = newTestEditor("abc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, ",m", "q"
+    )
+
+    e.press("q", "a", "x", ",", "m")
+
+    check not e.macroState.isRecording
+    check e.macroState.registers['a'] == @["x"]
+
+  test "a stop after the first key of its right-hand side keeps the mapping key":
+    # Vim leaves out only what the stopping key's fetch took: the left-hand
+    # side goes with the first key it gives, and that one ran before the q.
+    let e = newTestEditor("abc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, ",", "xq"
+    )
+
+    e.press("q", "a", ",")
+
+    check not e.macroState.isRecording
+    check e.macroState.registers['a'] == @[","]
+
+    # The q in it is ignored in a running register, as in Vim.
+    e.press("@", "a")
+
+    check e.activeBuffer.getLine(0) == "c"
+    check not e.macroState.isRecording
+
+  test "keys a right-hand side leaves held stand for no typed keys":
+    let e = newTestEditor("abc\nabc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, "ggz", "l"
+    )
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, "Q", "jxgg", noremap = false
+    )
+
+    # The q lets go of the g g that Q left held, then stops the recording.
+    e.press("q", "a", "Q", "q")
+
+    check not e.macroState.isRecording
+    check e.macroState.registers['a'] == @["Q"]
+    check e.activeBuffer.getLine(1) == "bc"
+    check e.state.cursor.line == 0
+
+  test "a mapping fired by the timeout that stops drops its keys":
+    let e = newTestEditor("abc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, ",", "q"
+    )
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, ",m", "x"
+    )
+
+    e.press("q", "a", "x", ",")
+    check e.handleKeyMappingTimeout()
+
+    check not e.macroState.isRecording
+    check e.macroState.registers['a'] == @["x"]
+
+  test "q let go when a mapping does not come drops only itself":
+    let e = newTestEditor("abc\nabc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, "qw", "x"
+    )
+
+    e.press("q", "a", "x", "q", "j")
+
+    check not e.macroState.isRecording
+    check e.macroState.registers['a'] == @["x"]
+    check e.state.cursor.line == 1
+
+  test "q let go by the mapping timeout drops only itself":
+    let e = newTestEditor("abc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, "qw", "x"
+    )
+
+    e.press("q", "a", "x", "q")
+    check e.macroState.isRecording
+
+    check e.handleKeyMappingTimeout()
+
+    check not e.macroState.isRecording
+    check e.macroState.registers['a'] == @["x"]
+
+suite "The typed keys behind a mapping":
+  test "the held keys a mapping completes when a later key breaks a longer one":
+    # Vim 9.2 with `nmap a G` and `nmap ab gg`: recording `ax` keeps both.
+    let e = newTestEditor("abc\nabc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, "a", "G"
+    )
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, "ab", "gg"
+    )
+
+    e.press("q", "z", "a", "x", "q")
+
+    check e.macroState.registers['z'] == @["a", "x"]
+    check e.activeBuffer.getLine(1) == "bc"
+
+  test "a mapping cut off as recursive keeps its key":
+    # Vim records a typed key as it reads it, whatever comes of it.
+    let e = newTestEditor("abc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, ",", ";", noremap = false
+    )
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, ";", ",", noremap = false
+    )
+
+    e.press("q", "z", ",", "x", "q")
+
+    check e.macroState.registers['z'] == @[",", "x"]
+    check e.activeBuffer.getLine(0) == "bc"
+
 suite "Recording":
   test "keys replayed from a register are not recorded":
     let e = newTestEditor("abc")
@@ -113,7 +235,7 @@ suite "Recording":
 
     check e.activeBuffer.getLine(0) == "bc"
     check e.macroState.isRecording
-    check e.macroState.recordedKeys == @["@", "b"]
+    check e.macroState.recording.get.keys == @["@", "b"]
 
   test "keys replayed from a mapping are not recorded":
     let e = newTestEditor("abc")
@@ -124,7 +246,7 @@ suite "Recording":
     e.press("q", "a", ",")
 
     check e.activeBuffer.getLine(0) == "bc"
-    check e.macroState.recordedKeys == @[","]
+    check e.macroState.recording.get.keys == @[","]
 
   test "overlay keys replayed from a register are not recorded":
     let e = newTestEditor("abc")
@@ -133,7 +255,18 @@ suite "Recording":
     e.press("q", "a", "@", "b")
 
     check e.state.cursor.column == 2
-    check e.macroState.recordedKeys == @["@", "b"]
+    check e.macroState.recording.get.keys == @["@", "b"]
+
+  test "keys typed after a held register name are recorded":
+    let e = newTestEditor("abc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, "gd", "l"
+    )
+
+    e.press("q", "g", "x")
+
+    check e.macroState.recordingRegister == some('g')
+    check e.macroState.recording.get.keys == @["x"]
 
   test "q typed as an operand is kept":
     let e = newTestEditor("aqb")
@@ -170,6 +303,19 @@ suite "Recording":
 
     check not e.macroState.isRecording
     check e.macroState.registers['a'] == @["x", "3"]
+
+suite "Keys let go by the key router":
+  test "a key after a held one meets what that one opened":
+    let e = newTestEditor("abc")
+    e.handlerManager.keyBindingRegistry.addKeySequenceMapping(
+      EditorMode.Normal, ":x", "l"
+    )
+
+    e.press(":", "w")
+
+    check e.state.isCommandOverlay
+    check e.state.input.commandText == ":w"
+    check e.state.cursor.column == 0
 
 suite "q after an operator":
   test "cancels the operator and keeps recording":
@@ -212,4 +358,74 @@ suite "q after an operator":
     e.press("q", "a", "c", "i", "q", "x")
 
     check e.macroState.isRecording
+    check e.activeBuffer.getLine(0) == "bc"
+
+suite "q resolves like any other command":
+  test "Escape cancels the register wait":
+    let e = newTestEditor("abc")
+    e.press("q", "Escape", "x")
+
+    check not e.macroState.isRecording
+    check e.activeBuffer.getLine(0) == "bc"
+
+  test "in Visual mode it stops the recording and stays in Visual":
+    let e = newTestEditor("abc")
+    e.press("q", "a", "v", "l", "q")
+
+    check not e.macroState.isRecording
+    check e.macroState.registers['a'] == @["v", "l"]
+    check e.state.mode == EditorMode.Visual
+
+  test "in Visual mode it starts a recording":
+    let e = newTestEditor("abc")
+    e.press("v", "q", "a", "l", "Escape", "x", "q")
+
+    check e.macroState.registers['a'] == @["l", "<Escape>", "x"]
+    check e.activeBuffer.getLine(0) == "ac"
+
+suite "The recording label":
+  test "stays on through later keys and messages":
+    let e = newTestEditor("abc\nabc")
+    e.press("q", "a", "j", ":", "f", "o", "o", "Enter")
+
+    check e.state.statusMessage.len > 0
+    check e.frontendStatus.recordingLabel == "recording @a"
+
+    e.press("l")
+    check e.macroState.recordingLabel == "recording @a"
+
+    e.press("q")
+    check e.macroState.recordingLabel == ""
+
+  test "is not shown while q waits for its register, as in Vim":
+    let e = newTestEditor("abc")
+    e.press("q")
+    check e.macroState.recordingLabel == ""
+    check e.frontendStatus.recordingLabel == ""
+
+    e.press("Up")
+    check not e.macroState.isRecording
+
+    e.press("v", "q")
+    check e.macroState.recordingLabel == ""
+
+suite "A replayed key meets what the typed key met":
+  test "Escape cancels a pending operator":
+    let e = newTestEditor("foo bar\nfoo bar")
+    e.press("q", "a", "d", "Escape", "q")
+    check e.state.pendingInput.pendingOperator.isNone
+
+    e.press("j", "@", "a")
+    check e.state.pendingInput.pendingOperator.isNone
+
+    e.press("w")
+    check e.activeBuffer.getLine(1) == "foo bar"
+
+  test "a key that dismisses temporary messages runs as well":
+    let e = newTestEditor("abc")
+    e.state.ui.tempMessages = @["message"]
+
+    check e.playbackMacro(@["x"]).kind == hrHandled
+
+    check e.state.ui.tempMessages.len == 0
     check e.activeBuffer.getLine(0) == "bc"

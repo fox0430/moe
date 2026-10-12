@@ -126,8 +126,8 @@ type
     ## How a part left of the ruler gives way in a narrow status line, after
     ## what stands for it in Vim.
     srLabel
-      ## Vim's mode message, on the command line: kept at any width, drawn in
-      ## the mode label's style
+      ## Vim's mode message and "recording @a", on the command line: kept at
+      ## any width, drawn in the mode label's style
     srExtra
       ## Not in Vim's status line: goes, last first, before the name loses its
       ## last path component
@@ -519,9 +519,11 @@ proc drawStatusLine(
     mode: EditorMode,
     config: StatusLineConfig,
     isActiveWindow, showMode, owesPreservedWork: bool,
+    recordingLabel: string,
 ) =
   ## Draw the status line of a window in `mode` with its cursor at `cursor`.
-  ## Only the active window shows an overlay and LSP progress.
+  ## Only the active window shows an overlay, LSP progress and
+  ## `recordingLabel`.
   let modeText = state.windowModeText(mode, isActiveWindow)
 
   # Use overlay styles if an overlay is active, otherwise use mode styles
@@ -534,6 +536,9 @@ proc drawStatusLine(
   var left: seq[StatusItem]
   if showMode:
     left.add part(fmt" {modeText} ", srLabel)
+  if isActiveWindow and recordingLabel.len > 0:
+    # Vim shows it after the mode message
+    left.add part(fmt" {recordingLabel} ", srLabel)
   left.add buildGitInfo(state.git, textBuffer, mode, config, isActiveWindow)
   left.add buildFileDisplay(textBuffer, mode, config, owesPreservedWork)
   if isActiveWindow and state.ui.lspProgressText.len > 0:
@@ -557,6 +562,7 @@ proc renderStatusLine*(
     statusLineY: int,
     config: StatusLineConfig,
     owesPreservedWork = false,
+    recordingLabel = "",
 ) =
   ## Render the status line at the specified Y position
   if not state.showStatusLine:
@@ -574,6 +580,7 @@ proc renderStatusLine*(
     isActiveWindow = true,
     showMode = config.mode,
     owesPreservedWork,
+    recordingLabel,
   )
 
 proc renderWindowStatusLine*(
@@ -588,8 +595,10 @@ proc renderWindowStatusLine*(
     windowCursor: BufferPosition,
     config: StatusLineConfig,
     owesPreservedWork = false,
+    recordingLabel = "",
 ) =
-  ## Render a status line for a specific window
+  ## Render a status line for a specific window. Only the active window shows
+  ## `recordingLabel`.
   if not state.showStatusLine or not state.multiStatusLine:
     return
 
@@ -606,4 +615,5 @@ proc renderWindowStatusLine*(
     # Show mode for active window, or inactive if showModeInactive
     showMode = config.mode and (isActiveWindow or config.showModeInactive),
     owesPreservedWork,
+    recordingLabel,
   )

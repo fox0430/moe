@@ -66,14 +66,8 @@ proc createTestState(): EditorState =
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     pendingInput: PendingInputState(
       macroState: MacroState(
-        isRecording: false,
-        register: '\0',
-        recordedKeys: @[],
         registers: initTable[char, seq[string]](),
         lastRegister: none(char),
-        waitingForRegister: false,
-        commandType: "",
-        pendingCount: 0,
         playbackDepth: 0,
       )
     ),
@@ -1346,15 +1340,13 @@ suite "InsertModeHandler - Macro Recording":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.pendingInput.macroState.isRecording = true
-    state.pendingInput.macroState.register = 'a'
-    state.pendingInput.macroState.recordedKeys = @[]
+    state.pendingInput.macroState.recording = some(MacroRecording(register: 'a'))
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {})
     discard handler.handleInsertModeKey(buf, state, keyCombo)
 
-    check state.pendingInput.macroState.recordedKeys.len == 0
+    check state.pendingInput.macroState.recording.get.keys.len == 0
 
 suite "InsertModeHandler - Execute Command":
   test "Execute command via registry":
@@ -3994,7 +3986,7 @@ suite "InsertModeHandler - LSP completion request retirement":
     state.cursor = BufferPosition(line: 1, column: 3)
     state.config.autocomplete.enable = true
     state.config.lsp.completion.enable = true
-    state.pendingInput.macroState.isRecording = true
+    state.pendingInput.macroState.recording = some(MacroRecording(register: 'a'))
 
     # Its answer and the candidates from before recording would differ in a
     # replay, so both go though no new request replaces them.
