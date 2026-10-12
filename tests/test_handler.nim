@@ -2480,6 +2480,11 @@ suite "handleMouseEvent - Left Click Multi-Window Bottom Reserve":
 proc makeEnterEvent(): Event =
   Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Enter))
 
+proc handleCommandModeEvent(e: Editor, event: Event): bool =
+  ## A key typed on the command line, the whole way a typed key goes (the
+  ## command-line mappings included).
+  e.dispatchEvent(event)
+
 suite "handleCommandModeEvent - exitOverlay after command execution":
   ## Regression tests: commands that don't manage overlay themselves must still
   ## exit the command overlay after execution. Previously, converting independent
@@ -7499,6 +7504,38 @@ suite "handleKeyCombo - temporary messages, as at Vim's hit-enter prompt":
     check e.state.ui.tempMessages.len == 0
     check e.cursor == BufferPosition(line: 1, column: 0)
 
+  test "a key that only dismisses them is left out of the recording":
+    # Vim 9.2: `qa:echo "a\nb"<CR><CR>q` records the command and its Enter
+    # only, as the prompt reads with the recording off. A key it puts back is
+    # recorded once it runs.
+    let e = createEditorWithMessages("abc")
+    e.state.ui.tempMessages = @[]
+    e.press("q", "a")
+    e.state.ui.tempMessages = @["message"]
+    e.press("Enter")
+    e.state.ui.tempMessages = @["message"]
+    e.press("x", "q")
+
+    check e.state.pendingInput.macroState.registers['a'] == @["x"]
+    check e.activeBuffer.getLine(0) == "bc"
+
+  test "`:` goes on to run as any other key":
+    # Vim 9.2: `i<C-o>:echo "a\nb"<CR>:x` types `:x`.
+    let e = createEditorWithMessages("")
+    e.press(":")
+    check e.state.isCommandOverlay
+
+    let i = createEditorWithMessages("")
+    i.state.ui.tempMessages = @[]
+    i.press("i")
+    i.state.ui.tempMessages = @["message"]
+    i.press(":")
+
+    check i.state.ui.tempMessages.len == 0
+    check i.state.mode == EditorMode.Insert
+    check not i.state.isCommandOverlay
+    check i.activeBuffer.getLine(0) == ":"
+
   test "the keys after a mapping's command that shows them run":
     # Vim 9.2 with `nnoremap Q :echo "a\nb"<CR>j`: the j runs after hit-enter.
     let e = createEditorWithMessages("abc\ndef\nghi")
@@ -7512,3 +7549,193 @@ suite "handleKeyCombo - temporary messages, as at Vim's hit-enter prompt":
 
     check e.state.ui.tempMessages.len == 0
     check e.cursor == BufferPosition(line: 1, column: 0)
+
+suite "handleKeyCombo - the mappings come before the layers that run a key":
+  proc createEditorForLayers(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc map(e: Editor, mode: EditorMode, lhs, rhs: string) =
+    check e.keyBindingRegistry.addRuntimeMapping(mode, lhs, rhs, true).len == 0
+
+  test "a command-line mapping applies on the search line":
+    # Vim 9.2 maps `/` with cmap as it maps `:`.
+    let e = createEditorForLayers("abc foo")
+    e.map(EditorMode.Command, ",", "f o o")
+
+    e.press("/", ",")
+
+    check e.state.isSearchOverlay
+    check e.state.input.search.text == "foo"
+
+  test "the timeout on the search line runs the command-line mapping":
+    let e = createEditorForLayers("abc")
+    e.map(EditorMode.Command, "j", "a b")
+    e.map(EditorMode.Command, "j k", "y z")
+
+    e.press("/", "j")
+    check e.keyRouter.isHoldingKeys
+    check e.handleKeyMappingTimeout()
+
+    check e.state.input.search.text == "ab"
+
+  test "a command-line mapping applies on the rename line":
+    # As Vim maps input() with cmap.
+    let e = createEditorForLayers("abc")
+    e.state.enterRenameOverlay("abc", 0, 0)
+    e.map(EditorMode.Command, ",", "x y")
+
+    e.press(",")
+
+    check e.state.isRenameOverlay
+    check e.state.renameState.text == "abcxy"
+
+  test "the Recent File mode's mappings apply":
+    let e = createEditorForLayers("")
+    e.enterRecentFileWith(@["/a", "/b", "/c"])
+    e.map(EditorMode.RecentFile, "x", "j")
+
+    e.press("x")
+
+    check e.activeWindow.modeState.recentFile.selectedIndex == 1
+
+  test "a viewer's mapping can start with Ctrl-W":
+    let e = createEditorForLayers("")
+    e.state.mode = EditorMode.Filer
+    var filerState =
+      FilerState(currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false)
+    for i in 0 ..< 3:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
+    e.map(EditorMode.Filer, "C-w x", "j")
+
+    e.press("C-w", "x")
+
+    check e.state.pendingInput.pendingCommand == PendingNone
+    check e.activeWindow.modeState.filer.selectedIndex == 1
+
+  test "a key held for a mapping is let go before a prompt reads the next":
+    # The held key meets the temporary messages first, as Vim's hit-enter
+    # prompt reads the typeahead in order, and the Enter then runs.
+    let e = createEditorForLayers("abc\ndef")
+    e.map(EditorMode.Normal, ", x", "d d")
+
+    e.press(",")
+    check e.keyRouter.isHoldingKeys
+    e.state.ui.tempMessages = @["message"]
+
+    e.press("Enter")
+
+    check not e.keyRouter.isHoldingKeys
+    check e.state.ui.tempMessages.len == 0
+    check e.cursor.line == 1
+
+  test "Ctrl-C drops the keys held for a mapping":
+    # Vim flushes the typeahead on an interrupt, so a key held on the search
+    # line does not run later in Normal mode.
+    let e = createEditorForLayers("abc\ndef")
+    e.map(EditorMode.Command, "j k", "Escape")
+
+    e.press("/", "j")
+    check e.keyRouter.isHoldingKeys
+
+    check e.handleInterrupt()
+    check not e.keyRouter.isHoldingKeys
+    check not e.state.isSearchOverlay
+
+    check e.handleKeyMappingTimeout()
+    check e.cursor.line == 0
+
+  test "a paste goes after the keys held for a mapping":
+    # Vim 9.2 with `inoremap jk <Esc>`: j then a paste of foo types jfoo.
+    let e = createEditorForLayers("")
+    e.map(EditorMode.Insert, "j k", "Escape")
+
+    e.press("i", "j")
+    check e.keyRouter.isHoldingKeys
+    check e.handlePaste("foo")
+
+    check not e.keyRouter.isHoldingKeys
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(0) == "jfoo"
+
+  test "a paste on the search line goes after the keys held for a mapping":
+    let e = createEditorForLayers("abc")
+    e.map(EditorMode.Command, "j k", "Escape")
+
+    e.press("/", "j")
+    check e.handlePaste("foo")
+
+    check e.state.input.search.text == "jfoo"
+
+  test "a paste lets go of every key held for a mapping first":
+    # A key let go can be held again as the start of another mapping. Vim
+    # with `inoremap abc Z` and `inoremap bd W`: a, b, then a paste of foo
+    # types abfoo.
+    let e = createEditorForLayers("")
+    e.map(EditorMode.Insert, "a b c", "Z")
+    e.map(EditorMode.Insert, "b d", "W")
+
+    e.press("i", "a", "b")
+    check e.handlePaste("foo")
+
+    check not e.keyRouter.isHoldingKeys
+    check e.activeBuffer.getLine(0) == "abfoo"
+
+  proc plainLayout(e: Editor) =
+    e.config.standard.mouse = true
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+
+  test "a click lets go of the keys held for a mapping first":
+    let e = createEditorForLayers("abc\ndef")
+    e.plainLayout()
+    e.map(EditorMode.Insert, "j k", "Escape")
+
+    e.press("i", "j")
+    check e.handlePointerInput(initPointerInput(1, 0))
+
+    check not e.keyRouter.isHoldingKeys
+    check e.activeBuffer.getLine(0) == "jabc"
+    check e.cursor.line == 1
+
+  test "a scroll lets go of the keys held for a mapping first":
+    let e = createEditorForLayers("abc\ndef")
+    e.plainLayout()
+    e.map(EditorMode.Insert, "j k", "Escape")
+
+    e.press("i", "j")
+    discard e.handleScrollInput(initScrollInput(0, 0, 1))
+
+    check not e.keyRouter.isHoldingKeys
+    check e.activeBuffer.getLine(0) == "jabc"
+
+  test "a middle-click paste lets go of the keys held for a mapping first":
+    when defined(posix):
+      let fakeDir = installFakeClipboardTool("XY")
+      defer:
+        removeFakeClipboardTool(fakeDir)
+      let e = createEditorForLayers("abc\ndef")
+      e.plainLayout()
+      e.config.clipboard.enable = true
+      e.config.clipboard.tool = cbtXclip
+      e.map(EditorMode.Insert, "j k", "Escape")
+
+      e.press("i", "j")
+      check e.handleEvent(makeMiddleClickEvent(0, 1))
+
+      # Insert mode pastes at the cursor, after the j let go.
+      check not e.keyRouter.isHoldingKeys
+      check e.activeBuffer.getLine(0) == "jXYabc"

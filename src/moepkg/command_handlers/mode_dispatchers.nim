@@ -23,8 +23,8 @@
 ## HandlerResult values. These are the non-recursive part of the dispatcher
 ## layer: each proc here calls into a single sub-handler and converts its
 ## result kind to a HandlerResult. The recursive cluster (Normal mode +
-## handleKeyCombo + playbackMacro + checkRuntimeKeySeqMapping) lives in
-## handler_manager.nim.
+## handleKeyCombo, macro playback and runtime mappings) lives in
+## handler_manager.nim and result_processor.nim.
 ##
 ## dispatchSubStateMode is also kept here because it only forwards to the
 ## sub-state-mode dispatchers in this file.

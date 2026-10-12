@@ -26,11 +26,9 @@ import std/[options, os, strutils]
 
 import pkg/chronos
 
-import ../celina_backend as celina
-
 import
   ../[
-    editor, key_bindings, modes, buffer, types, command_line, command_completion,
+    editor, key_bindings, buffer, types, command_line, command_completion,
     unicode_utils, key_router,
   ]
 import ./editor_ops
@@ -94,8 +92,6 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
     elif e.state.ui.substitutePreview.isActive:
       e.cancelSubstitutePreview()
 
-proc handleCommandModeKeyCombo*(e: Editor, key: KeyInput): ReplayOutcome
-
 proc insertPastedTextInCommand*(e: Editor, text: string) =
   ## Insert pasted text at the current command-line cursor.
   ## The command line is single-line: only the first line of the paste is used
@@ -129,18 +125,6 @@ proc insertPastedTextInCommand*(e: Editor, text: string) =
   e.state.commandCompletionManager.cancelCompletion()
   e.updateSubstitutePreviewIfNeeded()
 
-proc handleCommandModeEvent*(e: Editor, event: Event): bool =
-  ## Handle Command mode events (special handling for text input)
-  if event.kind != EventKind.Key:
-    return true
-
-  # Convert event to key combo
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return true
-
-  return e.handleCommandModeKeyCombo(typedKey(keyComboOpt.get)) != roQuit
-
 proc findHistoryMatch(
     history: seq[string], prefix: string, startIndex, step: int
 ): int =
@@ -153,8 +137,10 @@ proc findHistoryMatch(
     i += step
   return -1
 
-proc runCommandLineKey(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
-  ## Run `keyCombo` on the command line, no mapping applied.
+proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
+  ## Run `keyCombo` on the command line. Its mappings (`cmap`) have already
+  ## had the key: a mapping's keys run here as keys of their own, so the ones
+  ## after an Enter that ends the command line reach the mode it returns to.
 
   # Handle Escape to exit Command mode and return to previous (base) mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
@@ -409,16 +395,3 @@ proc runCommandLineKey(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
 
   # Ignore other special keys
   return roContinue
-
-proc handleCommandModeKeyCombo*(e: Editor, key: KeyInput): ReplayOutcome =
-  ## Handle a key in command-line mode, with runtime mapping support. A
-  ## mapping's keys and the held keys let go run as keys of their own, so the
-  ## ones after an Enter that ends the command line reach the mode it returns
-  ## to.
-  let routed = e.handlerManager.checkRuntimeKeySeqMapping(
-    e, EditorMode.Command, key, literal = false
-  )
-  if routed.isSome:
-    return routed.get
-  e.recordingAfter(key.standsFor):
-    result = e.runCommandLineKey(key.combo)

@@ -505,6 +505,8 @@ The legacy mode name `quickrun` (the QuickRun mode no longer exists) is still ac
 
 Special mode sections (`Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `RecoveryManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`) apply mappings to the corresponding special mode and override `All`.
 
+`[KeyMapping.Command]` applies to every line you type into, as Vim's `cmap` does: the `:` command line, the `/` and `?` search line, and the LSP rename prompt.
+
 ```toml
 # Apply to all modes (except CommandLine)
 [KeyMapping.All]

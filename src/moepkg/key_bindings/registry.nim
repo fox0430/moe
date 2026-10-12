@@ -175,57 +175,6 @@ type
       ## right-hand side, none for other keys. Not `typed`: that first key
       ## stands for typed keys without being one.
 
-  ## Result of matching a single key against the runtime mapping table.
-  ## `routeRuntimeMapping` returns this; the caller executes the decision.
-  RuntimeMappingDecisionKind* = enum
-    rmdExecuteCommand ## Exact match, rmkCommand: execute named command
-    rmdExecuteKeySequence ## Exact match, rmkKeySequence: replay target keys
-    rmdWaitForMore ## Prefix of one or more mappings; wait for next key
-    rmdNoMatchPassThrough
-      ## Either the table is empty, or the only key accumulated has no match.
-      ## Caller should process the current key as if no mapping existed.
-    rmdNoMatchFlush
-      ## Two or more keys accumulated and none match. The caller lets them go
-      ## as Vim does: `leading` (the mapping the first keys complete) runs, or
-      ## else the first key runs unmapped, and the keys after it are fed again.
-
-  RuntimeMappingDecision* = object
-    case kind*: RuntimeMappingDecisionKind
-    of rmdExecuteCommand:
-      commandName*: string
-    of rmdExecuteKeySequence:
-      triggerKeys*: seq[KeyCombo]
-      targetKeys*: seq[KeyCombo]
-      noremap*: bool
-    of rmdWaitForMore, rmdNoMatchPassThrough:
-      discard
-    of rmdNoMatchFlush:
-      accumulatedKeys*: seq[KeyInput]
-      leading*: Option[RuntimeKeyMapping]
-
-  ## Plan returned by `flushRuntimeMapping` when the key-mapping timeout fires
-  ## with a non-empty accumulator. The caller is responsible for executing the
-  ## plan.
-  RuntimeMappingFlushKind* = enum
-    rmfNothing ## Accumulator was already empty
-    rmfExecuteCommand ## Exact match with rmkCommand
-    rmfExecuteKeySequence ## Exact match with rmkKeySequence
-    rmfReplayPerKey ## No exact match: let the keys go as `rmdNoMatchFlush` does
-
-  RuntimeMappingFlushPlan* = object
-    case kind*: RuntimeMappingFlushKind
-    of rmfNothing:
-      discard
-    of rmfExecuteCommand:
-      commandName*: string
-    of rmfExecuteKeySequence:
-      triggerKeys*: seq[KeyCombo]
-      targetKeys*: seq[KeyCombo]
-      noremap*: bool
-    of rmfReplayPerKey:
-      keysToReplay*: seq[KeyInput]
-      leading*: Option[RuntimeKeyMapping]
-
   ## Registry for all key_bindings
   KeyBindingRegistry* = ref object
     bindings*: Table[EditorMode, seq[KeyBinding]]
