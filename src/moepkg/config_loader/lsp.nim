@@ -38,17 +38,26 @@ import base, save_base
 # Top-level TOML section name handled by this module, from the type itself.
 const LspSectionName* = cfgGroupName(LspConfig)
 
-# Server keys accepted inside an `[Lsp.<languageId>]` table.
-const LspServerConfigKeys = [
-  "extensions", "command", "trace", "settings", "rustAnalyzerRunSingle",
-  "rustAnalyzerDebugSingle",
+# Deprecated bool keys, each standing for one `clientCommands` entry. Not
+# `{.cfgDeprecated.}`: `[Lsp.<languageId>]` has no type to derive from. To drop
+# them, delete this table and its uses.
+const DeprecatedClientCommandKeys = [
+  ("rustAnalyzerRunSingle", RunSingleCommand),
+  ("rustAnalyzerDebugSingle", DebugSingleCommand),
 ]
+
+# Documented server keys of an `[Lsp.<languageId>]` table.
+const LspServerConfigKeys =
+  ["extensions", "command", "trace", "settings", "clientCommands"]
+
+# Server keys accepted inside an `[Lsp.<languageId>]` table.
+const LspServerKeys = @LspServerConfigKeys & DeprecatedClientCommandKeys.mapIt(it[0])
 
 # `[Lsp.<Feature>]` names, also accepted as `[Lsp.<languageId>.<Feature>]`.
 const LspFeatureNames = generateSectionGroupChildNames(LspConfig)
 
 # Keys accepted inside an `[Lsp.<languageId>]` table.
-const LspLanguageKeys = @LspServerConfigKeys & @LspFeatureNames
+const LspLanguageKeys = LspServerKeys & @LspFeatureNames
 
 # The only key a `[Lsp.<languageId>.<Feature>]` table takes.
 const LspLanguageFeatureKey = "enable"
@@ -77,17 +86,36 @@ proc tomlValueToJson*(v: TomlValueRef): JsonNode =
     for key, val in t.pairs:
       result[key] = tomlValueToJson(val)
 
+proc loadDeprecatedClientCommands(
+    table: TomlTableRef,
+    commands: var seq[string],
+    vr: var ValidationResult,
+    section: string,
+) =
+  ## The deprecated keys apply only while `clientCommands` is not written.
+  var keys, deprecatedCommands: seq[string]
+  for (key, command) in DeprecatedClientCommandKeys:
+    var enabled = false
+    loadBool(table, key, enabled, vr, section)
+    # Skips `false`, which `:putConfigFile` used to write for every language.
+    if enabled:
+      keys.add key
+      deprecatedCommands.add command
+  let overridden = table.hasKey("clientCommands")
+  let msg =
+    if overridden:
+      "ignored because clientCommands is set"
+    else:
+      "use clientCommands = " & toTomlStringArray(deprecatedCommands) & " instead"
+  for key in keys:
+    vr.addDeprecated(fullKey(section, key), msg)
+  if not overridden:
+    commands = deprecatedCommands
+
 proc loadLspServerConfig*(
     table: TomlTableRef, vr: var ValidationResult, section: string
 ): LspServerConfig =
-  result = LspServerConfig(
-    extensions: @[],
-    command: "",
-    trace: ltOff,
-    settings: "",
-    rustAnalyzerRunSingle: false,
-    rustAnalyzerDebugSingle: false,
-  )
+  result = LspServerConfig(extensions: @[], command: "", trace: ltOff, settings: "")
   loadStringArray(table, "extensions", result.extensions, vr, section)
   loadString(table, "command", result.command, vr, section)
   loadEnum(
@@ -99,10 +127,11 @@ proc loadLspServerConfig*(
       result.settings = $tomlValueToJson(val)
     else:
       vr.addError(fullKey(section, "settings"), $val, "table")
-  loadBool(table, "rustAnalyzerRunSingle", result.rustAnalyzerRunSingle, vr, section)
-  loadBool(
-    table, "rustAnalyzerDebugSingle", result.rustAnalyzerDebugSingle, vr, section
+  loadEnumStringArray(
+    table, "clientCommands", result.clientCommands, RunnableCommands, vr, section
   )
+  result.clientCommands = result.clientCommands.deduplicate
+  loadDeprecatedClientCommands(table, result.clientCommands, vr, section)
 
 proc loadLspLanguageFeatures(
     table: TomlTableRef, vr: var ValidationResult, section: string
@@ -140,7 +169,7 @@ proc loadLspConfig*(
     let langTable = value.getTable()
     var hasServerKey, hasSubTable = false
     for k, v in langTable:
-      if k in LspServerConfigKeys:
+      if k in LspServerKeys:
         hasServerKey = true
       elif v.kind == TomlValueKind.Table:
         hasSubTable = true
@@ -205,8 +234,8 @@ proc appendLspServerToml(
       lines.add "settings = " & jsonToTomlInline(parseJson(server.settings))
     except JsonParsingError as e:
       logWarn("config_loader/lsp", &"Invalid JSON in settings for '{name}': {e.msg}")
-  lines.add "rustAnalyzerRunSingle = " & toTomlBool(server.rustAnalyzerRunSingle)
-  lines.add "rustAnalyzerDebugSingle = " & toTomlBool(server.rustAnalyzerDebugSingle)
+  if server.clientCommands.len > 0:
+    lines.add "clientCommands = " & toTomlStringArray(server.clientCommands)
   lines.add ""
 
 proc appendLspToml*(lines: var seq[string], cfg: LspConfig) =

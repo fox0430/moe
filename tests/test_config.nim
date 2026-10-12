@@ -419,18 +419,13 @@ suite "Config - LspServerConfig defaults":
     check serverConfig.command == ""
     check serverConfig.trace == ltOff
     check serverConfig.settings == ""
-    check serverConfig.rustAnalyzerRunSingle == false
-    check serverConfig.rustAnalyzerDebugSingle == false
+    check serverConfig.clientCommands.len == 0
 
   test "LspServerConfig can be added to servers table":
     let config = newEditorConfig()
 
     config.lsp.servers["nim"] = LspServerConfig(
-      extensions: @[".nim", ".nims"],
-      command: "nimlsp",
-      trace: ltVerbose,
-      rustAnalyzerRunSingle: false,
-      rustAnalyzerDebugSingle: false,
+      extensions: @[".nim", ".nims"], command: "nimlsp", trace: ltVerbose
     )
 
     check config.lsp.servers.hasKey("nim")

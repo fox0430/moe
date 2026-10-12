@@ -534,6 +534,16 @@ suite "LspWorker - buildApplyEditResponse":
     check resp["id"].kind == JNull
     check resp["result"]["applied"].getBool
 
+suite "LspWorker - buildClientCapabilities":
+  test "experimental.commands is sent even without client commands":
+    ## rust-analyzer treats a missing list as "every command is supported".
+    let caps = buildClientCapabilities(@[])
+    check caps["experimental"]["commands"]["commands"] == newJArray()
+
+  test "experimental.commands lists only the given commands":
+    let caps = buildClientCapabilities(@["rust-analyzer.runSingle"])
+    check caps["experimental"]["commands"]["commands"] == %*["rust-analyzer.runSingle"]
+
 suite "LspWorker - buildWorkspaceConfigurationResponse":
   test "returns one null per item when settings is null":
     let params = %*{"items": [{"section": "foo"}, {"section": "bar"}]}

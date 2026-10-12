@@ -694,6 +694,90 @@ trace = "invalid"
     check "Lsp.nim.trace" in vr.errors[0].name
     check config.lsp.servers["nim"].trace == ltOff # Default value
 
+  test "clientCommands loads in any language table":
+    let tomlStr = """
+[Lsp.rustdev]
+command = "rust-analyzer"
+clientCommands = ["rust-analyzer.runSingle", "rust-analyzer.debugSingle"]
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.len == 0
+    check config.lsp.servers["rustdev"].clientCommands ==
+      @["rust-analyzer.runSingle", "rust-analyzer.debugSingle"]
+
+  test "a clientCommands entry moe cannot run is rejected":
+    let tomlStr = """
+[Lsp.rust]
+clientCommands = ["rust-analyzer.showReferences", "rust-analyzer.runSingle"]
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.len == 1
+    check vr.errors[0].kind == sikInvalidValue
+    check vr.errors[0].name == "Lsp.rust.clientCommands[0]"
+    check config.lsp.servers["rust"].clientCommands.len == 0
+
+  test "deprecated rust-analyzer keys still add their client command":
+    ## `false` is left alone: `:putConfigFile` used to write it for every language.
+    let tomlStr = """
+[Lsp.rust]
+rustAnalyzerRunSingle = true
+rustAnalyzerDebugSingle = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check vr.errors.len == 1
+    check vr.errors[0].kind == sikDeprecated
+    check vr.errors[0].name == "Lsp.rust.rustAnalyzerRunSingle"
+    check config.lsp.servers["rust"].clientCommands == @["rust-analyzer.runSingle"]
+
+  test "every deprecated key's notice suggests the same clientCommands":
+    let tomlStr = """
+[Lsp.rust]
+rustAnalyzerRunSingle = true
+rustAnalyzerDebugSingle = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    const suggestion =
+      """use clientCommands = ["rust-analyzer.runSingle", "rust-analyzer.debugSingle"] instead"""
+    check vr.errors.len == 2
+    check vr.errors.allIt(it.kind == sikDeprecated and it.expected == suggestion)
+    check config.lsp.servers["rust"].clientCommands ==
+      @["rust-analyzer.runSingle", "rust-analyzer.debugSingle"]
+
+  test "clientCommands, even empty, wins over the deprecated keys":
+    let tomlStr = """
+[Lsp.rust]
+clientCommands = []
+rustAnalyzerRunSingle = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.len == 1
+    check vr.errors[0].kind == sikDeprecated
+    check vr.errors[0].expected == "ignored because clientCommands is set"
+    check config.lsp.servers["rust"].clientCommands.len == 0
+
+  test "an invalid clientCommands still wins over the deprecated keys":
+    let tomlStr = """
+[Lsp.rust]
+clientCommands = ["rust-analyzer.debugSingle", "typo"]
+rustAnalyzerRunSingle = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.len == 2
+    check vr.errors.countIt(it.kind == sikInvalidValue) == 1
+    check vr.errors.countIt(it.kind == sikDeprecated) == 1
+    check config.lsp.servers["rust"].clientCommands.len == 0
+
+  test "a deprecated rust-analyzer key with a non-bool value is invalid":
+    let tomlStr = """
+[Lsp.rust]
+rustAnalyzerRunSingle = "yes"
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.len == 1
+    check vr.errors[0].kind == sikInvalidValue
+    check config.lsp.servers["rust"].clientCommands.len == 0
+
   test "Every feature sub-table is loaded":
     ## Every table must be accepted and must drive its own `enable`. Both
     ## values are exercised: one feature defaults to false, so a single pass
@@ -2379,8 +2463,7 @@ suite "Config - saveConfigToToml round-trip completeness":
       extensions: @[".test"],
       command: "test-lsp",
       trace: ltMessages,
-      rustAnalyzerRunSingle: true,
-      rustAnalyzerDebugSingle: true,
+      clientCommands: @["rust-analyzer.runSingle", "rust-analyzer.debugSingle"],
     )
 
     config.lsp.languageFeatures["testLang"] = {"Hover": false}.toTable
@@ -4371,6 +4454,29 @@ suite "Config - Lsp per-language feature tables round-trip":
     check loaded.lsp.languageFeatures == config.lsp.languageFeatures
     check not loaded.lsp.servers.hasKey("nim")
 
+suite "Config - Lsp clientCommands round-trip":
+  test "Saved only where set, never as the deprecated keys":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_lsp_client_commands_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.lsp.servers["nim"] = LspServerConfig(command: "nimlsp")
+    config.lsp.servers["rust"] =
+      LspServerConfig(clientCommands: @["rust-analyzer.runSingle"])
+    check saveConfigToToml(config, testFile).isOk
+    let content = readFile(testFile)
+    check content.count("clientCommands") == 1
+    check "rustAnalyzer" notin content
+
+    let (loaded, vr) = loadConfigFromToml(testFile).get
+    check vr.errors.len == 0
+    check loaded.lsp.servers["rust"].clientCommands == @["rust-analyzer.runSingle"]
+
 suite "Config - Lsp server settings round-trip":
   proc roundTripSettings(settingsJson: string): string =
     inc testFileCounter
@@ -4382,12 +4488,7 @@ suite "Config - Lsp server settings round-trip":
     config.theme.kind = tkDefault
     config.theme.path = ""
     config.lsp.servers["nim"] = LspServerConfig(
-      extensions: @[".nim"],
-      command: "nimlsp",
-      trace: ltOff,
-      settings: settingsJson,
-      rustAnalyzerRunSingle: false,
-      rustAnalyzerDebugSingle: false,
+      extensions: @[".nim"], command: "nimlsp", trace: ltOff, settings: settingsJson
     )
 
     let saveResult = saveConfigToToml(config, testFile)

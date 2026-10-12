@@ -66,8 +66,10 @@ proc buildModifiedPathSuffix*(e: Editor, res: WorkspaceEditResult): string =
   if pathList.len > 0:
     result = ": " & pathList
 
-proc launchAffectingFields(c: LanguageServerConfig): (string, seq[string], string) =
-  (c.command, c.args, c.initializationOptions)
+proc launchAffectingFields(
+    c: LanguageServerConfig
+): (string, seq[string], string, seq[string]) =
+  (c.command, c.args, c.initializationOptions, c.clientCommands.sorted)
 
 proc toWorkerTrace(t: LspTraceLevel): LspTrace =
   ## Translate the config-layer enum to the worker-layer enum. Two enums exist
@@ -103,10 +105,7 @@ proc applyLspServerConfigs*(e: Editor) =
         c.extensions = serverCfg.extensions
       c.traceLevel = toWorkerTrace(serverCfg.trace)
       c.settings = serverCfg.settings
-      if langId == "rust":
-        c.initializationOptions =
-          "{\"lens\":{\"run\":{\"enable\":" & $serverCfg.rustAnalyzerRunSingle &
-          "},\"debug\":{\"enable\":" & $serverCfg.rustAnalyzerDebugSingle & "}}}"
+      c.clientCommands = serverCfg.clientCommands
       e.lsp.service.setConfig(langId, c)
     elif serverCfg.command.len > 0:
       e.lsp.service.setConfig(
@@ -118,6 +117,7 @@ proc applyLspServerConfigs*(e: Editor) =
           enabled: true,
           traceLevel: toWorkerTrace(serverCfg.trace),
           settings: serverCfg.settings,
+          clientCommands: serverCfg.clientCommands,
         ),
       )
 

@@ -620,9 +620,8 @@ command = "rust-analyzer"              # LSP server command
 
 trace = "verbose"                      # Trace level
 
-rustAnalyzerRunSingle = true           # rust-analyzer specific: run single
-
-rustAnalyzerDebugSingle = true         # rust-analyzer specific: debug single
+# Client-side commands moe runs (rust-analyzer Run / Debug Code Lenses)
+clientCommands = ["rust-analyzer.runSingle", "rust-analyzer.debugSingle"]
 
 # [CommandAliases]
 # Define custom command aliases for built-in editor commands.

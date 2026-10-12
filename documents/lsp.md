@@ -234,7 +234,14 @@ If this feature is enabled, Highlight.currentWord will be forced to disable.
 
 Currently, Only supported in rust-analyzer.
 
-Please set true to `Lps.CodeLens.enable`, `Lsp.rust.rustAnalyzerRunSingle`, `Lsp.rust.rustAnalyzerDebugSingle`.
+Please set true to `Lsp.CodeLens.enable` and list the commands in `Lsp.rust.clientCommands`.
+
+```toml
+[Lsp.rust]
+clientCommands = ["rust-analyzer.runSingle", "rust-analyzer.debugSingle"]
+```
+
+Run / Debug lenses appear only for the listed commands, in whatever `[Lsp.<languageId>]` table runs rust-analyzer. Earlier versions also showed them when `[Lsp.rust]` was absent or rust-analyzer ran under another language ID.
 
 `\c` command in Normal mode on A code lens line.
 

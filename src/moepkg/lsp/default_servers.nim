@@ -17,8 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-## Built-in language servers. Free of the LSP runtime so the config loader can
-## tell a built-in language ID from a typo.
+## Built-in language servers and the client-side commands moe runs for them.
+## Free of the LSP runtime so the config loader can use them.
 
 type DefaultLspServer* = object
   langId*: string
@@ -57,6 +57,11 @@ const DefaultLspServers* = [
     extensions: @["cpp", "hpp", "cc", "hh", "cxx", "hxx"],
   ),
 ]
+
+const
+  RunSingleCommand* = "rust-analyzer.runSingle"
+  DebugSingleCommand* = "rust-analyzer.debugSingle"
+  RunnableCommands* = [RunSingleCommand, DebugSingleCommand]
 
 proc isDefaultLspLanguage*(langId: string): bool =
   ## Whether `langId` has a built-in server.

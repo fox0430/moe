@@ -706,9 +706,8 @@ type
     settings*: string
       ## Serialized JSON for workspace/didChangeConfiguration and
       ## workspace/configuration responses ("" = none).
-    # Rust-analyzer specific options
-    rustAnalyzerRunSingle*: bool
-    rustAnalyzerDebugSingle*: bool
+    clientCommands*: seq[string]
+      ## Client-side commands advertised in `experimental.commands`.
 
   # LSP settings. A section group: loader, known-key list, serializer, UI and
   # docs are all derived from this declaration; `servers` and

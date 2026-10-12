@@ -427,6 +427,50 @@ suite "LspService - Worker Management (without actual workers)":
 
     worker.stop()
 
+  test "clientCommands reach initialize on first start and on restart":
+    proc waitForState(
+        worker: LspWorker, expected: LspWorkerState, timeoutMs = 5000
+    ): bool =
+      let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+      while getMonoTime() < deadline:
+        if worker.state == expected:
+          return true
+        sleep(10)
+      false
+
+    proc advertisedCommands(worker: LspWorker, timeoutMs = 5000): JsonNode =
+      let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+      while getMonoTime() < deadline:
+        for evt in worker.pollEvents():
+          if evt.kind == levRawJson and evt.jsonDirection == ljdSent:
+            let msg = parseJson(evt.rawJson)
+            if msg{"method"}.getStr == "initialize":
+              return
+                msg{"params", "capabilities", "experimental", "commands", "commands"}
+        sleep(10)
+      newJNull()
+
+    let svc = newLspService()
+    var config = LanguageServerConfig(
+      command: "sleep",
+      args: @["1"],
+      extensions: @["cmdext"],
+      enabled: true,
+      traceLevel: traceVerbose,
+      clientCommands: @["rust-analyzer.runSingle"],
+    )
+    svc.setConfig("cmdlang", config)
+    let worker = svc.startWorker("cmdlang").get
+    check worker.advertisedCommands() == %*["rust-analyzer.runSingle"]
+    check worker.waitForState(lwsCrashed)
+
+    config.clientCommands = @["rust-analyzer.debugSingle"]
+    svc.setConfig("cmdlang", config)
+    check svc.startWorker("cmdlang").get == worker
+    check worker.advertisedCommands() == %*["rust-analyzer.debugSingle"]
+
+    worker.stop()
+
 suite "LspService - Pending Request Management":
   test "hasPendingRequests returns false initially":
     let svc = newLspService()
