@@ -30,7 +30,7 @@ import
   lsp_integration,
   unicode_utils,
   lsp_request_context
-import lsp/rust_runnable
+import lsp/[default_servers, rust_runnable]
 import buffer/undo
 
 proc hasCodeLensSupport*(e: Editor): bool =
@@ -287,8 +287,7 @@ proc executeCodeLensItem*(
     # rust-analyzer run/debug are client-side commands: the server expects the
     # editor (not workspace/executeCommand) to launch the build/test process.
     # Intercept them and queue a terminal command; the main loop opens it.
-    if item.command == "rust-analyzer.runSingle" or
-        item.command == "rust-analyzer.debugSingle":
+    if item.command in RunnableCommands:
       if item.arguments.len == 0:
         return err("Runnable command has no arguments")
       var runnable: JsonNode
@@ -296,9 +295,8 @@ proc executeCodeLensItem*(
         runnable = parseJson(item.arguments[0])
       except JsonParsingError:
         return err("Failed to parse runnable argument")
-      let cmdResult = buildRunnableCommand(
-        runnable, debug = item.command == "rust-analyzer.debugSingle"
-      )
+      let cmdResult =
+        buildRunnableCommand(runnable, debug = item.command == DebugSingleCommand)
       if cmdResult.isErr:
         return err(cmdResult.error)
       e.state.pending.add PendingAsyncOp(

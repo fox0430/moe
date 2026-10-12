@@ -58,6 +58,8 @@ type
     settings*: string
       ## Serialized JSON for workspace/didChangeConfiguration and
       ## workspace/configuration responses ("" = none).
+    clientCommands*: seq[string]
+      ## Client-side commands advertised in `experimental.commands`.
 
   LspResponseStatus* = enum
     lrsPending # Response not yet received
@@ -429,7 +431,7 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
       # Thread survived; respawn the server on it.
       worker.startServer(
         config.command, config.args, svc.workspaceRoot, config.initializationOptions,
-        config.settings,
+        config.settings, config.clientCommands,
       )
       svc.onLogMessage(langId, mtInfo, "Restarting language server: " & config.command)
       # Re-baseline to lwsStarting; a re-read could miss an instant death.
@@ -454,7 +456,7 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
   # Start the LSP server
   worker.startServer(
     config.command, config.args, svc.workspaceRoot, config.initializationOptions,
-    config.settings,
+    config.settings, config.clientCommands,
   )
 
   svc.workers[langId] = worker

@@ -1214,8 +1214,7 @@ The same commands as `[KeyMapping]` are available. See [Available commands](#ava
 | command | string | | LSP server command |
 | trace | LspTraceLevel | off | LSP trace level for debugging |
 | settings | table | | Server-specific settings, sent as `workspace/didChangeConfiguration` and used to answer `workspace/configuration` |
-| rustAnalyzerRunSingle | bool | false | `rust-analyzer.runSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
-| rustAnalyzerDebugSingle | bool | false | `rust-analyzer.debugSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
+| clientCommands | Array of string | | Client-side commands advertised to the server. Supported: `rust-analyzer.runSingle`, `rust-analyzer.debugSingle` (Code Lens, needs `Lsp.CodeLens` enabled). Replaces the deprecated `rustAnalyzerRunSingle` / `rustAnalyzerDebugSingle`, which are ignored when it is set |
 
 
 ### Lsp.{languageId}.{Feature} table

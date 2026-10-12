@@ -359,6 +359,43 @@ suite "Editor - applyConfigSettings LSP server configs":
     e.applyConfigSettings(removeCfg)
     check e.lsp.service.getConfig("mylang").isNone
 
+  test "client commands are advertised only when [Lsp.<lang>] lists them":
+    let e = mkEditor()
+    check e.lsp.service.getConfig("rust").get.clientCommands.len == 0
+
+    let rustCfg = newEditorConfig()
+    rustCfg.lsp.servers["rust"] = LspServerConfig(extensions: @["rs"], trace: ltVerbose)
+    e.applyConfigSettings(rustCfg)
+    check e.lsp.service.getConfig("rust").get.clientCommands.len == 0
+
+    let runCfg = newEditorConfig()
+    runCfg.lsp.servers["rust"] =
+      LspServerConfig(extensions: @["rs"], clientCommands: @["rust-analyzer.runSingle"])
+    runCfg.lsp.servers["rustdev"] = LspServerConfig(
+      command: "rust-analyzer",
+      extensions: @["rs"],
+      clientCommands: @["rust-analyzer.debugSingle"],
+    )
+    e.applyConfigSettings(runCfg)
+    check e.lsp.service.getConfig("rust").get.clientCommands ==
+      @["rust-analyzer.runSingle"]
+    check e.lsp.service.getConfig("rustdev").get.clientCommands ==
+      @["rust-analyzer.debugSingle"]
+
+    e.applyConfigSettings(newEditorConfig())
+    check e.lsp.service.getConfig("rust").get.clientCommands.len == 0
+
+  test "a custom [Lsp.rust] server gets no rust-analyzer initializationOptions":
+    let e = mkEditor()
+    let customCfg = newEditorConfig()
+    customCfg.lsp.servers["rust"] =
+      LspServerConfig(command: "custom-rust", extensions: @["rs"])
+    e.applyConfigSettings(customCfg)
+    let c = e.lsp.service.getConfig("rust").get
+    check c.command == "custom-rust"
+    check c.initializationOptions == ""
+    check c.clientCommands.len == 0
+
 suite "Editor - applyLspServerConfigs :lspRestart hint on running-worker change":
   test "hint appears when a running worker's command changed":
     let e = mkEditor()
@@ -406,9 +443,8 @@ suite "Editor - applyLspServerConfigs :lspRestart hint on running-worker change"
     let newCfg = newEditorConfig()
     newCfg.lsp.servers["nim"] =
       LspServerConfig(command: "custom-nim", extensions: @["nim"])
-    newCfg.lsp.servers["rust"] = LspServerConfig(
-      command: "custom-rust", extensions: @["rs"], rustAnalyzerRunSingle: false
-    )
+    newCfg.lsp.servers["rust"] =
+      LspServerConfig(command: "custom-rust", extensions: @["rs"])
     e.state.statusMessage = ""
     e.applyConfigSettings(newCfg)
 
@@ -435,26 +471,49 @@ suite "Editor - applyLspServerConfigs :lspRestart hint on running-worker change"
 
     check not e.state.statusMessage.contains(":lspRestart")
 
-  test "hint when rust-analyzer initializationOptions change":
+  test "hint when rust-analyzer client commands change":
     let e = mkEditor()
     e.lsp.service.liveWorkerLangIdsOverride = proc(): seq[string] {.gcsafe.} =
       @["rust"]
 
     let firstCfg = newEditorConfig()
     firstCfg.lsp.servers["rust"] = LspServerConfig(
-      extensions: @["rs"], rustAnalyzerRunSingle: true, rustAnalyzerDebugSingle: true
+      extensions: @["rs"],
+      clientCommands: @["rust-analyzer.runSingle", "rust-analyzer.debugSingle"],
     )
     e.applyConfigSettings(firstCfg)
     e.state.statusMessage = ""
 
     let secondCfg = newEditorConfig()
     secondCfg.lsp.servers["rust"] = LspServerConfig(
-      extensions: @["rs"], rustAnalyzerRunSingle: false, rustAnalyzerDebugSingle: true
+      extensions: @["rs"], clientCommands: @["rust-analyzer.debugSingle"]
     )
     e.applyConfigSettings(secondCfg)
 
     check e.state.statusMessage.contains("rust")
     check e.state.statusMessage.contains(":lspRestart")
+
+  test "no hint when only the client command order changes":
+    let e = mkEditor()
+    e.lsp.service.liveWorkerLangIdsOverride = proc(): seq[string] {.gcsafe.} =
+      @["rust"]
+
+    let firstCfg = newEditorConfig()
+    firstCfg.lsp.servers["rust"] = LspServerConfig(
+      extensions: @["rs"],
+      clientCommands: @["rust-analyzer.runSingle", "rust-analyzer.debugSingle"],
+    )
+    e.applyConfigSettings(firstCfg)
+    e.state.statusMessage = ""
+
+    let secondCfg = newEditorConfig()
+    secondCfg.lsp.servers["rust"] = LspServerConfig(
+      extensions: @["rs"],
+      clientCommands: @["rust-analyzer.debugSingle", "rust-analyzer.runSingle"],
+    )
+    e.applyConfigSettings(secondCfg)
+
+    check not e.state.statusMessage.contains(":lspRestart")
 
 suite "EditorState - per-buffer .editorconfig overrides for tabStop/shiftWidth/expandTab":
   test "tabStop reads buf.editorConfig override when set":

@@ -135,6 +135,7 @@ type
       workspaceRoot*: string
       initializationOptions*: string # Serialized JSON ("" = none)
       settings*: string # Serialized JSON ("" = none)
+      clientCommands*: seq[string] # Advertised in `experimental.commands`
     of lcmdStop, lcmdShutdown:
       discard
     of lcmdDidOpen:
@@ -406,7 +407,7 @@ proc popAll*(q: var EventQueue): seq[LspEvent] =
       result.add(q.queue.popFirst())
 
 # Client capabilities
-proc buildClientCapabilities(): JsonNode =
+proc buildClientCapabilities*(clientCommands: seq[string]): JsonNode =
   %*{
     "textDocument": {
       "synchronization": {
@@ -495,14 +496,10 @@ proc buildClientCapabilities(): JsonNode =
       "didChangeConfiguration": {"dynamicRegistration": true},
     },
     "window": {"workDoneProgress": true},
-    # rust-analyzer only emits its run/debug CodeLenses when the client declares
-    # it can execute the corresponding client-side commands. Advertise the ones
-    # moe handles (see editor_codelens.executeCodeLensItem); the actual
-    # run/debug lens visibility is still gated per-setting via the server's
-    # initializationOptions (lens.run/lens.debug).
-    "experimental": {
-      "commands": {"commands": ["rust-analyzer.runSingle", "rust-analyzer.debugSingle"]}
-    },
+    # rust-analyzer only emits its Run / Debug CodeLenses for the commands
+    # listed here (see editor_codelens.executeCodeLensItem). Sent even when
+    # empty: without it rust-analyzer assumes every client command.
+    "experimental": {"commands": {"commands": clientCommands}},
   }
 
 proc buildApplyEditResponse*(
@@ -1256,14 +1253,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       "rootUri": rootUri,
       "rootPath": rootPath,
       "workspaceFolders": newJNull(),
-      "capabilities": buildClientCapabilities(),
+      "capabilities": buildClientCapabilities(cmd.clientCommands),
       # Forward the configured trace level verbatim (LSP spec: off/messages/verbose).
       # An off level tells the server not to send $/logTrace at all.
       "trace": $ctx.traceLevel,
     }
 
-    # Forward server-specific initializationOptions (e.g. rust-analyzer lens
-    # config). Carried as a serialized string across the thread boundary.
+    # Forward server-specific initializationOptions. Carried as a serialized
+    # string across the thread boundary.
     if cmd.initializationOptions.len > 0:
       try:
         initParams["initializationOptions"] = parseJson(cmd.initializationOptions)
@@ -1938,6 +1935,7 @@ proc startServer*(
     workspaceRoot: string,
     initializationOptions: string = "",
     settings: string = "",
+    clientCommands: seq[string] = @[],
 ) =
   # Mark starting before queuing so liveness checks see it; otherwise a sync
   # in the gap re-opens an already-opened document.
@@ -1951,6 +1949,7 @@ proc startServer*(
     workspaceRoot: workspaceRoot,
     initializationOptions: initializationOptions,
     settings: settings,
+    clientCommands: clientCommands,
   )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 
