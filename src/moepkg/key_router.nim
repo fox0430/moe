@@ -31,12 +31,12 @@
 ## (which `addRuntimeMapping` stores in `sequences[mode]`) resolves correctly.
 ##
 ## The router owns the runtime-mapping accumulator directly via its
-## `dispatchState` field (a `DispatchState`); the routing helpers
-## (`routeRuntimeMapping`/`flushRuntimeMapping`) take it as a `var` parameter.
-## Stale accumulator on empty mappings is handled inside `routeRuntimeMapping`
-## via `rmdNoMatchFlush`. The built-in sequence accumulator
-## (`KeyBindingRegistry.sequenceState`) is *deliberately* registry-owned — this
-## split is the intended end state, not a pending migration:
+## `dispatchState` field (a `DispatchState`), which `feedKey` and
+## `flushTimeout` match against the mapping table and decide on in one step.
+## Stale accumulator on empty mappings is let go there. The built-in sequence
+## accumulator (`KeyBindingRegistry.sequenceState`) is *deliberately*
+## registry-owned — this split is the intended end state, not a pending
+## migration:
 ##
 ## - `processKey`'s sequence FSM lives in `key_bindings` and is the only writer;
 ##   every other toucher goes through named registry APIs (`isWaitingForChar`,
@@ -81,6 +81,11 @@ proc isHoldingKeys*(router: KeyRouter): bool =
   ## True while runtime-mapping keys wait for the rest of a mapping.
   router.dispatchState.keys.len > 0
 
+proc dropHeldKeys*(router: KeyRouter) =
+  ## Forget the keys held for a mapping, as Vim flushes the typeahead on an
+  ## interrupt.
+  clearRuntimeMappingState(router.dispatchState)
+
 proc cancel*(router: KeyRouter): bool {.discardable.} =
   ## Cancel pending dispatch state that Escape should clear. Currently this
   ## is the built-in multi-key sequence accumulator only; the runtime mapping
@@ -113,34 +118,44 @@ proc mappingsFor(router: KeyRouter, mode: EditorMode): seq[RuntimeKeyMapping] =
   else:
     router.registry.getAllRuntimeMappings(mode)
 
-proc decisionToRoute(decision: RuntimeMappingDecision, key: KeyCombo): RouteResult =
-  case decision.kind
-  of rmdExecuteCommand:
-    RouteResult(kind: rrExecuteRuntimeCommand, commandName: decision.commandName)
-  of rmdExecuteKeySequence:
-    RouteResult(
-      kind: rrExecuteRuntimeKeySequence,
-      triggerKeys: decision.triggerKeys,
-      targetKeys: decision.targetKeys,
-      noremap: decision.noremap,
-    )
-  of rmdWaitForMore:
-    RouteResult(kind: rrWaiting, waitsForTimeout: true)
-  of rmdNoMatchPassThrough:
-    RouteResult(kind: rrUnhandled, key: key)
-  of rmdNoMatchFlush:
-    RouteResult(
-      kind: rrReleaseHeld, keys: decision.accumulatedKeys, leading: decision.leading
-    )
+proc leadingMapping(
+    keys: seq[KeyCombo], mappings: seq[RuntimeKeyMapping]
+): Option[RuntimeKeyMapping] =
+  ## The mapping with the longest left-hand side that `keys` start with and go
+  ## past, which Vim runs when the keys after it break a longer mapping.
+  for m in mappings:
+    let n = m.triggerKeys.len
+    if n < keys.len and keys.startsWith(m.triggerKeys) and
+        (result.isNone or n > result.get.triggerKeys.len):
+      result = some(m)
+
+proc exactMapping(
+    keys: seq[KeyCombo], mappings: seq[RuntimeKeyMapping]
+): Option[RuntimeKeyMapping] =
+  ## The mapping whose left-hand side is `keys`, if any.
+  for m in mappings:
+    if m.triggerKeys == keys:
+      return some(m)
+
+proc letGo(
+    router: KeyRouter, keys: seq[KeyInput], mappings: seq[RuntimeKeyMapping]
+): RouteResult =
+  ## Stop holding and let `keys` go, after the mapping their first keys
+  ## complete if there is one.
+  clearRuntimeMappingState(router.dispatchState)
+  RouteResult(
+    kind: rrReleaseHeld, keys: keys, leading: leadingMapping(keys.combos, mappings)
+  )
 
 proc feedKey*(
     router: KeyRouter, mode: EditorMode, key: KeyInput, literal: bool
 ): RouteResult =
   ## Hand `key` to the router for runtime-mapping resolution. The result tells
-  ## the caller what to do next: execute a runtime mapping, wait for more keys,
-  ## let the held keys go, or fall through to normal handling. A key comes here
-  ## unless a layer in front of the router takes it, such as a popup or a
-  ## viewer's Ctrl-W; only such a key can run before the keys held ahead of it.
+  ## the caller what to do next: run a runtime mapping, wait for more keys,
+  ## let the held keys go, or fall through to normal handling. Every key comes
+  ## here before the layers that run it, so none runs ahead of the keys held
+  ## before it; only a prompt (temporary messages, a popup) reads a key first,
+  ## and only while none are held.
   ## `literal` is true when the command being built reads `key` as it is (an
   ## operand, an Escape that ends it). That is the command before the held
   ## keys, so it counts only while none are held; the key meets it again once
@@ -149,36 +164,48 @@ proc feedKey*(
   if not router.isHoldingKeys and (literal or not key.remap):
     return RouteResult(kind: rrUnhandled, key: key.combo)
   let mappings = router.mappingsFor(mode)
+  if mappings.len == 0 and not router.isHoldingKeys:
+    return RouteResult(kind: rrUnhandled, key: key.combo)
+  if mappings.len == 0 or not key.remap:
+    # Mappings unbound while keys were held, or a key Vim neither starts nor
+    # completes a mapping with: it ends the keys held before it.
+    return router.letGo(router.dispatchState.keys & key, mappings)
+
+  router.dispatchState.keys.add(key)
   let held = router.dispatchState.keys
-  let decision = routeRuntimeMapping(router.dispatchState, key, mappings)
-  result = decisionToRoute(decision, key.combo)
-  if result.kind in {rrExecuteRuntimeCommand, rrExecuteRuntimeKeySequence}:
-    result.lhsKeys = held & key
+  let accKeys = held.combos
+  var hasLongerMatch = false
+  for m in mappings:
+    if m.triggerKeys.len > accKeys.len and m.triggerKeys.startsWith(accKeys):
+      hasLongerMatch = true
+      break
+
+  if hasLongerMatch:
+    # Both exact and longer match possible: wait for next key. If no key
+    # arrives within timeoutlen, the timeout runs the exact match.
+    return RouteResult(kind: rrWaiting, waitsForTimeout: true)
+  let exactMatch = exactMapping(accKeys, mappings)
+  if exactMatch.isSome:
+    clearRuntimeMappingState(router.dispatchState)
+    return RouteResult(kind: rrRunMapping, mapping: exactMatch.get, lhsKeys: held)
+  if held.len == 1:
+    clearRuntimeMappingState(router.dispatchState)
+    return RouteResult(kind: rrUnhandled, key: key.combo)
+  router.letGo(held, mappings)
 
 proc flushTimeout*(router: KeyRouter, mode: EditorMode): RouteResult =
   ## Called when the key-mapping timeout fires. Inspect the accumulated keys
   ## against `mode`'s runtime mappings: if there is an exact match, fire the
   ## mapping; otherwise the caller lets them go as on `rrReleaseHeld`.
+  if not router.isHoldingKeys:
+    return RouteResult(kind: rrCancelled)
   let mappings = router.mappingsFor(mode)
   let held = router.dispatchState.keys
-  let plan = flushRuntimeMapping(router.dispatchState, mappings)
-  case plan.kind
-  of rmfNothing:
-    RouteResult(kind: rrCancelled)
-  of rmfExecuteCommand:
-    RouteResult(
-      kind: rrExecuteRuntimeCommand, commandName: plan.commandName, lhsKeys: held
-    )
-  of rmfExecuteKeySequence:
-    RouteResult(
-      kind: rrExecuteRuntimeKeySequence,
-      triggerKeys: plan.triggerKeys,
-      targetKeys: plan.targetKeys,
-      noremap: plan.noremap,
-      lhsKeys: held,
-    )
-  of rmfReplayPerKey:
-    RouteResult(kind: rrReleaseHeld, keys: plan.keysToReplay, leading: plan.leading)
+  let exactMatch = exactMapping(held.combos, mappings)
+  if exactMatch.isSome:
+    clearRuntimeMappingState(router.dispatchState)
+    return RouteResult(kind: rrRunMapping, mapping: exactMatch.get, lhsKeys: held)
+  router.letGo(held, mappings)
 
 proc resolveBuiltin*(
     registry: KeyBindingRegistry, mode: EditorMode, combo: KeyCombo

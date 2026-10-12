@@ -43,14 +43,14 @@ proc addKeySeqMapping(reg: KeyBindingRegistry, mode: EditorMode, lhs, rhs: strin
   discard reg.addRuntimeMapping(mode, lhs, rhs)
 
 suite "KeyRouter - feedKey runtime key-sequence mapping":
-  test "single-key trigger fires immediately (rrExecuteRuntimeKeySequence)":
+  test "single-key trigger fires immediately (rrRunMapping)":
     let router = newRouter()
     router.registry.addKeySeqMapping(EditorMode.Insert, "j", "Escape")
 
     let route = router.feedKey(EditorMode.Insert, toKeyCombo('j'))
 
-    check route.kind == rrExecuteRuntimeKeySequence
-    check route.targetKeys == @[toSpecialKeyCombo(skEscape)]
+    check route.kind == rrRunMapping and route.mapping.kind == rmkKeySequence
+    check route.mapping.targetKeys == @[toSpecialKeyCombo(skEscape)]
     check router.dispatchState.keys.len == 0
 
   test "multi-key prefix waits, then fires on exact match":
@@ -63,8 +63,8 @@ suite "KeyRouter - feedKey runtime key-sequence mapping":
     check router.dispatchState.keys.len > 0
 
     let second = router.feedKey(EditorMode.Insert, toKeyCombo('j'))
-    check second.kind == rrExecuteRuntimeKeySequence
-    check second.targetKeys == @[toSpecialKeyCombo(skEscape)]
+    check second.kind == rrRunMapping and second.mapping.kind == rmkKeySequence
+    check second.mapping.targetKeys == @[toSpecialKeyCombo(skEscape)]
     check router.dispatchState.keys.len == 0
 
   test "non-prefix key in middle of sequence flushes accumulator":
@@ -156,7 +156,7 @@ suite "KeyRouter - feedKey runtime key-sequence mapping":
     let route = router.feedKey(
       EditorMode.Normal, KeyInput(combo: toKeyCombo('a'), remap: true), literal = true
     )
-    check route.kind == rrExecuteRuntimeKeySequence
+    check route.kind == rrRunMapping and route.mapping.kind == rmkKeySequence
 
   test "key with no mapping passes through (rrUnhandled)":
     let router = newRouter()
@@ -189,8 +189,8 @@ suite "KeyRouter - feedKey mode separation":
     let r1 = router.feedKey(EditorMode.Normal, toKeyCombo('k'))
     check r1.kind == rrWaiting
     let r2 = router.feedKey(EditorMode.Normal, toKeyCombo('k'))
-    check r2.kind == rrExecuteRuntimeKeySequence
-    check r2.targetKeys == @[toKeyCombo('i')]
+    check r2.kind == rrRunMapping and r2.mapping.kind == rmkKeySequence
+    check r2.mapping.targetKeys == @[toKeyCombo('i')]
 
 suite "KeyRouter - flushTimeout":
   test "empty accumulator returns rrCancelled":
@@ -207,8 +207,8 @@ suite "KeyRouter - flushTimeout":
     router.dispatchState.keys.add(KeyInput(combo: toKeyCombo('j')))
 
     let route = router.flushTimeout(EditorMode.Insert)
-    check route.kind == rrExecuteRuntimeKeySequence
-    check route.targetKeys == @[toSpecialKeyCombo(skEscape)]
+    check route.kind == rrRunMapping and route.mapping.kind == rmkKeySequence
+    check route.mapping.targetKeys == @[toSpecialKeyCombo(skEscape)]
     check router.dispatchState.keys.len == 0
 
   test "no exact match lets the held keys go (rrReleaseHeld)":
@@ -242,8 +242,8 @@ suite "KeyRouter - flushTimeout":
       EditorMode.Insert, "x", "Escape", noremap = false
     )
     let immediate = router.feedKey(EditorMode.Insert, toKeyCombo('x'))
-    check immediate.kind == rrExecuteRuntimeKeySequence
-    check immediate.noremap == false
+    check immediate.kind == rrRunMapping and immediate.mapping.kind == rmkKeySequence
+    check immediate.mapping.noremap == false
 
     # noremap=true (:noremap) fired via the timeout-flush path
     discard router.registry.addRuntimeMapping(
@@ -252,8 +252,8 @@ suite "KeyRouter - flushTimeout":
     discard router.feedKey(EditorMode.Insert, toKeyCombo('y')) # rrWaiting
     router.dispatchState.keys.add(KeyInput(combo: toKeyCombo('y')))
     let flushed = router.flushTimeout(EditorMode.Insert)
-    check flushed.kind == rrExecuteRuntimeKeySequence
-    check flushed.noremap == true
+    check flushed.kind == rrRunMapping and flushed.mapping.kind == rmkKeySequence
+    check flushed.mapping.noremap == true
 
 suite "KeyRouter - cancel and accessors":
   test "cancel clears the built-in sequence accumulator":
@@ -315,8 +315,8 @@ suite "KeyRouter - rmkCommand routing":
     )
 
     let r = router.feedKey(EditorMode.Filer, toKeyCombo('j', ctrl = true))
-    check r.kind == rrExecuteRuntimeCommand
-    check r.commandName == "window-prev"
+    check r.kind == rrRunMapping and r.mapping.kind == rmkCommand
+    check r.mapping.commandName == "window-prev"
 
   test "feedKey multi-key rmkCommand waits then fires on exact match":
     let router = newRouter()
@@ -328,8 +328,8 @@ suite "KeyRouter - rmkCommand routing":
     check waiting.kind == rrWaiting
 
     let fired = router.feedKey(EditorMode.Filer, toKeyCombo('d'))
-    check fired.kind == rrExecuteRuntimeCommand
-    check fired.commandName == "go-to-definition"
+    check fired.kind == rrRunMapping and fired.mapping.kind == rmkCommand
+    check fired.mapping.commandName == "go-to-definition"
 
   test "flushTimeout fires exact-match rmkCommand (prefix becomes exact)":
     let router = newRouter()
@@ -344,8 +344,8 @@ suite "KeyRouter - rmkCommand routing":
     check waiting.kind == rrWaiting
 
     let r = router.flushTimeout(EditorMode.Filer)
-    check r.kind == rrExecuteRuntimeCommand
-    check r.commandName == "go-back"
+    check r.kind == rrRunMapping and r.mapping.kind == rmkCommand
+    check r.mapping.commandName == "go-back"
 
   test "rmkCommand in Normal mode is invisible to KeyRouter (file-edit mode)":
     # File-edit modes use getRuntimeKeySeqMappings, which filters out

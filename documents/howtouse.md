@@ -915,6 +915,9 @@ For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml`. See
 `noremap`, `nnoremap`, `inoremap`, `vnoremap`, `cnoremap` map keys non-recursively
 (the right-hand side is replayed verbatim, like Vim's `noremap`).
 
+Command mode mappings apply to every line you type into, as Vim's `cmap` does:
+the `:` command line, the `/` and `?` search line, and the LSP rename prompt.
+
 **Key notation:**
 
 | Notation | Meaning |

@@ -42,12 +42,10 @@ type
     enabled*: bool
 
   RouteResultKind* = enum
-    rrExecuteRuntimeCommand
-      ## Runtime mapping with `rmkCommand` fired. Caller executes the named
-      ## command (typically via `executeCommandDirect`).
-    rrExecuteRuntimeKeySequence
-      ## Runtime mapping with `rmkKeySequence` fired. Caller replays the
-      ## target keys (typically via `playbackMacro`).
+    rrRunMapping
+      ## A runtime mapping fired. The caller runs `mapping`, whose left-hand
+      ## side took `lhsKeys`: the first key of its right-hand side or its
+      ## command stands for their typed keys.
     rrWaiting
       ## Accumulation continues. `waitsForTimeout` is true for runtime-mapping
       ## prefixes (timer should be armed); built-in sequence prefixes never
@@ -69,18 +67,10 @@ type
       ## resolved `Command`; the caller executes it (Normal-mode dispatcher).
 
   RouteResult* = object
-    lhsKeys*: seq[KeyInput]
-      ## For a fired mapping, the keys its left-hand side took. The first key
-      ## of its right-hand side or its command stands for their typed keys.
     case kind*: RouteResultKind
-    of rrExecuteRuntimeCommand:
-      commandName*: string
-    of rrExecuteRuntimeKeySequence:
-      triggerKeys*: seq[KeyCombo]
-      targetKeys*: seq[KeyCombo]
-      noremap*: bool
-        ## When false the replayed keys are re-expanded through the mapping
-        ## table (`:map`); when true they are replayed verbatim (`:noremap`).
+    of rrRunMapping:
+      mapping*: RuntimeKeyMapping
+      lhsKeys*: seq[KeyInput]
     of rrWaiting:
       waitsForTimeout*: bool
     of rrUnhandled:

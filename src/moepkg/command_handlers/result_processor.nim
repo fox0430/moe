@@ -44,11 +44,10 @@ type
     roQuit ## hrQuit / hrCquit — main loop terminates
     roAbort ## Error or queued host result — loop stops, app continues
 
-  FrontLayerHook* = proc(e: Editor, key: KeyInput): Option[ReplayOutcome] {.closure.}
-    ## The layers in front of the mode handlers (temp messages, overlays,
-    ## popups, ...). `none` = fall through; `some` = handled, with its outcome.
-    ## Wired from handler.nim to avoid an import cycle (overlay handlers import
-    ## here).
+  LayerHook* = proc(e: Editor, keyCombo: KeyCombo): Option[ReplayOutcome] {.closure.}
+    ## A layer a key meets on its way to the mode handlers. `none` = it does
+    ## not take the key; `some` = it took it, with its outcome. Wired from
+    ## handler.nim to avoid an import cycle (the layers' handlers import here).
 
 const ModesNeedingContext = {
   EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
@@ -57,7 +56,11 @@ const ModesNeedingContext = {
   ## Modes that need a payload (an LSP response, a file pair); `mode_switch`
   ## to one of these is rejected rather than entered with no listing.
 
-var frontLayerHook*: FrontLayerHook = nil
+var promptLayerHook*: LayerHook = nil
+  ## The LSP popups, which read a key before the mappings.
+var frontLayerHook*: LayerHook = nil
+  ## The layers in front of the mode handlers that run a key as it is: the
+  ## command line, Search, Rename, Debug, a viewer's Ctrl-W and Recent File.
 
 proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome
 
@@ -541,15 +544,19 @@ template withPlaybackGuard*(e: Editor, body: untyped): ReplayOutcome =
         state.pendingInput.macroState.playbackDepth -= 1
       outcome
 
-template recordingAfter*(e: Editor, keys: seq[KeyCombo], body: untyped) =
-  ## Run `body` for a key that stands for the typed `keys` and record them once
-  ## it has run, if a recording was on before it. The keys that start or stop
-  ## a recording thus stay out of it, as Vim drops what the stopping key's
+template recordingIfRan(
+    e: Editor, keys: seq[KeyCombo], body: untyped
+): Option[ReplayOutcome] =
+  ## `body` for a key that stands for the typed `keys`, recording them once it
+  ## has run (`some`) if a recording was on before it. The keys that start or
+  ## stop a recording thus stay out of it, as Vim drops what the stopping key's
   ## fetch recorded.
-  let recording = e.state.pendingInput.macroState.isRecording
-  body
-  if recording:
-    e.state.pendingInput.macroState.recordTypedKeys(keys)
+  block:
+    let recording = e.state.pendingInput.macroState.isRecording
+    let ran: Option[ReplayOutcome] = body
+    if recording and ran.isSome:
+      e.state.pendingInput.macroState.recordTypedKeys(keys)
+    ran
 
 proc playbackKeyCombosImpl(
     e: Editor, combos: seq[KeyCombo], remapFrom: int, standsFor: seq[KeyCombo]
@@ -603,32 +610,30 @@ proc stopRecursiveMapping(editor: Editor): ReplayOutcome =
   roAbort
 
 proc replayMappingKeys(
-    editor: Editor, triggerKeys, targetKeys, standsFor: seq[KeyCombo], noremap: bool
+    editor: Editor, mapping: RuntimeKeyMapping, standsFor: seq[KeyCombo]
 ): ReplayOutcome =
   ## `:noremap` keys run unmapped; `:map` keys meet the mappings again,
   ## bounded by `mapExpandDepth` / `MaxMapRecursionDepth`, all but the first
   ## when they start with the left-hand side, so `:map a ab` does not recur, as
   ## in Vim. Either way only the keys themselves: a register they run is mapped
   ## as when typed, as in Vim.
-  if noremap:
+  let targetKeys = mapping.targetKeys
+  if mapping.noremap:
     return
       playbackKeyCombosImpl(editor, targetKeys, remapFrom = targetKeys.len, standsFor)
 
   if editor.keyRouter.mapExpandDepth >= MaxMapRecursionDepth:
     editor.state.pendingInput.macroState.recordTypedKeys(standsFor)
     return editor.stopRecursiveMapping()
-  let remapFrom = if targetKeys.startsWith(triggerKeys): 1 else: 0
+  let remapFrom = if targetKeys.startsWith(mapping.triggerKeys): 1 else: 0
   editor.keyRouter.mapExpandDepth += 1
   try:
     result = playbackKeyCombosImpl(editor, targetKeys, remapFrom, standsFor)
   finally:
     editor.keyRouter.mapExpandDepth -= 1
 
-proc replayRuntimeKeySequence*(
-    manager: HandlerManager,
-    editor: Editor,
-    triggerKeys, targetKeys, standsFor: seq[KeyCombo],
-    noremap: bool,
+proc replayRuntimeKeySequence(
+    editor: Editor, mapping: RuntimeKeyMapping, standsFor: seq[KeyCombo]
 ): ReplayOutcome =
   ## Replay the RHS of a fired runtime key-sequence mapping, whose left-hand
   ## side stands for the typed keys `standsFor`. Vim resumes the Insert Ctrl-o
@@ -638,15 +643,15 @@ proc replayRuntimeKeySequence*(
   ## Ctrl-o in it waits anew.
   let waiting = editor.state.insertResume
   if waiting == irNone or not editor.state.mode.isVisualAllMode:
-    return editor.replayMappingKeys(triggerKeys, targetKeys, standsFor, noremap)
+    return editor.replayMappingKeys(mapping, standsFor)
   editor.state.insertResume = irHeld
   try:
-    result = editor.replayMappingKeys(triggerKeys, targetKeys, standsFor, noremap)
+    result = editor.replayMappingKeys(mapping, standsFor)
   finally:
     if editor.state.insertResume == irHeld:
       editor.state.insertResume = waiting
 
-proc runRuntimeCommand*(
+proc runRuntimeCommand(
     manager: HandlerManager,
     editor: Editor,
     commandName: string,
@@ -655,13 +660,26 @@ proc runRuntimeCommand*(
   ## Run the command an `rmkCommand` mapping names, for the typed keys
   ## `standsFor` of its left-hand side. `none` when it names none that can run
   ## here, which runs nothing and records nothing.
-  let recording = editor.state.pendingInput.macroState.isRecording
-  let cmdResult = manager.executeCommandDirect(commandName)
-  if cmdResult.isNone:
-    return none(ReplayOutcome)
-  result = some(processReplayedResult(editor, cmdResult.get, editor.activeBuffer))
-  if recording:
-    editor.state.pendingInput.macroState.recordTypedKeys(standsFor)
+  editor.recordingIfRan(standsFor):
+    let cmdResult = manager.executeCommandDirect(commandName)
+    if cmdResult.isSome:
+      some(processReplayedResult(editor, cmdResult.get, editor.activeBuffer))
+    else:
+      none(ReplayOutcome)
+
+proc runMapping(
+    manager: HandlerManager,
+    editor: Editor,
+    mapping: RuntimeKeyMapping,
+    lhsKeys: seq[KeyInput],
+): Option[ReplayOutcome] =
+  ## Run `mapping`, whose left-hand side took `lhsKeys`. `none` when it names a
+  ## command that cannot run here.
+  case mapping.kind
+  of rmkCommand:
+    manager.runRuntimeCommand(editor, mapping.commandName, lhsKeys.standsFor)
+  of rmkKeySequence:
+    some(editor.replayRuntimeKeySequence(mapping, lhsKeys.standsFor))
 
 proc feedHeldKeys(
     manager: HandlerManager,
@@ -710,21 +728,10 @@ proc releaseHeldKeys*(
     var first = none(ReplayOutcome)
     var next = 1
     if leading.isSome:
-      let mapping = leading.get
-      let standsFor = keys[0 ..< mapping.triggerKeys.len].standsFor
-      first =
-        case mapping.kind
-        of rmkCommand:
-          manager.runRuntimeCommand(editor, mapping.commandName, standsFor)
-        of rmkKeySequence:
-          some(
-            manager.replayRuntimeKeySequence(
-              editor, mapping.triggerKeys, mapping.targetKeys, standsFor,
-              mapping.noremap,
-            )
-          )
+      let n = leading.get.triggerKeys.len
+      first = manager.runMapping(editor, leading.get, keys[0 ..< n])
       if first.isSome:
-        next = mapping.triggerKeys.len
+        next = n
     if first.isNone:
       var unmapped = keys[0]
       unmapped.remap = false
@@ -733,48 +740,48 @@ proc releaseHeldKeys*(
   finally:
     router.mapExpandDepth -= 1
 
-proc runCommandMapping*(
-    manager: HandlerManager, editor: Editor, commandName: string, lhsKeys: seq[KeyInput]
-): ReplayOutcome =
-  ## Run a fired `rmkCommand` mapping whose left-hand side took `lhsKeys`. One
-  ## whose command cannot run here counts as none, as when the held keys are
-  ## let go, so its keys run unmapped instead of being lost.
-  let ran = manager.runRuntimeCommand(editor, commandName, lhsKeys.standsFor)
-  if ran.isSome:
-    return ran.get
-  manager.releaseHeldKeys(editor, lhsKeys, none(RuntimeKeyMapping))
-
-proc checkRuntimeKeySeqMapping*(
-    manager: HandlerManager,
-    editor: Editor,
-    mode: EditorMode,
-    key: KeyInput,
-    literal: bool,
+proc runRoute*(
+    manager: HandlerManager, editor: Editor, route: RouteResult
 ): Option[ReplayOutcome] =
-  ## Ask the KeyRouter whether `key` is part of one of `mode`'s runtime
-  ## mappings. Returns `none` to let the caller fall through to built-in
-  ## resolution, or `some` outcome when the mapping fired (or is still
-  ## building), or when the held keys were let go, `key` with them. `literal`
-  ## is as for `KeyRouter.feedKey`.
-  let route = editor.keyRouter.feedKey(mode, key, literal)
+  ## Run what the router decided for a key fed to it or at the timeout. `none`
+  ## when it leaves the key to run as it is, or holds nothing.
   case route.kind
   of rrUnhandled, rrCancelled, rrCommand:
-    # rrCommand is produced only by resolveBuiltin (Normal dispatcher), never by
-    # feedKey; listed for exhaustiveness. Fall through to built-in resolution.
-    return none(ReplayOutcome)
-  of rrExecuteRuntimeCommand:
-    return some(manager.runCommandMapping(editor, route.commandName, route.lhsKeys))
-  of rrExecuteRuntimeKeySequence:
-    return some(
-      replayRuntimeKeySequence(
-        manager, editor, route.triggerKeys, route.targetKeys, route.lhsKeys.standsFor,
-        route.noremap,
-      )
-    )
+    # rrCommand comes only from `resolveBuiltin`, never from the router.
+    none(ReplayOutcome)
+  of rrRunMapping:
+    let ran = manager.runMapping(editor, route.mapping, route.lhsKeys)
+    if ran.isSome:
+      ran
+    else:
+      # A command that cannot run here counts as no mapping, as when the held
+      # keys are let go, so its keys run unmapped instead of being lost.
+      some(manager.releaseHeldKeys(editor, route.lhsKeys, none(RuntimeKeyMapping)))
   of rrWaiting:
-    return some(roContinue)
+    some(roContinue)
   of rrReleaseHeld:
-    return some(manager.releaseHeldKeys(editor, route.keys, route.leading))
+    some(manager.releaseHeldKeys(editor, route.keys, route.leading))
+
+proc routerMode*(e: Editor): EditorMode =
+  ## The mode whose mappings a key meets: the command line's in the Command,
+  ## Search and Rename overlays, as Vim maps `:`, `/` and `input()` alike, else
+  ## the window's.
+  if e.state.hasOverlay: EditorMode.Command else: e.state.mode
+
+proc letHeldKeysGo*(manager: HandlerManager, editor: Editor): ReplayOutcome =
+  ## Let go of the keys held for a mapping before an input that is not a key,
+  ## as the timeout does, until none are held: a key let go can be held again
+  ## as the start of another mapping. Keys that keep coming back end as a
+  ## recursive mapping.
+  result = roContinue
+  for _ in 0 ..< MaxMapRecursionDepth:
+    if not editor.keyRouter.isHoldingKeys or result != roContinue:
+      return
+    let route = editor.keyRouter.flushTimeout(editor.routerMode)
+    result = manager.runRoute(editor, route).get(roContinue)
+  if editor.keyRouter.isHoldingKeys:
+    editor.keyRouter.dropHeldKeys()
+    result = editor.stopRecursiveMapping()
 
 proc escapeEndsCommand(e: Editor, keyCombo: KeyCombo): bool =
   ## Escape ends a Normal mode command being built before a Normal mode
@@ -783,36 +790,73 @@ proc escapeEndsCommand(e: Editor, keyCombo: KeyCombo): bool =
   keyCombo.isSpecial and keyCombo.special == skEscape and
     e.state.mode == EditorMode.Normal and hasPendingBuiltinInput(e)
 
+proc answerHitEnter(e: Editor, keyCombo: KeyCombo): bool =
+  ## Dismiss temporary messages (e.g. :jump output) on any key, as Vim's
+  ## hit-enter prompt does. True when that uses the key up: Enter, Space,
+  ## Ctrl-J and Ctrl-C only dismiss. Vim puts any other key back to run, so
+  ## `:` starts a command line, or types itself in Insert mode, and the keys
+  ## after `:jump<CR>` in a mapping run.
+  if e.state.ui.tempMessages.len == 0:
+    return false
+  e.state.ui.tempMessages = @[]
+  if keyCombo.isSpecial:
+    return keyCombo.special == skEnter and keyCombo.modifiers == {}
+  if keyCombo.modifiers == {}:
+    return keyCombo.char == " "
+  keyCombo.modifiers == {kmCtrl} and keyCombo.char in ["c", "C", "j", "J"]
+
+proc runAsItself(manager: HandlerManager, e: Editor, key: KeyInput): ReplayOutcome =
+  ## Run `key` with no mapping applied: a layer in front of the mode handlers
+  ## takes it if one is up, else the mode handler.
+  let front =
+    if frontLayerHook.isNil:
+      none(ReplayOutcome)
+    else:
+      frontLayerHook(e, key.combo)
+  if front.isSome:
+    return front.get
+  let r = manager.handleKeyCombo(e, key.combo)
+  result = processReplayedResult(e, r, e.activeBuffer)
+  e.enforceModePolicy()
+
 proc dispatchNestedKeyCombo(
     manager: HandlerManager, e: Editor, key: KeyInput
 ): ReplayOutcome =
-  # Typed and replayed keys pass the same layers in front of the mode handlers,
-  # so a replay meets what typing met.
-  if not frontLayerHook.isNil:
-    let front = frontLayerHook(e, key)
-    if front.isSome:
-      return front.get
+  # A prompt reads its keys before the mappings, as Vim reads a hit-enter
+  # prompt's or a popup menu's, and lets one it does not take go on to them.
+  # Keys the router holds meet it once they are let go.
+  if not e.keyRouter.isHoldingKeys:
+    if e.answerHitEnter(key.combo):
+      # Vim reads it with the recording off. The typed keys a mapping's key
+      # stands for were read before, with the mapping.
+      if not key.typed:
+        e.state.pendingInput.macroState.recordTypedKeys(key.standsFor)
+      return roContinue
+    if not promptLayerHook.isNil:
+      let prompted = e.recordingIfRan(key.standsFor, promptLayerHook(e, key.combo))
+      if prompted.isSome:
+        return prompted.get
+  let mode = e.routerMode
   let literal =
-    e.state.pendingInput.waitsForOperand(manager.keyBindingRegistry) or
-    e.escapeEndsCommand(key.combo)
-  let expand = checkRuntimeKeySeqMapping(manager, e, e.state.mode, key, literal)
-  if expand.isSome:
-    return expand.get
-  e.recordingAfter(key.standsFor):
-    let r = manager.handleKeyCombo(e, key.combo)
-    result = processReplayedResult(e, r, e.activeBuffer)
-    e.enforceModePolicy()
+    mode != EditorMode.Command and (
+      e.state.pendingInput.waitsForOperand(manager.keyBindingRegistry) or
+      e.escapeEndsCommand(key.combo)
+    )
+  let routed = manager.runRoute(e, e.keyRouter.feedKey(mode, key, literal))
+  if routed.isSome:
+    return routed.get
+  e.recordingIfRan(key.standsFor, some(manager.runAsItself(e, key))).get
 
 proc runNestedKeyCombo*(
     manager: HandlerManager, e: Editor, key: KeyInput
 ): ReplayOutcome =
-  ## Single entry point that fuses precheck (runtime key-sequence mapping) with
-  ## dispatch and full processResult side effects. Both the top-level event
-  ## loop and nested-playback loops (macro, mapping RHS, held keys let go) call
-  ## this so every kind's side effect fires exactly once. Each key may finish
-  ## the command Ctrl-o waits for, so Insert may resume after it, in the
-  ## middle of a mapping too, as in Vim. `key.remap` covers this key alone, not
-  ## the keys of a register it runs.
+  ## The one way a key runs, typed or replayed (macro, mapping RHS, held keys
+  ## let go): a prompt reads it first, then the router, then the layers and the
+  ## mode handler that run it as it is, so a replay meets what typing met and
+  ## every kind's side effect fires exactly once. Each key may finish the
+  ## command Ctrl-o waits for, so Insert may resume after it, in the middle of
+  ## a mapping too, as in Vim. `key.remap` covers this key alone, not the keys
+  ## of a register it runs.
   # Before the command starts, so the jump is not counted as its move.
   e.completeScrollAnimation()
   e.state.armInsertResume()

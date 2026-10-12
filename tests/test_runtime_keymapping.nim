@@ -1708,10 +1708,10 @@ suite "Timeout flush - exact match with longer match pending":
     editor.keyRouter.dispatchState.keys = @[KeyInput(combo: j, remap: true)]
 
     let rr = editor.keyRouter.flushTimeout(state.mode)
-    check rr.kind == rrExecuteRuntimeKeySequence
-    check rr.targetKeys == @[toKeyCombo('a')]
+    check rr.kind == rrRunMapping and rr.mapping.kind == rmkKeySequence
+    check rr.mapping.targetKeys == @[toKeyCombo('a')]
 
-    let r = playbackKeyCombos(editor, rr.targetKeys, remap = false)
+    let r = playbackKeyCombos(editor, rr.mapping.targetKeys, remap = false)
     check r.kind == hrHandled
     check state.mode == EditorMode.Insert
 
@@ -1734,9 +1734,9 @@ suite "Timeout flush - exact match with longer match pending":
     editor.keyRouter.dispatchState.keys = @[KeyInput(combo: j, remap: true)]
 
     let rr = editor.keyRouter.flushTimeout(state.mode)
-    check rr.kind == rrExecuteRuntimeKeySequence
+    check rr.kind == rrRunMapping and rr.mapping.kind == rmkKeySequence
 
-    discard playbackKeyCombos(editor, rr.targetKeys, remap = false)
+    discard playbackKeyCombos(editor, rr.mapping.targetKeys, remap = false)
 
     check state.mode == EditorMode.Normal
 
