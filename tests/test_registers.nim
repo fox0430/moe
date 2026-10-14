@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[monotimes, os, osproc, strutils, tempfiles, times, unittest]
+import std/[monotimes, options, os, osproc, strutils, tempfiles, times, unittest]
 
 import pkg/results
 
@@ -37,53 +37,214 @@ suite "Registers":
     for c in 'a' .. 'z':
       check r.getNamedRegister(c).isEmpty
 
-  test "setYankedRegister stores in register 0 and unnamed":
+  test "a yank goes to register 0 and the unnamed register":
     let r = initRegisters()
-    r.setYankedRegister("hello", false)
+    r.storeYanked(none(char), "hello", false)
 
     check r.getNoNamedRegister().getContent() == "hello"
     check r.getNumberRegister(0).getContent() == "hello"
     check not r.getNoNamedRegister().isLine
     check not r.getNumberRegister(0).isLine
 
-  test "setYankedRegister with linewise":
+  test "linewise text ends every line with a line break":
     let r = initRegisters()
-    r.setYankedRegister("line1\nline2", true)
+    r.storeYanked(none(char), "line1\nline2\n", true)
 
-    check r.getNoNamedRegister().getContent() == "line1\nline2"
+    check r.getNoNamedRegister().getContent() == "line1\nline2\n"
+    check r.getNoNamedRegister().getLines() == @["line1", "line2"]
     check r.getNoNamedRegister().isLine
 
-  test "setDeletedRegister shifts number registers":
+  test "linewise text keeps its empty lines, the last ones too":
+    # The line break that ends linewise text ends its last line, as Vim's
+    # setreg() takes it, so text without one holds the same lines.
+    for (content, lines) in [
+      ("line1\nline2", @["line1", "line2"]),
+      ("foo\n\n\n", @["foo", "", ""]),
+      ("\n\n", @["", ""]),
+      ("\n", @[""]),
+      ("", @[""]),
+    ]:
+      let r = initRegisters()
+      r.storeYanked(none(char), content, true)
+      check r.getNumberRegister(0).getLines() == lines
+      check not r.getNumberRegister(0).isEmpty
+
+  test "a carriage return in linewise text stays in its line":
+    # A raw buffer keeps the CR of a CRLF line, and a line may hold a lone CR.
+    for (content, lines) in [("a\rb\n", @["a\rb"]), ("a\r\nb\r\n", @["a\r", "b\r"])]:
+      let r = initRegisters()
+      r.storeYanked(none(char), content, true)
+      check r.getNumberRegister(0).getLines() == lines
+      check r.getNumberRegister(0).getContent() == content
+
+  test "a delete over lines shifts the numbered registers":
     let r = initRegisters()
-    r.setDeletedRegister("first delete\nsecond line", true)
-    r.setDeletedRegister("second delete\nanother line", true)
-    r.setDeletedRegister("third delete\nmore lines", true)
+    r.storeDeleted(none(char), "first delete\nsecond line\n", true)
+    r.storeDeleted(none(char), "second delete\nanother line\n", true)
+    r.storeDeleted(none(char), "third delete\nmore lines\n", true)
 
     # Most recent should be in register 1
-    check r.getNumberRegister(1).getContent() == "third delete\nmore lines"
-    check r.getNumberRegister(2).getContent() == "second delete\nanother line"
-    check r.getNumberRegister(3).getContent() == "first delete\nsecond line"
+    check r.getNumberRegister(1).getLines() == @["third delete", "more lines"]
+    check r.getNumberRegister(2).getLines() == @["second delete", "another line"]
+    check r.getNumberRegister(3).getLines() == @["first delete", "second line"]
 
-  test "setSmallDeleteRegister for single line deletions":
+  test "a delete within a line goes to the small delete register":
     let r = initRegisters()
-    r.setSmallDeleteRegister("small")
+    r.storeDeleted(none(char), "seed\n", true)
+    r.storeDeleted(none(char), "small", false)
 
     check r.getSmallDeleteRegister().getContent() == "small"
     check r.getNoNamedRegister().getContent() == "small"
+    check r.getNumberRegister(1).getLines() == @["seed"]
+    check r.getNumberRegister(2).isEmpty
 
-  test "setNamedRegister lowercase overwrites":
+  test "a characterwise delete over lines goes to register 1, not -":
     let r = initRegisters()
-    discard r.setNamedRegister('a', "first", false)
-    discard r.setNamedRegister('a', "second", false)
+    r.storeDeleted(none(char), "line1\nline2", false)
+
+    check r.getNumberRegister(1).getContent() == "line1\nline2"
+    check not r.getNumberRegister(1).isLine
+    check r.getSmallDeleteRegister().isEmpty
+
+  test "a delete over % and the like goes to register 1 and - within a line":
+    let r = initRegisters()
+    r.storeDeleted(none(char), "(a b)", false, useRegOne = true)
+
+    check r.getNumberRegister(1).getContent() == "(a b)"
+    check r.getSmallDeleteRegister().getContent() == "(a b)"
+    check r.getNoNamedRegister().getContent() == "(a b)"
+
+  test "a delete into a named register also goes to 1 when it is over lines":
+    # Vim 9.2: `"add` puts the line in a and "1, shifting the old "1 to "2.
+    let r = initRegisters()
+    r.storeDeleted(none(char), "old\n", true)
+    r.storeDeleted(some('a'), "one\n", true)
+
+    check r.getNamedRegister('a').getLines() == @["one"]
+    check r.getNumberRegister(1).getLines() == @["one"]
+    check r.getNumberRegister(2).getLines() == @["old"]
+    check r.getNoNamedRegister().getLines() == @["one"]
+
+  test "a delete within a line into a clipboard register also fills -":
+    # The unnamed register mirrors the clipboard, as Vim's
+    # clipboard=unnamedplus, which fills "- for `"+x`.
+    let r = initRegisters()
+    r.storeDeleted(some('+'), "o", false)
+
+    check r.getSmallDeleteRegister().getContent() == "o"
+    check r.getNumberRegister(1).isEmpty
+
+  test "a delete into a named register within a line leaves 1 and -":
+    let r = initRegisters()
+    r.storeDeleted(some('a'), "one", false)
+
+    check r.getNamedRegister('a').getContent() == "one"
+    check r.getNumberRegister(1).isEmpty
+    check r.getSmallDeleteRegister().isEmpty
+    check r.getNoNamedRegister().getContent() == "one"
+
+  test "a delete into a named register over % goes to 1 but not -":
+    let r = initRegisters()
+    r.storeDeleted(some('a'), "(a b)", false, useRegOne = true)
+
+    check r.getNamedRegister('a').getContent() == "(a b)"
+    check r.getNumberRegister(1).getContent() == "(a b)"
+    check r.getSmallDeleteRegister().isEmpty
+
+  test "a delete into a numbered register is shifted on with the others":
+    # Vim 9.2: `"3dd` writes "3, then shifts it to "4 as it fills "1.
+    let r = initRegisters()
+    discard r.setRegister('2', "R2", false)
+    discard r.setRegister('3', "R3", false)
+    r.storeDeleted(some('3'), "one\n", true)
+
+    check r.getNumberRegister(1).getLines() == @["one"]
+    check r.getNumberRegister(3).getContent() == "R2"
+    check r.getNumberRegister(4).getLines() == @["one"]
+
+  test "adding a delete to a named register leaves its whole text unnamed":
+    # Vim 9.2: after `"ayy` `"Add`, `p` puts both lines, and "1 holds the
+    # deleted one.
+    let r = initRegisters()
+    r.storeYanked(some('a'), "one\n", true)
+    r.storeDeleted(some('A'), "two\n", true)
+
+    check r.getNamedRegister('a').getLines() == @["one", "two"]
+    check r.getNumberRegister(1).getLines() == @["two"]
+    check r.getNoNamedRegister().getLines() == @["one", "two"]
+
+  test "a yank into a numbered register or - leaves register 0":
+    let r = initRegisters()
+    r.storeYanked(some('3'), "two\n", true)
+    r.storeYanked(some('-'), "three\n", true)
+
+    check r.getNumberRegister(3).getLines() == @["two"]
+    check r.getSmallDeleteRegister().getLines() == @["three"]
+    check r.getSmallDeleteRegister().isLine
+    check r.getNumberRegister(0).isEmpty
+    check r.getNoNamedRegister().getLines() == @["three"]
+
+  test "a yank into the unnamed register writes register 0":
+    let r = initRegisters()
+    r.storeYanked(some('"'), "two", false)
+
+    check r.getNumberRegister(0).getContent() == "two"
+    check r.getNoNamedRegister().getContent() == "two"
+
+  test "the black hole register keeps nothing":
+    let r = initRegisters()
+    r.storeYanked(none(char), "kept", false)
+    r.storeYanked(some('_'), "yanked", false)
+    r.storeDeleted(some('_'), "deleted\n", true)
+
+    check r.getNoNamedRegister().getContent() == "kept"
+    check r.getNumberRegister(0).getContent() == "kept"
+    check r.getNumberRegister(1).isEmpty
+
+  test "a lowercase name overwrites":
+    let r = initRegisters()
+    r.storeYanked(some('a'), "first", false)
+    r.storeYanked(some('a'), "second", false)
 
     check r.getNamedRegister('a').getContent() == "second"
 
-  test "setNamedRegister uppercase appends":
+  test "an uppercase name appends, and the unnamed register holds it all":
     let r = initRegisters()
-    discard r.setNamedRegister('a', "first", false)
-    discard r.setNamedRegister('A', "second", false)
+    r.storeYanked(some('a'), "first", false)
+    r.storeYanked(some('A'), "second", false)
 
     check r.getNamedRegister('a').getContent() == "firstsecond"
+    check r.getNoNamedRegister().getContent() == "firstsecond"
+
+  test "an uppercase name appends lines with no blank line between":
+    let r = initRegisters()
+    r.storeYanked(some('e'), "first\n", true)
+    r.storeYanked(some('E'), "second\n", true)
+
+    check r.getNamedRegister('e').getLines() == @["first", "second"]
+    check r.getNamedRegister('e').getContent() == "first\nsecond\n"
+
+  test "an uppercase name appends charwise text to lines as a new line":
+    let r = initRegisters()
+    r.storeYanked(some('f'), "line1\nline2\n", true)
+    r.storeYanked(some('F'), "abc", false)
+
+    check r.getNamedRegister('f').isLine
+    check r.getNamedRegister('f').getLines() == @["line1", "line2", "abc"]
+
+  test "an uppercase name appends lines to charwise text as new lines":
+    let r = initRegisters()
+    r.storeYanked(some('g'), "hello", false)
+    r.storeYanked(some('G'), "line1\nline2\n", true)
+
+    check r.getNamedRegister('g').isLine
+    check r.getNamedRegister('g').getLines() == @["hello", "line1", "line2"]
+
+  test "an uppercase name adds to an empty register as a write does":
+    let r = initRegisters()
+    r.storeYanked(some('H'), "one\n", true)
+
+    check r.getNamedRegister('h').getLines() == @["one"]
 
   test "isValidRegisterName":
     check isValidRegisterName('"')
@@ -101,27 +262,29 @@ suite "Registers":
 
   test "getRegister returns correct register":
     let r = initRegisters()
-    r.setYankedRegister("yanked", false)
-    discard r.setNamedRegister('b', "named-b", false)
-    r.setSmallDeleteRegister("small")
+    r.storeYanked(none(char), "yanked", false)
+    discard r.setRegister('b', "named-b", false)
+    r.storeDeleted(none(char), "small", false)
 
-    # Note: setSmallDeleteRegister also updates unnamed register
     check r.getRegister('"').getContent() == "small" # Last operation
     check r.getRegister('0').getContent() == "yanked" # Yank register preserved
     check r.getRegister('b').getContent() == "named-b"
     check r.getRegister('-').getContent() == "small"
 
-  test "setRegister by name":
+  test "setRegister writes a register as Vim's setreg(), leaving the unnamed one":
+    # Vim 9.2: `:let @a = "x"` leaves "" alone; `:let @" = "x"` writes "0 and
+    # makes it the unnamed register.
     let r = initRegisters()
     discard r.setRegister('"', "unnamed", false)
     discard r.setRegister('5', "num5", false)
     discard r.setRegister('c', "named-c", false)
     discard r.setRegister('-', "small-del", false)
+    discard r.setRegister('C', "-more", false)
 
-    check r.getRegister('"').getContent() == "small-del"
-      # small-del was last set to unnamed
+    check r.getRegister('0').getContent() == "unnamed"
+    check r.getRegister('"').getContent() == "unnamed"
     check r.getRegister('5').getContent() == "num5"
-    check r.getRegister('c').getContent() == "named-c"
+    check r.getRegister('c').getContent() == "named-c-more"
     check r.getRegister('-').getContent() == "small-del"
 
   test "isNamedRegisterName":
@@ -166,13 +329,13 @@ suite "Registers":
     check r.getNoNamedRegister().isEmpty
     check r.getNumberRegister(0).isEmpty
 
-    r.setYankedRegister("content", false)
+    r.storeYanked(none(char), "content", false)
     check not r.getNoNamedRegister().isEmpty
     check not r.getNumberRegister(0).isEmpty
 
   test "isEmpty with empty string":
     let r = initRegisters()
-    r.setYankedRegister("", false)
+    r.storeYanked(none(char), "", false)
     check r.getNoNamedRegister().isEmpty
 
   test "getContent empty register":
@@ -181,177 +344,61 @@ suite "Registers":
 
   test "getContent characterwise":
     let r = initRegisters()
-    r.setYankedRegister("hello world", false)
+    r.storeYanked(none(char), "hello world", false)
     check r.getNoNamedRegister().getContent() == "hello world"
     check not r.getNoNamedRegister().isLine
 
-  test "getContent linewise":
+  test "a yank into + also fills the unnamed register":
     let r = initRegisters()
-    r.setYankedRegister("line1\nline2\nline3", true)
-    check r.getNoNamedRegister().getContent() == "line1\nline2\nline3"
-    check r.getNoNamedRegister().isLine
-
-  test "getLines":
-    let r = initRegisters()
-    r.setYankedRegister("line1\nline2", true)
-    let lines = r.getNoNamedRegister().getLines()
-    check lines.len == 2
-    check lines[0] == "line1"
-    check lines[1] == "line2"
-
-  test "setYankedRegister with seq[string]":
-    let r = initRegisters()
-    r.setYankedRegister(@["line1", "line2", "line3"], true)
-
-    check r.getNoNamedRegister().getLines() == @["line1", "line2", "line3"]
-    check r.getNumberRegister(0).getLines() == @["line1", "line2", "line3"]
-    check r.getNoNamedRegister().isLine
-    check r.getNumberRegister(0).isLine
-
-  test "setDeletedRegister with seq[string]":
-    let r = initRegisters()
-    r.setDeletedRegister(@["deleted1", "deleted2"], true)
-    r.setDeletedRegister(@["deleted3", "deleted4"], true)
-
-    check r.getNumberRegister(1).getLines() == @["deleted3", "deleted4"]
-    check r.getNumberRegister(2).getLines() == @["deleted1", "deleted2"]
-
-  test "setDeletedRegister seq[string] characterwise single line goes to small delete":
-    let r = initRegisters()
-    r.setDeletedRegister(@["seed"], true)
-    r.setDeletedRegister(@["small"], false)
-
-    check r.getSmallDeleteRegister().getContent() == "small"
-    check r.getNoNamedRegister().getContent() == "small"
-    check r.getNumberRegister(1).getLines() == @["seed"]
-    check r.getNumberRegister(2).isEmpty
-
-  test "setDeletedRegister seq[string] characterwise multiline goes to number register":
-    let r = initRegisters()
-    r.setDeletedRegister(@["line1", "line2"], false)
-
-    check r.getNumberRegister(1).getLines() == @["line1", "line2"]
-    check r.getSmallDeleteRegister().isEmpty
-
-  test "setDeletedRegister characterwise single line goes to small delete":
-    let r = initRegisters()
-    r.setDeletedRegister("small", false)
-
-    check r.getSmallDeleteRegister().getContent() == "small"
-    check r.getNoNamedRegister().getContent() == "small"
-    # Should not be in number register 1
-    check r.getNumberRegister(1).isEmpty
-
-  test "setDeletedRegister characterwise multiline goes to number register":
-    let r = initRegisters()
-    r.setDeletedRegister("line1\nline2", false)
-
-    check r.getNumberRegister(1).getContent() == "line1\nline2"
-    check r.getSmallDeleteRegister().isEmpty
-
-  test "setNamedRegister with seq[string]":
-    let r = initRegisters()
-    discard r.setNamedRegister('d', @["line1", "line2"], true)
-
-    check r.getNamedRegister('d').getLines() == @["line1", "line2"]
-    check r.getNamedRegister('d').isLine
-
-  test "setNamedRegister uppercase with seq[string] appends":
-    let r = initRegisters()
-    discard r.setNamedRegister('e', @["first"], true)
-    discard r.setNamedRegister('E', @["second"], true)
-
-    check r.getNamedRegister('e').getContent() == "first\nsecond"
-
-  test "setNamedRegister uppercase linewise + charwise appends as new line":
-    let r = initRegisters()
-    discard r.setNamedRegister('f', @["line1", "line2"], true)
-    discard r.setNamedRegister('F', "abc", false)
-
-    check r.getNamedRegister('f').isLine
-    check r.getNamedRegister('f').getLines() == @["line1", "line2", "abc"]
-    check r.getNamedRegister('f').getContent() == "line1\nline2\nabc"
-
-  test "setNamedRegister uppercase charwise + linewise appends as new lines":
-    let r = initRegisters()
-    discard r.setNamedRegister('g', "hello", false)
-    discard r.setNamedRegister('G', @["line1", "line2"], true)
-
-    check r.getNamedRegister('g').isLine
-    check r.getNamedRegister('g').getLines() == @["hello", "line1", "line2"]
-
-  test "setNamedRegister invalid name returns error":
-    let r = initRegisters()
-    let result = r.setNamedRegister('0', "content", false)
-
-    check result.isErr
-    check "Invalid register name" in result.error
-
-  test "setClipboardRegister with + register":
-    let r = initRegisters()
-    r.setClipboardRegister('+', "clipboard content", false)
+    r.storeYanked(some('+'), "clipboard content", false)
 
     check r.getClipboardRegister('+').getContent() == "clipboard content"
     check r.getNoNamedRegister().getContent() == "clipboard content"
 
-  test "setClipboardRegister with * register":
+  test "a yank into * also fills the unnamed register":
     let r = initRegisters()
-    r.setClipboardRegister('*', "primary content", false)
+    r.storeYanked(some('*'), "primary content", false)
 
     check r.getClipboardRegister('*').getContent() == "primary content"
     check r.getNoNamedRegister().getContent() == "primary content"
 
-  test "setClipboardRegister linewise":
+  test "a yank into + keeps linewise text":
     let r = initRegisters()
-    r.setClipboardRegister('+', "line1\nline2", true)
+    r.storeYanked(some('+'), "line1\nline2\n", true)
 
-    check r.getClipboardRegister('+').getContent() == "line1\nline2"
+    check r.getClipboardRegister('+').getLines() == @["line1", "line2"]
     check r.getClipboardRegister('+').isLine
 
   test "* and + registers are independent":
     let r = initRegisters()
-    r.setClipboardRegister('*', "primary text", false)
-    r.setClipboardRegister('+', "clipboard text", false)
+    r.storeYanked(some('*'), "primary text", false)
+    r.storeYanked(some('+'), "clipboard text", false)
 
     check r.getClipboardRegister('*').getContent() == "primary text"
     check r.getClipboardRegister('+').getContent() == "clipboard text"
 
   test "~ register behaves same as +":
     let r = initRegisters()
-    r.setClipboardRegister('~', "tilde content", false)
+    r.storeYanked(some('~'), "tilde content", false)
 
     check r.getClipboardRegister('~').getContent() == "tilde content"
     check r.getClipboardRegister('+').getContent() == "tilde content"
 
   test "setting * does not affect +":
     let r = initRegisters()
-    r.setClipboardRegister('+', "plus content", false)
-    r.setClipboardRegister('*', "star content", false)
+    r.storeYanked(some('+'), "plus content", false)
+    r.storeYanked(some('*'), "star content", false)
 
     check r.getClipboardRegister('+').getContent() == "plus content"
     check r.getClipboardRegister('*').getContent() == "star content"
 
-  test "setNoNamedRegister string":
-    let r = initRegisters()
-    r.setNoNamedRegister("unnamed content", false)
-
-    check r.getNoNamedRegister().getContent() == "unnamed content"
-    check not r.getNoNamedRegister().isLine
-
-  test "setNoNamedRegister seq[string]":
-    let r = initRegisters()
-    r.setNoNamedRegister(@["line1", "line2"], true)
-
-    check r.getNoNamedRegister().getLines() == @["line1", "line2"]
-    check r.getNoNamedRegister().isLine
-
   test "setRegister clipboard registers are separate":
     let r = initRegisters()
-    discard r.setRegister('*', "star content", false)
+    r.storeYanked(some('*'), "star content", false)
     check r.getClipboardRegister('*').getContent() == "star content"
     check r.getClipboardRegister('+').getContent() == "" # + unaffected
 
-    discard r.setRegister('+', "plus content", false)
+    r.storeYanked(some('+'), "plus content", false)
     check r.getClipboardRegister('+').getContent() == "plus content"
     check r.getClipboardRegister('*').getContent() == "star content" # * unaffected
 
@@ -369,24 +416,24 @@ suite "Registers":
 
   test "getNumberRegister with char":
     let r = initRegisters()
-    r.setYankedRegister("yanked", false)
+    r.storeYanked(none(char), "yanked", false)
 
     check r.getNumberRegister('0').getContent() == "yanked"
     check r.getNumberRegister('x').isEmpty # Invalid char
 
   test "getRegisterContent":
     let r = initRegisters()
-    r.setYankedRegister("content", false)
+    r.storeYanked(none(char), "content", false)
 
     check r.getRegisterContent('0') == "content"
     check r.getRegisterContent('"') == "content"
 
   test "isRegisterLinewise":
     let r = initRegisters()
-    r.setYankedRegister("line", false)
+    r.storeYanked(none(char), "line", false)
     check not r.isRegisterLinewise('0')
 
-    r.setYankedRegister("line1\nline2", true)
+    r.storeYanked(none(char), "line1\nline2", true)
     check r.isRegisterLinewise('0')
 
   test "getRegister with invalid name returns empty register":
@@ -400,26 +447,26 @@ suite "Registers":
     let r = initRegisters()
     # Fill registers 1-9
     for i in 1 .. 10:
-      r.setDeletedRegister("delete" & $i & "\nline", true)
+      r.storeDeleted(none(char), "delete" & $i & "\nline", true)
 
     # Register 9 should have delete2 (oldest kept)
-    check r.getNumberRegister(9).getContent() == "delete2\nline"
+    check r.getNumberRegister(9).getLines() == @["delete2", "line"]
     # Register 1 should have delete10 (most recent)
-    check r.getNumberRegister(1).getContent() == "delete10\nline"
+    check r.getNumberRegister(1).getLines() == @["delete10", "line"]
 
   test "yank does not affect delete registers":
     let r = initRegisters()
-    r.setDeletedRegister("deleted\nline", true)
-    r.setYankedRegister("yanked", false)
+    r.storeDeleted(none(char), "deleted\nline", true)
+    r.storeYanked(none(char), "yanked", false)
 
     # Yank should go to register 0
     check r.getNumberRegister(0).getContent() == "yanked"
     # Delete should stay in register 1
-    check r.getNumberRegister(1).getContent() == "deleted\nline"
+    check r.getNumberRegister(1).getLines() == @["deleted", "line"]
 
   test "getNoNamedRegister without clipboard tool returns internal register":
     let r = initRegisters()
-    r.setYankedRegister("internal", false)
+    r.storeYanked(none(char), "internal", false)
 
     # Without clipboard tool, should just return internal register
     check r.getNoNamedRegister().getContent() == "internal"
@@ -434,7 +481,7 @@ suite "Registers":
       try:
         let r = initRegisters()
         r.setClipboardTool(cbtXclip)
-        r.setYankedRegister("cached", false)
+        r.storeYanked(none(char), "cached", false)
 
         # Overwrite CLIPBOARD to simulate an external copy.
         writeFile(clipboardFilePath(fakeDir), fakeClipboardContent)
@@ -447,9 +494,8 @@ suite "Registers":
         removeFakeClipboardTool(fakeDir)
 
   test "put keeps the linewise type when CLIPBOARD holds moe's own write":
-    # Regression: a single-line linewise yank writes no trailing newline,
-    # so the read cannot tell linewise from characterwise by content alone;
-    # the internal type must be kept when the selection matches.
+    # A linewise yank writes the line break that ends its last line, and the
+    # internal type is kept when the selection matches.
     let fakeDir = installFakeClipboardTool(fakeClipboardContent)
     if fakeDir.len == 0:
       skip()
@@ -457,10 +503,11 @@ suite "Registers":
       try:
         let r = initRegisters()
         r.setClipboardTool(cbtXclip)
-        r.setYankedRegister("single line", true)
+        r.storeYanked(none(char), "single line", true)
 
+        check readFile(clipboardFilePath(fakeDir)) == "single line\n"
         let reg = r.getNoNamedRegister()
-        check reg.getContent() == "single line"
+        check reg.getContent() == "single line\n"
         check reg.isLine == true
       finally:
         removeFakeClipboardTool(fakeDir)
@@ -476,11 +523,85 @@ suite "Registers":
       try:
         let r = initRegisters()
         r.setClipboardTool(cbtXclip)
-        r.setYankedRegister("first\nsecond", false)
+        r.storeYanked(none(char), "first\nsecond", false)
 
         let reg = r.getNoNamedRegister()
         check reg.getContent() == "first\nsecond"
         check reg.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "text from the clipboard is linewise when it ends in a line break":
+    # As Vim takes the clipboard: "a\nb" is characterwise, "a\nb\n" two lines.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+
+        writeFile(clipboardFilePath(fakeDir), "a\nb")
+        var reg = r.getNoNamedRegister()
+        check not reg.isLine
+        check reg.getContent() == "a\nb"
+
+        writeFile(clipboardFilePath(fakeDir), "a\nb\n")
+        reg = r.getNoNamedRegister()
+        check reg.isLine
+        check reg.getLines() == @["a", "b"]
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "a CRLF line break from the clipboard is a line break":
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+
+        writeFile(clipboardFilePath(fakeDir), "foo\r\nbar\r\n")
+        let reg = r.getNoNamedRegister()
+        check reg.isLine
+        check reg.getLines() == @["foo", "bar"]
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "the clipboard read back keeps the CR of a raw buffer's lines":
+    # A raw buffer of a CRLF file keeps the CR in its lines; reading moe's own
+    # write back must not take it away.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        r.storeYanked(none(char), "a\r\n", true)
+
+        check readFile(clipboardFilePath(fakeDir)) == "a\r\n"
+        let reg = r.getNoNamedRegister()
+        check reg.getLines() == @["a\r"]
+        check reg.isLine
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "a selection that made moe's line breaks CRLF still holds moe's text":
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        r.storeYanked(none(char), "foo\nbar", false)
+
+        writeFile(clipboardFilePath(fakeDir), "foo\r\nbar")
+        let reg = r.getNoNamedRegister()
+        check reg.getContent() == "foo\nbar"
+        check not reg.isLine
       finally:
         removeFakeClipboardTool(fakeDir)
 
@@ -494,7 +615,7 @@ suite "Registers":
       try:
         let r = initRegisters()
         r.setClipboardTool(cbtXclip)
-        r.setYankedRegister("cached", false)
+        r.storeYanked(none(char), "cached", false)
 
         writeFile(clipboardFilePath(fakeDir), "clip content")
         writeFile(primaryFilePath(fakeDir), "mouse selected content")
@@ -517,10 +638,10 @@ suite "Registers":
         # A prior yank leaves both selections holding the same value.
         writeFile(clipboardFilePath(fakeDir), "old value")
         writeFile(primaryFilePath(fakeDir), "old value")
-        r.setYankedRegister("old value", false)
+        r.storeYanked(none(char), "old value", false)
 
         # `"+y "new value"` writes the CLIPBOARD selection only.
-        r.setClipboardRegister('+', "new value", false)
+        r.storeYanked(some('+'), "new value", false)
 
         # Every put returns the written content (no PRIMARY-based oscillation).
         check r.getNoNamedRegister().getContent() == "new value"
@@ -541,10 +662,10 @@ suite "Registers":
 
         writeFile(clipboardFilePath(fakeDir), "old value")
         writeFile(primaryFilePath(fakeDir), "old value")
-        r.setYankedRegister("old value", false)
+        r.storeYanked(none(char), "old value", false)
 
         writeFile(primaryFilePath(fakeDir), "new value")
-        r.setClipboardRegister('*', "new value", false)
+        r.storeYanked(some('*'), "new value", false)
 
         check r.getNoNamedRegister().getContent() == "old value"
         check r.getClipboardRegister('*').getContent() == "new value"
@@ -563,8 +684,8 @@ suite "Registers":
         let r = initRegisters()
         r.setClipboardTool(cbtWlClipboard)
         # Wait for the fake wl-copy to record the write before reading back.
-        r.setNoNamedRegister("new content", true)
-        waitForClipboardWrite(fakeDir, "new content")
+        r.storeYanked(none(char), "new content\n", true)
+        waitForClipboardWrite(fakeDir, "new content\n")
 
         # Restart the claim window so the wait above cannot move the put
         # past it.
@@ -573,7 +694,7 @@ suite "Registers":
         # The first read returns the pre-write content; the claim window
         # keeps the internal register instead of adopting the stale read.
         var reg = r.getNoNamedRegister()
-        check reg.getContent() == "new content"
+        check reg.getContent() == "new content\n"
         check reg.isLine == true
 
         # After the claim window has expired, an external change is picked
@@ -781,8 +902,8 @@ suite "Registers":
         for _ in 0 ..< 10:
           let r = initRegisters()
           r.setClipboardTool(cbtWlClipboard)
-          r.setNoNamedRegister("new content", true)
-          waitForClipboardWrite(fakeDir, "new content")
+          r.storeYanked(none(char), "new content\n", true)
+          waitForClipboardWrite(fakeDir, "new content\n")
 
           # The write is confirmed (the fake exits right away), so the
           # immediate external change is adopted by the next put.
@@ -812,15 +933,15 @@ suite "Registers":
         # from the yanked content.
         writeFile(clipboardFilePath(fakeDir), "old external content")
 
-        r.setYankedRegister("yanked line", true)
-        waitForClipboardWrite(fakeDir, "yanked line")
+        r.storeYanked(none(char), "yanked line\n", true)
+        waitForClipboardWrite(fakeDir, "yanked line\n")
 
         # Restart the claim window so the wait above cannot move the put
         # past it.
         restartClipboardClaimWindow(r)
 
         let reg = r.getClipboardRegister('+')
-        check reg.getContent() == "yanked line"
+        check reg.getContent() == "yanked line\n"
         check reg.isLine == true
       finally:
         removeFakeClipboardTool(fakeDir)
@@ -836,13 +957,13 @@ suite "Registers":
         let r = initRegisters()
         r.setClipboardTool(cbtWlClipboard)
 
-        r.setYankedRegister("new content", true)
-        waitForClipboardWrite(fakeDir, "new content")
+        r.storeYanked(none(char), "new content\n", true)
+        waitForClipboardWrite(fakeDir, "new content\n")
 
         # Inside the 500ms boundary the pre-write read is not adopted.
         # 250ms leaves margin for the fake wl-paste spawn on a slow CI.
         setClipboardWriteAgo(r, 250)
-        check r.getNoNamedRegister().getContent() == "new content"
+        check r.getNoNamedRegister().getContent() == "new content\n"
 
         # Outside the boundary an external change is adopted by the next put.
         setClipboardWriteAgo(r, 750)
@@ -922,9 +1043,9 @@ suite "Registers clipboard integration":
     else:
       let r = initRegisters()
       r.setClipboardTool(tool)
-      r.setYankedRegister("old internal", false)
+      r.storeYanked(none(char), "old internal", false)
 
-      # setYankedRegister writes to both CLIPBOARD and PRIMARY synchronously.
+      # storeYanked writes to both CLIPBOARD and PRIMARY synchronously.
       # Verify they landed before our explicit sync write below.
       let clipSeeded = readClipboardWithRetry(tool, "old internal")
       check clipSeeded.isOk and clipSeeded.get() == "old internal"
@@ -958,9 +1079,9 @@ suite "Registers clipboard integration":
     else:
       let r = initRegisters()
       r.setClipboardTool(tool)
-      r.setYankedRegister("old internal", false)
+      r.storeYanked(none(char), "old internal", false)
 
-      # setYankedRegister writes to both CLIPBOARD and PRIMARY synchronously.
+      # storeYanked writes to both CLIPBOARD and PRIMARY synchronously.
       # Verify they landed before our explicit sync write below.
       let clipSeeded = readClipboardWithRetry(tool, "old internal")
       check clipSeeded.isOk and clipSeeded.get() == "old internal"
@@ -991,9 +1112,9 @@ suite "Registers clipboard integration":
     else:
       let r = initRegisters()
       r.setClipboardTool(tool)
-      r.setYankedRegister("cached internal", false)
+      r.storeYanked(none(char), "cached internal", false)
 
-      # setYankedRegister writes synchronously; verify they landed before
+      # storeYanked writes synchronously; verify they landed before
       # the external write below.
       let clipSeeded = readClipboardWithRetry(tool, "cached internal")
       check clipSeeded.isOk and clipSeeded.get() == "cached internal"
@@ -1018,7 +1139,7 @@ suite "Registers clipboard integration":
 
       cleanup(tool)
 
-  test "setNoNamedRegister writes to PRIMARY selection":
+  test "a yank writes to PRIMARY selection":
     let (available, tool) = getAvailableTool()
     if not available:
       skip()
@@ -1027,7 +1148,7 @@ suite "Registers clipboard integration":
       r.setClipboardTool(tool)
 
       let testText = "primary selection test"
-      r.setNoNamedRegister(testText, false)
+      r.storeYanked(none(char), testText, false)
 
       # Read back from PRIMARY selection (writes are synchronous)
       let readResult = readPrimaryWithRetry(tool, testText)
@@ -1036,7 +1157,7 @@ suite "Registers clipboard integration":
 
       cleanup(tool)
 
-  test "setNoNamedRegister writes to both CLIPBOARD and PRIMARY":
+  test "a yank writes to both CLIPBOARD and PRIMARY":
     let (available, tool) = getAvailableTool()
     if not available:
       skip()
@@ -1045,7 +1166,7 @@ suite "Registers clipboard integration":
       r.setClipboardTool(tool)
 
       let testText = "dual clipboard test"
-      r.setNoNamedRegister(testText, false)
+      r.storeYanked(none(char), testText, false)
 
       # Writes are synchronous
       let clipResult = readClipboardWithRetry(tool, testText)
@@ -1067,7 +1188,7 @@ suite "Registers clipboard integration":
       r.setClipboardTool(tool)
 
       let testText = "yanked to primary"
-      r.setYankedRegister(testText, false)
+      r.storeYanked(none(char), testText, false)
 
       let primaryResult = readPrimaryWithRetry(tool, testText)
       check primaryResult.isOk

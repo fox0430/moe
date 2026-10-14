@@ -307,7 +307,7 @@ suite "Visual Commands - getVisualSelectionText":
       active: true,
       kind: vskLine,
     )
-    check getVisualSelectionText(buf, selection) == "hello world\nfoo bar baz"
+    check getVisualSelectionText(buf, selection) == "hello world\nfoo bar baz\n"
 
   test "vskBlock returns rectangle joined by newlines":
     let buf = newTextBuffer()
@@ -332,7 +332,7 @@ suite "Visual Commands - getVisualSelectionText":
       active: true,
       kind: vskLine,
     )
-    check getVisualSelectionText(buf, selection) == "aaa\nbbb"
+    check getVisualSelectionText(buf, selection) == "aaa\nbbb\n"
 
   test "Inactive selection returns empty string":
     let buf = newTextBuffer()
@@ -375,7 +375,7 @@ suite "Visual Commands - visualYank":
 
     visualYank(buf, state)
 
-    check state.registers.getNoNamedRegister().getContent() == "line 1\nline 2"
+    check state.registers.getNoNamedRegister().getContent() == "line 1\nline 2\n"
     check state.registers.getNoNamedRegister().isLine == true
     check state.visualSelection.active == false
 
@@ -542,7 +542,7 @@ suite "Visual Commands - visualDelete":
 
     visualDelete(buf, state, register = some('a'))
 
-    check state.registers.getNamedRegister('a').getContent() == "line 1\nline 2"
+    check state.registers.getNamedRegister('a').getContent() == "line 1\nline 2\n"
     check state.registers.getNamedRegister('a').isLine == true
 
   test "Delete blockwise selection into named register":
@@ -1365,7 +1365,7 @@ suite "Visual Commands - visualChange":
 
     visualChange(buf, state, register = some('a'))
 
-    check state.registers.getNamedRegister('a').getContent() == "line 1\nline 2"
+    check state.registers.getNamedRegister('a').getContent() == "line 1\nline 2\n"
     check state.registers.getNamedRegister('a').isLine == true
 
   test "Change block selection stores deleted text into named register":
@@ -1407,7 +1407,7 @@ suite "Visual Commands - visualChange":
 
     visualChange(buf, state)
 
-    check state.registers.getNoNamedRegister().getContent() == "line 1\nline 2"
+    check state.registers.getNoNamedRegister().getContent() == "line 1\nline 2\n"
     check state.registers.getNoNamedRegister().isLine == true
 
 suite "Visual Commands - visualSwapSelection":
@@ -1444,7 +1444,7 @@ suite "Visual Commands - visualPaste":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.registers.setYankedRegister("REPLACED", false)
+    state.registers.storeYanked(none(char), "REPLACED", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
@@ -1459,7 +1459,7 @@ suite "Visual Commands - visualPaste":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.registers.setYankedRegister("XYZ", false)
+    state.registers.storeYanked(none(char), "XYZ", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
@@ -1475,7 +1475,7 @@ suite "Visual Commands - visualPaste":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.registers.setYankedRegister("XY", false)
+    state.registers.storeYanked(none(char), "XY", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
@@ -1493,7 +1493,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 1, column: 3), "\nccc")
     let state = createTestState()
     state.mode = EditorMode.VisualLine
-    state.registers.setYankedRegister("XX\nYY\n", true)
+    state.registers.storeYanked(none(char), "XX\nYY\n", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
@@ -1512,7 +1512,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
     let state = createTestState()
     state.mode = EditorMode.VisualLine
-    state.registers.setYankedRegister("XX\n", true)
+    state.registers.storeYanked(none(char), "XX\n", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
@@ -1529,7 +1529,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
     let state = createTestState()
     state.mode = EditorMode.VisualLine
-    state.registers.setYankedRegister("XX\nYY\n", true)
+    state.registers.storeYanked(none(char), "XX\nYY\n", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
@@ -1547,7 +1547,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
     let state = createTestState()
     state.mode = EditorMode.VisualLine
-    state.registers.setYankedRegister("  pasted\n", true)
+    state.registers.storeYanked(none(char), "  pasted\n", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0), vskLine
     )
@@ -1564,7 +1564,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 3), "\nbbb")
     let state = createTestState()
     state.mode = EditorMode.VisualLine
-    state.registers.setYankedRegister("XX\n", true)
+    state.registers.storeYanked(none(char), "XX\n", true)
     state.selectVisual(
       BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 0), vskLine
     )
@@ -1583,7 +1583,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
-    state.registers.setYankedRegister("XYZ", false)
+    state.registers.storeYanked(none(char), "XYZ", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskBlock
     )
@@ -1603,7 +1603,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 2), "\ncdefgh")
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
-    state.registers.setYankedRegister("X\nYZ", false)
+    state.registers.storeYanked(none(char), "X\nYZ", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 5), vskBlock
     )
@@ -1624,7 +1624,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line1\nline2\nline3")
     let state = createTestState()
     state.mode = EditorMode.VisualLine
-    state.registers.setYankedRegister("", true)
+    state.registers.storeYanked(none(char), "", true)
     state.selectVisual(
       BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 5), vskLine
     )
@@ -1642,7 +1642,7 @@ suite "Visual Commands - visualPaste":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.registers.setYankedRegister("", false)
+    state.registers.storeYanked(none(char), "", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
@@ -1674,7 +1674,7 @@ suite "Visual Commands - visualPaste":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    discard state.registers.setNamedRegister('a', "NAMED", false)
+    discard state.registers.setRegister('a', "NAMED", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
@@ -1690,7 +1690,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 1, column: 7), "\ntest line")
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
-    discard state.registers.setNamedRegister('a', "REG_A_CONTENT", false)
+    discard state.registers.setRegister('a', "REG_A_CONTENT", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 2), vskBlock
     )
@@ -1709,7 +1709,7 @@ suite "Visual Commands - visualPaste":
     state.mode = EditorMode.VisualLine
     # Linewise register holding a single empty line (Vim's dd on a blank line
     # or yy on an empty line produces this).
-    state.registers.setYankedRegister("", true)
+    state.registers.storeYanked(none(char), "", true)
     state.selectVisual(
       BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 5), vskLine
     )
@@ -1721,12 +1721,13 @@ suite "Visual Commands - visualPaste":
     check buf.getLine(2) == "line3"
     check state.visualSelection.active == false
 
-  test "Charwise paste of linewise empty register deletes the selection":
-    # Vim also splits the line there to put the empty line; moe does not.
+  test "Charwise paste of linewise empty register puts an empty line":
+    # Like Vim, the line splits where the selection was and the empty line
+    # goes between.
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.registers.setYankedRegister("", true)
+    state.registers.storeYanked(none(char), "", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
@@ -1734,7 +1735,11 @@ suite "Visual Commands - visualPaste":
     let r = visualPaste(buf, state)
 
     check r.isOk
-    check buf.getLine(0) == " world"
+    check buf.len == 3
+    check buf.getLine(0) == ""
+    check buf.getLine(1) == ""
+    check buf.getLine(2) == " world"
+    check state.cursor == BufferPosition(line: 1, column: 0)
     check state.visualSelection.active == false
 
   test "visualPaste falls back to system clipboard when register empty":
@@ -1908,7 +1913,7 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
-    state.registers.setYankedRegister("REPLACED", false)
+    state.registers.storeYanked(none(char), "REPLACED", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskLine
     )
@@ -1925,7 +1930,7 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
     discard buf.insertText(BufferPosition(line: 1, column: 10), "\nold line 3")
     let state = createTestState()
-    state.registers.setYankedRegister("new line A\nnew line B", true)
+    state.registers.storeYanked(none(char), "new line A\nnew line B", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
@@ -1941,7 +1946,7 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "old line 1")
     discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
     let state = createTestState()
-    state.registers.setYankedRegister("new line A\r\nnew line B", true)
+    state.registers.storeYanked(none(char), "new line A\r\nnew line B", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
@@ -1963,7 +1968,7 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
     discard buf.insertText(BufferPosition(line: 1, column: 10), "\nold line 3")
     let state = createTestState()
-    state.registers.setYankedRegister("new line A\nnew line B\n", true)
+    state.registers.storeYanked(none(char), "new line A\nnew line B\n", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
@@ -1982,7 +1987,7 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "old line 1")
     discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
     let state = createTestState()
-    state.registers.setYankedRegister("foo\n", true)
+    state.registers.storeYanked(none(char), "foo\n", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
@@ -1999,7 +2004,7 @@ suite "Visual Commands - Block Selection":
     discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
     let state = createTestState()
     # Charwise register (isLine = false) whose content still spans lines.
-    state.registers.setYankedRegister("frag A\nfrag B", false)
+    state.registers.storeYanked(none(char), "frag A\nfrag B", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
     )
@@ -2100,7 +2105,7 @@ suite "Visual Commands - Edge Cases":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.mode = EditorMode.Normal
-    state.registers.setYankedRegister("", false)
+    state.registers.storeYanked(none(char), "", false)
 
     visualYank(buf, state)
 
@@ -2181,7 +2186,7 @@ suite "Visual Commands - Edge Cases":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.registers.setYankedRegister("REPLACED", false)
+    state.registers.storeYanked(none(char), "REPLACED", false)
     state.mode = EditorMode.Normal
 
     discard visualPaste(buf, state)
@@ -2709,7 +2714,7 @@ suite "Visual paste - cursor on a rolled-back paste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
     let state = createTestState()
-    state.registers.setYankedRegister("REPLACED", false)
+    state.registers.storeYanked(none(char), "REPLACED", false)
     buf.readOnly = true
     (buf, state)
 
@@ -2751,9 +2756,9 @@ suite "Visual delete - register/buffer atomicity":
     let state = createTestState()
     # Linewise / multiline deletes land in number register 1, single-line
     # charwise deletes in the small delete register
-    state.registers.setDeletedRegister("SEED_LINE\n", true)
-    state.registers.setDeletedRegister("SEED", false)
-    discard state.registers.setNamedRegister('a', "SEED_A", false)
+    state.registers.storeDeleted(none(char), "SEED_LINE\n", true)
+    state.registers.storeDeleted(none(char), "SEED", false)
+    discard state.registers.setRegister('a', "SEED_A", false)
     buf.readOnly = true
     (buf, state)
 
@@ -2804,7 +2809,7 @@ suite "Visual delete - register/buffer atomicity":
   test "charwise visual paste keeps registers when the delete fails":
     let (buf, state) = newReadOnlyState()
     state.mode = EditorMode.Visual
-    state.registers.setYankedRegister("XYZ", false)
+    state.registers.storeYanked(none(char), "XYZ", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
@@ -2817,7 +2822,7 @@ suite "Visual delete - register/buffer atomicity":
   test "linewise visual paste keeps registers when the delete fails":
     let (buf, state) = newReadOnlyState()
     state.mode = EditorMode.VisualLine
-    state.registers.setYankedRegister("XYZ\n", true)
+    state.registers.storeYanked(none(char), "XYZ\n", true)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4), vskLine
     )
@@ -2892,7 +2897,7 @@ suite "Visual edit commands - read-only failure rolls back and reports":
   test "visualPaste on read-only buffer keeps text and reports":
     let (buf, state) = newReadOnlyVisualState()
     state.mode = EditorMode.Visual
-    state.registers.setYankedRegister("XYZ", false)
+    state.registers.storeYanked(none(char), "XYZ", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )

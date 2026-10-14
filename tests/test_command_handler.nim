@@ -2397,7 +2397,7 @@ suite "CommandModeHandler - executeDelete":
 
     let result = handler.executeDelete(buffer, currentLine = 0)
     # hrError instead of hrDeleteLines guarantees result_processor's
-    # setDeletedRegister branch never fires -- the register cannot be polluted.
+    # storeDeleted branch never fires -- the register cannot be polluted.
     check result.kind == hrError
     check result.errorMessage == "Buffer is read-only"
     check buffer.len == 2

@@ -174,8 +174,17 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("visual-block-append", "Append after visual block selection", "visual.block.append"),
   ("visual-paste", "Delete selection and paste register content", "visual.paste"),
   (
+    "visual-paste-before", "Delete selection and paste, keeping the registers",
+    "visual.paste.before",
+  ),
+  (
     "visual-paste-end", "Delete selection, paste, and leave cursor after pasted text",
     "visual.paste.end",
+  ),
+  (
+    "visual-paste-before-end",
+    "Delete selection, paste, and leave cursor after pasted text (lines go above a block)",
+    "visual.paste.before.end",
   ),
   ("visual-reselect", "Reselect the previous visual area", "visual.reselect"),
 ].withWindowCommands()

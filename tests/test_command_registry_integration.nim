@@ -631,7 +631,7 @@ suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
     let registry = createTestRegistry()
 
     # Prime the unnamed register with a previous yank ("xyz").
-    ctx.state.registers.setNoNamedRegister("xyz", false)
+    ctx.state.registers.storeYanked(none(char), "xyz", false)
 
     ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
@@ -1512,7 +1512,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.registers.setYankedRegister("XYZ", false)
+    ctx.state.registers.storeYanked(none(char), "XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -1522,7 +1522,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("new line", true)
+    ctx.state.registers.storeYanked(none(char), "new line", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -1533,7 +1533,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("  indented", true)
+    ctx.state.registers.storeYanked(none(char), "  indented", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -1546,7 +1546,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("no indent", true)
+    ctx.state.registers.storeYanked(none(char), "no indent", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -1559,7 +1559,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("   ", true)
+    ctx.state.registers.storeYanked(none(char), "   ", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -1572,7 +1572,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.registers.setYankedRegister("X", false)
+    ctx.state.registers.storeYanked(none(char), "X", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after"), @["3"]).isOk
@@ -1582,18 +1582,18 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("", false)
+    ctx.state.registers.storeYanked(none(char), "", false)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, custom("paste.after"))
     check result.isErr
-    check "Nothing to paste" in result.error
+    check result.error == "E353: Nothing in register \""
 
   test "paste failure keeps an outer session transaction open":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("X", false)
+    ctx.state.registers.storeYanked(none(char), "X", false)
     # Simulate a live Insert session: the paste must not roll it back.
     check buffer.beginTransaction("Insert mode edit").isOk
     let registry = createTestRegistry()
@@ -1612,7 +1612,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("X", false)
+    ctx.state.registers.storeYanked(none(char), "X", false)
     let registry = createTestRegistry()
 
     # count = 2 opens the paste's own transaction; the out-of-bounds cursor
@@ -1679,7 +1679,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 5)
-    ctx.state.registers.setYankedRegister("XYZ", false)
+    ctx.state.registers.storeYanked(none(char), "XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -1689,7 +1689,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0)
-    ctx.state.registers.setYankedRegister("\tindented", true)
+    ctx.state.registers.storeYanked(none(char), "\tindented", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -1702,7 +1702,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("no indent", true)
+    ctx.state.registers.storeYanked(none(char), "no indent", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -1715,7 +1715,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0)
-    ctx.state.registers.setYankedRegister("  ", true)
+    ctx.state.registers.storeYanked(none(char), "  ", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -1728,7 +1728,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.registers.setYankedRegister("あいう", false)
+    ctx.state.registers.storeYanked(none(char), "あいう", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -1740,7 +1740,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 5)
-    ctx.state.registers.setYankedRegister("あいう", false)
+    ctx.state.registers.storeYanked(none(char), "あいう", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -1752,7 +1752,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("xy\nab", false)
+    ctx.state.registers.storeYanked(none(char), "xy\nab", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -1767,7 +1767,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("xy\nab", false)
+    ctx.state.registers.storeYanked(none(char), "xy\nab", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after"), @["2"]).isOk
@@ -1785,7 +1785,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 2)
-    ctx.state.registers.setYankedRegister("xy\nab", false)
+    ctx.state.registers.storeYanked(none(char), "xy\nab", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -1800,7 +1800,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("あい\nうえお", false)
+    ctx.state.registers.storeYanked(none(char), "あい\nうえお", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -1815,7 +1815,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.registers.setYankedRegister("XYZ", false)
+    ctx.state.registers.storeYanked(none(char), "XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isOk
@@ -1827,7 +1827,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 5)
-    ctx.state.registers.setYankedRegister("XYZ", false)
+    ctx.state.registers.storeYanked(none(char), "XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before.end")).isOk
@@ -1839,7 +1839,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.registers.setYankedRegister("XY", false)
+    ctx.state.registers.storeYanked(none(char), "XY", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isOk
@@ -1854,7 +1854,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.registers.setYankedRegister("あいう", false)
+    ctx.state.registers.storeYanked(none(char), "あいう", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isOk
@@ -1865,7 +1865,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("xy\nab", false)
+    ctx.state.registers.storeYanked(none(char), "xy\nab", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isOk
@@ -1879,7 +1879,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.registers.setYankedRegister("X", false)
+    ctx.state.registers.storeYanked(none(char), "X", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end"), @["3"]).isOk
@@ -1890,7 +1890,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("  indented", true)
+    ctx.state.registers.storeYanked(none(char), "  indented", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isOk
@@ -1903,7 +1903,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\n    next")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("X", true)
+    ctx.state.registers.storeYanked(none(char), "X", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isOk
@@ -1917,7 +1917,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0)
-    ctx.state.registers.setYankedRegister("\tindented", true)
+    ctx.state.registers.storeYanked(none(char), "\tindented", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before.end")).isOk
@@ -1930,7 +1930,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("  pasted", true)
+    ctx.state.registers.storeYanked(none(char), "  pasted", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isOk
@@ -1943,7 +1943,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("X", true)
+    ctx.state.registers.storeYanked(none(char), "X", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end"), @["2"]).isOk
@@ -1957,7 +1957,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("X", true)
+    ctx.state.registers.storeYanked(none(char), "X", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before.end"), @["2"]).isOk
@@ -1972,7 +1972,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("XY", false)
+    ctx.state.registers.storeYanked(none(char), "XY", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isOk
@@ -1986,7 +1986,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("XY", false)
+    ctx.state.registers.storeYanked(none(char), "XY", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before.end")).isOk
@@ -2000,7 +2000,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("head\n1\n2\ntail")
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
-    ctx.state.registers.setNoNamedRegister("X\n", true)
+    ctx.state.registers.storeYanked(none(char), "X\n", true)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -2014,7 +2014,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.setYankedRegister("", true)
+    ctx.state.registers.storeYanked(none(char), "", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isOk
@@ -2027,7 +2027,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 1)
-    ctx.state.registers.setYankedRegister("", false)
+    ctx.state.registers.storeYanked(none(char), "", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isErr
@@ -2568,7 +2568,7 @@ suite "Handler - Yank line operations":
     ctx.cursor = BufferPosition(line: 1, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.registers.setYankedRegister("", true)
+    ctx.state.registers.storeYanked(none(char), "", true)
     check registry.execute(ctx, custom("paste.before")).isOk
     check buffer.len == 3
     check buffer[0] == "line1"
@@ -3574,7 +3574,7 @@ suite "Handler - Text Object operations":
     let registry = createTestRegistry()
 
     # Seed the unnamed register; an empty yank must not clobber it.
-    ctx.state.registers.setYankedRegister("PREV", false)
+    ctx.state.registers.storeYanked(none(char), "PREV", false)
 
     ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
@@ -3591,7 +3591,7 @@ suite "Handler - Text Object operations":
     let registry = createTestRegistry()
 
     # An empty delete removes nothing, so a previously yanked value survives.
-    ctx.state.registers.setYankedRegister("PREV", false)
+    ctx.state.registers.storeYanked(none(char), "PREV", false)
 
     ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
@@ -4244,7 +4244,7 @@ suite "Handler - Clipboard operations":
         writeFile(clipboardFilePath(fakeDir), "yanked content")
         writeFile(primaryFilePath(fakeDir), "yanked content")
         ctx.state.registers.setClipboardTool(cbtXclip)
-        ctx.state.registers.setYankedRegister("yanked content", false)
+        ctx.state.registers.storeYanked(none(char), "yanked content", false)
 
         let selectedText = getVisualSelectionText(buffer, ctx.state.visualSelection)
         check selectedText.len > 0
@@ -4262,9 +4262,8 @@ suite "Handler - Clipboard operations":
         removeFakeClipboardTool(fakeDir)
 
   test "clipboard copy on V-line keeps the linewise type on unnamed put":
-    # Regression: a single-line linewise copy writes no trailing newline,
-    # so the read cannot tell linewise from characterwise by content alone;
-    # the copy must update the internal register to keep the linewise type.
+    # A linewise copy writes the line break that ends its last line, as a
+    # linewise yank does, and the put keeps the linewise type.
     let fakeDir = installFakeClipboardTool(fakeClipboardContent)
     if fakeDir.len == 0:
       skip()
@@ -4281,15 +4280,15 @@ suite "Handler - Clipboard operations":
         writeFile(clipboardFilePath(fakeDir), "old yanked content")
         writeFile(primaryFilePath(fakeDir), "old yanked content")
         ctx.state.registers.setClipboardTool(cbtXclip)
-        ctx.state.registers.setYankedRegister("old yanked content", false)
+        ctx.state.registers.storeYanked(none(char), "old yanked content", false)
 
         check registry.execute(ctx, builtin(bcEditCopy)).isOk
 
-        check readFile(clipboardFilePath(fakeDir)) == "hello world"
+        check readFile(clipboardFilePath(fakeDir)) == "hello world\n"
         check readFile(primaryFilePath(fakeDir)) == "old yanked content"
 
         # The put returns the copied line and keeps the linewise type.
-        check ctx.state.registers.getNoNamedRegister().getContent() == "hello world"
+        check ctx.state.registers.getNoNamedRegister().getContent() == "hello world\n"
         check ctx.state.registers.getNoNamedRegister().isLine == true
       finally:
         removeFakeClipboardTool(fakeDir)
@@ -4317,7 +4316,7 @@ suite "Handler - Clipboard operations":
         check registry.execute(ctx, builtin(bcEditCopy)).isOk
 
         # Wait for the fake wl-copy to record the copy before reading back.
-        waitForClipboardWrite(fakeDir, "hello world")
+        waitForClipboardWrite(fakeDir, "hello world\n")
 
         # Restart the claim window so the wait above cannot move the put
         # past it.
@@ -4326,7 +4325,7 @@ suite "Handler - Clipboard operations":
         # The first read after a write returns the pre-copy content; the put
         # keeps the internal register (the copied content with its type).
         var reg = ctx.state.registers.getNoNamedRegister()
-        check reg.getContent() == "hello world"
+        check reg.getContent() == "hello world\n"
         check reg.isLine == true
 
         # After the claim window has expired, an external change is picked
@@ -4397,14 +4396,14 @@ suite "Handler - Clipboard operations":
         check registry.execute(ctx, builtin(bcEditCopy)).isOk
 
         # Wait for the fake wl-copy write to land.
-        waitForClipboardWrite(fakeDir, "hello world")
+        waitForClipboardWrite(fakeDir, "hello world\n")
 
         # Restart the claim window so the wait above cannot move the put
         # past it.
         restartClipboardClaimWindow(ctx.state.registers)
 
         let reg = ctx.state.registers.getClipboardRegister('+')
-        check reg.getContent() == "hello world"
+        check reg.getContent() == "hello world\n"
         check reg.isLine == true
       finally:
         removeFakeClipboardTool(fakeDir)
@@ -4448,7 +4447,7 @@ suite "Handler - Clipboard operations":
         check buffer[0] == "tail"
         # Delete register captured the full lines line-wise.
         let noname = ctx.state.registers.getNoNamedRegister()
-        check noname.getContent() == "hello world\nfoo bar baz"
+        check noname.getContent() == "hello world\nfoo bar baz\n"
         check noname.isLine == true
         check ctx.state.visualSelection.active == false
       finally:
@@ -4471,7 +4470,7 @@ suite "Handler - Clipboard operations":
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
 
         check getVisualSelectionText(buffer, ctx.state.visualSelection) ==
-          "first\nsecond"
+          "first\nsecond\n"
 
         let registry = createTestRegistry()
         check registry.execute(ctx, builtin(bcEditCut)).isOk
@@ -4545,7 +4544,7 @@ suite "Handler - Clipboard operations":
 
         check buffer.len == 1
         check buffer[0] == "tail"
-        waitForClipboardWrite(fakeDir, "a0\na1\na2\na3")
+        waitForClipboardWrite(fakeDir, "a0\na1\na2\na3\n")
       finally:
         removeFakeClipboardTool(fakeDir)
 
@@ -4839,7 +4838,7 @@ suite "Handler - Visual mode extended operations":
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
     ctx.setCursor(0, 4)
-    ctx.state.registers.setYankedRegister("XYZ", false)
+    ctx.state.registers.storeYanked(none(char), "XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcVisualPaste)).isOk
@@ -5860,8 +5859,8 @@ suite "Cursor clamping - Visual operations sync ctx.cursor":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 0, 4)
-    ctx.state.registers.setYankedRegister("XYZ", false)
-    ctx.state.registers.setDeletedRegister("XYZ", false)
+    ctx.state.registers.storeYanked(none(char), "XYZ", false)
+    ctx.state.registers.storeDeleted(none(char), "XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcVisualPaste)).isOk
@@ -5873,8 +5872,8 @@ suite "Cursor clamping - Visual operations sync ctx.cursor":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 0, 4)
-    ctx.state.registers.setYankedRegister("XYZ", false)
-    ctx.state.registers.setDeletedRegister("XYZ", false)
+    ctx.state.registers.storeYanked(none(char), "XYZ", false)
+    ctx.state.registers.storeDeleted(none(char), "XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("visual.paste.end")).isOk
@@ -7808,7 +7807,7 @@ suite "executeCommand - closed folds are edited as a whole":
     let buffer = newTextBuffer("0\n1\n2\n3\n4")
     check buffer.foldState.addFold(0, 3, collapsed = true)
     let ctx = createTestContext(buffer)
-    ctx.state.registers.setNoNamedRegister("new\n", true)
+    ctx.state.registers.storeYanked(none(char), "new\n", true)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -7891,7 +7890,7 @@ suite "executeCommand - closed folds are edited as a whole":
     let buffer = newTextBuffer("head\n1\n2\ntail")
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
-    ctx.state.registers.setNoNamedRegister("X\n", true)
+    ctx.state.registers.storeYanked(none(char), "X\n", true)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -7908,7 +7907,7 @@ suite "executeCommand - closed folds are edited as a whole":
     let buffer = newTextBuffer("head\n1\n2\ntail")
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
-    ctx.state.registers.setNoNamedRegister("X\n", true)
+    ctx.state.registers.storeYanked(none(char), "X\n", true)
     ctx.cursor = BufferPosition(line: 2, column: 0)
     let registry = createTestRegistry()
 
@@ -7926,7 +7925,7 @@ suite "executeCommand - closed folds are edited as a whole":
     let buffer = newTextBuffer("a\nb\n\ntail")
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
-    ctx.state.registers.setNoNamedRegister("PASTED\n", true)
+    ctx.state.registers.storeYanked(none(char), "PASTED\n", true)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -8494,8 +8493,8 @@ suite "Register/buffer atomicity - failed edits must not touch registers":
   # the buffer change succeeded.
 
   proc seedRegisters(ctx: CommandContext) =
-    ctx.state.registers.setDeletedRegister("SEED", false)
-    discard ctx.state.registers.setNamedRegister('a', "SEED_A", false)
+    ctx.state.registers.storeDeleted(none(char), "SEED", false)
+    discard ctx.state.registers.setRegister('a', "SEED_A", false)
 
   proc checkRegistersUntouched(ctx: CommandContext) =
     check ctx.state.registers.getSmallDeleteRegister().getContent() == "SEED"

@@ -33,16 +33,6 @@ import ../buffer/[core, edit, fold, undo]
 
 import core, operator_engine, operator_driver
 
-proc firstNonBlankColumn*(line: seq[Rune]): int =
-  ## Return the column of the first non-whitespace character.
-  ## If the line is all whitespace, return the last valid column (Vim behavior).
-  for i, r in line:
-    if not r.isWhiteSpace:
-      return i
-  if line.len > 0:
-    return line.len - 1
-  return 0
-
 proc finishPasteCursor(
     ctx: CommandContext,
     isFullLine, cursorAfter: bool,
@@ -61,6 +51,24 @@ proc finishPasteCursor(
   elif not isFullLine and firstPastedChar.isSome:
     ctx.cursor = firstPastedChar.get
 
+proc pasteSource(
+    ctx: CommandContext
+): Result[tuple[text: string, isLine: bool], string] =
+  ## What `p`/`P` put: the register this command names, else the unnamed one,
+  ## made fit for the buffer. Linewise text ends in a line break.
+  let name = ctx.register.get('"')
+  if ctx.register.isSome:
+    ctx.state.statusMessage = ""
+  let reg = ?ctx.state.registers.textToPut(name, ctx.clipboardConfig)
+  if reg.isEmpty:
+    return err(nothingInRegister(name))
+  let text = ctx.buffer.preparePastedText(reg.getContent)
+  logDebug(
+    "paste",
+    "Using register '" & $name & "', length: " & $text.len & ", isLine=" & $reg.isLine,
+  )
+  ok((text, reg.isLine))
+
 proc handlePasteAfter*(
     ctx: CommandContext, count: int = 1, cursorAfter: bool = false
 ): Result[(), string] =
@@ -70,51 +78,7 @@ proc handlePasteAfter*(
     # The black hole register reads as nothing, and nothing is put.
     return ok(())
   let actualCount = max(1, count)
-
-  var pasteText: string
-  var isFullLine: bool
-  var registerEmpty: bool
-  var usedRegister = '"' # Track register for fallback cache.
-
-  if ctx.register.isSome:
-    # User specified a register with "
-    let regName = ctx.register.get
-    usedRegister = regName
-    let reg = ctx.state.registers.getRegister(regName)
-    pasteText = reg.getContent()
-    isFullLine = reg.isLine
-    registerEmpty = reg.isEmpty
-    ctx.state.statusMessage = ""
-    logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
-  else:
-    # Use unnamed register (most recent yank/delete)
-    let reg = ctx.state.registers.getNoNamedRegister()
-    pasteText = reg.getContent()
-    isFullLine = reg.isLine
-    registerEmpty = reg.isEmpty
-    logDebug("paste", "Using unnamed register, length: " & $pasteText.len)
-
-  logDebug(
-    "paste", "Paste content length: " & $pasteText.len & ", isLine=" & $isFullLine
-  )
-
-  # Fallback to clipboard if register empty; empty linewise is valid.
-  if registerEmpty and ctx.clipboardConfig.enable:
-    logDebug("paste", "Register empty, trying clipboard")
-    let readResult =
-      ctx.state.registers.clipboardFallbackRead(ctx.clipboardConfig.tool, usedRegister)
-    if readResult.isErr:
-      return err(
-        # `readResult.error` already reads "Failed to read from clipboard: ...".
-        "Nothing to paste: " & readResult.error
-      )
-
-    pasteText = readResult.value
-    isFullLine = pasteText.len > 0 and pasteText[^1] == '\n'
-    logDebug("paste", "Got from clipboard, length: " & $pasteText.len)
-
-  if pasteText.len == 0 and not isFullLine:
-    return err("Nothing to paste")
+  let (pasteText, isFullLine) = ?ctx.pasteSource()
 
   # Begin transaction if count > 1 to group all pastes into single undo entry
   if actualCount > 1:
@@ -142,10 +106,8 @@ proc handlePasteAfter*(
         let pastePos =
           BufferPosition(line: ctx.cursor.line, column: currentLine.charLen)
 
-        # Insert the paste content
-        # Remove trailing newline from pasteText and add newline prefix
-        let textToInsert =
-          "\n" & pasteText.strip(leading = false, trailing = true, chars = {'\n'})
+        # The lines go after the current one's line break.
+        let textToInsert = "\n" & pasteText.withoutLastLineBreak
         let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
         if insertResult.isErr:
           # Rollback transaction on error
@@ -161,8 +123,7 @@ proc handlePasteAfter*(
         lastPastedEndLine = max(lastPastedEndLine, ctx.cursor.line + n)
         # Move cursor to the first non-whitespace character of pasted line
         ctx.cursor.line = ctx.cursor.line + 1
-        ctx.cursor.column =
-          firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toCharRunes())
+        ctx.cursor.column = firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line))
       else:
         # Paste after cursor position (Vim 'p' behavior for characterwise yank)
         let lineContent = ctx.buffer.getLine(ctx.cursor.line)
@@ -226,51 +187,7 @@ proc handlePasteBefore*(
     # The black hole register reads as nothing, and nothing is put.
     return ok(())
   let actualCount = max(1, count)
-
-  var pasteText: string
-  var isFullLine: bool
-  var registerEmpty: bool
-  var usedRegister = '"' # Track register for fallback cache.
-
-  if ctx.register.isSome:
-    # User specified a register with "
-    let regName = ctx.register.get
-    usedRegister = regName
-    let reg = ctx.state.registers.getRegister(regName)
-    pasteText = reg.getContent()
-    isFullLine = reg.isLine
-    registerEmpty = reg.isEmpty
-    ctx.state.statusMessage = ""
-    logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
-  else:
-    # Use unnamed register (most recent yank/delete)
-    let reg = ctx.state.registers.getNoNamedRegister()
-    pasteText = reg.getContent()
-    isFullLine = reg.isLine
-    registerEmpty = reg.isEmpty
-    logDebug("paste", "Using unnamed register, length: " & $pasteText.len)
-
-  logDebug(
-    "paste", "Paste content length: " & $pasteText.len & ", isLine=" & $isFullLine
-  )
-
-  # Fallback to clipboard if register empty; empty linewise is valid.
-  if registerEmpty and ctx.clipboardConfig.enable:
-    logDebug("paste", "Register empty, trying clipboard")
-    let readResult =
-      ctx.state.registers.clipboardFallbackRead(ctx.clipboardConfig.tool, usedRegister)
-    if readResult.isErr:
-      return err(
-        # `readResult.error` already reads "Failed to read from clipboard: ...".
-        "Nothing to paste: " & readResult.error
-      )
-
-    pasteText = readResult.value
-    isFullLine = pasteText.len > 0 and pasteText[^1] == '\n'
-    logDebug("paste", "Got from clipboard, length: " & $pasteText.len)
-
-  if pasteText.len == 0 and not isFullLine:
-    return err("Nothing to paste")
+  let (pasteText, isFullLine) = ?ctx.pasteSource()
 
   # Begin transaction if count > 1 to group all pastes into single undo entry
   if actualCount > 1:
@@ -296,10 +213,8 @@ proc handlePasteBefore*(
         # Paste on new line above current line (Vim 'P' behavior for linewise yank)
         let pastePos = BufferPosition(line: ctx.cursor.line, column: 0)
 
-        # Insert the paste content
-        # Remove trailing newline from pasteText and add newline suffix
-        let textToInsert =
-          pasteText.strip(leading = false, trailing = true, chars = {'\n'}) & "\n"
+        # The lines go before the current one, each ending in a line break.
+        let textToInsert = pasteText
         let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
         if insertResult.isErr:
           # Rollback transaction on error
@@ -314,8 +229,7 @@ proc handlePasteBefore*(
           lastPastedEndLine += n
         lastPastedEndLine = max(lastPastedEndLine, ctx.cursor.line + n - 1)
         # Move cursor to the first non-whitespace character of pasted line
-        ctx.cursor.column =
-          firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toCharRunes())
+        ctx.cursor.column = firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line))
       else:
         # Paste at cursor position (Vim 'P' behavior for characterwise yank)
         let pastePos = ctx.cursor
@@ -661,14 +575,7 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
   logDebug("substitute", "handleSubstituteLine called with count=" & $count)
   let (startLine, endLine, _) = ctx.cursorLineRange(count)
 
-  # Extract lines for yank register
-  var text = ""
-  for lineIdx in startLine .. endLine:
-    if lineIdx < ctx.buffer.len:
-      let lineContent = ctx.buffer.getLine(lineIdx)
-      text.add(lineContent)
-      if lineContent.len == 0 or lineContent[^1] != '\n':
-        text.add("\n")
+  let text = ctx.buffer.linewiseText(startLine, endLine)
 
   # Get indent; skipped for raw buffers.
   let firstLine = ctx.buffer.getLine(startLine)
@@ -795,14 +702,7 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
   logDebug("delete", "handleDeleteLine called with count=" & $count)
   let (startLine, endLine, lineCount) = ctx.cursorLineRange(count)
 
-  # Build text from lines to be deleted (for yank register)
-  var deletedText = ""
-  for lineIdx in startLine .. endLine:
-    if lineIdx < ctx.buffer.len:
-      let lineContent = ctx.buffer.getLine(lineIdx)
-      deletedText.add(lineContent)
-      if lineIdx < endLine or (lineContent.len > 0 and lineContent[^1] != '\n'):
-        deletedText.add("\n")
+  let deletedText = ctx.buffer.linewiseText(startLine, endLine)
 
   var clearedWholeBuffer = false
   let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
@@ -875,25 +775,15 @@ proc handleYankLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
   let (startLine, endLine, lineCount) = ctx.cursorLineRange(count)
   logDebug("yank", "lineCount=" & $lineCount)
 
-  # Build text from multiple lines
-  var yankText = ""
-  for lineIdx in startLine .. endLine:
-    if lineIdx < ctx.buffer.len:
-      let lineContent = ctx.buffer.getLine(lineIdx)
-      yankText.add(lineContent)
-      # Add newline if not the last line or if the line itself doesn't end with one
-      if lineIdx < endLine or (lineContent.len > 0 and lineContent[^1] != '\n'):
-        yankText.add("\n")
+  let yankText = ctx.buffer.linewiseText(startLine, endLine)
 
   # Debug: log the yanked text
   logDebug("yank", "Yanking " & $lineCount & " line(s), total length: " & $yankText.len)
   logDebug("yank", "Yanked text: '" & yankText & "'")
 
-  # An empty yankText here means a single empty line was yanked — still valid
-  # in Vim (the register holds one blank line, pasteable via p/P).
   storeYankedText(ctx, yankText, true)
 
-  let storedReg = ctx.state.registers.getNoNamedRegister()
+  let storedReg = ctx.state.registers.noNamed
   logDebug(
     "yank",
     "Stored in register: '" & storedReg.getContent() & "', isLine=" & $storedReg.isLine,
@@ -983,14 +873,7 @@ proc handleOperatorYank*(
     let startLine = ctx.cursor.line
     let endLine = min(startLine + lines.get - 1, ctx.buffer.len - 1)
 
-    # Extract lines for yank register
-    var text = ""
-    for lineIdx in startLine .. endLine:
-      if lineIdx < ctx.buffer.len:
-        let lineContent = ctx.buffer.getLine(lineIdx)
-        text.add(lineContent)
-        if lineContent.len == 0 or lineContent[^1] != '\n':
-          text.add("\n")
+    let text = ctx.buffer.linewiseText(startLine, endLine)
 
     storeYankedText(ctx, text, true)
 
@@ -1022,13 +905,7 @@ proc handleOperatorDelete*(
     let endLine = min(startLine + lines.get - 1, ctx.buffer.len - 1)
     let lineCount = endLine - startLine + 1
 
-    var text = ""
-    for lineIdx in startLine .. endLine:
-      if lineIdx < ctx.buffer.len:
-        let lineContent = ctx.buffer.getLine(lineIdx)
-        text.add(lineContent)
-        if lineContent.len == 0 or lineContent[^1] != '\n':
-          text.add("\n")
+    let text = ctx.buffer.linewiseText(startLine, endLine)
 
     let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
       var brokeEarly = false

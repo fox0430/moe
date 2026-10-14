@@ -113,8 +113,8 @@ proc normalizeNewlines*(b: TextBuffer, text: string): string =
     text
 
 proc preparePastedText*(b: TextBuffer, text: string): string =
-  ## Sanitize external text (CR, invalid UTF-8) for `b`; skipped for raw buffers.
-  ## Register contents use `normalizeNewlines` instead.
+  ## Make text a put brings in fit for `b`: CR line breaks become LF and
+  ## invalid UTF-8 becomes U+FFFD; skipped for raw buffers.
   if b.allowsTextTransforms:
     text.sanitizeInvalidUtf8().normalizeNewlines()
   else:
@@ -369,6 +369,13 @@ proc replaceLines*(
   )
 
   return ok(())
+
+proc linewiseText*(b: TextBuffer, first, last: int): string =
+  ## Lines `first` to `last` as linewise register text: each ends in a line
+  ## break.
+  for lineIdx in first .. min(last, b.len - 1):
+    result.add(b.getLine(lineIdx))
+    result.add('\n')
 
 proc getTextInRange*(b: TextBuffer, startPos, endPos: BufferPosition): string =
   ## Get text from startPos to endPos (inclusive)

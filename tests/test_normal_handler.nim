@@ -2579,7 +2579,7 @@ suite "NormalModeHandler - dgn (delete search match forward)":
     let viewport = createTestViewport()
     state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.registers.setDeletedRegister("SEED", false)
+    state.registers.storeDeleted(none(char), "SEED", false)
 
     discard pressDgn(handler, buf, state, viewport)
     check state.registers.getSmallDeleteRegister().getContent() == "SEED"

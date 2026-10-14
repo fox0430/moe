@@ -56,8 +56,8 @@ type
 
     number*: array[10, Register]
       ## Numbered registers. 0 is the latest yank; 1-9 are the delete history,
-      ## newest first. Only linewise or multiline deletes enter 1 (shifting 1-8
-      ## down); characterwise single-line deletes go to `smallDelete`.
+      ## newest first. Deletes over lines, or over `%`, `}`, `n` and the like,
+      ## enter 1 (shifting 1-8 down); others within a line go to `smallDelete`.
 
     named*: Table[char, Register] ## Named registers (a-z).
 

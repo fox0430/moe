@@ -57,7 +57,7 @@ suite "editor selection API":
     )
 
     check e.currentSelection().get.kind == EditorSelectionKind.Line
-    check e.selectedText() == "alpha\nbeta"
+    check e.selectedText() == "alpha\nbeta\n"
 
     e.state.selectVisual(
       BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 2), vskBlock
@@ -79,7 +79,7 @@ suite "editor selection API":
     # The ends stay where the user put them.
     check selection.anchor == BufferPosition(line: 0, column: 2)
     check selection.focus == BufferPosition(line: 1, column: 0)
-    check e.selectedText() == "alpha\nbeta\ngamma"
+    check e.selectedText() == "alpha\nbeta\ngamma\n"
 
   test "takes every field from the window the editor reports as active":
     # Between the window manager switching windows and the editor syncing, the

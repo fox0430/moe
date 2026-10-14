@@ -59,7 +59,7 @@ proc lineBreakAfter(buffer: TextBuffer, line: int): BufferPosition =
   ## takes.
   BufferPosition(line: line, column: buffer.getLine(line).charLen)
 
-proc toOperatorRange*(
+proc rangeUpTo(
     buffer: TextBuffer, target: MotionTarget, operator: OperatorType
 ): OperatorRange =
   ## The text `operator` takes up to `target`, by Vim's rules: an exclusive
@@ -129,6 +129,14 @@ proc toOperatorRange*(
         start: first, endPos: BufferPosition(line: last.line, column: last.column - 1)
       )
 
+proc toOperatorRange*(
+    buffer: TextBuffer, target: MotionTarget, operator: OperatorType
+): OperatorRange =
+  ## The text `operator` takes up to `target` (`rangeUpTo`), and which
+  ## registers a delete of it fills.
+  result = buffer.rangeUpTo(target, operator)
+  result.useRegOne = target.useRegOne
+
 proc settle(ctx: CommandContext, pos: BufferPosition): BufferPosition =
   ## `pos` as a Normal mode cursor: on a character of its line, and at the
   ## start of a closed fold it lies in.
@@ -185,7 +193,10 @@ proc motionTarget(
   ok(
     some(
       MotionTarget(
-        start: op.startPos, finish: landing.pos, motionType: landing.motionType
+        start: op.startPos,
+        finish: landing.pos,
+        motionType: landing.motionType,
+        useRegOne: landing.useRegOne,
       )
     )
   )
@@ -200,6 +211,7 @@ proc markTarget(
         start: op.startPos,
         finish: dest,
         motionType: if operand.markLinewise: mtLinewise else: mtExclusive,
+        useRegOne: not operand.markLinewise,
       )
     )
   )

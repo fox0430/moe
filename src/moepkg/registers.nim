@@ -22,7 +22,8 @@
 ## This module provides a comprehensive register system similar to Vim:
 ## - Unnamed register ("): The default register for all operations
 ## - Numbered registers (0-9): 0 for yank, 1-9 for delete history
-##   (linewise/multiline deletes only; shorter deletions go to `-`)
+##   (deletes over lines, or over `%`, `}`, `n` and the like; shorter
+##   deletions go to `-`)
 ## - Named registers (a-z, A-Z): User-defined registers (uppercase appends)
 ## - Small delete register (-): For deletions less than one line
 ## - Clipboard registers (*, +): System clipboard integration
@@ -76,53 +77,82 @@ proc isEmpty*(r: Register): bool =
   r.buffer.len == 0 or (r.buffer.len == 1 and r.buffer[0].len == 0 and not r.isLine)
 
 proc getContent*(r: Register): string =
-  ## Get register content as a single string
+  ## The register's text. Linewise text ends every line with a line break,
+  ## as Vim's getreg() gives it.
   if r.buffer.len == 0:
-    return ""
+    ""
   elif r.isLine:
-    return r.buffer.join("\n")
+    r.buffer.join("\n") & "\n"
   else:
-    return r.buffer.join("")
+    r.buffer.join("")
 
 proc getLines*(r: Register): seq[string] =
   ## Get register content as lines
   r.buffer
 
-# Private helpers for setting register content
+proc withoutLastLineBreak*(text: string): string =
+  ## Linewise text without the line break that ends its last line.
+  if text.endsWith('\n'):
+    text[0 ..^ 2]
+  else:
+    text
 
-proc setRegister(r: var Register, content: string, isLine: bool) =
-  ## Set register content from a string
-  r.isLine = isLine
+proc linewiseLines*(text: string): seq[string] =
+  ## The lines of linewise text: a line break that ends it ends its last line
+  ## rather than starting another, as Vim's setreg() takes it. Only LF breaks
+  ## lines; a CR stays in the line it is in.
+  text.withoutLastLineBreak.split('\n')
+
+proc toRegister(content: string, isLine: bool): Register =
+  ## `content` as a register holds it.
   if isLine:
-    r.buffer = content.splitLines()
+    Register(isLine: true, buffer: content.linewiseLines)
   else:
-    r.buffer = @[content]
+    Register(isLine: false, buffer: @[content])
 
-proc setRegister(r: var Register, lines: seq[string], isLine: bool) =
-  ## Set register content from lines
-  r.isLine = isLine
-  r.buffer = lines
-
-proc appendRegister(r: var Register, content: string, isLine: bool) =
-  ## Append content to register (vim `"A` semantics: linewise wins).
-  if r.buffer.len == 0:
-    r.setRegister(content, isLine)
-  elif isLine or r.isLine:
-    r.buffer.add(content.splitLines())
-    r.isLine = true
+proc asLines(r: Register): seq[string] =
+  ## The register's text as lines, charwise text split at its line breaks.
+  if r.isLine:
+    r.buffer
   else:
-    r.buffer[^1].add(content)
+    r.getContent.split('\n')
+
+proc selectionText(raw: string): string =
+  ## Text read from a system selection, its CRLF line breaks made LF.
+  raw.replace("\r\n", "\n")
+
+proc fromSelection(text: string): Register =
+  ## `selectionText` as a register holds it: linewise when it ends in a line
+  ## break, as Vim takes the clipboard.
+  toRegister(text, text.endsWith('\n'))
+
+proc shows(reg: Register, raw: string): bool =
+  ## `raw`, read from a system selection, is `reg`'s text: as it was written,
+  ## or with its line breaks made CRLF by the selection. A raw buffer's CR
+  ## stays in its lines, so the text is not made LF before comparing.
+  let own = reg.getContent
+  raw == own or ('\r' in raw and raw.selectionText == own)
+
+proc appended(r: Register, text: Register): Register =
+  ## `r` with `text` added after it, as `"A` adds: linewise if either is, else
+  ## the text continues the last line.
+  if r.isEmpty:
+    text
+  elif r.isLine or text.isLine:
+    Register(isLine: true, buffer: r.asLines & text.asLines)
+  else:
+    Register(isLine: false, buffer: @[r.getContent & text.getContent])
 
 # Clipboard integration (synchronous so that put-time reads see the writes)
 
-proc sendToClipboard(r: Registers, content: string, isLine: bool) =
+proc sendToClipboard(r: Registers, reg: Register) =
   ## Send to system CLIPBOARD and sync `+` cache.
   if r.clipboardTool.isSome:
-    let writeResult = writeToClipboardSync(r.clipboardTool.get, content)
+    let writeResult = writeToClipboardSync(r.clipboardTool.get, reg.getContent)
     if writeResult.isErr:
       logError "registers", "Failed to write to CLIPBOARD: " & writeResult.error
     else:
-      r.clipboardSelection.setRegister(content, isLine)
+      r.clipboardSelection = reg
       if not writeResult.get:
         r.lastClipboardWriteTime = getMonoTime()
 
@@ -171,173 +201,108 @@ proc markClipboardWritten*(
     r: Registers, content: string, isLine: bool, writeConfirmed: bool
 ) =
   ## Record CLIPBOARD write and sync registers.
-  r.noNamed.setRegister(content, isLine)
-  r.clipboardSelection.setRegister(content, isLine)
+  r.noNamed = toRegister(content, isLine)
+  r.clipboardSelection = r.noNamed
   if not writeConfirmed:
     r.lastClipboardWriteTime = getMonoTime()
 
-# Public API for setting registers
+# Writing registers, as Vim's op_yank and op_delete
 
-proc setNoNamedRegister*(r: Registers, content: string, isLine: bool) =
-  ## Set the unnamed register (") and sync to clipboard and primary selection
-  r.noNamed.setRegister(content, isLine)
-  r.sendToClipboard(content, isLine)
-  r.sendToPrimarySelection(content)
-
-proc setNoNamedRegister*(r: Registers, lines: seq[string], isLine: bool) =
-  ## Set the unnamed register from lines
-  r.noNamed.setRegister(lines, isLine)
-  # Send line-joined text so line boundaries survive.
-  let joined = lines.join("\n")
-  r.sendToClipboard(joined, isLine)
-  r.sendToPrimarySelection(joined)
-
-proc setSmallDeleteRegister*(r: Registers, content: string) =
-  ## Set the small delete register (-) for deletions less than one line
-  r.smallDelete.setRegister(content, false)
-  r.setNoNamedRegister(content, false)
-
-proc setYankedRegister*(r: Registers, content: string, isLine: bool) =
-  ## Set register 0 (yank register) and unnamed register
-  r.number[0].setRegister(content, isLine)
-  r.setNoNamedRegister(content, isLine)
-
-proc setYankedRegister*(r: Registers, lines: seq[string], isLine: bool) =
-  ## Set register 0 (yank register) from lines
-  r.number[0].setRegister(lines, isLine)
-  r.setNoNamedRegister(lines, isLine)
-
-proc setDeletedRegister*(r: Registers, content: string, isLine: bool) =
-  ## Set delete register with history shift
-  ## - If linewise or multiline: goes to register 1, shifting 1-8 to 2-9
-  ## - If characterwise single line: goes to small delete register (-)
-  if isLine or content.contains('\n'):
-    # Shift registers 1-8 to 2-9
-    for i in countdown(8, 1):
-      r.number[i + 1] = r.number[i]
-    r.number[1].setRegister(content, isLine)
-    r.setNoNamedRegister(content, isLine)
+proc slot(r: Registers, name: char): var Register =
+  ## The register `name` writes to. A name with no register of its own writes
+  ## to "0, as `""yy` does in Vim's get_yank_register.
+  if name.isNumberRegisterName:
+    return r.number[ord(name) - ord('0')]
+  elif name.isNamedRegisterName:
+    return r.named[name.toLowerAscii]
+  elif name.isSmallDeleteRegisterName:
+    return r.smallDelete
+  elif name.isPrimarySelectionRegisterName:
+    return r.primarySelection
+  elif name.isClipboardSelectionRegisterName:
+    return r.clipboardSelection
   else:
-    r.setSmallDeleteRegister(content)
+    return r.number[0]
 
-proc setDeletedRegister*(r: Registers, lines: seq[string], isLine: bool) =
-  ## Set delete register from lines with history shift
-  ## - If linewise or multiline: goes to register 1, shifting 1-8 to 2-9
-  ## - If characterwise single line: goes to small delete register (-)
-  if isLine or lines.len > 1:
-    for i in countdown(8, 1):
-      r.number[i + 1] = r.number[i]
-    r.number[1].setRegister(lines, isLine)
-    r.setNoNamedRegister(lines, isLine)
-  else:
-    let content =
-      if lines.len == 0:
-        ""
-      else:
-        lines[0]
-    r.setSmallDeleteRegister(content)
-
-proc setNamedRegister*(
-    r: Registers, name: char, content: string, isLine: bool
-): Result[(), string] =
-  ## Set a named register (a-z overwrites, A-Z appends)
-  if not name.isNamedRegisterName:
-    return err("Invalid register name: " & $name)
-
-  let lowerName = name.toLowerAscii
-  if name in {'A' .. 'Z'}:
-    # Uppercase: append to register
-    r.named[lowerName].appendRegister(content, isLine)
-  else:
-    # Lowercase: overwrite register
-    r.named[lowerName].setRegister(content, isLine)
-
-  r.setNoNamedRegister(content, isLine)
-  ok(())
-
-proc setNamedRegister*(
-    r: Registers, name: char, lines: seq[string], isLine: bool
-): Result[(), string] =
-  ## Set a named register from lines
-  if not name.isNamedRegisterName:
-    return err("Invalid register name: " & $name)
-
-  let lowerName = name.toLowerAscii
-  if name in {'A' .. 'Z'}:
-    r.named[lowerName].appendRegister(lines.join("\n"), isLine)
-  else:
-    r.named[lowerName].setRegister(lines, isLine)
-
-  r.setNoNamedRegister(lines, isLine)
-  ok(())
-
-proc setClipboardRegister*(r: Registers, name: char, content: string, isLine: bool) =
-  ## Set clipboard register by name and sync to the appropriate system selection
-  ## '*' -> PRIMARY selection, '+' or '~' -> CLIPBOARD selection
+proc yankInto(r: Registers, name: char, text: Register): Register =
+  ## Write `text` to the register `name` names, adding to it for A-Z, and
+  ## return what that register then holds. The clipboard registers also go
+  ## to their system selection.
+  result =
+    if name in {'A' .. 'Z'}:
+      r.slot(name).appended(text)
+    else:
+      text
+  r.slot(name) = result
   if name.isPrimarySelectionRegisterName:
-    r.primarySelection.setRegister(content, isLine)
-    r.sendToPrimarySelection(content)
-  else:
-    r.clipboardSelection.setRegister(content, isLine)
-    r.sendToClipboard(content, isLine)
-  r.noNamed.setRegister(content, isLine)
+    r.sendToPrimarySelection(result.getContent)
+  elif name.isClipboardSelectionRegisterName:
+    r.sendToClipboard(result)
 
-proc setClipboardRegister*(r: Registers, content: string, isLine: bool) =
-  ## Set clipboard register (defaults to CLIPBOARD selection '+')
-  r.setClipboardRegister('+', content, isLine)
+proc setUnnamed(r: Registers, text: Register, wroteClipboard: bool) =
+  ## Make the unnamed register hold `text`, the register written last, and
+  ## send it to the system selections unless a clipboard register was just
+  ## written. The unnamed register mirrors CLIPBOARD, as Vim's
+  ## clipboard=unnamedplus: a put reads CLIPBOARD back, so after `"*y` it puts
+  ## what CLIPBOARD holds, as Vim does.
+  r.noNamed = text
+  if not wroteClipboard:
+    r.sendToClipboard(text)
+    r.sendToPrimarySelection(text.getContent)
 
 proc storeYanked*(r: Registers, name: Option[char], content: string, isLine: bool) =
-  ## Store yanked text in the register `"x` named, else in the yank register.
-  ## The black hole register keeps nothing.
-  if name.isSome and name.get.isBlackHoleRegisterName:
-    discard
-  elif name.isSome and name.get.isNamedRegisterName:
-    discard r.setNamedRegister(name.get, content, isLine)
-  elif name.isSome and name.get.isClipboardRegisterName:
-    r.setClipboardRegister(name.get, content, isLine)
-  else:
-    r.setYankedRegister(content, isLine)
+  ## Store yanked text in the register `"x` named, else in "0, and make the
+  ## unnamed register hold it. The black hole register keeps nothing.
+  let target = name.get('0')
+  if target.isBlackHoleRegisterName:
+    return
+  r.setUnnamed(
+    r.yankInto(target, toRegister(content, isLine)), target.isClipboardRegisterName
+  )
 
-proc storeDeleted*(r: Registers, name: Option[char], content: string, isLine: bool) =
-  ## Store deleted text in the register `"x` named, else in the delete registers.
+proc storeDeleted*(
+    r: Registers, name: Option[char], content: string, isLine: bool, useRegOne = false
+) =
+  ## Store deleted text as Vim's op_delete: in the register `"x` named; in "1,
+  ## shifting "1-"8 down, when it is linewise, spans lines or `useRegOne` (the
+  ## motion was `%`, `}`, `n` and the like); and in "- when it is within a
+  ## line and no register, or a clipboard one, was named. The unnamed
+  ## register holds it, or all of the register it was added to with `"A`.
   ## The black hole register keeps nothing.
   if name.isSome and name.get.isBlackHoleRegisterName:
-    discard
-  elif name.isSome and name.get.isNamedRegisterName:
-    discard r.setNamedRegister(name.get, content, isLine)
-  elif name.isSome and name.get.isClipboardRegisterName:
-    r.setClipboardRegister(name.get, content, isLine)
-  else:
-    r.setDeletedRegister(content, isLine)
+    return
+  let
+    text = toRegister(content, isLine)
+    withinLine = not isLine and '\n' notin content
+  var unnamed = text
+  if name.isSome:
+    unnamed = r.yankInto(name.get, text)
+  if not withinLine or useRegOne:
+    for i in countdown(8, 1):
+      r.number[i + 1] = r.number[i]
+    r.number[1] = text
+    if name.isNone or name.get notin {'A' .. 'Z'}:
+      unnamed = text
+  # The unnamed register mirrors the system selections, as Vim's
+  # clipboard=unnamed,unnamedplus, which fills "- for `"*` and `"+` too.
+  if withinLine and (name.isNone or name.get.isClipboardRegisterName):
+    r.smallDelete = text
+  r.setUnnamed(unnamed, name.isSome and name.get.isClipboardRegisterName)
 
 proc setRegister*(
     r: Registers, name: char, content: string, isLine: bool
 ): Result[(), string] =
-  ## Set any register by name
-  ## " - unnamed register
-  ## 0-9 - number registers
-  ## a-z/A-Z - named registers
-  ## - - small delete register
-  ## *, + - clipboard registers
+  ## Write the register `name` as Vim's setreg() does: the unnamed register
+  ## still holds what it did, unless `name` is `"`, which writes "0 and makes
+  ## it the unnamed register.
+  if not name.isValidRegisterName:
+    return err("Invalid register name: " & $name)
+  if name.isBlackHoleRegisterName:
+    return ok(())
+  let written = r.yankInto(name, toRegister(content, isLine))
   if name == '"':
-    r.setNoNamedRegister(content, isLine)
-    ok(())
-  elif name.isNumberRegisterName:
-    let idx = ord(name) - ord('0')
-    r.number[idx].setRegister(content, isLine)
-    r.setNoNamedRegister(content, isLine)
-    ok(())
-  elif name.isNamedRegisterName:
-    r.setNamedRegister(name, content, isLine)
-  elif name.isSmallDeleteRegisterName:
-    r.smallDelete.setRegister(content, false)
-    r.setNoNamedRegister(content, false)
-    ok(())
-  elif name.isClipboardRegisterName:
-    r.setClipboardRegister(name, content, isLine)
-    ok(())
-  else:
-    err("Invalid register name: " & $name)
+    r.setUnnamed(written, wroteClipboard = false)
+  ok(())
 
 proc isWithinClipboardClaimWindow(r: Registers): bool =
   ## True while the wl-copy claim may still serve the pre-write content.
@@ -366,10 +331,9 @@ proc tryUpdateClipboardSelectionRegister(r: Registers) =
   let clipResult = r.getFromClipboard()
   if clipResult.isOk:
     let content = clipResult.get
-    if content.len > 0 and content != r.clipboardSelection.getContent:
+    if content.len > 0 and not r.clipboardSelection.shows(content):
       if not r.isWithinClipboardClaimWindow:
-        let hasNewline = content.contains('\n')
-        r.clipboardSelection.setRegister(content, hasNewline)
+        r.clipboardSelection = content.selectionText.fromSelection
     elif content.len > 0 and r.isWithinClipboardClaimWindow:
       # The write has landed: close the claim window so external changes
       # are adopted again.
@@ -380,19 +344,17 @@ proc tryUpdatePrimarySelectionRegister(r: Registers) =
   let clipResult = r.getFromPrimarySelection()
   if clipResult.isOk:
     let content = clipResult.get
-    if content.len > 0 and content != r.primarySelection.getContent:
-      let hasNewline = content.contains('\n')
-      r.primarySelection.setRegister(content, hasNewline)
+    if content.len > 0 and not r.primarySelection.shows(content):
+      r.primarySelection = content.selectionText.fromSelection
 
 proc getNoNamedRegister*(r: Registers): Register =
   ## Get unnamed register, syncing with system CLIPBOARD.
   let clipResult = r.getFromClipboard()
   if clipResult.isOk:
     let clipContent = clipResult.get
-    if clipContent.len > 0 and clipContent != r.noNamed.getContent:
+    if clipContent.len > 0 and not r.noNamed.shows(clipContent):
       if not r.isWithinClipboardClaimWindow:
-        let hasNewline = clipContent.contains('\n')
-        r.noNamed.setRegister(clipContent, hasNewline)
+        r.noNamed = clipContent.selectionText.fromSelection
     elif clipContent.len > 0 and r.isWithinClipboardClaimWindow:
       r.lastClipboardWriteTime = MonoTime()
   else:
@@ -478,6 +440,21 @@ proc clipboardFallbackRead*(
       return err(r.clipboardReadError)
     return ok(r.clipboardReadValue)
   return readFromClipboardSync(tool)
+
+proc nothingInRegister*(name: char): string =
+  ## The error for putting the empty register `name` (Vim's E353).
+  "E353: Nothing in register " & $name
+
+proc textToPut*(
+    r: Registers, name: char, clipboard: ClipboardConfig
+): Result[Register, string] =
+  ## What a put of the register `name` puts. An empty register that shows a
+  ## system selection reads it. An empty result is nothing to put, Vim's
+  ## E353. Fails only when reading the selection does.
+  let reg = r.getRegister(name)
+  if not reg.isEmpty or not name.showsSelection or not clipboard.enable:
+    return ok(reg)
+  ok((?r.clipboardFallbackRead(clipboard.tool, name)).selectionText.fromSelection)
 
 proc getRegisterContent*(r: Registers, name: char): string =
   ## Get register content as string

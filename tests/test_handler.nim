@@ -24,7 +24,7 @@
 ## - Search mode event handling helpers
 
 import std/[unittest, options, tables, os, osproc, times, posix]
-from std/strutils import contains, continuesWith, repeat
+from std/strutils import contains, continuesWith, repeat, strip
 
 import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
@@ -1908,7 +1908,7 @@ suite "frontend-neutral pointer and scroll input":
 
     check e.handlePointerInput(initPointerInput(2, 2, action = paDrag))
     check e.state.visualSelection.current == BufferPosition(line: 2, column: 0)
-    check e.selectedText() == "one\ntwo"
+    check e.selectedText() == "one\ntwo\n"
 
   test "Shift-primary press extends from the existing caret":
     let e = createTestEditorWithBuffer("alpha beta")
@@ -7997,8 +7997,8 @@ suite "handleKeyCombo - the register named for a command, as Vim's regname":
 
   test "Insert waits for the command after it from Ctrl-o":
     let e = createEditorForRegisters("abcdef")
-    check e.state.registers.setNamedRegister('a', "XY", false).isOk
-    e.state.registers.setYankedRegister("Q", false)
+    check e.state.registers.setRegister('a', "XY", false).isOk
+    e.state.registers.storeYanked(none(char), "Q", false)
 
     e.press("i", "C-o", "\"", "a", "p")
 
@@ -8047,7 +8047,7 @@ suite "handleKeyCombo - the register named for a command, as Vim's regname":
       @["v", "\"", "_", "y"],
     ]:
       let e = createEditorForRegisters("abc def\nghi")
-      e.state.registers.setYankedRegister("Q", false)
+      e.state.registers.storeYanked(none(char), "Q", false)
 
       e.press(keys)
 
@@ -8085,8 +8085,12 @@ suite "handleKeyCombo - the register named for a command, as Vim's regname":
     for (keys, lines, message) in [
       (@["v", "i", "w", "\"", "_", "p"], @[" def", "ghi"], ""),
       (@["V", "\"", "_", "p"], @["", "ghi"], ""),
-      (@["v", "i", "w", "\"", "b", "p"], @[" def", "ghi"], "Nothing to paste"),
-      (@["V", "\"", "b", "p"], @["ghi"], "Nothing to paste"),
+      (
+        @["v", "i", "w", "\"", "b", "p"],
+        @[" def", "ghi"],
+        "E353: Nothing in register b",
+      ),
+      (@["V", "\"", "b", "p"], @["ghi"], "E353: Nothing in register b"),
     ]:
       let e = createEditorForRegisters("abc def\nghi")
       e.state.config.clipboard = ClipboardConfig(enable: false, tool: cbtXclip)
@@ -8096,7 +8100,7 @@ suite "handleKeyCombo - the register named for a command, as Vim's regname":
       check e.activeBuffer.len == lines.len
       for i, line in lines:
         check e.activeBuffer.getLine(i) == line
-      check e.register('"') == (if keys[0] == "V": "abc def" else: "abc")
+      check e.register('"') == (if keys[0] == "V": "abc def\n" else: "abc")
       check e.state.registers.isRegisterLinewise('"') == (keys[0] == "V")
       check e.state.statusMessage.contains(message)
       check e.state.mode == EditorMode.Normal
@@ -8123,7 +8127,7 @@ suite "handleKeyCombo - the register named for a command, as Vim's regname":
       (@["\"", "_", "d", "d", "."], "seven"), (@["\"", "_", "x", "."], "e two three")
     ]:
       let e = createEditorForRegisters("one two three\nfour five six\nseven")
-      e.state.registers.setYankedRegister("Q", false)
+      e.state.registers.storeYanked(none(char), "Q", false)
 
       e.press(keys)
 
@@ -8137,8 +8141,8 @@ suite "handleKeyCombo - the register named for a command, as Vim's regname":
     let e = createEditorForRegisters("one two three\nfour")
     for (name, content) in [('1', "R1\n"), ('2', "R2\n"), ('3', "R3\n")]:
       check e.state.registers.setRegister(name, content, true).isOk
-    check e.state.registers.setNamedRegister('a', "A", false).isOk
-    check e.state.registers.setNamedRegister('b', "B", false).isOk
+    check e.state.registers.setRegister('a', "A", false).isOk
+    check e.state.registers.setRegister('b', "B", false).isOk
 
     e.press("\"", "1", "p", ".", ".")
 
@@ -8174,7 +8178,7 @@ suite "handleKeyCombo - a command an operator cannot act over cancels it, as Vim
   test "a command that is no motion does not run, and the motion after it moves":
     for keys in [@["x"], @["J"], @["~"], @["p"], @["C-a"], @["z", "z"]]:
       let e = createEditorForOperators("abc def\nghi")
-      e.state.registers.setYankedRegister("Q", false)
+      e.state.registers.storeYanked(none(char), "Q", false)
 
       e.press("d")
       e.press(keys)
@@ -8208,7 +8212,7 @@ suite "handleKeyCombo - a command an operator cannot act over cancels it, as Vim
 
   test "the register named after it goes to the next command":
     let e = createEditorForOperators("abc def")
-    check e.state.registers.setNamedRegister('a', "XY", false).isOk
+    check e.state.registers.setRegister('a', "XY", false).isOk
 
     e.press("d", "I", "\"", "a", "p")
 
@@ -8251,7 +8255,7 @@ suite "handleKeyCombo - a command an operator cannot act over cancels it, as Vim
       @["d", "y"], @["y", "d"], @["d", ">"], @["c", "d"], @["g", "u", "g", "U"]
     ]:
       let e = createEditorForOperators("abc def\nghi")
-      e.state.registers.setYankedRegister("Q", false)
+      e.state.registers.storeYanked(none(char), "Q", false)
 
       e.press(keys)
       check e.state.pendingInput.pendingOperator.isNone
@@ -8812,3 +8816,304 @@ suite "handleKeyCombo - an operator acts over what a motion finds, as Vim's do_p
     g.press("y", "g", "n")
     check g.cursor == BufferPosition(line: 0, column: 4)
     check g.state.registers.getRegisterContent('0') == "def"
+
+suite "handleKeyCombo - the registers a yank or delete fills, as Vim's op_yank and op_delete":
+  # Expectations are Vim 9.2's, with "1-"3 holding R1-R3 beforehand.
+  proc createEditorForRegisters(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    result.state.autoIndent = false
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    for (name, text) in [('1', "R1"), ('2', "R2"), ('3', "R3")]:
+      check result.state.registers.setRegister(name, text, false).isOk
+    result.state.registers.noNamed = Register()
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc lines(e: Editor, name: char): seq[string] =
+    e.state.registers.getRegister(name).getLines
+
+  proc linewise(e: Editor, name: char): bool =
+    e.state.registers.isRegisterLinewise(name)
+
+  proc buffer(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  test "a yank into a numbered register or - leaves register 0":
+    for (keys, name, lines, linewise) in [
+      (@["\"", "3", "y", "y"], '3', @["two"], true),
+      (@["\"", "9", "y", "y"], '9', @["two"], true),
+      (@["\"", "-", "y", "w"], '-', @["two"], false),
+      (@["\"", "-", "y", "y"], '-', @["two"], true),
+    ]:
+      let e = createEditorForRegisters("one\ntwo\nthree")
+      e.press("j")
+
+      e.press(keys)
+
+      check e.lines(name) == lines
+      check e.linewise(name) == linewise
+      check e.lines('"') == lines
+      check e.state.registers.getNumberRegister(0).isEmpty
+
+  test "a yank or delete into the unnamed register writes register 0":
+    for keys in [@["\"", "\"", "y", "w"], @["\"", "\"", "d", "w"]]:
+      let e = createEditorForRegisters("one\ntwo")
+
+      e.press(keys)
+
+      check e.lines('0') == @["one"]
+      check e.lines('"') == @["one"]
+      check e.state.registers.getSmallDeleteRegister().isEmpty
+
+  test "a delete over lines into a register shifts the numbered ones too":
+    for (keys, regs) in [
+      (@["\"", "a", "d", "d"], @[('a', "one"), ('1', "one"), ('2', "R1"), ('4', "R3")]),
+      (@["\"", "3", "d", "d"], @[('1', "one"), ('2', "R1"), ('3', "R2"), ('4', "one")]),
+      (@["\"", "1", "d", "d"], @[('1', "one"), ('2', "one"), ('3', "R2")]),
+      (@["\"", "0", "d", "d"], @[('0', "one"), ('1', "one"), ('2', "R1")]),
+    ]:
+      let e = createEditorForRegisters("one\ntwo")
+
+      e.press(keys)
+
+      for (name, text) in regs:
+        check e.lines(name) == @[text]
+      check e.lines('"') == @["one"]
+
+  test "a delete within a line into a register leaves 1 and -":
+    let e = createEditorForRegisters("one two")
+
+    e.press("\"", "a", "d", "w")
+
+    check e.lines('a') == @["one "]
+    check e.lines('1') == @["R1"]
+    check e.state.registers.getSmallDeleteRegister().isEmpty
+
+  test "a delete over %, }, `, n or * within a line goes to 1 and -":
+    for (content, setup, keys, deleted) in [
+      ("(a b) c", newSeq[string](), @["d", "%"], "(a b)"),
+      ("a b c\nd", @["l"], @["d", "}"], " b c\nd"),
+      ("foo bar", @["f", "b", "m", "a", "0"], @["d", "`", "a"], "foo "),
+      ("x foo x foo", @["l", "l", "*", "0"], @["d", "n"], "x "),
+      ("x foo x foo", @["l", "l"], @["d", "*"], "foo x "),
+    ]:
+      let e = createEditorForRegisters(content)
+      e.press(setup)
+
+      e.press(keys)
+
+      check e.state.registers.getNumberRegister(1).getContent == deleted
+      check e.lines('2') == @["R1"]
+      if '\n' notin deleted:
+        check e.state.registers.getSmallDeleteRegister().getContent == deleted
+
+  test "a delete over % into a register goes to 1 but not -":
+    let e = createEditorForRegisters("(a b) c")
+
+    e.press("\"", "a", "d", "%")
+
+    check e.lines('a') == @["(a b)"]
+    check e.lines('1') == @["(a b)"]
+    check e.state.registers.getSmallDeleteRegister().isEmpty
+
+  test "gn is no reason to use register 1":
+    let e = createEditorForRegisters("x foo x foo")
+    e.press("l", "l", "*", "0")
+
+    e.press("d", "g", "n")
+
+    check e.lines('-') == @["foo"]
+    check e.lines('1') == @["R1"]
+
+  test "adding to a register leaves all of it unnamed":
+    for (keys, a, unnamed, one) in [
+      (
+        @["\"", "a", "y", "y", "j", "\"", "A", "y", "y"],
+        @["one", "two"],
+        @["one", "two"],
+        "R1",
+      ),
+      (
+        @["\"", "a", "y", "y", "j", "\"", "A", "d", "d"],
+        @["one", "two"],
+        @["one", "two"],
+        "two",
+      ),
+      (@["\"", "a", "y", "w", "j", "\"", "A", "y", "w"], @["onetwo"], @["onetwo"], "R1"),
+      (
+        @["\"", "a", "y", "y", "j", "\"", "A", "y", "w"],
+        @["one", "two"],
+        @["one", "two"],
+        "R1",
+      ),
+      (
+        @["\"", "a", "y", "w", "j", "\"", "A", "y", "y"],
+        @["one", "two"],
+        @["one", "two"],
+        "R1",
+      ),
+    ]:
+      let e = createEditorForRegisters("one\ntwo\nthree")
+
+      e.press(keys)
+
+      check e.lines('a') == a
+      check e.lines('"') == unnamed
+      check e.state.registers.getNumberRegister(1).getContent.strip == one
+
+  test "linewise text keeps its empty last lines when put":
+    for (keys, cursor, expected) in [
+      (@["3", "y", "y", "G", "p"], 0, @["foo", "", "", "bar", "", "foo", "", ""]),
+      (@["2", "y", "y", "G", "p"], 1, @["foo", "", "", "bar", "", "", ""]),
+      (@["3", "d", "d", "p"], 0, @["bar", "foo", "", "", ""]),
+      (@["V", "j", "j", "y", "G", "p"], 0, @["foo", "", "", "bar", "", "foo", "", ""]),
+      (
+        @["\"", "a", "y", "y", "j", "\"", "A", "y", "y", "\"", "a", "p"],
+        0,
+        @["foo", "", "foo", "", "", "bar", ""],
+      ),
+    ]:
+      let e = createEditorForRegisters("foo\n\n\nbar\n\n")
+      e.activeWindow.cursor.line = cursor
+
+      e.press(keys)
+
+      check e.buffer == expected
+
+  test "putting over a selection fills the registers as a delete does":
+    let e = createEditorForRegisters("one\ntwo\nthree")
+    e.press("y", "w", "v", "j", "p")
+
+    check e.state.registers.getRegisterContent('1') == "one\nt"
+    check not e.linewise('1')
+    check e.state.registers.getRegisterContent('"') == "one\nt"
+
+  test "P over a selection leaves the registers, as Vim's v_P":
+    let e = createEditorForRegisters("one\ntwo\nthree")
+    e.press("y", "w", "V", "j", "P")
+
+    check e.buffer == @["one", "three"]
+    check e.lines('"') == @["one"]
+    check e.lines('1') == @["R1"]
+
+  test "gP over a selection fills the registers as p does":
+    let e = createEditorForRegisters("one\ntwo")
+    e.press("j", "y", "w", "v", "l", "g", "P")
+
+    check e.buffer == @["one", "twoo"]
+    check e.lines('"') == @["tw"]
+    check e.lines('-') == @["tw"]
+
+  test "putting an empty register is Vim's E353":
+    let e = createEditorForRegisters("one")
+
+    discard e.handleKeyCombo(parseKeyCombo("\"").get)
+    discard e.handleKeyCombo(parseKeyCombo("b").get)
+    discard e.handleKeyCombo(parseKeyCombo("p").get)
+
+    check e.buffer == @["one"]
+    check e.state.statusMessage.contains("E353: Nothing in register b")
+
+  test "lines put over a block go below it, as in Vim":
+    let e = createEditorForRegisters("one\nabcd")
+    e.press("y", "y", "j", "l", "C-v", "l", "p")
+
+    check e.buffer == @["one", "ad", "one"]
+    check e.activeWindow.cursor == BufferPosition(line: 2, column: 0)
+
+  test "the cursor goes to the first non-blank of lines put over a selection":
+    for (keys, lines, cursor) in [
+      (
+        @["v", "l", "p"],
+        @["    foo", "a", "    foo", "d"],
+        BufferPosition(line: 2, column: 4),
+      ),
+      (@["V", "p"], @["    foo", "    foo"], BufferPosition(line: 1, column: 4)),
+    ]:
+      let e = createEditorForRegisters("    foo\nabcd")
+      e.press("y", "y", "j", "0", "l")
+
+      e.press(keys)
+
+      check e.buffer == lines
+      check e.activeWindow.cursor == cursor
+
+  test "P and gP put lines above a block, or below its first line at the line end":
+    # Vim 9.2: P keeps the registers, gP does not; both put lines above the
+    # block unless the block reached the end of its first line.
+    for (content, column, keys, lines, cursor) in [
+      ("one\nabcd", 1, @["C-v", "l", "P"], @["one", "one", "ad"], (1, 0)),
+      (
+        "one\nabcd\nefgh",
+        1,
+        @["C-v", "j", "l", "P"],
+        @["one", "one", "ad", "eh"],
+        (1, 0),
+      ),
+      ("one\nabcd\nx", 1, @["C-v", "l", "g", "P"], @["one", "one", "ad", "x"], (2, 0)),
+      ("one\nabcd", 2, @["C-v", "l", "P"], @["one", "ab", "one"], (2, 0)),
+      (
+        "one\nabcd\nefgh",
+        2,
+        @["C-v", "j", "l", "P"],
+        @["one", "ab", "one", "ef"],
+        (2, 0),
+      ),
+      ("one\nab\nef", 0, @["C-v", "j", "l", "P"], @["one", "one", "", ""], (1, 0)),
+    ]:
+      let e = createEditorForRegisters(content)
+      e.press("y", "y", "j")
+      e.activeWindow.cursor.column = column
+
+      e.press(keys)
+
+      check e.buffer == lines
+      check e.activeWindow.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
+  test "p and v_p make the text fit for the buffer alike":
+    # Text yanked from a raw buffer can hold bytes that are not UTF-8; a
+    # decoded buffer gets U+FFFD for them.
+    for keys in [@["\"", "a", "p"], @["v", "\"", "a", "p"]]:
+      let e = createEditorForRegisters("xy")
+      check e.state.registers.setRegister('a', "a\xFFb", false).isOk
+
+      e.press(keys)
+
+      check e.buffer[0].contains("a\xEF\xBF\xBDb")
+
+  test "p puts lines over a block below the line the cursor ended on":
+    # Vim 9.2 puts them below b_visual.vi_end, which `k` or `o` can make the
+    # top line of the block.
+    for (setup, keys) in [
+      (@["j", "j"], @["C-v", "k", "l", "p"]), (@["j"], @["C-v", "j", "l", "o", "p"])
+    ]:
+      let e = createEditorForRegisters("one\nabcd\nefgh\nijkl")
+      e.press("y", "y")
+      e.press(setup)
+      e.activeWindow.cursor.column = 1
+
+      e.press(keys)
+
+      check e.buffer == @["one", "ad", "one", "eh", "ijkl"]
+      check e.activeWindow.cursor == BufferPosition(line: 2, column: 0)
+
+  test "^ and a put of lines land on the same first non-blank, as Vim's beginline":
+    # Vim 9.2 skips spaces and tabs only, and stops on the last blank of an
+    # all-blank line.
+    for (content, column) in [("x\n   ", 2), ("x\n　foo", 0), ("x\n\t\tfoo", 2)]:
+      let e = createEditorForRegisters(content)
+      e.press("j", "^")
+      check e.activeWindow.cursor.column == column
+
+      e.press("y", "y", "k", "p")
+      check e.activeWindow.cursor == BufferPosition(line: 1, column: column)
