@@ -60,7 +60,8 @@ import
   editor_command_output,
   job_lanes,
   highlight,
-  visual_selection
+  visual_selection,
+  insert_record
 
 when not defined(moe.embedded):
   import terminal_mode
@@ -249,7 +250,8 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing, hrEnterTerminal,
       hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
       hrFileTreeQuit, hrOpenUri, hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd,
-      hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro, hrUndo, hrRedo, hrJobs:
+      hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro, hrRepeatInsert, hrUndo,
+      hrRedo, hrJobs:
     discard # Not expected from RecentFile mode handler
 
   # Route overlay/mode transitions through processResult so a viewer target
@@ -356,6 +358,7 @@ proc handlePasteText(e: Editor, text: string): bool =
         e.state.statusMessage = "Paste failed: " & transactionResult.error
         return true
 
+    e.state.noteOutsideChange()
     let pos = e.cursor
     let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
     if insertResult.isErr:
@@ -370,6 +373,8 @@ proc handlePasteText(e: Editor, text: string): bool =
       return true
 
     e.activeWindow.cursor = insertResult.get.cursor
+    # Record it as typed, so `.` types the pasted text.
+    e.state.noteTypedText(pastedText)
 
     if ownTransaction:
       let commitResult = activeBuffer.commitTransaction()
@@ -797,6 +802,7 @@ proc middleClickPaste(e: Editor, row, col: int) =
       e.notify("Paste failed: " & transactionResult.error, nlError)
       return
 
+  e.state.noteOutsideChange()
   let pos = e.cursor
   let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
   if insertResult.isErr:
@@ -818,6 +824,7 @@ proc middleClickPaste(e: Editor, row, col: int) =
     return
 
   e.activeWindow.cursor = insertResult.get.cursor
+  e.state.noteTypedText(pastedText)
   # The click chose this window, so re-attach its viewport: a wheel-scrolled
   # split would otherwise keep the cursor off-screen after the insert.
   e.activeWindow.viewport.detachedFromCursor = false
@@ -1221,7 +1228,6 @@ proc handleInterruptCore(e: Editor): bool =
           logError "handler", "Failed to commit transaction: " & commitResult.error
           e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
       e.state.editState.replaceHistory = @[]
-      e.state.editState.substituteContext = none(types.SubstituteContext)
 
     e.state.previousMode = e.state.mode
     e.setMode(EditorMode.Normal)

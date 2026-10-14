@@ -140,23 +140,16 @@ proc matchActiveWindowIndexAssign(code: string): int =
 proc matchFinalizeForBufferSwitch(code: string): int =
   code.countCalls("finalizeInsertSessionForBufferSwitch")
 
-proc countStartPosAssign(code: string, rhs: string): int =
-  const Field = "insertModeStartPos"
-  for idx in code.occurrences(Field):
-    let after = code.assignsAt(idx + Field.len, compound = false)
-    if after >= 0 and code.substr(code.skipSpaces(after)).startsWith(rhs):
-      inc result
+proc matchRecordStart(code: string): int =
+  code.countCalls("startInsertRecord")
 
-proc matchStartPosSome(code: string): int =
-  code.countStartPosAssign("some")
-
-proc matchStartPosNone(code: string): int =
-  code.countStartPosAssign("none")
+proc matchRecordEnd(code: string): int =
+  code.countCalls("endInsertRecord")
 
 proc matchSessionBeginTransaction(code: string): int =
   ## `beginTransaction` opened with one of the session descriptions. The
   ## description is what makes a transaction a session, so this catches entry
-  ## points that never touch `insertModeStartPos` (Replace does not).
+  ## points that never start a record (Replace does not).
   const Descriptions = [
     "Insert mode edit", "Append mode edit", "Visual to insert mode", "Replace mode edit"
   ]
@@ -246,20 +239,23 @@ let Invariants = @[
     ],
   ),
   Invariant(
-    name: "session start position record",
+    name: "session record start",
     guidance: "Session entry points must stay enumerable.",
     skipFiles: @[],
-    match: matchStartPosSome,
+    match: matchRecordStart,
     allow: @[
-      ("moepkg/command_handlers/mode_dispatchers.nim", 2),
-      ("moepkg/command_registry/edit.nim", 6),
+      ("moepkg/command_registry/insert_entry.nim", 1),
+      ("moepkg/command_registry/edit.nim", 1),
+      ("moepkg/command_registry/operator_driver.nim", 1),
+      ("moepkg/command_handlers/handler_manager.nim", 1),
+      ("moepkg/command_handlers/mode_dispatchers.nim", 1),
     ],
   ),
   Invariant(
-    name: "session start position clear",
-    guidance: "Session exit points and boundaries must stay enumerable.",
+    name: "session record end",
+    guidance: "Session exit points must stay enumerable.",
     skipFiles: @[],
-    match: matchStartPosNone,
+    match: matchRecordEnd,
     allow: @[
       ("moepkg/editor_mode.nim", 2), ("moepkg/command_handlers/mode_dispatchers.nim", 2)
     ],
@@ -268,14 +264,13 @@ let Invariants = @[
     name: "session transaction open",
     guidance:
       "Every session opens its transaction with one of these descriptions, " &
-      "so this sees entry points that never record a start position.",
+      "so this sees entry points that never start a record.",
     skipFiles: @[],
     match: matchSessionBeginTransaction,
     allow: @[
       ("moepkg/command_handlers/handler_manager.nim", 1),
-      ("moepkg/command_handlers/mode_dispatchers.nim", 1),
-      ("moepkg/command_handlers/normal_handler.nim", 2),
-      ("moepkg/command_registry/edit.nim", 2),
+      # beginInsertModeSession, which every Insert entry shares.
+      ("moepkg/command_handlers/insert_commands.nim", 1),
     ],
   ),
 ]
@@ -376,13 +371,11 @@ suite "Invariant scanner self-tests":
     check m.hits("e.finalizeInsertSessionForBufferSwitch(buf)") == 1
     check m.hits("proc finalizeInsertSessionForBufferSwitch*(e: Editor) =") == 0
 
-  test "start position record and clear are distinguished":
-    let some = matchStartPosSome
-    let none = matchStartPosNone
-    check some.hits("state.editState.insertModeStartPos = some(cursor)") == 1
-    check some.hits("state.editState.insertModeStartPos = none(Pos)") == 0
-    check none.hits("state.editState.insertModeStartPos = none(Pos)") == 1
-    check none.hits("if state.editState.insertModeStartPos.isNone:") == 0
+  test "record start and end match calls, not definitions":
+    check matchRecordStart.hits("ctx.state.startInsertRecord(entry, count)") == 1
+    check matchRecordStart.hits("proc startInsertRecord*(state: EditorState) =") == 0
+    check matchRecordEnd.hits("state.endInsertRecord()") == 1
+    check matchRecordEnd.hits("proc endInsertRecord*(state: EditorState) =") == 0
 
   test "session transaction open matches only session descriptions":
     let m = matchSessionBeginTransaction

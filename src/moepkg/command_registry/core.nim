@@ -77,6 +77,7 @@ type
     bcInsertLineAbove = "insert.line.above"
     bcInsertAppend = "insert.append"
     bcInsertAppendEnd = "insert.append.end"
+    bcInsertFirstNonBlank = "insert.first.non.blank"
     # Visual mode operations
     bcVisualMoveLeft = "visual.move.left"
     bcVisualMoveRight = "visual.move.right"

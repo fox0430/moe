@@ -946,7 +946,7 @@ suite "HandlerManager - o/O open line with auto-indent":
     )
 
     check r.kind == hrHandled
-    check r.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check buffer.inTransaction
     check buffer.len == 2
     check buffer.getLine(1) == "  "
@@ -1186,53 +1186,6 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
     check r.execCommandText == "set number"
     check r.execCommandCount == 3
 
-proc createTestManagerWithMotion(
-    buffer: TextBuffer, state: EditorState, viewport: ViewPort
-): HandlerManager =
-  ## Create a HandlerManager with a properly initialized MotionController
-  let keyBindingRegistry = newKeyBindingRegistry()
-  keyBindingRegistry.setupDefaultBindings()
-
-  let commandRegistry = newCommandRegistry()
-  commandRegistry.registerBuiltinCommands()
-
-  let motionController = newMotionController(buffer, state, viewport)
-
-  let normalHandler = NormalModeHandler(
-    keyBindingRegistry: keyBindingRegistry,
-    commandRegistry: commandRegistry,
-    motionController: motionController,
-  )
-
-  let insertHandler =
-    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
-
-  let visualHandler = VisualModeHandler(
-    keyBindingRegistry: keyBindingRegistry,
-    commandRegistry: commandRegistry,
-    motionController: motionController,
-  )
-
-  let replaceHandler = ReplaceModeHandler(keyBindingRegistry: keyBindingRegistry)
-
-  let commandLineParser = newCommandLineParser()
-  let commandConfig = newCommandConfig()
-  commandConfig.loadDefaultConfig()
-  commandConfig.applyToParser(commandLineParser)
-  let commandHandler =
-    newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
-
-  HandlerManager(
-    keyBindingRegistry: keyBindingRegistry,
-    commandRegistry: commandRegistry,
-    motionController: motionController,
-    normalHandler: normalHandler,
-    insertHandler: insertHandler,
-    commandHandler: commandHandler,
-    visualHandler: visualHandler,
-    replaceHandler: replaceHandler,
-  )
-
 suite "HandlerManager - FileTree search statusMessage":
   test "/ sets statusMessage to search prompt":
     let tmpDir = createTempDir("moe_test_", "_ftmgr")
@@ -1377,7 +1330,6 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
     # Simulate having entered Insert mode: open a transaction.
     check buffer.beginTransaction("test insert").isOk
     check buffer.inTransaction
-    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
 
     # `imap K = "bdelete"` — RHS resolves to the exec.cmdline.* bridge.
     let err =
@@ -1393,7 +1345,6 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
     check r.execCommandText == "bdelete"
     # The open transaction must be committed before forwarding the alias.
     check not buffer.inTransaction
-    check state.editState.insertModeStartPos.isNone
 
   test "Bridge works when no Insert transaction is open":
     # Sanity-check: the commit branch is a no-op when there's nothing to
@@ -1421,81 +1372,29 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
 
 suite "HandlerManager - Insert mode exec.cmdline.* bridge full finalize":
   # Regression: the bridge used to only commit the transaction; leaking
-  # substituteContext / insertReplayCount / visualBlockInsertContext and
-  # skipping `.` repeat + [count]i replay recording.
-  test "Bridge sets lastEditCommand for . repeat":
+  # visualBlockInsertContext and skipping `.` and [count]i.
+  proc typeInsert(manager: HandlerManager, e: Editor, keys: string) =
+    for k in keys:
+      discard manager.handleKeyCombo(e, KeyCombo(isSpecial: false, char: $k))
+
+  test "Bridge ends what `.` repeats":
     let manager = createTestManager()
     let buffer = newTextBuffer()
     let state = createTestState()
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
+    let e =
+      createTestEditor(buffer, state, createTestViewport(), manager.keyBindingRegistry)
+    check manager.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Insert, "K", "bdelete"
+    ) == ""
 
-    check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
-    discard buffer.insertText(BufferPosition(line: 0, column: 0), "abc")
-    state.cursor = BufferPosition(line: 0, column: 3)
-
-    let err =
-      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
-    check err == ""
-
-    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
-    let r = manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
-    )
+    manager.typeInsert(e, "iabc")
+    let r = manager.handleInsertMode(e, KeyCombo(isSpecial: false, char: "K"))
 
     check r.kind == hrExecCommand
-    check state.editState.lastEditCommand.isSome
-    check state.editState.lastEditCommand.get.kind == types.lecInsertText
-    check state.editState.lastEditCommand.get.insertedText == "abc"
-
-  test "Bridge clears substituteContext":
-    let manager = createTestManager()
-    let buffer = newTextBuffer()
-    discard buffer.insertText(BufferPosition(line: 0, column: 0), "xy")
-    let state = createTestState()
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-
-    check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
-    state.editState.substituteContext =
-      some(types.SubstituteContext(kind: skChar, deleteCount: 2))
-
-    discard
-      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
-
-    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
-    let r = manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
-    )
-
-    check r.kind == hrExecCommand
-    check state.editState.substituteContext.isNone
-
-  test "Bridge clears insertReplayCount and insertReplayLineEntry":
-    let manager = createTestManager()
-    let buffer = newTextBuffer()
-    let state = createTestState()
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-
-    check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
-    state.editState.insertReplayCount = 3
-    state.editState.insertReplayLineEntry = true
-
-    discard
-      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
-
-    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
-    let r = manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
-    )
-
-    check r.kind == hrExecCommand
-    check state.editState.insertReplayCount == 0
-    check state.editState.insertReplayLineEntry == false
+    check state.editState.lastEditCommand.get.kind == types.lecInsert
+    check state.editState.insertRecord.typed.len == 3
+    check not state.editState.typing.open
+    check state.editState.lastInserted.get.len == 3
 
   test "Bridge clears visualBlockInsertContext":
     let manager = createTestManager()
@@ -1506,7 +1405,6 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge full finalize":
     let viewport = createTestViewport()
 
     check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
     state.editState.visualBlockInsertContext = some(
       types.VisualBlockInsertContext(
         kind: vbiInsert, startLine: 0, endLine: 2, insertColumn: 0
@@ -1524,29 +1422,22 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge full finalize":
     check r.kind == hrExecCommand
     check state.editState.visualBlockInsertContext.isNone
 
-  test "Bridge replays [count]i typed text":
+  test "Bridge types [count]i's repeats before the command":
     let manager = createTestManager()
     let buffer = newTextBuffer()
     let state = createTestState()
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-
-    check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
-    state.editState.insertReplayCount = 3
-    discard buffer.insertText(BufferPosition(line: 0, column: 0), "x")
-    state.cursor = BufferPosition(line: 0, column: 1)
-
+    let e =
+      createTestEditor(buffer, state, createTestViewport(), manager.keyBindingRegistry)
     discard
       manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
 
-    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
-    let r = manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
-    )
+    manager.typeInsert(e, "3ix")
+    let r = manager.handleInsertMode(e, KeyCombo(isSpecial: false, char: "K"))
 
-    check r.kind == hrExecCommand
-    check buffer.getLine(0) == "xxx"
+    check r.kind == hrRepeatInsert
+    check r.repeatTimes == 2
+    check r.repeatLeave
+    check r.repeatThenExec == "bdelete"
 
 suite "HandlerManager - Replace mode fold auto-expand":
   test "Entering Replace mode opens a collapsed fold at the cursor":
@@ -1567,473 +1458,11 @@ suite "HandlerManager - Replace mode fold auto-expand":
     check r.modeTransition == some(EditorMode.Replace)
     check buffer.foldState.folds[0].collapsed == false
 
-suite "HandlerManager - [count]i/a/o insert replay":
-  # Drives the full Normal->Insert->type->Escape flow so the [count] prefix is
-  # carried onto the Insert session and the typed text is replayed on exit,
-  # matching Vim's "3ihello", "2ahello", "3ohello", etc.
-  proc digit(
-      manager: HandlerManager,
-      buffer: TextBuffer,
-      state: EditorState,
-      viewport: ViewPort,
-      d: string,
-  ) =
-    discard manager.handleNormalMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
-      KeyCombo(isSpecial: false, char: d, modifiers: {}),
-    )
-
-  proc enterInsert(
-      manager: HandlerManager,
-      buffer: TextBuffer,
-      state: EditorState,
-      viewport: ViewPort,
-      key: string,
-  ) =
-    let r = manager.handleNormalMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
-      KeyCombo(isSpecial: false, char: key, modifiers: {}),
-    )
-    check r.kind == hrHandled
-    # i/a enter Insert by setting state.mode directly (no modeTransition); the
-    # explicit insert commands (A/o/O) return a modeTransition instead.
-    check (
-      r.modeTransition == some(EditorMode.Insert) or state.mode == EditorMode.Insert
-    )
-    state.mode = EditorMode.Insert
-
-  proc typeChar(
-      manager: HandlerManager,
-      buffer: TextBuffer,
-      state: EditorState,
-      viewport: ViewPort,
-      ch: string,
-  ) =
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
-      KeyCombo(isSpecial: false, char: ch, modifiers: {}),
-    )
-
-  proc typeEnter(
-      manager: HandlerManager,
-      buffer: TextBuffer,
-      state: EditorState,
-      viewport: ViewPort,
-  ) =
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
-      KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {}),
-    )
-
-  proc typeLeft(
-      manager: HandlerManager,
-      buffer: TextBuffer,
-      state: EditorState,
-      viewport: ViewPort,
-  ) =
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
-      KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {}),
-    )
-
-  proc escape(
-      manager: HandlerManager,
-      buffer: TextBuffer,
-      state: EditorState,
-      viewport: ViewPort,
-  ) =
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
-      KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {}),
-    )
-
-  test "3iX repeats inserted text three times at cursor":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    manager.digit(buffer, state, viewport, "3")
-    manager.enterInsert(buffer, state, viewport, "i")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "XXXabc"
-
-  test "3aX appends repeated text after the cursor":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    manager.digit(buffer, state, viewport, "3")
-    manager.enterInsert(buffer, state, viewport, "a")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "aXXXbc"
-
-  test "3AX appends repeated text at end of line":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    manager.digit(buffer, state, viewport, "3")
-    manager.enterInsert(buffer, state, viewport, "A")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "abcXXX"
-
-  test "1iX inserts once (count 1, no replay)":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    manager.digit(buffer, state, viewport, "1")
-    manager.enterInsert(buffer, state, viewport, "i")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "Xabc"
-
-  test "iX without count inserts once":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    manager.enterInsert(buffer, state, viewport, "i")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "Xabc"
-
-  test "3IX repeats text at first non-blank, preserving leading indent":
-    # I moves to the first non-blank via a motion, so it needs a fully wired
-    # MotionController (createTestManager()'s stub one would segfault).
-    let buffer = newTextBuffer("  abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    let manager = createTestManagerWithMotion(buffer, state, viewport)
-    manager.digit(buffer, state, viewport, "3")
-    manager.enterInsert(buffer, state, viewport, "I")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "  XXXabc"
-
-  test "3oX opens three lines each with the typed text":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    manager.digit(buffer, state, viewport, "3")
-    manager.enterInsert(buffer, state, viewport, "o")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "abc"
-    check buffer.getLine(1) == "X"
-    check buffer.getLine(2) == "X"
-    check buffer.getLine(3) == "X"
-    check buffer.len == 4
-
-  test "3OX opens three lines above each with the typed text":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    manager.digit(buffer, state, viewport, "3")
-    manager.enterInsert(buffer, state, viewport, "O")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "X"
-    check buffer.getLine(1) == "X"
-    check buffer.getLine(2) == "X"
-    check buffer.getLine(3) == "abc"
-    check buffer.len == 4
-
-  test "2i with a newline replays the multi-line unit":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    manager.digit(buffer, state, viewport, "2")
-    manager.enterInsert(buffer, state, viewport, "i")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.typeEnter(buffer, state, viewport)
-    manager.typeChar(buffer, state, viewport, "Y")
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "X"
-    check buffer.getLine(1) == "YX"
-    check buffer.getLine(2) == "Yabc"
-
-  test "cursor movement during counted insert cancels the replay":
-    # Moving the cursor mid-insert invalidates the [insertModeStartPos, cursor)
-    # range the replay derives the typed text from, so the count repeat is
-    # dropped (Vim-like) instead of re-inserting a garbled partial range.
-    let buffer = newTextBuffer("abc")
-    let state = createTestState()
-    let viewport = createTestViewport()
-    let manager = createTestManagerWithMotion(buffer, state, viewport)
-    manager.digit(buffer, state, viewport, "3")
-    manager.enterInsert(buffer, state, viewport, "i")
-    manager.typeChar(buffer, state, viewport, "X")
-    manager.typeChar(buffer, state, viewport, "Y")
-    manager.typeLeft(buffer, state, viewport)
-    manager.escape(buffer, state, viewport)
-    check buffer.getLine(0) == "XYabc"
-
-suite "HandlerManager - extractInsertedText line-join skip":
-  # Regression: a line join's pre-existing content (not user input) leaked
-  # into lastEditCommand.insertedText and was re-inserted on `.`, even across
-  # buffers. Covers both join shapes: one ckDeleteRange of the break, and a
-  # ckDeleteLine whose content a ckInsertText re-attaches.
-  test "A deleted line break starts the text over":
-    let tx = buffer.BufferTransaction(
-      changes: @[
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 1, column: 0),
-          insertText: "AB",
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckDeleteRange,
-          deleteStartPos: BufferPosition(line: 0, column: 4),
-          deleteEndPos: BufferPosition(line: 0, column: 4),
-          deletedRangeText: "\n",
-          deleteJoinedNextLine: true,
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 4),
-          insertText: "X",
-        ),
-      ]
-    )
-    check extractInsertedText(tx) == "X"
-
-  test "ckDeleteLine drops the immediately following ckInsertText":
-    let tx = buffer.BufferTransaction(
-      changes: @[
-        buffer.BufferChange(
-          kind: buffer.ckDeleteLine, deleteLineIdx: 1, deletedLineText: "SECRET"
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 4),
-          insertText: "SECRET",
-        ),
-      ]
-    )
-    check extractInsertedText(tx) == ""
-
-  test "Only the first ckInsertText after ckDeleteLine is skipped":
-    # A single line-join emits exactly one ckInsertText; any further inserts
-    # in the same transaction are real typing and must survive.
-    let tx = buffer.BufferTransaction(
-      changes: @[
-        buffer.BufferChange(
-          kind: buffer.ckDeleteLine, deleteLineIdx: 1, deletedLineText: "SECRET"
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 4),
-          insertText: "SECRET",
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 10),
-          insertText: "typed",
-        ),
-      ]
-    )
-    check extractInsertedText(tx) == "typed"
-
-  test "Typing before the join keeps typed text, join content is dropped":
-    # User typed "AB", then hit Backspace at line start joining the next line
-    # in ("SECRET"). Everything typed before the join is cleared by ckDeleteLine
-    # (matches the existing "line delete during insert clears accumulator"
-    # semantics); the paired re-attach is skipped so nothing leaks.
-    let tx = buffer.BufferTransaction(
-      changes: @[
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 0),
-          insertText: "AB",
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckDeleteLine, deleteLineIdx: 1, deletedLineText: "SECRET"
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 4),
-          insertText: "SECRET",
-        ),
-      ]
-    )
-    check extractInsertedText(tx) == ""
-
-  test "Typing after the join is preserved":
-    # After the line-join, the user typed "XYZ" — that must round-trip.
-    let tx = buffer.BufferTransaction(
-      changes: @[
-        buffer.BufferChange(
-          kind: buffer.ckDeleteLine, deleteLineIdx: 1, deletedLineText: "SECRET"
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 4),
-          insertText: "SECRET",
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 10),
-          insertText: "XYZ",
-        ),
-      ]
-    )
-    check extractInsertedText(tx) == "XYZ"
-
-  test "Two line-joins in a row each skip their paired re-attach":
-    let tx = buffer.BufferTransaction(
-      changes: @[
-        buffer.BufferChange(
-          kind: buffer.ckDeleteLine, deleteLineIdx: 2, deletedLineText: "A"
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 1, column: 3),
-          insertText: "A",
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckDeleteLine, deleteLineIdx: 1, deletedLineText: "B"
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 3),
-          insertText: "B",
-        ),
-      ]
-    )
-    check extractInsertedText(tx) == ""
-
-  test "Intervening non-InsertText change disarms the pending skip":
-    # If some other change lands between ckDeleteLine and the next
-    # ckInsertText, the skip must not swallow a real typed insert further on.
-    let tx = buffer.BufferTransaction(
-      changes: @[
-        buffer.BufferChange(
-          kind: buffer.ckDeleteLine, deleteLineIdx: 1, deletedLineText: "SECRET"
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckDeleteText,
-          deletePos: BufferPosition(line: 0, column: 3),
-          deletedText: "x",
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 3),
-          insertText: "typed",
-        ),
-      ]
-    )
-    check extractInsertedText(tx) == "typed"
-
-  test "Plain typing without any ckDeleteLine is unaffected":
-    let tx = buffer.BufferTransaction(
-      changes: @[
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 0),
-          insertText: "hello",
-        )
-      ]
-    )
-    check extractInsertedText(tx) == "hello"
-
-  test "Empty-line join does not skip subsequent typing":
-    # Joining an empty line into its predecessor emits only ckDeleteLine — the
-    # re-attach ckInsertText is elided because insertText no-ops on an empty
-    # payload. The next ckInsertText that arrives is real typing and must
-    # survive.
-    let tx = buffer.BufferTransaction(
-      changes: @[
-        buffer.BufferChange(
-          kind: buffer.ckDeleteLine, deleteLineIdx: 1, deletedLineText: ""
-        ),
-        buffer.BufferChange(
-          kind: buffer.ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 4),
-          insertText: "typed",
-        ),
-      ]
-    )
-    check extractInsertedText(tx) == "typed"
-
-suite "HandlerManager - Insert-mode line-join backspace . repeat":
-  # Regression path: line-start Backspace in Insert mode used to leak the
-  # merged line's content into lastEditCommand.insertedText, so a later `.`
-  # replayed that content — even in a completely different buffer.
-  test "Line-join backspace with no typing does not touch lastEditCommand":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("PREV\nSECRET")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 1, column: 0)
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-
-    check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 1, column: 0))
-    # Sentinel: a prior lastEditCommand must survive untouched — an empty
-    # insert session (nothing was typed) must not overwrite it.
-    state.editState.lastEditCommand = some(
-      types.LastEditCommand(
-        kind: types.lecInsertText,
-        insertedText: "prev",
-        insertPosition: BufferPosition(line: 0, column: 0),
-      )
-    )
-
-    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), bsKey
-    )
-    let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), escKey
-    )
-
-    check buffer.getLine(0) == "PREVSECRET"
-    check state.editState.lastEditCommand.isSome
-    check state.editState.lastEditCommand.get.insertedText == "prev"
-
-  test "Line-join backspace then typing records only the typed text":
-    let manager = createTestManager()
-    let buffer = newTextBuffer("PREV\nSECRET")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 1, column: 0)
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-
-    check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 1, column: 0))
-
-    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), bsKey
-    )
-    # After join the cursor is at (0, 4). Type "X".
-    let xKey = KeyCombo(isSpecial: false, char: "X", modifiers: {})
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), xKey
-    )
-    let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), escKey
-    )
-
-    check buffer.getLine(0) == "PREVXSECRET"
-    check state.editState.lastEditCommand.isSome
-    check state.editState.lastEditCommand.get.kind == types.lecInsertText
-    # Must NOT be "XSECRET" or "SECRETX" — only the actually typed "X".
-    check state.editState.lastEditCommand.get.insertedText == "X"
-
+suite "HandlerManager - Insert-mode line-join backspace":
   test "Line-join backspace does not poison visual-block insert replication":
-    # visualBlockInsertContext replicates insertedText across the block's
-    # trailing lines. Before the fix, a stray line-join re-attach payload
-    # would be replicated onto every one of those lines.
+    # visualBlockInsertContext replicates what the first line gained across
+    # the block's trailing lines. A line join must not be replicated onto
+    # every one of those lines.
     let manager = createTestManager()
     let buffer = newTextBuffer("PREV\nSECRET\nlineA\nlineB")
     let state = createTestState()
@@ -2042,7 +1471,6 @@ suite "HandlerManager - Insert-mode line-join backspace . repeat":
     let viewport = createTestViewport()
 
     check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 1, column: 0))
     state.editState.visualBlockInsertContext = some(
       types.VisualBlockInsertContext(
         kind: vbiInsert, startLine: 1, endLine: 3, insertColumn: 0
@@ -2058,80 +1486,12 @@ suite "HandlerManager - Insert-mode line-join backspace . repeat":
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), escKey
     )
 
-    # Block-insert replicates insertedText onto (startLine+1 .. endLine). With
-    # the fix insertedText is "", so replication is skipped entirely and the
+    # The join leaves the block's first line, so nothing is replicated and the
     # trailing lines survive untouched. After the join collapses PREV+SECRET,
     # lineA / lineB shift up by one row.
     check buffer.getLine(0) == "PREVSECRET"
     check buffer.getLine(1) == "lineA"
     check buffer.getLine(2) == "lineB"
-
-  test "Empty-line join then typing records the typed text":
-    # Backspace at the head of an empty line joins it into the previous line
-    # without emitting a re-attach ckInsertText. The next keystroke ("X") is
-    # real typing and must be recorded — otherwise `.` would replay nothing.
-    let manager = createTestManager()
-    let buffer = newTextBuffer("PREV\n\nnext")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 1, column: 0)
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-
-    check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 1, column: 0))
-
-    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), bsKey
-    )
-    let xKey = KeyCombo(isSpecial: false, char: "X", modifiers: {})
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), xKey
-    )
-    let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), escKey
-    )
-
-    check buffer.getLine(0) == "PREVX"
-    check buffer.getLine(1) == "next"
-    check state.editState.lastEditCommand.isSome
-    check state.editState.lastEditCommand.get.kind == types.lecInsertText
-    check state.editState.lastEditCommand.get.insertedText == "X"
-
-  test "Joining a line the typing did not end keeps the previous `.`":
-    # The typed "XY" is not the text before the joined break, so nothing is
-    # recorded rather than "X" (one byte taken off for the break).
-    let manager = createTestManager()
-    let buffer = newTextBuffer("PREV\nSECRET")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 4)
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-
-    check buffer.beginTransaction("test insert").isOk
-    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 4))
-    state.editState.lastEditCommand = some(
-      types.LastEditCommand(
-        kind: types.lecInsertText,
-        insertedText: "prev",
-        insertPosition: BufferPosition(line: 0, column: 0),
-      )
-    )
-
-    proc press(key: KeyCombo) =
-      discard manager.handleInsertMode(
-        createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), key
-      )
-
-    press(KeyCombo(isSpecial: false, char: "X", modifiers: {}))
-    press(KeyCombo(isSpecial: false, char: "Y", modifiers: {}))
-    state.cursor = BufferPosition(line: 1, column: 0)
-    press(KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {}))
-    press(KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {}))
-
-    check buffer.getLine(0) == "PREVXYSECRET"
-    check state.editState.lastEditCommand.get.insertedText == "prev"
 
 suite "Insert mode - the cursor line is never folded":
   # Insert mode is the one place folds are opened rather than widened over: the
@@ -2145,7 +1505,6 @@ suite "Insert mode - the cursor line is never folded":
     let manager = createTestManager()
     state.mode = EditorMode.Insert
     state.cursor = BufferPosition(line: 8, column: 0)
-    state.editState.insertModeStartPos = some(state.cursor)
 
     let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
     discard manager.handleKeyCombo(
@@ -2164,7 +1523,6 @@ suite "Insert mode - the cursor line is never folded":
     let manager = createTestManager()
     state.mode = EditorMode.Insert
     state.cursor = BufferPosition(line: 0, column: 0)
-    state.editState.insertModeStartPos = some(state.cursor)
 
     let xKey = KeyCombo(isSpecial: false, char: "X", modifiers: {})
     discard manager.handleKeyCombo(
@@ -2186,7 +1544,6 @@ suite "Insert mode - the cursor line is never folded":
     let manager = createTestManager()
     state.mode = EditorMode.Insert
     state.cursor = BufferPosition(line: 3, column: 0)
-    state.editState.insertModeStartPos = some(state.cursor)
 
     let xKey = KeyCombo(isSpecial: false, char: "X", modifiers: {})
     discard manager.handleKeyCombo(

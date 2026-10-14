@@ -2018,7 +2018,7 @@ suite "frontend-neutral pointer and scroll input":
     check e.state.mode == EditorMode.Visual
     check e.state.previousMode == EditorMode.Normal
     check not e.activeBuffer.inTransaction
-    check e.state.editState.insertModeStartPos.isNone
+    check not e.state.editState.typing.open
 
   test "drag remains bound to the split where its press began":
     let e = createTestEditorWithBuffer("left")
@@ -4775,8 +4775,8 @@ suite "handleKeyCombo - Insert resumes after the Ctrl-o command":
     e.press("A", "C-o", "z", "z")
 
     check e.cursor == BufferPosition(line: 0, column: 3)
-    check e.state.editState.insertModeStartPos ==
-      some(BufferPosition(line: 0, column: 3))
+    e.press("x")
+    check e.activeBuffer.getLine(0) == "abcx"
 
   test "the cursor stays on a character when Insert cannot resume":
     let e = createEditorForCtrlO("abc")
@@ -4958,12 +4958,9 @@ suite "handleKeyCombo - Ctrl-o ends the Insert session":
   test "dot repeats only what was typed after the command, as in Vim":
     let e = createEditorForCtrlO("abc")
 
-    e.press("i", "f", "o", "o", "C-o", "l", "b", "a", "r", "Esc")
+    e.press("i", "f", "o", "o", "C-o", "l", "b", "a", "r", "Esc", "0", ".")
 
-    let last = e.state.editState.lastEditCommand
-    check last.isSome
-    check last.get.kind == lecInsertText
-    check last.get.insertedText == "bar"
+    check e.activeBuffer.getLine(0) == "barfooabarbc"
 
   test "a count is dropped, as in Vim":
     let e = createEditorForCtrlO("abc")
@@ -5187,10 +5184,9 @@ suite "Insert mode Ctrl-A / Ctrl-@":
 
     check e.state.mode == EditorMode.Normal
     check $e.activeBuffer.getLine(1) == "xyz"
-    let lastCmd = e.state.editState.lastEditCommand
-    check lastCmd.isSome
-    check lastCmd.get.kind == lecInsertText
-    check lastCmd.get.insertedText == "\nxyz"
+    check e.handleKeyCombo(charKey("."))
+    check e.activeBuffer.len == 3
+    check $e.activeBuffer.getLine(2) == "xyz"
 
 suite "Visual-block insert - what the other lines get":
   # Vim copies what the first line gained, from the block column, when the
@@ -5268,10 +5264,10 @@ suite "Visual-block insert - what the other lines get":
     check $e.activeBuffer.getLine(2) == "mabnopqr"
 
   test "`.` repeats what was typed, not the copies":
-    let lastCmd = editorAfter("<C-v>jjIab<Esc>").state.editState.lastEditCommand
-    check lastCmd.isSome
-    check lastCmd.get.kind == lecInsertText
-    check lastCmd.get.insertedText == "ab"
+    let e = editorAfter("<C-v>jjIab<Esc>")
+    check e.state.editState.lastEditCommand.get.kind == lecInsert
+    check e.state.editState.insertRecord.entry.kind == ieInsert
+    check e.state.editState.insertRecord.typed.len == 2
 
 suite "forced Insert mode":
   let
@@ -5298,8 +5294,6 @@ suite "forced Insert mode":
 
     check e.state.mode == EditorMode.Insert
     check e.activeBuffer.inTransaction
-    check e.state.editState.insertModeStartPos ==
-      some(BufferPosition(line: 0, column: 0))
 
   test "committed GUI text inserts without a Normal-mode command":
     let e = createForcedInsertEditor()
@@ -5416,7 +5410,6 @@ suite "forced Insert mode":
     let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
     e.state.mode = EditorMode.Insert
     check e.activeBuffer.beginTransaction("visual block insert").isOk
-    e.state.editState.insertModeStartPos = some(e.cursor)
     e.state.editState.visualBlockInsertContext = some(
       VisualBlockInsertContext(
         kind: vbiInsert, startLine: 0, endLine: 2, insertColumn: 0
@@ -5453,7 +5446,6 @@ suite "forced Insert mode":
     check e.handleKeyCombo(escapeKey)
     e.typeKeys(".")
 
-    check e.state.editState.substituteContext.isNone
     check $e.activeBuffer.getLine(0) == "QQy"
 
   test "marking the first -R buffer leaves it in Normal mode":
@@ -5642,7 +5634,6 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
 
     let bufA = e.windowManager.windows[0].buffer
     e.state.mode = EditorMode.Insert
-    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
     check bufA.beginTransaction("Insert mode edit").isOk
     check bufA.inTransaction
 
@@ -5651,7 +5642,6 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
 
     check e.windowManager.activeWindowIndex == 1
     check not bufA.inTransaction
-    check e.state.editState.insertModeStartPos.isNone
     check e.state.mode == EditorMode.Normal
 
   test "Completion and signature help close on the jump":
@@ -5751,7 +5741,6 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
 
     let bufA = e.windowManager.windows[0].buffer
     e.state.mode = EditorMode.Insert
-    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
     check bufA.beginTransaction("Insert mode edit").isOk
 
     # Two windows so the same-window branch (not the single-window one) runs.
@@ -5764,7 +5753,6 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
     check e.windowManager.activeWindowIndex == 0
     check bufA.inTransaction
     check e.state.mode == EditorMode.Insert
-    check e.state.editState.insertModeStartPos.isSome
 
 proc enterRecentFileWith(e: Editor, paths: seq[string]) =
   ## Enter Recent File mode in a split window with a fixed entry list.

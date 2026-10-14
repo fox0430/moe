@@ -29,6 +29,7 @@ import std/options
 
 import ../[modes, setting_options]
 import ../buffer/core
+import ../types/key_combo_types
 import ../lsp/protocol/types as lspTypes
 
 type
@@ -178,6 +179,7 @@ type
     hrFileTreeQuit # Close fileTree sidebar
     hrOpenUri # Open URI/file under cursor
     hrPlaybackMacro # Playback a recorded macro (@a, N@a) via nested playback loop
+    hrRepeatInsert # Type an Insert record again (`.`, [count]i, Ctrl-A)
     hrUnhandled # Command was not handled
     hrError # Error occurred
     hrMapAdd # Add runtime key mapping (:map, :nmap, etc.)
@@ -449,6 +451,17 @@ type
     of hrPlaybackMacro:
       playbackMacroKeys*: seq[string]
       playbackMacroCount*: int
+    of hrRepeatInsert:
+      repeatTyped*: seq[TypedInput]
+      repeatTimes*: int
+      repeatAsTyping*: bool
+        # What is typed goes on the record (`.`, Ctrl-A); the count's repeats
+        # type what is recorded instead
+      repeatNewLine*: Option[int]
+        # The count of o and O: Enter at the end of what was typed, on the
+        # line above the last this many lines
+      repeatLeave*: bool # Leave Insert after, as Escape does
+      repeatThenExec*: string # A command line to run once Insert is left
     of hrMapAdd:
       mapAddLhs*: string
       mapAddRhs*: string
@@ -536,8 +549,8 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
       hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig,
       hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit, hrExecCommand,
-      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrMapAdd,
-      hrMapRemove, hrMapClear, hrMapList, hrUndo, hrRedo:
+      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrRepeatInsert,
+      hrMapAdd, hrMapRemove, hrMapClear, hrMapList, hrUndo, hrRedo:
     hrgExitAndResync
 
 proc group*(r: HandlerResult): HandlerResultGroup =

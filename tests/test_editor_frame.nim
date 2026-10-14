@@ -44,7 +44,6 @@ suite "tick - forced Insert mode boundaries":
     check e.activeBuffer.undoStack.len == 1
     check e.activeBuffer.inTransaction
     check e.activeBuffer.currentTransaction.get.changes.len == 0
-    check e.state.editState.insertModeStartPos == some(e.cursor)
 
 suite "tick - frontend Git status subscription":
   test "does not maintain Git status without a display or frontend consumer":

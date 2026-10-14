@@ -212,119 +212,79 @@ suite "NormalModeHandler - Mode Switching":
     check result.modeTransition.isNone
 
 suite "NormalModeHandler - Insert Mode Entry":
-  test "Insert at cursor (i)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
+  # Each entry puts the cursor where typing goes and starts what `.` repeats.
+  for (key, line, column, wanted, entry) in [
+    ("i", "Hello World", 5, 5, ieInsert),
+    ("a", "Hello World", 5, 6, ieAppend),
+    ("A", "Hello World", 0, 11, ieAppendEnd),
+    ("I", "   Hello World", 10, 3, ieInsertNonBlank),
+    ("I", "   ", 1, 3, ieInsertNonBlank),
+  ]:
+    test key & " on " & line.escape & " from column " & $column:
+      let buf = newTextBuffer(line)
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.cursor = BufferPosition(line: 0, column: column)
 
-    let result = handler.handleInsertModeEntry(buf, state, "insert")
+      discard handler.typeKeys(buf, state, createTestViewport(), key)
 
-    check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Insert
-    check state.cursor.column == 5 # Cursor stays at same position
+      check state.mode == EditorMode.Insert
+      check state.cursor.column == wanted
+      check state.editState.insertRecord.entry.kind == entry
+      check state.editState.lastEditCommand.get.kind == lecInsert
 
-  test "Append after cursor (a)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
+  for (key, entry, typedLine) in [("o", ieOpenBelow, 1), ("O", ieOpenAbove, 0)]:
+    test key & " opens a line to type on":
+      let buf = newTextBuffer("Hello")
+      let handler = createTestHandler(buf)
+      let state = createTestState()
 
-    let result = handler.handleInsertModeEntry(buf, state, "append")
+      discard handler.typeKeys(buf, state, createTestViewport(), key)
 
-    check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Insert
-    check state.cursor.column == 6 # Cursor moves right by 1
+      check state.mode == EditorMode.Insert
+      check buf.len == 2
+      check state.cursor == BufferPosition(line: typedLine, column: 0)
+      check state.editState.insertRecord.entry.kind == entry
 
-  test "Append at end of line (A)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    let result = handler.handleInsertModeEntry(buf, state, "append-end")
-
-    check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Insert
-    check state.cursor.column == 11 # Cursor at end of "Hello World"
-
-  test "Insert at first non-blank (I)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "   Hello World")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 10)
-
-    let result = handler.handleInsertModeEntry(buf, state, "insert-first-non-blank")
-
-    check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Insert
-    check state.cursor.column == 3
-
-  test "Open line below (o)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    let result = handler.handleInsertModeEntry(buf, state, "open-below")
-
-    check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Insert
-
-  test "Open line above (O)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    let result = handler.handleInsertModeEntry(buf, state, "open-above")
-
-    check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Insert
-
-  test "Unknown insert type returns error":
-    let buf = newTextBuffer()
+  test "a count is what the typing is repeated by":
+    let buf = newTextBuffer("Hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
 
-    let result = handler.handleInsertModeEntry(buf, state, "unknown-type")
+    discard handler.typeKeys(buf, state, createTestViewport(), "3", "A")
 
-    check result.kind == nmrError
-    check result.errorMessage == "Unknown insert type: unknown-type"
+    check state.editState.insertRecord.count == 3
+    check state.editState.typing.repeatsLeft == 2
+
+  test "Insert resumed after Ctrl-o starts no record":
+    let buf = newTextBuffer("Hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.editState.lastEditCommand =
+      some(LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true))
+
+    let result = handler.resumeInsert(buf, state, append = true)
+
+    check result.modeTransition == some(EditorMode.Insert)
+    check state.cursor.column == 1
+    check state.editState.lastEditCommand.get.kind == lecDeleteChar
 
 suite "NormalModeHandler - Insert Mode Entry readOnly guard":
   ## A read-only buffer (log viewer, quick-run output, etc.) must reject every
   ## insert-entry command (o, O, a, A, I, i) before Insert mode is reached,
   ## otherwise the follow-up typed characters slip past command_registry's
   ## readOnly gate straight into buffer.insertText.
-  for insertType in [
-    "insert", "append", "append-end", "insert-first-non-blank", "open-below",
-    "open-above",
-  ]:
-    test "'" & insertType & "' is blocked on a read-only buffer":
-      let buf = newTextBuffer()
-      discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+  for key in ["i", "a", "A", "I", "o", "O"]:
+    test "'" & key & "' is blocked on a read-only buffer":
+      let buf = newTextBuffer("Hello")
       buf.readOnly = true
       let handler = createTestHandler(buf)
       let state = createTestState()
       state.cursor = BufferPosition(line: 0, column: 0)
 
-      let result = handler.handleInsertModeEntry(buf, state, insertType)
+      discard handler.typeKeys(buf, state, createTestViewport(), key)
 
-      check result.kind == nmrHandled
-      check result.modeTransition.isNone
+      check state.mode == EditorMode.Normal
       check state.statusMessage == "Buffer is read-only"
       check buf[0] == "Hello" # open-below/open-above must not modify buffer
 

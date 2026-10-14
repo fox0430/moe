@@ -37,7 +37,7 @@ import pkg/results
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_line, command_config,
-    command_registry, lsp_integration, logger, key_router, pending_input,
+    command_registry, lsp_integration, logger, key_router, pending_input, insert_record,
   ]
 import ../types/editor_types
 # The shared handler-module list lives in handler_modules (single source of
@@ -183,14 +183,14 @@ proc applyNormalModeResult(
     if r.modeTransition.isSome:
       let targetMode = r.modeTransition.get
       if targetMode == EditorMode.Insert:
-        let transactionResult = beginInsertModeSession(
-          buffer, state, r.insertReplayCount, r.insertReplayLineEntry
-        )
+        let transactionResult = beginInsertModeSession(buffer, state)
         if transactionResult.isErr:
           return HandlerResult(
             kind: hrError,
             errorMessage: "Failed to begin transaction: " & transactionResult.error,
           )
+        if r.insertEntry.isSome:
+          state.startInsertRecord(r.insertEntry.get, r.insertCount)
       elif targetMode == EditorMode.Replace:
         # As for Insert, a transaction a failed commit left open carries on.
         if not buffer.inTransaction:
@@ -224,6 +224,16 @@ proc applyNormalModeResult(
       kind: hrPlaybackMacro,
       playbackMacroKeys: r.macroKeys,
       playbackMacroCount: if r.macroCount > 0: r.macroCount else: 1,
+    )
+  of nmrRepeatInsert:
+    # `.` entered Insert again: the nested-playback processor types the record
+    # and leaves.
+    return HandlerResult(
+      kind: hrRepeatInsert,
+      repeatTyped: r.repeatTyped,
+      repeatTimes: 1,
+      repeatAsTyping: true,
+      repeatLeave: true,
     )
   of nmrExecCommand:
     # @: - repeat last Command mode command
@@ -328,8 +338,6 @@ proc runInsertCommand*(
   ## The `i` command, or `a` if `append`, whatever keys they are bound to. Vim
   ## resumes Insert after Ctrl-o by queueing `i` (unmapped), past the end of
   ## the line if need be, which is `a` on its last character.
-  let r = manager.normalHandler.handleInsertModeEntry(
-    e.activeBuffer, e.state, if append: "append" else: "insert"
-  )
+  let r = manager.normalHandler.resumeInsert(e.activeBuffer, e.state, append)
   result = manager.applyNormalModeResult(e, r)
   e.keepCursorLineUnfolded(result)

@@ -48,6 +48,7 @@ import
   types/syntax_checker_types,
   types/recent_file_mode_types,
   types/git_cache_types,
+  types/key_combo_types,
   config
 
 when not defined(moe.embedded):
@@ -63,7 +64,7 @@ export
   diff_viewer_types, debug_viewer_types, config_mode_types, references_viewer_types,
   documentsymbol_viewer_types, callhierarchy_viewer_types, hover_popup_types,
   notification_popup_types, primitives, syntax_checker_types, recent_file_mode_types,
-  config.BracketSplitMode
+  key_combo_types, config.BracketSplitMode
 
 when not defined(moe.embedded):
   export terminal_mode_types
@@ -107,7 +108,6 @@ type
     viewportReservedLines*: int = -1
       ## Reserved rows outside text area. `-1` is unset; `0` is valid. Use `motionReservedLines`.
     scrollAnimation*: ScrollAnimation # Current scroll animation state
-    savedViewportTopLine*: int # Viewport position saved when operator starts
 
   CursorPosition* = object
     x*: int
@@ -295,20 +295,17 @@ type
 
   EditState* = object ## Edit operation state grouped together
     lastEditCommand*: Option[LastEditCommand] # Last change command for . (repeat)
+    insertRecord*: InsertRecord # What `.` repeats for lecInsert
+    changeBefore*: tuple[command: Option[LastEditCommand], record: InsertRecord]
+      # What `.` repeated before the Insert record started, which Ctrl-o reads
+    lastInserted*: Option[seq[TypedInput]]
+      # What Ctrl-A and Ctrl-@ type again, none before any insert
+    typing*: InsertTyping # The recorder of the Insert session under way
     lastFindChar*: Option[LastFindChar] # Last f/F/t/T for ; and , repeat
-    substituteContext*: Option[SubstituteContext]
-      # Context for substitute commands (s/S/cc)
     replaceHistory*: seq[ReplaceHistoryEntry] # Replace mode undo history
-    insertModeStartPos*: Option[BufferPosition] # Position where Insert mode started
     visualBlockInsertContext*: Option[VisualBlockInsertContext]
       # Context for visual block insert/append/change replication
-    autoIndentedLine*: Option[tuple[line: int, indent: string]]
-    insertReplayCount*: int
-      # [count] prefix for [count]i/a/I/A/o/O. On Insert-mode exit the typed
-      # text is replayed (count - 1) more times to match Vim. <= 1 means none.
-    insertReplayLineEntry*: bool
-      # True when Insert was entered via o/O, so each replay opens a fresh line
-      # (newline + the entry line's indent) instead of inserting inline.
+    autoIndentedLine*: Option[AutoIndentedLine]
 
   PendingSemanticTokensRequest* = object
     ## Semantic-tokens-specific extras (legend, viewport, range) captured at
@@ -552,6 +549,7 @@ type
     countGiven*: bool # A count was typed before the operator (`3dG`)
     startPos*: BufferPosition # Position where operator was invoked
     register*: Option[char] # Register named by `"x` before the operator
+    topLine*: int # The viewport's top line then, which the change puts back
 
   TextObjectKind* = enum
     ## Types of text objects
@@ -613,16 +611,55 @@ type
       textObjectModifier*: TextObjectModifier
       textObjectKind*: TextObjectKind
 
+  AutoIndentedLine* = object ## A line Insert mode indented by itself
+    line*: int
+    version*: int
+      # contentVersion once the indent went in: while it holds, nothing was
+      # typed there, and Escape, Enter or a move takes the indent off
+
+  InsertEntryKind* = enum
+    ## The command a change entered Insert mode with, which `.` runs again
+    ieInsert # i, and the plain insert a move before typing starts
+    ieAppend # a
+    ieAppendEnd # A
+    ieInsertNonBlank # I
+    ieOpenBelow # o
+    ieOpenAbove # O
+    ieSubstitute # s
+    ieSubstituteLine # S, cc
+    ieChangeToEnd # C
+    ieChange # c{motion}
+
+  InsertEntry* = object
+    case kind*: InsertEntryKind
+    of ieChange:
+      operand*: Operand
+    else:
+      discard
+
+  InsertRecord* = object
+    ## The Insert-mode change `.` repeats: the entry command, its count and
+    ## what was typed.
+    entry*: InsertEntry
+    count*: int
+    typed*: seq[TypedInput]
+
+  InsertTyping* = object ## The recorder of the Insert session under way
+    open*: bool # What is typed now goes on `insertRecord`
+    repeatsLeft*: int # Times Escape types the record again ([count]i)
+    repeating*: bool # Those repeats run, and their keys are not typing
+    linesBelow*: int # Lines below where typing started, which it leaves as they are
+    lastCursor*: BufferPosition # Where the last key left the cursor
+    lastVersion*: int # and the buffer's contentVersion
+
   LastEditCommandKind* = enum
     ## Types of repeatable edit commands
-    lecOperatorMotion # Operator + motion (e.g., dw, c2w, y$)
-    lecInsertText # Text inserted in insert mode
+    lecOperatorMotion # Operator + motion (e.g., dw, d2w, y$)
+    lecInsert # A change made in Insert mode, kept in EditState.insertRecord
     lecReplaceChar # Character replacement with r command
     lecVisualReplace # Visual-mode replace (r) with recorded selection shape
     lecDeleteChar # Character deletion with x/X
-    lecSubstitute # Substitute command (s/S)
     lecDeleteLine # Delete line(s) with dd
-    lecChangeLine # Change line(s) with cc
     lecPaste # Paste operation (p/P/gp/gP)
     lecToggleCase # Toggle case with ~
     lecJoinLines # Join lines with J
@@ -635,9 +672,8 @@ type
     of lecOperatorMotion:
       operator*: OperatorType # d, c, y, >, <, ~, gu, gU
       operand*: Operand
-    of lecInsertText:
-      insertedText*: string # Text that was inserted
-      insertPosition*: BufferPosition # Where insertion started
+    of lecInsert:
+      discard
     of lecReplaceChar:
       replaceChar*: string # Character used for replacement
       replaceCount*: int # Number of characters to replace
@@ -652,14 +688,8 @@ type
     of lecDeleteChar:
       deleteCount*: int # Number of characters to delete
       deleteForward*: bool # true for x, false for X
-    of lecSubstitute:
-      substituteText*: string # Text substituted
-      substituteCount*: int # Number of characters or lines substituted
-      substituteKind*: SubstituteKind # Whether it was s (char) or S/cc (line)
     of lecDeleteLine:
       deleteLineCount*: int # Number of lines to delete
-    of lecChangeLine:
-      changeLineCount*: int # Number of lines to change
     of lecPaste:
       pasteCount*: int # Number of times to paste
       pasteBefore*: bool # true for P/gP (before), false for p/gp (after)
@@ -729,17 +759,6 @@ type
       originalChar*: string # Original char (empty when it was an end-of-line insert)
     of rheNewline:
       discard
-
-  SubstituteKind* = enum
-    ## Kind of substitute operation that led to Insert mode
-    skChar # s command - substitute character(s)
-    skLine # S or cc command - substitute line(s)
-
-  SubstituteContext* = object
-    ## Tracks context when Insert mode was entered via substitute command
-    ## Used to properly record the command for repeat (.)
-    kind*: SubstituteKind # Type of substitute operation
-    deleteCount*: int # Number of characters or lines deleted
 
   VisualBlockInsertKind* = enum
     ## Kind of visual block insert operation
@@ -983,6 +1002,9 @@ type
     insertResume*: InsertResume
     # Line Ctrl-o was typed past the end of (Vim's ins_at_eol)
     insertResumeLineEnd*: Option[int]
+    # Ctrl-o came while the Insert change was still being typed, so `.`
+    # repeats the change before it
+    insertResumeInChange*: bool
     # Startup window actions completed (runs once on first render)
     startUpWindowsDone*: bool
     # Notification popup manager

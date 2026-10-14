@@ -1,4 +1,4 @@
-import std/[options, os, tempfiles, unittest]
+import std/[options, os, strutils, tempfiles, unittest]
 
 import ../src/moepkg/frontend
 import ../src/moepkg/[editor, key_bindings, keybind_config, types]
@@ -304,3 +304,23 @@ suite "Host result interception":
     require request.isSome
     check request.get.kind == hrHSplit
     check e.takeHostResultRequest().isNone
+
+  test "an Insert mapping's command line reaches the hook after the count too":
+    proc requestAfter(keys: openArray[string]): Option[HandlerResult] =
+      let e = testEditor()
+      defer:
+        e.releaseExternalResources()
+      e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+        r.kind == hrExecCommand
+      require e.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bnext") ==
+        ""
+      for k in keys:
+        require e.key(k)
+      check e.activeBuffer().getLine(0) == "x".repeat(if keys[0] == "3": 3 else: 1)
+      e.takeHostResultRequest()
+
+    for keys in [@["i", "x", "K"], @["3", "i", "x", "K"]]:
+      let request = requestAfter(keys)
+      require request.isSome
+      check request.get.kind == hrExecCommand
+      check request.get.execCommandText == "bnext"

@@ -5644,22 +5644,25 @@ suite "Handler - Edit Repeat Command":
     # Should fail with no previous command
     check result.isErr
 
-  test "edit.repeat with insert command":
+  test "edit.repeat enters Insert again with the command a change began with":
+    # What was typed is typed again by the caller, through the keys.
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
     ctx.setCursor(0, 5)
-    ctx.state.editState.lastEditCommand = some(
-      LastEditCommand(
-        kind: lecInsertText,
-        insertedText: "X",
-        insertPosition: BufferPosition(line: 0, column: 0),
-      )
+    ctx.state.editState.lastEditCommand = some(LastEditCommand(kind: lecInsert))
+    ctx.state.editState.insertRecord = InsertRecord(
+      entry: InsertEntry(kind: ieAppendEnd),
+      count: 1,
+      typed: @[TypedInput(kind: tiKey, key: KeyCombo(isSpecial: false, char: "X"))],
     )
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("edit.repeat")).isOk
-    check buffer[0] == "helloX world"
+    check ctx.state.mode == EditorMode.Insert
+    check ctx.cursor == BufferPosition(line: 0, column: 11)
+    check ctx.state.editState.insertRecord.entry.kind == ieAppendEnd
+    check ctx.state.editState.insertRecord.typed.len == 0
 
   test "edit.repeat with delete char command":
     let buffer = newTextBuffer("hello world")
@@ -7836,7 +7839,7 @@ suite "executeCommand - closed folds are edited as a whole":
     check buffer[1] == "tail"
     check ctx.cursor == BufferPosition(line: 0, column: 2)
     check ctx.state.mode == EditorMode.Insert
-    check ctx.state.editState.insertModeStartPos == some(ctx.cursor)
+    check ctx.state.editState.insertRecord.entry.kind == ieSubstitute
 
   test "x on a closed fold is what . repeats afterwards":
     let buffer = newTextBuffer("head\n1\n2\ntail")
@@ -7868,8 +7871,8 @@ suite "executeCommand - closed folds are edited as a whole":
     # The fold widened the edit to three lines, but `.` elsewhere must still
     # substitute the one line the user asked for.
     check buffer.len == 2
-    check ctx.state.editState.substituteContext ==
-      some(SubstituteContext(kind: skLine, deleteCount: 1))
+    check ctx.state.editState.insertRecord.entry.kind == ieSubstituteLine
+    check ctx.state.editState.insertRecord.count == 1
 
   test "dd on a hidden fold line leaves the cursor where the fold was":
     # `:42` and friends can park the cursor on a line the fold marker hides.
@@ -7966,76 +7969,8 @@ suite "executeCommand - closed folds are edited as a whole":
     check buffer.foldState.folds.len == 0
 
 suite "executeCommand - . on a closed fold":
-  # `.` writes to the buffer without going through an operator or entering
-  # Insert mode, so it has to hold the fold rules on its own.
-  test "repeating an insert opens the fold instead of typing into it":
-    let buffer = newTextBuffer("aaa\nbbb\nccc\ntail")
-    check buffer.foldState.addFold(0, 2, collapsed = true)
-    let ctx = createTestContext(buffer)
-    ctx.state.editState.lastEditCommand = some(
-      LastEditCommand(
-        kind: lecInsertText,
-        insertedText: "XYZ",
-        insertPosition: BufferPosition(line: 0, column: 0),
-      )
-    )
-    ctx.cursor = BufferPosition(line: 0, column: 0)
-    let registry = createTestRegistry()
-
-    let cmd = Command(kind: ctCustom, commandId: "edit.repeat", count: 1)
-    check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "XYZaaa"
-    # Insert mode never leaves the typed line folded, and neither does its repeat.
-    check not buffer.foldState.folds[0].collapsed
-
-  test "repeating S covers the whole fold":
-    let buffer = newTextBuffer("aaa\nbbb\nccc\ntail")
-    check buffer.foldState.addFold(0, 2, collapsed = true)
-    let ctx = createTestContext(buffer)
-    ctx.state.editState.lastEditCommand = some(
-      LastEditCommand(
-        kind: lecSubstitute,
-        substituteText: "NEW",
-        substituteCount: 1,
-        substituteKind: skLine,
-      )
-    )
-    ctx.cursor = BufferPosition(line: 0, column: 0)
-    let registry = createTestRegistry()
-
-    let cmd = Command(kind: ctCustom, commandId: "edit.repeat", count: 1)
-    check registry.executeCommand(ctx, cmd).isOk
-    check buffer.len == 2
-    check buffer[0] == "NEW"
-    check buffer[1] == "tail"
-    # The replacement lands on the fold's line, so it must not stay hidden.
-    check not buffer.foldState.folds[0].collapsed
-
-  test "repeating s changes the fold as a unit":
-    # Live `s` on a closed fold is a linewise change over the whole fold, so its
-    # repeat cannot fall back to deleting characters off the hidden first line.
-    let buffer = newTextBuffer("aaa\nbbb\nccc\ntail")
-    check buffer.foldState.addFold(0, 2, collapsed = true)
-    let ctx = createTestContext(buffer)
-    ctx.state.editState.lastEditCommand = some(
-      LastEditCommand(
-        kind: lecSubstitute,
-        substituteText: "NEW",
-        substituteCount: 1,
-        substituteKind: skChar,
-      )
-    )
-    ctx.cursor = BufferPosition(line: 0, column: 0)
-    let registry = createTestRegistry()
-
-    let cmd = Command(kind: ctCustom, commandId: "edit.repeat", count: 1)
-    check registry.executeCommand(ctx, cmd).isOk
-    check buffer.len == 2
-    check buffer[0] == "NEW"
-    check buffer[1] == "tail"
-    # The replacement lands on the fold's line, so it must not stay hidden.
-    check not buffer.foldState.folds[0].collapsed
-
+  # `.` runs a change again where the cursor is, so it meets the fold rules
+  # there as the change did.
   test "dd with a cursor past the end of the buffer deletes nothing":
     # Fold snapping normalizes a reversed range, so an out-of-range cursor must
     # be rejected before it: otherwise the empty request becomes a valid-looking
@@ -8055,8 +7990,8 @@ suite "executeCommand - . on a closed fold":
 
   test "s on a fold records a substitute, so `.` repeats a substitute":
     # The fold branch routes through the operator engine and never touches the
-    # per-character substitute path, so it has to record the context itself:
-    # without it Insert exit would record a plain insert and `.` would stop
+    # per-character substitute path, so it has to start the record itself:
+    # without it typing would record a plain insert and `.` would stop
     # substituting.
     let buffer = newTextBuffer("aaa\nbbb\nccc\ntail")
     check buffer.foldState.addFold(0, 2, collapsed = true)
@@ -8066,27 +8001,7 @@ suite "executeCommand - . on a closed fold":
 
     let cmd = Command(kind: ctCustom, commandId: "substitute.char", count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    check ctx.state.editState.substituteContext.isSome
-    check ctx.state.editState.substituteContext.get.kind == skChar
-
-  test "repeating s off a fold still substitutes characters":
-    let buffer = newTextBuffer("aaa\nbbb")
-    let ctx = createTestContext(buffer)
-    ctx.state.editState.lastEditCommand = some(
-      LastEditCommand(
-        kind: lecSubstitute,
-        substituteText: "X",
-        substituteCount: 1,
-        substituteKind: skChar,
-      )
-    )
-    ctx.cursor = BufferPosition(line: 0, column: 0)
-    let registry = createTestRegistry()
-
-    let cmd = Command(kind: ctCustom, commandId: "edit.repeat", count: 1)
-    check registry.executeCommand(ctx, cmd).isOk
-    check buffer.len == 2
-    check buffer[0] == "Xaa"
+    check ctx.state.editState.insertRecord.entry.kind == ieSubstitute
 
 suite "Change operator over a linewise range":
   # The change operator holds its transaction open for the insert that follows,

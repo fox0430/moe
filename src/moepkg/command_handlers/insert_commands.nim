@@ -26,9 +26,32 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, modes, unicode_utils]
-import ../buffer/[core, edit]
+import ../[types, modes, unicode_utils, insert_record]
+import ../buffer/[core, edit, undo]
 import smart_indent
+
+proc beginInsertModeSession*(
+    buffer: TextBuffer, state: EditorState
+): Result[bool, string] =
+  ## Begin the transaction an Insert session types into, true when it begins
+  ## here: an open one belongs to an entry command that edited first (`cw`).
+  if buffer.inTransaction:
+    return ok(false)
+  let begun =
+    buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
+  if begun.isErr:
+    return err(begun.error)
+  ok(true)
+
+proc markAutoIndented(
+    buffer: TextBuffer, state: EditorState, line: int, indent: string
+) =
+  ## Note that Insert indented `line` by itself.
+  state.editState.autoIndentedLine =
+    if indent.len > 0:
+      some(AutoIndentedLine(line: line, version: buffer.contentVersion))
+    else:
+      none(AutoIndentedLine)
 
 proc getLineIndent*(line: string): string =
   ## Extract leading whitespace (spaces and tabs) from a line
@@ -195,11 +218,7 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
     # Register the middle line for auto-indent cleanup on Esc — if the user
     # leaves Insert mode without typing anything, the whitespace we just
     # inserted is removed (the bracket pair itself stays intact).
-    if middleIndent.len > 0:
-      state.editState.autoIndentedLine =
-        some((line: state.cursor.line, indent: middleIndent))
-    else:
-      state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+    buffer.markAutoIndented(state, state.cursor.line, middleIndent)
     return
 
   # Prepare the text to insert (newline + optional indent as single operation)
@@ -223,8 +242,19 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
       textToInsert = "\n" & newLineIndent
       indentLen = newLineIndent.len
 
+  # An untouched auto-indent comes off the line Enter leaves; the new line
+  # still gets it.
+  var at = pos
+  if buffer.untouchedAutoIndent(state) == some(pos.line) and
+      pos.column == currentLineText.charLen:
+    let cleared = buffer.replaceLine(pos.line, "")
+    if cleared.isErr:
+      state.statusMessage = cleared.error
+      return
+    at.column = 0
+
   # Insert newline (and indent if any) as a single undo-able operation
-  let insertResult = buffer.insertText(pos, textToInsert)
+  let insertResult = buffer.insertText(at, textToInsert)
   if insertResult.isErr:
     state.statusMessage = insertResult.error
     return
@@ -233,11 +263,7 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   state.cursor.line += 1
   state.cursor.column = indentLen
 
-  if indentLen > 0:
-    state.editState.autoIndentedLine =
-      some((line: state.cursor.line, indent: newLineIndent))
-  else:
-    state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+  buffer.markAutoIndented(state, state.cursor.line, newLineIndent)
 
 proc insertLineBelow*(buffer: TextBuffer, state: EditorState): Result[(), string] =
   ## Handle 'o' command - insert line below and enter insert mode with auto-indent
@@ -271,11 +297,7 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState): Result[(), string
   state.cursor.line = currentLine + 1
   state.cursor.column = indentLen
 
-  if indentLen > 0:
-    state.editState.autoIndentedLine =
-      some((line: currentLine + 1, indent: newLineIndent))
-  else:
-    state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+  buffer.markAutoIndented(state, currentLine + 1, newLineIndent)
 
   state.mode = EditorMode.Insert
   ok(())
@@ -288,14 +310,13 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string
   # Use "indent\n" (not "\nindent") — inserting "\nindent" at column 0 would
   # concatenate the indent with the original line content.
   var textToInsert = "\n"
-  var indentLen = 0
+  var indent = ""
 
   # Auto-indent skipped for raw buffers.
   if state.autoIndent and buffer.allowsTextTransforms:
-    let indent = getLineIndent(lineContent)
+    indent = getLineIndent(lineContent)
     if indent.len > 0:
       textToInsert = indent & "\n"
-      indentLen = indent.len
 
   let insertResult =
     buffer.insertText(BufferPosition(line: currentLine, column: 0), textToInsert)
@@ -303,33 +324,12 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string
     return err(insertResult.error)
 
   state.cursor.line = currentLine
-  state.cursor.column = indentLen
+  state.cursor.column = indent.len
 
-  if indentLen > 0:
-    state.editState.autoIndentedLine =
-      some((line: currentLine, indent: getLineIndent(lineContent)))
-  else:
-    state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+  buffer.markAutoIndented(state, currentLine, indent)
 
   state.mode = EditorMode.Insert
   ok(())
-
-proc insertAppend*(buffer: TextBuffer, state: EditorState) =
-  ## Handle 'a' command - move cursor right and enter insert mode
-  let lineContent = buffer.getLine(state.cursor.line)
-  # Only move right if not at end of line
-  # Use charLen (character count) not len (byte count) for multibyte character support
-  if state.cursor.column < lineContent.charLen:
-    state.cursor.column += 1
-  # Switch to insert mode
-  state.mode = EditorMode.Insert
-
-proc insertAppendEnd*(buffer: TextBuffer, state: EditorState) =
-  ## Handle 'A' command - move to end of line and enter insert mode
-  let lineContent = buffer.getLine(state.cursor.line)
-  state.cursor.column = lineContent.charLen
-  # Switch to insert mode
-  state.mode = EditorMode.Insert
 
 proc indentLine*(
     buffer: TextBuffer, state: EditorState, count: int = 1
@@ -491,31 +491,89 @@ proc deleteToLineStart*(buffer: TextBuffer, state: EditorState) =
 
   state.cursor.column = min(max(0, pos.column - deleted), lineLen - deleted)
 
-proc insertLastText*(buffer: TextBuffer, state: EditorState): Result[string, string] =
-  ## Re-insert the text recorded for `.` at the cursor (Ctrl-A in Insert mode).
-  ## Substitute text and `o`/`O` newline with auto-indent replay as-is.
-  ## No-op when no insertable text was recorded.
-  ## Returns the inserted text for signature help tracking.
-  if state.editState.lastEditCommand.isNone:
-    return ok("")
+proc stepToAppend*(buffer: TextBuffer, state: EditorState) =
+  ## Put the cursor after the character under it, where `a` types.
+  if state.cursor.column < buffer.getLine(state.cursor.line).charLen:
+    state.cursor.column += 1
 
-  let lastCmd = state.editState.lastEditCommand.get
-  var text = ""
-  case lastCmd.kind
-  of lecInsertText:
-    text = lastCmd.insertedText
-  of lecSubstitute:
-    text = lastCmd.substituteText
-  else:
-    discard
-  if text.len == 0:
-    return ok("")
+proc deleteBetween*(
+    buffer: TextBuffer, first, stop: BufferPosition
+): Result[void, string] =
+  ## Delete from `first` up to `stop`, across lines too: deleteRange's end is
+  ## inclusive, and past a line's last character it takes the line break.
+  if first == stop:
+    return ok()
+  let last =
+    if stop.column > 0:
+      BufferPosition(line: stop.line, column: stop.column - 1)
+    else:
+      BufferPosition(line: stop.line - 1, column: buffer.getLine(stop.line - 1).charLen)
+  let removed = buffer.deleteRange(first, last)
+  if removed.isErr:
+    return err(removed.error)
+  ok()
 
-  let insertResult = buffer.insertTextEnd(state.cursor, text)
-  if insertResult.isErr:
-    return err(insertResult.error)
-  state.cursor = insertResult.get.cursor
-  ok(text)
+proc charsBetween*(buffer: TextBuffer, a, b: BufferPosition): int =
+  ## Characters from `a` up to `b`, a line break counting as one. 0 when `b`
+  ## is not after `a`.
+  if b.line < a.line or (b.line == a.line and b.column <= a.column):
+    return 0
+  if a.line == b.line:
+    return b.column - a.column
+  result = buffer.getLine(a.line).charLen - a.column + 1
+  for line in a.line + 1 ..< b.line:
+    result += buffer.getLine(line).charLen + 1
+  result += b.column
+
+proc stepChars(buffer: TextBuffer, pos: BufferPosition, n: int): BufferPosition =
+  ## The position `n` characters after `pos` (before it when negative), a line
+  ## break counting as one, stopping at the ends of the buffer.
+  result = pos
+  var left = n
+  while left > 0:
+    let lineLen = buffer.getLine(result.line).charLen
+    if result.column + left <= lineLen:
+      result.column += left
+      left = 0
+    elif result.line + 1 < buffer.len:
+      left -= lineLen - result.column + 1
+      inc result.line
+      result.column = 0
+    else:
+      result.column = lineLen
+      left = 0
+  while left < 0:
+    if result.column + left >= 0:
+      result.column += left
+      left = 0
+    elif result.line > 0:
+      left += result.column + 1
+      dec result.line
+      result.column = buffer.getLine(result.line).charLen
+    else:
+      result.column = 0
+      left = 0
+
+proc typeTextAgain*(
+    buffer: TextBuffer, state: EditorState, typed: TypedInput
+): Result[void, string] =
+  ## Put the text `.` recorded in at the cursor, in place of the characters it
+  ## replaced, as it came in: no indent or pair is added.
+  let
+    first = buffer.stepChars(state.cursor, -typed.removeBefore)
+    removed =
+      buffer.deleteBetween(first, buffer.stepChars(state.cursor, typed.removeAfter))
+  if removed.isErr:
+    return removed
+  state.cursor = first
+  if typed.text.len > 0:
+    let inserted = buffer.insertTextEnd(
+      first, typed.text, cursorByte = typed.text.charToBytePos(typed.cursorAt)
+    )
+    if inserted.isErr:
+      return err(inserted.error)
+    state.cursor = inserted.get.cursor
+  ok()
 
 proc insertCharFromAbove*(buffer: TextBuffer, state: EditorState): bool =
   ## Insert character from the line above at the same column (Ctrl-Y in insert mode)
@@ -573,15 +631,11 @@ proc insertCharFromBelow*(buffer: TextBuffer, state: EditorState): bool =
 
 proc clearAutoIndentIfUnedited*(buffer: TextBuffer, state: EditorState) =
   ## Remove auto-indent whitespace when leaving Insert mode without editing.
-  ## Uses replaceLine (not deleteText) so extractInsertedText ignores the change.
-  if state.editState.autoIndentedLine.isSome:
-    let (line, indent) = state.editState.autoIndentedLine.get
-    if line >= 0 and line < buffer.len:
-      let lineContent = buffer.getLine(line)
-      if lineContent == indent:
-        let replaceResult = buffer.replaceLine(line, "")
-        if replaceResult.isErr:
-          state.statusMessage = replaceResult.error
-        elif state.cursor.line == line:
-          state.cursor.column = 0
-    state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+  let untouched = buffer.untouchedAutoIndent(state)
+  if untouched.isSome:
+    let replaceResult = buffer.replaceLine(untouched.get, "")
+    if replaceResult.isErr:
+      state.statusMessage = replaceResult.error
+    elif state.cursor.line == untouched.get:
+      state.cursor.column = 0
+  state.editState.autoIndentedLine = none(AutoIndentedLine)

@@ -28,6 +28,9 @@
 import std/[tables, strutils, options, sequtils, hashes]
 
 import ../[types, modes, logger, unicode_utils]
+import ../types/key_combo_types
+
+export key_combo_types
 
 const ExecCmdlinePrefix* = "exec.cmdline."
   ## commandId prefix for Command mode command alias bridge entries (see
@@ -37,44 +40,6 @@ const ExecCmdlinePrefix* = "exec.cmdline."
   ## text, so the full `:`-parser (and its safety checks) runs.
 
 type
-  ## Key modifiers that can be combined
-  KeyModifier* = enum
-    kmNone
-    kmCtrl
-    kmAlt
-    kmShift
-    kmMeta
-
-  ## A key combination with potential modifiers
-  ## We store the key as char and special key kind separately
-  ## to avoid direct dependency on celina.Key type
-  SpecialKey* = enum
-    skNone
-    skEnter
-    skTab
-    skBackTab
-    skBackspace
-    skDelete
-    skEscape
-    skUp
-    skDown
-    skLeft
-    skRight
-    skPageUp
-    skPageDown
-    skHome
-    skEnd
-    skFunction
-
-  KeyCombo* = object
-    case isSpecial*: bool
-    of true:
-      special*: SpecialKey
-      fnNum*: int ## For function keys
-    of false:
-      char*: string
-    modifiers*: set[KeyModifier]
-
   ## Types of commands that can be bound
   CommandType* = enum
     ctMotion ## Basic cursor movement

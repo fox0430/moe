@@ -38,8 +38,8 @@ when not defined(moe.embedded):
 
 import
   ../[
-    types, buffer, modes, key_bindings, keybind_config, string_builder, filer, filetree,
-    diff_viewer, recent_file_mode, command_line, visual_selection,
+    types, buffer, modes, key_bindings, keybind_config, filer, filetree, diff_viewer,
+    recent_file_mode, command_line, visual_selection, insert_record,
   ]
 
 when not defined(moe.embedded):
@@ -51,179 +51,11 @@ import ../types/editor_types
 # centralized there rather than duplicated per importer.
 import handler_modules
 
-proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
-  ## Extract net inserted text from a transaction
-  ## Handles insertions and deletions (backspace during insert mode)
-  ## Optimized with StringBuilder for O(n) instead of O(n²) performance
-  ##
-  ## A line join (Backspace at a line start) starts the text over: what came
-  ## before it may not have been typed. A deleted line whose content is then
-  ## re-attached is dropped the same way, re-attach included.
-  var sb = newStringBuilder()
-  var skipNextInsertText = false
-  for change in transaction.changes:
-    case change.kind
-    of buffer.ckInsertText:
-      if skipNextInsertText:
-        skipNextInsertText = false
-      else:
-        sb.add(change.insertText)
-    of buffer.ckDeleteText:
-      # Backspace - remove from end of accumulated text
-      sb.removeLast(change.deletedText.len)
-      skipNextInsertText = false
-    of buffer.ckInsertLine:
-      # Line insertion - add the line text
-      sb.add(change.insertLineText)
-      # Ensure it ends with newline if it doesn't already
-      if change.insertLineText.len == 0 or change.insertLineText[^1] != '\n':
-        sb.add("\n")
-      skipNextInsertText = false
-    of buffer.ckDeleteLine:
-      # Line deletion during insert mode: the paired ckInsertText that follows
-      # is a line-join re-attach, not user input. Clear accumulated text and
-      # arm the skip for the immediate next ckInsertText — but only when the
-      # deleted line had content, since joining an empty line omits the
-      # re-attach entirely (insertText no-ops on ""), and the next
-      # ckInsertText would then be real typing.
-      sb.clear()
-      skipNextInsertText = change.deletedLineText.len > 0
-    of buffer.ckDeleteRange:
-      if change.deletedRangeText == "\n":
-        # A line join
-        sb.clear()
-      else:
-        # Range deletion - remove from end of accumulated text
-        sb.removeLast(change.deletedRangeText.len)
-      skipNextInsertText = false
-    of buffer.ckReplaceLine, buffer.ckReplaceLines:
-      discard # Line replacement doesn't contribute to inserted text tracking
-      skipNextInsertText = false
-    of buffer.ckSnapshot:
-      discard # Snapshots don't contribute to inserted text tracking
-      skipNextInsertText = false
-    of buffer.ckTransaction:
-      # Nested transaction - recursively extract text
-      let nestedTransaction = buffer.BufferTransaction(
-        changes: change.transactionChanges,
-        description: change.transactionDescription,
-        startSeq: 0,
-      )
-      sb.add(extractInsertedText(nestedTransaction))
-      skipNextInsertText = false
-  return sb.toString()
-
-proc typedTextInRange(buffer: TextBuffer, startPos, endPos: BufferPosition): string =
-  ## Text typed in the half-open range [startPos, endPos), where endPos is the
-  ## cursor sitting one rune past the last inserted character. Returns "" when
-  ## the cursor is not strictly ahead of startPos (e.g. everything backspaced).
-  if endPos.line < startPos.line or
-      (endPos.line == startPos.line and endPos.column <= startPos.column):
-    return ""
-  # getTextInRange is inclusive on both ends, so step the end back one rune.
-  let endIncl =
-    if endPos.column > 0:
-      BufferPosition(line: endPos.line, column: endPos.column - 1)
-    else:
-      # Cursor at column 0: the last typed rune is the newline that ended the
-      # previous line; getTextInRange includes it when endCol reaches line end.
-      BufferPosition(
-        line: endPos.line - 1, column: buffer.getLine(endPos.line - 1).charLen
-      )
-  buffer.getTextInRange(startPos, endIncl)
-
-proc replayCountedInsert(buffer: TextBuffer, state: EditorState) =
-  ## Replay the just-typed text (count - 1) more times for [count]i/a/I/A/o/O,
-  ## matching Vim. Runs while the Insert transaction is still open so every
-  ## repeat shares one undo group, and before the cursor is pulled back into
-  ## Normal mode. No-op for substitute inserts (s/S/cc), which use the count to
-  ## drive their own delete and never set insertReplayCount. Visual-block insert
-  ## likewise never carries a replay count, and its context is already cleared by
-  ## the caller before we run, so no guard for it is needed here.
-  let count = state.editState.insertReplayCount
-  if count <= 1 or state.editState.insertModeStartPos.isNone or
-      state.editState.substituteContext.isSome:
-    return
-
-  let startPos = state.editState.insertModeStartPos.get
-  var cursor = state.cursor
-  let typed = typedTextInRange(buffer, startPos, cursor)
-  if typed.len == 0:
-    return
-
-  var unit = typed
-  if state.editState.insertReplayLineEntry:
-    # o/O opened the first line already; each repeat opens another line that
-    # carries the entry line's indentation.
-    let entryLine = buffer.getLine(startPos.line)
-    let indentLen = min(startPos.column, entryLine.charLen)
-    unit = "\n" & entryLine.charSubStr(0, indentLen) & typed
-
-  for _ in 1 ..< count:
-    # Take the next position from the insertion itself: counting `unit` on its
-    # own would miscount a character completed over the seam.
-    let inserted = buffer.insertTextEnd(cursor, unit)
-    if inserted.isErr:
-      break
-    cursor = inserted.get.cursor
-  state.cursor = cursor
-
-proc beginInsertModeSession*(
-    buffer: TextBuffer, state: EditorState, replayCount = 0, replayLineEntry = false
-): Result[void, string] =
-  ## Begin the transaction and tracking shared by all ordinary Insert entries.
-  ## An existing transaction belongs to an entry command that edited the buffer
-  ## before returning its mode transition.
-  if not buffer.inTransaction:
-    let transactionResult =
-      buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
-    if transactionResult.isErr:
-      return err(transactionResult.error)
-
-  if state.editState.insertModeStartPos.isNone:
-    state.editState.insertModeStartPos = some(state.cursor)
-    state.editState.insertReplayCount = replayCount
-    state.editState.insertReplayLineEntry = replayLineEntry
-
-  ok()
-
-proc recordLastInsertEdit(transaction: buffer.BufferTransaction, state: EditorState) =
-  let insertedText = extractInsertedText(transaction)
-  if insertedText.len == 0 or state.editState.insertModeStartPos.isNone:
-    return
-
-  if state.editState.substituteContext.isSome:
-    let subCtx = state.editState.substituteContext.get
-    state.editState.lastEditCommand = some(
-      types.LastEditCommand(
-        kind: types.lecSubstitute,
-        substituteText: insertedText,
-        substituteCount: subCtx.deleteCount,
-        substituteKind: subCtx.kind,
-      )
-    )
-  else:
-    state.editState.lastEditCommand = some(
-      types.LastEditCommand(
-        kind: types.lecInsertText,
-        insertedText: insertedText,
-        insertPosition: state.editState.insertModeStartPos.get,
-      )
-    )
-
 proc commitInsertModeBoundary*(
     buffer: TextBuffer, state: EditorState
 ): Result[void, string] =
-  ## Commit one Insert-mode undo group without leaving Insert mode. Unlike an
-  ## Escape or Ctrl-C exit, this keeps snippet and auto-indent state active.
-  if buffer.currentTransaction.isSome:
-    recordLastInsertEdit(buffer.currentTransaction.get, state)
-
-  state.editState.insertModeStartPos = none(BufferPosition)
-  state.editState.insertReplayCount = 0
-  state.editState.insertReplayLineEntry = false
-  state.editState.substituteContext = none(types.SubstituteContext)
-
+  ## Commit one Insert-mode undo group without leaving Insert mode: snippet and
+  ## auto-indent state stay active, and what `.` repeats goes on.
   if buffer.inTransaction:
     let transactionResult = buffer.commitTransaction()
     if transactionResult.isErr:
@@ -264,37 +96,20 @@ proc replicateBlockInsert*(buffer: TextBuffer, state: EditorState): string =
   ""
 
 proc finalizeInsertExit*(
-    buffer: TextBuffer, state: EditorState, ctrlO = false
+    buffer: TextBuffer, state: EditorState
 ): Result[string, string] =
-  ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, `.`-repeat +
-  ## `[count]i` bookkeeping, visual-block replication, insert-state reset, and
-  ## transaction commit. Called by the Escape path, the imap -> Command-mode
-  ## alias bridge, and Ctrl-o, so none of them skips the cleanup. Ctrl-o drops
-  ## the count, as Vim does.
+  ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, the end of what
+  ## `.` repeats, visual-block replication and transaction commit.
   ##
-  ## ok carries a non-fatal warning to surface (empty when clean): the
-  ## transaction is committed at that point, so the message must not block the
-  ## mode transition or a pending aliased command. err is a fatal commit
-  ## failure.
+  ## ok carries a non-fatal warning to surface (empty when clean), which must
+  ## not block the mode transition. err is a fatal commit failure.
   state.snippetSession.active = false
-  if ctrlO:
-    state.editState.insertReplayCount = 0
+  state.endInsertRecord()
 
   clearAutoIndentIfUnedited(buffer, state)
 
-  if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
-    let transaction = buffer.currentTransaction.get
-    recordLastInsertEdit(transaction, state)
-    # Replay before commit so [count]i repeats share the same undo group.
-    replayCountedInsert(buffer, state)
-
-  # After recording, so `.` repeats what was typed, not the copies.
+  # Not typed, so `.` repeats what was typed, not the copies.
   let replicationError = replicateBlockInsert(buffer, state)
-
-  state.editState.insertModeStartPos = none(BufferPosition)
-  state.editState.insertReplayCount = 0
-  state.editState.insertReplayLineEntry = false
-  state.editState.substituteContext = none(types.SubstituteContext)
 
   if buffer.inTransaction:
     let transactionResult = buffer.commitTransaction()
@@ -312,9 +127,10 @@ proc finalizeInsertExit*(
 proc finalizeInsertInterrupt*(
     buffer: TextBuffer, state: EditorState
 ): Result[void, string] =
-  ## Finish Insert mode for Ctrl-C without Escape-only count replay or visual
-  ## block replication. The typed text is still recorded for dot-repeat.
+  ## Finish Insert mode for Ctrl-C without the count's repeats or visual-block
+  ## replication.
   state.snippetSession.active = false
+  state.endInsertRecord()
   clearAutoIndentIfUnedited(buffer, state)
 
   state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
@@ -335,12 +151,71 @@ proc leaveInsertForCtrlO(state: EditorState, buffer: TextBuffer) =
     state.cursor.column = lineLen - 1
     state.preferredColumn = wanted
 
+proc leaveInsert*(
+    manager: HandlerManager, editor: Editor, target = EditorMode.Normal, thenExec = ""
+): HandlerResult =
+  ## Leave Insert as Escape does, running the command line `thenExec` after if
+  ## given. A count types the record again first (`3ifoo`, `2o`).
+  let buffer = editor.activeBuffer
+  let state = editor.state
+  manager.insertHandler.closeInsertPopups()
+  let times = state.editState.typing.repeatsLeft
+  if target == EditorMode.Normal and state.editState.typing.open and times > 0:
+    state.editState.typing.repeatsLeft = 0
+    let record = state.editState.insertRecord
+    return HandlerResult(
+      kind: hrRepeatInsert,
+      repeatTyped: record.typed,
+      repeatTimes: times,
+      repeatNewLine:
+        if record.entry.kind in {ieOpenBelow, ieOpenAbove}:
+          some(state.editState.typing.linesBelow)
+        else:
+          none(int),
+      repeatLeave: true,
+      repeatThenExec: thenExec,
+    )
+  let finalizeResult = finalizeInsertExit(buffer, state)
+  if thenExec.len > 0:
+    if finalizeResult.isErr:
+      return HandlerResult(kind: hrError, errorMessage: finalizeResult.error)
+    if finalizeResult.get.len > 0:
+      # Committed with a partial-replication warning: surface it but run the
+      # command anyway, the session being finalized already.
+      state.statusMessage = finalizeResult.get
+    return
+      HandlerResult(kind: hrExecCommand, execCommandText: thenExec, execCommandCount: 1)
+  # Even on failure, allow the mode transition so the user is not stuck in Insert.
+  HandlerResult(
+    kind: hrHandled,
+    modeTransition: some(target),
+    statusMessage:
+      if finalizeResult.isErr: finalizeResult.error else: finalizeResult.get,
+  )
+
+proc typeText*(
+    manager: HandlerManager, editor: Editor, typed: TypedInput
+): HandlerResult =
+  ## Put text in at the cursor as typed (a paste, or text `.` types again).
+  let state = editor.state
+  state.noteOutsideChange()
+  let r = typeTextAgain(editor.activeBuffer, state, typed)
+  if r.isErr:
+    return HandlerResult(kind: hrError, errorMessage: r.error)
+  state.noteTyped([typed])
+  state.settleTyping()
+  HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
+
 proc handleInsertMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
   ## Handle Insert mode input
   let buffer = editor.activeBuffer
   let state = editor.state
+  state.noteOutsideChange()
+  let
+    cursorBefore = state.cursor
+    versionBefore = buffer.contentVersion
   let r = manager.insertHandler.handleInsertModeKey(buffer, state, keyCombo)
   case r.kind
   of imrHandled:
@@ -349,6 +224,7 @@ proc handleInsertMode*(
       # Forced Insert mode uses Ctrl-o as its built-in route to Command mode.
       # It ends a Visual-block insert, as in Vim.
       if state.config.standard.forceInsertMode and r.isCtrlOExit:
+        state.closeInsertRecord()
         let replicationError = replicateBlockInsert(buffer, state)
         return HandlerResult(
           kind: hrHandled,
@@ -365,12 +241,14 @@ proc handleInsertMode*(
       # resumes with a new session once it is done (settleInsertResume). A
       # session that cannot commit leaves Insert as Escape does, cursor and
       # all, without the wait, so Insert does not resume over the open
-      # transaction.
+      # transaction. The count is not typed again.
       if r.isCtrlOExit:
-        let finalizeResult = finalizeInsertExit(buffer, state, ctrlO = true)
+        let inChange = state.editState.typing.open
+        let finalizeResult = finalizeInsertExit(buffer, state)
         if finalizeResult.isOk:
           state.leaveInsertForCtrlO(buffer)
           state.insertResume = irWaiting
+          state.insertResumeInChange = inChange
         return HandlerResult(
           kind: hrHandled,
           modeTransition: r.modeTransition,
@@ -388,39 +266,39 @@ proc handleInsertMode*(
           statusMessage: if interruptResult.isErr: interruptResult.error else: "",
         )
 
-      let finalizeResult = finalizeInsertExit(buffer, state)
-      # Even on failure, allow mode transition so user isn't stuck in Insert
-      # mode. A committed replication warning (ok with a message) surfaces the
-      # same way.
-      return HandlerResult(
-        kind: hrHandled,
-        modeTransition: r.modeTransition,
-        statusMessage:
-          if finalizeResult.isErr: finalizeResult.error else: finalizeResult.get,
-      )
+      return manager.leaveInsert(editor, r.modeTransition.get)
+    state.noteKey(
+      buffer, keyCombo, r.typedBefore, r.keyConsumed, r.moves, cursorBefore,
+      versionBefore,
+    )
+    state.settleTyping()
     return HandlerResult(
       kind: hrHandled,
       modeTransition: r.modeTransition,
       overlayTransition: r.overlayTransition,
       statusMessage: "",
     )
+  of imrTypeAgain:
+    if state.editState.lastInserted.isNone:
+      # Vim's E29; Ctrl-@ still leaves Insert.
+      const noneYet = "E29: No inserted text yet"
+      if not r.thenLeave:
+        return HandlerResult(kind: hrError, errorMessage: noneYet)
+      state.statusMessage = noneYet
+      return manager.leaveInsert(editor)
+    return HandlerResult(
+      kind: hrRepeatInsert,
+      repeatTyped: state.editState.lastInserted.get,
+      repeatTimes: 1,
+      repeatAsTyping: true,
+      repeatLeave: r.thenLeave,
+    )
   of imrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of imrExecCommand:
-    # `imap K = "bdelete"` bridge: run the full leaving-Insert finalize so
-    # `.` repeat, `[count]i` replay, and substituteContext / block-insert
-    # cleanup all fire before the aliased command runs.
-    let finalizeResult = finalizeInsertExit(buffer, state)
-    if finalizeResult.isErr:
-      return HandlerResult(kind: hrError, errorMessage: finalizeResult.error)
-    if finalizeResult.get.len > 0:
-      # Committed with a partial-replication warning: surface it but run the
-      # alias anyway. The session is already finalized, and aborting here would
-      # leave Insert mode without a transaction.
-      state.statusMessage = finalizeResult.get
-    return HandlerResult(
-      kind: hrExecCommand, execCommandText: r.execCommandText, execCommandCount: 1
-    )
+    # `imap K = "bdelete"` bridge: leave Insert as `<Esc>:bdelete<CR>` would,
+    # cleanup and all, before the aliased command runs.
+    return manager.leaveInsert(editor, thenExec = r.execCommandText)
   of imrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -550,7 +428,8 @@ proc handleVisualMode*(
             kind: hrError,
             errorMessage: "Failed to begin transaction: " & transactionResult.error,
           )
-      state.editState.insertModeStartPos = some(state.cursor)
+      # `.` inserts what is typed at the cursor; it does not take a selection.
+      state.startInsertRecord(InsertEntry(kind: ieInsert), 1)
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
