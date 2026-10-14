@@ -125,6 +125,7 @@ type
 
   DiagnosticReport* = object ## One source's latest diagnostics, in start order.
     items*: seq[BufferDiagnostic]
+    owner*: string ## Who made the report, such as the language server's id
 
   BufferDiagnostics* = array[DiagnosticSource, DiagnosticReport]
 
@@ -1701,9 +1702,10 @@ proc setDiagnostics*(
     source: DiagnosticSource,
     items: sink seq[BufferDiagnostic],
     awaited = 0,
+    owner = "",
 ): bool {.discardable.} =
-  ## Replace `source` diagnostics, saying whether taken. Moves the `awaited`
-  ## report across edits since; drops it after. Empty ranges collapse.
+  ## Replace `source` diagnostics with `owner`'s, saying whether taken. Moves
+  ## the `awaited` report across edits since; drops it after. Empty ranges collapse.
   var
     items = items
     edits: seq[SpanEdit]
@@ -1735,7 +1737,7 @@ proc setDiagnostics*(
         items[kept] = move(items[i])
       inc kept
   items.setLen(kept)
-  b.diagnostics[source] = DiagnosticReport(items: move(items))
+  b.diagnostics[source] = DiagnosticReport(items: move(items), owner: owner)
   if source == dsrcLsp:
     b.highlightNeedsUpdate = true
     b.diagnosticsDirty = true

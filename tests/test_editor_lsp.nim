@@ -410,7 +410,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     e.addBuffer(other)
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-other.nim"), oneDiagnostic("on other"), none(int)
+      "nim", pathToUri("/tmp/moe-diag-other.nim"), oneDiagnostic("on other"), none(int)
     )
 
     check other.diagnostics[dsrcLsp].items.len == 1
@@ -424,7 +424,10 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.filePath = some("/tmp/moe-diag-active.nim")
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-active.nim"), oneDiagnostic("on active"), none(int)
+      "nim",
+      pathToUri("/tmp/moe-diag-active.nim"),
+      oneDiagnostic("on active"),
+      none(int),
     )
     check activeBuffer.diagnostics[dsrcLsp].items.len == 1
 
@@ -435,9 +438,77 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.filePath = some("/tmp/moe-diag-active.nim")
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-nonexistent.nim"), oneDiagnostic("nowhere"), none(int)
+      "nim",
+      pathToUri("/tmp/moe-diag-nonexistent.nim"),
+      oneDiagnostic("nowhere"),
+      none(int),
     )
     check activeBuffer.diagnostics[dsrcLsp].items.len == 0
+
+  test "drops a publish from a server that does not serve the buffer":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some("/tmp/moe-diag-owner.nim")
+    let uri = pathToUri("/tmp/moe-diag-owner.nim")
+
+    e.applyDiagnosticsForUri("rust", uri, oneDiagnostic("foreign"), none(int))
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 0
+
+    e.applyDiagnosticsForUri("nim", uri, oneDiagnostic("own"), none(int))
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 1
+    check activeBuffer.diagnostics[dsrcLsp].owner == "nim"
+
+  test "a buffer the server does not serve passes the publish on to one it does":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let dir = getTempDir() / "moe_test_diag_link"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    writeFile(path, "x")
+    createSymlink(path, dir / "a")
+    e.activeBuffer().filePath = some(dir / "a")
+    let served = newTextBuffer("x", some(path))
+    e.addBuffer(served)
+
+    e.applyDiagnosticsForUri("nim", pathToUri(path), oneDiagnostic("own"), none(int))
+
+    check e.activeBuffer().diagnostics[dsrcLsp].items.len == 0
+    check served.diagnostics[dsrcLsp].items.len == 1
+
+  test "a buffer the server does not serve passes the publish on with its diagnostics off":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.config.lsp.languageFeatures["rust"] = {"Diagnostics": false}.toTable
+    let dir = getTempDir() / "moe_test_diag_link_off"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    writeFile(path, "x")
+    createSymlink(path, dir / "a.rs")
+    e.activeBuffer().filePath = some(dir / "a.rs")
+    let served = newTextBuffer("x", some(path))
+    e.addBuffer(served)
+
+    e.applyDiagnosticsForUri("nim", pathToUri(path), oneDiagnostic("own"), none(int))
+
+    check served.diagnostics[dsrcLsp].items.len == 1
+
+  test "drops a late publish for a buffer no server serves any more":
+    # A server dropped from the config keeps running until :lspRestart.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let path = getTempDir() / "moe_test_diag_late.unknownlspext"
+    let buf = newTextBuffer("x", some(path))
+    e.addBuffer(buf)
+    check e.lsp.lspParticipation(buf) == lpNoServer
+
+    e.applyDiagnosticsForUri("nim", pathToUri(path), oneDiagnostic("late"), none(int))
+
+    check buf.diagnostics[dsrcLsp].items.len == 0
 
   test "matches when buffer path has unnormalized segments vs normalized URI":
     # absolutePath is a no-op on absolute paths, so both sides must go
@@ -453,7 +524,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.filePath = some(unnormalized)
 
     e.applyDiagnosticsForUri(
-      pathToUri(normalized), oneDiagnostic("via normalized"), none(int)
+      "nim", pathToUri(normalized), oneDiagnostic("via normalized"), none(int)
     )
 
     check activeBuffer.diagnostics[dsrcLsp].items.len == 1
@@ -470,7 +541,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.keepRaw = true
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-raw.nim"), oneDiagnostic("stale"), none(int)
+      "nim", pathToUri("/tmp/moe-diag-raw.nim"), oneDiagnostic("stale"), none(int)
     )
 
     check activeBuffer.diagnostics[dsrcLsp].items.len == 0
@@ -485,7 +556,9 @@ suite "editor_lsp - applyDiagnosticsForUri":
     let path = getTempDir() / "moe_test_diag_disabled.nim"
     activeBuffer.filePath = some(path)
 
-    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("dropped"), none(int))
+    e.applyDiagnosticsForUri(
+      "nim", pathToUri(path), oneDiagnostic("dropped"), none(int)
+    )
 
     check activeBuffer.diagnostics[dsrcLsp].items.len == 0
     check activeBuffer.diagnosticMarker(0).isNone
@@ -504,7 +577,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
 
     # An in-flight publish tagged with version=1 arrives after we've already
     # sent version=2. It must be dropped.
-    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("stale"), some(1))
+    e.applyDiagnosticsForUri("nim", pathToUri(path), oneDiagnostic("stale"), some(1))
     check activeBuffer.diagnostics[dsrcLsp].items.len == 0
 
   test "applies publish whose version matches the last didChange":
@@ -515,7 +588,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.filePath = some(path)
     e.lsp.documents[path] = initLspDocumentState(1, "", delivered = true)
 
-    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("current"), some(1))
+    e.applyDiagnosticsForUri("nim", pathToUri(path), oneDiagnostic("current"), some(1))
     check activeBuffer.diagnostics[dsrcLsp].items.len == 1
     check activeBuffer.diagnostics[dsrcLsp].items[0].message == "current"
 
@@ -529,9 +602,11 @@ suite "editor_lsp - applyDiagnosticsForUri":
       initLspDocumentState(1, buf.getTextString(), delivered = true)
     check buf.insertText(BufferPosition(line: 0, column: 0), "\n").isOk
 
-    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("before"), some(1))
+    e.applyDiagnosticsForUri("nim", pathToUri(path), oneDiagnostic("before"), some(1))
     check buf.diagnostics[dsrcLsp].items.len == 0
-    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("untagged"), none(int))
+    e.applyDiagnosticsForUri(
+      "nim", pathToUri(path), oneDiagnostic("untagged"), none(int)
+    )
     check buf.diagnostics[dsrcLsp].items.len == 1
 
   test "applies a publish once the edits since leave the text the server has":
@@ -545,7 +620,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     check buf.insertText(BufferPosition(line: 0, column: 0), "\n").isOk
     check buf.undo().isOk
 
-    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("current"), some(1))
+    e.applyDiagnosticsForUri("nim", pathToUri(path), oneDiagnostic("current"), some(1))
     check buf.diagnostics[dsrcLsp].items.len == 1
 
   test "applies publish with no version (backward compatible)":
@@ -556,7 +631,9 @@ suite "editor_lsp - applyDiagnosticsForUri":
     let activeBuffer = e.activeBuffer()
     activeBuffer.filePath = some(path)
 
-    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("untagged"), none(int))
+    e.applyDiagnosticsForUri(
+      "nim", pathToUri(path), oneDiagnostic("untagged"), none(int)
+    )
     check activeBuffer.diagnostics[dsrcLsp].items.len == 1
 
   test "routes diagnostics aimed at a symlink's real path to the holder":
@@ -576,12 +653,95 @@ suite "editor_lsp - applyDiagnosticsForUri":
       activeBuffer.filePath = some(link)
       let didOpenKey = normalizedPath(absolutePath(link))
       e.lsp.documents[didOpenKey] = initLspDocumentState(1, "", delivered = true)
+      e.lsp.openedPaths[activeBuffer.id] = didOpenKey
 
-      e.applyDiagnosticsForUri(pathToUri(real), oneDiagnostic("via real"), some(1))
+      e.applyDiagnosticsForUri(
+        "nim", pathToUri(real), oneDiagnostic("via real"), some(1)
+      )
       check activeBuffer.diagnostics[dsrcLsp].items.len == 1
       check activeBuffer.diagnostics[dsrcLsp].items[0].message == "via real"
     else:
       skip()
+
+  test "drops a publish for the spelling a buffer left once the server names its own":
+    when defined(posix):
+      let e = createTestEditor()
+      e.lsp.enabled = true
+      let dir = getTempDir() / "moe_test_diag_left"
+      createDir(dir)
+      defer:
+        removeDir(dir)
+      let left = dir / "a.nim"
+      let link = dir / "link.nim"
+      writeFile(left, "x\n")
+      createSymlink(left, link)
+
+      # Saved from `a.nim` under `link.nim`, another spelling of the same file.
+      let buf = e.activeBuffer()
+      buf.filePath = some(link)
+      let didOpenKey = normalizedPath(absolutePath(link))
+      e.lsp.documents[didOpenKey] = initLspDocumentState(1, "", delivered = true)
+      e.lsp.openedPaths[buf.id] = didOpenKey
+
+      e.applyDiagnosticsForUri("nim", pathToUri(link), oneDiagnostic("own"), none(int))
+      # The server answers the close of `a.nim` after the open of `link.nim`.
+      e.applyDiagnosticsForUri(
+        "nim", pathToUri(left), newSeq[lspTypes.Diagnostic](), none(int)
+      )
+
+      check buf.diagnostics[dsrcLsp].items.len == 1
+      check buf.diagnostics[dsrcLsp].items[0].message == "own"
+    else:
+      skip()
+
+suite "editor_lsp - save-as":
+  test "saving under another path drops the diagnostics published for the old one":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    # No server, so the save spawns none.
+    e.lsp.service.liveWorkerOverride = proc(path: string): bool =
+      false
+    let original = getTempDir() / "moe_test_saveas_lsp_orig.nim"
+    let target = getTempDir() / "moe_test_saveas_lsp_target.nim"
+    writeFile(original, "x\n")
+    defer:
+      removeFile(original)
+      if fileExists(target):
+        removeFile(target)
+    let buf = e.activeBuffer()
+    check buf.loadFile(original).isOk
+    let key = canonicalPath(original)
+    e.lsp.documents[key] = initLspDocumentState(1, "x\n", delivered = true)
+    e.lsp.openedPaths[buf.id] = key
+    applyDiagnosticsToBuffer(
+      buf, "nim", @[lspTypes.Diagnostic(`range`: lspTypes.newRange(0, 0, 0, 1))]
+    )
+
+    check e.saveFile(buf, some(target)).isOk
+
+    check buf.diagnostics[dsrcLsp].items.len == 0
+    check e.lsp.openedPaths[buf.id] == canonicalPath(target)
+
+suite "editor_lsp - onLspServerLost":
+  test "drops the diagnostics the lost server published, and only those":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let lost = e.activeBuffer()
+    lost.filePath = some(getTempDir() / "moe_test_diag_lost.nim")
+    let kept = newTextBuffer("x", some(getTempDir() / "moe_test_diag_kept.rs"))
+    e.addBuffer(kept)
+    let diag = @[lspTypes.Diagnostic(`range`: lspTypes.newRange(0, 0, 0, 1))]
+    applyDiagnosticsToBuffer(lost, "nim", diag)
+    applyDiagnosticsToBuffer(kept, "rust", diag)
+    lost.setDiagnostics(
+      dsrcSyntaxCheck, @[BufferDiagnostic(startLine: 0, endLine: 0, severity: bdsError)]
+    )
+
+    e.onLspServerLost("nim")
+
+    check lost.diagnostics[dsrcLsp].items.len == 0
+    check lost.diagnostics[dsrcSyntaxCheck].items.len == 1
+    check kept.diagnostics[dsrcLsp].items.len == 1
 
 suite "editor_lsp - clearDisabledLspState":
   test "clears stored diagnostics and markers from all buffers when disabled":
@@ -602,8 +762,8 @@ suite "editor_lsp - clearDisabledLspState":
         message: "boom",
       )
     ]
-    e.applyDiagnosticsForUri(pathToUri(activePath), diag, none(int))
-    e.applyDiagnosticsForUri(pathToUri(otherPath), diag, none(int))
+    e.applyDiagnosticsForUri("nim", pathToUri(activePath), diag, none(int))
+    e.applyDiagnosticsForUri("nim", pathToUri(otherPath), diag, none(int))
     check activeBuffer.diagnostics[dsrcLsp].items.len == 1
     check other.diagnostics[dsrcLsp].items.len == 1
     check activeBuffer.diagnosticMarker(0).isSome
@@ -633,6 +793,46 @@ suite "editor_lsp - clearDisabledLspState":
 
     check buf.diagnosticMarker(0) == some(LineMarkerKind.SyntaxError)
     check not buf.diagnosticsDirty
+
+  proc seedLspDiagnostics(buf: TextBuffer, langId: string) =
+    applyDiagnosticsToBuffer(
+      buf, langId, @[lspTypes.Diagnostic(`range`: lspTypes.newRange(0, 0, 0, 1))]
+    )
+
+  test "drops diagnostics from buffers no server serves any more":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let served = e.activeBuffer()
+    served.filePath = some(getTempDir() / "moe_test_diag_served.nim")
+    let unserved =
+      newTextBuffer("x", some(getTempDir() / "moe_test_diag_unserved.unknownlspext"))
+    e.addBuffer(unserved)
+    served.seedLspDiagnostics("nim")
+    unserved.seedLspDiagnostics("nim")
+    check e.lsp.lspParticipation(unserved) == lpNoServer
+
+    e.clearDisabledLspState()
+
+    check served.diagnosticMarker(0).isSome
+    check unserved.diagnostics[dsrcLsp].items.len == 0
+    check unserved.diagnosticMarker(0).isNone
+
+  test "drops diagnostics from a server that no longer serves the buffer":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let buf = e.activeBuffer()
+    buf.filePath = some(getTempDir() / "moe_test_diag_moved.nim")
+    buf.seedLspDiagnostics("nimlegacy")
+    buf.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[BufferDiagnostic(startLine: 0, endLine: 0, severity: bdsWarning)],
+    )
+
+    e.clearDisabledLspState()
+
+    check buf.diagnostics[dsrcLsp].items.len == 0
+    check buf.diagnosticMarker(0) == some(LineMarkerKind.SyntaxWarning)
+    check buf.diagnostics[dsrcLsp].owner == ""
 
   test "drops the painted semantic overlay when semantic tokens are disabled":
     let e = createTestEditor()
@@ -719,8 +919,8 @@ suite "editor_lsp - clearDisabledLspState":
         message: "boom",
       )
     ]
-    e.applyDiagnosticsForUri(pathToUri(nimPath), diag, none(int))
-    e.applyDiagnosticsForUri(pathToUri(rustPath), diag, none(int))
+    e.applyDiagnosticsForUri("nim", pathToUri(nimPath), diag, none(int))
+    e.applyDiagnosticsForUri("rust", pathToUri(rustPath), diag, none(int))
 
     e.config.lsp.languageFeatures["nim"] = {"Diagnostics": false}.toTable
     e.clearDisabledLspState()

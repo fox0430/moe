@@ -752,6 +752,9 @@ proc saveFile*(
     return Result[(), string].err written.error
 
   buffer.markSaved()
+  if buffer.filePath.isNone or not samePath(buffer.filePath.get, path):
+    # The check ran on the former path; the LSP layer drops its own report.
+    buffer.clearDiagnostics({dsrcSyntaxCheck})
   buffer.filePath = some(path)
 
   buffer.noteFileStamp(path)

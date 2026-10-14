@@ -171,6 +171,8 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
     lastProgressCleanupTime: 0.0,
     serverStatus: initTable[string, LspStatusState](),
     semanticTypeColorTables: initTable[string, SemanticTypeColorTable](),
+    onServerLost: proc(langId: string) {.gcsafe, raises: [].} =
+      discard,
   )
 
   # Set up internal callback to collect LSP log messages for display
@@ -185,6 +187,7 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   svc.onServerLost = proc(langId: string) {.gcsafe, raises: [].} =
     {.cast(gcsafe).}:
       lsp.forgetServerDocuments(langId)
+      lsp.onServerLost(langId)
 
   # A document write outcome confirms the shadow or retracts it.
   svc.onSyncAck = proc(
@@ -380,8 +383,9 @@ proc getProgressText*(state: LspProgressState): string =
 
 proc setDiagnosticsCallback*(
     lsp: LspIntegration,
-    callback:
-      proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.},
+    callback: proc(
+      langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    ) {.gcsafe.},
 ) =
   ## Set callback for diagnostics updates
   lsp.service.onDiagnosticsUpdate = callback
@@ -400,6 +404,13 @@ proc setServerRestartCallback*(
   ## The editor uses it to re-open buffers so diagnostics/completion recover
   ## without a manual `:lspRestart`.
   lsp.service.onServerRestart = callback
+
+proc setServerLostCallback*(
+    lsp: LspIntegration, callback: proc(langId: string) {.gcsafe, raises: [].}
+) =
+  ## Set callback invoked when a language server goes away, after the
+  ## documents it held are retracted.
+  lsp.onServerLost = callback
 
 proc setApplyEditCallback*(
     lsp: LspIntegration,
@@ -431,8 +442,8 @@ proc lspParticipation*(lsp: LspIntegration, buffer: TextBuffer): LspParticipatio
     return lpNoServer
   lpParticipates
 
-proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
-  ## Resolve language ID for buffer, or none if unavailable.
+proc requireLangId*(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
+  ## The language, and so the server, serving `buffer`, or none if unavailable.
   if not lsp.enabled or buffer.filePath.isNone:
     return none(string)
   lsp.service.getLanguageIdFromPath(buffer.filePath.get)
@@ -576,13 +587,22 @@ proc dropPathUnlessClaimed(lsp: LspIntegration, path: string, notify = true) =
   else:
     lsp.documents.del(path)
 
-proc releaseClaim(lsp: LspIntegration, buffer: TextBuffer, keep = "", notify = true) =
-  ## Release `buffer`'s claim unless it equals `keep`.
+proc releaseClaim(
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    keep = "",
+    notify = true,
+    keepDiagnostics = false,
+) =
+  ## Release `buffer`'s claim unless it equals `keep`, and the diagnostics
+  ## published for it unless `keepDiagnostics`.
   let owned = lsp.openedPaths.getOrDefault(buffer.id, "")
   if owned.len == 0 or owned == keep:
     return
   lsp.openedPaths.del(buffer.id)
   lsp.dropPathUnlessClaimed(owned, notify)
+  if not keepDiagnostics:
+    buffer.clearDiagnostics({dsrcLsp})
 
 proc claimDocument(
     lsp: LspIntegration, buffer: TextBuffer, path: string, notify = true
@@ -674,7 +694,8 @@ proc onBufferOpen*(
 proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer) =
   ## Called when a buffer is closed. Only send didClose if didOpen was delivered.
   # Release the claim even with LSP off; the record names renamed paths.
-  lsp.releaseClaim(buffer, notify = lsp.enabled)
+  # Diagnostics stay: a reload re-opens, and its publish replaces them.
+  lsp.releaseClaim(buffer, notify = lsp.enabled, keepDiagnostics = true)
 
   if not lsp.enabled or buffer.filePath.isNone:
     return
@@ -1207,6 +1228,18 @@ proc requestSyncGate*(
     else:
       # No edit or save reaches this server; let the request go.
       none(string)
+
+proc publishIsFor*(lsp: LspIntegration, buffer: TextBuffer, path: string): bool =
+  ## Whether a publish for `path`, a spelling of `buffer`'s file, is about the
+  ## document `buffer` handed the server; one under its URI is noted. Once the
+  ## server names the document as we do, another spelling names another, such
+  ## as the one the buffer left on a move.
+  let owned = lsp.openedPaths.getOrDefault(buffer.id, "")
+  if owned == path:
+    lsp.documents.withValue(owned, doc):
+      doc[].notePublishedUnderUri()
+    return true
+  owned notin lsp.documents or not lsp.documents[owned].publishedUnderUri
 
 proc isDocumentDelivered*(lsp: LspIntegration, path: string): bool =
   ## Whether didOpen for `path` was delivered.
@@ -1975,8 +2008,10 @@ proc applyWorkspaceEdit*(
   )
 
 # Diagnostic helpers
-proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic]) =
-  ## Replace the buffer's LSP diagnostics with a publish.
+proc applyDiagnosticsToBuffer*(
+    buffer: TextBuffer, langId: string, diagnostics: seq[Diagnostic]
+) =
+  ## Replace the buffer's LSP diagnostics with a publish of server `langId`.
   var items: seq[BufferDiagnostic]
   for diag in diagnostics:
     let startLine = diag.range.start.line
@@ -2014,7 +2049,7 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
         message: diag.message,
       )
     )
-  buffer.setDiagnostics(dsrcLsp, items)
+  buffer.setDiagnostics(dsrcLsp, items, owner = langId)
 
 proc formatDiagnosticsForHover*(diagnostics: seq[BufferDiagnostic]): string =
   ## Format diagnostics for display in hover popup

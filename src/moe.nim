@@ -480,8 +480,10 @@ proc main() {.used.} =
   # buffer matching the URI (not only the active one) so diagnostics for
   # background buffers aren't dropped.
   editor.lsp.setDiagnosticsCallback(
-    proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.} =
-      editor.applyDiagnosticsForUri(uri, diagnostics, version)
+    proc(
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    ) {.gcsafe.} =
+      editor.applyDiagnosticsForUri(langId, uri, diagnostics, version)
   )
 
   # Re-open buffers automatically when a language server recovers from a crash,
@@ -489,6 +491,12 @@ proc main() {.used.} =
   editor.lsp.setServerRestartCallback(
     proc(langId: string) {.gcsafe.} =
       editor.onLspServerRestart(langId)
+  )
+
+  # A server that went away leaves no one to replace its diagnostics.
+  editor.lsp.setServerLostCallback(
+    proc(langId: string) {.gcsafe, raises: [].} =
+      editor.onLspServerLost(langId)
   )
 
   # Apply server-initiated workspace/applyEdit requests (e.g. rust-analyzer

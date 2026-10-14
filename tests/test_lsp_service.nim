@@ -1117,12 +1117,14 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
 
   test "levDiagnostics is parsed and forwarded to the callback":
     let svc = newLspService()
+    var gotLangId = ""
     var gotUri = ""
     var gotDiags: seq[Diagnostic] = @[]
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       {.cast(gcsafe).}:
+        gotLangId = langId
         gotUri = uri
         gotDiags = diagnostics
     let diagsJson = $(
@@ -1141,6 +1143,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
         kind: levDiagnostics, diagUri: "file:///t.nim", diagnosticsJson: diagsJson
       ),
     )
+    check gotLangId == "nim"
     check gotUri == "file:///t.nim"
     check gotDiags.len == 1
     check gotDiags[0].message == "unused variable"
@@ -1149,7 +1152,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
     svc.processEvent(
@@ -1163,7 +1166,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
     for payload in ["null", "42", "{}", "\"x\""]:
@@ -1180,7 +1183,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     let svc = newLspService()
     var gotDiags: seq[Diagnostic] = @[]
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       {.cast(gcsafe).}:
         gotDiags = diagnostics
@@ -1634,10 +1637,10 @@ suite "LspService - Callback Setup":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
-    svc.onDiagnosticsUpdate("test", @[], none(int))
+    svc.onDiagnosticsUpdate("nim", "test", @[], none(int))
     check called
 
   test "can set custom onLogMessage callback":
@@ -1998,6 +2001,82 @@ suite "LspService - onServerLost":
     check lost == 1
 
     restarted.get.stop()
+
+  test "a publish queued before the death is dropped with it":
+    let svc = newLspService()
+    var called = false
+    svc.onDiagnosticsUpdate = proc(
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    ) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        called = true
+    let worker = svc.fakeWorker(lwsRunning)
+    svc.poll(0)
+
+    worker.enqueueEventForTest(
+      LspEvent(kind: levDiagnostics, diagUri: "file:///t.nim", diagnosticsJson: "[]")
+    )
+    worker.setStateForTest(lwsCrashed)
+    svc.poll(0)
+
+    check not called
+
+  test "a publish queued before a restart on the same thread is dropped":
+    proc waitForState(
+        worker: LspWorker, expected: LspWorkerState, timeoutMs = 5000
+    ): bool =
+      let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+      while getMonoTime() < deadline:
+        if worker.state == expected:
+          return true
+        sleep(10)
+      false
+
+    let svc = newLspService()
+    var published: seq[string]
+    svc.onDiagnosticsUpdate = proc(
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    ) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        published.add uri
+    svc.setConfig(
+      "crashlang",
+      LanguageServerConfig(
+        command: "true", args: @[], extensions: @["crashext"], enabled: true
+      ),
+    )
+    let worker = svc.startWorker("crashlang").get
+    check worker.waitForState(lwsCrashed)
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levDiagnostics,
+        diagUri: "file:///old.crashext",
+        diagnosticsJson: "[]",
+        diagGeneration: worker.serverGeneration,
+      )
+    )
+
+    # Restarted before a poll saw the death; the server lingers so it stays live.
+    svc.setConfig(
+      "crashlang",
+      LanguageServerConfig(
+        command: "sleep", args: @["1"], extensions: @["crashext"], enabled: true
+      ),
+    )
+    check svc.startWorker("crashlang").get == worker
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levDiagnostics,
+        diagUri: "file:///new.crashext",
+        diagnosticsJson: "[]",
+        diagGeneration: worker.serverGeneration,
+      )
+    )
+    svc.poll(0)
+
+    check published == @["file:///new.crashext"]
+
+    worker.stop()
 
   test "one death noticed twice is reported once":
     # Same dead generation reports once.

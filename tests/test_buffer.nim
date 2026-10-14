@@ -1981,7 +1981,99 @@ suite "Buffer - saveFile external modification guard":
     check res.error == ExternalModErrorMsg
     check readFile(path) == "external change"
 
+suite "Buffer - save-as drops the syntax check":
+  proc seedCheck(buf: TextBuffer, line = 0) =
+    buf.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[BufferDiagnostic(startLine: line, endLine: line, severity: bdsError)],
+    )
+
+  test "Saving under another path drops the check of the old one":
+    let original = getTempDir() / "moe_test_saveas_diag_orig.nim"
+    let target = getTempDir() / "moe_test_saveas_diag_target.txt"
+    writeFile(original, "hello")
+    defer:
+      removeFile(original)
+      if fileExists(target):
+        removeFile(target)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(original)
+    buf.seedCheck()
+
+    check buf.saveFile(target).isOk
+    check buf.diagnostics[dsrcSyntaxCheck].items.len == 0
+
+  test "Saving under another path drops a check still running on the old one":
+    let original = getTempDir() / "moe_test_saveas_check_orig.nim"
+    let target = getTempDir() / "moe_test_saveas_check_target.txt"
+    writeFile(original, "hello")
+    defer:
+      removeFile(original)
+      if fileExists(target):
+        removeFile(target)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(original)
+    let awaited = buf.awaitReport(dsrcSyntaxCheck)
+
+    check buf.saveFile(target).isOk
+    check not buf.setDiagnostics(
+      dsrcSyntaxCheck, @[BufferDiagnostic(startLine: 0, endLine: 0)], awaited
+    )
+    check buf.diagnostics[dsrcSyntaxCheck].items.len == 0
+
+  test "Saving the same file under another spelling keeps the check":
+    let name = "moe_test_saveas_diag_alias.nim"
+    let path = getTempDir() / name
+    # Built by hand rather than with `/`, which collapses `.` as it joins.
+    let alias = getTempDir() & "." & $DirSep & name
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    buf.seedCheck()
+
+    check buf.saveFile(alias).isOk
+    check buf.diagnostics[dsrcSyntaxCheck].items.len == 1
+
+  for backend in [GapBuffer, PieceTable]:
+    test "Undo and redo do not bring the dropped check back [" & $backend & "]":
+      let target = getTempDir() / "moe_test_saveas_diag_undo.txt"
+      defer:
+        if fileExists(target):
+          removeFile(target)
+      let buf = newTextBuffer(
+        "a\nb\nc", some(getTempDir() / "moe_test_saveas_diag_undo.nim"), backend
+      )
+      buf.setLineMarker(2, LineMarkerKind.GitChanged)
+      buf.seedCheck(2)
+      check buf.insert(0, "new").isOk
+
+      check buf.saveFile(target).isOk
+      check buf.undo().isOk
+      check buf.getLineMarker(2) == some(LineMarkerKind.GitChanged)
+      check buf.diagnosticMarker(2).isNone
+      check buf.redo().isOk
+      check buf.getLineMarker(3) == some(LineMarkerKind.GitChanged)
+      check buf.diagnosticMarker(3).isNone
+
 suite "Buffer - reloadFile":
+  test "A load forgets the server of its diagnostics":
+    let path = getTempDir() / "moe_test_load_diag_state.txt"
+    writeFile(path, "a\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    buf.setDiagnostics(dsrcLsp, @[BufferDiagnostic()], owner = "nim")
+
+    check buf.loadFile(path).isOk
+
+    check buf.diagnostics[dsrcLsp].owner == ""
+
   test "Returns error when buffer has no file path":
     let buf = newTextBuffer("hello")
     let res = buf.reloadFile()
