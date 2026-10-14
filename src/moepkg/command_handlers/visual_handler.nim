@@ -198,17 +198,15 @@ proc handleVisualModeKey*(
         else:
           return VisualModeResult(kind: vmrError, errorMessage: cmdResult.error)
       else:
-        # Not a text object key - cancel pending state with feedback. Clear the
-        # pending operator too (matching the Normal handler) so no stale operator
-        # is left armed.
-        state.pendingInput.pendingTextObject = none(PendingTextObject)
-        state.pendingInput.pendingOperator = none(PendingOperator)
+        # Not a text object key - cancel pending state with feedback.
+        state.pendingInput.cancelOperatorPending()
         state.statusMessage = "Not a text object: " & keyCombo.char
         return VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
     else:
-      # Special key or key with modifiers - cancel pending state
-      state.pendingInput.pendingTextObject = none(PendingTextObject)
-      # Fall through to process the key normally
+      # Special key or key with modifiers: not a text object either, and used
+      # up by the `i`/`a` it ends, as in Vim (`vi<Left>` does not move).
+      state.pendingInput.cancelOperatorPending()
+      return VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
 
   # Resolve the key through the shared built-in decode entry (`resolveBuiltin`)
   # — the same path the Normal dispatcher uses. For VisualBlock/VisualLine, fall
@@ -236,7 +234,9 @@ proc handleVisualModeKey*(
     # Escape cleared a pending sequence; stay in visual mode.
     return VisualModeResult(kind: vmrUnhandled)
   else:
-    # rrUnhandled: no user mapping found.
+    # rrUnhandled: no user mapping found. The key ends the command being
+    # built, so a count or register typed before it goes.
+    handler.keyBindingRegistry.clearSequence()
     # ESC/C-c with no user mapping returns to previousMode.
     if (keyCombo.isSpecial and keyCombo.special == skEscape) or (
       not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == "c"
@@ -270,13 +270,9 @@ proc handleVisualModeKey*(
     if cmd.commandId == "lsp.selection.range":
       return VisualModeResult(kind: vmrLspSelectionRange)
 
-  # Create command context
-  let ctx = CommandContext(
-    buffer: buffer,
-    state: state,
-    viewport: viewport,
-    motionController: handler.motionController,
-    keyBindingRegistry: handler.keyBindingRegistry,
+  let ctx = newCommandContext(
+    buffer, state, viewport, handler.motionController, handler.keyBindingRegistry,
+    cmd.register,
   )
 
   # Execute command through registry

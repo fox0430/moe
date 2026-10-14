@@ -275,6 +275,7 @@
 | <kbd>**"**</kbd> <kbd>**Any key**</kbd> <kbd>**d**</kbd> <kbd>**h**</kbd> | Delete a character before cursor to a named register |
 | <kbd>**"**</kbd> <kbd>**Any key**</kbd> <kbd>**c**</kbd> <kbd>**l**</kbd> OR <kbd>**"**</kbd> <kbd>**Any key**</kbd> <kbd>**s**</kbd> | Change a character to a named register |
 | <kbd>**"**</kbd> <kbd>**Any key**</kbd> <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**Any key**</kbd> | Change inside to a named register |
+| <kbd>**"**</kbd> <kbd>**_**</kbd> <kbd>**d**</kbd> <kbd>**d**</kbd> | Delete a line without keeping it in a register |
 <!-- AUTO-GEN:end Register -->
  
 </details>
@@ -306,6 +307,7 @@
 | <kbd>**g**</kbd> <kbd>**v**</kbd> | Exchange the selection with the previous Visual area |
 | <kbd>**q**</kbd> <kbd>**Any key**</kbd> | Start recording operations for Macros |
 | <kbd>**q**</kbd> | Stop recording operations |
+| <kbd>**"**</kbd> <kbd>**Any key**</kbd> | Use a named register for the next command |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd> | Selection Range (LSP) |
 | <kbd>**Esc**</kbd> | Go to Normal mode |
 <!-- AUTO-GEN:end VisualMode -->

@@ -27,8 +27,8 @@ import pkg/results
 
 import
   ../[
-    types, buffer, modes, motion, key_bindings, command_registry, registers,
-    render_utils, search_utils, uri_utils, key_router, unicode_utils, visual_selection,
+    types, buffer, modes, motion, key_bindings, command_registry, render_utils,
+    uri_utils, key_router, unicode_utils, visual_selection, pending_input,
   ]
 import handler_types, visual_handler, insert_commands, command_passthrough
 from visual_commands import reselectVisual
@@ -125,6 +125,19 @@ proc newNormalModeHandler*(
     commandRegistry: commandRegistry,
   )
 
+proc newContext(
+    handler: NormalModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    register = none(char),
+): CommandContext =
+  ## Context for a command `"x` named `register` for, on this handler's parts.
+  newCommandContext(
+    buffer, state, viewport, handler.motionController, handler.keyBindingRegistry,
+    register,
+  )
+
 proc executeCommand*(
     handler: NormalModeHandler,
     buffer: TextBuffer,
@@ -134,13 +147,7 @@ proc executeCommand*(
     args: seq[string] = @[],
 ): NormalModeResult =
   ## Execute a command using the CommandRegistry
-  let ctx = CommandContext(
-    buffer: buffer,
-    state: state,
-    viewport: viewport,
-    motionController: handler.motionController,
-    keyBindingRegistry: handler.keyBindingRegistry,
-  )
+  let ctx = handler.newContext(buffer, state, viewport)
 
   let r = handler.commandRegistry.execute(ctx, commandId, args)
   if r.isOk:
@@ -162,170 +169,18 @@ proc handleMotionCommand*(
     return err(r.error)
   return Result[(), string].ok ()
 
-proc findMatchContainingCursor(
-    buffer: TextBuffer,
-    searchText: string,
-    cursorPos: BufferPosition,
-    ignorecase: bool,
-    wholeWord: bool,
-): Option[BufferPosition] =
-  ## Return start position of a match that contains the cursor, if any.
-  ## Uses findSearchMatchRanges for regex-aware match detection.
-  let ranges =
-    buffer.findSearchMatchRanges(cursorPos.line, searchText, ignorecase, wholeWord)
-  for r in ranges:
-    if cursorPos.column >= r.startCol and cursorPos.column < r.endCol:
-      return some(BufferPosition(line: cursorPos.line, column: r.startCol))
-  return none(BufferPosition)
-
-proc getMatchEndCol(
-    buffer: TextBuffer,
-    searchText: string,
-    matchStart: BufferPosition,
-    ignorecase: bool,
-    wholeWord: bool,
-): int =
-  ## Get the end column (inclusive) of a match starting at matchStart.
-  let ranges =
-    buffer.findSearchMatchRanges(matchStart.line, searchText, ignorecase, wholeWord)
-  for r in ranges:
-    if r.startCol == matchStart.column:
-      return r.endCol - 1
-  # Fallback: use search text char length
-  return matchStart.column + searchText.charLen - 1
-
 proc searchMatchAndSelect(
-    buffer: TextBuffer, state: EditorState, forward: bool
+    buffer: TextBuffer, state: EditorState, forward: bool, count: int
 ): NormalModeResult =
   ## Find a search match and enter Visual mode selecting it.
   ## Used by both gn (forward=true) and gN (forward=false).
-  if state.input.search.last.pattern.len == 0:
-    return NormalModeResult(kind: nmrError, errorMessage: "No previous search")
-  let searchText = state.input.search.last.pattern
-  let ignoreCase = shouldIgnoreCase(
-    searchText, state.input.search.ignorecase, state.input.search.smartcase
-  )
-  let wholeWord = state.input.search.last.wholeWord
-  state.input.search.hlsearchTempDisabled = false
-
-  var matchStart =
-    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, wholeWord)
-  if matchStart.isNone:
-    matchStart =
-      if forward:
-        findNext(buffer, searchText, state.cursor, ignoreCase, wholeWord)
-      else:
-        findPrev(buffer, searchText, state.cursor, ignoreCase, wholeWord)
-  if matchStart.isNone:
-    return
-      NormalModeResult(kind: nmrError, errorMessage: "Pattern not found: " & searchText)
-
-  let pos = matchStart.get
-  let endCol = getMatchEndCol(buffer, searchText, pos, ignoreCase, wholeWord)
-  let matchEnd = BufferPosition(line: pos.line, column: endCol)
+  let match = findGnMatch(buffer, state, forward, count)
+  if match.isErr:
+    return NormalModeResult(kind: nmrError, errorMessage: match.error)
+  let (first, last) = match.get
   recordJump(state)
-  state.enterVisual(vskChar, pos, matchEnd)
+  state.enterVisual(vskChar, first, last)
   return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
-
-proc searchMatchAndOperate(
-    buffer: TextBuffer, state: EditorState, forward: bool, op: PendingOperator
-): NormalModeResult =
-  ## Find a search match and apply an operator (delete/change/yank) to it.
-  if state.input.search.last.pattern.len == 0:
-    return NormalModeResult(kind: nmrError, errorMessage: "No previous search")
-  let searchText = state.input.search.last.pattern
-  let ignoreCase = shouldIgnoreCase(
-    searchText, state.input.search.ignorecase, state.input.search.smartcase
-  )
-  let wholeWord = state.input.search.last.wholeWord
-  state.input.search.hlsearchTempDisabled = false
-
-  var matchStart =
-    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, wholeWord)
-  if matchStart.isNone:
-    matchStart =
-      if forward:
-        findNext(buffer, searchText, state.cursor, ignoreCase, wholeWord)
-      else:
-        findPrev(buffer, searchText, state.cursor, ignoreCase, wholeWord)
-  if matchStart.isNone:
-    return
-      NormalModeResult(kind: nmrError, errorMessage: "Pattern not found: " & searchText)
-
-  let pos = matchStart.get
-  let endCol = getMatchEndCol(buffer, searchText, pos, ignoreCase, wholeWord)
-  let matchEnd = BufferPosition(line: pos.line, column: endCol)
-  recordJump(state)
-  # Like Vim, the match is the Visual area the operator worked on, for `gv`.
-  # An operator that does nothing below leaves the area alone.
-  if op.operatorType in {OpDelete, OpChange, OpYank}:
-    buffer.lastVisual = some(VisualArea(start: pos, cursor: matchEnd, kind: vskChar))
-
-  # Get text in the match range
-  let selectedText = buffer.getTextInRange(pos, matchEnd)
-  let isMultiLine = pos.line != matchEnd.line
-
-  # Store in register only after the buffer change succeeded (registers are not
-  # covered by the buffer transaction, so a rollback would not undo them)
-  proc storeMatchText() =
-    if state.pendingInput.pendingRegister.isSome and
-        state.pendingInput.pendingRegister.get != '\0':
-      let regName = state.pendingInput.pendingRegister.get
-      if regName.isNamedRegisterName:
-        discard state.registers.setNamedRegister(regName, selectedText, false)
-      elif regName.isClipboardRegisterName:
-        state.registers.setClipboardRegister(regName, selectedText, false)
-      else:
-        state.registers.setDeletedRegister(selectedText, isMultiLine)
-    else:
-      state.registers.setDeletedRegister(selectedText, isMultiLine)
-    state.pendingInput.pendingRegister = none(char)
-
-  case op.operatorType
-  of OpDelete, OpChange:
-    let transactionName =
-      if op.operatorType == OpDelete: "Delete search match" else: "Change search match"
-    let txr =
-      try:
-        withTransaction(buffer, transactionName):
-          let deleteResult = buffer.deleteRange(pos, matchEnd)
-          if deleteResult.isErr:
-            return
-              NormalModeResult(kind: nmrError, errorMessage: "Failed to delete match")
-      except TransactionRollbackError as exc:
-        # Surface a failed rollback (untrustworthy buffer) as a status message.
-        return NormalModeResult(
-          kind: nmrError, errorMessage: exc.msg & " (buffer state may be inconsistent)"
-        )
-    if txr.isErr:
-      return NormalModeResult(
-        kind: nmrError, errorMessage: "Transaction failed: " & txr.error
-      )
-
-    storeMatchText()
-
-    # Move cursor to start of deleted range and clamp
-    state.cursor = pos
-    if state.cursor.line >= buffer.len:
-      state.cursor.line = max(0, buffer.len - 1)
-    if buffer.len > 0:
-      let line = buffer.getLine(state.cursor.line)
-      if line.charLen > 0:
-        state.cursor.column = min(state.cursor.column, line.charLen - 1)
-      else:
-        state.cursor.column = 0
-
-    if op.operatorType == OpChange:
-      return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
-    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-  of OpYank:
-    # Yank only - no deletion, move cursor to match start
-    storeMatchText()
-    state.cursor = pos
-    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-  else:
-    # Unsupported operator for search match
-    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
 proc handleModeSwitchToOverlay*(
     handler: NormalModeHandler,
@@ -548,13 +403,7 @@ proc handleNormalModeKey*(
       let textObjectCommandId = textObjectCommandIdFor(keyCombo.char)
 
       if textObjectCommandId.len > 0:
-        let ctx = CommandContext(
-          buffer: buffer,
-          state: state,
-          viewport: viewport,
-          motionController: handler.motionController,
-          keyBindingRegistry: handler.keyBindingRegistry,
-        )
+        let ctx = handler.newContext(buffer, state, viewport)
 
         let cmdResult = handler.commandRegistry.execute(ctx, textObjectCommandId, @[])
         if cmdResult.isOk:
@@ -564,22 +413,23 @@ proc handleNormalModeKey*(
       else:
         # Not a text object key - cancel pending state with feedback (no silent
         # drop of the pending operator).
-        state.pendingInput.pendingTextObject = none(PendingTextObject)
-        state.pendingInput.pendingOperator = none(PendingOperator)
+        state.pendingInput.cancelOperatorPending()
         state.statusMessage = "Not a text object: " & keyCombo.char
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
-      # Special key or key with modifiers - cancel pending state
-      state.pendingInput.pendingTextObject = none(PendingTextObject)
-      state.pendingInput.pendingOperator = none(PendingOperator)
+      # Special key or key with modifiers: not a text object either, and used
+      # up by the operator it ends, as in Vim (`di<Left>` does not move).
+      state.pendingInput.cancelOperatorPending()
       state.statusMessage = ""
-      # Fall through to process the key normally
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # `guu` / `gUU` lowercase/uppercase whole lines. Handled here because the
   # second key is not the operator key: the router would turn `u` into undo.
   # (`gugu` / `gUgU` need no special case - they re-enter the operator handler.)
+  # A key the router waits for (`gufu`, `gu'u`) or one in a sequence is not it.
   let pendingOp = state.pendingInput.pendingOperator
-  if pendingOp.isSome and not keyCombo.isSpecial and keyCombo.modifiers == {} and (
+  if pendingOp.isSome and not keyCombo.isSpecial and keyCombo.modifiers == {} and
+      not handler.keyBindingRegistry.hasPendingKeys and (
     (pendingOp.get.operatorType == OpLowerCase and keyCombo.char == "u") or
     (pendingOp.get.operatorType == OpUpperCase and keyCombo.char == "U")
   ):
@@ -592,17 +442,9 @@ proc handleNormalModeKey*(
     # Consume a count typed between the halves (gu3u); the router never sees
     # the key that would clear it
     let count = handler.keyBindingRegistry.getNumericPrefix()
-    handler.keyBindingRegistry.clearNumericPrefix()
-    # gugu/gUgU: drop the intermediate `g` the router already stashed.
     handler.keyBindingRegistry.clearSequence()
 
-    let ctx = CommandContext(
-      buffer: buffer,
-      state: state,
-      viewport: viewport,
-      motionController: handler.motionController,
-      keyBindingRegistry: handler.keyBindingRegistry,
-    )
+    let ctx = handler.newContext(buffer, state, viewport)
 
     let cmdResult = handler.commandRegistry.execute(ctx, doubledOperatorId, @[$count])
     if cmdResult.isOk:
@@ -612,23 +454,47 @@ proc handleNormalModeKey*(
 
   # Resolve the key through the router (numeric prefixes, sequences, f/t/r, etc.)
   let route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Normal, keyCombo)
+  if route.kind == rrUnhandled:
+    # A key that runs nothing ends the command being built, as Vim's
+    # clearopbeep does: the count, the register and the operator go.
+    handler.keyBindingRegistry.clearSequence()
+    state.pendingInput.cancelOperatorPending()
+  elif state.pendingInput.pendingOperator.isSome:
+    let operand = handler.keyBindingRegistry.operandCommand
+    let cancels =
+      if route.kind == rrCommand:
+        not handler.commandRegistry.endsOperator(route.command)
+      else:
+        operand.isSome and not handler.commandRegistry.endsOperator(operand.get)
+    if cancels:
+      # A command the operator cannot act over cancels it and does not run,
+      # as Vim's checkclearop: `dx`, `dI`, `dv`. One that waits for a key
+      # (`"`, `r`, `m`) takes none, so the next key starts a command of its
+      # own (`d"aw` appends). The search and command lines still open: moe
+      # applies no operator over them, and the keys typed for them must not
+      # run as commands.
+      handler.keyBindingRegistry.clearSequence()
+      state.pendingInput.cancelOperatorPending()
+      if route.kind != rrCommand or route.command.kind != ctOverlaySwitch:
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   if route.kind != rrCommand:
-    # Key consumed (waiting / cancelled) or unhandled: all collapse to the
-    # previous `cmdOption.isNone` behaviour (handled, no mode transition).
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+  if state.pendingInput.pendingOperator.isSome:
+    # The command ends the operator: a motion it acts over, a text object or
+    # an operator (`dd`, or another that cancels it).
+    let ctx = handler.newContext(buffer, state, viewport, route.command.register)
+    let cmdResult = handler.commandRegistry.executeCommand(ctx, route.command)
+    if cmdResult.isOk:
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    else:
+      return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
 
   let cmd = route.command
 
   case cmd.kind
   of ctMotion:
     # Execute all motions through CommandRegistry to handle numeric prefixes
-    let ctx = CommandContext(
-      buffer: buffer,
-      state: state,
-      viewport: viewport,
-      motionController: handler.motionController,
-      keyBindingRegistry: handler.keyBindingRegistry,
-    )
+    let ctx = handler.newContext(buffer, state, viewport, cmd.register)
 
     # Execute the motion command directly through CommandRegistry
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
@@ -814,35 +680,17 @@ proc handleNormalModeKey*(
       # Same buffer - update cursor position
       return handler.updateCursorToJumpPosition(buffer, state, pos)
     of "search.next.select":
-      if state.pendingInput.pendingOperator.isSome:
-        let op = state.pendingInput.pendingOperator.get
-        state.pendingInput.pendingOperator = none(PendingOperator)
-        return searchMatchAndOperate(buffer, state, forward = true, op)
-      return searchMatchAndSelect(buffer, state, forward = true)
+      return searchMatchAndSelect(buffer, state, forward = true, max(1, cmd.count))
     of "search.prev.select":
-      if state.pendingInput.pendingOperator.isSome:
-        let op = state.pendingInput.pendingOperator.get
-        state.pendingInput.pendingOperator = none(PendingOperator)
-        return searchMatchAndOperate(buffer, state, forward = false, op)
-      return searchMatchAndSelect(buffer, state, forward = false)
+      return searchMatchAndSelect(buffer, state, forward = false, max(1, cmd.count))
     of "visual.reselect":
-      # Like Vim, `gv` is no motion: it cancels a pending operator.
-      if state.pendingInput.pendingOperator.isSome:
-        state.pendingInput.pendingOperator = none(PendingOperator)
-        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       let r = reselectVisual(buffer, state)
       if r.isErr:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
       return NormalModeResult(kind: nmrHandled, modeTransition: some(r.get))
     else:
       # Try to execute using command registry for other actions
-      let ctx = CommandContext(
-        buffer: buffer,
-        state: state,
-        viewport: viewport,
-        motionController: handler.motionController,
-        keyBindingRegistry: handler.keyBindingRegistry,
-      )
+      let ctx = handler.newContext(buffer, state, viewport, cmd.register)
       let cmdResult = handler.commandRegistry.execute(ctx, cmd.commandId, cmd.args)
       if cmdResult.isOk:
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
@@ -891,24 +739,9 @@ proc handleNormalModeKey*(
       else:
         state.statusMessage = "Invalid register (use a-z, @, or :)"
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-    of "register-select":
-      let registerChar = cmd.targetChar.asciiChar
-      if registerChar.isSome and isValidRegisterName(registerChar.get):
-        state.pendingInput.pendingRegister = registerChar
-        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-      else:
-        state.pendingInput.pendingRegister = none(char)
-        state.statusMessage = "Invalid register"
-        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       # Handle operators that require additional input (f, t, r, etc)
-      let ctx = CommandContext(
-        buffer: buffer,
-        state: state,
-        viewport: viewport,
-        motionController: handler.motionController,
-        keyBindingRegistry: handler.keyBindingRegistry,
-      )
+      let ctx = handler.newContext(buffer, state, viewport, cmd.register)
       let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
       if cmdResult.isOk:
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
@@ -933,13 +766,7 @@ proc handleNormalModeKey*(
       )
 
     # Execute custom commands and operators through command registry
-    let ctx = CommandContext(
-      buffer: buffer,
-      state: state,
-      viewport: viewport,
-      motionController: handler.motionController,
-      keyBindingRegistry: handler.keyBindingRegistry,
-    )
+    let ctx = handler.newContext(buffer, state, viewport, cmd.register)
     # Use executeCommand to handle numeric prefixes properly
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
     if cmdResult.isOk:

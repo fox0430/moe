@@ -172,8 +172,9 @@ proc getVisualSelectionText*(buffer: TextBuffer, selection: VisualSelection): st
     let (selStart, selEnd) = selection.getSelectionRange()
     buffer.getTextInRange(selStart, selEnd)
 
-proc visualYank*(buffer: TextBuffer, state: EditorState) =
-  ## Yank (copy) visual selection to the yank register and return to previous mode
+proc visualYank*(buffer: TextBuffer, state: EditorState, register = none(char)) =
+  ## Yank (copy) visual selection to `register` (else the yank register) and
+  ## return to previous mode
   let sel = state.operandSelection(buffer)
   if sel.active:
     # Get normalized selection range
@@ -183,22 +184,7 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
 
     let isLine = sel.kind == vskLine
 
-    # Store in register system
-    if state.pendingInput.pendingRegister.isSome and
-        state.pendingInput.pendingRegister.get != '\0':
-      # User specified a register with "
-      let regName = state.pendingInput.pendingRegister.get
-      if regName.isNamedRegisterName:
-        discard state.registers.setNamedRegister(regName, selectedText, isLine)
-      elif regName.isClipboardRegisterName:
-        state.registers.setClipboardRegister(regName, selectedText, isLine)
-      else:
-        # For other registers (including "), use yank register
-        state.registers.setYankedRegister(selectedText, isLine)
-      state.pendingInput.pendingRegister = none(char)
-    else:
-      # Default: use yank register (0) and unnamed register
-      state.registers.setYankedRegister(selectedText, isLine)
+    state.registers.storeYanked(register, selectedText, isLine)
 
     # Move cursor to start of selection (Vim behavior)
     state.cursor = selStart
@@ -211,21 +197,6 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
 
     state.statusMessage = ""
     state.leaveVisual()
-
-proc storeVisualDeletedText(
-    state: EditorState, reg: Option[char], text: string, isLine: bool
-) =
-  ## Store deleted text in register `reg` (captured before edit); call only after commit.
-  if reg.isSome and reg.get != '\0':
-    let regName = reg.get
-    if regName.isNamedRegisterName:
-      discard state.registers.setNamedRegister(regName, text, isLine)
-    elif regName.isClipboardRegisterName:
-      state.registers.setClipboardRegister(regName, text, isLine)
-    else:
-      state.registers.setDeletedRegister(text, isLine)
-  else:
-    state.registers.setDeletedRegister(text, isLine)
 
 proc deleteBlockSelection(
     buffer: TextBuffer,
@@ -300,15 +271,12 @@ proc deleteLineSelection(
 
   return ok(())
 
-proc visualDelete*(buffer: TextBuffer, state: EditorState, sel: VisualSelection) =
-  ## Delete `sel` and return to previous mode
+proc visualDelete*(
+    buffer: TextBuffer, state: EditorState, sel: VisualSelection, register = none(char)
+) =
+  ## Delete `sel` into `register` (else the delete registers) and return to
+  ## previous mode
   if sel.active:
-    # Capture the pending register before the edit: the store happens only after
-    # the transaction commits (registers are outside buffer transactions), and
-    # it must be consumed even if the edit fails.
-    let pendingReg = state.pendingInput.pendingRegister
-    state.pendingInput.pendingRegister = none(char)
-
     var deletedText = ""
     var deletedIsLine = false
 
@@ -333,7 +301,7 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState, sel: VisualSelection)
       return
 
     # Registers are outside the buffer transaction, so store after commit.
-    state.storeVisualDeletedText(pendingReg, deletedText, deletedIsLine)
+    state.registers.storeDeleted(register, deletedText, deletedIsLine)
 
     # Clamp cursor to valid position after deletion
     if state.cursor.line >= buffer.len:
@@ -348,9 +316,9 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState, sel: VisualSelection)
     state.statusMessage = ""
     state.leaveVisual()
 
-proc visualDelete*(buffer: TextBuffer, state: EditorState) =
+proc visualDelete*(buffer: TextBuffer, state: EditorState, register = none(char)) =
   ## Delete visual selection and return to previous mode
-  visualDelete(buffer, state, state.operandSelection(buffer))
+  visualDelete(buffer, state, state.operandSelection(buffer), register)
 
 proc visualIndent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
   ## Indent all lines in visual selection and return to previous mode
@@ -697,16 +665,11 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
   # Switch to insert mode
   state.mode = EditorMode.Insert
 
-proc visualChange*(buffer: TextBuffer, state: EditorState) =
-  ## Delete visual selection and enter insert mode (c command)
+proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)) =
+  ## Delete visual selection into `register` (else the delete registers) and
+  ## enter insert mode (c command)
   let sel = state.operandSelection(buffer)
   if sel.active:
-    # Capture the pending register before the edit: the store happens only after
-    # the transaction commits (registers are outside buffer transactions), and
-    # it must be consumed even if the edit fails.
-    let pendingReg = state.pendingInput.pendingRegister
-    state.pendingInput.pendingRegister = none(char)
-
     var deletedText = ""
     var deletedIsLine = false
 
@@ -757,7 +720,7 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
       return
 
     # Registers are outside the buffer transaction, so store after commit.
-    state.storeVisualDeletedText(pendingReg, deletedText, deletedIsLine)
+    state.registers.storeDeleted(register, deletedText, deletedIsLine)
 
     state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
     state.mode = EditorMode.Insert
@@ -794,27 +757,21 @@ proc visualPaste*(
     state: EditorState,
     clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: cbtXclip),
     cursorAfter: bool = false,
+    register = none(char),
 ): Result[(), string] =
-  ## Delete selection and paste register content.
+  ## Delete selection and paste the content of `register` (else the unnamed one).
   let sel = state.operandSelection(buffer)
   result = Result[(), string].ok ()
   if sel.active:
-    let regName =
-      if state.pendingInput.pendingRegister.isSome and
-          state.pendingInput.pendingRegister.get != '\0':
-        state.pendingInput.pendingRegister.get
-      else:
-        '"'
+    let regName = register.get('"')
     let reg = state.registers.getRegister(regName)
     var pasteText = buffer.normalizeNewlines(reg.getContent())
     let isFullLine = reg.isLine
     let registerEmpty = reg.isEmpty
 
-    # Clear early so deletes don't overwrite the source register.
-    state.pendingInput.pendingRegister = none(char)
-
     # Fallback to system clipboard if register empty; empty linewise is not empty.
-    if registerEmpty and clipboardConfig.enable:
+    # The black hole register is always empty.
+    if registerEmpty and clipboardConfig.enable and not regName.isBlackHoleRegisterName:
       let readResult =
         state.registers.clipboardFallbackRead(clipboardConfig.tool, regName)
       if readResult.isErr:
@@ -824,12 +781,12 @@ proc visualPaste*(
         return Result[(), string].err(readResult.error)
       pasteText = buffer.preparePastedText(readResult.get)
 
-    # Empty linewise paste is valid for line-visual mode.
-    let allowEmptyLinewise = isFullLine and sel.kind == vskLine
-    if pasteText.len == 0 and not allowEmptyLinewise:
-      # Nothing to paste, just exit visual mode
-      state.leaveVisual()
-      return
+    # Like Vim, the selection goes even when there is nothing to put. The black
+    # hole register and a linewise register holding one empty line put an
+    # empty string, which over whole lines is a blank line; an empty register
+    # puts nothing and reports it.
+    let putsNothing =
+      pasteText.len == 0 and not isFullLine and not regName.isBlackHoleRegisterName
 
     var deletedText = ""
     var deletedIsLine = false
@@ -853,7 +810,8 @@ proc visualPaste*(
         let startLine = min(sel.start.line, sel.current.line)
         pasteStart = BufferPosition(line: startLine, column: startCol)
         state.cursor = pasteStart
-        checkPasteErr(buffer.insertText(state.cursor, pasteText))
+        if pasteText.len > 0:
+          checkPasteErr(buffer.insertText(state.cursor, pasteText))
       of vskLine:
         let
           startLine = min(sel.start.line, sel.current.line)
@@ -867,15 +825,19 @@ proc visualPaste*(
 
         # Linewise register stores a trailing \n, so split yields an empty tail
         # element -- drop it or an extra blank line gets inserted.
-        var lines = pasteText.split('\n')
+        var lines: seq[string]
+        if not putsNothing:
+          lines = pasteText.split('\n')
         if lines.len > 1 and lines[^1].len == 0:
           lines.setLen(lines.len - 1)
+        if lines.len == 0 and buffer.len == 0:
+          # The selection was every line, and a buffer keeps one.
+          lines.add ""
         pastedLineCount = lines.len
-        pasteStart = BufferPosition(line: startLine, column: 0)
         for i, line in lines:
           checkPasteErr(buffer.insert(startLine + i, line))
-        state.cursor.line = startLine
-        state.cursor.column = 0
+        pasteStart = BufferPosition(line: min(startLine, buffer.len - 1), column: 0)
+        state.cursor = pasteStart
       of vskChar:
         let (selStart, selEnd) = sel.getSelectionRange()
 
@@ -886,7 +848,8 @@ proc visualPaste*(
 
         pasteStart = selStart
         state.cursor = selStart
-        checkPasteErr(buffer.insertText(state.cursor, pasteText))
+        if pasteText.len > 0:
+          checkPasteErr(buffer.insertText(state.cursor, pasteText))
     if txr.isErr:
       # The transaction rolled the buffer back, so the paste anchor is gone.
       state.cursor = cursorBeforePaste
@@ -899,6 +862,9 @@ proc visualPaste*(
 
     state.statusMessage = ""
     state.leaveVisual()
+    if pasteText.len == 0:
+      # The deletion may have left the cursor past the end of its line.
+      clampCursorToLastChar(state.cursor, buffer.getLine(state.cursor.line).charLen)
 
     let
       lastPutLine = min(pasteStart.line + max(pastedLineCount, 1) - 1, buffer.len - 1)
@@ -913,7 +879,9 @@ proc visualPaste*(
           line: lastPutLine, column: max(0, buffer.getLine(lastPutLine).charLen - 1)
         )
       of vskChar, vskBlock:
-        if afterPut.column > 0:
+        if pasteText.len == 0:
+          pasteStart
+        elif afterPut.column > 0:
           BufferPosition(line: afterPut.line, column: afterPut.column - 1)
         else:
           BufferPosition(
@@ -943,6 +911,9 @@ proc visualPaste*(
         state.cursor = afterPut
         if buffer.len > 0:
           clampCursorToLastChar(state.cursor, buffer.getLine(state.cursor.line).charLen)
+
+    if putsNothing:
+      result = Result[(), string].err("Nothing to paste")
 
 const SurroundPairs = [
   ("(", ")"),

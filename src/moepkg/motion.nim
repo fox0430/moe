@@ -36,6 +36,22 @@ type
     motion*: Motion
     count*: int
     targetChar*: string # For find/till commands
+    repeat*: bool ## `;`/`,` repeating f/F/t/T
+
+  MotionType* = enum
+    ## How an operator takes the text up to where a motion lands
+    mtExclusive ## Up to the place, not including it (w b h l 0 ^ F T { } ` n *)
+    mtInclusive ## Up to and including it (e ge $ g_ f t % gn)
+    mtLinewise ## Whole lines (j k gg G H M L + - ')
+
+  MotionLanding* = object
+    ## Where a motion lands and how an operator takes the text up to there, as
+    ## Vim's motion commands fill in the operator's arguments
+    pos*: BufferPosition
+    motionType*: MotionType
+    failed*: bool
+      ## The motion failed (Vim beeps), and a waiting operator does nothing.
+      ## It may still have moved part of the way (`3b` near the start).
 
   # Motion executor - handles only motion logic
   MotionExecutor* = ref object
@@ -64,6 +80,22 @@ const tagScanInitialRadius = 128
 
 proc newMotionExecutor*(buffer: core.TextBuffer): MotionExecutor =
   MotionExecutor(buffer: buffer)
+
+proc lineContentNoNewline(buffer: TextBuffer, lineIdx: int): string =
+  ## Get the content of a line excluding any trailing newline.
+  ## Returns empty string when lineIdx is out of range.
+  if lineIdx < 0 or lineIdx >= buffer.len:
+    return ""
+  let line = buffer.getLine(lineIdx)
+  if line.len > 0 and line[^1] == '\n':
+    line[0 ..< ^1]
+  else:
+    line
+
+proc lineRunesNoNl*(buffer: TextBuffer, line: int): seq[Rune] =
+  ## The line's characters with any trailing newline stripped, in the column
+  ## model buffer positions use. Out-of-range lines yield an empty seq.
+  lineContentNoNewline(buffer, line).toCharRunes()
 
 proc moveLeft(
     e: MotionExecutor, currentPos: CursorPosition, count: int
@@ -322,63 +354,36 @@ proc moveLastLine(
     result.y = min(count - 1, e.buffer.len - 1)
   result.x = 0
 
-proc findChar(
-    e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int
-): CursorPosition =
-  ## Find next occurrence of character on current line
-  result = currentPos
-  if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-    let targetRunes = targetChar.toCharRunes
-    if targetRunes.len != 1:
-      return
-    let
-      target = targetRunes[0]
-      runes = e.buffer.getLine(currentPos.y).toCharRunes
-    var found = 0
-    # Index a one-time rune copy of the line instead of rescanning from the
-    # start per column (avoids O(n^2) on long lines).
-    for charIdx in currentPos.x + 1 ..< runes.len:
-      if runes[charIdx] == target:
-        found.inc
-        if found == count:
-          result.x = charIdx
-          break
-
-proc findCharBackward(
-    e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int
-): CursorPosition =
-  ## Find previous occurrence of character on current line
-  result = currentPos
-  if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-    let targetRunes = targetChar.toCharRunes
-    if targetRunes.len != 1:
-      return
-    let
-      target = targetRunes[0]
-      runes = e.buffer.getLine(currentPos.y).toCharRunes
-    var found = 0
-    for charIdx in countdown(min(currentPos.x - 1, runes.len - 1), 0):
-      if runes[charIdx] == target:
-        found.inc
-        if found == count:
-          result.x = charIdx
-          break
-
-proc tillChar(
-    e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int
-): CursorPosition =
-  ## Move till (before) next occurrence of character
-  result = e.findChar(currentPos, targetChar, count)
-  if result.x > currentPos.x:
-    result.x = result.x - 1
-
-proc tillCharBackward(
-    e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int
-): CursorPosition =
-  ## Move till (after) previous occurrence of character
-  result = e.findCharBackward(currentPos, targetChar, count)
-  if result.x < currentPos.x:
-    result.x = result.x + 1
+proc searchChar(
+    e: MotionExecutor, currentPos: CursorPosition, cmd: MotionCommand
+): Option[CursorPosition] =
+  ## f/F/t/T as Vim's searchc: none when the line has no `count`-th match.
+  ## t/T stop next to it, and repeated by `;`/`,` with no count they step past
+  ## the match they stand next to (Vim's 'cpoptions' without `;`).
+  if currentPos.y < 0 or currentPos.y >= e.buffer.len:
+    return none(CursorPosition)
+  let target = cmd.targetChar.toCharRunes
+  if target.len != 1:
+    return none(CursorPosition)
+  let
+    forward = cmd.motion in {Motion.FindChar, Motion.TillChar}
+    till = cmd.motion in {Motion.TillChar, Motion.TillCharBackward}
+    step = if forward: 1 else: -1
+    runes = e.buffer.lineRunesNoNl(currentPos.y)
+  var
+    col = currentPos.x
+    skip = cmd.repeat and till and cmd.count == 1
+  for _ in 1 .. cmd.count:
+    while true:
+      col += step
+      if col < 0 or col >= runes.len:
+        return none(CursorPosition)
+      if runes[col] == target[0] and not skip:
+        break
+      skip = false
+  if till:
+    col -= step
+  some(CursorPosition(x: col, y: currentPos.y))
 
 proc isWhitespace(r: Rune): bool =
   ## Check if a character is whitespace
@@ -389,269 +394,202 @@ proc isSymbolChar(r: Rune): bool =
   ## Check if a character is a symbol (non-word, non-whitespace)
   return not isWordChar(r) and not isWhitespace(r)
 
-proc skipWordForward*(runes: seq[Rune], startCol: int): int =
-  ## Skip current word/symbol sequence and trailing whitespace from startCol.
-  ## Returns the column position after skipping.
-  ## Used by both moveWordForward and calculateOperatorRange.
-  result = startCol
-  if result < runes.len:
-    let ch = runes[result]
-    if isWordChar(ch):
-      while result < runes.len and isWordChar(runes[result]):
-        result += 1
-    elif not isWhitespace(ch):
-      while result < runes.len and not isWordChar(runes[result]) and
-          not isWhitespace(runes[result]):
-        result += 1
-  while result < runes.len and isWhitespace(runes[result]):
-    result += 1
+type WordWalker = object
+  ## Steps through a buffer as Vim's inc_cursor/dec_cursor do: the end of a
+  ## line is a place of its own, after its last character
+  buffer: TextBuffer
+  pos: BufferPosition
+  runes: seq[Rune]
 
-proc moveWordForward(
-    e: MotionExecutor, currentPos: CursorPosition, count: int
-): CursorPosition =
-  ## Move to the start of the next word (w motion)
-  ## In Vim, a word is either:
-  ## 1. A sequence of word characters (letters, digits, underscore)
-  ## 2. A sequence of non-word, non-whitespace characters (symbols)
-  ##
-  ## Note: Uses toCharRunes() for simplicity. For most lines (<1000 chars),
-  ## the overhead is negligible compared to the clarity and correctness.
-  result = currentPos
-  var iterCount = count
+proc initWordWalker(buffer: TextBuffer, pos: BufferPosition): WordWalker =
+  WordWalker(buffer: buffer, pos: pos, runes: buffer.lineRunesNoNl(pos.line))
 
-  while iterCount > 0:
-    # Get current line
-    if result.y >= e.buffer.len:
-      break
+proc class(w: WordWalker): int =
+  ## Vim's cls(): 0 for a blank or the end of a line, 2 for a word character,
+  ## 1 for any other
+  if w.pos.column >= w.runes.len:
+    return 0
+  let r = w.runes[w.pos.column]
+  if r == Rune(' ') or r == Rune('\t'):
+    0
+  elif r.isWordChar:
+    2
+  else:
+    1
 
-    let line = e.buffer.getLine(result.y)
-    # Remove trailing newline if present for proper rune processing
-    let lineContent =
-      if line.len > 0 and line[^1] == '\n':
-        line[0 ..< ^1]
-      else:
-        line
-    let runes = lineContent.toCharRunes()
-    let pos = skipWordForward(runes, result.x)
+proc onEmptyLine(w: WordWalker): bool =
+  w.runes.len == 0
 
-    # If we reached end of line, move to next line
-    if pos >= runes.len:
-      if result.y + 1 < e.buffer.len:
-        result.y += 1
-        result.x = 0
-        # Skip leading whitespace on new line
-        let nextLine = e.buffer.getLine(result.y)
-        let nextContent =
-          if nextLine.len > 0 and nextLine[^1] == '\n':
-            nextLine[0 ..< ^1]
-          else:
-            nextLine
-        let nextRunes = nextContent.toCharRunes()
-        while result.x < nextRunes.len and isWhitespace(nextRunes[result.x]):
-          result.x += 1
-      else:
-        # At last line, stay at end
-        result.x = max(0, runes.len - 1)
-    else:
-      result.x = pos
+proc inc(w: var WordWalker): int =
+  ## One step forward: 0 within the line, 2 onto its end, 1 onto the next line,
+  ## -1 at the end of the buffer (no move).
+  if w.pos.column < w.runes.len:
+    w.pos.column += 1
+    return (if w.pos.column < w.runes.len: 0 else: 2)
+  if w.pos.line + 1 < w.buffer.len:
+    w.pos = BufferPosition(line: w.pos.line + 1, column: 0)
+    w.runes = w.buffer.lineRunesNoNl(w.pos.line)
+    return 1
+  -1
 
-    iterCount -= 1
+proc dec(w: var WordWalker): int =
+  ## One step back: 0 within the line, 1 onto the end of the line before, -1
+  ## at the start of the buffer (no move).
+  if w.pos.column > 0:
+    w.pos.column -= 1
+    return 0
+  if w.pos.line > 0:
+    w.pos.line -= 1
+    w.runes = w.buffer.lineRunesNoNl(w.pos.line)
+    w.pos.column = w.runes.len
+    return 1
+  -1
 
-proc moveWordBackward(
-    e: MotionExecutor, currentPos: CursorPosition, count: int
-): CursorPosition =
-  ## Move to the start of the previous word (b motion)
-  ## Same word definition as moveWordForward
-  result = currentPos
-  var iterCount = count
+proc skipClass(w: var WordWalker, class: int, forward: bool): bool =
+  ## Vim's skip_chars: step over characters of `class`; true when the buffer
+  ## ends first.
+  while w.class == class:
+    if (if forward: w.inc else: w.dec) == -1:
+      return true
+  false
 
-  while iterCount > 0:
-    if result.y < 0:
-      break
-
-    var pos = result.x
-    var currentLine: string
-    var lineContent: string
-    var runes: seq[Rune]
-
-    template loadCurrentLine() =
-      currentLine = e.buffer.getLine(result.y)
-      lineContent =
-        if currentLine.len > 0 and currentLine[^1] == '\n':
-          currentLine[0 ..< ^1]
-        else:
-          currentLine
-      runes = lineContent.toCharRunes()
-
-    # Move back one position first
-    if pos > 0:
-      pos -= 1
-      loadCurrentLine()
-    elif result.y > 0:
-      # Move to previous line
-      result.y -= 1
-      loadCurrentLine()
-      pos = max(0, runes.len - 1)
-    else:
-      # At beginning of buffer
-      break
-
-    # Skip whitespace and empty lines backwards.
-    while true:
-      while pos > 0 and pos < runes.len and isWhitespace(runes[pos]):
-        pos -= 1
-      if (runes.len == 0 or (pos < runes.len and isWhitespace(runes[pos]))) and
-          result.y > 0:
-        result.y -= 1
-        loadCurrentLine()
-        pos = max(0, runes.len - 1)
-      else:
+proc fwdWord(w: var WordWalker, count: int, eol: bool): bool =
+  ## Vim's fwd_word: on to the start of the `count`-th word, stopping at an
+  ## empty line. With `eol` (an operator waits) the last word stops at the end
+  ## of its line instead of going on to the next. False when it started at the
+  ## last character of the buffer.
+  for n in countdown(count - 1, 0):
+    let
+      startClass = w.class
+      lastLine = w.pos.line == w.buffer.len - 1
+    var i = w.inc
+    if i == -1 or (i >= 1 and lastLine):
+      return false
+    if i >= 1 and eol and n == 0:
+      return true
+    if startClass != 0:
+      while w.class == startClass:
+        i = w.inc
+        if i == -1 or (i >= 1 and eol and n == 0):
+          return true
+    while w.class == 0:
+      if w.pos.column == 0 and w.onEmptyLine:
         break
+      i = w.inc
+      if i == -1 or (i >= 1 and eol and n == 0):
+        return true
+  true
 
-    # Now we're on a non-whitespace character
-    # Skip backwards through the word/symbol sequence to find its start
-    if pos >= 0 and pos < runes.len:
-      if isWordChar(runes[pos]):
-        # Skip word characters backwards
-        while pos > 0 and isWordChar(runes[pos - 1]):
-          pos -= 1
-      elif not isWhitespace(runes[pos]):
-        # Skip symbol characters backwards
-        while pos > 0 and not isWordChar(runes[pos - 1]) and
-            not isWhitespace(runes[pos - 1]):
-          pos -= 1
+proc bckWord(w: var WordWalker, count: int): bool =
+  ## Vim's bck_word: back to the start of the `count`-th word, stopping at an
+  ## empty line. False when it started at the start of the buffer.
+  for _ in 1 .. count:
+    if w.dec == -1:
+      return false
+    block finished:
+      while w.class == 0:
+        if w.pos.column == 0 and w.onEmptyLine:
+          break finished
+        if w.dec == -1:
+          return true
+      if w.skipClass(w.class, forward = false):
+        return true
+      discard w.inc # overshot
+  true
 
-    result.x = pos
-    iterCount -= 1
+proc endWord(w: var WordWalker, count: int, stop: bool): bool =
+  ## Vim's end_word: on to the end of the `count`-th word. With `stop` (`cw`)
+  ## the first stays on the word it stands at the end of. False when the
+  ## buffer ends first.
+  var stop = stop
+  for _ in 1 .. count:
+    let startClass = w.class
+    if w.inc == -1:
+      return false
+    if w.class == startClass and startClass != 0:
+      if w.skipClass(startClass, forward = true):
+        return false
+    elif not stop or startClass == 0:
+      while w.class == 0:
+        if w.inc == -1:
+          return false
+      if w.skipClass(w.class, forward = true):
+        return false
+    discard w.dec # overshot
+    stop = false
+  true
 
-proc moveWordEnd(
-    e: MotionExecutor, currentPos: CursorPosition, count: int
-): CursorPosition =
-  ## Move to the end of the next word (e motion)
-  ## Same word definition as moveWordForward
-  result = currentPos
-  var iterCount = count
-
-  while iterCount > 0:
-    if result.y >= e.buffer.len:
-      break
-
-    var pos = result.x
-    var currentLine = e.buffer.getLine(result.y)
-    var lineContent =
-      if currentLine.len > 0 and currentLine[^1] == '\n':
-        currentLine[0 ..< ^1]
-      else:
-        currentLine
-    var runes = lineContent.toCharRunes()
-
-    # Move forward one position first
-    if pos + 1 < runes.len:
-      pos += 1
-    elif result.y + 1 < e.buffer.len:
-      # Move to next line
-      result.y += 1
-      pos = 0
-      currentLine = e.buffer.getLine(result.y)
-      lineContent =
-        if currentLine.len > 0 and currentLine[^1] == '\n':
-          currentLine[0 ..< ^1]
-        else:
-          currentLine
-      runes = lineContent.toCharRunes()
-    else:
-      # At end of buffer
-      break
-
-    # Skip whitespace and empty lines.
-    while true:
-      while pos < runes.len and isWhitespace(runes[pos]):
-        pos += 1
-      if pos >= runes.len and result.y + 1 < e.buffer.len:
-        result.y += 1
-        pos = 0
-        currentLine = e.buffer.getLine(result.y)
-        lineContent =
-          if currentLine.len > 0 and currentLine[^1] == '\n':
-            currentLine[0 ..< ^1]
-          else:
-            currentLine
-        runes = lineContent.toCharRunes()
-      else:
+proc bckendWord(w: var WordWalker, count: int): bool =
+  ## Vim's bckend_word: back to the end of the `count`-th word, stopping at an
+  ## empty line. False when it started at the start of the buffer.
+  for _ in 1 .. count:
+    let startClass = w.class
+    if w.dec == -1:
+      return false
+    if startClass != 0:
+      while w.class == startClass:
+        if w.dec == -1:
+          return true
+    while w.class == 0:
+      if w.pos.column == 0 and w.onEmptyLine:
         break
+      if w.dec == -1:
+        return true
+  true
 
-    # Move to end of word/symbol sequence
-    if pos < runes.len:
-      if isWordChar(runes[pos]):
-        # Move to end of word characters
-        while pos + 1 < runes.len and isWordChar(runes[pos + 1]):
-          pos += 1
-      elif not isWhitespace(runes[pos]):
-        # Move to end of symbol characters
-        while pos + 1 < runes.len and not isWordChar(runes[pos + 1]) and
-            not isWhitespace(runes[pos + 1]):
-          pos += 1
+proc landWord(
+    w: WordWalker, start: BufferPosition, motionType: MotionType, mode: EditorMode
+): MotionLanding =
+  ## Vim's adjust_cursor: a word motion that went forward onto the end of a
+  ## line steps back onto its last character, which an operator then takes.
+  ## Insert/Replace may rest there.
+  result = MotionLanding(pos: w.pos, motionType: motionType)
+  if start < w.pos and w.pos.column > 0 and w.pos.column >= w.runes.len and
+      mode notin {EditorMode.Insert, EditorMode.Replace}:
+    result.pos.column -= 1
+    result.motionType = mtInclusive
 
-    result.x = pos
-    iterCount -= 1
+proc wordForward(
+    buffer: TextBuffer,
+    start: BufferPosition,
+    count: int,
+    operator: Option[OperatorType],
+    mode: EditorMode,
+): MotionLanding =
+  ## `w`, as Vim's nv_wordcmd: `cw` on a word changes up to its end as `ce`
+  ## does, and with an operator the last word stops at the end of its line
+  ## (`dw` keeps the line break).
+  var w = initWordWalker(buffer, start)
+  if operator == some(OpChange) and w.class != 0:
+    discard w.endWord(count, stop = true)
+    return w.landWord(start, mtInclusive, mode)
+  discard w.fwdWord(count, eol = operator.isSome)
+  w.landWord(start, mtExclusive, mode)
 
-proc moveWordEndBackward(
-    e: MotionExecutor, currentPos: CursorPosition, count: int
-): CursorPosition =
-  ## Move to the end of the previous word (ge motion)
-  ## A "word end" is a position where the character is non-whitespace and the
-  ## next character is whitespace, a different char type, or end of line.
-  ## We search backward for the nearest such position before current.
-  result = currentPos
-  var iterCount = count
+proc wordEnd(
+    buffer: TextBuffer, start: BufferPosition, count: int, mode: EditorMode
+): MotionLanding =
+  ## `e`, as Vim's nv_wordcmd. It never fails with an operator: at the end of
+  ## the buffer it takes the last character.
+  var w = initWordWalker(buffer, start)
+  discard w.endWord(count, stop = false)
+  w.landWord(start, mtInclusive, mode)
 
-  template getLineRunes(lineIdx: int): seq[Rune] =
-    let line = e.buffer.getLine(lineIdx)
-    let content =
-      if line.len > 0 and line[^1] == '\n':
-        line[0 ..< ^1]
-      else:
-        line
-    content.toCharRunes()
+proc wordBackward(
+    buffer: TextBuffer, start: BufferPosition, count: int
+): MotionLanding =
+  ## `b`: fails at the start of the buffer.
+  var w = initWordWalker(buffer, start)
+  let ok = w.bckWord(count)
+  MotionLanding(pos: w.pos, motionType: mtExclusive, failed: not ok)
 
-  template isWordEnd(runes: seq[Rune], pos: int): bool =
-    pos < runes.len and not isWhitespace(runes[pos]) and (
-      pos + 1 >= runes.len or isWhitespace(runes[pos + 1]) or
-      isWordChar(runes[pos]) != isWordChar(runes[pos + 1])
-    )
-
-  while iterCount > 0:
-    var pos = result.x - 1
-    var y = result.y
-    var found = false
-
-    # Convert the line once and refresh only when moving to a previous line
-    var runes = getLineRunes(y)
-
-    while not found:
-      if pos < 0:
-        if y > 0:
-          y -= 1
-          runes = getLineRunes(y)
-          pos = runes.len - 1
-          if pos < 0:
-            # Empty line - continue to previous line
-            continue
-        else:
-          # Beginning of buffer
-          break
-
-      if isWordEnd(runes, pos):
-        found = true
-      else:
-        pos -= 1
-
-    if found:
-      result.x = pos
-      result.y = y
-    # If not found, stay at current position (beginning of buffer)
-
-    iterCount -= 1
+proc wordEndBackward(
+    buffer: TextBuffer, start: BufferPosition, count: int
+): MotionLanding =
+  ## `ge`: fails at the start of the buffer.
+  var w = initWordWalker(buffer, start)
+  let ok = w.bckendWord(count)
+  MotionLanding(pos: w.pos, motionType: mtInclusive, failed: not ok)
 
 proc isBlankLine(line: string): bool =
   ## Check if a line is blank (empty or contains only whitespace)
@@ -670,57 +608,43 @@ proc isBlankLine(line: string): bool =
       return false
   return true
 
-proc moveParagraphForward(
-    e: MotionExecutor, currentPos: CursorPosition, count: int
-): CursorPosition =
-  ## Move to next paragraph (} motion)
-  ## A paragraph is defined as a block of text separated by blank lines
-  result = currentPos
-  var iterCount = count
+proc isParagraphBoundary(buffer: TextBuffer, line: int): bool =
+  ## Vim's startPS for `{`/`}`: an empty line, not one of blanks.
+  buffer.lineContentNoNewline(line).len == 0
 
-  while iterCount > 0:
-    var lineIdx = result.y
-
-    # If we're on a blank line, skip blank lines
-    if lineIdx < e.buffer.len and isBlankLine(e.buffer.getLine(lineIdx)):
-      while lineIdx < e.buffer.len - 1 and isBlankLine(e.buffer.getLine(lineIdx)):
-        lineIdx += 1
-
-    # Now find the next blank line
-    while lineIdx < e.buffer.len - 1:
-      lineIdx += 1
-      if isBlankLine(e.buffer.getLine(lineIdx)):
+proc findParagraph(
+    buffer: TextBuffer, start: BufferPosition, count: int, forward: bool
+): MotionLanding =
+  ## `}`/`{` as Vim's findpar: to the `count`-th empty line past a paragraph,
+  ## or the buffer's edge for the last; fails in place when the edge comes with
+  ## paragraphs still to go. `}` to the edge goes to the last character, which
+  ## an operator then takes.
+  let dir = if forward: 1 else: -1
+  var curr = start.line
+  for n in countdown(count - 1, 0):
+    var
+      skipped = false
+      first = true
+    while true:
+      let boundary = buffer.isParagraphBoundary(curr)
+      if not boundary:
+        skipped = true
+      if not first and skipped and boundary:
         break
-
-    result.y = lineIdx
-    result.x = 0
-    iterCount -= 1
-
-proc moveParagraphBackward(
-    e: MotionExecutor, currentPos: CursorPosition, count: int
-): CursorPosition =
-  ## Move to previous paragraph ({ motion)
-  ## A paragraph is defined as a block of text separated by blank lines
-  result = currentPos
-  var iterCount = count
-
-  while iterCount > 0:
-    var lineIdx = result.y
-
-    # If we're on a blank line, skip blank lines going backward
-    if lineIdx > 0 and isBlankLine(e.buffer.getLine(lineIdx)):
-      while lineIdx > 0 and isBlankLine(e.buffer.getLine(lineIdx)):
-        lineIdx -= 1
-
-    # Now find the previous blank line
-    while lineIdx > 0:
-      lineIdx -= 1
-      if isBlankLine(e.buffer.getLine(lineIdx)):
+      curr += dir
+      if curr < 0 or curr >= buffer.len:
+        if n > 0:
+          return MotionLanding(pos: start, motionType: mtExclusive, failed: true)
+        curr -= dir
         break
-
-    result.y = lineIdx
-    result.x = 0
-    iterCount -= 1
+      first = false
+  if forward and curr == buffer.len - 1:
+    let lineLen = buffer.lineRunesNoNl(curr).len
+    if lineLen > 0:
+      return MotionLanding(
+        pos: BufferPosition(line: curr, column: lineLen - 1), motionType: mtInclusive
+      )
+  MotionLanding(pos: BufferPosition(line: curr, column: 0), motionType: mtExclusive)
 
 proc moveToMatchingBracket(
     e: MotionExecutor, currentPos: CursorPosition
@@ -857,6 +781,141 @@ proc moveViewportLow(
   result.y = e.viewportRowLine(rl, viewportTop, visibleRows - count)
   result.x = 0
 
+proc rightForOperator(
+    buffer: TextBuffer, start: BufferPosition, count: int
+): MotionLanding =
+  ## `l` with an operator, as Vim's nv_right: past the last character it takes
+  ## that one, and on an empty line it takes nothing (`cl` still inserts).
+  let lineLen = buffer.lineRunesNoNl(start.line).len
+  if lineLen == 0:
+    MotionLanding(pos: start, motionType: mtExclusive)
+  elif start.column + count >= lineLen:
+    MotionLanding(
+      pos: BufferPosition(line: start.line, column: lineLen - 1),
+      motionType: mtInclusive,
+    )
+  else:
+    MotionLanding(
+      pos: BufferPosition(line: start.line, column: start.column + count),
+      motionType: mtExclusive,
+    )
+
+proc landMotion*(
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    cmd: MotionCommand,
+    viewportHeight: int = 24,
+    viewportTopLine: int = 0,
+    reservedLines: int = steadyBottomAreaHeight(),
+    mode: EditorMode = EditorMode.Normal,
+    rowLayout: RowLayout = RowLayout(),
+    viewportTopWrapOffset: int = 0,
+    operator = none(OperatorType),
+): MotionLanding =
+  ## Where `cmd` takes the cursor from `currentPos`, how `operator`, when one
+  ## waits, takes the text up to there, and whether the motion fails.
+  ## `visibleRows` is used for viewport-relative motions.
+  let
+    visibleRows = max(1, viewportHeight - max(0, reservedLines))
+    viewportTop = (line: viewportTopLine, offset: viewportTopWrapOffset)
+    start = BufferPosition(line: currentPos.y, column: currentPos.x)
+
+  proc at(pos: CursorPosition, motionType: MotionType): MotionLanding =
+    MotionLanding(
+      pos: BufferPosition(line: pos.y, column: pos.x), motionType: motionType
+    )
+
+  proc stuck(motionType: MotionType): MotionLanding =
+    MotionLanding(pos: start, motionType: motionType, failed: true)
+
+  proc offLine(pos: CursorPosition): MotionLanding =
+    ## A line motion fails when there is no line to go to (`k` on the first).
+    if pos.y == currentPos.y:
+      stuck(mtLinewise)
+    else:
+      at(pos, mtLinewise)
+
+  case cmd.motion
+  of Motion.Left:
+    at(e.moveLeft(currentPos, cmd.count), mtExclusive)
+  of Motion.Right:
+    if operator.isSome:
+      e.buffer.rightForOperator(start, cmd.count)
+    else:
+      at(e.moveRight(currentPos, cmd.count, mode), mtExclusive)
+  of Motion.Up:
+    offLine(e.moveUp(currentPos, cmd.count))
+  of Motion.Down:
+    offLine(e.moveDown(currentPos, cmd.count))
+  of Motion.PageUp:
+    at(e.movePageUp(currentPos, cmd.count, visibleRows, rowLayout), mtLinewise)
+  of Motion.PageDown:
+    at(e.movePageDown(currentPos, cmd.count, visibleRows, rowLayout), mtLinewise)
+  of Motion.HalfPageUp:
+    at(e.moveHalfPageUp(currentPos, cmd.count, visibleRows, rowLayout), mtLinewise)
+  of Motion.HalfPageDown:
+    at(e.moveHalfPageDown(currentPos, cmd.count, visibleRows, rowLayout), mtLinewise)
+  of Motion.Home:
+    at(e.moveHome(currentPos), mtExclusive)
+  of Motion.FirstNonBlank:
+    at(e.moveFirstNonBlank(currentPos), mtExclusive)
+  of Motion.LastNonBlank:
+    at(e.moveLastNonBlank(currentPos), mtInclusive)
+  of Motion.End:
+    at(e.moveEnd(currentPos, mode), mtInclusive)
+  of Motion.FirstLine:
+    at(e.moveFirstLine(currentPos), mtLinewise)
+  of Motion.LastLine:
+    at(e.moveLastLine(currentPos, cmd.count), mtLinewise)
+  of Motion.FindChar, Motion.FindCharBackward, Motion.TillChar, Motion.TillCharBackward:
+    let
+      found = e.searchChar(currentPos, cmd)
+      motionType =
+        if cmd.motion in {Motion.FindChar, Motion.TillChar}:
+          mtInclusive
+        else:
+          mtExclusive
+    if found.isNone:
+      stuck(motionType)
+    else:
+      at(found.get, motionType)
+  of Motion.WordForward:
+    e.buffer.wordForward(start, cmd.count, operator, mode)
+  of Motion.WordBackward:
+    e.buffer.wordBackward(start, cmd.count)
+  of Motion.WordEnd:
+    e.buffer.wordEnd(start, cmd.count, mode)
+  of Motion.WordEndBackward:
+    e.buffer.wordEndBackward(start, cmd.count)
+  of Motion.ParagraphForward:
+    e.buffer.findParagraph(start, cmd.count, forward = true)
+  of Motion.ParagraphBackward:
+    e.buffer.findParagraph(start, cmd.count, forward = false)
+  of Motion.ViewportHigh:
+    at(e.moveViewportHigh(currentPos, viewportTop, cmd.count, rowLayout), mtLinewise)
+  of Motion.ViewportMiddle:
+    at(
+      e.moveViewportMiddle(currentPos, viewportTop, visibleRows, rowLayout), mtLinewise
+    )
+  of Motion.ViewportLow:
+    at(
+      e.moveViewportLow(currentPos, viewportTop, visibleRows, cmd.count, rowLayout),
+      mtLinewise,
+    )
+  of Motion.NextLineFirstNonBlank:
+    offLine(e.moveNextLineFirstNonBlank(currentPos, cmd.count))
+  of Motion.PreviousLineFirstNonBlank:
+    offLine(e.movePreviousLineFirstNonBlank(currentPos, cmd.count))
+  of Motion.MatchBracket:
+    let pos = e.moveToMatchingBracket(currentPos)
+    if pos == currentPos:
+      stuck(mtInclusive)
+    else:
+      at(pos, mtInclusive)
+  of Motion.RepeatFind, Motion.RepeatFindReverse:
+    # Must be resolved to a concrete motion before reaching here.
+    raiseAssert "RepeatFind must be resolved before landMotion"
+
 proc calculateNewPosition*(
     e: MotionExecutor,
     currentPos: CursorPosition,
@@ -868,74 +927,13 @@ proc calculateNewPosition*(
     rowLayout: RowLayout = RowLayout(),
     viewportTopWrapOffset: int = 0,
 ): CursorPosition =
-  ## New cursor position after motion (no state change). `visibleRows` is used for viewport-relative motions.
-  let
-    visibleRows = max(1, viewportHeight - max(0, reservedLines))
-    viewportTop = (line: viewportTopLine, offset: viewportTopWrapOffset)
-  case cmd.motion
-  of Motion.Left:
-    e.moveLeft(currentPos, cmd.count)
-  of Motion.Right:
-    e.moveRight(currentPos, cmd.count, mode)
-  of Motion.Up:
-    e.moveUp(currentPos, cmd.count)
-  of Motion.Down:
-    e.moveDown(currentPos, cmd.count)
-  of Motion.PageUp:
-    e.movePageUp(currentPos, cmd.count, visibleRows, rowLayout)
-  of Motion.PageDown:
-    e.movePageDown(currentPos, cmd.count, visibleRows, rowLayout)
-  of Motion.HalfPageUp:
-    e.moveHalfPageUp(currentPos, cmd.count, visibleRows, rowLayout)
-  of Motion.HalfPageDown:
-    e.moveHalfPageDown(currentPos, cmd.count, visibleRows, rowLayout)
-  of Motion.Home:
-    e.moveHome(currentPos)
-  of Motion.FirstNonBlank:
-    e.moveFirstNonBlank(currentPos)
-  of Motion.LastNonBlank:
-    e.moveLastNonBlank(currentPos)
-  of Motion.End:
-    e.moveEnd(currentPos, mode)
-  of Motion.FirstLine:
-    e.moveFirstLine(currentPos)
-  of Motion.LastLine:
-    e.moveLastLine(currentPos, cmd.count)
-  of Motion.FindChar:
-    e.findChar(currentPos, cmd.targetChar, cmd.count)
-  of Motion.FindCharBackward:
-    e.findCharBackward(currentPos, cmd.targetChar, cmd.count)
-  of Motion.TillChar:
-    e.tillChar(currentPos, cmd.targetChar, cmd.count)
-  of Motion.TillCharBackward:
-    e.tillCharBackward(currentPos, cmd.targetChar, cmd.count)
-  of Motion.WordForward:
-    e.moveWordForward(currentPos, cmd.count)
-  of Motion.WordBackward:
-    e.moveWordBackward(currentPos, cmd.count)
-  of Motion.WordEnd:
-    e.moveWordEnd(currentPos, cmd.count)
-  of Motion.WordEndBackward:
-    e.moveWordEndBackward(currentPos, cmd.count)
-  of Motion.ParagraphForward:
-    e.moveParagraphForward(currentPos, cmd.count)
-  of Motion.ParagraphBackward:
-    e.moveParagraphBackward(currentPos, cmd.count)
-  of Motion.ViewportHigh:
-    e.moveViewportHigh(currentPos, viewportTop, cmd.count, rowLayout)
-  of Motion.ViewportMiddle:
-    e.moveViewportMiddle(currentPos, viewportTop, visibleRows, rowLayout)
-  of Motion.ViewportLow:
-    e.moveViewportLow(currentPos, viewportTop, visibleRows, cmd.count, rowLayout)
-  of Motion.NextLineFirstNonBlank:
-    e.moveNextLineFirstNonBlank(currentPos, cmd.count)
-  of Motion.PreviousLineFirstNonBlank:
-    e.movePreviousLineFirstNonBlank(currentPos, cmd.count)
-  of Motion.MatchBracket:
-    e.moveToMatchingBracket(currentPos)
-  of Motion.RepeatFind, Motion.RepeatFindReverse:
-    # Must be resolved to a concrete motion before reaching here.
-    raiseAssert "RepeatFind must be resolved before calculateNewPosition"
+  ## New cursor position after motion (no state change). A failed motion
+  ## leaves the cursor as far as it went.
+  let landing = e.landMotion(
+    currentPos, cmd, viewportHeight, viewportTopLine, reservedLines, mode, rowLayout,
+    viewportTopWrapOffset,
+  )
+  CursorPosition(x: landing.pos.column, y: landing.pos.line)
 
 proc newCursorManager*(state: EditorState): CursorManager =
   CursorManager(state: state)
@@ -1236,23 +1234,20 @@ const
     Motion.NextLineFirstNonBlank, Motion.PreviousLineFirstNonBlank,
   } ## Motions onto a line's start or end.
 
-proc executeMotion*(
+proc landMotion*(
     controller: MotionController,
     cmd: MotionCommand,
-    currentCursorPos: BufferPosition,
-    updateViewport: bool = true,
+    start: BufferPosition,
+    operator = none(OperatorType),
     aimedColumn = -1,
-): Result[BufferPosition, string] =
-  ## Execute motion and return new cursor position. A vertical motion aims for
-  ## `aimedColumn`, or for the column of `currentCursorPos` when it is -1.
+): MotionLanding =
+  ## Where `cmd` takes the cursor from `start`, how `operator`, when one
+  ## waits, takes the text up to there, and whether the motion fails. A
+  ## vertical motion aims for `aimedColumn`, or for the column of `start` when
+  ## it is -1. Leaves the viewport alone. Only a cursor move is kept on the
+  ## line and out of closed folds; an operator widens over folds itself.
   let effectiveX =
-    if cmd.motion in VerticalMotions and aimedColumn >= 0:
-      aimedColumn
-    else:
-      currentCursorPos.column
-
-  # Convert to CursorPosition for internal calculations
-  let currentPos = CursorPosition(x: effectiveX, y: currentCursorPos.line)
+    if cmd.motion in VerticalMotions and aimedColumn >= 0: aimedColumn else: start.column
 
   let
     actualReservedLines = controller.cursorManager.state.motionReservedLines()
@@ -1267,16 +1262,49 @@ proc executeMotion*(
       controller.cursorManager.state.tabStop,
     )
 
-  var newPos = controller.executor.calculateNewPosition(
-    currentPos, cmd, controller.viewportManager.viewport.height,
-    controller.viewportManager.viewport.topLine, actualReservedLines,
-    controller.cursorManager.state.mode, rowLayout,
+  result = controller.executor.landMotion(
+    CursorPosition(x: effectiveX, y: start.line),
+    cmd,
+    controller.viewportManager.viewport.height,
+    controller.viewportManager.viewport.topLine,
+    actualReservedLines,
+    controller.cursorManager.state.mode,
+    rowLayout,
     controller.viewportManager.viewport.topWrapOffset,
+    operator,
   )
+  # A failed motion that did not move stays where it started, even off the
+  # aimed column.
+  if result.failed and result.pos == BufferPosition(
+    line: start.line, column: effectiveX
+  ):
+    result.pos = start
+  if operator.isNone:
+    let clamped = controller.cursorManager.clampPosition(
+      CursorPosition(x: result.pos.column, y: result.pos.line),
+      controller.executor.buffer,
+    )
+    result.pos = BufferPosition(line: clamped.y, column: clamped.x)
 
-  newPos = controller.cursorManager.clampPosition(newPos, controller.executor.buffer)
+proc executeMotion*(
+    controller: MotionController,
+    cmd: MotionCommand,
+    currentCursorPos: BufferPosition,
+    updateViewport: bool = true,
+    aimedColumn = -1,
+): Result[BufferPosition, string] =
+  ## Execute motion and return new cursor position. A failed motion leaves the
+  ## cursor as far as it went. A vertical motion aims for `aimedColumn`, or for
+  ## the column of `currentCursorPos` when it is -1.
+  let landing = controller.landMotion(cmd, currentCursorPos, aimedColumn = aimedColumn)
+  let newPos = CursorPosition(x: landing.pos.column, y: landing.pos.line)
 
+  let
+    actualReservedLines = controller.cursorManager.state.motionReservedLines()
+    lineWrap = controller.cursorManager.state.effectiveLineWrap()
   if updateViewport:
+    let viewportOffset =
+      viewportOffsetFor(controller.executor.buffer, controller.cursorManager.state)
     controller.viewportManager.updateViewport(
       newPos, controller.executor.buffer.len,
       controller.cursorManager.state.showStatusLine, actualReservedLines, lineWrap,
@@ -1309,117 +1337,6 @@ proc moveCursorByMotion*(
       state.preferredColumn = aimed
     elif result.get != start or cmd.motion in LineEdgeMotions:
       state.preferredColumn = -1
-
-## Operator+motion classification. Linewise / exclusive / inclusive
-## determines operator+motion range. Use `isLinewiseMotion`/`isExclusiveMotion`.
-
-const LinewiseMotions* = {
-  Motion.Up, Motion.Down, Motion.FirstLine, Motion.LastLine, Motion.PageUp,
-  Motion.PageDown, Motion.HalfPageUp, Motion.HalfPageDown, Motion.ParagraphForward,
-  Motion.ParagraphBackward, Motion.NextLineFirstNonBlank,
-  Motion.PreviousLineFirstNonBlank,
-}
-
-const ExclusiveMotions* = {
-  Motion.WordForward, # w
-  Motion.WordBackward, # b
-  Motion.Right, # l (when used with operator)
-  Motion.Left, # h (when used with operator)
-  Motion.Home, # 0
-  Motion.FirstNonBlank, # ^
-}
-
-const NoMoveNoOpMotions* =
-  LinewiseMotions + {
-    Motion.Left, Motion.Home, Motion.FirstNonBlank, Motion.WordBackward
-  }
-  ## "No move" as no-op for operator (vim bell). Excludes forward motions where cursor char is valid.
-
-func isLinewiseMotion*(motion: Motion): bool {.inline.} =
-  ## True if motion is linewise for operator.
-  motion in LinewiseMotions
-
-func isExclusiveMotion*(motion: Motion): bool {.inline.} =
-  ## True if motion is exclusive (end char excluded).
-  motion in ExclusiveMotions
-
-proc lineContentNoNewline(buffer: TextBuffer, lineIdx: int): string =
-  ## Get the content of a line excluding any trailing newline.
-  ## Returns empty string when lineIdx is out of range.
-  if lineIdx < 0 or lineIdx >= buffer.len:
-    return ""
-  let line = buffer.getLine(lineIdx)
-  if line.len > 0 and line[^1] == '\n':
-    line[0 ..< ^1]
-  else:
-    line
-
-proc wordForwardReachesEol(buffer: TextBuffer, pos: BufferPosition): bool =
-  ## True if `w` from `pos` runs past the last character on its line. When
-  ## this happens, `dw` should delete through the last character instead of
-  ## applying the usual exclusive (decrement-by-1) adjustment -- this is the
-  ## "w stuck at last line of buffer" special case in Vim.
-  if pos.line < 0 or pos.line >= buffer.len:
-    return false
-  let runes = lineContentNoNewline(buffer, pos.line).toCharRunes()
-  skipWordForward(runes, pos.column) >= runes.len
-
-proc calculateOperatorRange*(
-    buffer: TextBuffer, startPos: BufferPosition, endPos: BufferPosition, motion: Motion
-): OperatorRange =
-  ## Calculate the range affected by an operator+motion combination
-  ## Returns OperatorRange with proper start/end and linewise flag
-
-  let isLinewise = motion.isLinewiseMotion()
-  let isExclusive = motion.isExclusiveMotion()
-
-  var range = OperatorRange(start: startPos, endPos: endPos, isLinewise: isLinewise)
-
-  # Ensure start comes before end
-  if range.start.line > range.endPos.line or (
-    range.start.line == range.endPos.line and range.start.column > range.endPos.column
-  ):
-    swap(range.start, range.endPos)
-
-  # For exclusive motions in characterwise mode, exclude the endPos character
-  # by moving endPos back by 1 column (this matches Vim's behavior)
-  if isExclusive and not isLinewise:
-    # For WordForward (dw), if the motion crosses lines, stop at end of current line
-    # Vim's dw does NOT delete the newline - it only deletes to end of line
-    if motion == Motion.WordForward and range.endPos.line > range.start.line:
-      range.endPos.line = range.start.line
-      if range.start.line < buffer.len:
-        let endCol = lineContentNoNewline(buffer, range.start.line).charLen - 1
-        range.endPos.column = max(range.start.column, endCol)
-    # Only adjust if we're not at the start of the range
-    elif range.endPos.line == range.start.line and
-        range.endPos.column > range.start.column:
-      if motion == Motion.WordForward and wordForwardReachesEol(buffer, range.start):
-        # w "stuck" at last line - delete to EOL without exclusive adjustment
-        let endCol = lineContentNoNewline(buffer, range.start.line).charLen - 1
-        range.endPos.column = max(range.start.column, endCol)
-      else:
-        # Standard exclusive adjustment (covers non-WordForward motions and
-        # WordForward with a real next word on this line)
-        range.endPos.column -= 1
-    elif range.endPos.line > range.start.line and range.endPos.column > 0:
-      # Different line - move column back
-      range.endPos.column -= 1
-    elif range.endPos.line > range.start.line and range.endPos.column == 0:
-      # endPos.column == 0 on a different line: move to previous line's end
-      range.endPos.line -= 1
-      if range.endPos.line >= 0 and range.endPos.line < buffer.len:
-        let endCol = lineContentNoNewline(buffer, range.endPos.line).charLen - 1
-        range.endPos.column = max(0, endCol)
-
-  # For linewise operations, extend to full lines
-  if isLinewise:
-    range.start.column = 0
-    if range.endPos.line < buffer.len:
-      let endLine = buffer.getLine(range.endPos.line)
-      range.endPos.column = endLine.charLen
-
-  return range
 
 proc snapOperatorRange*(buffer: TextBuffer, range: OperatorRange): OperatorRange =
   ## Widen an operator range so a closed fold either end lies in is covered
@@ -2034,166 +1951,129 @@ proc findQuotedBoundaries(
       )
     )
 
-proc findMatchingParen(
+proc incl(w: var WordWalker): int =
+  ## Vim's incl: one step forward, over the end of a non-empty line.
+  result = w.inc
+  if result >= 1 and w.pos.column > 0:
+    result = w.inc
+
+proc decl(w: var WordWalker): int =
+  ## Vim's decl: one step back, over the end of a non-empty line.
+  result = w.dec
+  if result == 1 and w.pos.column > 0:
+    result = w.dec
+
+proc inIndent(w: WordWalker): bool =
+  ## Vim's inindent(1): on a blank before the line's first non-blank.
+  var blanks = 0
+  while blanks < w.runes.len and w.runes[blanks] in [Rune(' '), Rune('\t')]:
+    blanks += 1
+  blanks >= w.pos.column + 1
+
+proc findUnmatched(
+    buffer: TextBuffer, start: BufferPosition, target, other: Rune, forward: bool
+): Option[BufferPosition] =
+  ## Vim's findmatch for a bracket: the first `target` from `start`, not
+  ## counting the character there, that no `other` passed on the way pairs
+  ## with. Brackets in quotes count; escaped ones do not ('cpoptions' with `%`
+  ## and without `M`).
+  var
+    w = initWordWalker(buffer, start)
+    depth = 0
+  while (if forward: w.inc else: w.dec) != -1:
+    if w.pos.column >= w.runes.len:
+      continue
+    let r = w.runes[w.pos.column]
+    if (r != target and r != other) or w.runes.isEscaped(w.pos.column):
+      continue
+    if r == other:
+      depth += 1
+    elif depth == 0:
+      return some(w.pos)
+    else:
+      depth -= 1
+  none(BufferPosition)
+
+proc currentBlock(
     buffer: TextBuffer,
     cursor: BufferPosition,
-    openChar: char,
-    closeChar: char,
+    openChar, closeChar: char,
     inner: bool,
+    count: int,
 ): Result[TextObjectRange, string] =
-  ## Find matching parenthesis/bracket/brace boundaries across multiple lines
-  ## inner=true: content inside delimiters
-  ## inner=false: content + delimiters
-
+  ## i( a( i{ a{ i[ a[ i< a< as Vim's current_block: the `count`-th block
+  ## around the cursor, or the next one after it when it is in none. The inner
+  ## block leaves out the indent before a closing bracket that starts its
+  ## line, and then stops at that line's start, which an operator takes as
+  ## whole lines when the block's first line holds nothing but its opening.
   if cursor.line < 0 or cursor.line >= buffer.len:
     return err("Cursor position out of bounds")
+  let
+    open = Rune(openChar)
+    close = Rune(closeChar)
 
-  # Search backward for opening delimiter
-  var depth = 0
-  var startLine = cursor.line
-  var startCol = -1
+  var w = initWordWalker(buffer, cursor)
+  if openChar == '{':
+    # `{` ignores the indent the cursor is in.
+    while w.inIndent:
+      if w.inc != 0:
+        break
+  if w.pos.column < w.runes.len and w.runes[w.pos.column] == open:
+    w.pos.column += 1
 
-  # Check if cursor is on a closing delimiter
-  let cursorLine = buffer.getLine(cursor.line)
-  let cursorRunes = cursorLine.toCharRunes()
-  let cursorCol = min(cursor.column, max(0, cursorRunes.len - 1))
-
-  if cursorRunes.len > 0 and cursorCol < cursorRunes.len and
-      cursorRunes[cursorCol] == Rune(closeChar):
-    depth = 1
-
-  # When the cursor sits on a close delimiter, depth is seeded with that close
-  # and the open that pops it back to 0 is the match. Closed pairs passed over
-  # during the scan must not match when they balance out.
-  let cursorOnClose = depth > 0
-
-  # Search backward from cursor position
-  var searchLine = cursor.line
-  var searchCol = cursorCol - (if depth > 0: 1 else: 0)
-
-  block searchBackward:
-    while searchLine >= 0:
-      let line = buffer.getLine(searchLine)
-      let runes = line.toCharRunes()
-
-      # Adjust starting column for each line
-      if searchLine < cursor.line:
-        searchCol = runes.len - 1
-
-      while searchCol >= 0:
-        if searchCol < runes.len:
-          if runes[searchCol] == Rune(closeChar):
-            depth.inc
-          elif runes[searchCol] == Rune(openChar):
-            if depth == 0:
-              startLine = searchLine
-              startCol = searchCol
-              break searchBackward
-            else:
-              depth.dec
-              if cursorOnClose and depth == 0:
-                startLine = searchLine
-                startCol = searchCol
-                break searchBackward
-        searchCol.dec
-
-      searchLine.dec
-      if searchLine >= 0:
-        let nextLine = buffer.getLine(searchLine)
-        searchCol = nextLine.charLen - 1
-
-  if startCol < 0:
+  var openPos = buffer.findUnmatched(w.pos, open, close, forward = false)
+  # In no block, the next one after the cursor.
+  let forward = openPos.isNone
+  if forward:
+    openPos = buffer.findUnmatched(w.pos, open, close, forward = true)
+  for _ in 2 .. max(1, count):
+    if openPos.isNone:
+      break
+    openPos = buffer.findUnmatched(openPos.get, open, close, forward)
+  if openPos.isNone:
     return err("No opening delimiter found")
-
-  # Search forward for closing delimiter
-  var endLine = -1
-  var endCol = -1
-  depth = 0
-
-  searchLine = startLine
-  searchCol = startCol + 1
-
-  block searchForward:
-    while searchLine < buffer.len:
-      let line = buffer.getLine(searchLine)
-      let runes = line.toCharRunes()
-
-      # Adjust starting column for each line
-      if searchLine > startLine:
-        searchCol = 0
-
-      while searchCol < runes.len:
-        if runes[searchCol] == Rune(openChar):
-          depth.inc
-        elif runes[searchCol] == Rune(closeChar):
-          if depth == 0:
-            endLine = searchLine
-            endCol = searchCol
-            break searchForward
-          else:
-            depth.dec
-        searchCol.inc
-
-      searchLine.inc
-      searchCol = 0
-
-  if endCol < 0:
+  let closePos = buffer.findUnmatched(openPos.get, close, open, forward = true)
+  if closePos.isNone:
     return err("No closing delimiter found")
 
-  if inner:
-    # Inner: content only (exclude delimiters)
-    let startPos = BufferPosition(line: startLine, column: startCol + 1)
-    if startLine == endLine:
-      if endCol <= startCol + 1:
-        # Empty delimiters like (): vim's `ci(` still enters Insert mode between
-        # the delimiters, so return an empty (no-op) range there.
-        return ok(
-          TextObjectRange(
-            start: startPos, endPos: startPos, isLinewise: false, isEmpty: true
-          )
-        )
-      return ok(
-        TextObjectRange(
-          start: startPos,
-          endPos: BufferPosition(line: endLine, column: endCol - 1),
-          isLinewise: false,
-        )
-      )
-    # Multi-line inner. When the close delimiter sits at column 0 the inner
-    # content ends with the line break before it, so the inclusive end is the
-    # previous line's end-of-content column -- deleting through that position
-    # also consumes the trailing newline and joins the lines, collapsing a block
-    # like `(\n  x\n)` to `()`. A naive `endCol - 1` here would be -1 and the
-    # delete would fail. Otherwise the close shares a line with content and the
-    # end is `endCol - 1` as usual.
-    if endCol == 0 and startLine + 1 == endLine and
-        startCol + 1 >= buffer.getLine(startLine).charLen:
-      # Only the boundary newline lies between the delimiters (e.g. `(\n)`); the
-      # inclusive range can't delete just that newline without clipping a
-      # delimiter, so return an empty (no-op) range -- `ci(` still inserts here.
-      let pos = BufferPosition(line: endLine, column: endCol)
-      return
-        ok(TextObjectRange(start: pos, endPos: pos, isLinewise: false, isEmpty: true))
-    let endPos =
-      if endCol == 0:
-        BufferPosition(line: endLine - 1, column: buffer.getLine(endLine - 1).charLen)
-      else:
-        BufferPosition(line: endLine, column: endCol - 1)
-    return ok(TextObjectRange(start: startPos, endPos: endPos, isLinewise: false))
-  else:
-    # Around: content + delimiters (deleteRange is inclusive, so endCol is correct)
+  if not inner:
+    return ok(TextObjectRange(start: openPos.get, endPos: closePos.get))
+
+  var first = initWordWalker(buffer, openPos.get)
+  discard first.incl
+  var last = initWordWalker(buffer, closePos.get)
+  var startsLine = last.pos.column == 0
+  discard last.decl
+  while last.inIndent:
+    startsLine = true
+    if last.decl != 0:
+      break
+  if startsLine:
+    discard last.incl
     return ok(
       TextObjectRange(
-        start: BufferPosition(line: startLine, column: startCol),
-        endPos: BufferPosition(line: endLine, column: endCol),
-        isLinewise: false,
+        start: first.pos,
+        endPos: last.pos,
+        exclusive: true,
+        isEmpty: first.pos == last.pos,
       )
     )
+  if first.pos <= last.pos:
+    return ok(TextObjectRange(start: first.pos, endPos: last.pos))
+  # Nothing between the brackets: `ci(` still inserts there.
+  ok(TextObjectRange(start: first.pos, endPos: first.pos, isEmpty: true))
 
-proc lineRunesNoNl(buffer: TextBuffer, line: int): seq[Rune] =
-  ## The line's characters with any trailing newline stripped, in the column
-  ## model buffer positions use. Out-of-range lines yield an empty seq.
-  lineContentNoNewline(buffer, line).toCharRunes()
+proc lastCell*(r: TextObjectRange, buffer: TextBuffer): BufferPosition =
+  ## The last place the object covers, as Visual mode selects it: before an
+  ## exclusive end, the line break ahead of it when that starts a line.
+  if not r.exclusive:
+    r.endPos
+  elif r.endPos.column > 0:
+    BufferPosition(line: r.endPos.line, column: r.endPos.column - 1)
+  else:
+    BufferPosition(
+      line: r.endPos.line - 1, column: buffer.getLine(r.endPos.line - 1).charLen
+    )
 
 proc findParagraphBoundaries(
     buffer: TextBuffer, cursor: BufferPosition, inner: bool
@@ -2669,13 +2549,13 @@ proc calculateBaseTextObjectRange(
   of toQuotedBacktick:
     return findQuotedBoundaries(buffer, cursor, '`', inner)
   of toParenthesis:
-    return findMatchingParen(buffer, cursor, '(', ')', inner)
+    return currentBlock(buffer, cursor, '(', ')', inner, 1)
   of toBracket:
-    return findMatchingParen(buffer, cursor, '[', ']', inner)
+    return currentBlock(buffer, cursor, '[', ']', inner, 1)
   of toBrace:
-    return findMatchingParen(buffer, cursor, '{', '}', inner)
+    return currentBlock(buffer, cursor, '{', '}', inner, 1)
   of toAngleBracket:
-    return findMatchingParen(buffer, cursor, '<', '>', inner)
+    return currentBlock(buffer, cursor, '<', '>', inner, 1)
   of toSentence:
     return findSentenceBoundaries(buffer, cursor, inner)
   of toParagraph:
@@ -2716,8 +2596,7 @@ proc calculateTextObjectRange*(
     count: int = 1,
 ): Result[TextObjectRange, string] =
   ## Range of a text object, extended over `count` objects (d2iw, 2dap, d3is,
-  ## 2dat). `count <= 1` is a single object. Counts are honoured for word/WORD,
-  ## paragraph, sentence and tag; the bracket/quote kinds ignore it.
+  ## 2dat, d2i(). `count <= 1` is a single object. The quote kinds ignore it.
   let base = calculateBaseTextObjectRange(buffer, cursor, kind, modifier)
   if base.isErr or count <= 1:
     return base
@@ -2791,7 +2670,15 @@ proc calculateTextObjectRange*(
         toRange.endPos = if lastInner.isOk: lastInner.value.endPos else: endAround
       else:
         toRange.endPos = endAround
-  else:
-    discard # bracket/quote kinds: count is not supported
+  of toParenthesis:
+    return currentBlock(buffer, cursor, '(', ')', modifier == tomInner, count)
+  of toBracket:
+    return currentBlock(buffer, cursor, '[', ']', modifier == tomInner, count)
+  of toBrace:
+    return currentBlock(buffer, cursor, '{', '}', modifier == tomInner, count)
+  of toAngleBracket:
+    return currentBlock(buffer, cursor, '<', '>', modifier == tomInner, count)
+  of toQuotedDouble, toQuotedSingle, toQuotedBacktick:
+    discard # count is not supported
 
   return ok(toRange)

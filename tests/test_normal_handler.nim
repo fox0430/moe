@@ -522,8 +522,11 @@ suite "NormalModeHandler - Register Selection":
     let r = handler.handleNormalModeKey(buf, state, viewport, aKey)
 
     check r.kind == nmrHandled
-    check state.pendingInput.pendingRegister.isSome
-    check state.pendingInput.pendingRegister.get == 'a'
+    # The router holds it until the next command, which takes it.
+    check handler.keyBindingRegistry.sequenceState.register == some('a')
+    let lKey = KeyCombo(isSpecial: false, char: "l", modifiers: {})
+    discard handler.handleNormalModeKey(buf, state, viewport, lKey)
+    check handler.keyBindingRegistry.sequenceState.register.isNone
 
   test "Register selection cancelled on invalid register":
     let buf = newTextBuffer()
@@ -539,7 +542,8 @@ suite "NormalModeHandler - Register Selection":
     let r = handler.handleNormalModeKey(buf, state, viewport, bangKey)
 
     check r.kind == nmrHandled
-    check state.pendingInput.pendingRegister.isNone
+    check state.statusMessage == "Invalid register"
+    check handler.keyBindingRegistry.sequenceState.register.isNone
 
   test "Register selection cancelled on special key":
     let buf = newTextBuffer()
@@ -555,7 +559,7 @@ suite "NormalModeHandler - Register Selection":
     let r = handler.handleNormalModeKey(buf, state, viewport, escKey)
 
     check r.kind == nmrHandled
-    check state.pendingInput.pendingRegister.isNone
+    check not handler.keyBindingRegistry.hasActiveSequence()
 
 suite "NormalModeHandler - Special Results":
   test "nmrPassthrough(ptSaveAndQuit) result":
@@ -933,7 +937,7 @@ suite "NormalModeHandler - Text Object Pending State":
     let viewport = createTestViewport()
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
 
     # Press Escape to cancel
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
@@ -1074,7 +1078,7 @@ suite "NormalModeHandler - Text Object Handling":
 
     # Set up pending text object state
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
@@ -1099,7 +1103,7 @@ suite "NormalModeHandler - Text Object Handling":
     let viewport = createTestViewport()
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomAround, operatorCount: 1))
+      some(PendingTextObject(modifier: tomAround, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpYank,
@@ -1125,7 +1129,7 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpChange,
@@ -1151,7 +1155,7 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
@@ -1176,7 +1180,7 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 6)
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
@@ -1201,7 +1205,7 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomAround, operatorCount: 1))
+      some(PendingTextObject(modifier: tomAround, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpYank,
@@ -1215,7 +1219,8 @@ suite "NormalModeHandler - Text Object Handling":
 
     check r.kind == nmrHandled
     check buf.getLine(0) == "arr[0, 1, 2]"
-    check state.cursor == BufferPosition(line: 0, column: 5)
+    # Vim leaves the cursor where the yanked text starts
+    check state.cursor == BufferPosition(line: 0, column: 3)
     check state.registers.getNoNamedRegister().getContent() == "[0, 1, 2]"
 
   test "Text object brace":
@@ -1227,7 +1232,7 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
@@ -1252,7 +1257,7 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
@@ -1277,7 +1282,7 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomAround, operatorCount: 1))
+      some(PendingTextObject(modifier: tomAround, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
@@ -1301,7 +1306,7 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 1)
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpYank,
@@ -1327,7 +1332,7 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
@@ -1351,7 +1356,7 @@ suite "NormalModeHandler - Text Object Handling":
     let viewport = createTestViewport()
 
     state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+      some(PendingTextObject(modifier: tomInner, count: 1))
     state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
@@ -1685,7 +1690,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let r2 = handler.handleNormalModeKey(buf, state, viewport, aKey)
     check r2.kind == nmrPlaybackMacro
 
-  test "register-select (\"a) sets pendingRegister":
+  test "register-select (\"a) names the register of the next command":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1701,7 +1706,12 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let aKey = KeyCombo(isSpecial: false, char: "a")
     let r2 = handler.handleNormalModeKey(buf, state, viewport, aKey)
     check r2.kind == nmrHandled
-    check state.pendingInput.pendingRegister == some('a')
+    check handler.keyBindingRegistry.sequenceState.register == some('a')
+
+    let xKey = KeyCombo(isSpecial: false, char: "x")
+    discard handler.handleNormalModeKey(buf, state, viewport, xKey)
+    check state.registers.getNamedRegister('a').getContent() == "H"
+    check not handler.keyBindingRegistry.hasActiveSequence()
 
   test "macro recording rejects a multi-character register name":
     # "ab" must not be read as register 'a' via its first byte.
@@ -1750,7 +1760,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let abKey = KeyCombo(isSpecial: false, char: "ab")
     let r2 = handler.handleNormalModeKey(buf, state, viewport, abKey)
     check r2.kind == nmrHandled
-    check state.pendingInput.pendingRegister.isNone
+    check handler.keyBindingRegistry.sequenceState.register.isNone
 
   test "macro recording rejects single multibyte and empty register names":
     for ch in @["あ", "é", ""]:
@@ -1791,7 +1801,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
       let key = KeyCombo(isSpecial: false, char: ch)
       let r2 = handler.handleNormalModeKey(buf, state, viewport, key)
       check r2.kind == nmrHandled
-      check state.pendingInput.pendingRegister.isNone
+      check handler.keyBindingRegistry.sequenceState.register.isNone
 
   test "quickrun (\\r) returns ptQuickRun":
     let buf = newTextBuffer()
@@ -2560,24 +2570,21 @@ suite "NormalModeHandler - dgn (delete search match forward)":
     check result.kind == nmrHandled
     check state.registers.getNoNamedRegister().getContent() == "world"
 
-  test "dgn keeps the registers when the transaction cannot start":
-    # An already-open transaction makes the delete fail. Registers live outside
-    # the buffer transaction, so they must only be written once the delete went
-    # through
+  test "dgn keeps the registers on a read-only buffer":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    buf.readOnly = true
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
     state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 0)
     state.registers.setDeletedRegister("SEED", false)
-    check buf.beginTransaction("outer").isOk
 
-    let result = pressDgn(handler, buf, state, viewport)
-    check result.kind == nmrError
+    discard pressDgn(handler, buf, state, viewport)
     check state.registers.getSmallDeleteRegister().getContent() == "SEED"
     check buf.getLine(0) == "hello world hello"
+    check state.pendingInput.pendingOperator.isNone
 
   test "dgn stays in Normal mode":
     let buf = newTextBuffer()
@@ -2644,8 +2651,7 @@ suite "NormalModeHandler - cgn (change search match forward)":
 
     let result = pressCgn(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Insert
+    check state.mode == EditorMode.Insert
     check buf.getLine(0) == "hello  hello"
 
 suite "NormalModeHandler - guu / gUU (case operator on lines)":
@@ -2774,12 +2780,13 @@ suite "NormalModeHandler - guu / gUU (case operator on lines)":
     discard pressKeys(handler, buf, state, viewport, @["."])
     check buf.getLine(1) == "two"
 
-  test "du falls through to undo (only gu/gU consume u)":
+  test "du cancels the operator without undoing (only gu/gU consume u)":
+    # Undo is no motion, so `u` cancels `d` and does not run, as in Vim.
     let (buf, handler, state, viewport) = setupTwoLines()
 
     discard pressKeys(handler, buf, state, viewport, @["d", "u"])
-    # `u` reached edit.undo, which reverted the insert done by the setup
-    check buf.getLine(0) == ""
+    check buf.getLine(0) == "Hello World"
+    check state.pendingInput.pendingOperator.isNone
 
   test "gugu does not leave a stale g in the router":
     # Regression: the intermediate `g` was retained; the next `g` fired `gg`.
@@ -2933,22 +2940,22 @@ block namedMarks:
     doAssert press(handler, buf, state, "j").kind == nmrHandled
     doAssert state.cursor.line == 1
 
-  block markCommandsConsumePendingRegister:
+  block markCommandsConsumeRegister:
     let buf = newTextBuffer()
     doAssert buf.insertText(BufferPosition(), "one\ntwo").isOk
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.cursor.line = 1
     doAssert press(handler, buf, state, "\"amb").kind == nmrHandled
-    doAssert state.pendingInput.pendingRegister.isNone
+    doAssert not handler.keyBindingRegistry.hasActiveSequence()
     state.cursor.line = 0
     doAssert press(handler, buf, state, "\"c'b").kind == nmrHandled
-    doAssert state.pendingInput.pendingRegister.isNone
+    doAssert not handler.keyBindingRegistry.hasActiveSequence()
     doAssert state.cursor.line == 1
     doAssert press(handler, buf, state, "\"c'z").kind == nmrError
-    doAssert state.pendingInput.pendingRegister.isNone
+    doAssert not handler.keyBindingRegistry.hasActiveSequence()
 
-  block markOperatorsUsePendingRegister:
+  block markOperatorsUseRegister:
     for operator in ["d", "y", "c"]:
       for motion in ["'", "`"]:
         let buf = newTextBuffer("one\ntwo\nthree")
@@ -2964,17 +2971,17 @@ block namedMarks:
         doAssert state.registers.getNamedRegister('q').getContent() == expected,
           operator & motion & repr(state.registers.getNamedRegister('q').getContent())
         doAssert state.registers.isRegisterLinewise('q') == (motion == "'")
-        doAssert state.pendingInput.pendingRegister.isNone
+        doAssert not handler.keyBindingRegistry.hasActiveSequence()
         doAssert state.pendingInput.pendingOperator.isNone
 
-  block failedMarkOperatorsConsumePendingRegister:
+  block failedMarkOperatorsConsumeRegister:
     for motion in ["'", "`"]:
       for name in ["z", "1"]:
         let buf = newTextBuffer("one\ntwo")
         let handler = createTestHandler(buf)
         let state = createTestState()
         doAssert press(handler, buf, state, "\"qd" & motion & name).kind == nmrError
-        doAssert state.pendingInput.pendingRegister.isNone
+        doAssert not handler.keyBindingRegistry.hasActiveSequence()
         doAssert state.pendingInput.pendingOperator.isNone
         doAssert buf.getLine(0) == "one"
         doAssert buf.len == 2

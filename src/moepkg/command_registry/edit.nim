@@ -31,7 +31,7 @@ import
   ]
 import ../buffer/[core, edit, fold, undo]
 
-import core, operator_engine
+import core, operator_engine, operator_driver
 
 proc firstNonBlankColumn*(line: seq[Rune]): int =
   ## Return the column of the first non-whitespace character.
@@ -66,6 +66,9 @@ proc handlePasteAfter*(
 ): Result[(), string] =
   ## Paste after cursor (p). `cursorAfter` is gp. Uses register or clipboard fallback.
   logDebug("paste", "handlePasteAfter called with count=" & $count)
+  if ctx.register.isSome and ctx.register.get.isBlackHoleRegisterName:
+    # The black hole register reads as nothing, and nothing is put.
+    return ok(())
   let actualCount = max(1, count)
 
   var pasteText: string
@@ -73,16 +76,14 @@ proc handlePasteAfter*(
   var registerEmpty: bool
   var usedRegister = '"' # Track register for fallback cache.
 
-  if ctx.state.pendingInput.pendingRegister.isSome and
-      ctx.state.pendingInput.pendingRegister.get != '\0':
+  if ctx.register.isSome:
     # User specified a register with "
-    let regName = ctx.state.pendingInput.pendingRegister.get
+    let regName = ctx.register.get
     usedRegister = regName
     let reg = ctx.state.registers.getRegister(regName)
     pasteText = reg.getContent()
     isFullLine = reg.isLine
     registerEmpty = reg.isEmpty
-    ctx.state.pendingInput.pendingRegister = none(char)
     ctx.state.statusMessage = ""
     logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
   else:
@@ -204,7 +205,7 @@ proc handlePasteAfter*(
     return rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
 
   # Record this command for repeat (.)
-  ctx.state.editState.lastEditCommand = some(
+  ctx.recordChange(
     LastEditCommand(
       kind: lecPaste,
       pasteCount: actualCount,
@@ -221,6 +222,9 @@ proc handlePasteBefore*(
   ## Paste before cursor (P). `cursorAfter` is gP. Uses register or clipboard fallback.
 
   logDebug("paste", "handlePasteBefore called with count=" & $count)
+  if ctx.register.isSome and ctx.register.get.isBlackHoleRegisterName:
+    # The black hole register reads as nothing, and nothing is put.
+    return ok(())
   let actualCount = max(1, count)
 
   var pasteText: string
@@ -228,16 +232,14 @@ proc handlePasteBefore*(
   var registerEmpty: bool
   var usedRegister = '"' # Track register for fallback cache.
 
-  if ctx.state.pendingInput.pendingRegister.isSome and
-      ctx.state.pendingInput.pendingRegister.get != '\0':
+  if ctx.register.isSome:
     # User specified a register with "
-    let regName = ctx.state.pendingInput.pendingRegister.get
+    let regName = ctx.register.get
     usedRegister = regName
     let reg = ctx.state.registers.getRegister(regName)
     pasteText = reg.getContent()
     isFullLine = reg.isLine
     registerEmpty = reg.isEmpty
-    ctx.state.pendingInput.pendingRegister = none(char)
     ctx.state.statusMessage = ""
     logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
   else:
@@ -351,7 +353,7 @@ proc handlePasteBefore*(
     return rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
 
   # Record this command for repeat (.)
-  ctx.state.editState.lastEditCommand = some(
+  ctx.recordChange(
     LastEditCommand(
       kind: lecPaste,
       pasteCount: actualCount,
@@ -384,8 +386,9 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
     let foldResult = ctx.editWholeFoldAtCursor(OpDelete)
     if foldResult.isOk:
       # `.` still repeats an `x`, not whatever edit came before it.
-      ctx.state.editState.lastEditCommand =
-        some(LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true))
+      ctx.recordChange(
+        LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true)
+      )
     return foldResult
   let actualCount = max(1, count)
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
@@ -461,7 +464,7 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
   # covered by the buffer transaction, so a rollback would not undo them)
   storeDeletedText(ctx, deletedText, false)
 
-  ctx.state.editState.lastEditCommand = some(
+  ctx.recordChange(
     LastEditCommand(
       kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: true
     )
@@ -562,7 +565,7 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
   ctx.cursor.column = startColumn
 
   # Record this command for repeat (.)
-  ctx.state.editState.lastEditCommand = some(
+  ctx.recordChange(
     LastEditCommand(
       kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: false
     )
@@ -781,8 +784,7 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
     ctx.cursor.column = max(0, finalLineContent.charLen - 1)
 
   # Record this command for repeat (.)
-  ctx.state.editState.lastEditCommand =
-    some(LastEditCommand(kind: lecToggleCase, toggleCaseCount: charsToToggle))
+  ctx.recordChange(LastEditCommand(kind: lecToggleCase, toggleCaseCount: charsToToggle))
 
   return Result[(), string].ok ()
 
@@ -850,8 +852,7 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
     ctx.cursor.column = 0
 
   # Record this command for repeat (.)
-  ctx.state.editState.lastEditCommand =
-    some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: max(1, count)))
+  ctx.recordChange(LastEditCommand(kind: lecDeleteLine, deleteLineCount: max(1, count)))
 
   # Delete screen notification (controlled by config)
   if ctx.notificationConfig.screenNotifications and
@@ -890,7 +891,6 @@ proc handleYankLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
 
   # An empty yankText here means a single empty line was yanked — still valid
   # in Vim (the register holds one blank line, pasteable via p/P).
-  # Store in register system (respects pendingRegister)
   storeYankedText(ctx, yankText, true)
 
   let storedReg = ctx.state.registers.getNoNamedRegister()
@@ -925,8 +925,7 @@ proc handleJoinLines*(ctx: CommandContext, count: int = 1): Result[(), string] =
     return err(joinResult.error)
 
   # Record this command for repeat (.)
-  ctx.state.editState.lastEditCommand =
-    some(LastEditCommand(kind: lecJoinLines, joinLinesCount: actualCount))
+  ctx.recordChange(LastEditCommand(kind: lecJoinLines, joinLinesCount: actualCount))
 
   let totalLines = actualCount + 1
   ctx.state.statusMessage = "Joined " & $totalLines & " line(s)"
@@ -970,18 +969,19 @@ proc handleShowCharInfo*(ctx: CommandContext): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc handleOperatorYank*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleOperatorYank*(
+    ctx: CommandContext, count: int = 1, countGiven = false
+): Result[(), string] =
   ## Yank operator - waits for motion (y2w, y$, etc.) or yy for line
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (yy for yank line)
-  if ctx.state.pendingInput.pendingOperator.isSome and
-      ctx.state.pendingInput.pendingOperator.get.operatorType == OpYank:
+  let lines = ctx.takeDoubledOperator(OpYank, count)
+  if lines.isSome:
     # Execute line yank. The cursor stays, but Vim's operators drop curswant.
     ctx.state.preferredColumn = -1
     let startLine = ctx.cursor.line
-    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
-    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+    let endLine = min(startLine + lines.get - 1, ctx.buffer.len - 1)
 
     # Extract lines for yank register
     var text = ""
@@ -992,11 +992,8 @@ proc handleOperatorYank*(ctx: CommandContext, count: int = 1): Result[(), string
         if lineContent.len == 0 or lineContent[^1] != '\n':
           text.add("\n")
 
-    # Store in register system (respects pendingRegister)
     storeYankedText(ctx, text, true)
 
-    # Clear operator state
-    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
     let lineCount = endLine - startLine + 1
     # Yank screen notification (controlled by config)
     if ctx.notificationConfig.screenNotifications and
@@ -1008,20 +1005,21 @@ proc handleOperatorYank*(ctx: CommandContext, count: int = 1): Result[(), string
     return ok(())
   else:
     # Set pending operator for motion
-    setPendingOperator(ctx, OpYank, count, "y")
+    setPendingOperator(ctx, OpYank, count, countGiven, "y")
     return ok(())
 
-proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleOperatorDelete*(
+    ctx: CommandContext, count: int = 1, countGiven = false
+): Result[(), string] =
   ## Delete operator - waits for motion (d2w, d$, etc.) or dd for line
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (dd for delete line)
-  if ctx.state.pendingInput.pendingOperator.isSome and
-      ctx.state.pendingInput.pendingOperator.get.operatorType == OpDelete:
+  let lines = ctx.takeDoubledOperator(OpDelete, count)
+  if lines.isSome:
     # Execute line deletion
     let startLine = ctx.cursor.line
-    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
-    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+    let endLine = min(startLine + lines.get - 1, ctx.buffer.len - 1)
     let lineCount = endLine - startLine + 1
 
     var text = ""
@@ -1069,11 +1067,8 @@ proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), stri
       ctx.cursor.column = 0
 
     # Record this command for repeat (.)
-    ctx.state.editState.lastEditCommand =
-      some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: lineCount))
+    ctx.recordChange(LastEditCommand(kind: lecDeleteLine, deleteLineCount: lineCount))
 
-    # Clear operator state
-    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
     # Delete screen notification (controlled by config)
     if ctx.notificationConfig.screenNotifications and
         ctx.notificationConfig.deleteScreenNotify:
@@ -1084,25 +1079,21 @@ proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), stri
     return ok(())
   else:
     # Set pending operator for motion
-    setPendingOperator(ctx, OpDelete, count, "d")
+    setPendingOperator(ctx, OpDelete, count, countGiven, "d")
     return ok(())
 
-proc handleOperatorChange*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleOperatorChange*(
+    ctx: CommandContext, count: int = 1, countGiven = false
+): Result[(), string] =
   ## Change operator - waits for motion (c2w, c$, etc.) or cc for line
   ## count: number of times to apply the operator (default: 1)
 
-  # Check if same operator was pressed (cc for change line)
-  if ctx.state.pendingInput.pendingOperator.isSome and
-      ctx.state.pendingInput.pendingOperator.get.operatorType == OpChange:
-    # Execute line change using handleSubstituteLine (same as S command)
-    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
-    # Clear operator state before calling handleSubstituteLine
-    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-    return handleSubstituteLine(ctx, operatorCount)
-  else:
-    # Set pending operator for motion
-    setPendingOperator(ctx, OpChange, count, "c")
-    return ok(())
+  # cc changes lines as S does
+  let lines = ctx.takeDoubledOperator(OpChange, count)
+  if lines.isSome:
+    return handleSubstituteLine(ctx, lines.get)
+  setPendingOperator(ctx, OpChange, count, countGiven, "c")
+  ok(())
 
 proc handleOperatorOnLines*(
     ctx: CommandContext, operatorType: OperatorType, count: int = 1
@@ -1127,7 +1118,7 @@ proc handleOperatorOnLines*(
     return opResult
 
   # Record this command for repeat (.)
-  ctx.state.editState.lastEditCommand = some(
+  ctx.recordChange(
     LastEditCommand(
       kind: lecOperatorLines, linesOperator: operatorType, operatorLineCount: lineCount
     )
@@ -1135,77 +1126,63 @@ proc handleOperatorOnLines*(
 
   return ok(())
 
-proc handleOperatorIndent*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleOperatorIndent*(
+    ctx: CommandContext, count: int = 1, countGiven = false
+): Result[(), string] =
   ## Indent operator - waits for motion (>2w, >$, etc.) or >> for line
   ## count: number of times to apply the operator (default: 1)
 
-  # Check if same operator was pressed (>> for indent line)
-  if ctx.state.pendingInput.pendingOperator.isSome and
-      ctx.state.pendingInput.pendingOperator.get.operatorType == OpIndent:
-    # Counts on both halves multiply (2>3> == 6 lines)
-    let lineCount =
-      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
-    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-    return handleOperatorOnLines(ctx, OpIndent, lineCount)
-  else:
-    # Set pending operator for motion
-    setPendingOperator(ctx, OpIndent, count, ">")
-    return ok(())
+  # Counts on both halves multiply (2>3> is six lines)
+  let lines = ctx.takeDoubledOperator(OpIndent, count)
+  if lines.isSome:
+    return handleOperatorOnLines(ctx, OpIndent, lines.get)
+  setPendingOperator(ctx, OpIndent, count, countGiven, ">")
+  ok(())
 
-proc handleOperatorOutdent*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleOperatorOutdent*(
+    ctx: CommandContext, count: int = 1, countGiven = false
+): Result[(), string] =
   ## Outdent operator - waits for motion (<2w, <$, etc.) or << for line
   ## count: number of times to apply the operator (default: 1)
 
-  # Check if same operator was pressed (<< for dedent line)
-  if ctx.state.pendingInput.pendingOperator.isSome and
-      ctx.state.pendingInput.pendingOperator.get.operatorType == OpOutdent:
-    # Counts on both halves multiply (2<3< == 6 lines)
-    let lineCount =
-      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
-    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-    return handleOperatorOnLines(ctx, OpOutdent, lineCount)
-  else:
-    # Set pending operator for motion
-    setPendingOperator(ctx, OpOutdent, count, "<")
-    return ok(())
+  # Counts on both halves multiply (2<3< is six lines)
+  let lines = ctx.takeDoubledOperator(OpOutdent, count)
+  if lines.isSome:
+    return handleOperatorOnLines(ctx, OpOutdent, lines.get)
+  setPendingOperator(ctx, OpOutdent, count, countGiven, "<")
+  ok(())
 
-proc handleOperatorLowerCase*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleOperatorLowerCase*(
+    ctx: CommandContext, count: int = 1, countGiven = false
+): Result[(), string] =
   ## Lowercase operator - waits for motion (guw, gu$, etc.) or guu/gugu for line
   ## count: number of times to apply the operator (default: 1)
 
-  # Check if same operator was pressed (guu / gugu for lowercase line)
-  if ctx.state.pendingInput.pendingOperator.isSome and
-      ctx.state.pendingInput.pendingOperator.get.operatorType == OpLowerCase:
-    # Counts on both halves multiply (2gu3u == 6 lines)
-    let lineCount =
-      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
-    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-    return handleOperatorOnLines(ctx, OpLowerCase, lineCount)
-  else:
-    # Set pending operator for motion
-    setPendingOperator(ctx, OpLowerCase, count, "gu")
-    return ok(())
+  # Counts on both halves multiply (2gu3u is six lines)
+  let lines = ctx.takeDoubledOperator(OpLowerCase, count)
+  if lines.isSome:
+    return handleOperatorOnLines(ctx, OpLowerCase, lines.get)
+  setPendingOperator(ctx, OpLowerCase, count, countGiven, "gu")
+  ok(())
 
-proc handleOperatorUpperCase*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleOperatorUpperCase*(
+    ctx: CommandContext, count: int = 1, countGiven = false
+): Result[(), string] =
   ## Uppercase operator - waits for motion (gUw, gU$, etc.) or gUU/gUgU for line
   ## count: number of times to apply the operator (default: 1)
 
-  # Check if same operator was pressed (gUU / gUgU for uppercase line)
-  if ctx.state.pendingInput.pendingOperator.isSome and
-      ctx.state.pendingInput.pendingOperator.get.operatorType == OpUpperCase:
-    # Counts on both halves multiply (2gU3U == 6 lines)
-    let lineCount =
-      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
-    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-    return handleOperatorOnLines(ctx, OpUpperCase, lineCount)
-  else:
-    # Set pending operator for motion
-    setPendingOperator(ctx, OpUpperCase, count, "gU")
-    return ok(())
+  # Counts on both halves multiply (2gU3U is six lines)
+  let lines = ctx.takeDoubledOperator(OpUpperCase, count)
+  if lines.isSome:
+    return handleOperatorOnLines(ctx, OpUpperCase, lines.get)
+  setPendingOperator(ctx, OpUpperCase, count, countGiven, "gU")
+  ok(())
 
 ## Text object command handlers
 
-proc handleTextObjectInner*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleTextObjectInner*(
+    ctx: CommandContext, count: int = 1, countGiven = false
+): Result[(), string] =
   ## Handle inner text object (iw, i", i(, etc.) or enter Insert mode.
   ## `count` is the [count] prefix; when this resolves to plain `i` it requests
   ## the typed text be replayed (count - 1) more times on Insert-mode exit.
@@ -1213,16 +1190,21 @@ proc handleTextObjectInner*(ctx: CommandContext, count: int = 1): Result[(), str
   # Check if we have a pending operator
   if ctx.state.pendingInput.pendingOperator.isSome:
     # We have a pending operator - set text object modifier
-    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
-    ctx.state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: operatorCount))
+    ctx.state.pendingInput.pendingTextObject = some(
+      PendingTextObject(
+        modifier: tomInner, count: max(1, count), countGiven: countGiven
+      )
+    )
     ctx.state.statusMessage =
       $ctx.state.pendingInput.pendingOperator.get.operatorType & "i"
     return ok(())
   elif isVisualAllMode(ctx.state.mode):
     # In Visual mode - set text object modifier for visual selection
-    ctx.state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+    ctx.state.pendingInput.pendingTextObject = some(
+      PendingTextObject(
+        modifier: tomInner, count: max(1, count), countGiven: countGiven
+      )
+    )
     return ok(())
   else:
     # No pending operator - enter Insert mode
@@ -1243,7 +1225,9 @@ proc handleTextObjectInner*(ctx: CommandContext, count: int = 1): Result[(), str
     ctx.state.statusMessage = "-- INSERT --"
     return ok(())
 
-proc handleTextObjectAround*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleTextObjectAround*(
+    ctx: CommandContext, count: int = 1, countGiven = false
+): Result[(), string] =
   ## Handle around text object (aw, a", a(, etc.) or enter Append mode.
   ## `count` is the [count] prefix; when this resolves to plain `a` it requests
   ## the typed text be replayed (count - 1) more times on Insert-mode exit.
@@ -1251,16 +1235,21 @@ proc handleTextObjectAround*(ctx: CommandContext, count: int = 1): Result[(), st
   # Check if we have a pending operator
   if ctx.state.pendingInput.pendingOperator.isSome:
     # We have a pending operator - set text object modifier
-    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
-    ctx.state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomAround, operatorCount: operatorCount))
+    ctx.state.pendingInput.pendingTextObject = some(
+      PendingTextObject(
+        modifier: tomAround, count: max(1, count), countGiven: countGiven
+      )
+    )
     ctx.state.statusMessage =
       $ctx.state.pendingInput.pendingOperator.get.operatorType & "a"
     return ok(())
   elif isVisualAllMode(ctx.state.mode):
     # In Visual mode - set text object modifier for visual selection
-    ctx.state.pendingInput.pendingTextObject =
-      some(PendingTextObject(modifier: tomAround, operatorCount: 1))
+    ctx.state.pendingInput.pendingTextObject = some(
+      PendingTextObject(
+        modifier: tomAround, count: max(1, count), countGiven: countGiven
+      )
+    )
     return ok(())
   else:
     # No pending operator - enter Append mode (move cursor right, then Insert)
@@ -1730,80 +1719,33 @@ proc registerEditCommands*(registry: CommandRegistry) =
       if ctx.state.editState.lastEditCommand.isNone:
         return err("No previous change to repeat")
 
-      let lastCmd = ctx.state.editState.lastEditCommand.get
+      var lastCmd = ctx.state.editState.lastEditCommand.get
+      # The change goes to the register it used again, a numbered one counting
+      # up (`"1p..` puts "1, "2, "3), as Vim's. One that used none takes the
+      # register named before `.` and keeps it for the next `.`.
+      if lastCmd.register.isSome:
+        var name = lastCmd.register.get
+        if name in '1' .. '8':
+          name = succ(name)
+        ctx.register = some(name)
+      lastCmd.register = ctx.register
+      ctx.state.editState.lastEditCommand = some(lastCmd)
 
       case lastCmd.kind
       of lecOperatorMotion:
-        # Repeat operator+motion command (e.g., dw, c2w, y$)
-        # Create a pending operator
+        # The operator acts again over what its operand finds from here (`dw`,
+        # `diw`, `dn` then `.`).
         ctx.state.pendingInput.pendingOperator = some(
           PendingOperator(
             operatorType: lastCmd.operator,
-            operatorCount: lastCmd.operatorCount,
+            operatorCount: 1,
             startPos: ctx.cursor,
+            register: ctx.register,
           )
         )
-        # Save viewport position for restoration after operator
         ctx.state.windowDisplay.savedViewportTopLine =
           ctx.motionController.viewportManager.viewport.topLine
-
-        if lastCmd.markName != '\0':
-          let op = ctx.state.pendingInput.pendingOperator.get
-          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-          return applyOperatorToMark(ctx, op, lastCmd.markName, lastCmd.markLinewise)
-
-        # LastLine with no prefix replays as count=0 (bare G); else combine counts.
-        let effectiveCount =
-          if lastCmd.motion == Motion.LastLine and not lastCmd.motionHasCount:
-            0
-          else:
-            lastCmd.motionCount * lastCmd.operatorCount
-
-        # f/F/t/T motions need the same no-move / till-adjacency guards as the
-        # live df{char}/dt{char} path; without them a repeat whose target is
-        # missing from the new cursor position would delete a spurious char.
-        if lastCmd.motion in {
-          Motion.FindChar, Motion.FindCharBackward, Motion.TillChar,
-          Motion.TillCharBackward,
-        }:
-          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-          let endOpt = findTillOperatorEndPos(
-            ctx, lastCmd.motion, lastCmd.targetChar, effectiveCount, ctx.cursor
-          )
-          if endOpt.isNone:
-            # Target not found from here - the repeat is a no-op.
-            return ok(())
-          return applyOperatorOverMotion(
-            ctx, lastCmd.operator, lastCmd.operatorCount, ctx.cursor, endOpt.get,
-            lastCmd.motion,
-          )
-
-        let motionCmd = MotionCommand(
-          motion: lastCmd.motion, targetChar: lastCmd.targetChar, count: effectiveCount
-        )
-        let r = ctx.motionController.executeMotion(
-          motionCmd, ctx.cursor, updateViewport = false
-        )
-        if r.isErr:
-          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-          return err(r.error)
-
-        # Mirrors the live operator+motion no-move guard (dh/dj/dk at boundary).
-        if r.value == ctx.cursor and lastCmd.motion in NoMoveNoOpMotions:
-          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-          return ok(())
-
-        # Apply the operator over the motion span (shared pipeline).
-        let op = ctx.state.pendingInput.pendingOperator.get
-        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-        let execResult = applyOperatorOverMotion(
-          ctx, op.operatorType, op.operatorCount, ctx.cursor, r.value, lastCmd.motion
-        )
-        if execResult.isErr:
-          return err(execResult.error)
-
-        # Note: We don't update lastEditCommand here because we're repeating the same command
-        return ok(())
+        return registry.finishOperator(ctx, lastCmd.operand)
       of lecDeleteChar:
         # Repeat character deletion (x or X)
         if lastCmd.deleteForward:
@@ -2160,8 +2102,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete Operator",
     "Delete operator - waits for motion (d2w, d$, etc.) or dd for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleOperatorDelete(ctx, count),
+      handleOperatorDelete(ctx, parseCount(args), countGiven = args.len > 0),
     0,
     1, # Accept optional count
   )
@@ -2171,8 +2112,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Change Operator",
     "Change operator - waits for motion (c2w, c$, etc.) or cc for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleOperatorChange(ctx, count),
+      handleOperatorChange(ctx, parseCount(args), countGiven = args.len > 0),
     0,
     1, # Accept optional count
   )
@@ -2182,8 +2122,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Yank Operator",
     "Yank operator - waits for motion (y2w, y$, etc.) or yy for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleOperatorYank(ctx, count),
+      handleOperatorYank(ctx, parseCount(args), countGiven = args.len > 0),
     0,
     1, # Accept optional count
   )
@@ -2193,8 +2132,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Indent Operator",
     "Indent operator - waits for motion (>w, >$, etc.) or >> for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleOperatorIndent(ctx, count),
+      handleOperatorIndent(ctx, parseCount(args), countGiven = args.len > 0),
     0,
     1, # Accept optional count
   )
@@ -2204,8 +2142,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Outdent Operator",
     "Outdent operator - waits for motion (<w, <$, etc.) or << for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleOperatorOutdent(ctx, count),
+      handleOperatorOutdent(ctx, parseCount(args), countGiven = args.len > 0),
     0,
     1, # Accept optional count
   )
@@ -2215,8 +2152,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Lowercase Operator",
     "Lowercase operator - waits for motion (guw, gu$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleOperatorLowerCase(ctx, count),
+      handleOperatorLowerCase(ctx, parseCount(args), countGiven = args.len > 0),
     0,
     1, # Accept optional count
   )
@@ -2226,8 +2162,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Uppercase Operator",
     "Uppercase operator - waits for motion (gUw, gU$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleOperatorUpperCase(ctx, count),
+      handleOperatorUpperCase(ctx, parseCount(args), countGiven = args.len > 0),
     0,
     1, # Accept optional count
   )
@@ -2256,13 +2191,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
       let r = executeOperatorOnRange(ctx, OpDelete, range, 1)
       if r.isOk:
         # Record this command for repeat (.)
-        ctx.state.editState.lastEditCommand = some(
+        ctx.recordChange(
           LastEditCommand(
             kind: lecOperatorMotion,
             operator: OpDelete,
-            motion: End,
-            motionCount: 1,
-            operatorCount: 1,
+            operand: Operand(count: 1, kind: odMotion, motion: Motion.End),
           )
         )
       return r,
@@ -2295,13 +2228,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
       let r = executeOperatorOnRange(ctx, OpChange, range, 1)
       if r.isOk:
         # Record this command for repeat (.)
-        ctx.state.editState.lastEditCommand = some(
+        ctx.recordChange(
           LastEditCommand(
             kind: lecOperatorMotion,
             operator: OpChange,
-            motion: End,
-            motionCount: 1,
-            operatorCount: 1,
+            operand: Operand(count: 1, kind: odMotion, motion: Motion.End),
           )
         )
       return r,
@@ -2317,7 +2248,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       # When `i` resolves to Insert mode, args[0] (present for count > 1) carries
       # the [count] prefix for replay; as a text object the count is ignored.
-      handleTextObjectInner(ctx, parseCount(args)),
+      handleTextObjectInner(ctx, parseCount(args), countGiven = args.len > 0),
     0,
     1,
   )
@@ -2327,7 +2258,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Around Text Object",
     "Select around text object (aw, a\", a(, etc.) or enter Append mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleTextObjectAround(ctx, parseCount(args)),
+      handleTextObjectAround(ctx, parseCount(args), countGiven = args.len > 0),
     0,
     1,
   )
@@ -2348,49 +2279,34 @@ proc registerEditCommands*(registry: CommandRegistry) =
           return ok(())
 
         let textObj = ctx.state.pendingInput.pendingTextObject.get
+        let op = ctx.state.pendingInput.pendingOperator
+        if op.isSome:
+          return reg.finishOperator(
+            ctx,
+            Operand(
+              count: op.get.operandCount(textObj.count),
+              countGiven: op.get.countGiven or textObj.countGiven,
+              kind: odTextObject,
+              textObjectModifier: textObj.modifier,
+              textObjectKind: kind,
+            ),
+          )
         ctx.state.pendingInput.pendingTextObject = none(PendingTextObject)
 
-        # Calculate the text object range, extended over the operator count
-        # (d2iw, 2dap, d3is, 2dat). textObj.operatorCount already holds the
-        # pending operator's count.
-        let effectiveCount = max(textObj.operatorCount, 1)
         let rangeResult = calculateTextObjectRange(
-          ctx.buffer, ctx.cursor, kind, textObj.modifier, effectiveCount
+          ctx.buffer, ctx.cursor, kind, textObj.modifier, textObj.count
         )
         if rangeResult.isErr:
-          # The object could not be resolved (e.g. dit outside a tag, dis on a
-          # blank line). Discard the pending operator too so a following motion
-          # is not silently consumed by a still-armed operator (a stray delete).
-          # Also drop any pending register prefix (e.g. `"adit`) rather than
-          # leaking it into the next command.
-          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-          ctx.state.pendingInput.pendingRegister = none(char)
           return err(rangeResult.error)
-
         let toRange = rangeResult.value
 
-        # Convert TextObjectRange to OperatorRange
-        let opRange = OperatorRange(
-          start: toRange.start,
-          endPos: toRange.endPos,
-          isLinewise: toRange.isLinewise,
-          isEmpty: toRange.isEmpty,
-        )
-
-        # Check if we have a pending operator
-        if ctx.state.pendingInput.pendingOperator.isSome:
-          let op = ctx.state.pendingInput.pendingOperator.get
-          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-
-          # Execute operator on text object
-          return executeOperatorOnRange(ctx, op.operatorType, opRange, op.operatorCount)
-        elif isVisualAllMode(ctx.state.mode):
+        if isVisualAllMode(ctx.state.mode):
           if toRange.isEmpty:
             # Empty object (e.g. vit on <a></a>): nothing to select, so leave
             # the current selection untouched like vim.
             return ok(())
           # In Visual mode - update selection to text object range
-          ctx.state.selectVisualRange(toRange.start, toRange.endPos)
+          ctx.state.selectVisualRange(toRange.start, toRange.lastCell(ctx.buffer))
           return ok(())
         else:
           return err("Text objects require an operator or Visual mode"),

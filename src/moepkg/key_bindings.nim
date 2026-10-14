@@ -29,7 +29,7 @@ import std/[tables, strutils, options, sequtils]
 
 import celina_backend as celina
 
-import modes, logger, unicode_utils
+import modes, logger, unicode_utils, register_names
 import key_bindings/registry
 export registry
 
@@ -43,6 +43,8 @@ const MaxNumericPrefix* = 1_000_000
   ## Cap on the count prefix. Iterative motions loop `count` times even when
   ## the cursor is stuck, so an unbounded value (e.g. `99999999w`) locks up.
 
+const RegisterSelect = "register-select"
+
 proc unbindKey*(registry: KeyBindingRegistry, mode: EditorMode, combo: KeyCombo) =
   ## Remove a key binding
   if mode in registry.bindings:
@@ -55,6 +57,8 @@ proc clearSequence*(registry: KeyBindingRegistry) =
   registry.sequenceState.pendingCommand = none(Command)
   registry.sequenceState.waitingForChar = false
   registry.sequenceState.numericPrefix = ""
+  registry.sequenceState.register = none(char)
+  registry.sequenceState.registerCount = 0
 
 proc hasPendingKeys*(registry: KeyBindingRegistry): bool =
   ## A sequence prefix or an operand wait is pending, so the next key ends it.
@@ -62,8 +66,10 @@ proc hasPendingKeys*(registry: KeyBindingRegistry): bool =
   registry.sequenceState.keys.len > 0 or registry.sequenceState.waitingForChar
 
 proc hasActiveSequence*(registry: KeyBindingRegistry): bool =
-  ## Check if there is an active key sequence in progress
-  registry.hasPendingKeys or registry.sequenceState.numericPrefix.len > 0
+  ## A command is being built: keys of a sequence, an operand wait, a count or
+  ## a `"x` register name typed before the command.
+  registry.hasPendingKeys or registry.sequenceState.numericPrefix.len > 0 or
+    registry.sequenceState.register.isSome
 
 proc clearNumericPrefix*(registry: KeyBindingRegistry) =
   ## Clear the accumulated count prefix once a command has consumed it.
@@ -77,6 +83,18 @@ proc isWaitingForChar*(registry: KeyBindingRegistry): bool =
   ## character (`f`/`t`/`r`, ...). Named API for the same reason as
   ## `clearNumericPrefix`.
   registry.sequenceState.waitingForChar
+
+proc operandCommand*(registry: KeyBindingRegistry): Option[Command] =
+  ## The command waiting for its operand key (`f`, `r`, `"`), if any.
+  if registry.sequenceState.waitingForChar:
+    registry.sequenceState.pendingCommand
+  else:
+    none(Command)
+
+proc lastKeyUnbound*(registry: KeyBindingRegistry): bool =
+  ## True when the key `processKey` last took had no binding. A count or a
+  ## register typed before it is kept for the caller to drop.
+  registry.sequenceState.unbound
 
 proc isMidSequence*(registry: KeyBindingRegistry): bool =
   ## True while `processKey` holds the first keys of a multi-key sequence
@@ -429,12 +447,38 @@ proc getNumericPrefix*(registry: KeyBindingRegistry): int =
     return 1
 
 proc applyCountToCommand(registry: KeyBindingRegistry, cmd: Command): Command =
-  ## Apply numeric prefix count to a command and clear the prefix
+  ## Give a command the count and the register typed before it, and clear them
   result = cmd
-  result.hasCount = registry.sequenceState.numericPrefix.len > 0
-  result.count = registry.getNumericPrefix()
+  let countBefore = registry.sequenceState.registerCount
+  result.hasCount = registry.sequenceState.numericPrefix.len > 0 or countBefore > 0
+  result.count =
+    if countBefore > 0:
+      min(countBefore * registry.getNumericPrefix(), MaxNumericPrefix)
+    else:
+      registry.getNumericPrefix()
+  result.register = registry.sequenceState.register
   registry.clearNumericPrefix()
+  registry.sequenceState.register = none(char)
+  registry.sequenceState.registerCount = 0
   logDebug("keybind", "Applied count=" & $result.count & " to command: " & cmd.name)
+
+proc holdRegister(registry: KeyBindingRegistry, name: char) =
+  ## Keep `"x` for the next command, as a count is kept. The count typed
+  ## before it carries over, as Vim's nv_regname keeps it in opcount.
+  if registry.sequenceState.numericPrefix.len > 0:
+    let count = registry.getNumericPrefix()
+    let before = registry.sequenceState.registerCount
+    registry.sequenceState.registerCount =
+      if before > 0:
+        min(before * count, MaxNumericPrefix)
+      else:
+        count
+  registry.sequenceState.register = some(name)
+  registry.sequenceState.numericPrefix = ""
+  registry.sequenceState.keys = @[]
+  registry.sequenceState.possibleSequences = @[]
+  registry.sequenceState.pendingCommand = none(Command)
+  registry.sequenceState.waitingForChar = false
 
 proc updatePossibleSequences*(registry: KeyBindingRegistry, mode: EditorMode) =
   ## Update the list of possible sequences based on current keys
@@ -477,6 +521,8 @@ proc processKey*(
       $combo.modifiers & " seqKeys.len=" & $registry.sequenceState.keys.len,
   )
 
+  registry.sequenceState.unbound = false
+
   # Check if we're waiting for an arbitrary character (f, t, r commands)
   if registry.sequenceState.waitingForChar and
       registry.sequenceState.pendingCommand.isSome:
@@ -484,6 +530,14 @@ proc processKey*(
 
     # Create the final command with the character
     if not combo.isSpecial and combo.modifiers == {}:
+      # A valid register name is a prefix of the next command. An invalid one
+      # comes out as `register-select`, which reports it and runs nothing.
+      if pendingCmd.kind == ctOperatorPending and
+          pendingCmd.operatorType == RegisterSelect:
+        let name = combo.char.asciiChar
+        if name.isSome and name.get.isValidRegisterName:
+          registry.holdRegister(name.get)
+          return none(Command)
       # Set the target character
       var finalCommand = pendingCmd
       finalCommand.targetChar = combo.char
@@ -510,12 +564,12 @@ proc processKey*(
       registry.sequenceState.numericPrefix.add(combo.char)
       return none(Command) # Wait for command key
 
-  # Check for ESC key - cancel any current sequence
-  if combo.isSpecial and combo.special == skEscape:
-    if registry.hasActiveSequence():
-      registry.clearSequence()
-      return none(Command) # Sequence cancelled
-    # If no sequence active, treat ESC as normal key
+  # Escape is used up by the sequence it cancels. After only a count or a
+  # register it is a command of its own (Vim's nv_esc ends Visual), so it goes
+  # on as a normal key.
+  if combo.isSpecial and combo.special == skEscape and registry.hasPendingKeys():
+    registry.clearSequence()
+    return none(Command)
 
   # Add current key to sequence
   registry.sequenceState.keys.add(combo)
@@ -605,10 +659,12 @@ proc processKey*(
       registry.sequenceState.possibleSequences = @[]
       return some(cmdWithCount)
     else:
-      # No binding found
+      # No binding found. A count or register typed before the key stays for
+      # the caller, which may look the key up in another mode first.
       logDebug("keybind", "processKey: no single binding found for key")
       registry.sequenceState.keys = @[]
       registry.sequenceState.possibleSequences = @[]
+      registry.sequenceState.unbound = true
       return none(Command)
 
   # Invalid sequence

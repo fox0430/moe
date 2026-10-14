@@ -757,25 +757,3 @@ suite "VisualModeHandler - Escape returns to previousMode":
     check r.modeTransition.get == EditorMode.LogViewer
     check state.mode == EditorMode.LogViewer
     check not state.visualSelection.active
-
-  test "Escape from Visual clears pendingRegister (\"a<Esc> leak)":
-    # `"a` in Normal sets pendingRegister=some('a'); entering Visual without
-    # consuming it leaves the register selection armed. Escape from Visual must
-    # clear it, otherwise the next yank/delete in the returned mode silently
-    # targets register a.
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    state.mode = EditorMode.Visual
-    state.previousMode = EditorMode.Normal
-    state.pendingInput.pendingRegister = some('a')
-    state.visualAnchor = state.cursor
-    let viewport = createTestViewport()
-
-    let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
-    let r = handler.handleVisualModeKey(buf, state, viewport, esc)
-
-    check r.kind == vmrHandled
-    check state.mode == EditorMode.Normal
-    check state.pendingInput.pendingRegister.isNone

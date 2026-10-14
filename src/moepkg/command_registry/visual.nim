@@ -54,13 +54,13 @@ proc handleVisualMoveDown*(ctx: CommandContext): Result[(), string] =
 
 proc handleVisualDelete*(ctx: CommandContext): Result[(), string] =
   ## Delete visual selection
-  visualDelete(ctx.buffer, ctx.state)
+  visualDelete(ctx.buffer, ctx.state, ctx.register)
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualYank*(ctx: CommandContext): Result[(), string] =
   ## Yank (copy) visual selection
-  visualYank(ctx.buffer, ctx.state)
+  visualYank(ctx.buffer, ctx.state, ctx.register)
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
@@ -190,7 +190,7 @@ proc handleVisualBlockAppend*(ctx: CommandContext): Result[(), string] =
 
 proc handleVisualChange*(ctx: CommandContext): Result[(), string] =
   ## Delete selection and enter insert mode
-  visualChange(ctx.buffer, ctx.state)
+  visualChange(ctx.buffer, ctx.state, ctx.register)
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
@@ -204,7 +204,8 @@ proc handleVisualPaste*(
     ctx: CommandContext, cursorAfter: bool = false
 ): Result[(), string] =
   ## Paste over selection (p/P). `cursorAfter` is gp/gP.
-  result = visualPaste(ctx.buffer, ctx.state, ctx.clipboardConfig, cursorAfter)
+  result =
+    visualPaste(ctx.buffer, ctx.state, ctx.clipboardConfig, cursorAfter, ctx.register)
   ctx.cursor = ctx.state.cursor
 
 proc handleVisualReselect*(ctx: CommandContext): Result[(), string] =
