@@ -576,10 +576,7 @@ proc applyGitDiffToBuffer*(buffer: TextBuffer, diffInfo: GitDiffInfo) =
   ## Apply git diff information to buffer sidebar markers
   ## This will set appropriate markers for added, modified, and deleted lines
 
-  # Clear existing git markers only. LSP diagnostics and other marker kinds
-  # (SessionModified, Bookmark, GitConflict) are preserved, since this
-  # proc may run periodically via the async cache refresh and blowing away
-  # diagnostics on every tick causes the LSP error gutter to flicker.
+  # Clear existing git change markers only, keeping GitConflict.
   buffer.clearGitMarkers()
 
   # Group consecutive changes to identify modified regions

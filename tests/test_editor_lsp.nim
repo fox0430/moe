@@ -413,9 +413,9 @@ suite "editor_lsp - applyDiagnosticsForUri":
       pathToUri("/tmp/moe-diag-other.nim"), oneDiagnostic("on other"), none(int)
     )
 
-    check other.diagnostics.len == 1
-    check other.diagnostics[0].message == "on other"
-    check activeBuffer.diagnostics.len == 0
+    check other.diagnostics[dsrcLsp].items.len == 1
+    check other.diagnostics[dsrcLsp].items[0].message == "on other"
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 0
 
   test "active buffer still receives its own diagnostics":
     let e = createTestEditor()
@@ -426,7 +426,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     e.applyDiagnosticsForUri(
       pathToUri("/tmp/moe-diag-active.nim"), oneDiagnostic("on active"), none(int)
     )
-    check activeBuffer.diagnostics.len == 1
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 1
 
   test "unknown URI is dropped without crashing":
     let e = createTestEditor()
@@ -437,7 +437,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     e.applyDiagnosticsForUri(
       pathToUri("/tmp/moe-diag-nonexistent.nim"), oneDiagnostic("nowhere"), none(int)
     )
-    check activeBuffer.diagnostics.len == 0
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 0
 
   test "matches when buffer path has unnormalized segments vs normalized URI":
     # absolutePath is a no-op on absolute paths, so both sides must go
@@ -456,8 +456,8 @@ suite "editor_lsp - applyDiagnosticsForUri":
       pathToUri(normalized), oneDiagnostic("via normalized"), none(int)
     )
 
-    check activeBuffer.diagnostics.len == 1
-    check activeBuffer.diagnostics[0].message == "via normalized"
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 1
+    check activeBuffer.diagnostics[dsrcLsp].items[0].message == "via normalized"
 
   test "drops diagnostics aimed at a buffer that has become raw":
     # A reload can turn a tracked document into raw bytes; its document is
@@ -473,7 +473,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
       pathToUri("/tmp/moe-diag-raw.nim"), oneDiagnostic("stale"), none(int)
     )
 
-    check activeBuffer.diagnostics.len == 0
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 0
 
   test "drops incoming diagnostics when disabled in config":
     let config = newEditorConfig()
@@ -487,8 +487,8 @@ suite "editor_lsp - applyDiagnosticsForUri":
 
     e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("dropped"), none(int))
 
-    check activeBuffer.diagnostics.len == 0
-    check activeBuffer.getLineMarker(0).isNone
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 0
+    check activeBuffer.diagnosticMarker(0).isNone
 
   test "drops publish tagged with a version older than last didChange":
     # Regression (P0'-3): reload / rapid-edit races leave an in-flight publish
@@ -505,7 +505,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     # An in-flight publish tagged with version=1 arrives after we've already
     # sent version=2. It must be dropped.
     e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("stale"), some(1))
-    check activeBuffer.diagnostics.len == 0
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 0
 
   test "applies publish whose version matches the last didChange":
     let e = createTestEditor()
@@ -516,8 +516,8 @@ suite "editor_lsp - applyDiagnosticsForUri":
     e.lsp.documents[path] = initLspDocumentState(1, "", delivered = true)
 
     e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("current"), some(1))
-    check activeBuffer.diagnostics.len == 1
-    check activeBuffer.diagnostics[0].message == "current"
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 1
+    check activeBuffer.diagnostics[dsrcLsp].items[0].message == "current"
 
   test "applies publish with no version (backward compatible)":
     # Many servers omit the optional version field; those frames still apply.
@@ -528,7 +528,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.filePath = some(path)
 
     e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("untagged"), none(int))
-    check activeBuffer.diagnostics.len == 1
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 1
 
   test "routes diagnostics aimed at a symlink's real path to the holder":
     when defined(posix):
@@ -549,8 +549,8 @@ suite "editor_lsp - applyDiagnosticsForUri":
       e.lsp.documents[didOpenKey] = initLspDocumentState(1, "", delivered = true)
 
       e.applyDiagnosticsForUri(pathToUri(real), oneDiagnostic("via real"), some(1))
-      check activeBuffer.diagnostics.len == 1
-      check activeBuffer.diagnostics[0].message == "via real"
+      check activeBuffer.diagnostics[dsrcLsp].items.len == 1
+      check activeBuffer.diagnostics[dsrcLsp].items[0].message == "via real"
     else:
       skip()
 
@@ -575,32 +575,34 @@ suite "editor_lsp - clearDisabledLspState":
     ]
     e.applyDiagnosticsForUri(pathToUri(activePath), diag, none(int))
     e.applyDiagnosticsForUri(pathToUri(otherPath), diag, none(int))
-    check activeBuffer.diagnostics.len == 1
-    check other.diagnostics.len == 1
-    check activeBuffer.getLineMarker(0).isSome
-    check other.getLineMarker(0).isSome
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 1
+    check other.diagnostics[dsrcLsp].items.len == 1
+    check activeBuffer.diagnosticMarker(0).isSome
+    check other.diagnosticMarker(0).isSome
 
     e.clearDisabledLspState()
-    check activeBuffer.diagnostics.len == 1
-    check other.diagnostics.len == 1
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 1
+    check other.diagnostics[dsrcLsp].items.len == 1
 
     e.config.lsp.diagnostics.enable = false
     e.clearDisabledLspState()
 
-    check activeBuffer.diagnostics.len == 0
-    check other.diagnostics.len == 0
-    check activeBuffer.getLineMarker(0).isNone
-    check other.getLineMarker(0).isNone
+    check activeBuffer.diagnostics[dsrcLsp].items.len == 0
+    check other.diagnostics[dsrcLsp].items.len == 0
+    check activeBuffer.diagnosticMarker(0).isNone
+    check other.diagnosticMarker(0).isNone
 
-  test "keeps syntax checker markers when no LSP diagnostics are stored":
+  test "keeps the syntax checker's diagnostics":
     let e = createTestEditorWithLspDisabled()
     let buf = e.activeBuffer()
-    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
+    buf.setDiagnostics(
+      dsrcSyntaxCheck, @[BufferDiagnostic(startLine: 0, endLine: 0, severity: bdsError)]
+    )
     buf.diagnosticsDirty = false
 
     e.clearDisabledLspState()
 
-    check buf.getLineMarker(0) == some(LineMarkerKind.SyntaxError)
+    check buf.diagnosticMarker(0) == some(LineMarkerKind.SyntaxError)
     check not buf.diagnosticsDirty
 
   test "drops the painted semantic overlay when semantic tokens are disabled":
@@ -694,10 +696,10 @@ suite "editor_lsp - clearDisabledLspState":
     e.config.lsp.languageFeatures["nim"] = {"Diagnostics": false}.toTable
     e.clearDisabledLspState()
 
-    check nimBuf.diagnostics.len == 0
-    check nimBuf.getLineMarker(0).isNone
-    check rustBuf.diagnostics.len == 1
-    check rustBuf.getLineMarker(0).isSome
+    check nimBuf.diagnostics[dsrcLsp].items.len == 0
+    check nimBuf.diagnosticMarker(0).isNone
+    check rustBuf.diagnostics[dsrcLsp].items.len == 1
+    check rustBuf.diagnosticMarker(0).isSome
 
   test "keeps the document highlights of a language that still has them":
     let e = createTestEditor()

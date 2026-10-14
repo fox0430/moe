@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, times, options, unicode]
+import std/[unittest, os, strutils, tables, times, options, unicode]
 
 import pkg/[results, celina]
 
@@ -1202,7 +1202,7 @@ suite "Buffer - Sidebar Markers":
     # startLine's marker survives; endLine's must not slide into its slot.
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(2, LineMarkerKind.GitChanged)
     buf.setLineMarker(3, LineMarkerKind.GitDeleted)
 
@@ -1213,15 +1213,15 @@ suite "Buffer - Sidebar Markers":
 
     check buf.len == 3
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    # SyntaxError on the surviving merged row (was line 1) must be kept.
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    # The marker on the surviving merged row (was line 1) must be kept.
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     # GitDeleted (was on line 3, now line 2) shifts up.
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
 
   test "deleteRange multi-line with join preserves startLine marker":
     # Multi-line-plus-join: startLine's marker survives too.
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(4, LineMarkerKind.GitAdded)
 
     # Delete (1, 0)..(2, endOfLine): joins Line4 up into row 1.
@@ -1232,14 +1232,14 @@ suite "Buffer - Sidebar Markers":
 
     # Line2 and Line3 fully consumed, Line4 moves up into row 1 — 3 lines total.
     # Marker on startLine survives; markers below shift up by 2.
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitAdded
 
   test "undo of multi-line deleteRange restores markers":
     # Reverse dispatch must reinsert marker slots to match savedLineMarkers.
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(2, LineMarkerKind.GitChanged)
     buf.setLineMarker(3, LineMarkerKind.GitDeleted)
 
@@ -1250,13 +1250,13 @@ suite "Buffer - Sidebar Markers":
 
     check buf.len == 4
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitChanged
     check buf.getLineMarker(3).get == LineMarkerKind.GitDeleted
 
   test "redo of multi-line deleteRange re-applies marker shifts":
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(3, LineMarkerKind.GitDeleted)
 
     discard buf.deleteRange(
@@ -1266,14 +1266,14 @@ suite "Buffer - Sidebar Markers":
     discard buf.redo()
 
     check buf.len == 3
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
 
   test "undo of single-line-join deleteRange restores markers":
     # Single-line-join reverse must reinsert one marker slot at startLine+1.
     let buf = newTextBuffer("Line1\nLine2\nLine3")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(2, LineMarkerKind.GitDeleted)
 
     # Zero-width delete at end of Line1: endPos.column >= lineLen triggers
@@ -1287,14 +1287,14 @@ suite "Buffer - Sidebar Markers":
 
     check buf.len == 3
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
 
   test "undo of insertText with newlines restores markers":
     # Reverse must delete the slots inserted at firstAffectedRow+1..
     let buf = newTextBuffer("Line1\nLine2\nLine3")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(2, LineMarkerKind.GitDeleted)
 
     # Insert "\nX\nY" at (0, 3): line 0 stays, two new lines appear at 1..2,
@@ -1302,28 +1302,25 @@ suite "Buffer - Sidebar Markers":
     discard buf.insertText(BufferPosition(line: 0, column: 3), "\nX\nY")
     check buf.len == 5
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    check buf.getLineMarker(3).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(3).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(4).get == LineMarkerKind.GitDeleted
 
     discard buf.undo()
 
     check buf.len == 3
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
 
   test "clearGitMarkers drops only the git-diff kinds":
-    # Called on every git diff refresh: anything it wipes beyond the diff kinds
-    # is silently lost until the next LSP/bookmark update repopulates it.
-    let buf = newTextBuffer("L0\nL1\nL2\nL3\nL4\nL5\nL6\nL7")
+    # Called on every git diff refresh: a conflict marker it wiped would be
+    # lost until the next conflict scan.
+    let buf = newTextBuffer("L0\nL1\nL2\nL3\nL4")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
     buf.setLineMarker(1, LineMarkerKind.GitChanged)
     buf.setLineMarker(2, LineMarkerKind.GitDeleted)
     buf.setLineMarker(3, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(4, LineMarkerKind.GitConflict)
-    buf.setLineMarker(5, LineMarkerKind.SyntaxError)
-    buf.setLineMarker(6, LineMarkerKind.Bookmark)
-    buf.setLineMarker(7, LineMarkerKind.SessionModified)
 
     buf.clearGitMarkers()
 
@@ -1331,9 +1328,6 @@ suite "Buffer - Sidebar Markers":
       check buf.getLineMarker(line).isNone
     # GitConflict is not a diff kind: it marks conflict blocks in the file.
     check buf.getLineMarker(4).get == LineMarkerKind.GitConflict
-    check buf.getLineMarker(5).get == LineMarkerKind.SyntaxError
-    check buf.getLineMarker(6).get == LineMarkerKind.Bookmark
-    check buf.getLineMarker(7).get == LineMarkerKind.SessionModified
 
   test "isGitChangeMarker covers the diff kinds only":
     for kind in [GitAdded, GitChanged, GitDeleted, GitChangedAndDeleted]:
@@ -2101,10 +2095,10 @@ suite "Git Change Navigation - findNextGitChange":
     check result.isSome
     check result.get == 3
 
-  test "Non-git markers are ignored":
+  test "Conflict markers are ignored":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
-    buf.setLineMarker(1, SyntaxError)
+    buf.setLineMarker(1, GitConflict)
     buf.setLineMarker(3, GitAdded)
     let result = buf.findNextGitChange(0)
     check result.isSome
@@ -2377,20 +2371,84 @@ suite "Buffer - Bookmarks - line insert/delete integration":
     discard buf.undo()
     check buf.bookmarks == @[2, 3]
 
+suite "Buffer - diagnostics follow edits":
+  proc spans(b: TextBuffer, source = dsrcLsp): seq[(int, int)] =
+    for d in b.diagnostics[source].items:
+      result.add (d.startLine, d.endLine)
+
+  test "An inserted line moves the diagnostics below it and stretches one across it":
+    let buf = newTextBuffer("a\nb\nc\nd\ne")
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(startLine: 0, endLine: 0),
+        BufferDiagnostic(startLine: 1, endLine: 3),
+        BufferDiagnostic(startLine: 4, endLine: 4),
+      ],
+    )
+    buf.diagnosticsDirty = false
+
+    check buf.insert(2, "new").isOk
+    check buf.spans == @[(0, 0), (1, 4), (5, 5)]
+    check buf.diagnosticsDirty
+
+  test "A diagnostic starting on a deleted line goes, and one ending on it ends above":
+    let buf = newTextBuffer("a\nbb\nccc\nd")
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(startLine: 0, startCol: 0, endLine: 1, endCol: 1),
+        BufferDiagnostic(startLine: 1, endLine: 1),
+        BufferDiagnostic(startLine: 3, endLine: 3),
+      ],
+    )
+
+    check buf.deleteLine(1).isOk
+    check buf.spans == @[(0, 0), (2, 2)]
+    check buf.diagnostics[dsrcLsp].items[0].endCol == 1
+
+  test "An edit within a line moves no diagnostic":
+    let buf = newTextBuffer("abc\ndef")
+    buf.setDiagnostics(dsrcLsp, @[BufferDiagnostic(startLine: 1, endLine: 1)])
+    let before = buf.diagnostics[dsrcLsp].items
+    buf.diagnosticsDirty = false
+
+    check buf.insertText(BufferPosition(line: 1, column: 0), "x").isOk
+    check buf.diagnostics[dsrcLsp].items.sharesStorage(before)
+    check not buf.diagnosticsDirty
+
+  test "The underline follows its diagnostic down":
+    let buf = newTextBuffer("hello\nworld")
+    buf.language = SourceLanguage.langNone
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[BufferDiagnostic(startLine: 1, endLine: 1, endCol: 5, severity: bdsError)],
+    )
+    buf.updateHighlight()
+    check 1 in buf.highlight.diagnosticOverlay
+
+    check buf.insert(0, "new").isOk
+    buf.updateHighlight()
+    check 1 notin buf.highlight.diagnosticOverlay
+    check 2 in buf.highlight.diagnosticOverlay
+
 suite "Buffer - Diagnostic Highlights":
   test "updateHighlight applies diagnostic underlines":
     let buf = newTextBuffer("hello world")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 5,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 5,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2405,16 +2463,19 @@ suite "Buffer - Diagnostic Highlights":
   test "updateHighlight with warning diagnostic":
     let buf = newTextBuffer("hello world")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 6,
-        endLine: 0,
-        endCol: 11,
-        severity: bdsWarning,
-        message: "test warning",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 6,
+          endLine: 0,
+          endCol: 11,
+          severity: bdsWarning,
+          message: "test warning",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2440,16 +2501,19 @@ suite "Buffer - Diagnostic Highlights":
     # preserve.
     let buf = newTextBuffer("line0\nline1\nline2\nline3")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 2,
-        endLine: 2,
-        endCol: 3,
-        severity: bdsError,
-        message: "multi-line err",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 2,
+          endLine: 2,
+          endCol: 3,
+          severity: bdsError,
+          message: "multi-line err",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2476,24 +2540,27 @@ suite "Buffer - Diagnostic Highlights":
     # deliberately, not silently.
     let buf = newTextBuffer("abcdefghij")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 5,
-        severity: bdsError,
-        message: "err first",
-      ),
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 2,
-        endLine: 0,
-        endCol: 8,
-        severity: bdsWarning,
-        message: "warn second",
-      ),
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 5,
+          severity: bdsError,
+          message: "err first",
+        ),
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 2,
+          endLine: 0,
+          endCol: 8,
+          severity: bdsWarning,
+          message: "warn second",
+        ),
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2509,28 +2576,31 @@ suite "Buffer - Diagnostic Highlights":
     check buf.highlight.getSegmentModifiers(0, 8) == {}
 
   test "clearing diagnostics removes render-side underlines and colors":
-    # After buf.diagnostics.setLen(0) + updateHighlight, previously highlighted
+    # After buf.setDiagnostics(dsrcLsp, @[]) + updateHighlight, previously highlighted
     # cells must return to no-underline / non-syntaxCheck* color. Existing
     # tests only checked marker (sidebar) clearing; this pins the render path.
     let buf = newTextBuffer("hello world")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 5,
-        severity: bdsError,
-        message: "boom",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 5,
+          severity: bdsError,
+          message: "boom",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
     check buf.highlight.getSegmentModifiers(0, 0) == {StyleModifier.Undercurl}
     check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.syntaxCheckErr
 
-    buf.diagnostics.setLen(0)
+    buf.setDiagnostics(dsrcLsp, @[])
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -3062,21 +3132,24 @@ suite "Buffer - reload preserves identity across a backend swap":
       removeFile(path)
 
     let buf = newTextBuffer(backend = PieceTable)
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 1,
-        severity: bdsError,
-        message: "boom",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 1,
+          severity: bdsError,
+          message: "boom",
+        )
+      ],
+    )
 
     check buf.loadFile(path).isOk
     check buf.backendKind == GapBuffer # the swap happened
 
-    check buf.diagnostics.len == 0
+    check buf.diagnostics[dsrcLsp].items.len == 0
 
   test "conflictBlocks are cleared on reload (not part of identity)":
     # conflictBlocks holds line ranges into the OLD content, so a reload makes them
@@ -3224,20 +3297,23 @@ suite "Buffer - reload resets stale content-keyed state":
       removeFile(path)
 
     let buf = newTextBuffer(backend = GapBuffer)
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 1,
-        severity: bdsError,
-        message: "stale",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 1,
+          severity: bdsError,
+          message: "stale",
+        )
+      ],
+    )
 
     check buf.loadFile(path).isOk
     check buf.backendKind == GapBuffer # same-backend path, no swap
-    check buf.diagnostics.len == 0
+    check buf.diagnostics[dsrcLsp].items.len == 0
 
   test "same-backend reload keeps contentVersion monotonic":
     # loadFile advances contentVersion once on its single reload path; a reload
@@ -3389,7 +3465,7 @@ suite "Buffer - an external reload lands as an edit":
     let buf = newTextBuffer()
     check buf.loadFile(path).isOk
     buf.toggleBookmark(2)
-    buf.setLineMarker(2, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitChanged)
 
     writeFile(path, "alpha\nBETA\ngamma\n")
     let reloaded = buf.reloadFileIfContentChanged()
@@ -3398,7 +3474,7 @@ suite "Buffer - an external reload lands as an edit":
 
     check buf.getLine(1) == "BETA"
     check buf.hasBookmark(2)
-    check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(2) == some(LineMarkerKind.GitChanged)
     # The buffer holds what is on disk, so nothing is owed a save.
     check not buf.isModified
 
@@ -3554,32 +3630,38 @@ suite "Buffer - an external reload lands as an edit":
     check buf.encoding == CharacterEncoding.utf8
     check buf.getLine(0) == "alpha"
 
-  test "Diagnostics go, because nothing carries them onto the new lines":
+  test "Diagnostics move with the reload's edit and come back on its undo":
     let path = getTempDir() / "moe_test_reload_diagnostics.txt"
     writeFile(path, "alpha\nbeta\n")
     defer:
       removeFile(path)
     let buf = newTextBuffer()
     check buf.loadFile(path).isOk
-    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 5,
-        severity: bdsError,
-        message: "stale",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0, endLine: 0, endCol: 5, severity: bdsError, message: "lsp"
+        )
+      ],
+    )
+    buf.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsWarning)],
+    )
+    buf.diagnosticsDirty = false
 
     writeFile(path, "INSERTED\nalpha\nbeta\n")
     check buf.reloadFileIfContentChanged().isOk
-    # The marker rides the edit down a line; the diagnostic cannot, so keeping
-    # it would leave the undercurl a line above the marker beside it.
-    check buf.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
-    check buf.diagnostics.len == 0
+    check buf.diagnostics[dsrcLsp].items[0].startLine == 1
+    check buf.diagnostics[dsrcSyntaxCheck].items[0].startLine == 2
+    check buf.diagnosticMarker(1) == some(LineMarkerKind.SyntaxError)
+    check buf.diagnosticMarker(2) == some(LineMarkerKind.SyntaxWarning)
     check buf.diagnosticsDirty
+
+    check buf.undo().isOk
+    check buf.diagnostics[dsrcLsp].items[0].startLine == 0
+    check buf.diagnostics[dsrcSyntaxCheck].items[0].startLine == 1
 
   test "Reloads that have spent their share of the undo stack go wholesale":
     let path = getTempDir() / "moe_test_reload_budget.txt"
@@ -4856,17 +4938,17 @@ suite "Buffer - replaceAllLines":
   test "A line between two changes keeps its marker":
     # Scattered changes: everything in between comes through untouched.
     let buf = bufferOf("head", "x", "middle", "y", "tail")
-    buf.setLineMarker(2, SyntaxError)
+    buf.setLineMarker(2, GitChanged)
     check buf.replaceAllLines(["head", "X", "middle", "Y", "tail"]).get.hunks.len == 2
     check buf[2] == "middle"
-    check buf.getLineMarker(2) == some(SyntaxError)
+    check buf.getLineMarker(2) == some(GitChanged)
 
   test "A marker below an inserted line moves down with it":
     let buf = bufferOf("a", "b", "c")
-    buf.setLineMarker(2, SyntaxError)
+    buf.setLineMarker(2, GitChanged)
     check buf.replaceAllLines(["a", "b", "new", "c"]).get.hunks.len == 1
     check buf[3] == "c"
-    check buf.getLineMarker(3) == some(SyntaxError)
+    check buf.getLineMarker(3) == some(GitChanged)
 
   test "Scattered changes are applied as separate hunks":
     let buf = bufferOf("a", "b", "c", "d", "e")
@@ -4964,7 +5046,11 @@ suite "Buffer - replaceAllLines":
     for i in 0 ..< lines.len:
       lines[i] = "line " & $i
     let buf = newTextBuffer(lines.join("\n"))
-    buf.setLineMarker(701, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(701, LineMarkerKind.GitChanged)
+    buf.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[BufferDiagnostic(startLine: 701, endLine: 701, severity: bdsError)],
+    )
     buf.toggleBookmark(701)
     var replacement = newSeq[string](lines.len)
     for i in 0 ..< lines.len:
@@ -4974,12 +5060,14 @@ suite "Buffer - replaceAllLines":
     check not diff.get.exact
     check buf[701] == "other 701"
     check buf.getLineMarker(701).isNone
+    check buf.diagnosticMarker(701).isNone
     check not buf.hasBookmark(701)
     # Undo puts the text and its markers back. A bookmark on a deleted line
     # does not survive undo anywhere in the buffer, so it is not checked here.
     check buf.undo().isOk
     check buf[701] == "line 701"
-    check buf.getLineMarker(701) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(701) == some(LineMarkerKind.GitChanged)
+    check buf.diagnosticMarker(701) == some(LineMarkerKind.SyntaxError)
 
   test "A replacement sharing no line takes the attachments with it":
     # The script is minimal -- deleting everything and inserting everything is
@@ -4989,7 +5077,7 @@ suite "Buffer - replaceAllLines":
     for i in 0 ..< lines.len:
       lines[i] = "line " & $i
     let buf = newTextBuffer(lines.join("\n"))
-    buf.setLineMarker(150, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(150, LineMarkerKind.GitChanged)
     buf.toggleBookmark(150)
     var replacement = newSeq[string](lines.len)
     for i in 0 ..< lines.len:
@@ -5007,12 +5095,12 @@ suite "Buffer - replaceAllLines":
 
   test "An exact script keeps the attachments on the lines it does not touch":
     let buf = bufferOf("a", "b", "c", "d", "e")
-    buf.setLineMarker(2, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitChanged)
     buf.toggleBookmark(2)
     let diff = buf.replaceAllLines(["a", "B", "c", "D", "e"])
     check diff.get.exact
     check not diff.get.coarse
-    check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(2) == some(LineMarkerKind.GitChanged)
     check buf.hasBookmark(2)
 
 suite "Buffer - decodeForBuffer":

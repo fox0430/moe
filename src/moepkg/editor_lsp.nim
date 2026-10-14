@@ -163,9 +163,8 @@ proc clearDisabledLspState*(e: Editor) =
   ## refill, but what was already applied or sent stays until removed here.
   ## Features still on are left alone.
   for buf in e.buffers:
-    # With none stored, clearing would only wipe the syntax checker's markers.
-    if not e.lspFeatureEnabled(buf, diagnostics) and buf.diagnostics.len > 0:
-      applyDiagnosticsToBuffer(buf, @[])
+    if not e.lspFeatureEnabled(buf, diagnostics):
+      buf.clearDiagnostics({dsrcLsp})
     let scope = some(buf.id)
     if not e.lspFeatureEnabled(buf, semanticTokens):
       invalidateSemanticTokensCache(e.lsp, e.state.lspCache, scope)
@@ -199,13 +198,13 @@ proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer) =
   e.lsp.syncBuffer(buf)
 
 proc resyncBufferAfterReload*(e: Editor, buf: TextBuffer) =
-  ## Re-publish diagnostics after a reload. A reload drops the buffer's
-  ## diagnostics (their positions are stale against the new content), but a plain
-  ## didChange is skipped when the reloaded text equals the server's shadow (`:e!`
-  ## on a clean buffer, or an external touch that left the bytes unchanged), so
-  ## diagnostics would stay gone until the next edit. Re-open the document
-  ## (didClose + didOpen) to force a fresh publish regardless of whether the bytes
-  ## changed — matching a reload's "re-read from disk" semantics.
+  ## Re-publish diagnostics after a reload, which leaves them moved with the
+  ## lines of the old content or drops them. A plain didChange is skipped when
+  ## the reloaded text equals the server's shadow (`:e!` on a clean buffer, or
+  ## an external touch that left the bytes unchanged), so they would stay stale
+  ## or gone until the next edit. Re-open the document (didClose + didOpen) to
+  ## force a fresh publish regardless of whether the bytes changed — matching a
+  ## reload's "re-read from disk" semantics.
   if not e.lsp.enabled or buf.filePath.isNone:
     return
   e.lsp.onBufferClose(buf) # re-opened next regardless

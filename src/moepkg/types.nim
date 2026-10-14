@@ -971,8 +971,6 @@ type
       # Command mode auto-completion manager
     # LSP cache state (grouped in LspCacheState)
     lspCache*: LspCacheState # LSP cache and picker state
-    # Active syntax check results (for status message display)
-    syntaxCheckResults*: tuple[path: string, errors: seq[SyntaxCheckError]]
     # LSP Rename state
     renameState*: RenameState # State for LSP rename mode
     # Overlay state for transient modes (Command, Search, Rename)

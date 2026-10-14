@@ -119,6 +119,18 @@ type
     severity*: BufferDiagnosticSeverity
     message*: string
 
+  DiagnosticSource* = enum
+    dsrcLsp ## The language server's publish
+    dsrcSyntaxCheck ## The syntax checker run on save
+
+  DiagnosticReport* = object
+    ## One source's latest diagnostics. They move with edits and come back on
+    ## undo like `lineMarkers`.
+    generation*: int ## Ordinal of the report among the buffer's reports
+    items*: CowSeq[BufferDiagnostic]
+
+  BufferDiagnostics* = array[DiagnosticSource, DiagnosticReport]
+
   LineModificationKind* = enum
     lmkUnmodified ## Line has not been modified since last save
     lmkModified ## Line content was changed since last save
@@ -194,6 +206,7 @@ type
       ## Pre-mutation modifiedLines snapshot for undo/redo (non-PieceTable, 1 byte per line)
     savedLineMarkers*: CowSeq[Option[LineMarkerKind]]
       ## Pre-mutation lineMarkers snapshot for undo/redo (non-PieceTable)
+    savedDiagnostics*: BufferDiagnostics ## Taken and restored with savedLineMarkers
     startSeq*: int
       ## changeSeq value BEFORE this entry was applied. undo() restores changeSeq
       ## to this so a transaction collapsing N mutations is reverted atomically.
@@ -295,6 +308,7 @@ type
       snapshotLineMarkers*: CowSeq[Option[LineMarkerKind]]
         ## COW-shared so a long undo history of snapshots that don't touch
         ## markers references one frozen array instead of a per-edit copy.
+      snapshotDiagnostics*: BufferDiagnostics
       modifiedLinesDelta*: SeqDelta[LineModificationKind]
         ## Bidirectional per-line delta vs the pre-mutation state, so the entry
         ## keeps O(changed lines) instead of a full O(lines) copy. The piece
@@ -481,6 +495,7 @@ type
 
     # Pre-mutation lineMarkers snapshot (for non-PieceTable undo/redo)
     pendingLineMarkersSnapshot*: CowSeq[Option[LineMarkerKind]]
+    pendingDiagnosticsSnapshot*: BufferDiagnostics
     hasPendingLineMarkersSnapshot*: bool
 
     # Change sequence tracking for modified flag
@@ -511,14 +526,15 @@ type
     # PieceTable snapshot support for O(1) undo/redo
     pendingSnapshot*: Option[PieceTableSnapshot]
     pendingSnapshotMarkers*: CowSeq[Option[LineMarkerKind]]
+    pendingSnapshotDiagnostics*: BufferDiagnostics
     pendingSnapshotModifiedLines*: seq[LineModificationKind]
     pendingSnapshotFolds*: FoldState
     pendingSnapshotNamedMarks*: NamedMarks
     pendingSnapshotBookmarks*: seq[int]
     pendingSnapshotRows*: seq[RowSpan] ## Rows rewritten since the snapshot was taken
 
-    # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
-    lineMarkers*: CowSeq[Option[LineMarkerKind]] # Each line can have at most one marker
+    # Sidebar markers for git diff and conflicts
+    lineMarkers*: CowSeq[Option[LineMarkerKind]]
 
     # Git merge conflict ranges (populated by git_conflict.scanBufferForConflicts)
     conflictBlocks*: seq[ConflictBlock]
@@ -528,7 +544,8 @@ type
       # How each line was modified since last save
 
     # Row/col remap subscribers. `sideArrayCallbacks` are skipped on undo/redo
-    # because savedLineMarkers / savedModifiedLines restore them wholesale.
+    # because savedLineMarkers / savedDiagnostics / savedModifiedLines restore
+    # them wholesale.
     remapCallbacks: seq[RowColRemapCallback]
     sideArrayCallbacks: seq[RowColRemapCallback]
 
@@ -565,12 +582,15 @@ type
     namedMarks*: NamedMarks
     lastVisual*: Option[VisualArea] ## Reselected by `gv`
 
-    # LSP diagnostics (full detail for hover display)
-    diagnostics*: seq[BufferDiagnostic]
+    diagnostics*: BufferDiagnostics
+    diagnosticsGeneration*: int ## The generation of the newest report
+    droppedDiagnostics*: array[DiagnosticSource, int]
+      ## The newest generation of each source a clear dropped, so undo does not
+      ## bring back a report from before it
     diagnosticsDirty*: bool
       ## Set by writers of `diagnostics`; cleared by `updateHighlight` after it
-      ## rebuilds `highlight.diagnosticOverlay`. Lets pure-edit ticks skip the
-      ## overlay rebuild when diagnostics have not changed.
+      ## rebuilds `highlight.diagnosticOverlay`. Lets ticks that moved no
+      ## diagnostic skip the overlay rebuild.
 
     # Per-buffer EditorConfig overrides
     editorConfig*: Option[BufferEditorConfig]
@@ -993,6 +1013,7 @@ proc namedMarkShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc lastVisualShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc lineMarkerShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc modifiedLinesShiftCallback(b: TextBuffer, event: RowColRemapEvent)
+proc diagnosticShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 
 proc newBufferStorage*(backend: BufferBackend, content: sink string): BufferStorage =
   ## Build a fresh backend value of `backend` from `content` (consumed exactly
@@ -1048,6 +1069,7 @@ proc newTextBuffer*(
   result.sideArrayCallbacks = @[]
   result.sideArrayCallbacks.add(lineMarkerShiftCallback)
   result.sideArrayCallbacks.add(modifiedLinesShiftCallback)
+  result.sideArrayCallbacks.add(diagnosticShiftCallback)
 
 proc `[]`*(b: TextBuffer, lineIndex: int): string =
   ## Bracket operator for accessing lines by index
@@ -1459,6 +1481,86 @@ proc modifiedLinesShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
   ## pushUndoChange's "mark changePos as modified" step sees the right state.
   shiftPerLineArray(b.modifiedLines, lmkInserted, event)
 
+proc shiftDiagnosticRows(
+    b: TextBuffer, report: var DiagnosticReport, row, delta: int
+): bool =
+  ## Move `report` across `delta` rows inserted at `row`, or deleted from it
+  ## when negative. A diagnostic starting on a deleted row goes, and one ending
+  ## on one ends at the end of the row above. False when none moved.
+  var reaches = false
+  for d in report.items:
+    if d.endLine >= row:
+      reaches = true
+      break
+  if not reaches:
+    return false
+  let deletedEnd = row - min(delta, 0)
+  var items = newSeqOfCap[BufferDiagnostic](report.items.len)
+  for item in report.items:
+    var d = item
+    if d.startLine >= deletedEnd:
+      d.startLine += delta
+    elif d.startLine >= row:
+      continue
+    if d.endLine >= deletedEnd:
+      d.endLine += delta
+    elif d.endLine >= row:
+      d.endLine = row - 1
+      d.endCol = b.getLineLen(row - 1)
+    items.add d
+  report.items = initCowSeq(items)
+  true
+
+proc diagnosticShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Move the diagnostics with their rows, as lineMarkerShiftCallback moves the
+  ## markers.
+  if event.kind != rrekMultiLine:
+    return
+  let delta = event.lastAffectedRowAfter - event.lastAffectedRowBefore
+  if delta == 0:
+    return
+  let row = event.firstAffectedRow + ord(event.preservesFirstRow)
+  for source in DiagnosticSource:
+    if b.shiftDiagnosticRows(b.diagnostics[source], row, delta):
+      b.diagnosticsDirty = true
+
+proc setDiagnostics*(
+    b: TextBuffer, source: DiagnosticSource, items: sink seq[BufferDiagnostic]
+) =
+  ## Replace the diagnostics of `source` with a new report from it.
+  inc b.diagnosticsGeneration
+  b.diagnostics[source] =
+    DiagnosticReport(generation: b.diagnosticsGeneration, items: initCowSeq(items))
+  b.highlightNeedsUpdate = true
+  b.diagnosticsDirty = true
+
+proc clearDiagnostics*(
+    b: TextBuffer,
+    sources: set[DiagnosticSource] = {DiagnosticSource.low .. DiagnosticSource.high},
+) =
+  ## Drop the diagnostics of `sources`, all of them by default. Undo does not
+  ## bring back their reports so far.
+  for source in sources:
+    b.droppedDiagnostics[source] = b.diagnosticsGeneration
+    if b.diagnostics[source].items.len > 0:
+      b.diagnostics[source] = DiagnosticReport()
+      b.highlightNeedsUpdate = true
+      b.diagnosticsDirty = true
+
+proc restoreDiagnostics*(b: TextBuffer, saved: BufferDiagnostics) =
+  ## Put back the diagnostics an undo entry took, leaving out a report dropped
+  ## since.
+  for source in DiagnosticSource:
+    let report =
+      if saved[source].generation > b.droppedDiagnostics[source]:
+        saved[source]
+      else:
+        DiagnosticReport()
+    if report.generation != b.diagnostics[source].generation or
+        not report.items.sharesStorage(b.diagnostics[source].items):
+      b.diagnostics[source] = report
+      b.diagnosticsDirty = true
+
 proc reversed(event: RowColRemapEvent): RowColRemapEvent =
   ## Flip a forward event into its inverse. `lineCharLenAfter` is preserved:
   ## emitRowColRemapEvents recomputes it via `getLine` at reverse dispatch time
@@ -1836,6 +1938,7 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
     # frozen array (O(1)). A line-count-changing edit resizes lineMarkers right
     # after this and clones once; same-line edits never clone.
     b.pendingSnapshotMarkers = b.lineMarkers
+    b.pendingSnapshotDiagnostics = b.diagnostics
     b.pendingSnapshotModifiedLines = b.modifiedLines
     b.pendingSnapshotFolds = b.foldState
     b.pendingSnapshotNamedMarks = b.namedMarks
@@ -1853,6 +1956,7 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
       b.hasPendingModifiedLinesSnapshot = true
     if not b.hasPendingLineMarkersSnapshot:
       b.pendingLineMarkersSnapshot = b.lineMarkers
+      b.pendingDiagnosticsSnapshot = b.diagnostics
       b.hasPendingLineMarkersSnapshot = true
 
 proc takePendingSnapshotRows*(b: TextBuffer): CowSeq[RowSpan] =
@@ -1868,6 +1972,7 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   ## attaching stale data.
   b.pendingSnapshot = none(PieceTableSnapshot)
   b.pendingSnapshotMarkers.clear()
+  b.pendingSnapshotDiagnostics = default(BufferDiagnostics)
   b.pendingSnapshotModifiedLines.setLen(0)
   b.pendingSnapshotFolds = initFoldState()
   b.pendingSnapshotNamedMarks = default(NamedMarks)
@@ -1879,6 +1984,7 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   b.pendingModifiedLinesSnapshot.setLen(0)
   b.hasPendingLineMarkersSnapshot = false
   b.pendingLineMarkersSnapshot.clear()
+  b.pendingDiagnosticsSnapshot = default(BufferDiagnostics)
 
 proc clearUndoRedoState*(b: TextBuffer) =
   ## Drop all undo/redo history, the in-flight transaction and any pending
@@ -2037,6 +2143,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
     b.hasPendingModifiedLinesSnapshot = false
   if b.hasPendingLineMarkersSnapshot:
     changeWithSnapshot.savedLineMarkers = b.pendingLineMarkersSnapshot
+    changeWithSnapshot.savedDiagnostics = b.pendingDiagnosticsSnapshot
     b.hasPendingLineMarkersSnapshot = false
 
   if b.inTransaction and b.currentTransaction.isSome:
@@ -2056,6 +2163,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
         snapshotData: b.pendingSnapshot.get,
         snapshotCursorPos: getChangePosition(change),
         snapshotLineMarkers: b.pendingSnapshotMarkers,
+        snapshotDiagnostics: b.pendingSnapshotDiagnostics,
         modifiedLinesDelta:
           computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
         snapshotFoldState: b.pendingSnapshotFolds,

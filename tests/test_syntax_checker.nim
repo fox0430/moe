@@ -202,25 +202,33 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
       ),
     ]
     applySyntaxCheckToBuffer(buf, errors)
-    check buf.getLineMarker(0) == none(LineMarkerKind)
-    check buf.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
-    check buf.getLineMarker(2) == none(LineMarkerKind)
-    check buf.getLineMarker(3) == some(LineMarkerKind.SyntaxWarning)
-    check buf.getLineMarker(4) == none(LineMarkerKind)
+    check buf.diagnosticMarker(0) == none(LineMarkerKind)
+    check buf.diagnosticMarker(1) == some(LineMarkerKind.SyntaxError)
+    check buf.diagnosticMarker(2) == none(LineMarkerKind)
+    check buf.diagnosticMarker(3) == some(LineMarkerKind.SyntaxWarning)
+    check buf.diagnosticMarker(4) == none(LineMarkerKind)
 
   test "Apply clears previous syntax markers":
     let buf = newTextBuffer("line1\nline2\nline3")
-    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
-    buf.setLineMarker(2, LineMarkerKind.SyntaxWarning)
+    applySyntaxCheckToBuffer(
+      buf,
+      @[
+        SyntaxCheckError(
+          position: BufferPosition(line: 0, column: 0),
+          messageType: SyntaxCheckMessageType.error,
+        )
+      ],
+    )
     # Apply with empty errors should clear syntax markers
     applySyntaxCheckToBuffer(buf, @[])
-    check buf.getLineMarker(0) == none(LineMarkerKind)
-    check buf.getLineMarker(2) == none(LineMarkerKind)
+    check buf.diagnosticMarker(0) == none(LineMarkerKind)
 
-  test "Apply preserves git markers":
+  test "Apply preserves git markers and LSP diagnostics":
     let buf = newTextBuffer("line1\nline2\nline3")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setDiagnostics(
+      dsrcLsp, @[BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsWarning)]
+    )
     let errors = @[
       SyntaxCheckError(
         position: BufferPosition(line: 2, column: 0),
@@ -229,12 +237,9 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
       )
     ]
     applySyntaxCheckToBuffer(buf, errors)
-    # Git marker should be preserved
     check buf.getLineMarker(0) == some(LineMarkerKind.GitAdded)
-    # Old syntax marker cleared
-    check buf.getLineMarker(1) == none(LineMarkerKind)
-    # New syntax marker set
-    check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+    check buf.diagnosticMarker(1) == some(LineMarkerKind.SyntaxWarning)
+    check buf.diagnosticMarker(2) == some(LineMarkerKind.SyntaxError)
 
   test "Hints and info are not shown in sidebar":
     let buf = newTextBuffer("line1\nline2\nline3")
@@ -251,8 +256,10 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
       ),
     ]
     applySyntaxCheckToBuffer(buf, errors)
-    check buf.getLineMarker(0) == none(LineMarkerKind)
-    check buf.getLineMarker(1) == none(LineMarkerKind)
+    check buf.diagnosticMarker(0) == none(LineMarkerKind)
+    check buf.diagnosticMarker(1) == none(LineMarkerKind)
+    # They still reach the status line.
+    check buf.syntaxCheckMessage(0) == some("Hint: a hint")
 
   test "Errors on out-of-range lines are ignored":
     let buf = newTextBuffer("line1\nline2")
@@ -264,27 +271,14 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
       )
     ]
     applySyntaxCheckToBuffer(buf, errors)
-    check buf.getLineMarker(0) == none(LineMarkerKind)
-    check buf.getLineMarker(1) == none(LineMarkerKind)
+    check buf.diagnostics[dsrcSyntaxCheck].items.len == 0
 
-suite "SyntaxChecker - clearSyntaxMarkers":
-  test "Clears syntax error and warning markers":
-    let buf = newTextBuffer("line1\nline2\nline3")
-    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxWarning)
-    buf.setLineMarker(2, LineMarkerKind.GitAdded)
-    clearSyntaxMarkers(buf)
-    check buf.getLineMarker(0) == none(LineMarkerKind)
-    check buf.getLineMarker(1) == none(LineMarkerKind)
-    check buf.getLineMarker(2) == some(LineMarkerKind.GitAdded)
+suite "SyntaxChecker - syntaxCheckMessage":
+  proc messageAt(errors: seq[SyntaxCheckError], line: int): Option[string] =
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    applySyntaxCheckToBuffer(buf, errors)
+    buf.syntaxCheckMessage(line)
 
-  test "Clears nothing when no syntax markers exist":
-    let buf = newTextBuffer("line1\nline2")
-    buf.setLineMarker(0, LineMarkerKind.GitChanged)
-    clearSyntaxMarkers(buf)
-    check buf.getLineMarker(0) == some(LineMarkerKind.GitChanged)
-
-suite "SyntaxChecker - formattedMessage":
   test "Returns error message for matching line":
     let errors = @[
       SyntaxCheckError(
@@ -293,7 +287,7 @@ suite "SyntaxChecker - formattedMessage":
         message: "undeclared identifier",
       )
     ]
-    let msg = formattedMessage(errors, 3)
+    let msg = errors.messageAt(3)
     check msg.isSome
     check msg.get == "Error: undeclared identifier"
 
@@ -305,7 +299,7 @@ suite "SyntaxChecker - formattedMessage":
         message: "unused variable",
       )
     ]
-    let msg = formattedMessage(errors, 5)
+    let msg = errors.messageAt(5)
     check msg.isSome
     check msg.get == "Warning: unused variable"
 
@@ -317,7 +311,7 @@ suite "SyntaxChecker - formattedMessage":
         message: "use const",
       )
     ]
-    let msg = formattedMessage(errors, 0)
+    let msg = errors.messageAt(0)
     check msg.isSome
     check msg.get == "Hint: use const"
 
@@ -329,7 +323,7 @@ suite "SyntaxChecker - formattedMessage":
         message: "some info",
       )
     ]
-    let msg = formattedMessage(errors, 1)
+    let msg = errors.messageAt(1)
     check msg.isSome
     check msg.get == "Info: some info"
 
@@ -341,7 +335,7 @@ suite "SyntaxChecker - formattedMessage":
         message: "error on line 3",
       )
     ]
-    let msg = formattedMessage(errors, 5)
+    let msg = errors.messageAt(5)
     check msg.isNone
 
   test "Returns first matching error when multiple on same line":
@@ -357,14 +351,57 @@ suite "SyntaxChecker - formattedMessage":
         message: "second issue",
       ),
     ]
-    let msg = formattedMessage(errors, 2)
+    let msg = errors.messageAt(2)
     check msg.isSome
     check msg.get == "Error: first error"
 
   test "Empty errors returns none":
     let errors: seq[SyntaxCheckError] = @[]
-    let msg = formattedMessage(errors, 0)
+    let msg = errors.messageAt(0)
     check msg.isNone
+
+  test "The message follows its line through an edit":
+    let buf = newTextBuffer("a\nb\nc")
+    applySyntaxCheckToBuffer(
+      buf,
+      @[
+        SyntaxCheckError(
+          position: BufferPosition(line: 1, column: 0),
+          messageType: SyntaxCheckMessageType.error,
+          message: "on b",
+        )
+      ],
+    )
+    check buf.insert(0, "new").isOk
+    check buf.syntaxCheckMessage(1).isNone
+    check buf.syntaxCheckMessage(2) == some("Error: on b")
+
+  test "Each buffer keeps its own messages":
+    let
+      first = newTextBuffer("a\nb")
+      second = newTextBuffer("a\nb")
+    applySyntaxCheckToBuffer(
+      first,
+      @[
+        SyntaxCheckError(
+          position: BufferPosition(line: 0, column: 0),
+          messageType: SyntaxCheckMessageType.error,
+          message: "first",
+        )
+      ],
+    )
+    applySyntaxCheckToBuffer(
+      second,
+      @[
+        SyntaxCheckError(
+          position: BufferPosition(line: 1, column: 0),
+          messageType: SyntaxCheckMessageType.warning,
+          message: "second",
+        )
+      ],
+    )
+    check first.syntaxCheckMessage(0) == some("Error: first")
+    check second.syntaxCheckMessage(1) == some("Warning: second")
 
 suite "SyntaxChecker - startBackgroundSyntaxCheck":
   test "Unsupported language returns error":

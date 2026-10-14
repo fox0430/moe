@@ -77,16 +77,19 @@ when defined(moe.matter) or defined(features.moe.matter):
       let buffer = newTextBuffer(text)
       buffer.language = langNim
       buffer.setMatterGrammar(langNim, NimMatterGrammar, "nim.tmLanguage.json")
-      buffer.diagnostics = @[
-        BufferDiagnostic(
-          startLine: 1,
-          startCol: 0,
-          endLine: 1,
-          endCol: 3,
-          severity: bdsError,
-          message: "diagnostic",
-        )
-      ]
+      buffer.setDiagnostics(
+        dsrcLsp,
+        @[
+          BufferDiagnostic(
+            startLine: 1,
+            startCol: 0,
+            endLine: 1,
+            endCol: 3,
+            severity: bdsError,
+            message: "diagnostic",
+          )
+        ],
+      )
       buffer.diagnosticsDirty = true
       discard buffer.updateHighlight()
       let original = buffer.highlight

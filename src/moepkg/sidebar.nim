@@ -245,9 +245,6 @@ proc updateSidebarForGitChangedAndDeleted*(sidebar: var Sidebar, lineNumber: int
     sidebar, lineNumber, globalMarkerConfig.gitChangedAndDeleted, GitChangedAndDeleted
   )
 
-# Syntax checker integration (placeholder for future implementation)
-# These functions will be connected to the LSP/syntax checker system when available
-
 proc updateSidebarForSyntaxError*(sidebar: var Sidebar, lineNumber: int) =
   ## Mark a line with a syntax error
   setSidebarLine(sidebar, lineNumber, globalMarkerConfig.syntaxError, SyntaxError)
@@ -268,51 +265,43 @@ proc generateSidebarFromBuffer*(
   ## Generate a sidebar view from buffer markers for the visible range.
   ## If showModifiedLines is true, lines with no other marker but modified/inserted in
   ## the current session will show a SessionModified/SessionInserted indicator as fallback.
-  ## Bookmarks are shown when no SyntaxError/SyntaxWarning marker is present.
+  ## A conflict marker outranks diagnostics, which outrank bookmarks, which
+  ## outrank git change markers.
   result = initSidebar(height, width)
+  let diagnosticMarkers = b.diagnosticMarkers(topLine, height)
 
   # Map buffer markers to sidebar for visible range
   for screenLine in 0 ..< height:
     let bufferLine = topLine + screenLine
     if bufferLine >= 0 and bufferLine < b.len:
       let marker = b.getLineMarker(bufferLine)
-      if marker.isSome:
-        let kind = marker.get
-        if kind in {SyntaxError, SyntaxWarning}:
-          # SyntaxError/Warning take highest priority
-          let text =
-            case kind
-            of SyntaxError: globalMarkerConfig.syntaxError
-            of SyntaxWarning: globalMarkerConfig.syntaxWarning
-            else: " "
-          setSidebarLine(result, screenLine, text, kind)
-        elif kind == GitConflict:
-          # GitConflict outranks bookmarks and regular git markers — a merge
-          # conflict is actionable state the user needs to resolve first.
-          setSidebarLine(
-            result, screenLine, globalMarkerConfig.gitConflict, GitConflict
-          )
-        elif b.hasBookmark(bufferLine):
-          # Bookmark overrides git/session markers
-          setSidebarLine(result, screenLine, globalMarkerConfig.bookmark, Bookmark)
-        else:
-          # Generate appropriate text for this marker kind from configuration
-          let text =
-            case kind
-            of GitAdded: globalMarkerConfig.gitAdded
-            of GitChanged: globalMarkerConfig.gitChanged
-            of GitDeleted: globalMarkerConfig.gitDeleted
-            of GitChangedAndDeleted: globalMarkerConfig.gitChangedAndDeleted
-            of GitConflict: globalMarkerConfig.gitConflict
-            of SyntaxError: globalMarkerConfig.syntaxError
-            of SyntaxWarning: globalMarkerConfig.syntaxWarning
-            of SessionModified: globalMarkerConfig.sessionModified
-            of SessionInserted: globalMarkerConfig.sessionInserted
-            of Bookmark: globalMarkerConfig.bookmark
-          setSidebarLine(result, screenLine, text, kind)
+      if marker == some(GitConflict):
+        # Its marker lines are syntax errors in most languages, so a diagnostic
+        # would hide where the conflict starts and ends.
+        setSidebarLine(result, screenLine, globalMarkerConfig.gitConflict, GitConflict)
+      elif diagnosticMarkers[screenLine] == some(SyntaxError):
+        result.updateSidebarForSyntaxError(screenLine)
+      elif diagnosticMarkers[screenLine] == some(SyntaxWarning):
+        result.updateSidebarForSyntaxWarning(screenLine)
       elif b.hasBookmark(bufferLine):
-        # No marker but has bookmark
+        # Bookmark overrides git/session markers
         setSidebarLine(result, screenLine, globalMarkerConfig.bookmark, Bookmark)
+      elif marker.isSome:
+        # Generate appropriate text for this marker kind from configuration
+        let kind = marker.get
+        let text =
+          case kind
+          of GitAdded: globalMarkerConfig.gitAdded
+          of GitChanged: globalMarkerConfig.gitChanged
+          of GitDeleted: globalMarkerConfig.gitDeleted
+          of GitChangedAndDeleted: globalMarkerConfig.gitChangedAndDeleted
+          of GitConflict: globalMarkerConfig.gitConflict
+          of SyntaxError: globalMarkerConfig.syntaxError
+          of SyntaxWarning: globalMarkerConfig.syntaxWarning
+          of SessionModified: globalMarkerConfig.sessionModified
+          of SessionInserted: globalMarkerConfig.sessionInserted
+          of Bookmark: globalMarkerConfig.bookmark
+        setSidebarLine(result, screenLine, text, kind)
       elif showModifiedLines and bufferLine < modifiedLines.len:
         # Fallback: show session marker when no other marker exists
         case modifiedLines[bufferLine]

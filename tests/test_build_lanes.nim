@@ -366,7 +366,7 @@ suite "Syntax check lanes":
 
     check e.states == @[jsWaiting]
     check e.settle()
-    check e.state.syntaxCheckResults.path == path
+    check "Syntax check: " in e.state.statusMessage
 
   test "A newer check stops the one running on the same file":
     let
@@ -381,7 +381,7 @@ suite "Syntax check lanes":
     e.check(path)
     check e.states == @[jsStopping, jsWaiting]
     check e.settle()
-    check e.state.syntaxCheckResults.path == path
+    check "Syntax check: " in e.state.statusMessage
 
   test "Checks of different files run side by side":
     let
@@ -408,5 +408,4 @@ suite "Syntax check lanes":
 
     check e.stopRunningCommands() == 1
     check e.settle()
-    check e.state.syntaxCheckResults.path == ""
     check e.state.statusMessage == ""

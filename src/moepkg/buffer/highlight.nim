@@ -476,13 +476,13 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           b, uriStart, uriEnd, applyToCache = not highlightRebuilt
         )
 
-    # Diagnostics are only mutated by the LSP publish path / reset/clear paths;
-    # a pure edit keeps them untouched, so the overlay rebuilt on the previous
-    # tick is still current. Skip the O(D + R) clear+rebuild in that case.
+    # Only the language server's diagnostics are underlined. An edit that
+    # moved none keeps the overlay rebuilt on the previous tick current, so
+    # skip the O(D + R) clear+rebuild then.
     if b.diagnosticsDirty:
       b.highlight.diagnosticOverlay.clear()
-      if b.diagnostics.len > 0:
-        applyDiagnosticHighlights(b.highlight, b.diagnostics)
+      if b.diagnostics[dsrcLsp].items.len > 0:
+        applyDiagnosticHighlights(b.highlight, b.diagnostics[dsrcLsp].items)
       b.diagnosticsDirty = false
 
     if highlightRebuilt:

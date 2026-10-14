@@ -23,6 +23,19 @@ import pkg/celina
 
 import ../src/moepkg/[buffer, sidebar, color, theme]
 
+proc addDiagnosticMarker(
+    b: TextBuffer, line: int, source: DiagnosticSource, kind: LineMarkerKind
+) =
+  var items: seq[BufferDiagnostic]
+  for d in b.diagnostics[source].items:
+    items.add d
+  items.add BufferDiagnostic(
+    startLine: line,
+    endLine: line,
+    severity: if kind == SyntaxError: bdsError else: bdsWarning,
+  )
+  b.setDiagnostics(source, items)
+
 suite "Sidebar - initSidebar":
   test "Initialize sidebar with default width":
     let sidebar = initSidebar(10)
@@ -299,7 +312,7 @@ suite "Sidebar - generateSidebarFromBuffer":
     )
     buf.setLineMarker(0, GitAdded)
     buf.setLineMarker(2, GitChanged)
-    buf.setLineMarker(4, SyntaxError)
+    buf.addDiagnosticMarker(4, dsrcLsp, SyntaxError)
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 5)
 
@@ -316,7 +329,7 @@ suite "Sidebar - generateSidebarFromBuffer":
     )
     buf.setLineMarker(0, GitAdded)
     buf.setLineMarker(2, GitChanged)
-    buf.setLineMarker(4, SyntaxError)
+    buf.addDiagnosticMarker(4, dsrcLsp, SyntaxError)
 
     # View starting from line 2
     let sidebar = generateSidebarFromBuffer(buf, 2, 3)
@@ -475,7 +488,7 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
   test "Generate sidebar with SyntaxWarning marker":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1")
-    buf.setLineMarker(0, SyntaxWarning)
+    buf.addDiagnosticMarker(0, dsrcLsp, SyntaxWarning)
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 1)
 
@@ -511,8 +524,8 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
     buf.setLineMarker(1, GitChanged)
     buf.setLineMarker(2, GitDeleted)
     buf.setLineMarker(3, GitChangedAndDeleted)
-    buf.setLineMarker(4, SyntaxError)
-    buf.setLineMarker(5, SyntaxWarning)
+    buf.addDiagnosticMarker(4, dsrcLsp, SyntaxError)
+    buf.addDiagnosticMarker(5, dsrcLsp, SyntaxWarning)
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 6)
 
@@ -522,6 +535,82 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
     check sidebar.buffer[3][0].kind == some(GitChangedAndDeleted)
     check sidebar.buffer[4][0].kind == some(SyntaxError)
     check sidebar.buffer[5][0].kind == some(SyntaxWarning)
+
+  test "A diagnostic outranks the git marker on its line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    buf.setLineMarker(0, GitAdded)
+    buf.setLineMarker(1, GitChanged)
+    buf.addDiagnosticMarker(0, dsrcLsp, SyntaxWarning)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 2)
+
+    check sidebar.buffer[0][0].kind == some(SyntaxWarning)
+    check sidebar.buffer[1][0].kind == some(GitChanged)
+
+  test "Information and hints leave the git marker":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    buf.setLineMarker(0, GitAdded)
+    buf.setLineMarker(1, GitChanged)
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(startLine: 0, endLine: 0, severity: bdsInformation),
+        BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsHint),
+      ],
+    )
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 2)
+
+    check sidebar.buffer[0][0].kind == some(GitAdded)
+    check sidebar.buffer[1][0].kind == some(GitChanged)
+
+  test "A conflict outranks a diagnostic on its line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "<<<<<<< HEAD\nours")
+    buf.setLineMarker(0, GitConflict)
+    buf.setLineMarker(1, GitConflict)
+    buf.addDiagnosticMarker(0, dsrcLsp, SyntaxError)
+    buf.addDiagnosticMarker(1, dsrcSyntaxCheck, SyntaxWarning)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 2)
+
+    check sidebar.buffer[0][0].kind == some(GitConflict)
+    check sidebar.buffer[1][0].kind == some(GitConflict)
+
+  test "A diagnostic marker follows its line across an edit":
+    let buf = newTextBuffer("Line 1\nLine 2\nLine 3")
+    buf.addDiagnosticMarker(2, dsrcSyntaxCheck, SyntaxError)
+
+    discard buf.insert(1, "new")
+    let sidebar = generateSidebarFromBuffer(buf, 0, 4)
+
+    check sidebar.buffer[2][0].kind.isNone
+    check sidebar.buffer[3][0].kind == some(SyntaxError)
+
+  test "Generate sidebar with syntax checker diagnostics":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    buf.addDiagnosticMarker(1, dsrcSyntaxCheck, SyntaxError)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 2)
+
+    check sidebar.buffer[0][0].kind.isNone
+    check sidebar.buffer[1][0].kind == some(SyntaxError)
+
+  test "An error outranks a warning from the other source":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    buf.addDiagnosticMarker(0, dsrcLsp, SyntaxWarning)
+    buf.addDiagnosticMarker(0, dsrcSyntaxCheck, SyntaxError)
+    buf.addDiagnosticMarker(1, dsrcLsp, SyntaxError)
+    buf.addDiagnosticMarker(1, dsrcSyntaxCheck, SyntaxWarning)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 2)
+
+    check sidebar.buffer[0][0].kind == some(SyntaxError)
+    check sidebar.buffer[1][0].kind == some(SyntaxError)
 
 suite "Sidebar - Bookmark display":
   test "bookmarkStyle uses the sidebarBookmarkSign theme color with bold":
@@ -553,7 +642,7 @@ suite "Sidebar - Bookmark display":
   test "SyntaxError overrides bookmark":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
-    buf.setLineMarker(1, SyntaxError)
+    buf.addDiagnosticMarker(1, dsrcLsp, SyntaxError)
     buf.toggleBookmark(1)
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 3, bookmarks = buf.bookmarks)
@@ -563,7 +652,7 @@ suite "Sidebar - Bookmark display":
   test "SyntaxWarning overrides bookmark":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
-    buf.setLineMarker(0, SyntaxWarning)
+    buf.addDiagnosticMarker(0, dsrcLsp, SyntaxWarning)
     buf.toggleBookmark(0)
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 2, bookmarks = buf.bookmarks)

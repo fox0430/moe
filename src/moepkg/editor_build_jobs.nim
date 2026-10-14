@@ -71,8 +71,6 @@ proc runSyntaxCheckJob(
       let bufIdx = editor.findBufferByPath(info.path)
       if bufIdx >= 0:
         applySyntaxCheckToBuffer(editor.buffers[bufIdx], errors)
-      # Kept for the status line.
-      editor.state.syntaxCheckResults = (path: info.path, errors: errors)
       let errorCount = errors.countIt(it.messageType == SyntaxCheckMessageType.error)
       let warnCount = errors.countIt(it.messageType == SyntaxCheckMessageType.warning)
       if errorCount > 0 or warnCount > 0:

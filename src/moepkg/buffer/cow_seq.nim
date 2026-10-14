@@ -74,6 +74,11 @@ proc `[]`*[T](cs: CowSeq[T], i: int): T {.inline.} =
     raise newException(IndexDefect, "index out of bounds: CowSeq is empty")
   cs.node.data[i]
 
+iterator items*[T](cs: CowSeq[T]): lent T =
+  if cs.node != nil:
+    for x in cs.node.data:
+      yield x
+
 proc `[]=`*[T](cs: var CowSeq[T], i: int, v: T) {.inline.} =
   cs.ensureUnique()
   cs.node.data[i] = v

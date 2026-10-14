@@ -1965,45 +1965,13 @@ proc applyWorkspaceEdit*(
 
 # Diagnostic helpers
 proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic]) =
-  ## Apply LSP diagnostics to buffer's line markers
-  ## Clears existing syntax markers and sets new ones
-
-  # Clear existing syntax-related markers
-  for i in 0 ..< buffer.lineMarkers.len:
-    let marker = buffer.lineMarkers[i]
-    if marker.isSome:
-      let kind = marker.get
-      if kind in {LineMarkerKind.SyntaxError, LineMarkerKind.SyntaxWarning}:
-        buffer.lineMarkers[i] = none(LineMarkerKind)
-
-  # Apply new diagnostics
-  for diag in diagnostics:
-    let line = diag.range.start.line
-    if line >= 0 and line < buffer.len:
-      let kind =
-        if diag.severity.isSome:
-          case diag.severity.get
-          of dsError: LineMarkerKind.SyntaxError
-          of dsWarning: LineMarkerKind.SyntaxWarning
-          of dsInformation: LineMarkerKind.SyntaxWarning
-          of dsHint: LineMarkerKind.SyntaxWarning
-        else:
-          LineMarkerKind.SyntaxError
-
-      # Only set if no marker or lower priority marker exists
-      let existing = buffer.getLineMarker(line)
-      if existing.isNone or (
-        existing.get != LineMarkerKind.SyntaxError and kind == LineMarkerKind.SyntaxError
-      ):
-        buffer.setLineMarker(line, kind)
-
-  # Store full diagnostics for hover display
-  buffer.diagnostics.setLen(0)
+  ## Replace the buffer's LSP diagnostics with a publish.
+  var items: seq[BufferDiagnostic]
   for diag in diagnostics:
     let startLine = diag.range.start.line
-    # Match the marker pass above: a diagnostic whose start line is outside
-    # the buffer is not stored — it can never be shown or hovered, and an
-    # arbitrary line must not drive the highlight overlay loops.
+    # A diagnostic whose start line is outside the buffer is not stored — it
+    # can never be shown or hovered, and an arbitrary line must not drive the
+    # highlight overlay loops.
     if startLine < 0 or startLine >= buffer.len:
       continue
     # An end beyond the buffer is common (a diagnostic running to EOF); clamp
@@ -2021,7 +1989,7 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
         bdsError
     # LSP columns are UTF-16 code units; consumers (markers, highlights)
     # expect rune indexes. Convert using the referenced line's text.
-    buffer.diagnostics.add(
+    items.add(
       BufferDiagnostic(
         startLine: startLine,
         startCol:
@@ -2032,10 +2000,7 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
         message: diag.message,
       )
     )
-
-  # Trigger highlight regeneration so diagnostic underlines are applied
-  buffer.highlightNeedsUpdate = true
-  buffer.diagnosticsDirty = true
+  buffer.setDiagnostics(dsrcLsp, items)
 
 proc formatDiagnosticsForHover*(diagnostics: seq[BufferDiagnostic]): string =
   ## Format diagnostics for display in hover popup

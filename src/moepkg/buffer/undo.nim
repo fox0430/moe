@@ -115,6 +115,7 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckSnapshot:
       b.storage.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
+      b.restoreDiagnostics(change.snapshotDiagnostics)
       # b.modifiedLines currently holds the post-mutation state; reverse it.
       applyUndo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
@@ -138,6 +139,7 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     # For non-snapshot: restore lineMarkers from pre-mutation snapshot
     if change.kind != ckSnapshot and change.savedLineMarkers.len > 0:
       b.lineMarkers = change.savedLineMarkers
+      b.restoreDiagnostics(change.savedDiagnostics)
 
     # A rewritten span that gave rows up dropped their folds and bookmarks and
     # the reversed events cannot bring them back, so restore them wholesale.
@@ -173,6 +175,7 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     snapshotData: b.storage.pieceTable.takeSnapshot(),
     snapshotCursorPos: change.snapshotCursorPos,
     snapshotLineMarkers: b.lineMarkers,
+    snapshotDiagnostics: b.diagnostics,
     modifiedLinesDelta: change.modifiedLinesDelta,
     snapshotFoldState: b.foldState,
     snapshotBookmarks: b.bookmarks,
@@ -267,6 +270,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
             else:
               firstChangePos,
           snapshotLineMarkers: b.pendingSnapshotMarkers,
+          snapshotDiagnostics: b.pendingSnapshotDiagnostics,
           modifiedLinesDelta:
             computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
           snapshotFoldState: b.pendingSnapshotFolds,
@@ -385,6 +389,7 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
     # PieceTable: O(1) restore from snapshot
     b.storage.pieceTable.restoreSnapshot(b.pendingSnapshot.get)
     b.lineMarkers = b.pendingSnapshotMarkers
+    b.restoreDiagnostics(b.pendingSnapshotDiagnostics)
     b.modifiedLines = b.pendingSnapshotModifiedLines
     b.foldState = b.pendingSnapshotFolds
     b.namedMarks = b.pendingSnapshotNamedMarks
@@ -463,6 +468,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     if change.kind != ckSnapshot:
       redoEntry.savedModifiedLines = b.modifiedLines
       redoEntry.savedLineMarkers = b.lineMarkers
+      redoEntry.savedDiagnostics = b.diagnostics
 
     let visualBefore = b.lastVisual
     let r = b.undoChange(change)
@@ -608,6 +614,7 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckSnapshot:
       b.storage.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
+      b.restoreDiagnostics(change.snapshotDiagnostics)
       # b.modifiedLines currently holds the pre-mutation state; re-apply it.
       applyRedo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
@@ -630,6 +637,7 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     # For non-snapshot: restore lineMarkers from pre-mutation snapshot
     if change.kind != ckSnapshot and change.savedLineMarkers.len > 0:
       b.lineMarkers = change.savedLineMarkers
+      b.restoreDiagnostics(change.savedDiagnostics)
 
     # Ensure lineMarkers and modifiedLines stay in sync after redo operations
     b.ensureMarkersSize()
@@ -680,6 +688,7 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     if change.kind != ckSnapshot:
       undoEntry.savedModifiedLines = b.modifiedLines
       undoEntry.savedLineMarkers = b.lineMarkers
+      undoEntry.savedDiagnostics = b.diagnostics
 
     let visualBefore = b.lastVisual
     let r = b.redoChange(change)

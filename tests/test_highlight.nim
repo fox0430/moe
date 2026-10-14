@@ -2727,16 +2727,19 @@ suite "Highlight - diagnostics survive progressive load":
     # not silently dropped until the next edit.
     var buf = loadProgressiveScalarFixture("moe_test_yaml_diag_progressive.yaml")
 
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 500,
-        startCol: 0,
-        endLine: 500,
-        endCol: 5,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 500,
+          startCol: 0,
+          endLine: 500,
+          endCol: 5,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2772,16 +2775,19 @@ suite "Highlight - diagnostics survive progressive load":
     while buf.uriScanParsedUpTo < buf.len - 1:
       discard buf.continueUriScan()
 
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 100,
-        startCol: 0,
-        endLine: 100,
-        endCol: 5,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 100,
+          startCol: 0,
+          endLine: 100,
+          endCol: 5,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2790,7 +2796,7 @@ suite "Highlight - diagnostics survive progressive load":
     buf.uriScanParsedUpTo = -1
     discard buf.continueUriScan()
 
-    buf.diagnostics.setLen(0)
+    buf.setDiagnostics(dsrcLsp, @[])
     buf.diagnosticsDirty = true
 
     buf.lastChangedLines = 490
@@ -5882,16 +5888,19 @@ suite "Highlight - diagnosticOverlay read path":
     # onto the per-row overlay in addition to the bake.
     let buf = newTextBuffer("line0\nline1\nline2\nline3")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 2,
-        endLine: 2,
-        endCol: 3,
-        severity: bdsError,
-        message: "multi-line",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 2,
+          endLine: 2,
+          endCol: 3,
+          severity: bdsError,
+          message: "multi-line",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()

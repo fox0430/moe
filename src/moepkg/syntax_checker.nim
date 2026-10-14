@@ -21,7 +21,7 @@ import std/[strutils, options]
 
 import pkg/[results, chronos, regex]
 
-import background_process, primitives, buffer/[core, markers]
+import background_process, primitives, buffer/core
 import syntax/tokenizer
 
 import types/syntax_checker_types
@@ -112,39 +112,35 @@ proc waitForAsync*(
   ## error.
   return await bp.process.waitForAsync(timeout, stop)
 
-proc clearSyntaxMarkers*(b: TextBuffer) =
-  ## Clear only SyntaxError and SyntaxWarning markers from the buffer,
-  ## preserving git diff markers.
-  for i in 0 ..< b.lineMarkers.len:
-    if b.lineMarkers[i].isSome:
-      let kind = b.lineMarkers[i].get
-      if kind == LineMarkerKind.SyntaxError or kind == LineMarkerKind.SyntaxWarning:
-        b.lineMarkers[i] = none(LineMarkerKind)
-
 proc applySyntaxCheckToBuffer*(b: TextBuffer, errors: seq[SyntaxCheckError]) =
-  ## Apply syntax check errors to buffer line markers.
-  ## Clears existing syntax markers first, then sets new ones.
-  b.clearSyntaxMarkers()
+  ## Replace the buffer's syntax check diagnostics with `errors`.
+  var items: seq[BufferDiagnostic]
   for err in errors:
     if err.position.line >= 0 and err.position.line < b.len:
-      case err.messageType
-      of SyntaxCheckMessageType.error:
-        b.setLineMarker(err.position.line, LineMarkerKind.SyntaxError)
-      of SyntaxCheckMessageType.warning:
-        b.setLineMarker(err.position.line, LineMarkerKind.SyntaxWarning)
-      of SyntaxCheckMessageType.hint, SyntaxCheckMessageType.info:
-        discard # Don't show hints/info in sidebar
-
-proc formattedMessage*(errors: seq[SyntaxCheckError], line: int): Option[string] =
-  ## Get formatted error/warning message for the given line.
-  ## Returns the first matching error for that line.
-  for err in errors:
-    if err.position.line == line:
-      let prefix =
+      let severity =
         case err.messageType
-        of SyntaxCheckMessageType.error: "Error"
-        of SyntaxCheckMessageType.warning: "Warning"
-        of SyntaxCheckMessageType.hint: "Hint"
-        of SyntaxCheckMessageType.info: "Info"
-      return some(prefix & ": " & err.message)
-  return none(string)
+        of SyntaxCheckMessageType.error: bdsError
+        of SyntaxCheckMessageType.warning: bdsWarning
+        of SyntaxCheckMessageType.info: bdsInformation
+        of SyntaxCheckMessageType.hint: bdsHint
+      items.add BufferDiagnostic(
+        startLine: err.position.line,
+        startCol: err.position.column,
+        endLine: err.position.line,
+        endCol: err.position.column,
+        severity: severity,
+        message: err.message,
+      )
+  b.setDiagnostics(dsrcSyntaxCheck, items)
+
+proc syntaxCheckMessage*(b: TextBuffer, line: int): Option[string] =
+  ## The first syntax check message for `line`.
+  for d in b.diagnostics[dsrcSyntaxCheck].items:
+    if d.startLine == line:
+      let prefix =
+        case d.severity
+        of bdsError: "Error"
+        of bdsWarning: "Warning"
+        of bdsInformation: "Info"
+        of bdsHint: "Hint"
+      return some(prefix & ": " & d.message)

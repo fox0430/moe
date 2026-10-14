@@ -38,9 +38,15 @@ proc contents(b: TextBuffer): seq[string] =
   for i in 0 ..< b.len:
     result.add b[i]
 
-proc markers(b: TextBuffer): seq[Option[LineMarkerKind]] =
+proc markers(b: TextBuffer): seq[(Option[LineMarkerKind], Option[LineMarkerKind])] =
   for i in 0 ..< b.len:
-    result.add b.getLineMarker(i)
+    result.add (b.getLineMarker(i), b.diagnosticMarker(i))
+
+proc markError(b: TextBuffer, line: int) =
+  b.setDiagnostics(
+    dsrcSyntaxCheck,
+    @[BufferDiagnostic(startLine: line, endLine: line, severity: bdsError)],
+  )
 
 proc bookmarkLines(b: TextBuffer): seq[int] =
   for i in 0 ..< b.len:
@@ -104,28 +110,34 @@ suite "Buffer - replaceLines":
 
   test "keepRows leaves what is attached to the shared rows where it is":
     let buf = bufferOf("a", "b", "c", "d")
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChanged)
+    buf.markError(1)
     buf.toggleBookmark(1)
     check buf.replaceLines(1, 2, ["B", "C"]).isOk
-    check buf.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(1) == some(LineMarkerKind.GitChanged)
+    check buf.diagnosticMarker(1) == some(LineMarkerKind.SyntaxError)
     check buf.hasBookmark(1)
 
   test "Without keepRows the old rows take their attachments with them":
     let buf = bufferOf("a", "b", "c", "d")
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChanged)
+    buf.markError(1)
     buf.toggleBookmark(1)
     check buf.replaceLines(1, 2, ["B", "C"], keepRows = false).isOk
     check buf.contents == @["a", "B", "C", "d"]
-    check buf.markers.allIt(it.isNone)
+    check buf.markers.allIt(it[0].isNone and it[1].isNone)
     check buf.bookmarkLines.len == 0
 
   test "A marker below the span moves with its line":
     let buf = bufferOf("a", "b", "c")
-    buf.setLineMarker(2, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitChanged)
+    buf.markError(2)
     check buf.replaceLines(1, 1, ["1", "2"]).isOk
-    check buf.getLineMarker(3) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(3) == some(LineMarkerKind.GitChanged)
+    check buf.diagnosticMarker(3) == some(LineMarkerKind.SyntaxError)
     check buf.undo().isOk
-    check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(2) == some(LineMarkerKind.GitChanged)
+    check buf.diagnosticMarker(2) == some(LineMarkerKind.SyntaxError)
 
   test "Without keepRows a fold reaching into the span is cut back to it":
     # The fold covered lines the span took with it; letting it stretch over the
@@ -248,17 +260,21 @@ suite "Buffer - replaceLines against the per-line sequence":
         check b.deleteLine(start + overlap).isOk
 
   proc decorate(b: TextBuffer, rng: var Rand) =
+    var diagnostics: seq[BufferDiagnostic]
     for i in 0 ..< b.len:
       case rng.rand(5)
       of 0:
-        b.setLineMarker(i, LineMarkerKind.SyntaxError)
+        b.setLineMarker(i, LineMarkerKind.GitChanged)
       of 1:
         b.toggleBookmark(i)
       of 2:
         if i + 1 < b.len:
           discard b.foldState.addFold(i, i + 1)
+      of 3:
+        diagnostics.add BufferDiagnostic(startLine: i, endLine: i, severity: bdsError)
       else:
         discard
+    b.setDiagnostics(dsrcSyntaxCheck, diagnostics)
 
   test "The two agree on content and on every attachment":
     var rng = initRand(20260914)
@@ -350,7 +366,8 @@ suite "Buffer - replaceAllLines records one change per hunk":
     let buf = newTextBuffer(lines.join("\n"))
     buf.toggleBookmark(10)
     check buf.foldState.addFold(20, 25)
-    buf.setLineMarker(30, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(30, LineMarkerKind.GitChanged)
+    buf.markError(30)
 
     var replacement = newSeq[string](lines.len)
     for i in 0 ..< lines.len:
@@ -364,7 +381,8 @@ suite "Buffer - replaceAllLines records one change per hunk":
     check buf.bookmarkLines == @[10]
     check buf.foldState.folds.len == 1
     check buf.foldState.folds[0].startLine == 20
-    check buf.getLineMarker(30) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(30) == some(LineMarkerKind.GitChanged)
+    check buf.diagnosticMarker(30) == some(LineMarkerKind.SyntaxError)
 
   test "An exact script is one change per hunk":
     let buf = bufferOf("a", "b", "c", "d", "e")

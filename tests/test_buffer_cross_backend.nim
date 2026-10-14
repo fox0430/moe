@@ -277,12 +277,12 @@ suite "CrossBackend - Undo/Redo":
 
     test "undo deleteLine restores lineMarkers at correct positions [" & $be & "]":
       let b = buf("aaa\nbbb\nccc", be)
-      b.setLineMarker(2, SyntaxError)
-      check b.lineMarkers[2] == some(SyntaxError)
+      b.setLineMarker(2, GitChanged)
+      check b.lineMarkers[2] == some(GitChanged)
 
       discard b.deleteLine(0)
       check b.lineMarkers.len == 2
-      check b.lineMarkers[1] == some(SyntaxError)
+      check b.lineMarkers[1] == some(GitChanged)
 
       discard b.undo()
       check b.len == 3
@@ -291,29 +291,76 @@ suite "CrossBackend - Undo/Redo":
       check b[2] == "ccc"
       check b.lineMarkers[0].isNone
       check b.lineMarkers[1].isNone
-      check b.lineMarkers[2] == some(SyntaxError)
+      check b.lineMarkers[2] == some(GitChanged)
+
+    test "undo deleteLine brings back the diagnostics on the line [" & $be & "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      b.setDiagnostics(
+        dsrcSyntaxCheck,
+        @[
+          BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsError),
+          BufferDiagnostic(startLine: 2, endLine: 2, severity: bdsWarning),
+        ],
+      )
+
+      discard b.deleteLine(1)
+      check b.diagnostics[dsrcSyntaxCheck].items.len == 1
+      check b.diagnosticMarker(1) == some(SyntaxWarning)
+
+      discard b.undo()
+      check b.diagnosticMarker(1) == some(SyntaxError)
+      check b.diagnosticMarker(2) == some(SyntaxWarning)
+
+      discard b.redo()
+      check b.diagnostics[dsrcSyntaxCheck].items.len == 1
+      check b.diagnosticMarker(1) == some(SyntaxWarning)
+
+    test "undo does not bring back a report a clear dropped [" & $be & "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      b.setDiagnostics(
+        dsrcLsp, @[BufferDiagnostic(startLine: 0, endLine: 0, severity: bdsError)]
+      )
+      b.setDiagnostics(
+        dsrcSyntaxCheck,
+        @[BufferDiagnostic(startLine: 2, endLine: 2, severity: bdsError)],
+      )
+      discard b.insert(1, "new")
+
+      b.clearDiagnostics({dsrcLsp})
+      # A report after the clear does not make the earlier ones come back.
+      b.setDiagnostics(
+        dsrcLsp, @[BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsWarning)]
+      )
+      discard b.undo()
+      check b.diagnostics[dsrcLsp].items.len == 0
+      check b.diagnosticMarker(0).isNone
+      check b.diagnosticMarker(2) == some(SyntaxError)
+
+      discard b.redo()
+      check b.diagnosticMarker(1) == some(SyntaxWarning)
+      check b.diagnosticMarker(3) == some(SyntaxError)
 
     test "undo deleteLine (variant) restores lineMarkers at correct positions [" & $be &
       "]":
       let b = buf("aaa\nbbb\nccc", be)
-      b.setLineMarker(0, SyntaxError)
-      b.setLineMarker(2, Bookmark)
-      check b.lineMarkers[0] == some(SyntaxError)
-      check b.lineMarkers[2] == some(Bookmark)
+      b.setLineMarker(0, GitChanged)
+      b.setLineMarker(2, GitDeleted)
+      check b.lineMarkers[0] == some(GitChanged)
+      check b.lineMarkers[2] == some(GitDeleted)
 
       discard b.deleteLine(1)
       check b.lineMarkers.len == 2
-      check b.lineMarkers[0] == some(SyntaxError)
-      check b.lineMarkers[1] == some(Bookmark)
+      check b.lineMarkers[0] == some(GitChanged)
+      check b.lineMarkers[1] == some(GitDeleted)
 
       discard b.undo()
       check b.len == 3
       check b[0] == "aaa"
       check b[1] == "bbb"
       check b[2] == "ccc"
-      check b.lineMarkers[0] == some(SyntaxError)
+      check b.lineMarkers[0] == some(GitChanged)
       check b.lineMarkers[1].isNone
-      check b.lineMarkers[2] == some(Bookmark)
+      check b.lineMarkers[2] == some(GitDeleted)
 
     test "undo insertLine restores lineMarkers at correct positions [" & $be & "]":
       let b = buf("aaa\nccc", be)
@@ -333,16 +380,16 @@ suite "CrossBackend - Undo/Redo":
 
     test "redo after undo restores lineMarkers to post-edit state [" & $be & "]":
       let b = buf("aaa\nbbb\nccc", be)
-      b.setLineMarker(2, Bookmark)
+      b.setLineMarker(2, GitDeleted)
       discard b.deleteLine(0)
       discard b.undo()
-      check b.lineMarkers[2] == some(Bookmark)
+      check b.lineMarkers[2] == some(GitDeleted)
       discard b.redo()
       check b.len == 2
       check b[0] == "bbb"
       check b[1] == "ccc"
       check b.lineMarkers[0].isNone
-      check b.lineMarkers[1] == some(Bookmark)
+      check b.lineMarkers[1] == some(GitDeleted)
 
   for be in BufferBackend:
     test "undo multi-line insertText shifts bookmarks back [" & $be & "]":
@@ -935,10 +982,10 @@ suite "PieceTable - Snapshot Undo/Redo Integration":
 
   test "lineMarkers preserved across undo/redo":
     let b = buf("line0\nline1\nline2", PieceTable)
-    b.setLineMarker(1, SyntaxError)
-    check b.lineMarkers[1] == some(SyntaxError)
+    b.setLineMarker(1, GitChanged)
+    check b.lineMarkers[1] == some(GitChanged)
 
-    # Edit and record snapshot (captures markers with SyntaxError on line 1)
+    # Edit and record snapshot (captures markers with GitChanged on line 1)
     discard b.replaceLine(0, "CHANGED")
     check b[0] == "CHANGED"
 
@@ -946,10 +993,10 @@ suite "PieceTable - Snapshot Undo/Redo Integration":
     b.clearLineMarker(1)
     check b.lineMarkers[1].isNone
 
-    # Undo should restore the snapshot (which had SyntaxError on line 1)
+    # Undo should restore the snapshot (which had GitChanged on line 1)
     discard b.undo()
     check b[0] == "line0"
-    check b.lineMarkers[1] == some(SyntaxError)
+    check b.lineMarkers[1] == some(GitChanged)
 
   test "foldState preserved across undo/redo":
     let b = buf("line0\nline1\nline2\nline3", PieceTable)
@@ -1022,11 +1069,25 @@ suite "PieceTable - Snapshot Undo/Redo Integration":
 
     discard b.beginTransaction("test")
     discard b.replaceLine(0, "CHANGED")
-    b.setLineMarker(0, SyntaxError)
+    b.setLineMarker(0, GitChanged)
     discard b.rollbackTransaction()
 
     check b[0] == "line0"
     check b.lineMarkers[0] == some(GitAdded)
+
+  test "rollback puts the diagnostics back where they were":
+    let b = buf("line0\nline1", PieceTable)
+    b.setDiagnostics(
+      dsrcSyntaxCheck, @[BufferDiagnostic(startLine: 0, endLine: 0, severity: bdsError)]
+    )
+
+    discard b.beginTransaction("test")
+    discard b.deleteLine(0)
+    check b.diagnostics[dsrcSyntaxCheck].items.len == 0
+    discard b.rollbackTransaction()
+
+    check b[0] == "line0"
+    check b.diagnosticMarker(0) == some(SyntaxError)
 
   test "snapshot cursorPos tracks change position":
     let b = buf("Hello\nWorld", PieceTable)

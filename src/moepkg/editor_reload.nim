@@ -142,8 +142,8 @@ proc finishReload*(e: Editor, buf: TextBuffer, filePath: string, announce = true
   ## Shared post-reload bookkeeping for every path that replaces a buffer's
   ## contents from disk (the external-change watcher, `:e!`, a hook that
   ## rewrote the file): refresh the git gutter, rescan conflict markers, and
-  ## re-open the document so the LSP re-publishes the diagnostics the reload
-  ## dropped. Position and overlay invalidation is driven by the load itself.
+  ## re-open the document so the LSP re-publishes the diagnostics for the new
+  ## contents. Position and overlay invalidation is driven by the load itself.
   ##
   ## `buf` need not be the active buffer; the status message and conflict-scan
   ## throttle are skipped when it is not. `announce = false` leaves the status
