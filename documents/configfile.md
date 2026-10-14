@@ -827,7 +827,9 @@ Commands are grouped by category below. Any command name listed here can be used
 | visual-delete | Delete visual selection |
 | visual-change | Delete selection and enter insert mode |
 | visual-paste | Delete selection and paste register content |
+| visual-paste-before | Delete selection and paste, keeping the registers |
 | visual-paste-end | Delete selection, paste, and leave cursor after pasted text |
+| visual-paste-before-end | Delete selection, paste, and leave cursor after pasted text (lines go above a block) |
 | visual-indent | Indent visual selection |
 | visual-dedent | Dedent visual selection |
 | visual-joinlines | Join lines in visual selection |

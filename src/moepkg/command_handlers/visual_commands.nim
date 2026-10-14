@@ -148,14 +148,10 @@ proc getBlockText(buffer: TextBuffer, selection: VisualSelection): string =
 
 proc getLineText(buffer: TextBuffer, selection: VisualSelection): string =
   ## Get text from a line-wise selection (entire lines)
-  let
-    startLine = min(selection.start.line, selection.current.line)
-    endLine = max(selection.start.line, selection.current.line)
-
-  var lines: seq[string]
-  for lineNum in startLine .. endLine:
-    lines.add($buffer.getLine(lineNum))
-  result = lines.join("\n")
+  buffer.linewiseText(
+    min(selection.start.line, selection.current.line),
+    max(selection.start.line, selection.current.line),
+  )
 
 proc getVisualSelectionText*(buffer: TextBuffer, selection: VisualSelection): string =
   ## Get the selected text respecting the selection kind.
@@ -758,33 +754,28 @@ proc visualPaste*(
     clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: cbtXclip),
     cursorAfter: bool = false,
     register = none(char),
+    keepRegisters = false,
+    before = false,
 ): Result[(), string] =
-  ## Delete selection and paste the content of `register` (else the unnamed one).
+  ## Delete selection and paste the content of `register` (else the unnamed
+  ## one). The deleted text goes to the registers as a delete's does, unless
+  ## `keepRegisters` (Vim's `v_P`). `before` is `P`/`gP`, which put lines
+  ## above a block rather than below it.
   let sel = state.operandSelection(buffer)
   result = Result[(), string].ok ()
   if sel.active:
     let regName = register.get('"')
-    let reg = state.registers.getRegister(regName)
-    var pasteText = buffer.normalizeNewlines(reg.getContent())
-    let isFullLine = reg.isLine
-    let registerEmpty = reg.isEmpty
-
-    # Fallback to system clipboard if register empty; empty linewise is not empty.
-    # The black hole register is always empty.
-    if registerEmpty and clipboardConfig.enable and not regName.isBlackHoleRegisterName:
-      let readResult =
-        state.registers.clipboardFallbackRead(clipboardConfig.tool, regName)
-      if readResult.isErr:
-        state.leaveVisual()
-        # The clipboard layer already names the operation; a second prefix here
-        # would double the sentence on the status line.
-        return Result[(), string].err(readResult.error)
-      pasteText = buffer.preparePastedText(readResult.get)
+    let put = state.registers.textToPut(regName, clipboardConfig)
+    if put.isErr:
+      state.leaveVisual()
+      return Result[(), string].err(put.error)
+    let
+      isFullLine = put.get.isLine
+      pasteText = buffer.preparePastedText(put.get.getContent)
 
     # Like Vim, the selection goes even when there is nothing to put. The black
-    # hole register and a linewise register holding one empty line put an
-    # empty string, which over whole lines is a blank line; an empty register
-    # puts nothing and reports it.
+    # hole register puts an empty string, which over whole lines is a blank
+    # line; an empty register puts nothing and reports it.
     let putsNothing =
       pasteText.len == 0 and not isFullLine and not regName.isBlackHoleRegisterName
 
@@ -806,12 +797,37 @@ proc visualPaste*(
       case sel.kind
       of vskBlock:
         checkPasteErr(deleteBlockSelection(buffer, state, sel, deletedText))
-        let startCol = min(sel.start.column, sel.current.column)
-        let startLine = min(sel.start.line, sel.current.line)
-        pasteStart = BufferPosition(line: startLine, column: startCol)
+        let
+          firstLine = min(sel.start.line, sel.current.line)
+          startColumn = min(sel.start.column, sel.current.column)
+        if isFullLine:
+          # Like Vim, lines go below the line the cursor ended on (its
+          # b_visual.vi_end, which can be the top one), or above the block
+          # for `P`. `P` puts them below the first line when the block
+          # reached its end, as the cursor then rests before where it was.
+          let firstLen = buffer.getLine(firstLine).charLen
+          if before and not (startColumn > 0 and startColumn >= firstLen):
+            checkPasteErr(
+              buffer.insertText(BufferPosition(line: firstLine, column: 0), pasteText)
+            )
+            pasteStart = BufferPosition(line: firstLine, column: 0)
+          else:
+            let afterLine = if before: firstLine else: sel.current.line
+            checkPasteErr(
+              buffer.insertText(
+                BufferPosition(
+                  line: afterLine, column: buffer.getLine(afterLine).charLen
+                ),
+                "\n" & pasteText.withoutLastLineBreak,
+              )
+            )
+            pasteStart = BufferPosition(line: afterLine + 1, column: 0)
+          pastedLineCount = pasteText.count('\n')
+        else:
+          pasteStart = BufferPosition(line: firstLine, column: startColumn)
+          if pasteText.len > 0:
+            checkPasteErr(buffer.insertText(pasteStart, pasteText))
         state.cursor = pasteStart
-        if pasteText.len > 0:
-          checkPasteErr(buffer.insertText(state.cursor, pasteText))
       of vskLine:
         let
           startLine = min(sel.start.line, sel.current.line)
@@ -823,13 +839,9 @@ proc visualPaste*(
         for _ in startLine .. endLine:
           checkPasteErr(buffer.deleteLine(startLine))
 
-        # Linewise register stores a trailing \n, so split yields an empty tail
-        # element -- drop it or an extra blank line gets inserted.
         var lines: seq[string]
         if not putsNothing:
-          lines = pasteText.split('\n')
-        if lines.len > 1 and lines[^1].len == 0:
-          lines.setLen(lines.len - 1)
+          lines = pasteText.linewiseLines
         if lines.len == 0 and buffer.len == 0:
           # The selection was every line, and a buffer keeps one.
           lines.add ""
@@ -842,14 +854,20 @@ proc visualPaste*(
         let (selStart, selEnd) = sel.getSelectionRange()
 
         deletedText = buffer.getTextInRange(selStart, selEnd)
-        deletedIsLine = selStart.line != selEnd.line
 
         checkPasteErr(buffer.deleteRange(selStart, selEnd))
 
-        pasteStart = selStart
-        state.cursor = selStart
-        if pasteText.len > 0:
-          checkPasteErr(buffer.insertText(state.cursor, pasteText))
+        if isFullLine:
+          # Like Vim, lines go on lines of their own: the line splits where
+          # the selection was, and they go between.
+          checkPasteErr(buffer.insertText(selStart, "\n" & pasteText))
+          pasteStart = BufferPosition(line: selStart.line + 1, column: 0)
+          pastedLineCount = pasteText.count('\n')
+        else:
+          pasteStart = selStart
+          if pasteText.len > 0:
+            checkPasteErr(buffer.insertText(selStart, pasteText))
+        state.cursor = pasteStart
     if txr.isErr:
       # The transaction rolled the buffer back, so the paste anchor is gone.
       state.cursor = cursorBeforePaste
@@ -858,7 +876,8 @@ proc visualPaste*(
 
     # Registers are not covered by the buffer transaction, so write the
     # replaced text only after the transaction committed.
-    state.registers.setDeletedRegister(deletedText, deletedIsLine)
+    if not keepRegisters:
+      state.registers.storeDeleted(none(char), deletedText, deletedIsLine)
 
     state.statusMessage = ""
     state.leaveVisual()
@@ -869,30 +888,32 @@ proc visualPaste*(
     let
       lastPutLine = min(pasteStart.line + max(pastedLineCount, 1) - 1, buffer.len - 1)
       afterPut = pasteEndPos(pasteStart, pasteText)
+      putLines = selKind == vskLine or isFullLine
 
     # Like Vim, the next `gv` selects the put text, in the mode the replaced
     # selection had.
     let putEnd =
-      case selKind
-      of vskLine:
+      if putLines:
         BufferPosition(
           line: lastPutLine, column: max(0, buffer.getLine(lastPutLine).charLen - 1)
         )
-      of vskChar, vskBlock:
-        if pasteText.len == 0:
-          pasteStart
-        elif afterPut.column > 0:
-          BufferPosition(line: afterPut.line, column: afterPut.column - 1)
-        else:
-          BufferPosition(
-            line: afterPut.line - 1, column: buffer.getLine(afterPut.line - 1).charLen
-          )
+      elif pasteText.len == 0:
+        pasteStart
+      elif afterPut.column > 0:
+        BufferPosition(line: afterPut.line, column: afterPut.column - 1)
+      else:
+        BufferPosition(
+          line: afterPut.line - 1, column: buffer.getLine(afterPut.line - 1).charLen
+        )
     buffer.lastVisual =
       some(VisualArea(start: pasteStart, cursor: putEnd, kind: selKind))
 
+    if putLines:
+      # Like Vim's put of lines, the cursor goes to the first non-blank.
+      state.cursor.column = firstNonBlankColumn(buffer.getLine(state.cursor.line))
+
     if cursorAfter and buffer.len > 0:
-      case selKind
-      of vskLine:
+      if putLines:
         let afterLine = lastPutLine + 1
         if afterLine < buffer.len:
           state.cursor.line = afterLine
@@ -907,13 +928,13 @@ proc visualPaste*(
             clampCursorToLastChar(state.cursor, lineLen)
           else:
             state.cursor.column = 0
-      of vskChar, vskBlock:
+      else:
         state.cursor = afterPut
         if buffer.len > 0:
           clampCursorToLastChar(state.cursor, buffer.getLine(state.cursor.line).charLen)
 
     if putsNothing:
-      result = Result[(), string].err("Nothing to paste")
+      result = Result[(), string].err(nothingInRegister(regName))
 
 const SurroundPairs = [
   ("(", ")"),

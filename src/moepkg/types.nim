@@ -543,6 +543,7 @@ type
     endPos*: BufferPosition
     isLinewise*: bool # Whether the operation affects entire lines
     isEmpty*: bool # No-op range (e.g. inner of an empty tag): delete/yank affect nothing
+    useRegOne*: bool # A delete goes to "1 even within a line (Vim's use_reg_one)
 
   PendingOperator* = object
     ## Represents an operator waiting for a motion or text object

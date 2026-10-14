@@ -808,7 +808,7 @@ suite "KeyBindingRegistry - setupDefaultBindings":
       discard registry.processKey(mode, toKeyCombo('g'))
       let visPasteBefore = registry.processKey(mode, toKeyCombo('P'))
       check visPasteBefore.isSome
-      check visPasteBefore.get.name == "visual-paste-end"
+      check visPasteBefore.get.name == "visual-paste-before-end"
 
   test "Visual mode bindings exist":
     let registry = newKeyBindingRegistry()

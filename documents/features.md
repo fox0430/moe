@@ -78,24 +78,34 @@ moe can use Vim-like registers.
 | Name | Description                                                                       |
 |------|-----------------------------------------------------------------------------------|
 | 0    | Yanked text                                                                       |
-| 1    | Deleted line. One line or less is stored in the small delete register ```-```     |
-| 2    | Every time a new delete command is issued, the contents of ```1``` are stored     |
+| 1    | Deleted text that spans lines, or that `%`, `{`, `}`, `` ` ``, `n`, `N`, `*` or `#` reached. Other deletes within a line go to the small delete register ```-``` |
+| 2    | Every time ```1``` is filled, its previous contents move here                     |
 | 3~9  | Similar to ```2```, the contents of the previous register are stored sequentially |
+
+A delete into a named register (`"add`) also fills ```1``` when it spans lines, as in Vim.
 
 ### Small delete register
 | Name | Description   |
 |------|---------------|
-| -    | Deleted text  |
+| -    | Deleted text within a line, when no register or a clipboard one (`*`, `+`) was named |
 
 ### Named register
 
 | Name | Description            |
 |------|------------------------|
-| a~z  | Any text can be stored |
+| a~z  | Any text can be stored. `A`~`Z` add to the register instead |
 
 ### No name register
 
-Stores the value of the last used register.
+Stores the value of the last used register. After adding to a named register with `A`~`Z`, it holds all of that register.
+
+### Black hole register
+
+`"_` keeps nothing: `"_dd` deletes a line without changing any register.
+
+### Putting
+
+Putting an empty register other than the unnamed one and the clipboard ones (`"*`, `"+`) is an error (`E353`); the unnamed one reads the system clipboard when it is empty. In Visual mode, `p` puts over the selection and stores the replaced text as a delete does, and `P` leaves the registers as they are.
 
 ## Bookmarks
 

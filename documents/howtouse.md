@@ -291,6 +291,8 @@
 | <kbd>**d**</kbd> OR <kbd>**x**</kbd> | Delete text |
 | <kbd>**c**</kbd> | Change (delete selection and enter insert mode) |
 | <kbd>**y**</kbd> | Copy text |
+| <kbd>**p**</kbd> | Paste over the selection; the replaced text goes to the registers |
+| <kbd>**P**</kbd> | Paste over the selection, keeping the registers |
 | <kbd>**g**</kbd> <kbd>**p**</kbd> OR <kbd>**g**</kbd> <kbd>**P**</kbd> | Paste over the selection and leave the cursor after the pasted text (replacing the whole buffer parks on the last pasted character) |
 | <kbd>**r**</kbd> | Replace character |
 | <kbd>**S**</kbd> | Surround selection with character |

@@ -72,7 +72,8 @@ const EditOperatorTypes = ["replace"]
 const VisualEditCommandIds = [
   "visual.delete", "visual.indent", "visual.dedent", "visual.lowercase",
   "visual.uppercase", "visual.togglecase", "visual.joinlines", "visual.to.insert",
-  "visual.change", "visual.block.append", "visual.paste", "visual.paste.end", "edit.cut",
+  "visual.change", "visual.block.append", "visual.paste", "visual.paste.before",
+  "visual.paste.end", "visual.paste.before.end", "edit.cut",
 ]
   ## Visual-mode command ids that modify the selection, gated on read-only
   ## buffers.

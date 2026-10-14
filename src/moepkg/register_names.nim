@@ -44,6 +44,12 @@ proc isClipboardRegisterName*(c: char): bool =
   ## Check if character is any clipboard register name (*, +, ~)
   c.isPrimarySelectionRegisterName or c.isClipboardSelectionRegisterName
 
+proc showsSelection*(c: char): bool =
+  ## The register shows a system selection: the unnamed register, which
+  ## mirrors CLIPBOARD, and the clipboard registers. Put empty, it reads the
+  ## selection.
+  c == '"' or c.isClipboardRegisterName
+
 proc isBlackHoleRegisterName*(c: char): bool =
   ## Check if character is the black hole register name (_)
   c == '_'

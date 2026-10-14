@@ -42,6 +42,14 @@ proc pasteEndPos*(startPos: BufferPosition, pasteText: string): BufferPosition =
     let lastSeg = pasteText.substr(pasteText.rfind('\n') + 1)
     BufferPosition(line: startPos.line + nlCount, column: lastSeg.charLen)
 
+proc firstNonBlankColumn*(line: string): int =
+  ## The column after `line`'s leading spaces and tabs, or its last character
+  ## when it is all blanks (Vim's beginline(BL_WHITE | BL_FIX)).
+  var i = 0
+  while i < line.len and line[i] in {' ', '\t'}:
+    inc i
+  min(i, max(0, line.charLen - 1))
+
 proc clampCursorToLastChar*(cursor: var BufferPosition, lineCharLen: int) =
   ## Normal mode cannot rest one past the last character (unlike Insert).
   if cursor.column >= lineCharLen:

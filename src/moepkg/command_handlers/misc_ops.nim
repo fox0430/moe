@@ -21,7 +21,7 @@
 ## background / man / build pending ops, theme), split out of
 ## result_processor.nim.
 
-import std/os
+import std/[options, os]
 
 import
   ../[
@@ -91,7 +91,7 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
     e.state.statusMessage = $count & " substitution" & (if count == 1: "" else: "s")
     return true
   of hrDeleteLines:
-    e.state.registers.setDeletedRegister(r.hrDeletedText, true)
+    e.state.registers.storeDeleted(none(char), r.hrDeletedText, true)
     let count = r.hrDeletedLineCount
     e.state.statusMessage =
       $count & " line" & (if count == 1: "" else: "s") & " deleted"

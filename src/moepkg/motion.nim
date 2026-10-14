@@ -26,7 +26,7 @@ import std/[options, unicode, monotimes, times]
 
 import pkg/results
 
-import types, unicode_utils, logger, render_utils, config, modes
+import cursor_util, types, unicode_utils, logger, render_utils, config, modes
 import buffer/[core, edit, fold, undo]
 import visible_rows
 
@@ -52,6 +52,9 @@ type
     failed*: bool
       ## The motion failed (Vim beeps), and a waiting operator does nothing.
       ## It may still have moved part of the way (`3b` near the start).
+    useRegOne*: bool
+      ## A delete over it goes to register 1 even within a line (Vim's
+      ## use_reg_one)
 
   # Motion executor - handles only motion logic
   MotionExecutor* = ref object
@@ -252,19 +255,12 @@ proc moveHome(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result.x = 0
 
 proc moveFirstNonBlank(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
-  ## Move to the first non-whitespace character on the current line (^ command)
+  ## Move to the first non-blank character on the current line (^ command)
   result = currentPos
   result.x = 0
 
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-    let line = e.buffer.getLine(currentPos.y)
-    let runes = line.toCharRunes()
-
-    # Find first non-whitespace character
-    for i, r in runes:
-      if not isWhitespace(r):
-        result.x = i
-        break
+    result.x = firstNonBlankColumn(e.buffer.getLine(currentPos.y))
 
 proc moveLastNonBlank(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   ## Move to the last non-whitespace character on the current line (g_ command)
@@ -303,16 +299,10 @@ proc moveNextLineFirstNonBlank(
   else:
     result.y = 0
 
-  # Move to first non-whitespace character on the new line
+  # Move to first non-blank character on the new line
   result.x = 0
   if result.y >= 0 and result.y < e.buffer.len:
-    let line = e.buffer.getLine(result.y)
-    let runes = line.toCharRunes()
-    # Find first non-whitespace character
-    for i, r in runes:
-      if not isWhitespace(r):
-        result.x = i
-        break
+    result.x = firstNonBlankColumn(e.buffer.getLine(result.y))
 
 proc movePreviousLineFirstNonBlank(
     e: MotionExecutor, currentPos: CursorPosition, count: int
@@ -324,16 +314,10 @@ proc movePreviousLineFirstNonBlank(
   # Move up by count lines
   result.y = max(0, currentPos.y - count)
 
-  # Move to first non-whitespace character on the new line
+  # Move to first non-blank character on the new line
   result.x = 0
   if result.y >= 0 and result.y < e.buffer.len:
-    let line = e.buffer.getLine(result.y)
-    let runes = line.toCharRunes()
-    # Find first non-whitespace character
-    for i, r in runes:
-      if not isWhitespace(r):
-        result.x = i
-        break
+    result.x = firstNonBlankColumn(e.buffer.getLine(result.y))
 
 proc moveFirstLine(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result = currentPos
@@ -828,6 +812,12 @@ proc landMotion*(
   proc stuck(motionType: MotionType): MotionLanding =
     MotionLanding(pos: start, motionType: motionType, failed: true)
 
+  proc usingRegOne(landing: MotionLanding): MotionLanding =
+    ## `landing` marked so a delete over it goes to register 1, as Vim's
+    ## nv_percent and nv_findpar set use_reg_one.
+    result = landing
+    result.useRegOne = true
+
   proc offLine(pos: CursorPosition): MotionLanding =
     ## A line motion fails when there is no line to go to (`k` on the first).
     if pos.y == currentPos.y:
@@ -888,9 +878,9 @@ proc landMotion*(
   of Motion.WordEndBackward:
     e.buffer.wordEndBackward(start, cmd.count)
   of Motion.ParagraphForward:
-    e.buffer.findParagraph(start, cmd.count, forward = true)
+    e.buffer.findParagraph(start, cmd.count, forward = true).usingRegOne
   of Motion.ParagraphBackward:
-    e.buffer.findParagraph(start, cmd.count, forward = false)
+    e.buffer.findParagraph(start, cmd.count, forward = false).usingRegOne
   of Motion.ViewportHigh:
     at(e.moveViewportHigh(currentPos, viewportTop, cmd.count, rowLayout), mtLinewise)
   of Motion.ViewportMiddle:
@@ -911,7 +901,7 @@ proc landMotion*(
     if pos == currentPos:
       stuck(mtInclusive)
     else:
-      at(pos, mtInclusive)
+      at(pos, mtInclusive).usingRegOne
   of Motion.RepeatFind, Motion.RepeatFindReverse:
     # Must be resolved to a concrete motion before reaching here.
     raiseAssert "RepeatFind must be resolved before landMotion"
@@ -1369,13 +1359,7 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
   var text = ""
 
   if range.isLinewise:
-    # Extract entire lines
-    for lineIdx in range.start.line .. range.endPos.line:
-      if lineIdx < buffer.len:
-        let lineContent = buffer.getLine(lineIdx)
-        text.add(lineContent)
-        if lineContent.len == 0 or lineContent[^1] != '\n':
-          text.add("\n")
+    text = buffer.linewiseText(range.start.line, range.endPos.line)
   else:
     # Extract character range
     if range.start.line == range.endPos.line:

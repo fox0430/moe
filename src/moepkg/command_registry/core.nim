@@ -157,6 +157,9 @@ type
     area*: bool
       ## A text object's or gn's span, taken as Visual mode takes it: an end
       ## at the end of a line takes its line break, even on an empty line
+    useRegOne*: bool
+      ## A delete up to it goes to register 1 even within a line, as after
+      ## Vim's `%`, `}`, `` ` ``, `n` and `*`
 
   TargetFinder* = proc(
     ctx: CommandContext, op: PendingOperator, count: int, countGiven: bool

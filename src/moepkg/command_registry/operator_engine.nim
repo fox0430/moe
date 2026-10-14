@@ -24,7 +24,10 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, motion, modes, registers, logger, unicode_utils, pending_input]
+import
+  ../[
+    cursor_util, types, motion, modes, registers, logger, unicode_utils, pending_input
+  ]
 import ../buffer/[core, edit, undo]
 import ../command_handlers/insert_commands
 
@@ -72,11 +75,13 @@ proc storeYankedText*(ctx: CommandContext, text: string, isLine: bool) =
   if not ctx.state.registers.isNil:
     ctx.state.registers.storeYanked(ctx.register, text, isLine)
 
-proc storeDeletedText*(ctx: CommandContext, text: string, isLine: bool) =
-  ## Store deleted text in the register this command names, else the delete
-  ## registers.
+proc storeDeletedText*(
+    ctx: CommandContext, text: string, isLine: bool, useRegOne = false
+) =
+  ## Store deleted text in the register this command names and the delete
+  ## registers, as Vim's op_delete.
   if not ctx.state.registers.isNil:
-    ctx.state.registers.storeDeleted(ctx.register, text, isLine)
+    ctx.state.registers.storeDeleted(ctx.register, text, isLine, useRegOne)
 
 proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
   ## Put the cursor on the first non-blank of `lineNum` (vim's `^`), clamped to
@@ -86,7 +91,7 @@ proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
 
   let line = ctx.buffer.getLine(lineNum)
   ctx.cursor.line = lineNum
-  ctx.cursor.column = min(getLineIndent(line).len, max(0, line.charLen - 1))
+  ctx.cursor.column = firstNonBlankColumn(line)
 
 proc textRewriteAction*(operatorType: OperatorType): Option[string] =
   ## Rewrite name for operator, or none if safe. Listing marks byte-unsafe for raw buffers.
@@ -255,7 +260,7 @@ proc executeOperatorOnRange*(
 
     # Store in register only after the buffer change succeeded (registers are not
     # covered by the buffer transaction, so a rollback would not undo them)
-    storeDeletedText(ctx, text, range.isLinewise)
+    storeDeletedText(ctx, text, range.isLinewise, range.useRegOne)
 
     # Move cursor to start of deletion
     ctx.cursor = range.start
@@ -315,7 +320,7 @@ proc executeOperatorOnRange*(
       # Store in register only after the buffer change succeeded (registers are
       # not covered by the transaction). An empty object (e.g. cit on <a></a>)
       # removes nothing, so leave the registers untouched.
-      storeDeletedText(ctx, text, range.isLinewise)
+      storeDeletedText(ctx, text, range.isLinewise, range.useRegOne)
 
     # Move cursor to start of change
     ctx.cursor = range.start

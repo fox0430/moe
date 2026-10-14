@@ -201,11 +201,19 @@ proc handleVisualSwapSelection*(ctx: CommandContext): Result[(), string] =
   Result[(), string].ok ()
 
 proc handleVisualPaste*(
-    ctx: CommandContext, cursorAfter: bool = false
+    ctx: CommandContext, cursorAfter: bool = false, before = false
 ): Result[(), string] =
-  ## Paste over selection (p/P). `cursorAfter` is gp/gP.
-  result =
-    visualPaste(ctx.buffer, ctx.state, ctx.clipboardConfig, cursorAfter, ctx.register)
+  ## Paste over selection (p). `cursorAfter` is gp/gP, `before` is P/gP; P also
+  ## keeps the registers.
+  result = visualPaste(
+    ctx.buffer,
+    ctx.state,
+    ctx.clipboardConfig,
+    cursorAfter,
+    ctx.register,
+    keepRegisters = before and not cursorAfter,
+    before = before,
+  )
   ctx.cursor = ctx.state.cursor
 
 proc handleVisualReselect*(ctx: CommandContext): Result[(), string] =
@@ -217,7 +225,7 @@ proc handleVisualReselect*(ctx: CommandContext): Result[(), string] =
   Result[(), string].ok ()
 
 proc registerVisualCommands*(registry: CommandRegistry) =
-  ## Register all 30 visual mode commands.
+  ## Register all 32 visual mode commands.
 
   # Visual mode movement commands
   registry.register(
@@ -502,9 +510,19 @@ proc registerVisualCommands*(registry: CommandRegistry) =
   registry.register(
     builtin(bcVisualPaste),
     "Visual Paste",
-    "Paste over selection (p/P command)",
+    "Paste over selection (p command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualPaste(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    custom("visual.paste.before"),
+    "Visual Paste Before",
+    "Paste over selection, keeping the registers (P command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualPaste(ctx, before = true),
     0,
     0,
   )
@@ -522,9 +540,19 @@ proc registerVisualCommands*(registry: CommandRegistry) =
   registry.register(
     custom("visual.paste.end"),
     "Visual Paste End",
-    "Paste over selection and leave cursor after pasted text (gp/gP)",
+    "Paste over selection and leave cursor after pasted text (gp)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualPaste(ctx, cursorAfter = true),
+    0,
+    0,
+  )
+
+  registry.register(
+    custom("visual.paste.before.end"),
+    "Visual Paste Before End",
+    "Paste over selection and leave cursor after pasted text (gP)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualPaste(ctx, cursorAfter = true, before = true),
     0,
     0,
   )

@@ -493,6 +493,13 @@ const VisualModeCommands*: HelpGroup = HelpGroup(
     ),
     HelpEntry(syntax: "y", description: "Copy text"),
     HelpEntry(
+      syntax: "p",
+      description: "Paste over the selection; the replaced text goes to the registers",
+    ),
+    HelpEntry(
+      syntax: "P", description: "Paste over the selection, keeping the registers"
+    ),
+    HelpEntry(
       syntax: "gp or gP",
       description:
         "Paste over the selection and leave the cursor after the pasted text (replacing the whole buffer parks on the last pasted character)",

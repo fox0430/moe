@@ -526,12 +526,7 @@ proc executeDelete*(
     return HandlerResult(kind: hrError, errorMessage: resolved.error)
   let (rangeStart, rangeEnd) = resolved.get
 
-  var text = ""
-  for lineIdx in rangeStart .. rangeEnd:
-    if lineIdx > rangeStart:
-      text.add("\n")
-    text.add(buffer.getLine(lineIdx))
-  text.add("\n")
+  let text = buffer.linewiseText(rangeStart, rangeEnd)
 
   let lineCount = rangeEnd - rangeStart + 1
   let deletingAll = rangeStart == 0 and rangeEnd == buffer.len - 1
