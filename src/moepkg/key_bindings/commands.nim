@@ -36,10 +36,6 @@ const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("move-right", "Move cursor right", Motion.Right),
   ("move-up", "Move cursor up", Motion.Up),
   ("move-down", "Move cursor down", Motion.Down),
-  ("page-up", "Scroll page up", Motion.PageUp),
-  ("page-down", "Scroll page down", Motion.PageDown),
-  ("half-page-up", "Scroll half page up", Motion.HalfPageUp),
-  ("half-page-down", "Scroll half page down", Motion.HalfPageDown),
   ("line-home", "Move to beginning of line", Motion.Home),
   (
     "line-first-non-blank", "Move to first non-whitespace character",
@@ -72,6 +68,13 @@ const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("repeat-find-reverse", "Repeat last f/F/t/T reversed", Motion.RepeatFindReverse),
 ]
 
+const ScrollCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
+  ("page-up", "Scroll page up", Motion.PageUp),
+  ("page-down", "Scroll page down", Motion.PageDown),
+  ("half-page-up", "Scroll half page up", Motion.HalfPageUp),
+  ("half-page-down", "Scroll half page down", Motion.HalfPageDown),
+] ## Moves by scrolling, which no operator acts over (`d<C-d>` cancels the `d`)
+
 func withWindowCommands(
     commands: seq[tuple[name, desc, commandId: string]]
 ): seq[tuple[name, desc, commandId: string]] =
@@ -92,18 +95,6 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("bookmark-next", "Jump to next bookmark", "bookmark.next"),
   ("bookmark-prev", "Jump to previous bookmark", "bookmark.prev"),
   ("bookmark-clear", "Clear all bookmarks in current buffer", "bookmark.clear"),
-  ("search-next", "Find next search result", "search.next"),
-  ("search-prev", "Find previous search result", "search.prev"),
-  (
-    "search-word-forward", "Search for word under cursor forward (*)",
-    "search.word.forward",
-  ),
-  (
-    "search-word-backward", "Search for word under cursor backward (#)",
-    "search.word.backward",
-  ),
-  ("search-next-select", "Select next search match (gn)", "search.next.select"),
-  ("search-prev-select", "Select previous search match (gN)", "search.prev.select"),
   ("clipboard-copy", "Copy selected text to system clipboard", "edit.copy"),
   ("clipboard-paste", "Paste text from system clipboard", "edit.paste"),
   ("clipboard-cut", "Cut selected text to system clipboard", "edit.cut"),
@@ -189,6 +180,21 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("visual-reselect", "Reselect the previous visual area", "visual.reselect"),
 ].withWindowCommands()
 
+const SearchCommands: seq[tuple[name, desc, commandId: string]] = @[
+  ("search-next", "Find next search result", "search.next"),
+  ("search-prev", "Find previous search result", "search.prev"),
+  (
+    "search-word-forward", "Search for word under cursor forward (*)",
+    "search.word.forward",
+  ),
+  (
+    "search-word-backward", "Search for word under cursor backward (#)",
+    "search.word.backward",
+  ),
+  ("search-next-select", "Select next search match (gn)", "search.next.select"),
+  ("search-prev-select", "Select previous search match (gN)", "search.prev.select"),
+] ## Actions a waiting operator acts over (`dn`, `d*`, `dgn`)
+
 func actionCommandId*(name: string): Option[string] =
   ## CommandId for an ActionCommands entry, or none when unknown.
   for (n, _, commandId) in ActionCommands:
@@ -238,8 +244,6 @@ const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("lsp-selection-range", "Expand selection range (LSP)", "lsp.selection.range"),
   ("lsp-document-link", "Follow document link at cursor (LSP)", "lsp.document.link"),
   ("open-uri", "Open URI/file under cursor", "editor.open.uri"),
-  ("operator-indent", "Indent operator", "operator.indent"),
-  ("operator-outdent", "Outdent operator", "operator.outdent"),
   ("autoindent-line", "Auto indent current line", "autoindent.line"),
   ("scroll-cursor-top", "Scroll cursor to top of screen", "scroll.cursor.top"),
   ("scroll-cursor-center", "Scroll cursor to center of screen", "scroll.cursor.center"),
@@ -255,11 +259,6 @@ const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("fold-delete", "Delete fold at cursor", "fold.delete"),
   ("fold-delete-all", "Delete all folds", "fold.delete.all"),
   ("quickrun", "Run current buffer", "quickrun"),
-  ("operator-delete", "Delete operator", "operator.delete"),
-  ("operator-change", "Change operator", "operator.change"),
-  ("operator-yank", "Yank operator", "operator.yank"),
-  ("operator-lowercase", "Lowercase operator", "operator.lowercase"),
-  ("operator-uppercase", "Uppercase operator", "operator.uppercase"),
   ("delete-to-end", "Delete to end of line", "operator.delete.to.end"),
   ("change-to-end", "Change to end of line", "operator.change.to.end"),
   ("delete-char", "Delete character at cursor", "delete.char"),
@@ -267,6 +266,24 @@ const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("substitute-char", "Substitute character at cursor", "substitute.char"),
   ("substitute-line", "Substitute line", "substitute.line"),
   ("toggle-case", "Toggle case of character at cursor", "toggle.case"),
+  ("navigate-git-next", "Next git change", "navigate.git.next"),
+  ("navigate-git-prev", "Previous git change", "navigate.git.prev"),
+  ("navigate-conflict-next", "Next git merge conflict", "navigate.conflict.next"),
+  ("navigate-conflict-prev", "Previous git merge conflict", "navigate.conflict.prev"),
+  ("change-word", "Change word", "change.word"),
+]
+
+const OperatorCommands: seq[tuple[name, desc, commandId: string]] = @[
+  ("operator-delete", "Delete operator", "operator.delete"),
+  ("operator-change", "Change operator", "operator.change"),
+  ("operator-yank", "Yank operator", "operator.yank"),
+  ("operator-indent", "Indent operator", "operator.indent"),
+  ("operator-outdent", "Outdent operator", "operator.outdent"),
+  ("operator-lowercase", "Lowercase operator", "operator.lowercase"),
+  ("operator-uppercase", "Uppercase operator", "operator.uppercase"),
+] ## Operators: one of its own kind goes on to lines (`dd`), another cancels it (`dy`)
+
+const TextObjectCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("textobject-inner", "Inner text object", "textobject.inner"),
   ("textobject-around", "Around text object", "textobject.around"),
   ("textobject-word", "Word text object", "textobject.word"),
@@ -275,12 +292,7 @@ const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("textobject-paren", "Parenthesis text object", "textobject.paren"),
   ("textobject-bracket", "Bracket text object", "textobject.bracket"),
   ("textobject-brace", "Brace text object", "textobject.brace"),
-  ("navigate-git-next", "Next git change", "navigate.git.next"),
-  ("navigate-git-prev", "Previous git change", "navigate.git.prev"),
-  ("navigate-conflict-next", "Next git merge conflict", "navigate.conflict.next"),
-  ("navigate-conflict-prev", "Previous git merge conflict", "navigate.conflict.prev"),
-  ("change-word", "Change word", "change.word"),
-]
+] ## Text objects a waiting operator acts over (`di(`)
 
 const ModeSwitchCommands: seq[tuple[name, desc: string, target: EditorMode]] = @[
   ("switch-to-insert", "Switch to insert mode", EditorMode.Insert),
@@ -319,26 +331,31 @@ const OperatorPendingCommands: seq[tuple[name, desc, opType: string, reverse: bo
 ]
 
 proc registerMotionCommands(reg: KeyBindingRegistry) =
-  for (name, desc, motion) in MotionCommands:
-    reg.registerCommand(
-      Command(name: name, description: desc, kind: ctMotion, motion: motion)
-    )
+  for commands in [MotionCommands, ScrollCommands]:
+    for (name, desc, motion) in commands:
+      reg.registerCommand(
+        Command(name: name, description: desc, kind: ctMotion, motion: motion)
+      )
 
 proc registerActionCommands(reg: KeyBindingRegistry) =
-  for (name, desc, commandId) in ActionCommands:
-    reg.registerCommand(
-      Command(
-        name: name, description: desc, kind: ctAction, commandId: commandId, args: @[]
+  for commands in [ActionCommands, SearchCommands]:
+    for (name, desc, commandId) in commands:
+      reg.registerCommand(
+        Command(
+          name: name, description: desc, kind: ctAction, commandId: commandId, args: @[]
+        )
       )
-    )
 
 proc registerCustomCommands(reg: KeyBindingRegistry) =
-  for (name, desc, commandId) in CustomCommands:
-    reg.registerCommand(
-      Command(
-        name: name, description: desc, kind: ctCustom, commandId: commandId, args: @[]
-      )
-    )
+  for (commands, kind) in [
+    (CustomCommands, ctCustom),
+    (OperatorCommands, ctOperator),
+    (TextObjectCommands, ctTextObject),
+  ]:
+    for (name, desc, commandId) in commands:
+      var command = Command(name: name, description: desc, kind: kind)
+      command.commandId = commandId
+      reg.registerCommand(command)
 
 proc registerModeSwitchCommands(reg: KeyBindingRegistry) =
   for (name, desc, target) in ModeSwitchCommands:

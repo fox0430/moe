@@ -673,17 +673,18 @@ suite "gv":
     check e.state.mode == EditorMode.Visual
     check e.selection == (pos(2, 0), pos(2, 2))
 
-  test "an operator gn does not run leaves the area alone":
+  test "after any operator on gn, selects the match":
+    # Vim 9.2: `gUgn` and `>gn` act on the match, and gv selects it
     for op in [@["g", "U"], @[">"]]:
       let e = newTestEditor("foo bar\nbaz qux\nfoo end")
       e.press("j", "v", "l", "Esc", "g", "g", "/", "f", "o", "o", "Enter")
       e.press(op)
       e.press("g", "n")
-      check e.activeBuffer.getLine(2) == "foo end"
+      check e.activeBuffer.getLine(2) != "foo end"
 
       e.press("g", "v")
       check e.state.mode == EditorMode.Visual
-      check e.selection == (pos(1, 0), pos(1, 1))
+      check e.selection == (pos(2, 0), pos(2, 2))
 
   test "run as a command from Normal mode, returns to Normal on Esc":
     let e = newTestEditor("one\ntwo")

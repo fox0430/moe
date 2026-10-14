@@ -548,7 +548,9 @@ type
     ## Represents an operator waiting for a motion or text object
     operatorType*: OperatorType
     operatorCount*: int # Count before operator (2d3w の "2")
+    countGiven*: bool # A count was typed before the operator (`3dG`)
     startPos*: BufferPosition # Position where operator was invoked
+    register*: Option[char] # Register named by `"x` before the operator
 
   TextObjectKind* = enum
     ## Types of text objects
@@ -576,11 +578,39 @@ type
     isLinewise*: bool # Whether this is a linewise text object
     isEmpty*: bool
       # Empty object (e.g. inner of <a></a>): operators are no-ops, but `cit` still inserts
+    exclusive*: bool
+      ## `endPos` is where the object stops, not its last character: an
+      ## operator takes the text before it by the `:h exclusive` rules (an
+      ## inner block whose closing bracket starts its line)
 
   PendingTextObject* = object
     ## Represents a text object selection waiting for the object type
     modifier*: TextObjectModifier # i or a
-    operatorCount*: int # Count before operator (if any)
+    count*: int # Count typed on the modifier (`d2iw`), 1 if none
+    countGiven*: bool
+
+  OperandKind* = enum
+    odMotion ## A cursor motion, f/F/t/T with their character
+    odMark ## ' or ` to a named mark
+    odCommand ## A registered command that finds a place (n, *, gn)
+    odTextObject
+
+  Operand* = object ## What a waiting operator acts over, kept so `.` finds it again
+    count*: int ## The operator's and the motion's counts multiplied (`2d3w`: 6)
+    countGiven*: bool
+      ## Either was typed (`dG` goes to the last line, `1dG` to the first)
+    case kind*: OperandKind
+    of odMotion:
+      motion*: Motion
+      targetChar*: string
+    of odMark:
+      markName*: char
+      markLinewise*: bool
+    of odCommand:
+      commandId*: string
+    of odTextObject:
+      textObjectModifier*: TextObjectModifier
+      textObjectKind*: TextObjectKind
 
   LastEditCommandKind* = enum
     ## Types of repeatable edit commands
@@ -599,16 +629,11 @@ type
 
   LastEditCommand* = object
     ## Represents the last change command that can be repeated with "."
+    register*: Option[char] ## Register named by `"x` for the change
     case kind*: LastEditCommandKind
     of lecOperatorMotion:
       operator*: OperatorType # d, c, y, >, <, ~, gu, gU
-      motion*: Motion # h, j, k, l, w, b, e, etc.
-      motionCount*: int # Count for motion (3 in "d3w")
-      motionHasCount*: bool # Explicit motion prefix? (dG vs d1G for `.`)
-      operatorCount*: int # Count for operator (2 in "2dd")
-      targetChar*: string # Target char for f/F/t/T motions (empty otherwise)
-      markName*: char # Named mark motion, or NUL for ordinary motions
-      markLinewise*: bool
+      operand*: Operand
     of lecInsertText:
       insertedText*: string # Text that was inserted
       insertPosition*: BufferPosition # Where insertion started
@@ -904,7 +929,6 @@ type
     macroState*: MacroState
     pendingOperator*: Option[PendingOperator]
     pendingTextObject*: Option[PendingTextObject]
-    pendingRegister*: Option[char] # "a-style register selector
     pendingCommand*: PendingCommand # Ctrl-W etc.
 
   InputState* = object ## Command-line / search input state grouped together.

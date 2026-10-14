@@ -6199,12 +6199,12 @@ suite "handleInterrupt - Visual":
     e.state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
-    e.state.pendingInput.pendingRegister = some('a')
+    e.keyRouter.registry.sequenceState.register = some('a')
 
     check e.handleInterrupt()
 
     check e.state.mode == EditorMode.Normal
-    check e.state.pendingInput.pendingRegister.isNone
+    check e.keyRouter.registry.sequenceState.register.isNone
 
   proc typeChars(e: Editor, keys: string) =
     for key in keys:
@@ -7739,3 +7739,1076 @@ suite "handleKeyCombo - the mappings come before the layers that run a key":
       # Insert mode pastes at the cursor, after the j let go.
       check not e.keyRouter.isHoldingKeys
       check e.activeBuffer.getLine(0) == "jXYabc"
+
+suite "handleKeyCombo - the register named for a command, as Vim's regname":
+  # Vim drops the register after a command that neither starts nor finishes an
+  # operator (normal_cmd). Expectations are Vim 9.2's.
+  proc createEditorForRegisters(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc register(e: Editor, name: char): string =
+    e.state.registers.getRegisterContent(name)
+
+  test "a motion drops it":
+    let e = createEditorForRegisters("abc\ndef")
+
+    e.press("\"", "a", "j", "x")
+
+    check e.register('a') == ""
+    check e.register('"') == "d"
+
+  test "a text object that fails drops it":
+    let e = createEditorForRegisters("abc def")
+
+    e.press("\"", "b", "c", "i", "q", "x")
+
+    check e.register('b') == ""
+    check e.register('"') == "a"
+    check e.activeBuffer.getLine(0) == "bc def"
+
+  test "a special key that ends a text object is used up and drops it":
+    let e = createEditorForRegisters("abc def")
+    e.press("l", "l", "l")
+
+    e.press("\"", "b", "d", "i", "Left", "x")
+
+    check e.register('b') == ""
+    check e.register('"') == " "
+    check e.activeBuffer.getLine(0) == "abcdef"
+
+  test "stopping a recording drops it":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("q", "a", "x", "\"", "a", "q", "x")
+
+    check e.state.pendingInput.macroState.registers['a'] == @["x", "\"", "a"]
+    check e.register('a') == ""
+    check e.register('"') == "b"
+
+  test "entering Visual drops it":
+    let e = createEditorForRegisters("abc")
+
+    e.press("\"", "a", "v", "l", "y")
+
+    check e.register('a') == ""
+    check e.register('"') == "ab"
+
+  test "Visual mode names a register as Normal mode does":
+    let e = createEditorForRegisters("abc")
+
+    e.press("v", "l", "\"", "a", "y")
+
+    check e.register('a') == "ab"
+
+  test "naming it again keeps it":
+    let e = createEditorForRegisters("abc")
+
+    e.press("\"", "a", "\"", "a", "x")
+
+    check e.register('a') == "a"
+
+  test "a count keeps it":
+    let e = createEditorForRegisters("abcd")
+
+    e.press("\"", "a", "3", "x")
+
+    check e.register('a') == "abc"
+
+  test "a macro the command runs meets no register":
+    let e = createEditorForRegisters("abc")
+    e.state.pendingInput.macroState.registers['q'] = @["x"]
+
+    e.press("\"", "a", "@", "q")
+
+    check e.register('a') == ""
+    check e.register('"') == "a"
+
+  test "Insert resumes after a Ctrl-o command that drops it":
+    let e = createEditorForRegisters("abc\nxyz")
+
+    e.press("i", "C-o", "\"", "a", "j", "x")
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(1) == "xxyz"
+    check e.register('a') == ""
+
+  test "a special key that ends a Visual text object is used up":
+    let e = createEditorForRegisters("abc def")
+    e.press("l", "l", "l")
+
+    e.press("v", "i", "Left")
+
+    check e.state.mode == EditorMode.Visual
+    check e.cursor.column == 3
+
+  test "a count before it carries over to the command":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("3", "\"", "a", "x")
+
+    check e.register('a') == "abc"
+    check e.activeBuffer.getLine(0) == "def"
+
+  test "a count before it multiplies the count after it":
+    let e = createEditorForRegisters("abcdefghij")
+
+    e.press("3", "\"", "a", "2", "x")
+
+    check e.register('a') == "abcdef"
+
+  test "naming another register keeps the counts":
+    let e = createEditorForRegisters("abcdefghij")
+
+    e.press("\"", "a", "2", "\"", "b", "3", "x")
+
+    check e.register('a') == ""
+    check e.register('b') == "abcdef"
+
+  test "a count before it reaches the operator":
+    let e = createEditorForRegisters("a b c d e f g h")
+
+    e.press("3", "\"", "a", "d", "2", "w")
+
+    check e.register('a') == "a b c d e f "
+    check e.activeBuffer.getLine(0) == "g h"
+
+  test "a special key as the name drops the one named before":
+    let e = createEditorForRegisters("abcdef")
+    e.press("l", "l")
+
+    e.press("\"", "a", "\"", "Left")
+    check e.cursor.column == 2
+
+    e.press("x")
+    check e.register('a') == ""
+    check e.register('"') == "c"
+
+  test "an invalid name drops the one named before":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("\"", "a", "\"", "!")
+    check e.state.statusMessage == "Invalid register"
+
+    e.press("x")
+    check e.register('a') == ""
+    check e.register('"') == "a"
+
+  test "a key with no binding drops it and the count":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("\"", "a", "F5", "x")
+    check e.register('a') == ""
+    check e.register('"') == "a"
+
+    e.press("3", "F5", "x")
+    check e.activeBuffer.getLine(0) == "cdef"
+
+  test "a key with no binding in Visual drops it and the count":
+    let e = createEditorForRegisters("abcdef")
+
+    e.press("v", "l", "\"", "a", "F5", "y")
+    check e.register('a') == ""
+    check e.register('"') == "ab"
+
+    e.press("v", "l", "3", "F5", "l")
+    check e.cursor.column == 2
+
+  test "a Visual binding that VisualLine falls back to runs with it":
+    let e = createEditorForRegisters("abc\ndef")
+    e.keyBindingRegistry.bindKey(EditorMode.Visual, "Z", "visual-yank")
+
+    e.press("V", "\"", "a", "Z")
+
+    check e.state.registers.isRegisterLinewise('a')
+    check e.state.registers.getRegister('a').buffer[0] == "abc"
+
+  test "a special key as an operand cancels the operator":
+    let e = createEditorForRegisters("abc def")
+
+    e.press("d", "f", "Left", "w")
+
+    check e.activeBuffer.getLine(0) == "abc def"
+    check e.cursor.column == 4
+
+  test "naming one while an operator waits cancels the operator":
+    let e = createEditorForRegisters("abc def")
+
+    e.press("d", "\"", "a", "w")
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(0) == "awbc def"
+    check e.register('a') == ""
+
+  test "Escape or Ctrl-c after it or a count leaves Visual":
+    for key in ["Escape", "C-c"]:
+      for prefix in [@["\"", "a"], @["3"]]:
+        let e = createEditorForRegisters("abc")
+
+        e.press("v")
+        e.press(prefix)
+        e.press(key)
+        check e.state.mode == EditorMode.Normal
+
+        e.press("y", "l")
+        check e.register('a') == ""
+        check e.register('"') == "a"
+
+  test "Escape that ends a register name or a sequence stays in Visual":
+    for keys in [@["\""], @["\"", "a", "\""], @["g"]]:
+      let e = createEditorForRegisters("abc")
+
+      e.press("v")
+      e.press(keys)
+      e.press("Escape")
+
+      check e.state.mode == EditorMode.Visual
+
+  test "Escape and Ctrl-c that end a Visual text object stay in Visual":
+    for key in ["Escape", "C-c"]:
+      let e = createEditorForRegisters("abc def")
+      e.press("l")
+
+      e.press("v", "i", key)
+
+      check e.state.mode == EditorMode.Visual
+
+  test "a mapping after it runs with it":
+    let e = createEditorForRegisters("abc\ndef")
+    let error = e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "X", "d d")
+    check error.len == 0
+
+    e.press("\"", "a", "X")
+
+    check e.state.registers.isRegisterLinewise('a')
+    check e.state.registers.getRegister('a').buffer[0] == "abc"
+    check e.activeBuffer.getLine(0) == "def"
+
+  test "Insert waits for the command after it from Ctrl-o":
+    let e = createEditorForRegisters("abcdef")
+    check e.state.registers.setNamedRegister('a', "XY", false).isOk
+    e.state.registers.setYankedRegister("Q", false)
+
+    e.press("i", "C-o", "\"", "a", "p")
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(0) == "aXYbcdef"
+
+  test "a command a mapping names takes it":
+    let e = createEditorForRegisters("abc\ndef\nghi")
+    let error =
+      e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "F2", "move-down")
+    check error.len == 0
+
+    e.press("\"", "a", "F2", "d", "d")
+
+    check e.register('a') == ""
+    check e.state.registers.getRegister('"').buffer[0] == "def"
+
+  test "gn yanks the match into the yank register":
+    let e = createEditorForRegisters("foo bar foo")
+    e.state.input.search.last.pattern = "bar"
+
+    e.press("y", "g", "n")
+
+    check e.register('0') == "bar"
+    check e.register('"') == "bar"
+    check e.register('-') == ""
+
+  test "gn takes the register named for the operator":
+    for op in ["y", "d"]:
+      let e = createEditorForRegisters("foo bar foo")
+      e.state.input.search.last.pattern = "bar"
+
+      e.press("\"", "a", op, "g", "n")
+
+      check e.register('a') == "bar"
+      check e.register('-') == ""
+      check e.register('0') == ""
+
+  test "the black hole register keeps nothing":
+    for keys in [
+      @["\"", "_", "d", "d"],
+      @["\"", "_", "x"],
+      @["\"", "_", "y", "y"],
+      @["\"", "_", "c", "w", "Escape"],
+      @["v", "\"", "_", "d"],
+      @["v", "\"", "_", "y"],
+    ]:
+      let e = createEditorForRegisters("abc def\nghi")
+      e.state.registers.setYankedRegister("Q", false)
+
+      e.press(keys)
+
+      check e.register('"') == "Q"
+      check e.register('0') == "Q"
+      check e.register('1') == ""
+      check e.register('-') == ""
+
+  test "putting the black hole register puts nothing":
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        for (keys, line) in [
+          (@["\"", "_", "p"], "abc"),
+          (@["\"", "_", "P"], "abc"),
+          (@["v", "\"", "_", "p"], "bc"),
+        ]:
+          let e = createEditorForRegisters("abc")
+          # An empty register falls back to the system clipboard; this one
+          # reads nothing.
+          e.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+          e.state.registers.setClipboardTool(cbtXclip)
+
+          e.press(keys)
+
+          check e.activeBuffer.getLine(0) == line
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "putting nothing over a selection still deletes it":
+    # The black hole register puts an empty string, a blank line over whole
+    # lines; an empty register puts nothing and says so.
+    for (keys, lines, message) in [
+      (@["v", "i", "w", "\"", "_", "p"], @[" def", "ghi"], ""),
+      (@["V", "\"", "_", "p"], @["", "ghi"], ""),
+      (@["v", "i", "w", "\"", "b", "p"], @[" def", "ghi"], "Nothing to paste"),
+      (@["V", "\"", "b", "p"], @["ghi"], "Nothing to paste"),
+    ]:
+      let e = createEditorForRegisters("abc def\nghi")
+      e.state.config.clipboard = ClipboardConfig(enable: false, tool: cbtXclip)
+
+      e.press(keys)
+
+      check e.activeBuffer.len == lines.len
+      for i, line in lines:
+        check e.activeBuffer.getLine(i) == line
+      check e.register('"') == (if keys[0] == "V": "abc def" else: "abc")
+      check e.state.registers.isRegisterLinewise('"') == (keys[0] == "V")
+      check e.state.statusMessage.contains(message)
+      check e.state.mode == EditorMode.Normal
+
+  test "`.` puts the change in the register it used again":
+    for (keys, name, content) in [
+      (@["\"", "a", "d", "d", "."], 'a', "four five six\n"),
+      (@["\"", "a", "d", "d", "\"", "b", "."], 'a', "four five six\n"),
+      (@["\"", "a", "x", "."], 'a', "n"),
+      (@["\"", "A", "x", "."], 'a', "on"),
+      (@["\"", "a", "d", "w", "."], 'a', "two "),
+      (@["d", "d", "\"", "b", "."], 'b', "four five six\n"),
+    ]:
+      let e = createEditorForRegisters("one two three\nfour five six\nseven")
+
+      e.press(keys)
+
+      check e.register(name) == content
+      if name == 'a':
+        check e.register('b') == ""
+
+  test "`.` after the black hole register keeps nothing again":
+    for (keys, line) in [
+      (@["\"", "_", "d", "d", "."], "seven"), (@["\"", "_", "x", "."], "e two three")
+    ]:
+      let e = createEditorForRegisters("one two three\nfour five six\nseven")
+      e.state.registers.setYankedRegister("Q", false)
+
+      e.press(keys)
+
+      check e.activeBuffer.getLine(0) == line
+      check e.register('"') == "Q"
+      check e.register('0') == "Q"
+      check e.register('1') == ""
+      check e.register('-') == ""
+
+  test "`.` puts from the register the put used, a numbered one counting up":
+    let e = createEditorForRegisters("one two three\nfour")
+    for (name, content) in [('1', "R1\n"), ('2', "R2\n"), ('3', "R3\n")]:
+      check e.state.registers.setRegister(name, content, true).isOk
+    check e.state.registers.setNamedRegister('a', "A", false).isOk
+    check e.state.registers.setNamedRegister('b', "B", false).isOk
+
+    e.press("\"", "1", "p", ".", ".")
+
+    check e.activeBuffer.getLine(1) == "R1"
+    check e.activeBuffer.getLine(2) == "R2"
+    check e.activeBuffer.getLine(3) == "R3"
+
+    e.press("g", "g", "0", "\"", "a", "p", "\"", "b", ".")
+
+    check e.activeBuffer.getLine(0) == "oAAne two three"
+
+suite "handleKeyCombo - a command an operator cannot act over cancels it, as Vim's checkclearop":
+  # Expectations are Vim 9.2's.
+  proc createEditorForOperators(content: string): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  test "a command that is no motion does not run, and the motion after it moves":
+    for keys in [@["x"], @["J"], @["~"], @["p"], @["C-a"], @["z", "z"]]:
+      let e = createEditorForOperators("abc def\nghi")
+      e.state.registers.setYankedRegister("Q", false)
+
+      e.press("d")
+      e.press(keys)
+      e.press("w")
+
+      check e.activeBuffer.getLine(0) == "abc def"
+      check e.activeBuffer.getLine(1) == "ghi"
+      check e.cursor.column == 4
+      check e.state.pendingInput.pendingOperator.isNone
+
+  test "a command that enters another mode does not run":
+    for key in ["I", "A", "o", "R"]:
+      let e = createEditorForOperators("abc def")
+
+      e.press("d", key)
+      check e.state.mode == EditorMode.Normal
+
+      e.press("w")
+      check e.activeBuffer.getLine(0) == "abc def"
+      check e.cursor.column == 4
+
+  test "v and V cancel it too":
+    # Vim forces the motion's kind with them (`dVw`); moe has no forced
+    # motion, so they cancel the operator as other commands do.
+    for key in ["v", "V"]:
+      let e = createEditorForOperators("abc def")
+
+      e.press("d", key)
+      check e.state.mode == EditorMode.Normal
+      check e.state.pendingInput.pendingOperator.isNone
+
+  test "the register named after it goes to the next command":
+    let e = createEditorForOperators("abc def")
+    check e.state.registers.setNamedRegister('a', "XY", false).isOk
+
+    e.press("d", "I", "\"", "a", "p")
+
+    check e.activeBuffer.getLine(0) == "aXYbc def"
+
+  test "a command that waits for a key takes none":
+    for key in ["r", "m", "@", "q"]:
+      let e = createEditorForOperators("abc def")
+
+      e.press("d", key, "x")
+
+      check e.activeBuffer.getLine(0) == "bc def"
+      check e.state.pendingInput.macroState.isRecording == false
+
+  test "the search line opens without it":
+    let e = createEditorForOperators("abc def ghi")
+
+    e.press("d", "/", "d", "e", "f", "Enter", "w")
+
+    check e.activeBuffer.getLine(0) == "abc def ghi"
+    check e.cursor.column == 8
+
+  test "a motion, a text object, a mark and the operator again end it":
+    for (keys, line) in [
+      (@["d", "w"], "def ghi"),
+      (@["d", "f", "e"], "f ghi"),
+      (@["d", "i", "w"], " def ghi"),
+      (@["d", "`", "a"], "def ghi"),
+      (@["d", "d"], ""),
+    ]:
+      let e = createEditorForOperators("abc def ghi")
+      e.activeBuffer.namedMarks['a'] = some(BufferPosition(line: 0, column: 4))
+
+      e.press(keys)
+
+      check e.activeBuffer.getLine(0) == line
+
+  test "an operator of another kind cancels it, and the motion after it moves":
+    for keys in [
+      @["d", "y"], @["y", "d"], @["d", ">"], @["c", "d"], @["g", "u", "g", "U"]
+    ]:
+      let e = createEditorForOperators("abc def\nghi")
+      e.state.registers.setYankedRegister("Q", false)
+
+      e.press(keys)
+      check e.state.pendingInput.pendingOperator.isNone
+      e.press("w")
+
+      check e.activeBuffer.getLine(0) == "abc def"
+      check e.cursor.column == 4
+      check e.state.registers.getRegisterContent('"') == "Q"
+
+  test "the register named for an operator another cancels goes with it":
+    let e = createEditorForOperators("abc def")
+
+    e.press("\"", "a", "d", "y", "x")
+
+    check e.state.registers.getRegisterContent('a') == ""
+    check e.state.registers.getRegisterContent('"') == "a"
+    check e.activeBuffer.getLine(0) == "bc def"
+
+  test "a scroll does not run under it":
+    var text = ""
+    for i in 1 .. 100:
+      if i > 1:
+        text.add '\n'
+      text.add "line " & $i
+    for key in ["C-d", "C-f", "C-u", "C-b", "PageDown", "PageUp"]:
+      let e = createEditorForOperators(text)
+      e.press("5", "0", "G")
+
+      e.press("d", key)
+
+      check e.activeBuffer.len == 100
+      check e.cursor.line == 49
+      check e.state.pendingInput.pendingOperator.isNone
+
+  test "a search acts as a motion that stops short of the match":
+    # Exclusive: one that ends at a line start stops at the end of the line
+    # before, and takes whole lines when it starts in the indent.
+    for (pattern, start, keys, lines, deleted) in [
+      (
+        "five",
+        (0, 0),
+        @["d", "n"],
+        @["five six", "seven", "eight", "nine"],
+        "one two three\nfour ",
+      ),
+      (
+        "two",
+        (2, 0),
+        @["d", "N"],
+        @["one ", "seven", "eight", "nine"],
+        "two three\nfour five six",
+      ),
+      (
+        "e",
+        (0, 0),
+        @["2", "d", "n"],
+        @["ee", "four five six", "seven", "eight", "nine"],
+        "one two thr",
+      ),
+      (
+        "^seven",
+        (1, 0),
+        @["d", "n"],
+        @["one two three", "seven", "eight", "nine"],
+        "four five six\n",
+      ),
+      (
+        "one",
+        (1, 0),
+        @["d", "n"],
+        @["four five six", "seven", "eight", "nine"],
+        "one two three\n",
+      ),
+    ]:
+      let e =
+        createEditorForOperators("one two three\nfour five six\nseven\neight\nnine")
+      e.state.input.search.last.pattern = pattern
+      e.activeWindow.cursor = BufferPosition(line: start[0], column: start[1])
+
+      e.press(keys)
+
+      check e.lines == lines
+      check e.state.registers.getRegisterContent('"') == deleted
+      check e.state.pendingInput.pendingOperator.isNone
+
+  test "yanking or changing up to a search":
+    let e = createEditorForOperators("one two three\nfour five six")
+    e.state.input.search.last.pattern = "five"
+
+    e.press("y", "n")
+
+    check e.state.registers.getRegisterContent('0') == "one two three\nfour "
+    check e.lines == @["one two three", "four five six"]
+    check e.cursor == BufferPosition(line: 0, column: 0)
+
+    e.press("c", "n", "X", "Escape")
+
+    check e.lines == @["Xfive six"]
+
+  test "searching for the word under the cursor acts as a motion":
+    for (start, key) in [((0, 0), "*"), ((1, 4), "#")]:
+      let e = createEditorForOperators("foo bar\nbaz foo qux")
+      e.activeWindow.cursor = BufferPosition(line: start[0], column: start[1])
+
+      e.press("d", key)
+
+      check e.lines == @["foo qux"]
+      check e.cursor == BufferPosition(line: 0, column: 0)
+
+  test "a counted search for the word under the cursor may wrap back to it":
+    # Vim 9.2: `2d*` on `foo bar foo` stops at the word under the cursor again
+    for (start, key, lines) in [
+      (0, "*", @["foo bar foo"]), (1, "*", @["oo bar foo"]), (8, "#", @["foo bar foo"])
+    ]:
+      let e = createEditorForOperators("foo bar foo")
+      e.activeWindow.cursor = BufferPosition(line: 0, column: start)
+
+      e.press("2", "d", key)
+
+      check e.lines == lines
+      check e.state.pendingInput.pendingOperator.isNone
+
+  test "a counted search for the word under the cursor passes matches":
+    let e = createEditorForOperators("foo bar foo baz foo")
+
+    e.press("2", "d", "*")
+
+    check e.lines == @["foo"]
+
+  test "a search that finds no other match ends it with no change":
+    for (pattern, start) in [("zzz", (0, 0)), ("five", (1, 5))]:
+      let e = createEditorForOperators("one two three\nfour five six")
+      e.state.input.search.last.pattern = pattern
+      e.activeWindow.cursor = BufferPosition(line: start[0], column: start[1])
+
+      e.press("d", "n")
+
+      check e.lines == @["one two three", "four five six"]
+      check e.state.pendingInput.pendingOperator.isNone
+
+  test "`.` searches again from where it is":
+    let e = createEditorForOperators("one two three\nfour")
+    e.state.input.search.last.pattern = "e"
+
+    e.press("d", "n", ".")
+
+    check e.lines == @["ee", "four"]
+
+suite "handleKeyCombo - an operator acts over what a motion finds, as Vim's do_pending_operator":
+  # Expectations are Vim 9.2's.
+  proc createEditorForOperators(content: string, line = 0, column = 0): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.activeWindow.cursor = BufferPosition(line: line, column: column)
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  const SevenLines = "a\nb\nc\nd\ne\nf\ng"
+
+  test "a count after the operator multiplies into lines of its own kind":
+    for (keys, lines) in [
+      (@["d", "3", "d"], @["d", "e", "f", "g"]),
+      (@["2", "d", "3", "d"], @["g"]),
+      (@["c", "2", "c", "X", "Escape"], @["X", "c", "d", "e", "f", "g"]),
+      (@[">", "2", ">"], @["\ta", "\tb", "c", "d", "e", "f", "g"]),
+    ]:
+      let e = createEditorForOperators(SevenLines)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.state.pendingInput.pendingOperator.isNone
+
+    let e = createEditorForOperators(SevenLines)
+    e.press("y", "3", "y")
+    check e.state.registers.getRegisterContent('0') == "a\nb\nc\n"
+
+  test "a count after the operator reaches a text object, a search and gn":
+    for (content, column, search, keys, lines) in [
+      ("foo bar baz qux", 0, "", @["d", "2", "i", "w"], @["bar baz qux"]),
+      ("foo bar baz qux", 0, "", @["2", "d", "i", "w"], @["bar baz qux"]),
+      ("foo bar baz qux", 0, "", @["d", "2", "a", "w"], @["baz qux"]),
+      ("x\nfoo\nx\nfoo\nx", 0, "foo", @["d", "2", "n"], @["foo", "x"]),
+      ("foo x foo x foo", 2, "foo", @["d", "2", "g", "n"], @["foo x  x foo"]),
+    ]:
+      let e = createEditorForOperators(content, column = column)
+      e.state.input.search.last.pattern = search
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+
+  test "a count before the operator makes G a line number":
+    for (line, keys, lines) in [
+      (1, @["3", "d", "G"], @["a", "d", "e", "f", "g"]),
+      (0, @["d", "3", "G"], @["d", "e", "f", "g"]),
+      (5, @["d", "G"], @["a", "b", "c", "d", "e"]),
+    ]:
+      let e = createEditorForOperators(SevenLines, line = line)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+
+  test "an exclusive motion that ends at a line start stops at the line before":
+    # And takes whole lines when it starts in the indent (`:h exclusive`)
+    for (content, line, column, keys, lines) in [
+      ("a\nb\n\nc", 0, 0, @["d", "}"], @["", "c"]),
+      ("abc\nd\n\ne", 0, 1, @["d", "}"], @["a", "", "e"]),
+      ("a\n\nb\nc", 3, 0, @["d", "{"], @["a", "c"]),
+      ("  a\nb\nc", 0, 0, @["d", "`", "a"], @["c"]),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+      e.activeBuffer.namedMarks['a'] = some(BufferPosition(line: 2, column: 0))
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+
+  test "each motion keeps its own kind":
+    for (content, line, column, keys, lines) in [
+      ("a1\nb2\nc3", 0, 1, @["d", "L"], @[""]),
+      ("a1\nb2\nc3", 2, 1, @["d", "H"], @[""]),
+      ("a\nb\nc", 0, 0, @["d", "H"], @["b", "c"]),
+      ("axbxcx", 0, 4, @["d", "F", "x"], @["axbcx"]),
+      ("axbxcx", 0, 4, @["d", "T", "x"], @["axbxcx"]),
+      ("a\nb\nc", 0, 0, @["d", "g", "g"], @["b", "c"]),
+      ("a\nb\nc", 2, 0, @["d", "G"], @["a", "b"]),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+
+  test "a motion that cannot move does nothing, one that moves nowhere acts over nothing":
+    for (content, line, column, keys, lines) in [
+      ("a\nb\nc", 0, 0, @["d", "k"], @["a", "b", "c"]),
+      ("a\nb\nc", 2, 0, @["d", "j"], @["a", "b", "c"]),
+      ("abc", 0, 0, @["d", "0"], @["abc"]),
+      ("abc", 0, 0, @["d", "b"], @["abc"]),
+      ("\nb", 0, 0, @["d", "l"], @["", "b"]),
+      ("abc", 0, 2, @["d", "l"], @["ab"]),
+      ("abc", 0, 1, @["d", "3", "l"], @["a"]),
+      # `c` over nothing still inserts
+      ("abc", 0, 0, @["c", "0", "X", "Escape"], @["Xabc"]),
+      ("abc", 0, 0, @["c", "h", "X", "Escape"], @["Xabc"]),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+
+  test "w stops at the end of the line its last word is on":
+    for (content, line, column, keys, lines) in [
+      ("foo bar\nbaz qux", 0, 4, @["d", "w"], @["foo ", "baz qux"]),
+      ("foo bar\nbaz qux", 0, 4, @["d", "2", "w"], @["foo qux"]),
+      ("foo   \nbar", 0, 0, @["d", "w"], @["", "bar"]),
+      ("  foo\nbar", 0, 2, @["d", "w"], @["  ", "bar"]),
+      ("foo\n\nbar", 0, 0, @["d", "2", "w"], @["bar"]),
+      ("foo bar\nbaz", 0, 4, @["d", "3", "w"], @["foo "]),
+      ("foo\n  bar", 0, 0, @["d", "2", "w"], @[""]),
+      ("foo bar", 0, 4, @["d", "w"], @["foo "]),
+      ("a\n\nb", 1, 0, @["d", "w"], @["a", "b"]),
+      # From the last character of a line, even after only blanks
+      ("  x\nfoo", 0, 2, @["d", "w"], @["  ", "foo"]),
+      ("x\nfoo", 0, 0, @["d", "w"], @["", "foo"]),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+
+  test "cw on a word changes up to its end, as ce":
+    for (content, line, column, keys, lines) in [
+      ("foo bar baz", 0, 0, @["c", "w"], @["X bar baz"]),
+      ("foo bar baz", 0, 2, @["c", "w"], @["foX bar baz"]),
+      ("foo  bar baz", 0, 3, @["c", "w"], @["fooXbar baz"]),
+      ("foo bar baz", 0, 0, @["c", "2", "w"], @["X baz"]),
+      ("foo\nbar", 0, 0, @["c", "w"], @["X", "bar"]),
+      ("a\n\nb", 1, 0, @["c", "w"], @["a", "X", "b"]),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+      e.press("X", "Escape")
+
+      checkpoint($keys)
+      check e.lines == lines
+
+  test "} in the last paragraph goes to its last character, which an operator takes":
+    for (content, line, column, keys, lines, cursor) in [
+      ("a\nb\nc", 0, 0, @["}"], @["a", "b", "c"], (2, 0)),
+      ("ab\ncd", 0, 0, @["}"], @["ab", "cd"], (1, 1)),
+      ("a\nb\nc", 0, 0, @["d", "}"], @[""], (0, 0)),
+      ("foo bar", 0, 4, @["d", "}"], @["foo "], (0, 3)),
+      ("ab\ncd", 1, 1, @["d", "}"], @["ab", "c"], (1, 0)),
+      # With paragraphs still to go it fails in place
+      ("a\n\nb\nc", 2, 0, @["5", "}"], @["a", "", "b", "c"], (2, 0)),
+      ("a\n\nb\nc", 2, 0, @["d", "5", "}"], @["a", "", "b", "c"], (2, 0)),
+      # An empty line ends a paragraph, a line of blanks does not
+      ("a\n  \nb\n\nc", 0, 0, @["}"], @["a", "  ", "b", "", "c"], (3, 0)),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
+  test "l with an operator takes nothing on an empty line, and c still inserts":
+    let e = createEditorForOperators("a\n\nb", line = 1)
+
+    e.press("c", "l", "X", "Escape")
+
+    check e.lines == @["a", "X", "b"]
+
+  test "an operator over an end on an empty line takes nothing there":
+    for keys in [@["d", "$"], @["d", "g", "_"], @["y", "$"]]:
+      let e = createEditorForOperators("a\n\nb", line = 1)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == @["a", "", "b"]
+      check e.state.registers.getRegisterContent('"') == ""
+
+  test "cw past the last word of the buffer stops at its last character":
+    let e = createEditorForOperators("foo bar", column = 4)
+
+    e.press("c", "2", "w", "X", "Escape")
+
+    check e.lines == @["foo X"]
+    check e.state.registers.getRegisterContent('"') == "bar"
+
+  test "a delete over lines lands on the first non-blank of the line that follows":
+    for (content, line, column, keys, lines, cursor) in [
+      ("x\ny\n  z", 0, 0, @["d", "j"], @["  z"], (0, 2)),
+      ("x\n\n  y\nz", 1, 0, @["d", "w"], @["x", "  y", "z"], (1, 2)),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
+  test "a delete over lines that leaves only blanks around takes them whole":
+    let e = createEditorForOperators("  x\ny  \nz", column = 2)
+
+    e.press("d", "2", "w")
+
+    check e.lines == @["z"]
+    check e.state.registers.getRegisterContent('"') == "  x\ny  \n"
+
+  test "a motion that fails part of the way does nothing but leaves the cursor moved":
+    let e = createEditorForOperators("a.b \nx ab}()", column = 1)
+
+    e.press("d", "3", "g", "e")
+
+    check e.lines == @["a.b ", "x ab}()"]
+    check e.cursor == BufferPosition(line: 0, column: 0)
+
+  test "a line motion with no line to go to fails":
+    let e = createEditorForOperators("ab\ncd", line = 1, column = 1)
+
+    e.press("y", "+")
+
+    check e.state.registers.getRegisterContent('"') == ""
+    check e.cursor == BufferPosition(line: 1, column: 1)
+
+  test "; after t steps past the match it stands next to, unless counted":
+    let e = createEditorForOperators("a.b.c.d")
+
+    e.press("t", ".", ";")
+    check e.cursor == BufferPosition(line: 0, column: 2)
+
+    e.press("2", ";")
+    check e.cursor == BufferPosition(line: 0, column: 4)
+
+  test "w goes over lines of blanks to the next word":
+    let e = createEditorForOperators("foo{ \n \n ", column = 4)
+
+    e.press("w")
+
+    check e.cursor == BufferPosition(line: 2, column: 0)
+
+  test "a yank over a block ending past a line leaves the cursor on a character":
+    let e = createEditorForOperators("fn() {\n  x\n}", line = 1, column = 2)
+
+    e.press("y", "i", "{")
+
+    check e.cursor.column < e.activeBuffer.getLine(e.cursor.line).charLen
+
+  test "a block object takes the block around the cursor, as Vim's current_block":
+    for (content, line, column, keys, lines, register) in [
+      # A count goes out to the enclosing block; past the last one it fails
+      ("f(a(b)c)", 0, 4, @["d", "2", "i", "("], @["f()"], "a(b)c"),
+      ("f(a(b)c)", 0, 4, @["d", "3", "i", "("], @["f(a(b)c)"], ""),
+      # Outside any block it takes the next one, even on a later line
+      ("x (y) z", 0, 0, @["d", "i", "("], @["x () z"], "y"),
+      ("x\n(y)", 0, 0, @["d", "i", "("], @["x", "()"], "y"),
+      ("f(a)", 0, 0, @["d", "a", "("], @["f"], "(a)"),
+      # An escaped bracket does not count
+      ("(a \\( b)", 0, 5, @["d", "i", "("], @["()"], "a \\( b"),
+      # The indent before a closing bracket that starts its line is left out
+      ("fn() {\n  x\n  }", 1, 2, @["d", "i", "{"], @["fn() {", "  }"], "  x\n"),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "> leaves empty lines unshifted":
+    let e = createEditorForOperators("a\n\nb")
+
+    e.press(">", "2", "j")
+
+    check e.lines == @["\ta", "", "\tb"]
+
+  test "guu and gUU leave a key f, t or a mark waits for to them":
+    for (content, keys, lines) in [
+      ("FOO BuR uX", @["g", "u", "f", "u"], @["foo buR uX"]),
+      ("foo bar Ux", @["g", "U", "t", "U"], @["FOO BAR Ux"]),
+      ("FOO\nBAR", @["g", "u", "u"], @["foo", "BAR"]),
+      ("FOO\nBAR", @["g", "u", "g", "u"], @["foo", "BAR"]),
+      ("FOO\nBAR\nBAZ", @["g", "u", "2", "u"], @["foo", "bar", "BAZ"]),
+    ]:
+      let e = createEditorForOperators(content)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.state.pendingInput.pendingOperator.isNone
+
+  test "`.` repeats an operator over a text object or gn":
+    let e = createEditorForOperators("foo bar baz")
+    e.press("d", "i", "w", ".")
+    check e.lines == @["bar baz"]
+
+    let g = createEditorForOperators("foo x foo x foo")
+    g.state.input.search.last.pattern = "foo"
+    g.press("d", "g", "n", ".")
+    check g.lines == @[" x  x foo"]
+
+  test "gn takes any operator":
+    let e = createEditorForOperators("x FOO x")
+    e.state.input.search.last.pattern = "FOO"
+
+    e.press("g", "u", "g", "n")
+
+    check e.lines == @["x foo x"]
+
+  test "a refused operator still puts the cursor where the text starts":
+    # Vim puts the cursor there before the operator runs, so 'nomodifiable'
+    # refusing the change leaves it there.
+    for keys in [@["g", "U", "b"], @["g", "U", "i", "w"]]:
+      let e = createEditorForOperators("foo bar bazz qux", column = 10)
+      e.activeBuffer.keepRaw = true
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == @["foo bar bazz qux"]
+      check e.cursor == BufferPosition(line: 0, column: 8)
+
+  test "a refused operator over gn still makes the match what gv selects":
+    # Vim keeps the Visual area gn made before the operator runs.
+    let e = createEditorForOperators("x foo x\nbar")
+    e.activeBuffer.keepRaw = true
+    e.state.input.search.last.pattern = "foo"
+    e.press("j", "v", "l", "Esc", "k", "0")
+
+    e.press("g", "U", "g", "n", "g", "v")
+
+    check e.lines == @["x foo x", "bar"]
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 2)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 4)
+
+  test "gn on a zero-width match takes the character it stands at":
+    # At the end of a line that is the line break, as Vim's gn selects it
+    let e = createEditorForOperators("foo\nbar", column = 1)
+    e.state.input.search.last.pattern = "$"
+
+    e.press("d", "g", "n")
+
+    check e.lines == @["foobar"]
+
+  test "a count before gn in Visual mode selects that match":
+    let e = createEditorForOperators("foo x foo x foo")
+    e.state.input.search.last.pattern = "foo"
+
+    e.press("2", "g", "n", "d")
+
+    check e.lines == @["foo x  x foo"]
+
+  test "a count past the matches goes round them, and one match is found again":
+    for (content, search, keys, lines) in [
+      ("foo x foo", "foo", @["d", "9", "9", "9", "9", "9", "9", "g", "n"], @[" x foo"]),
+      ("x foo y", "foo", @["d", "9", "9", "9", "9", "9", "9", "n"], @["foo y"]),
+      ("x foo y", "foo", @["d", "2", "n"], @["foo y"]),
+    ]:
+      let e = createEditorForOperators(content)
+      e.state.input.search.last.pattern = search
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+
+  test "a yank leaves the cursor where the yanked text starts":
+    for (content, line, column, keys, cursor) in [
+      ("abc def\nghi jkl", 0, 4, @["y", "j"], (0, 4)),
+      ("abc def\nghi jkl", 1, 4, @["y", "k"], (0, 4)),
+      ("abc def", 0, 5, @["y", "b"], (0, 4)),
+      ("abc def", 0, 5, @["y", "i", "w"], (0, 4)),
+      ("abc def", 0, 6, @["y", "F", "a"], (0, 0)),
+      ("abc\ndef\nghi", 2, 1, @["y", "g", "g"], (0, 0)),
+      ("abc def", 0, 1, @["y", "$"], (0, 1)),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
+    let g = createEditorForOperators("abc def")
+    g.state.input.search.last.pattern = "def"
+    g.press("y", "g", "n")
+    check g.cursor == BufferPosition(line: 0, column: 4)
+    check g.state.registers.getRegisterContent('0') == "def"

@@ -445,7 +445,6 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
 
   e.state.pendingInput.pendingOperator = none(PendingOperator)
   e.state.pendingInput.pendingTextObject = none(PendingTextObject)
-  e.state.pendingInput.pendingRegister = none(char)
   discard e.keyRouter.cancel()
 
   # state.mode aliases activeWindow.mode; the subsequent swap re-aliases to

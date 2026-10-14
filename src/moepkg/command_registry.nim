@@ -34,9 +34,13 @@ import buffer/[core, edit, undo]
 import command_handlers/visual_commands
 
 import
-  command_registry/
-    [core, operator_engine, clipboard, motion_scroll, visual, edit, misc, macro_record]
-export core, operator_engine, clipboard, motion_scroll, visual, edit, misc, macro_record
+  command_registry/[
+    core, operator_engine, operator_driver, clipboard, motion_scroll, visual, edit,
+    misc, macro_record,
+  ]
+export
+  core, operator_engine, operator_driver, clipboard, motion_scroll, visual, edit, misc,
+  macro_record
 
 const EditCommandIds = [
   "delete.char", "delete.char.before", "delete.line", "delete.word",
@@ -81,57 +85,6 @@ const VisualConsumeOnlyCommandIds = ["visual.yank"]
   ## Command ids that end Visual by acting on the selection without editing
   ## it, outside the read-only gate.
 
-proc reverseFindMotion(m: Motion): Motion =
-  ## The opposite-direction find/till motion, used by `,`.
-  case m
-  of Motion.FindChar: Motion.FindCharBackward
-  of Motion.FindCharBackward: Motion.FindChar
-  of Motion.TillChar: Motion.TillCharBackward
-  of Motion.TillCharBackward: Motion.TillChar
-  else: m
-
-proc tillRepeatSkipDest(
-    ctx: CommandContext,
-    reverse: bool,
-    targetChar: string,
-    count: int,
-    fromPos: BufferPosition,
-): Option[BufferPosition] =
-  ## Destination for ; / , repeating a t/T: the cursor is parked one cell before
-  ## a target, so probe one cell further along with findChar (which, unlike
-  ## tillChar, distinguishes "found adjacent" from "not found") and back off by
-  ## one for till semantics. none() when there is no further target. Shared by
-  ## the cursor-move and pending-operator repeat paths.
-  let
-    findMotion = if reverse: Motion.FindCharBackward else: Motion.FindChar
-    probeCol =
-      if reverse:
-        fromPos.column - 1
-      else:
-        fromPos.column + 1
-  if probeCol < 0:
-    return none(BufferPosition)
-  # Forward: a probe at or past the end of the line has no character ahead to
-  # find. Without this guard executeMotion clamps the out-of-range probe back
-  # onto the line and the "did it move?" check below misfires into a phantom
-  # match -- a wrong cursor jump for ; and a spurious d; delete at end of line.
-  if not reverse and probeCol >= ctx.buffer.getLine(fromPos.line).charLen:
-    return none(BufferPosition)
-  let probe = BufferPosition(line: fromPos.line, column: probeCol)
-  let fr = ctx.motionController.executeMotion(
-    MotionCommand(motion: findMotion, targetChar: targetChar, count: count),
-    probe,
-    updateViewport = false,
-  )
-  if fr.isOk and not (fr.value.line == probe.line and fr.value.column == probe.column):
-    var dest = fr.value
-    if reverse:
-      dest.column += 1
-    else:
-      dest.column -= 1
-    return some(dest)
-  return none(BufferPosition)
-
 proc executeFindCharMotion(
     ctx: CommandContext,
     motion: Motion,
@@ -139,88 +92,23 @@ proc executeFindCharMotion(
     count: int,
     isRepeat: bool = false,
 ): Result[(), string] =
-  ## Shared execution for f/F/t/T and their ; / , repeats. Handles both the
-  ## pending-operator case (df{char}, d;) and the plain cursor-move case (which
-  ## also refreshes the match highlight). `motion` must be one of FindChar /
-  ## FindCharBackward / TillChar / TillCharBackward.
-  ##
-  ## `isRepeat` is set for ; and , so the cursor-move case reproduces vim's
-  ## behaviour of skipping the match a t/T repeat is already parked before.
-  let
-    isTill = motion in {Motion.TillChar, Motion.TillCharBackward}
-    reverse = motion in {Motion.FindCharBackward, Motion.TillCharBackward}
-    motionCmd = MotionCommand(motion: motion, targetChar: targetChar, count: count)
+  ## Move the cursor by f/F/t/T or their ; / , repeats (`isRepeat`) and refresh
+  ## the match highlight. `motion` must be one of FindChar / FindCharBackward /
+  ## TillChar / TillCharBackward.
+  let r = ctx.motionController.moveCursorByMotion(
+    ctx.state,
+    MotionCommand(
+      motion: motion, targetChar: targetChar, count: count, repeat: isRepeat
+    ),
+  )
+  if r.isErr:
+    return err(r.error)
 
-  if ctx.state.pendingInput.pendingOperator.isSome:
-    let op = ctx.state.pendingInput.pendingOperator.get
-    # Fold the operator count into the motion count (2df{c} == d2f{c}); the
-    # charwise delete ignores operatorCount, so the multiplication must happen
-    # here as it does on the generic operator+motion path.
-    let motionCount = count * op.operatorCount
-
-    var endPos: BufferPosition
-    if isRepeat and isTill:
-      # ; / , repeating a t/T must skip the match the cursor is parked before,
-      # exactly like the cursor-move case below.
-      let skipDest =
-        tillRepeatSkipDest(ctx, reverse, targetChar, motionCount, op.startPos)
-      if skipDest.isNone:
-        # No further target - delete nothing.
-        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-        return ok(())
-      endPos = skipDest.get
-    else:
-      let endOpt =
-        findTillOperatorEndPos(ctx, motion, targetChar, motionCount, op.startPos)
-      if endOpt.isNone:
-        # Character not found - clear operator and do nothing.
-        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-        return ok(())
-      endPos = endOpt.get
-
-    # Apply the operator over the find/till span (shared with the generic
-    # operator+motion path and the `.` repeat).
-    let opResult = applyOperatorOverMotion(
-      ctx, op.operatorType, op.operatorCount, op.startPos, endPos, motion
-    )
-    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-    if opResult.isErr:
-      return err(opResult.error)
-
-    # Record this command for repeat (.) - only if successful and not a yank.
-    # motionCount stores the raw count; edit.repeat re-multiplies by operatorCount.
-    if op.operatorType != OpYank:
-      ctx.state.editState.lastEditCommand = some(
-        LastEditCommand(
-          kind: lecOperatorMotion,
-          operator: op.operatorType,
-          motion: motion,
-          motionCount: count,
-          operatorCount: op.operatorCount,
-          targetChar: targetChar,
-        )
-      )
-    return ok(())
-  else:
-    # No pending operator - just move cursor.
-    var skipped = false
-    if isRepeat and isTill:
-      # Repeating t/T: vim advances past the match the cursor is parked before.
-      # Falls through to the plain till (a no-op) when there is no further target.
-      let skipDest = tillRepeatSkipDest(ctx, reverse, targetChar, count, ctx.cursor)
-      if skipDest.isSome:
-        ctx.cursor = skipDest.get
-        skipped = true
-    if not skipped:
-      let r = ctx.motionController.moveCursorByMotion(ctx.state, motionCmd)
-      if r.isErr:
-        return err(r.error)
-
-    # Highlight all matching characters on cursor line
-    ctx.state.ui.findCharMatchLine = ctx.cursor.line
-    ctx.state.ui.findCharMatches =
-      findAllCharPositions(ctx.buffer, ctx.cursor.line, targetChar)
-    return ok(())
+  # Highlight all matching characters on cursor line
+  ctx.state.ui.findCharMatchLine = ctx.cursor.line
+  ctx.state.ui.findCharMatches =
+    findAllCharPositions(ctx.buffer, ctx.cursor.line, targetChar)
+  ok(())
 
 proc executeCommand*(
     registry: CommandRegistry, ctx: CommandContext, cmd: key_bindings.Command
@@ -277,10 +165,14 @@ proc executeCommand*(
     ctx.state.statusMessage = "Buffer is read-only"
     return ok(())
 
+  let op = ctx.state.pendingInput.pendingOperator
+  if op.isSome and registry.isMotion(cmd):
+    return registry.finishOperator(ctx, operandFor(op.get, cmd))
+
   case cmd.kind
   of ctMotion:
-    # ; / , replay the last f/F/t/T (resolved from editState), reusing the same
-    # find/till execution path so d; / 3; work too.
+    # ; / , replay the last f/F/t/T (resolved from editState) through the
+    # find/till move, so 3; works too.
     if cmd.motion in {Motion.RepeatFind, Motion.RepeatFindReverse}:
       if ctx.state.editState.lastFindChar.isNone:
         ctx.state.statusMessage = "No previous find"
@@ -295,117 +187,59 @@ proc executeCommand*(
         ctx, motion, last.targetChar, max(1, cmd.count), isRepeat = true
       )
 
-    # Check if we have a pending operator
-    if ctx.state.pendingInput.pendingOperator.isSome:
-      let op = ctx.state.pendingInput.pendingOperator.get
+    let motionCount =
+      if cmd.motion == Motion.LastLine and not cmd.hasCount: 0 else: cmd.count
+    let motionCmd = MotionCommand(motion: cmd.motion, count: motionCount)
+    logDebug(
+      "command",
+      "Executing motion, current cursor=(" & $ctx.cursor.line & "," & $ctx.cursor.column &
+        ")",
+    )
 
-      # Multiply motion count by operator count for correct Vim behavior
-      # e.g., 3dw = d3w (delete 3 words), 2d3w = 6 words
-      let effectiveCount =
-        if cmd.motion == Motion.LastLine and not cmd.hasCount:
-          0
-        else:
-          cmd.count * op.operatorCount
-      let motionCmd = MotionCommand(motion: cmd.motion, count: effectiveCount)
+    # Record jump before big movements (like gg, G, Ctrl-d, Ctrl-u, etc.)
+    let shouldRecordJump =
+      cmd.motion in {
+        Motion.FirstLine, Motion.LastLine, Motion.PageUp, Motion.PageDown,
+        Motion.HalfPageUp, Motion.HalfPageDown, Motion.ViewportHigh,
+        Motion.ViewportMiddle, Motion.ViewportLow,
+      }
+    if shouldRecordJump:
+      recordJump(ctx.state)
 
-      # Execute motion to get end position
-      # Suppress viewport updates to prevent visual scrolling during operator+motion
-      let r = ctx.motionController.executeMotion(
-        motionCmd, op.startPos, updateViewport = false
-      )
-      if r.isErr:
-        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-        return err(r.error)
+    # Check if this is a scroll motion for smooth scrolling
+    let isScrollMotion = cmd.motion in ScrollMotions
+    let prevCursorLine = ctx.cursor.line
 
-      # Boundary-clamped no-move motion (dh at col 0, dk on first line, dj on
-      # last line): vim treats as no-op. Without this, calculateOperatorRange
-      # returns a zero-move inclusive range and the operator eats one char/line.
-      if r.value == op.startPos and cmd.motion in NoMoveNoOpMotions:
-        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-        return ok(())
+    # For smooth scroll motions, don't update viewport in executeMotion
+    # The animation will handle viewport updates
+    let skipViewportUpdate = isScrollMotion and ctx.smoothScrollConfig.enable
+    let r = ctx.motionController.moveCursorByMotion(
+      ctx.state, motionCmd, updateViewport = not skipViewportUpdate
+    )
+    if r.isErr:
+      return err(r.error)
+    logDebug(
+      "command",
+      "Motion returned cursor=(" & $r.value.line & "," & $r.value.column & ")",
+    )
 
-      block:
-        # Apply the operator over the motion span (range calc + fold opening +
-        # operator execution are shared with the find/till and `.` paths).
-        let r = applyOperatorOverMotion(
-          ctx, op.operatorType, op.operatorCount, op.startPos, r.value, cmd.motion
-        )
-        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-        if r.isErr:
-          return err(r.error)
+    let targetCursorLine = r.value.line
 
-        # Record this command for repeat (.) - only if successful and not a yank
-        # Yank is not a change operation, so it should not be repeatable
-        if op.operatorType != OpYank:
-          ctx.state.editState.lastEditCommand = some(
-            LastEditCommand(
-              kind: lecOperatorMotion,
-              operator: op.operatorType,
-              motion: cmd.motion,
-              motionCount: cmd.count,
-              motionHasCount: cmd.hasCount,
-              operatorCount: op.operatorCount,
-            )
-          )
-
-      return ok(())
-    else:
-      # No pending operator - just move cursor
-      let motionCount =
-        if cmd.motion == Motion.LastLine and not cmd.hasCount: 0 else: cmd.count
-      let motionCmd = MotionCommand(motion: cmd.motion, count: motionCount)
-      logDebug(
-        "command",
-        "Executing motion, current cursor=(" & $ctx.cursor.line & "," &
-          $ctx.cursor.column & ")",
+    # Start smooth scroll animation if this was a scroll motion
+    if skipViewportUpdate and targetCursorLine != prevCursorLine:
+      # Scroll the cursor back to where the animation starts, keeping the
+      # column the move aimed for.
+      ctx.state.activeWindow.scrollCursor(prevCursorLine)
+      startScrollAnimation(
+        ctx.state.windowDisplay.scrollAnimation, prevCursorLine, targetCursorLine,
+        ctx.smoothScrollConfig,
       )
 
-      # Record jump before big movements (like gg, G, Ctrl-d, Ctrl-u, etc.)
-      let shouldRecordJump =
-        cmd.motion in {
-          Motion.FirstLine, Motion.LastLine, Motion.PageUp, Motion.PageDown,
-          Motion.HalfPageUp, Motion.HalfPageDown, Motion.ViewportHigh,
-          Motion.ViewportMiddle, Motion.ViewportLow,
-        }
-      if shouldRecordJump:
-        recordJump(ctx.state)
-
-      # Check if this is a scroll motion for smooth scrolling
-      let isScrollMotion =
-        cmd.motion in
-        {Motion.PageUp, Motion.PageDown, Motion.HalfPageUp, Motion.HalfPageDown}
-      let prevCursorLine = ctx.cursor.line
-
-      # For smooth scroll motions, don't update viewport in executeMotion
-      # The animation will handle viewport updates
-      let skipViewportUpdate = isScrollMotion and ctx.smoothScrollConfig.enable
-      let r = ctx.motionController.moveCursorByMotion(
-        ctx.state, motionCmd, updateViewport = not skipViewportUpdate
-      )
-      if r.isErr:
-        return err(r.error)
-      logDebug(
-        "command",
-        "Motion returned cursor=(" & $r.value.line & "," & $r.value.column & ")",
-      )
-
-      let targetCursorLine = r.value.line
-
-      # Start smooth scroll animation if this was a scroll motion
-      if skipViewportUpdate and targetCursorLine != prevCursorLine:
-        # Scroll the cursor back to where the animation starts, keeping the
-        # column the move aimed for.
-        ctx.state.activeWindow.scrollCursor(prevCursorLine)
-        startScrollAnimation(
-          ctx.state.windowDisplay.scrollAnimation, prevCursorLine, targetCursorLine,
-          ctx.smoothScrollConfig,
-        )
-
-      logDebug(
-        "command",
-        "Cursor after assignment=(" & $ctx.cursor.line & "," & $ctx.cursor.column & ")",
-      )
-      return Result[(), string].ok ()
+    logDebug(
+      "command",
+      "Cursor after assignment=(" & $ctx.cursor.line & "," & $ctx.cursor.column & ")",
+    )
+    return Result[(), string].ok ()
   of ctModeSwitch:
     # Handle mode switching
     ctx.state.mode = cmd.targetMode
@@ -438,34 +272,13 @@ proc executeCommand*(
     let count = cmd.count
     case cmd.operatorType
     of "mark-set", "mark-line", "mark-exact":
-      let op = ctx.state.pendingInput.pendingOperator
-      ctx.state.pendingInput.pendingOperator = none(PendingOperator)
       if cmd.targetChar.len != 1 or cmd.targetChar[0] notin {'a' .. 'z'}:
-        ctx.state.pendingInput.pendingRegister = none(char)
         return err("Invalid mark (use a-z)")
       let name = cmd.targetChar[0]
       if cmd.operatorType == "mark-set":
-        ctx.state.pendingInput.pendingRegister = none(char)
-        if op.isSome:
-          return err("Mark setting is not a motion")
         ctx.buffer.namedMarks[name] = some(ctx.cursor)
         return ok(())
       let linewise = cmd.operatorType == "mark-line"
-      if op.isSome:
-        let r = applyOperatorToMark(ctx, op.get, name, linewise)
-        if r.isOk and op.get.operatorType != OpYank:
-          ctx.state.editState.lastEditCommand = some(
-            LastEditCommand(
-              kind: lecOperatorMotion,
-              operator: op.get.operatorType,
-              operatorCount: op.get.operatorCount,
-              motionCount: 1,
-              markName: name,
-              markLinewise: linewise,
-            )
-          )
-        return r
-      ctx.state.pendingInput.pendingRegister = none(char)
       let dest = ctx.namedMarkPosition(name)
       if dest.isErr:
         return err(dest.error)
@@ -527,7 +340,7 @@ proc executeCommand*(
         return err(txr.error)
 
       # Record this command for repeat (.)
-      ctx.state.editState.lastEditCommand = some(
+      ctx.recordChange(
         LastEditCommand(
           kind: lecReplaceChar,
           replaceChar: cmd.targetChar,
@@ -606,7 +419,7 @@ proc executeCommand*(
 
       # Don't record refused replaces on raw buffers; nothing changed.
       if ctx.buffer.allowsTextTransforms:
-        ctx.state.editState.lastEditCommand = some(visualRepeatCmd)
+        ctx.recordChange(visualRepeatCmd)
 
       return ok(())
     of "visual-surround":
@@ -627,6 +440,11 @@ proc executeCommand*(
       return ok(())
     of "macro-record":
       return startMacroRecording(ctx, cmd.targetChar)
+    of "register-select":
+      # The key router keeps a valid `"x` as a prefix of the next command, so
+      # only an invalid name comes here. Vim beeps and runs the keys after it.
+      ctx.state.statusMessage = "Invalid register"
+      return ok(())
     else:
       return Result[(), string].err "Unknown operator type: " & cmd.operatorType
   of ctAction, ctTextObject, ctOperator, ctCustom:

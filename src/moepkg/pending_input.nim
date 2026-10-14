@@ -27,7 +27,7 @@ import types, key_bindings
 
 proc isActive*(pi: PendingInputState, registry: KeyBindingRegistry): bool =
   ## True iff any pending-input FSM is active.
-  pi.pendingOperator.isSome or pi.pendingTextObject.isSome or pi.pendingRegister.isSome or
+  pi.pendingOperator.isSome or pi.pendingTextObject.isSome or
     pi.pendingCommand != PendingNone or registry.hasActiveSequence()
 
 proc waitsForOperand*(pi: PendingInputState, registry: KeyBindingRegistry): bool =
@@ -40,8 +40,8 @@ proc waitsForOperand*(pi: PendingInputState, registry: KeyBindingRegistry): bool
 
 proc cancelOperatorPending*(pi: var PendingInputState): bool {.discardable.} =
   ## Drop the operator-pending gesture whole, as Vim's clearop does: the
-  ## operator, the text object that is the second half of it, and the register
-  ## named for it. Returns true iff an operator or text object was pending.
+  ## operator with the register named for it, and the text object that is the
+  ## second half of it. Returns true iff an operator or text object was pending.
   var cleared = false
   if pi.pendingOperator.isSome:
     pi.pendingOperator = none(PendingOperator)
@@ -49,8 +49,6 @@ proc cancelOperatorPending*(pi: var PendingInputState): bool {.discardable.} =
   if pi.pendingTextObject.isSome:
     pi.pendingTextObject = none(PendingTextObject)
     cleared = true
-  if cleared:
-    pi.pendingRegister = none(char)
   cleared
 
 proc cancelAll*(
@@ -60,9 +58,6 @@ proc cancelAll*(
   ## cleared (callers use this for double-Escape UX).
   var cleared = false
   if pi.cancelOperatorPending():
-    cleared = true
-  if pi.pendingRegister.isSome:
-    pi.pendingRegister = none(char)
     cleared = true
   if registry.clearAllPending():
     cleared = true

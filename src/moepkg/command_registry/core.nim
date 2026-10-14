@@ -140,10 +140,29 @@ type
     viewport*: ViewPort
     motionController*: MotionController
     keyBindingRegistry*: key_bindings.KeyBindingRegistry
+    register*: Option[char]
+      ## Register named by `"x` for this command, or for the operator it ends
 
   ## Function signature for command handlers
   CommandHandler* =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] {.closure.}
+
+  MotionTarget* = object ## Where a motion takes a waiting operator
+    start*: BufferPosition
+      ## Where the operated text starts: the operator's own
+      ## place for a motion, the object's start for a text object or gn
+    finish*: BufferPosition
+    motionType*: MotionType
+    empty*: bool ## An object with nothing inside (`dit` on `<a></a>`)
+    area*: bool
+      ## A text object's or gn's span, taken as Visual mode takes it: an end
+      ## at the end of a line takes its line break, even on an empty line
+
+  TargetFinder* = proc(
+    ctx: CommandContext, op: PendingOperator, count: int, countGiven: bool
+  ): Result[Option[MotionTarget], string] {.closure.}
+    ## Where a command takes a waiting operator: none when it acts over nothing
+    ## (Vim beeps), err with a message
 
   ## Command information stored in registry
   RegisteredCommand* = object
@@ -159,6 +178,35 @@ type
     commands*: Table[string, RegisteredCommand]
     builtinCommands*: array[BuiltinCommandId, RegisteredCommand]
       ## Fast access for builtins
+    targets*: Table[string, TargetFinder]
+      ## Commands a waiting operator acts over (`dn`, `dgn`), by command id
+
+proc newCommandContext*(
+    buffer: core.TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    motionController: MotionController,
+    keyBindingRegistry: key_bindings.KeyBindingRegistry,
+    register = none(char),
+): CommandContext =
+  ## Context for a command `"x` named `register` for. A command that ends an
+  ## operator takes the operator's register instead (`"adw`), where the
+  ## operator acts.
+  CommandContext(
+    buffer: buffer,
+    state: state,
+    viewport: viewport,
+    motionController: motionController,
+    keyBindingRegistry: keyBindingRegistry,
+    register: register,
+  )
+
+proc recordChange*(ctx: CommandContext, change: LastEditCommand) =
+  ## Remember `change` for `.`, with the register it used (`"add` then `.`
+  ## deletes into a again).
+  var change = change
+  change.register = ctx.register
+  ctx.state.editState.lastEditCommand = some(change)
 
 proc cursor*(ctx: CommandContext): var BufferPosition {.inline.} =
   ## Cursor position forwarded to EditorState (which delegates to activeWindow)
@@ -243,6 +291,11 @@ proc register*(
   # Also store in builtin array for fast access
   if id.kind == ckBuiltin and id.builtin != bcNone:
     registry.builtinCommands[id.builtin] = cmd
+
+proc registerTarget*(registry: CommandRegistry, id: string, finder: TargetFinder) =
+  ## Let a waiting operator act over the command `id` (`dn`), up to `finder`'s
+  ## place.
+  registry.targets[id] = finder
 
 proc findCommand*(registry: CommandRegistry, id: CommandId): Option[RegisteredCommand] =
   ## Find a command by CommandId
@@ -332,53 +385,6 @@ proc findAllCharPositions*(
       if $rune == targetChar:
         result.add(charIdx)
       charIdx.inc
-
-proc findTillOperatorEndPos*(
-    ctx: CommandContext,
-    motion: Motion,
-    targetChar: string,
-    count: int,
-    startPos: BufferPosition,
-): Option[BufferPosition] =
-  ## Inclusive end position for an operator applied over an f/F/t/T motion
-  ## (df{char}, dt{char}, and the `.` repeat thereof). Returns none() when the
-  ## target is not found from startPos -- the operator must then be a no-op and
-  ## never delete a spurious character. For t/T the target may be adjacent
-  ## (tillChar returns startPos), so this re-probes with findChar to tell
-  ## "found adjacent" from "not found". Shared so the live find/till path and
-  ## the `.` repeat path apply the same guards.
-  let
-    isTill = motion in {Motion.TillChar, Motion.TillCharBackward}
-    reverse = motion in {Motion.FindCharBackward, Motion.TillCharBackward}
-    motionCmd = MotionCommand(motion: motion, targetChar: targetChar, count: count)
-
-  let r =
-    ctx.motionController.executeMotion(motionCmd, startPos, updateViewport = false)
-  if r.isErr:
-    return none(BufferPosition)
-  if not (r.value.line == startPos.line and r.value.column == startPos.column):
-    return some(r.value)
-
-  # Motion didn't move.
-  if not isTill:
-    return none(BufferPosition) # find: character not found
-
-  # till: re-probe with findChar to distinguish an adjacent target from no match.
-  let findMotion = if reverse: Motion.FindCharBackward else: Motion.FindChar
-  let fr = ctx.motionController.executeMotion(
-    MotionCommand(motion: findMotion, targetChar: targetChar, count: count),
-    startPos,
-    updateViewport = false,
-  )
-  if fr.isErr or (fr.value.line == startPos.line and fr.value.column == startPos.column):
-    return none(BufferPosition)
-
-  var endPos = fr.value
-  if not reverse and endPos.column > startPos.column:
-    endPos.column -= 1
-  elif reverse and endPos.column < startPos.column:
-    endPos.column += 1
-  return some(endPos)
 
 # Helper function to parse count from arguments safely
 proc parseCount*(

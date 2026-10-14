@@ -363,7 +363,6 @@ suite "executeCommand - Operator + Motion":
   test "delete word (dw) on whitespace-only last line":
     # Regression: dw on a line with only spaces at the last line of the buffer
     # should delete all spaces, not leave one behind.
-    # See: moveWordForward "stuck at end" + exclusive adjustment bug.
     let buffer = newTextBuffer("hello\n  echo \"ok\"\n  ")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 2, column: 0)
@@ -449,7 +448,8 @@ suite "executeCommand - Operator + Motion":
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "world"
+    # cw on a word changes up to its end, as ce (Vim)
+    check buffer[0] == " world"
     check ctx.state.mode == EditorMode.Insert
 
   test "delete to end of line (d$)":
@@ -1342,7 +1342,8 @@ suite "executeCommand - Record last edit":
     let lastCmd = ctx.state.editState.lastEditCommand.get
     check lastCmd.kind == lecOperatorMotion
     check lastCmd.operator == OpDelete
-    check lastCmd.motion == Motion.WordForward
+    check lastCmd.operand.kind == odMotion
+    check lastCmd.operand.motion == Motion.WordForward
 
   test "yank is not recorded for repeat":
     let buffer = newTextBuffer("hello world")
@@ -3599,54 +3600,65 @@ suite "Handler - Text Object operations":
     check registry.execute(ctx, custom("textobject.tag")).isOk
     check ctx.state.registers.getNoNamedRegister().getContent() == "PREV"
 
-  test "textobject tag (\"ayit) on empty tag consumes the pending register":
-    # Regression: an empty yank is a no-op, but the operator command still
-    # completes -- the `"a` register prefix must be consumed, not leaked into
-    # the next command.
+  test "textobject tag (\"ayit) on empty tag ends the operator and its register":
+    # An empty yank is a no-op, but the operator command still completes, so
+    # the operator goes with the `"a` named for it.
     let buffer = newTextBuffer("<a></a>")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 1)
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('a')
     ctx.state.pendingInput.pendingOperator = some(
-      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+      PendingOperator(
+        operatorType: OpYank,
+        operatorCount: 1,
+        startPos: ctx.cursor,
+        register: some('a'),
+      )
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isOk
-    check ctx.state.pendingInput.pendingRegister.isNone
+    check ctx.state.pendingInput.pendingOperator.isNone
 
-  test "textobject tag (\"adit) on empty tag consumes the pending register":
+  test "textobject tag (\"adit) on empty tag ends the operator and its register":
     let buffer = newTextBuffer("<a></a>")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 1)
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('a')
     ctx.state.pendingInput.pendingOperator = some(
-      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+      PendingOperator(
+        operatorType: OpDelete,
+        operatorCount: 1,
+        startPos: ctx.cursor,
+        register: some('a'),
+      )
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isOk
-    check ctx.state.pendingInput.pendingRegister.isNone
+    check ctx.state.pendingInput.pendingOperator.isNone
 
-  test "textobject tag (\"acit) on empty tag consumes the pending register":
+  test "textobject tag (\"acit) on empty tag ends the operator and its register":
     let buffer = newTextBuffer("<a></a>")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 1)
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('a')
     ctx.state.pendingInput.pendingOperator = some(
-      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+      PendingOperator(
+        operatorType: OpChange,
+        operatorCount: 1,
+        startPos: ctx.cursor,
+        register: some('a'),
+      )
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isOk
     check ctx.state.mode == EditorMode.Insert
-    check ctx.state.pendingInput.pendingRegister.isNone
+    check ctx.state.pendingInput.pendingOperator.isNone
 
   test "textobject tag (gUit) on empty tag is a no-op, not a corruption":
     # Regression: case operators must honor the empty range. Previously this
@@ -3696,9 +3708,8 @@ suite "Handler - Text Object operations":
       check "raw undecodable bytes" in r.error
       check buffer[0] == before
 
-  test "a refused operator does not open the folds it would have covered":
-    # applyOperatorOverMotion opens folds over the range before running the
-    # operator; a refusal must happen first so nothing visible changes.
+  test "a refused operator leaves the folds closed":
+    # A refusal must come before any change, so no fold opens.
     let buffer = newTextBuffer("one\ntwo\nthree\nfour")
     buffer.keepRaw = true
     check buffer.foldState.addFold(0, 2, collapsed = true)
@@ -3706,41 +3717,20 @@ suite "Handler - Text Object operations":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     ctx.state.mode = EditorMode.Normal
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let registry = createTestRegistry()
 
-    let r = applyOperatorOverMotion(
-      ctx,
-      OpIndent,
-      1,
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 1, column: 0),
-      Motion.Down,
+    let r = registry.finishOperator(
+      ctx, Operand(count: 1, kind: odMotion, motion: Motion.Down)
     )
 
     check r.isErr
     check "raw undecodable bytes" in r.error
     check buffer.foldState.isLineInCollapsedFold(1)
-
-  test "a refused operator restores the cursor to where the command started":
-    # The motion runs before the refusal, so the cursor has already moved to
-    # its end; the refusal must put it back at the command start.
-    let buffer = newTextBuffer("one\ntwo\nthree")
-    buffer.keepRaw = true
-    let ctx = createTestContext(buffer)
-    ctx.cursor = BufferPosition(line: 2, column: 3)
-    ctx.state.mode = EditorMode.Normal
-
-    let r = applyOperatorOverMotion(
-      ctx,
-      OpIndent,
-      1,
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 2, column: 3),
-      Motion.Down,
-    )
-
-    check r.isErr
-    check "raw undecodable bytes" in r.error
     check ctx.cursor == BufferPosition(line: 0, column: 0)
+    check ctx.state.pendingInput.pendingOperator.isNone
 
   test "auto indent and toggle case refuse a raw buffer":
     # == and ~ rewrite existing text as if it were characters. transformRange
@@ -3829,31 +3819,7 @@ suite "Handler - Text Object operations":
     check ctx.cursor.column == 0
     check ctx.state.editState.lastEditCommand.isNone
 
-  test "a refused operator consumes the pending register prefix":
-    # "a>j leaves register 'a' selected if the refusal returns early, and the
-    # next unrelated delete would then land in it.
-    let buffer = newTextBuffer("one\ntwo")
-    buffer.keepRaw = true
-    let ctx = createTestContext(buffer)
-    ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.mode = EditorMode.Normal
-    ctx.state.pendingInput.pendingRegister = some('a')
-
-    let r = applyOperatorOverMotion(
-      ctx,
-      OpIndent,
-      1,
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 1, column: 0),
-      Motion.Down,
-    )
-
-    check r.isErr
-    check ctx.state.pendingInput.pendingRegister.isNone
-
-  test "textobject tag (>it) on empty tag does not indent the line":
-    # Regression: indent operators must honor the empty range (was <a></a> ->
-    # \t<a></a>).
+  test "textobject tag (>it) on empty tag still shifts the line, as Vim does":
     let buffer = newTextBuffer("<a></a>")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 1)
@@ -3865,7 +3831,7 @@ suite "Handler - Text Object operations":
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isOk
-    check buffer[0] == "<a></a>"
+    check buffer[0] == "\t<a></a>"
 
   test "textobject quote (gUi\") on empty quotes is a no-op":
     let buffer = newTextBuffer("x \"\" y")
@@ -3881,7 +3847,7 @@ suite "Handler - Text Object operations":
     check registry.execute(ctx, custom("textobject.quote.double")).isOk
     check buffer[0] == "x \"\" y"
 
-  test "textobject paren (>i() on empty parens does not indent the line":
+  test "textobject paren (>i() on empty parens still shifts the line, as Vim does":
     let buffer = newTextBuffer("x () y")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 2)
@@ -3893,7 +3859,7 @@ suite "Handler - Text Object operations":
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.paren")).isOk
-    check buffer[0] == "x () y"
+    check buffer[0] == "\tx () y"
 
   test "textobject tag (vit) on empty tag leaves the selection untouched":
     # Visual mode must not turn an empty object into a zero-width selection.
@@ -3914,9 +3880,9 @@ suite "Handler - Text Object operations":
       ctx.state.visualSelection.current.line, ctx.state.visualSelection.current.column
     ) == (0, 1)
 
-  test "textobject paren (di() on a multi-line block collapses to ()":
-    # Regression: a closing delimiter at column 0 used to yield a negative end
-    # column and fail with `Column positions cannot be negative`.
+  test "textobject paren (di() on a multi-line block deletes its inner lines":
+    # As Vim: the close at column 0 makes the inner stop at its line's start,
+    # and a start on the line after the open one takes whole lines.
     let buffer = newTextBuffer("foo(\n  bar\n)")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 3) # on the open paren
@@ -3928,10 +3894,11 @@ suite "Handler - Text Object operations":
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.paren")).isOk
-    check buffer.len == 1
-    check buffer[0] == "foo()"
+    check buffer.len == 2
+    check buffer[0] == "foo("
+    check buffer[1] == ")"
 
-  test "textobject paren (ci() on a multi-line block collapses and enters Insert":
+  test "textobject paren (ci() on a multi-line block changes its inner lines":
     let buffer = newTextBuffer("(\n  bar\n)")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
@@ -3943,13 +3910,13 @@ suite "Handler - Text Object operations":
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.paren")).isOk
-    check buffer.len == 1
-    check buffer[0] == "()"
+    check buffer.len == 3
+    check buffer[0] == "("
+    check buffer[2] == ")"
     check ctx.state.mode == EditorMode.Insert
-    # Cursor lands between the delimiters, ready to type.
-    check (ctx.cursor.line, ctx.cursor.column) == (0, 1)
+    check ctx.cursor.line == 1
 
-  test "textobject brace (di{) on a multi-line block collapses to {}":
+  test "textobject brace (di{) on a multi-line block deletes its inner lines":
     let buffer = newTextBuffer("{\n  x\n}")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
@@ -3961,8 +3928,9 @@ suite "Handler - Text Object operations":
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.brace")).isOk
-    check buffer.len == 1
-    check buffer[0] == "{}"
+    check buffer.len == 2
+    check buffer[0] == "{"
+    check buffer[1] == "}"
 
   test "textobject paren (yi() on a multi-line block yanks the inner content":
     let buffer = newTextBuffer("(\n  bar\n)")
@@ -3976,16 +3944,12 @@ suite "Handler - Text Object operations":
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.paren")).isOk
-    # Buffer is untouched and the register holds the full inner content,
-    # including the trailing newline that a delete would consume (matching
-    # buffer.deleteRange / getTextInRange).
+    # Buffer is untouched and the register holds the inner lines.
     check buffer[0] == "("
-    check ctx.state.registers.getNoNamedRegister().getContent() == "\n  bar\n"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "  bar\n"
 
   test "textobject paren (di() on a multi-line block stores the deleted text verbatim":
-    # Regression: the yank register must match what the delete removed. The
-    # collapse range ends at the content line's end-of-content column, so the
-    # register has to include the trailing newline deleteRange consumes.
+    # The register must match what the delete removed.
     let buffer = newTextBuffer("foo(\n  bar\n)")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 3) # on the open paren
@@ -3997,14 +3961,13 @@ suite "Handler - Text Object operations":
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.paren")).isOk
-    check buffer.len == 1
-    check buffer[0] == "foo()"
-    # di( then p must round-trip: register == removed text == "\n  bar\n".
-    check ctx.state.registers.getNoNamedRegister().getContent() == "\n  bar\n"
+    check buffer.len == 2
+    check buffer[0] == "foo("
+    check ctx.state.registers.getNoNamedRegister().getContent() == "  bar\n"
 
-  test "textobject paren (di() on a single content line collapses and stores it":
-    # `(x\n)`: the close sits at column 0 on the next line, so the inner range is
-    # single-line ending at charLen("(x"); the register must carry the newline.
+  test "textobject paren (di() on a single content line keeps the line break":
+    # `(x\n)`: the close at column 0 makes the inner stop at the end of `(x`,
+    # leaving its line break, as Vim does.
     let buffer = newTextBuffer("(x\n)")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
@@ -4016,9 +3979,9 @@ suite "Handler - Text Object operations":
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.paren")).isOk
-    check buffer.len == 1
-    check buffer[0] == "()"
-    check ctx.state.registers.getNoNamedRegister().getContent() == "x\n"
+    check buffer.len == 2
+    check buffer[0] == "("
+    check ctx.state.registers.getNoNamedRegister().getContent() == "x"
 
   test "textobject paren (ci() on a multi-line empty pair is a no-op insert":
     # `(\n)` has only the boundary newline between the delimiters: no content to
@@ -4190,22 +4153,25 @@ suite "Handler - Text Object operations":
     check buffer.len == 2
     check buffer[0] == "hello world"
 
-  test "failed text object (\"adit outside a tag) consumes the pending register":
-    # Regression: a failed text object aborts the operator, but the `"a`
-    # register prefix must be consumed too, not leaked into the next command.
+  test "failed text object (\"adit outside a tag) ends the operator and its register":
+    # A failed text object aborts the operator with the `"a` named for it.
     let buffer = newTextBuffer("hello world\nsecond line")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('a')
     ctx.state.pendingInput.pendingOperator = some(
-      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+      PendingOperator(
+        operatorType: OpDelete,
+        operatorCount: 1,
+        startPos: ctx.cursor,
+        register: some('a'),
+      )
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isErr
-    check ctx.state.pendingInput.pendingRegister.isNone
+    check ctx.state.pendingInput.pendingOperator.isNone
 
 suite "Handler - Clipboard operations":
   test "clipboard copy when disabled returns error":
@@ -6233,11 +6199,10 @@ suite "Handler - Visual mode text object selection":
     # { - brace text object
     check registry.execute(ctx, custom("textobject.brace")).isOk
     check ctx.state.visualSelection.active == true
-    # Selection spans from after { (end of line 0) to before } (end of "world",
-    # the last content line). The close brace sits at column 0, so the end is the
-    # previous line's end-of-content column, not a negative column on line 3.
+    # Selection spans the lines between the braces, up to the line break before
+    # the close one, as Vim's current_block selects it.
     check (ctx.state.visualSelection.start.line, ctx.state.visualSelection.start.column) ==
-      (0, 9)
+      (1, 0)
     check (
       ctx.state.visualSelection.current.line, ctx.state.visualSelection.current.column
     ) == (2, 5)
@@ -6577,14 +6542,13 @@ suite "Handler - Text Object Count (d2iw, d2aw)":
     # Only "hello" inside quotes should be deleted (count ignored)
     check buffer[0] == "say \"\" world"
 
-suite "pendingRegister dispatch for clipboard registers":
-  test "yy with pendingRegister '*' stores in primary selection register":
+suite "register dispatch for clipboard registers":
+  test "yy with register '*' stores in primary selection register":
     let buffer = newTextBuffer("hello primary")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    # Set pending register to '*'
-    ctx.state.pendingInput.pendingRegister = some('*')
+    ctx.register = some('*')
 
     # Execute yy (yank line)
     check registry.execute(ctx, custom("yank.line")).isOk
@@ -6598,12 +6562,12 @@ suite "pendingRegister dispatch for clipboard registers":
     let clipboardReg = ctx.state.registers.getClipboardRegister('+')
     check clipboardReg.isEmpty
 
-  test "yy with pendingRegister '+' stores in clipboard selection register":
+  test "yy with register '+' stores in clipboard selection register":
     let buffer = newTextBuffer("hello clipboard")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('+')
+    ctx.register = some('+')
 
     check registry.execute(ctx, custom("yank.line")).isOk
 
@@ -6614,12 +6578,12 @@ suite "pendingRegister dispatch for clipboard registers":
     let primaryReg = ctx.state.registers.getClipboardRegister('*')
     check primaryReg.isEmpty
 
-  test "dd with pendingRegister '*' stores in primary selection register":
+  test "dd with register '*' stores in primary selection register":
     let buffer = newTextBuffer("line1\nline2\nline3")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('*')
+    ctx.register = some('*')
 
     check registry.execute(ctx, custom("delete.line")).isOk
 
@@ -6630,12 +6594,12 @@ suite "pendingRegister dispatch for clipboard registers":
     let clipboardReg = ctx.state.registers.getClipboardRegister('+')
     check clipboardReg.isEmpty
 
-  test "x with pendingRegister '+' stores in clipboard selection register":
+  test "x with register '+' stores in clipboard selection register":
     let buffer = newTextBuffer("abcdef")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('+')
+    ctx.register = some('+')
 
     check registry.execute(ctx, custom("delete.char")).isOk
 
@@ -6645,7 +6609,7 @@ suite "pendingRegister dispatch for clipboard registers":
     let primaryReg = ctx.state.registers.getClipboardRegister('*')
     check primaryReg.isEmpty
 
-  test "yy without pendingRegister stores in yank register (default)":
+  test "yy without a register stores in yank register (default)":
     let buffer = newTextBuffer("default yank")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
@@ -6662,23 +6626,12 @@ suite "pendingRegister dispatch for clipboard registers":
     let clipboardReg = ctx.state.registers.getClipboardRegister('+')
     check clipboardReg.isEmpty
 
-  test "pendingRegister is cleared after use":
-    let buffer = newTextBuffer("test clearing")
-    let ctx = createTestContext(buffer)
-    let registry = createTestRegistry()
-
-    ctx.state.pendingInput.pendingRegister = some('*')
-    check registry.execute(ctx, custom("yank.line")).isOk
-
-    # pendingRegister should be cleared
-    check ctx.state.pendingInput.pendingRegister.isNone
-
-  test "yy with pendingRegister named register 'a' stores in named register":
+  test "yy with named register 'a' stores in named register":
     let buffer = newTextBuffer("named content")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('a')
+    ctx.register = some('a')
     check registry.execute(ctx, custom("yank.line")).isOk
 
     let namedReg = ctx.state.registers.getNamedRegister('a')
@@ -6688,12 +6641,12 @@ suite "pendingRegister dispatch for clipboard registers":
     check ctx.state.registers.getClipboardRegister('*').isEmpty
     check ctx.state.registers.getClipboardRegister('+').isEmpty
 
-  test "operator yank (y + motion) with pendingRegister '*'":
+  test "operator yank (y + motion) with register '*'":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('*')
+    ctx.register = some('*')
 
     # First y sets pending operator
     check registry.execute(ctx, custom("operator.yank")).isOk
@@ -6705,12 +6658,12 @@ suite "pendingRegister dispatch for clipboard registers":
 
     check ctx.state.registers.getClipboardRegister('+').isEmpty
 
-  test "operator delete (d + motion) with pendingRegister '+'":
+  test "operator delete (d + motion) with register '+'":
     let buffer = newTextBuffer("line1\nline2\nline3")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingInput.pendingRegister = some('+')
+    ctx.register = some('+')
 
     # First d sets pending operator
     check registry.execute(ctx, custom("operator.delete")).isOk
@@ -6809,7 +6762,7 @@ suite "Operator + Backward Find/Till":
     )
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "hello wd"
+    check buffer[0] == "hello wld" # F is exclusive (Vim)
 
   test "delete till backward (dT)":
     let buffer = newTextBuffer("hello world")
@@ -6830,7 +6783,7 @@ suite "Operator + Backward Find/Till":
     )
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "hello wod"
+    check buffer[0] == "hello wold" # T is exclusive (Vim)
 
   test "change find backward (cF)":
     let buffer = newTextBuffer("hello world")
@@ -6851,7 +6804,7 @@ suite "Operator + Backward Find/Till":
     )
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "hello wd"
+    check buffer[0] == "hello wld"
     check ctx.state.mode == EditorMode.Insert
 
   test "change till backward (cT)":
@@ -6873,7 +6826,7 @@ suite "Operator + Backward Find/Till":
     )
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "hello wod"
+    check buffer[0] == "hello wold"
     check ctx.state.mode == EditorMode.Insert
 
   test "yank find backward (yF)":
@@ -6896,7 +6849,7 @@ suite "Operator + Backward Find/Till":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.registers.getNoNamedRegister().getContent() == "orl"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "or"
 
   test "yank till backward (yT)":
     let buffer = newTextBuffer("hello world")
@@ -6918,7 +6871,7 @@ suite "Operator + Backward Find/Till":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.registers.getNoNamedRegister().getContent() == "rl"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "r"
 
 suite "Operator + Word End/Backward motions":
   test "delete word end (de)":
@@ -7217,7 +7170,7 @@ suite "Operator + Word End Backward (ge) motions":
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
 
-  test "ge across multiple empty lines":
+  test "ge stops at an empty line, as in Vim":
     let buffer = newTextBuffer("hello\n\n\nworld")
     let ctx = createTestContext(buffer)
     ctx.setCursor(3, 0) # on 'w' of "world"
@@ -7226,7 +7179,7 @@ suite "Operator + Word End Backward (ge) motions":
     let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+    check ctx.cursor == BufferPosition(line: 2, column: 0)
 
   test "ge with count across lines (2ge)":
     # Second iteration must scan the line reached by the first iteration
@@ -7254,7 +7207,7 @@ suite "Operator + Word End Backward (ge) motions":
       # 'は' (end of "こんにちは")
 
   test "ge with count exceeding available words":
-    # 10ge but only 2 word ends exist; should stop at the earliest one
+    # 10ge but only 2 word ends exist; Vim goes on to the start of the buffer
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.setCursor(0, 10) # on 'd' of "world"
@@ -7263,7 +7216,7 @@ suite "Operator + Word End Backward (ge) motions":
     let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 10)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
 
   test "ge on single character words":
     let buffer = newTextBuffer("a b c d")
@@ -7412,9 +7365,10 @@ suite "Operator + Paragraph/File motions":
     let cmd = Command(kind: ctMotion, motion: Motion.ParagraphForward, count: 1)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer.len == 2
-    check buffer[0] == "line4"
-    check buffer[1] == "line5"
+    # } is exclusive: it stops before the blank line and goes linewise (Vim)
+    check buffer.len == 3
+    check buffer[0] == ""
+    check buffer[1] == "line4"
 
   test "delete paragraph backward (d{)":
     let buffer = newTextBuffer("line1\nline2\n\nline4\nline5")
@@ -7429,9 +7383,11 @@ suite "Operator + Paragraph/File motions":
     let cmd = Command(kind: ctMotion, motion: Motion.ParagraphBackward, count: 1)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer.len == 2
+    # { takes the blank line and the lines up to the cursor's (Vim)
+    check buffer.len == 3
     check buffer[0] == "line1"
     check buffer[1] == "line2"
+    check buffer[2] == "line5"
 
   test "yank paragraph forward (y})":
     let buffer = newTextBuffer("line1\nline2\n\nline4")
@@ -7447,7 +7403,7 @@ suite "Operator + Paragraph/File motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer.len == 4 # Buffer unchanged
-    check ctx.state.registers.getNoNamedRegister().getContent() == "line1\nline2\n\n"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "line1\nline2\n"
 
   test "delete to first line (dgg)":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
@@ -8229,9 +8185,9 @@ suite "executeCommand - visual selections snapped by a closed fold":
     check buffer[0] == "tail"
     check yanked == ctx.state.registers.getNoNamedRegister().getContent()
 
-  test "a command that does nothing leaves the cursor where it was":
-    # The snap is how the command sees the selection; with nothing to paste `p`
-    # only leaves Visual, so the cursor stays where the user put it.
+  test "putting nothing still deletes the snapped selection":
+    # As in Vim, `p` with an empty register deletes the selection and then
+    # reports that there was nothing to put.
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
@@ -8239,10 +8195,11 @@ suite "executeCommand - visual selections snapped by a closed fold":
     let registry = createTestRegistry()
 
     let cmd = Command(kind: ctCustom, commandId: "visual.paste", count: 1)
-    check registry.executeCommand(ctx, cmd).isOk
-    check buffer.len == 5
+    check registry.executeCommand(ctx, cmd).isErr
+    check buffer.len == 1
+    check buffer[0] == "eee"
     check ctx.state.mode == EditorMode.Normal
-    check ctx.state.cursor == BufferPosition(line: 1, column: 0)
+    check ctx.state.cursor == BufferPosition(line: 0, column: 0)
 
   test "a refused replace leaves the selection as it was":
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
@@ -8640,12 +8597,12 @@ suite "Register/buffer atomicity - failed edits must not touch registers":
     check executeOperatorOnRange(ctx, OpChange, range, 1).isErr
     ctx.checkRegistersUntouched()
 
-  test "pending register is preserved when the delete fails":
+  test "named register is preserved when the delete fails":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.setCursor(0, 0)
     ctx.seedRegisters()
-    ctx.state.pendingInput.pendingRegister = some('a')
+    ctx.register = some('a')
     buffer.readOnly = true
     let registry = createTestRegistry()
 

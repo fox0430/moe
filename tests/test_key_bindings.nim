@@ -1267,20 +1267,20 @@ suite "KeyBindingRegistry - processKey additional cases":
     check result.isSome
     check result.get.name == "triple-cmd"
 
-  test "Escape cancels numeric prefix":
+  test "Escape after only a count is a key of its own":
+    # As Vim's nv_esc, which ends Visual mode after a count. The caller drops
+    # the count when nothing runs the key.
     let registry = newKeyBindingRegistry()
     let cmd = Command(
       name: "move-down", description: "Move down", kind: ctMotion, motion: Motion.Down
     )
     registry.bindKey(EditorMode.Normal, toKeyCombo('j'), cmd)
 
-    # Enter numeric prefix
     discard registry.processKey(EditorMode.Normal, toKeyCombo('5'))
     check registry.sequenceState.numericPrefix == "5"
 
-    # Cancel with Escape
-    discard registry.processKey(EditorMode.Normal, toSpecialKeyCombo(skEscape))
-    check registry.sequenceState.numericPrefix == ""
+    check registry.processKey(EditorMode.Normal, toSpecialKeyCombo(skEscape)).isNone
+    check registry.lastKeyUnbound
 
   test "Digits do not accumulate numeric prefix in Insert mode":
     let registry = newKeyBindingRegistry()

@@ -29,6 +29,17 @@ import ../src/moepkg/types/config_types
 import ../src/moepkg/buffer/[core, fold]
 import ../src/moepkg/motion {.all.}
 
+proc move(
+    executor: MotionExecutor,
+    pos: CursorPosition,
+    motion: Motion,
+    count = 1,
+    targetChar = "",
+): CursorPosition =
+  executor.calculateNewPosition(
+    pos, MotionCommand(motion: motion, count: count, targetChar: targetChar)
+  )
+
 suite "TillChar Motion":
   test "tillChar moves to correct position":
     # Setup: "abcxyz"
@@ -37,7 +48,7 @@ suite "TillChar Motion":
 
     # Start at 'a' (column 0), find 'x' (column 3)
     let currentPos = CursorPosition(x: 0, y: 0)
-    let result = executor.tillChar(currentPos, "x", 1)
+    let result = executor.move(currentPos, Motion.TillChar, 1, "x")
 
     check result.y == 0
     check result.x == 2 # Should be at 'c', which is column 2
@@ -49,30 +60,17 @@ suite "TillChar Motion":
 
     # Start at 'a' (column 0), find 'x' (column 3)
     let currentPos = CursorPosition(x: 0, y: 0)
-    let result = executor.findChar(currentPos, "x", 1)
+    let result = executor.move(currentPos, Motion.FindChar, 1, "x")
 
     check result.y == 0
     check result.x == 3 # Should be at 'x', which is column 3
 
 suite "OperatorRange":
-  test "calculateOperatorRange for TillChar":
-    # Setup: "abcxyz"
-    let buffer = newTextBuffer("abcxyz")
-
-    # Simulate dtx: start at column 0, tillChar moves to column 2
-    let startPos = BufferPosition(line: 0, column: 0)
-    let endPos = BufferPosition(line: 0, column: 2)
-
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.TillChar)
-
-    check range.start.column == 0
-    check range.endPos.column == 2
-
   test "extractRangeText for TillChar range":
     # Setup: "abcxyz"
     let buffer = newTextBuffer("abcxyz")
 
-    # Range from calculateOperatorRange (with inclusive semantics)
+    # An inclusive range
     let range = OperatorRange(
       start: BufferPosition(line: 0, column: 0),
       endPos: BufferPosition(line: 0, column: 2),
@@ -207,116 +205,116 @@ suite "Line Motion":
     check result.x == 4 # Last non-whitespace 'o' is at index 4
 
 suite "Word Motion":
-  test "moveWordForward basic":
+  test "w basic":
     let buffer = newTextBuffer("hello world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 0, y: 0)
-    let result = executor.moveWordForward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordForward, 1)
     check result.x == 6 # 'w' of "world"
 
-  test "moveWordForward with symbols":
+  test "w with symbols":
     let buffer = newTextBuffer("hello,world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 0, y: 0)
-    let result = executor.moveWordForward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordForward, 1)
     check result.x == 5 # ',' is a separate word
 
-  test "moveWordForward across lines":
+  test "w across lines":
     let buffer = newTextBuffer("hello\nworld")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 3, y: 0)
-    let result = executor.moveWordForward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordForward, 1)
     check result.y == 1
     check result.x == 0
 
-  test "moveWordBackward basic":
+  test "b basic":
     let buffer = newTextBuffer("hello world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 8, y: 0)
-    let result = executor.moveWordBackward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordBackward, 1)
     check result.x == 6 # Start of "world"
 
-  test "moveWordBackward to previous word":
+  test "b to previous word":
     let buffer = newTextBuffer("hello world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 6, y: 0)
-    let result = executor.moveWordBackward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordBackward, 1)
     check result.x == 0 # Start of "hello"
 
-  test "moveWordEnd basic":
+  test "e basic":
     let buffer = newTextBuffer("hello world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 0, y: 0)
-    let result = executor.moveWordEnd(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordEnd, 1)
     check result.x == 4 # End of "hello"
 
-  test "moveWordEnd to next word end":
+  test "e to next word end":
     let buffer = newTextBuffer("hello world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 4, y: 0)
-    let result = executor.moveWordEnd(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordEnd, 1)
     check result.x == 10 # End of "world"
 
-  test "moveWordForward with Unicode":
+  test "w with Unicode":
     let buffer = newTextBuffer("hello 日本語 world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 0, y: 0)
-    let result = executor.moveWordForward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordForward, 1)
     check result.x == 6 # Start of '日本語'
 
-  test "moveWordForward past Unicode word":
+  test "w past Unicode word":
     let buffer = newTextBuffer("hello 日本語 world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 6, y: 0)
-    let result = executor.moveWordForward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordForward, 1)
     check result.x == 10 # Start of 'world'
 
-  test "moveWordBackward with Unicode":
+  test "b with Unicode":
     let buffer = newTextBuffer("hello 日本語 world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 10, y: 0)
-    let result = executor.moveWordBackward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordBackward, 1)
     check result.x == 6 # Start of '日本語'
 
-  test "moveWordEnd with Unicode":
+  test "e with Unicode":
     let buffer = newTextBuffer("hello 日本語 world")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 6, y: 0)
-    let result = executor.moveWordEnd(currentPos, 1)
+    let result = executor.move(currentPos, Motion.WordEnd, 1)
     check result.x == 8 # End of '日本語'
 
-  test "moveWordEnd crosses a single empty line":
+  test "e crosses a single empty line":
     let buffer = newTextBuffer("foo\n\nbar")
     let executor = newMotionExecutor(buffer)
-    let result = executor.moveWordEnd(CursorPosition(x: 2, y: 0), 1)
+    let result = executor.move(CursorPosition(x: 2, y: 0), Motion.WordEnd, 1)
     check result.y == 2
     check result.x == 2 # End of "bar"
 
-  test "moveWordEnd crosses multiple empty lines":
+  test "e crosses multiple empty lines":
     let buffer = newTextBuffer("foo\n\n\n\nbar")
     let executor = newMotionExecutor(buffer)
-    let result = executor.moveWordEnd(CursorPosition(x: 2, y: 0), 1)
+    let result = executor.move(CursorPosition(x: 2, y: 0), Motion.WordEnd, 1)
     check result.y == 4
     check result.x == 2 # End of "bar"
 
-  test "moveWordBackward crosses a single empty line":
+  test "b stops at an empty line, as in Vim":
     let buffer = newTextBuffer("foo\n\nbar")
     let executor = newMotionExecutor(buffer)
-    let result = executor.moveWordBackward(CursorPosition(x: 0, y: 2), 1)
-    check result.y == 0
-    check result.x == 0 # Start of "foo"
+    let result = executor.move(CursorPosition(x: 0, y: 2), Motion.WordBackward, 1)
+    check result.y == 1
+    check result.x == 0
 
-  test "moveWordBackward crosses multiple empty lines":
+  test "b goes on past empty lines with a count":
     let buffer = newTextBuffer("foo\n\n\n\nbar")
     let executor = newMotionExecutor(buffer)
-    let result = executor.moveWordBackward(CursorPosition(x: 0, y: 4), 1)
+    let result = executor.move(CursorPosition(x: 0, y: 4), Motion.WordBackward, 4)
     check result.y == 0
     check result.x == 0 # Start of "foo"
 
-  test "moveWordBackward crosses whitespace-only line":
+  test "b crosses whitespace-only line":
     let buffer = newTextBuffer("foo\n  \nbar")
     let executor = newMotionExecutor(buffer)
-    let result = executor.moveWordBackward(CursorPosition(x: 0, y: 2), 1)
+    let result = executor.move(CursorPosition(x: 0, y: 2), Motion.WordBackward, 1)
     check result.y == 0
     check result.x == 0 # Start of "foo"
 
@@ -325,21 +323,21 @@ suite "Find/Till Char Backward":
     let buffer = newTextBuffer("abcxabc")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 6, y: 0)
-    let result = executor.findCharBackward(currentPos, "a", 1)
+    let result = executor.move(currentPos, Motion.FindCharBackward, 1, "a")
     check result.x == 4
 
   test "findCharBackward with count":
     let buffer = newTextBuffer("abcxabc")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 6, y: 0)
-    let result = executor.findCharBackward(currentPos, "a", 2)
+    let result = executor.move(currentPos, Motion.FindCharBackward, 2, "a")
     check result.x == 0
 
   test "tillCharBackward stops after target":
     let buffer = newTextBuffer("abcxyz")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 5, y: 0)
-    let result = executor.tillCharBackward(currentPos, "c", 1)
+    let result = executor.move(currentPos, Motion.TillCharBackward, 1, "c")
     check result.x == 3 # One after 'c'
 
 suite "Find/Till Char - Unicode and long lines":
@@ -348,67 +346,72 @@ suite "Find/Till Char - Unicode and long lines":
     let buffer = newTextBuffer("日本xy語x")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 0, y: 0)
-    check executor.findChar(currentPos, "x", 1).x == 2
-    check executor.findChar(currentPos, "x", 2).x == 5
+    check executor.move(currentPos, Motion.FindChar, 1, "x").x == 2
+    check executor.move(currentPos, Motion.FindChar, 2, "x").x == 5
 
   test "findCharBackward uses character positions past multibyte runes":
     # x(0) 本(1) x(2) 語(3)
     let buffer = newTextBuffer("x本x語")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 3, y: 0)
-    check executor.findCharBackward(currentPos, "x", 1).x == 2
-    check executor.findCharBackward(currentPos, "x", 2).x == 0
+    check executor.move(currentPos, Motion.FindCharBackward, 1, "x").x == 2
+    check executor.move(currentPos, Motion.FindCharBackward, 2, "x").x == 0
 
   test "findChar leaves cursor unchanged when target is absent":
     let buffer = newTextBuffer("abcdef")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 0, y: 0)
-    check executor.findChar(currentPos, "z", 1).x == 0
+    check executor.move(currentPos, Motion.FindChar, 1, "z").x == 0
 
   test "findChar finds target at end of a long line":
     let buffer = newTextBuffer("a".repeat(5000) & "x")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 0, y: 0)
-    check executor.findChar(currentPos, "x", 1).x == 5000
+    check executor.move(currentPos, Motion.FindChar, 1, "x").x == 5000
 
   test "findChar/findCharBackward find a multibyte target rune":
     # 語(0) a(1) 語(2) b(3) 語(4)
     let buffer = newTextBuffer("語a語b語")
     let executor = newMotionExecutor(buffer)
-    check executor.findChar(CursorPosition(x: 0, y: 0), "語", 1).x == 2
-    check executor.findChar(CursorPosition(x: 0, y: 0), "語", 2).x == 4
-    check executor.findCharBackward(CursorPosition(x: 4, y: 0), "語", 1).x == 2
-    check executor.findCharBackward(CursorPosition(x: 4, y: 0), "語", 2).x == 0
+    check executor.move(CursorPosition(x: 0, y: 0), Motion.FindChar, 1, "語").x == 2
+    check executor.move(CursorPosition(x: 0, y: 0), Motion.FindChar, 2, "語").x == 4
+    check executor.move(CursorPosition(x: 4, y: 0), Motion.FindCharBackward, 1, "語").x ==
+      2
+    check executor.move(CursorPosition(x: 4, y: 0), Motion.FindCharBackward, 2, "語").x ==
+      0
 
   test "tillChar/tillCharBackward stop adjacent to a target past multibyte runes":
     # a(0) 語(1) b(2) y(3)
     let buffer = newTextBuffer("a語by")
     let executor = newMotionExecutor(buffer)
-    check executor.tillChar(CursorPosition(x: 0, y: 0), "y", 1).x == 2
-    check executor.tillCharBackward(CursorPosition(x: 3, y: 0), "a", 1).x == 1
+    check executor.move(CursorPosition(x: 0, y: 0), Motion.TillChar, 1, "y").x == 2
+    check executor.move(CursorPosition(x: 3, y: 0), Motion.TillCharBackward, 1, "a").x ==
+      1
 
   test "findChar leaves cursor unchanged for empty or multi-rune targets":
     let buffer = newTextBuffer("abc")
     let executor = newMotionExecutor(buffer)
     let pos = CursorPosition(x: 0, y: 0)
-    check executor.findChar(pos, "", 1).x == 0
-    check executor.findChar(pos, "bc", 1).x == 0
-    check executor.findCharBackward(CursorPosition(x: 2, y: 0), "", 1).x == 2
-    check executor.findCharBackward(CursorPosition(x: 2, y: 0), "ab", 1).x == 2
+    check executor.move(pos, Motion.FindChar, 1, "").x == 0
+    check executor.move(pos, Motion.FindChar, 1, "bc").x == 0
+    check executor.move(CursorPosition(x: 2, y: 0), Motion.FindCharBackward, 1, "").x ==
+      2
+    check executor.move(CursorPosition(x: 2, y: 0), Motion.FindCharBackward, 1, "ab").x ==
+      2
 
 suite "Paragraph Motion":
-  test "moveParagraphForward to blank line":
+  test "} to blank line":
     let buffer = newTextBuffer("line1\nline2\n\nline4")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 0, y: 0)
-    let result = executor.moveParagraphForward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.ParagraphForward, 1)
     check result.y == 2 # Blank line
 
-  test "moveParagraphBackward to blank line":
+  test "{ to blank line":
     let buffer = newTextBuffer("line1\n\nline3\nline4")
     let executor = newMotionExecutor(buffer)
     let currentPos = CursorPosition(x: 0, y: 3)
-    let result = executor.moveParagraphBackward(currentPos, 1)
+    let result = executor.move(currentPos, Motion.ParagraphBackward, 1)
     check result.y == 1 # Blank line
 
 suite "First/Last Line Motion":
@@ -779,110 +782,111 @@ suite "Text Objects - Quoted":
     check result.get.endPos.column == 3
 
 suite "Text Objects - Parenthesis":
-  test "findMatchingParen cursor on close paren":
+  test "currentBlock cursor on close paren":
     let buffer = newTextBuffer("(x)")
     let cursor = BufferPosition(line: 0, column: 2)
-    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    let result = currentBlock(buffer, cursor, '(', ')', inner = true, count = 1)
     check result.isOk
     let range = result.get
     check range.start.column == 1
     check range.endPos.column == 1
 
-  test "findMatchingParen cursor on close paren around":
+  test "currentBlock cursor on close paren around":
     let buffer = newTextBuffer("(x)")
     let cursor = BufferPosition(line: 0, column: 2)
-    let result = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    let result = currentBlock(buffer, cursor, '(', ')', inner = false, count = 1)
     check result.isOk
     let range = result.get
     check range.start.column == 0
     check range.endPos.column == 2
 
-  test "findMatchingParen cursor on close paren empty":
+  test "currentBlock cursor on close paren empty":
     let buffer = newTextBuffer("()")
     let cursor = BufferPosition(line: 0, column: 1)
-    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    let result = currentBlock(buffer, cursor, '(', ')', inner = true, count = 1)
     check result.isOk
 
-  test "findMatchingParen inner":
+  test "currentBlock inner":
     let buffer = newTextBuffer("func(arg)")
     let cursor = BufferPosition(line: 0, column: 6)
-    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    let result = currentBlock(buffer, cursor, '(', ')', inner = true, count = 1)
     check result.isOk
     let range = result.get
     check range.start.column == 5
     check range.endPos.column == 7
 
-  test "findMatchingParen around":
+  test "currentBlock around":
     let buffer = newTextBuffer("func(arg)")
     let cursor = BufferPosition(line: 0, column: 6)
-    let result = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    let result = currentBlock(buffer, cursor, '(', ')', inner = false, count = 1)
     check result.isOk
     let range = result.get
     check range.start.column == 4
     check range.endPos.column == 8
 
-  test "findMatchingParen multi-line":
-    # Close delimiter on its own line: the inner ends at the previous line's
-    # end-of-content column (just past "  arg") so deleting through it joins the
-    # lines and collapses the block to `()` instead of yielding a negative end.
+  test "currentBlock multi-line":
+    # Close delimiter on its own line: as Vim's current_block, the inner starts
+    # on the line after the open one and stops at the close line's start, which
+    # an operator then takes as whole lines.
     let buffer = newTextBuffer("func(\n  arg\n)")
     let cursor = BufferPosition(line: 1, column: 2)
-    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    let result = currentBlock(buffer, cursor, '(', ')', inner = true, count = 1)
     check result.isOk
     let range = result.get
     check not range.isEmpty
-    check (range.start.line, range.start.column) == (0, 5)
-    check (range.endPos.line, range.endPos.column) == (1, 5)
+    check range.exclusive
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (2, 0)
 
-  test "findMatchingParen with multibyte runes inside and outside":
+  test "currentBlock with multibyte runes inside and outside":
     # Rune columns: 日(0) 本(1) 語(2) ((3) あ(4) +(5) い(6) )(7) 末(8) 尾(9)
     let buffer = newTextBuffer("日本語(あ+い)末尾")
     let cursor = BufferPosition(line: 0, column: 5)
-    let innerRes = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    let innerRes = currentBlock(buffer, cursor, '(', ')', inner = true, count = 1)
     check innerRes.isOk
     check innerRes.get.start.column == 4
     check innerRes.get.endPos.column == 6
-    let aroundRes = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    let aroundRes = currentBlock(buffer, cursor, '(', ')', inner = false, count = 1)
     check aroundRes.isOk
     check aroundRes.get.start.column == 3
     check aroundRes.get.endPos.column == 7
 
-  test "findMatchingParen skips a closed pair when scanning backward":
+  test "currentBlock skips a closed pair when scanning backward":
     # f(g(x) + y) with the cursor on '+': the backward scan passes over the
     # closed inner pair (x) and must select the outer pair, like vim's i(.
     let buffer = newTextBuffer("f(g(x) + y)")
     let cursor = BufferPosition(line: 0, column: 7)
-    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    let result = currentBlock(buffer, cursor, '(', ')', inner = true, count = 1)
     check result.isOk
     check result.get.start.column == 2
     check result.get.endPos.column == 9
 
-  test "findMatchingParen selects the innermost enclosing pair":
+  test "currentBlock selects the innermost enclosing pair":
     let buffer = newTextBuffer("f(g(x))")
     let cursor = BufferPosition(line: 0, column: 4)
-    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    let result = currentBlock(buffer, cursor, '(', ')', inner = true, count = 1)
     check result.isOk
     check result.get.start.column == 4
     check result.get.endPos.column == 4
 
-  test "findMatchingParen cursor on close paren of the outer nested pair":
+  test "currentBlock cursor on close paren of the outer nested pair":
     # f(g(x)) with the cursor on the outer ')': the seeded close must match
     # the outer '(', not the inner one.
     let buffer = newTextBuffer("f(g(x))")
     let cursor = BufferPosition(line: 0, column: 6)
-    let result = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    let result = currentBlock(buffer, cursor, '(', ')', inner = false, count = 1)
     check result.isOk
     check result.get.start.column == 1
     check result.get.endPos.column == 6
 
-  test "findMatchingParen cursor on close paren multi-line":
+  test "currentBlock cursor on close paren multi-line":
     let buffer = newTextBuffer("func(\n  arg\n)")
     let cursor = BufferPosition(line: 2, column: 0)
-    let innerRes = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    let innerRes = currentBlock(buffer, cursor, '(', ')', inner = true, count = 1)
     check innerRes.isOk
-    check (innerRes.get.start.line, innerRes.get.start.column) == (0, 5)
-    check (innerRes.get.endPos.line, innerRes.get.endPos.column) == (1, 5)
-    let aroundRes = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    check (innerRes.get.start.line, innerRes.get.start.column) == (1, 0)
+    check (innerRes.get.endPos.line, innerRes.get.endPos.column) == (2, 0)
+    let aroundRes = currentBlock(buffer, cursor, '(', ')', inner = false, count = 1)
     check aroundRes.isOk
     check (aroundRes.get.start.line, aroundRes.get.start.column) == (0, 4)
     check (aroundRes.get.endPos.line, aroundRes.get.endPos.column) == (2, 0)
@@ -970,20 +974,18 @@ suite "calculateTextObjectRange":
     check (range.start.line, range.start.column) == (0, 3)
     check (range.endPos.line, range.endPos.column) == (0, 3)
 
-  test "multi-line paren inner spans from after open to end of the content line":
-    # `(\n  bar\n)`: the close sits at column 0, so the inner ends at the content
-    # line's end-of-content column (deleting through it joins the lines). A naive
-    # endCol-1 would be -1 and the delete would fail.
+  test "multi-line paren inner stops at the start of the close line":
+    # `(\n  bar\n)`: the close sits at column 0, so the inner runs from the line
+    # after the open one up to the close line, exclusive.
     let buffer = newTextBuffer("(\n  bar\n)")
     let cursor = BufferPosition(line: 0, column: 0)
     let result = calculateTextObjectRange(buffer, cursor, toParenthesis, tomInner)
     check result.isOk
     let range = result.get
     check not range.isEmpty
-    check not range.isLinewise
-    check (range.start.line, range.start.column) == (0, 1)
-    # column 5 == charLen("  bar"), i.e. just past the content (the newline).
-    check (range.endPos.line, range.endPos.column) == (1, 5)
+    check range.exclusive
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (2, 0)
 
   test "multi-line paren inner with empty middle lines stays a valid range":
     let buffer = newTextBuffer("(\n\n)")
@@ -992,8 +994,8 @@ suite "calculateTextObjectRange":
     check result.isOk
     let range = result.get
     check not range.isEmpty
-    check (range.start.line, range.start.column) == (0, 1)
-    check (range.endPos.line, range.endPos.column) == (1, 0)
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (2, 0)
 
   test "multi-line paren inner with content not at column 0 is unchanged":
     let buffer = newTextBuffer("(abc\ndef)")
@@ -1455,61 +1457,6 @@ suite "Next/Previous Line FirstNonBlank":
     check result.y == 0
     check result.x == 2 # First non-blank on line 1
 
-suite "calculateOperatorRange - linewise motions":
-  test "Motion.Down produces linewise range with column 0 start":
-    let buffer = newTextBuffer("line1\nline2\nline3")
-    let startPos = BufferPosition(line: 0, column: 3)
-    let endPos = BufferPosition(line: 1, column: 2)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.Down)
-
-    check range.isLinewise == true
-    check range.start.line == 0
-    check range.start.column == 0
-    check range.endPos.line == 1
-    # endPos.column extends to full line length
-    check range.endPos.column == "line2".len
-
-  test "Motion.Up swaps start/end and produces linewise range":
-    let buffer = newTextBuffer("line1\nline2\nline3")
-    let startPos = BufferPosition(line: 2, column: 4)
-    let endPos = BufferPosition(line: 0, column: 1)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.Up)
-
-    check range.isLinewise == true
-    check range.start.line == 0
-    check range.start.column == 0
-    check range.endPos.line == 2
-
-  test "Motion.FirstLine produces linewise range":
-    let buffer = newTextBuffer("a\nb\nc")
-    let startPos = BufferPosition(line: 2, column: 0)
-    let endPos = BufferPosition(line: 0, column: 0)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.FirstLine)
-
-    check range.isLinewise == true
-    check range.start.line == 0
-    check range.endPos.line == 2
-
-  test "Motion.LastLine produces linewise range":
-    let buffer = newTextBuffer("a\nb\nc")
-    let startPos = BufferPosition(line: 0, column: 0)
-    let endPos = BufferPosition(line: 2, column: 0)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.LastLine)
-
-    check range.isLinewise == true
-    check range.start.line == 0
-    check range.endPos.line == 2
-
-  test "Motion.ParagraphForward produces linewise range":
-    let buffer = newTextBuffer("para1\n\npara2")
-    let startPos = BufferPosition(line: 0, column: 2)
-    let endPos = BufferPosition(line: 1, column: 0)
-    let range =
-      calculateOperatorRange(buffer, startPos, endPos, Motion.ParagraphForward)
-
-    check range.isLinewise == true
-    check range.start.column == 0
-
 suite "Motion columns match the buffer's character model":
   test "findChar lands on the column charLen counts":
     # 0xE3 advertises three bytes but 'a' and 'b' follow it, so it stands alone
@@ -1518,119 +1465,20 @@ suite "Motion columns match the buffer's character model":
     let buffer = newTextBuffer("\xE3ab x")
     check buffer.getLine(0).charLen == 5
     let executor = newMotionExecutor(buffer)
-    check executor.findChar(CursorPosition(x: 0, y: 0), "x", 1).x == 4
+    check executor.move(CursorPosition(x: 0, y: 0), Motion.FindChar, 1, "x").x == 4
 
   test "findCharBackward lands on the column charLen counts":
     let buffer = newTextBuffer("\xE3ab x y")
     check buffer.getLine(0).charLen == 7
     let executor = newMotionExecutor(buffer)
-    check executor.findCharBackward(CursorPosition(x: 6, y: 0), "x", 1).x == 4
+    check executor.move(CursorPosition(x: 6, y: 0), Motion.FindCharBackward, 1, "x").x ==
+      4
 
   test "moveLastNonBlank lands on the column charLen counts":
     let buffer = newTextBuffer("\xE3ab z  ")
     check buffer.getLine(0).charLen == 7
     let executor = newMotionExecutor(buffer)
     check executor.moveLastNonBlank(CursorPosition(x: 0, y: 0)).x == 4
-
-suite "calculateOperatorRange - exclusive motions":
-  test "Motion.Home reduces endPos column by 1 (exclusive)":
-    let buffer = newTextBuffer("abcdef")
-    let startPos = BufferPosition(line: 0, column: 0)
-    let endPos = BufferPosition(line: 0, column: 4)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.Home)
-
-    check range.isLinewise == false
-    # Exclusive: endPos shifted back by 1
-    check range.endPos.column == 3
-
-  test "Motion.FirstNonBlank is exclusive":
-    let buffer = newTextBuffer("  abcdef")
-    let startPos = BufferPosition(line: 0, column: 0)
-    let endPos = BufferPosition(line: 0, column: 5)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.FirstNonBlank)
-
-    check range.isLinewise == false
-    check range.endPos.column == 4
-
-  test "Motion.Right (l) is exclusive":
-    let buffer = newTextBuffer("abcdef")
-    let startPos = BufferPosition(line: 0, column: 1)
-    let endPos = BufferPosition(line: 0, column: 3)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.Right)
-
-    check range.endPos.column == 2
-
-  test "Motion.WordForward stays on starting line when crossing lines":
-    # `dw` should not delete the newline; it must clamp to end of start line
-    let buffer = newTextBuffer("hello\nworld")
-    let startPos = BufferPosition(line: 0, column: 0)
-    let endPos = BufferPosition(line: 1, column: 0)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.WordForward)
-
-    check range.start.line == 0
-    check range.endPos.line == 0
-    # Clamped to end of "hello" (last char index)
-    check range.endPos.column == "hello".len - 1
-
-suite "calculateOperatorRange - inclusive motions":
-  test "Motion.WordEnd does NOT shift endPos (inclusive)":
-    let buffer = newTextBuffer("hello world")
-    let startPos = BufferPosition(line: 0, column: 0)
-    let endPos = BufferPosition(line: 0, column: 4)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.WordEnd)
-
-    check range.isLinewise == false
-    # Inclusive: endPos preserved
-    check range.endPos.column == 4
-
-  test "Motion.TillChar is inclusive (range covers up to target)":
-    let buffer = newTextBuffer("abcxyz")
-    let startPos = BufferPosition(line: 0, column: 0)
-    let endPos = BufferPosition(line: 0, column: 2)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.TillChar)
-
-    check range.endPos.column == 2
-
-  test "Motion.FindChar is inclusive":
-    let buffer = newTextBuffer("abcxyz")
-    let startPos = BufferPosition(line: 0, column: 0)
-    let endPos = BufferPosition(line: 0, column: 3)
-    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.FindChar)
-
-    check range.endPos.column == 3
-
-suite "Operator motion classifier consistency (Vim parity)":
-  test "isLinewiseMotion matches LinewiseMotions set":
-    for m in LinewiseMotions:
-      check isLinewiseMotion(m)
-
-  test "isExclusiveMotion matches ExclusiveMotions set":
-    for m in ExclusiveMotions:
-      check isExclusiveMotion(m)
-
-  test "WordEnd is NOT exclusive (Vim parity)":
-    check not isExclusiveMotion(Motion.WordEnd)
-    check not isExclusiveMotion(Motion.WordEndBackward)
-
-  test "TillChar/FindChar are NOT exclusive (inclusive)":
-    check not isExclusiveMotion(Motion.TillChar)
-    check not isExclusiveMotion(Motion.FindChar)
-    check not isExclusiveMotion(Motion.TillCharBackward)
-    check not isExclusiveMotion(Motion.FindCharBackward)
-
-  test "Home/FirstNonBlank are exclusive (Vim parity)":
-    check isExclusiveMotion(Motion.Home)
-    check isExclusiveMotion(Motion.FirstNonBlank)
-
-  test "Up/Down/FirstLine/LastLine are linewise":
-    check isLinewiseMotion(Motion.Up)
-    check isLinewiseMotion(Motion.Down)
-    check isLinewiseMotion(Motion.FirstLine)
-    check isLinewiseMotion(Motion.LastLine)
-
-  test "WordForward is exclusive but NOT linewise":
-    check isExclusiveMotion(Motion.WordForward)
-    check not isLinewiseMotion(Motion.WordForward)
 
 suite "snapOperatorRange - a closed fold is a unit":
   # An operator range with an end in a closed fold acts on the whole fold, and a

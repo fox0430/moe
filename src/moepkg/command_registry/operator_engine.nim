@@ -24,7 +24,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, motion, modes, registers, logger, unicode_utils]
+import ../[types, motion, modes, registers, logger, unicode_utils, pending_input]
 import ../buffer/[core, edit, undo]
 import ../command_handlers/insert_commands
 
@@ -67,46 +67,16 @@ proc rollbackPasteOnException*(
     )
   err("Paste failed: " & excMsg)
 
-## Helper for register dispatch
-## These helpers check pendingRegister and route content to the correct register.
-
 proc storeYankedText*(ctx: CommandContext, text: string, isLine: bool) =
-  ## Store yanked text in the appropriate register, respecting pendingRegister.
-  ## Also writes to the system clipboard when appropriate.
-  if ctx.state.registers.isNil:
-    return
-
-  if ctx.state.pendingInput.pendingRegister.isSome and
-      ctx.state.pendingInput.pendingRegister.get != '\0':
-    let regName = ctx.state.pendingInput.pendingRegister.get
-    if regName.isNamedRegisterName:
-      discard ctx.state.registers.setNamedRegister(regName, text, isLine)
-    elif regName.isClipboardRegisterName:
-      ctx.state.registers.setClipboardRegister(regName, text, isLine)
-    else:
-      ctx.state.registers.setYankedRegister(text, isLine)
-    ctx.state.pendingInput.pendingRegister = none(char)
-  else:
-    ctx.state.registers.setYankedRegister(text, isLine)
+  ## Store yanked text in the register this command names, else the yank register.
+  if not ctx.state.registers.isNil:
+    ctx.state.registers.storeYanked(ctx.register, text, isLine)
 
 proc storeDeletedText*(ctx: CommandContext, text: string, isLine: bool) =
-  ## Store deleted text in the appropriate register, respecting pendingRegister.
-  ## Also writes to the system clipboard when appropriate.
-  if ctx.state.registers.isNil:
-    return
-
-  if ctx.state.pendingInput.pendingRegister.isSome and
-      ctx.state.pendingInput.pendingRegister.get != '\0':
-    let regName = ctx.state.pendingInput.pendingRegister.get
-    if regName.isNamedRegisterName:
-      discard ctx.state.registers.setNamedRegister(regName, text, isLine)
-    elif regName.isClipboardRegisterName:
-      ctx.state.registers.setClipboardRegister(regName, text, isLine)
-    else:
-      ctx.state.registers.setDeletedRegister(text, isLine)
-    ctx.state.pendingInput.pendingRegister = none(char)
-  else:
-    ctx.state.registers.setDeletedRegister(text, isLine)
+  ## Store deleted text in the register this command names, else the delete
+  ## registers.
+  if not ctx.state.registers.isNil:
+    ctx.state.registers.storeDeleted(ctx.register, text, isLine)
 
 proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
   ## Put the cursor on the first non-blank of `lineNum` (vim's `^`), clamped to
@@ -115,15 +85,8 @@ proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
     return
 
   let line = ctx.buffer.getLine(lineNum)
-  var column = 0
-  for (r, _) in line.chars:
-    if $r == " " or $r == "\t":
-      column += 1
-    else:
-      break
-
   ctx.cursor.line = lineNum
-  ctx.cursor.column = min(column, max(0, line.charLen - 1))
+  ctx.cursor.column = min(getLineIndent(line).len, max(0, line.charLen - 1))
 
 proc textRewriteAction*(operatorType: OperatorType): Option[string] =
   ## Rewrite name for operator, or none if safe. Listing marks byte-unsafe for raw buffers.
@@ -145,7 +108,6 @@ proc refuseOnRawBytes(ctx: CommandContext, operatorType: OperatorType): Option[s
   if action.isNone or ctx.buffer.allowsTextTransforms:
     return none(string)
 
-  ctx.state.pendingInput.pendingRegister = none(char)
   some(rawBytesRejection(action.get))
 
 proc applyCaseOperator(
@@ -220,6 +182,15 @@ proc changeLinesInRange(ctx: CommandContext, range: OperatorRange): Result[(), s
 
   ok(())
 
+proc shiftedLines(buffer: TextBuffer, range: OperatorRange): (int, int) =
+  ## The lines `>`/`<` shift over `range`: those it touches. A text object
+  ## that starts at the end of a line (a sentence after one) touches nothing
+  ## of that line.
+  result = (range.start.line, range.endPos.line)
+  if not range.isLinewise and range.start.line < range.endPos.line and
+      range.start.column >= buffer.getLine(range.start.line).charLen:
+    result[0] += 1
+
 proc executeOperatorOnRange*(
     ctx: CommandContext,
     operatorType: OperatorType,
@@ -243,14 +214,11 @@ proc executeOperatorOnRange*(
   if rejection.isSome:
     return err(rejection.get)
 
-  if range.isEmpty and operatorType != OpChange:
-    # Empty object (e.g. yit/dit on <a></a>, gUi" on "", >i( on ()): the range
-    # spans no characters, so every operator is a no-op and the registers stay
-    # untouched. Only `c` still acts -- it drops into Insert between the
-    # delimiters -- so OpChange falls through to its branch below.
-    # The operator command still completes, so consume any pending register
-    # prefix (e.g. `"ayit`) rather than leaking it into the next command.
-    ctx.state.pendingInput.pendingRegister = none(char)
+  if range.isEmpty and operatorType notin {OpChange, OpIndent, OpOutdent}:
+    # Empty object (e.g. yit/dit on <a></a>, gUi" on ""): the range spans no
+    # characters, so the operator is a no-op and the registers stay untouched.
+    # `c` still drops into Insert between the delimiters, and `>`/`<` still
+    # shift the line, as Vim's op_shift does (`>i(` on `()`).
     return ok(())
 
   # Vim's operators drop curswant, even ones that leave the cursor and text.
@@ -261,7 +229,6 @@ proc executeOperatorOnRange*(
     # Yank (copy) the range
     let text = extractRangeText(ctx.buffer, range)
 
-    # Store in register system (respects pendingRegister)
     storeYankedText(ctx, text, range.isLinewise)
 
     let lineCount =
@@ -295,7 +262,10 @@ proc executeOperatorOnRange*(
     # Clamp cursor to valid position
     if ctx.cursor.line >= ctx.buffer.len:
       ctx.cursor.line = max(0, ctx.buffer.len - 1)
-    if ctx.cursor.line < ctx.buffer.len:
+    if range.isLinewise:
+      # Vim's op_delete lands on the first non-blank of the line that follows.
+      moveToFirstNonBlank(ctx, ctx.cursor.line)
+    elif ctx.cursor.line < ctx.buffer.len:
       let line = ctx.buffer.getLine(ctx.cursor.line)
       ctx.cursor.column = min(ctx.cursor.column, max(0, line.charLen - 1))
 
@@ -326,12 +296,6 @@ proc executeOperatorOnRange*(
   of OpChange:
     # Change the range (delete and enter insert mode)
     let text = extractRangeText(ctx.buffer, range)
-
-    if range.isEmpty:
-      # Empty change still completes the operator command (it drops into Insert
-      # between the delimiters), so consume any pending register prefix rather
-      # than leaking it into the next command.
-      ctx.state.pendingInput.pendingRegister = none(char)
 
     # Begin transaction for all change operations (delete + insert mode input)
     let transactionResult = ctx.buffer.beginTransaction("Change operation")
@@ -391,24 +355,13 @@ proc executeOperatorOnRange*(
 
     return ok(())
   of OpIndent:
-    # Indent lines in the range
-    # For character-wise ranges (e.g., i{), adjust start/end lines:
-    # If start column is at/past end of line, content starts on the next line.
-    # If end column is negative or end line has closing delimiter only, exclude it.
-    var startLine = range.start.line
-    var endLine = range.endPos.line
-    if not range.isLinewise and startLine != endLine:
-      if startLine < ctx.buffer.len:
-        let startLineContent = ctx.buffer.getLine(startLine)
-        if range.start.column >= startLineContent.charLen:
-          startLine += 1
-      if endLine < ctx.buffer.len and range.endPos.column < 0:
-        endLine -= 1
+    let (startLine, endLine) = ctx.buffer.shiftedLines(range)
 
     let txr = withTransaction(ctx.buffer, "Indent lines"):
       let indentStr = getIndentString(ctx.state)
       for lineNum in startLine .. endLine:
-        if lineNum < ctx.buffer.len:
+        # Vim leaves empty lines unshifted.
+        if lineNum < ctx.buffer.len and ctx.buffer.getLine(lineNum).charLen > 0:
           let insertPos = BufferPosition(line: lineNum, column: 0)
           let insertResult = ctx.buffer.insertText(insertPos, indentStr)
           if insertResult.isErr:
@@ -420,16 +373,7 @@ proc executeOperatorOnRange*(
 
     return ok(())
   of OpOutdent:
-    # Dedent lines in the range (same line adjustment as indent)
-    var startLine = range.start.line
-    var endLine = range.endPos.line
-    if not range.isLinewise and startLine != endLine:
-      if startLine < ctx.buffer.len:
-        let startLineContent = ctx.buffer.getLine(startLine)
-        if range.start.column >= startLineContent.charLen:
-          startLine += 1
-      if endLine < ctx.buffer.len and range.endPos.column < 0:
-        endLine -= 1
+    let (startLine, endLine) = ctx.buffer.shiftedLines(range)
 
     let txr = withTransaction(ctx.buffer, "Dedent lines"):
       let indentWidth = effectiveShiftWidth(ctx.state)
@@ -459,39 +403,47 @@ proc executeOperatorOnRange*(
     # there along with the applyCaseOperator call that implements it.
     return err("Operator " & $operatorType & " not yet implemented")
 
-proc applyOperatorOverMotion*(
-    ctx: CommandContext,
-    operatorType: OperatorType,
-    operatorCount: int,
-    startPos, endPos: BufferPosition,
-    motion: Motion,
-): Result[(), string] =
-  ## Apply operator over motion span.
-  # Refuse before any buffer change; restore cursor if rejected.
-  let rejection = refuseOnRawBytes(ctx, operatorType)
-  if rejection.isSome:
-    ctx.cursor = startPos
-    return err(rejection.get)
-
-  let range = calculateOperatorRange(ctx.buffer, startPos, endPos, motion)
-  executeOperatorOnRange(ctx, operatorType, range, operatorCount)
-
 ## Operator command helpers
 ## Use setPendingOperator() for all operators to save viewport position
 ## before motion execution. This prevents unwanted scrolling.
 
 proc setPendingOperator*(
-    ctx: CommandContext, operatorType: OperatorType, count: int, statusMsg: string
+    ctx: CommandContext,
+    operatorType: OperatorType,
+    count: int,
+    countGiven: bool,
+    statusMsg: string,
 ) =
-  ## Set pending operator and save viewport position for operator+motion commands
+  ## Set pending operator and save viewport position for operator+motion
+  ## commands. An operator of another kind already waiting is cancelled
+  ## instead, as Vim's nv_operator: `dyw` neither deletes nor yanks.
+  if ctx.state.pendingInput.cancelOperatorPending():
+    ctx.state.statusMessage = ""
+    return
   ctx.state.windowDisplay.savedViewportTopLine =
     ctx.motionController.viewportManager.viewport.topLine
   ctx.state.pendingInput.pendingOperator = some(
     PendingOperator(
-      operatorType: operatorType, operatorCount: count, startPos: ctx.cursor
+      operatorType: operatorType,
+      operatorCount: max(1, count),
+      countGiven: countGiven,
+      startPos: ctx.cursor,
+      register: ctx.register,
     )
   )
   ctx.state.statusMessage = statusMsg
+
+proc takeDoubledOperator*(
+    ctx: CommandContext, operatorType: OperatorType, count: int
+): Option[int] =
+  ## The line count when an operator of `operatorType` already waits (`dd`,
+  ## `2d3d` for six lines), ending it. none when it starts the operator instead.
+  let op = ctx.state.pendingInput.pendingOperator
+  if op.isNone or op.get.operatorType != operatorType:
+    return none(int)
+  ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+  ctx.register = op.get.register
+  some(op.get.operatorCount * max(1, count))
 
 proc namedMarkPosition*(
     ctx: CommandContext, name: char
@@ -505,18 +457,3 @@ proc namedMarkPosition*(
   var pos = mark.get
   pos.column = min(pos.column, max(0, ctx.buffer.getLine(pos.line).charLen - 1))
   ok(pos)
-
-proc applyOperatorToMark*(
-    ctx: CommandContext, op: PendingOperator, name: char, linewise: bool
-): Result[(), string] =
-  ## Apply an operator to a named mark; backtick motions exclude the endpoint.
-  let dest = ctx.namedMarkPosition(name)
-  if dest.isErr:
-    ctx.state.pendingInput.pendingRegister = none(char)
-    return err(dest.error)
-  var range = calculateOperatorRange(
-    ctx.buffer, op.startPos, dest.get, if linewise: Motion.Down else: Motion.Right
-  )
-  if not linewise and op.startPos == dest.get:
-    range.isEmpty = true
-  executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)

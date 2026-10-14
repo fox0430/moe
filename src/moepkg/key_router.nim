@@ -214,8 +214,11 @@ proc resolveBuiltin*(
   ## wrapper over `KeyBindingRegistry.processKey`: a resolved command becomes
   ## `rrCommand`; the `none` cases are classified by observing the registry's
   ## sequence state — an active sequence means "still accumulating" (`rrWaiting`),
-  ## an Escape that consumed an active sequence is `rrCancelled`, and anything
-  ## else is `rrUnhandled`.
+  ## an Escape that ended pending keys or an operand wait is `rrCancelled`, and
+  ## anything else is `rrUnhandled`. A key with no binding is `rrUnhandled` even
+  ## after a count or a `"x` register name (Escape after them included): those
+  ## stay in the registry until the caller, finding nothing else that runs the
+  ## key, drops them.
   ##
   ## Built-in sequence prefixes never time out (Vim spec), so `rrWaiting`
   ## carries `waitsForTimeout = false` — unlike runtime-mapping prefixes.
@@ -239,12 +242,14 @@ proc resolveBuiltin*(
   ## mode dispatchers hold the registry, not the router (see the module
   ## docstring for why that ownership split is the intended end state).
   let wasEscapeOnActive =
-    combo.isSpecial and combo.special == skEscape and registry.hasActiveSequence()
+    combo.isSpecial and combo.special == skEscape and registry.hasPendingKeys()
   let cmdOpt = registry.processKey(mode, combo)
   if cmdOpt.isSome:
     return RouteResult(kind: rrCommand, command: cmdOpt.get)
   if wasEscapeOnActive:
     return RouteResult(kind: rrCancelled)
+  if registry.lastKeyUnbound:
+    return RouteResult(kind: rrUnhandled, key: combo)
   if registry.hasActiveSequence():
     return RouteResult(kind: rrWaiting, waitsForTimeout: false)
   return RouteResult(kind: rrUnhandled, key: combo)

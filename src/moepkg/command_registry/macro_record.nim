@@ -22,7 +22,7 @@
 
 import pkg/results
 
-import ../[types, key_bindings, pending_input, macro_recording]
+import ../[types, key_bindings, macro_recording]
 
 import core
 
@@ -34,10 +34,8 @@ const RecordRegister = key_bindings.Command(
 ) ## The operand `q` waits for. Not bindable on its own.
 
 proc handleMacroRecord(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Like Vim's `q`: it cancels a pending operator, is ignored in a running
-  ## register, stops a recording, and only otherwise takes a register name.
-  if ctx.state.pendingInput.cancelOperatorPending():
-    return ok(())
+  ## Like Vim's `q`: it is ignored in a running register, stops a recording,
+  ## and only otherwise takes a register name.
   if ctx.state.pendingInput.macroState.executingDepth > 0:
     return ok(())
   if ctx.state.pendingInput.macroState.isRecording:

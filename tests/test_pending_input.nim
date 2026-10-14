@@ -56,9 +56,9 @@ suite "PendingInputState - isActive":
     pi.pendingTextObject = some(PendingTextObject(modifier: tomInner))
     check isActive(pi, registry) == true
 
-  test "isActive with pendingRegister":
+  test "isActive with a register named before the command":
     var (pi, registry) = newTestState()
-    pi.pendingRegister = some('a')
+    registry.sequenceState.register = some('a')
     check isActive(pi, registry) == true
 
   test "isActive with pendingCommand":
@@ -92,11 +92,11 @@ suite "PendingInputState - cancelAll":
     check cancelAll(pi, registry) == true
     check pi.pendingTextObject.isNone
 
-  test "cancelAll clears pendingRegister":
+  test "cancelAll clears a register named before the command":
     var (pi, registry) = newTestState()
-    pi.pendingRegister = some('a')
+    registry.sequenceState.register = some('a')
     check cancelAll(pi, registry) == true
-    check pi.pendingRegister.isNone
+    check registry.sequenceState.register.isNone
 
   test "cancelAll clears pendingCommand":
     var (pi, registry) = newTestState()
@@ -118,7 +118,7 @@ suite "PendingInputState - cancelAll":
       )
     )
     pi.pendingTextObject = some(PendingTextObject(modifier: tomInner))
-    pi.pendingRegister = some('a')
+    registry.sequenceState.register = some('a')
     pi.pendingCommand = PendingWindowCmd
     startSequence(registry)
     check cancelAll(pi, registry) == true
