@@ -2958,7 +2958,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
         data: none(JsonNode),
       )
     ]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
     check buffer.diagnosticMarker(1) == some(LineMarkerKind.SyntaxError)
 
   test "applyDiagnosticsToBuffer sets warning markers":
@@ -2978,7 +2978,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
         data: none(JsonNode),
       )
     ]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
     check buffer.diagnosticMarker(0) == some(LineMarkerKind.SyntaxWarning)
 
   test "applyDiagnosticsToBuffer error takes precedence over warning":
@@ -3011,13 +3011,14 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
         data: none(JsonNode),
       ),
     ]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
     check buffer.diagnosticMarker(0) == some(LineMarkerKind.SyntaxError)
 
   test "applyDiagnosticsToBuffer replaces only the LSP diagnostics":
     let buffer = newTextBuffer("line1\nline2")
     applyDiagnosticsToBuffer(
       buffer,
+      "nim",
       @[Diagnostic(range: newRange(0, 0, 0, 5), severity: some(dsError), message: "e")],
     )
     buffer.setDiagnostics(
@@ -3026,7 +3027,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
     )
 
     let diagnostics: seq[Diagnostic] = @[]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
 
     check buffer.diagnosticMarker(0).isNone
     check buffer.diagnosticMarker(1) == some(LineMarkerKind.SyntaxWarning)
@@ -3035,6 +3036,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
     let buffer = newTextBuffer("line1\nline2")
     applyDiagnosticsToBuffer(
       buffer,
+      "nim",
       @[
         Diagnostic(range: newRange(0, 0, 0, 5), severity: some(dsInformation)),
         Diagnostic(range: newRange(1, 0, 1, 5), severity: some(dsHint)),
@@ -3062,7 +3064,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
         data: none(JsonNode),
       )
     ]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
     # Should not crash, line 0 should have no marker
     check buffer.diagnosticMarker(0).isNone
 
@@ -3092,7 +3094,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
         data: none(JsonNode),
       ),
     ]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
     check buffer.diagnostics[dsrcLsp].items.len == 2
     check buffer.diagnostics[dsrcLsp].items[0].startLine == 1
     check buffer.diagnostics[dsrcLsp].items[0].startCol == 2
@@ -3133,7 +3135,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
         data: none(JsonNode),
       ),
     ]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
     check buffer.diagnostics[dsrcLsp].items.len == 2
     check buffer.diagnostics[dsrcLsp].items[0].startCol == 4
     check buffer.diagnostics[dsrcLsp].items[0].endCol == 7
@@ -3177,7 +3179,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
         data: none(JsonNode),
       ),
     ]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
     # Storage must match the marker pass: out-of-range start lines are skipped.
     check buffer.diagnostics[dsrcLsp].items.len == 1
     check buffer.diagnostics[dsrcLsp].items[0].startLine == 0
@@ -3198,7 +3200,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
         data: none(JsonNode),
       )
     ]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
     check buffer.diagnostics[dsrcLsp].items.len == 1
     check buffer.diagnostics[dsrcLsp].items[0].startLine == 1
     check buffer.diagnostics[dsrcLsp].items[0].endLine == buffer.len - 1
@@ -3218,7 +3220,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
         data: none(JsonNode),
       )
     ]
-    applyDiagnosticsToBuffer(buffer, diagnostics)
+    applyDiagnosticsToBuffer(buffer, "nim", diagnostics)
     check buffer.diagnostics[dsrcLsp].items.len == 1
     check buffer.diagnostics[dsrcLsp].items[0].startLine == 2
     check buffer.diagnostics[dsrcLsp].items[0].endLine == 2
@@ -3396,7 +3398,12 @@ suite "LspIntegration - Callbacks":
     let lsp = newLspIntegration()
     var called = false
     lsp.setDiagnosticsCallback(
-      proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.} =
+      proc(
+          langId: string,
+          uri: string,
+          diagnostics: seq[Diagnostic],
+          version: Option[int],
+      ) {.gcsafe.} =
         called = true
     )
     # Callback is set but won't be called without actual LSP events
@@ -4241,6 +4248,18 @@ suite "LspIntegration - incremental didChange":
     lsp.onBufferClose(buf)
     check Path notin lsp.documents
     check buf.id notin lsp.openedPaths
+
+  test "closing a buffer keeps its diagnostics for the re-open":
+    let buf = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(buf).isOk
+    applyDiagnosticsToBuffer(
+      buf, "nim", @[Diagnostic(range: newRange(0, 0, 0, 3), severity: some(dsError))]
+    )
+
+    lsp.onBufferClose(buf)
+
+    check buf.diagnostics[dsrcLsp].items.len == 1
+    check buf.lspDiagnosticsLangId == "nim"
 
   test "the shared request helper passes the caller's trigger to the gate":
     # Helper must pass trigger; default stays automatic.

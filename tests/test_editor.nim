@@ -1260,6 +1260,7 @@ suite "Editor - applyConfigSettings syncs display state":
     let e = createTestEditor()
     e.config.lsp.enable = true
     let buf = e.activeBuffer()
+    buf.lspDiagnosticsLangId = "nim"
     buf.setDiagnostics(
       dsrcLsp,
       @[
@@ -1283,6 +1284,8 @@ suite "Editor - applyConfigSettings syncs display state":
   test "Keeps stored diagnostics while diagnostics stay enabled":
     let e = createTestEditor()
     let buf = e.activeBuffer()
+    buf.filePath = some(getTempDir() / "moe_test_keep_diagnostics.nim")
+    buf.lspDiagnosticsLangId = "nim"
     buf.setDiagnostics(
       dsrcLsp,
       @[
@@ -1306,6 +1309,7 @@ suite "Editor - applyConfigSettings syncs display state":
   test "Turning LSP off clears stored diagnostics and markers":
     let e = createTestEditor()
     let buf = e.activeBuffer()
+    buf.lspDiagnosticsLangId = "nim"
     buf.setDiagnostics(
       dsrcLsp,
       @[

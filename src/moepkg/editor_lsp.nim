@@ -134,12 +134,15 @@ proc applyLspServerConfigs*(e: Editor) =
       "; run :lspRestart to apply"
 
 proc applyDiagnosticsForUri*(
-    e: Editor, uri: string, diags: seq[Diagnostic], version: Option[int]
+    e: Editor, langId: string, uri: string, diags: seq[Diagnostic], version: Option[int]
 ) =
-  ## Route publishDiagnostics to target buffer; drop stale or raw-buffer frames.
+  ## Route publishDiagnostics to target buffer; drop stale or raw-buffer frames,
+  ## and frames from a server that does not serve the buffer.
   let path = pathKey(uriToPath(uri))
   for buf in e.buffers:
     if buf.filePath.isNone or not buf.bufferHoldsFile(path):
+      continue
+    if e.lsp.requireLangId(buf) != some(langId):
       continue
     if not e.lspFeatureEnabled(buf, diagnostics):
       return
@@ -152,7 +155,7 @@ proc applyDiagnosticsForUri*(
     # Raw buffer has no version; drop diagnostics computed from decoded text.
     if not buf.isLspEligible:
       return
-    applyDiagnosticsToBuffer(buf, diags)
+    applyDiagnosticsToBuffer(buf, langId, diags)
     return
   # No matching open buffer: drop. The server only publishes for documents
   # we opened (didOpen), so this is the closed-in-the-meantime case.
@@ -163,7 +166,11 @@ proc clearDisabledLspState*(e: Editor) =
   ## refill, but what was already applied or sent stays until removed here.
   ## Features still on are left alone.
   for buf in e.buffers:
-    if not e.lspFeatureEnabled(buf, diagnostics):
+    # A server no longer serving the buffer sends no publish to replace its own.
+    if buf.lspDiagnosticsLangId.len > 0 and (
+      not e.lspFeatureEnabled(buf, diagnostics) or
+      e.lsp.requireLangId(buf) != some(buf.lspDiagnosticsLangId)
+    ):
       buf.clearDiagnostics({dsrcLsp})
     let scope = some(buf.id)
     if not e.lspFeatureEnabled(buf, semanticTokens):

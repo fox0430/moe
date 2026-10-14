@@ -131,8 +131,9 @@ type
     # Generations already reported lost; cleared when a new one starts.
     lostGenerationReported: HashSet[string]
     # Global callbacks (forwarded from individual workers)
-    onDiagnosticsUpdate*:
-      proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.}
+    onDiagnosticsUpdate*: proc(
+      langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    ) {.gcsafe.}
     onLogMessage*:
       proc(langId: string, msgType: MessageType, message: string) {.gcsafe.}
     onProgress*:
@@ -234,7 +235,7 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     initializedLangs: initHashSet[string](),
     # Default no-op callbacks to avoid nil checks throughout the code
     onDiagnosticsUpdate: proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       discard,
     onLogMessage: proc(
@@ -614,7 +615,7 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
     except CatchableError as e:
       svc.onLogMessage(langId, mtWarning, "Failed to parse diagnostics: " & e.msg)
       return
-    svc.onDiagnosticsUpdate(evt.diagUri, diagnostics, evt.diagVersion)
+    svc.onDiagnosticsUpdate(langId, evt.diagUri, diagnostics, evt.diagVersion)
   of levLogMessage:
     svc.onLogMessage(langId, evt.msgType, evt.message)
   of levShowMessage:

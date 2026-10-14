@@ -1117,12 +1117,14 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
 
   test "levDiagnostics is parsed and forwarded to the callback":
     let svc = newLspService()
+    var gotLangId = ""
     var gotUri = ""
     var gotDiags: seq[Diagnostic] = @[]
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       {.cast(gcsafe).}:
+        gotLangId = langId
         gotUri = uri
         gotDiags = diagnostics
     let diagsJson = $(
@@ -1141,6 +1143,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
         kind: levDiagnostics, diagUri: "file:///t.nim", diagnosticsJson: diagsJson
       ),
     )
+    check gotLangId == "nim"
     check gotUri == "file:///t.nim"
     check gotDiags.len == 1
     check gotDiags[0].message == "unused variable"
@@ -1149,7 +1152,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
     svc.processEvent(
@@ -1163,7 +1166,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
     for payload in ["null", "42", "{}", "\"x\""]:
@@ -1180,7 +1183,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     let svc = newLspService()
     var gotDiags: seq[Diagnostic] = @[]
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       {.cast(gcsafe).}:
         gotDiags = diagnostics
@@ -1634,10 +1637,10 @@ suite "LspService - Callback Setup":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+        langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
-    svc.onDiagnosticsUpdate("test", @[], none(int))
+    svc.onDiagnosticsUpdate("nim", "test", @[], none(int))
     check called
 
   test "can set custom onLogMessage callback":

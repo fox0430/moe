@@ -1977,7 +1977,104 @@ suite "Buffer - saveFile external modification guard":
     check res.error == ExternalModErrorMsg
     check readFile(path) == "external change"
 
+suite "Buffer - save-as drops diagnostics":
+  proc seedDiagnostics(buf: TextBuffer, line = 0) =
+    for source in DiagnosticSource:
+      buf.setDiagnostics(
+        source, @[BufferDiagnostic(startLine: line, endLine: line, severity: bdsError)]
+      )
+    buf.lspDiagnosticsLangId = "nim"
+    buf.diagnosticsDirty = false
+
+  test "Saving under another path drops the diagnostics of the old one":
+    let original = getTempDir() / "moe_test_saveas_diag_orig.nim"
+    let target = getTempDir() / "moe_test_saveas_diag_target.txt"
+    writeFile(original, "hello")
+    defer:
+      removeFile(original)
+      if fileExists(target):
+        removeFile(target)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(original)
+    buf.seedDiagnostics()
+
+    check buf.saveFile(target).isOk
+    for source in DiagnosticSource:
+      check buf.diagnostics[source].items.len == 0
+    check buf.lspDiagnosticsLangId == ""
+    check buf.diagnosticsDirty
+
+  test "Saving the same file under another spelling keeps them":
+    let name = "moe_test_saveas_diag_alias.nim"
+    let path = getTempDir() / name
+    # Built by hand rather than with `/`, which collapses `.` as it joins.
+    let alias = getTempDir() & "." & $DirSep & name
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    buf.seedDiagnostics()
+
+    check buf.saveFile(alias).isOk
+    for source in DiagnosticSource:
+      check buf.diagnostics[source].items.len == 1
+    check buf.lspDiagnosticsLangId == "nim"
+    check not buf.diagnosticsDirty
+
+  for backend in [GapBuffer, PieceTable]:
+    test "Undo and redo do not bring the dropped diagnostics back [" & $backend & "]":
+      let target = getTempDir() / "moe_test_saveas_diag_undo.txt"
+      defer:
+        if fileExists(target):
+          removeFile(target)
+      let buf = newTextBuffer(
+        "a\nb\nc", some(getTempDir() / "moe_test_saveas_diag_undo.nim"), backend
+      )
+      buf.setLineMarker(2, LineMarkerKind.GitChanged)
+      buf.seedDiagnostics(2)
+      check buf.insert(0, "new").isOk
+
+      check buf.saveFile(target).isOk
+      check buf.undo().isOk
+      check buf.getLineMarker(2) == some(LineMarkerKind.GitChanged)
+      check buf.diagnosticMarker(2).isNone
+      check buf.redo().isOk
+      check buf.getLineMarker(3) == some(LineMarkerKind.GitChanged)
+      check buf.diagnosticMarker(3).isNone
+
+  test "A report after the save does not bring back the ones before it":
+    let target = getTempDir() / "moe_test_saveas_diag_report.txt"
+    defer:
+      if fileExists(target):
+        removeFile(target)
+    let buf =
+      newTextBuffer("a\nb\nc", some(getTempDir() / "moe_test_saveas_diag_report.nim"))
+    buf.seedDiagnostics(2)
+    check buf.insert(0, "new").isOk
+
+    check buf.saveFile(target).isOk
+    buf.setDiagnostics(dsrcLsp, @[])
+    check buf.undo().isOk
+
+    check buf.diagnosticMarker(2).isNone
+
 suite "Buffer - reloadFile":
+  test "A load forgets the server of its diagnostics":
+    let path = getTempDir() / "moe_test_load_diag_state.txt"
+    writeFile(path, "a\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    buf.lspDiagnosticsLangId = "nim"
+
+    check buf.loadFile(path).isOk
+
+    check buf.lspDiagnosticsLangId == ""
+
   test "Returns error when buffer has no file path":
     let buf = newTextBuffer("hello")
     let res = buf.reloadFile()

@@ -752,6 +752,10 @@ proc saveFile*(
     return Result[(), string].err written.error
 
   buffer.markSaved()
+  if buffer.filePath.isNone or not samePath(buffer.filePath.get, path):
+    # Diagnostics belong to the document they were computed for, which the
+    # server names by its path's spelling.
+    buffer.clearDiagnostics()
   buffer.filePath = some(path)
 
   buffer.noteFileStamp(path)

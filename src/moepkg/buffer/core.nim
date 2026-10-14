@@ -583,6 +583,7 @@ type
     lastVisual*: Option[VisualArea] ## Reselected by `gv`
 
     diagnostics*: BufferDiagnostics
+    lspDiagnosticsLangId*: string ## The server whose publish the LSP report is
     diagnosticsGeneration*: int ## The generation of the newest report
     droppedDiagnostics*: array[DiagnosticSource, int]
       ## The newest generation of each source a clear dropped, so undo does not
@@ -1540,6 +1541,8 @@ proc clearDiagnostics*(
 ) =
   ## Drop the diagnostics of `sources`, all of them by default. Undo does not
   ## bring back their reports so far.
+  if dsrcLsp in sources:
+    b.lspDiagnosticsLangId = ""
   for source in sources:
     b.droppedDiagnostics[source] = b.diagnosticsGeneration
     if b.diagnostics[source].items.len > 0:

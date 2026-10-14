@@ -380,8 +380,9 @@ proc getProgressText*(state: LspProgressState): string =
 
 proc setDiagnosticsCallback*(
     lsp: LspIntegration,
-    callback:
-      proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.},
+    callback: proc(
+      langId: string, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    ) {.gcsafe.},
 ) =
   ## Set callback for diagnostics updates
   lsp.service.onDiagnosticsUpdate = callback
@@ -431,8 +432,8 @@ proc lspParticipation*(lsp: LspIntegration, buffer: TextBuffer): LspParticipatio
     return lpNoServer
   lpParticipates
 
-proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
-  ## Resolve language ID for buffer, or none if unavailable.
+proc requireLangId*(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
+  ## The language, and so the server, serving `buffer`, or none if unavailable.
   if not lsp.enabled or buffer.filePath.isNone:
     return none(string)
   lsp.service.getLanguageIdFromPath(buffer.filePath.get)
@@ -1964,8 +1965,10 @@ proc applyWorkspaceEdit*(
   )
 
 # Diagnostic helpers
-proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic]) =
-  ## Replace the buffer's LSP diagnostics with a publish.
+proc applyDiagnosticsToBuffer*(
+    buffer: TextBuffer, langId: string, diagnostics: seq[Diagnostic]
+) =
+  ## Replace the buffer's LSP diagnostics with a publish of server `langId`.
   var items: seq[BufferDiagnostic]
   for diag in diagnostics:
     let startLine = diag.range.start.line
@@ -2001,6 +2004,7 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
       )
     )
   buffer.setDiagnostics(dsrcLsp, items)
+  buffer.lspDiagnosticsLangId = langId
 
 proc formatDiagnosticsForHover*(diagnostics: seq[BufferDiagnostic]): string =
   ## Format diagnostics for display in hover popup
