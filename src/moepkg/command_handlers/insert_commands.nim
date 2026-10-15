@@ -221,47 +221,44 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
     buffer.markAutoIndented(state, state.cursor.line, middleIndent)
     return
 
-  # Prepare the text to insert (newline + optional indent as single operation)
-  var textToInsert = "\n"
-  var indentLen = 0
+  # As Vim's open_line: the text Enter leaves gives the indent, and the blanks
+  # it carries down give way to it. Auto-indent skipped for raw buffers.
+  let
+    autoIndent = state.autoIndent and buffer.allowsTextTransforms
+    leftText = currentLineText.charSubStr(0, pos.column)
   var newLineIndent = ""
-
-  # Auto-indent skipped for raw buffers.
-  if state.autoIndent and buffer.allowsTextTransforms:
-    # Get the indentation from the current line
-    let baseIndent = getLineIndent(currentLineText)
+  var last = pos.column
+  if autoIndent:
+    let carried = currentLineText.charSubStr(pos.column)
     let extraIndent =
       if state.smartIndent:
-        extraIndentForNewline(currentLineText, buffer.language, getIndentString(state))
+        extraIndentForNewline(
+          leftText, buffer.language, getIndentString(state), carried
+        )
       else:
         ""
-    newLineIndent = baseIndent & extraIndent
+    newLineIndent = getLineIndent(leftText) & extraIndent
+    last += getLineIndent(carried).len
 
-    if newLineIndent.len > 0:
-      # Combine newline and indent into single insertion
-      textToInsert = "\n" & newLineIndent
-      indentLen = newLineIndent.len
-
-  # An untouched auto-indent comes off the line Enter leaves; the new line
+  # An untouched auto-indent comes off the text Enter leaves; the new line
   # still gets it.
-  var at = pos
-  if buffer.untouchedAutoIndent(state) == some(pos.line) and
-      pos.column == currentLineText.charLen:
-    let cleared = buffer.replaceLine(pos.line, "")
-    if cleared.isErr:
-      state.statusMessage = cleared.error
-      return
-    at.column = 0
+  var first = pos.column
+  if buffer.untouchedAutoIndent(state) == some(pos.line):
+    first -= leftText.len - leftText.strip(leading = false, chars = {' ', '\t'}).len
 
-  # Insert newline (and indent if any) as a single undo-able operation
-  let insertResult = buffer.insertText(at, textToInsert)
+  let at = BufferPosition(line: pos.line, column: first)
+  if last > first:
+    let cut = buffer.deleteRange(at, BufferPosition(line: pos.line, column: last - 1))
+    if cut.isErr:
+      state.statusMessage = cut.error
+      return
+  let insertResult = buffer.insertText(at, "\n" & newLineIndent)
   if insertResult.isErr:
     state.statusMessage = insertResult.error
     return
 
-  # Move cursor to start of new line (after indent if any)
   state.cursor.line += 1
-  state.cursor.column = indentLen
+  state.cursor.column = newLineIndent.len
 
   buffer.markAutoIndented(state, state.cursor.line, newLineIndent)
 
@@ -633,9 +630,9 @@ proc clearAutoIndentIfUnedited*(buffer: TextBuffer, state: EditorState) =
   ## Remove auto-indent whitespace when leaving Insert mode without editing.
   let untouched = buffer.untouchedAutoIndent(state)
   if untouched.isSome:
-    let replaceResult = buffer.replaceLine(untouched.get, "")
-    if replaceResult.isErr:
-      state.statusMessage = replaceResult.error
-    elif state.cursor.line == untouched.get:
+    let cleared = buffer.clearUntouchedAutoIndent(untouched.get)
+    if cleared.isErr:
+      state.statusMessage = cleared.error
+    elif cleared.get and state.cursor.line == untouched.get:
       state.cursor.column = 0
   state.editState.autoIndentedLine = none(AutoIndentedLine)

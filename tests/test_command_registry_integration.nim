@@ -5007,7 +5007,7 @@ suite "Handler - Insert Mode Operations":
     check registry.execute(ctx, builtin(bcInsertNewline)).isOk
     check buffer.len == 2
     check buffer[0] == "hello"
-    check buffer[1] == " world"
+    check buffer[1] == "world" # autoindent drops the blank carried down
 
   test "insert append (a)":
     let buffer = newTextBuffer("hello")

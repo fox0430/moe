@@ -162,12 +162,23 @@ proc unclosedBracketDepth(stripped: string): int =
       discard
   result = depth
 
-proc nimNeedsExtraIndent(line: string): bool =
+proc firstNonBlank(s: string): char =
+  for c in s:
+    if c notin {' ', '\t'}:
+      return c
+  '\0'
+
+proc nimNeedsExtraIndent(line, carried: string): bool =
   let code = stripNimCodeOnly(line)
   if code.len == 0:
     return false
   let stripped = code.strip(leading = false, trailing = true)
   if stripped.len == 0:
+    return false
+
+  # A carried closer steps only right after an opener, as Vim's smartindent
+  # steps only after a `{`.
+  if firstNonBlank(carried) in {')', ']', '}'} and stripped[^1] notin {'(', '[', '{'}:
     return false
 
   let trimmed = stripped.strip()
@@ -191,17 +202,17 @@ proc nimNeedsExtraIndent(line: string): bool =
   return false
 
 proc extraIndentForNewline*(
-    line: string, language: SourceLanguage, indentUnit: string
+    line: string, language: SourceLanguage, indentUnit: string, carried = ""
 ): string =
   ## Return the additional indent string to append after the base indent
-  ## when Enter is pressed on `line`. Returns `""` when no trigger fires
-  ## or the language is unsupported.
+  ## when Enter is pressed on `line`, moving `carried` down. Returns `""`
+  ## when no trigger fires or the language is unsupported.
   ##
   ## Always returns at most one `indentUnit` regardless of how many
   ## triggers match (e.g. nested unclosed brackets).
   case language
   of langNim:
-    if nimNeedsExtraIndent(line):
+    if nimNeedsExtraIndent(line, carried):
       return indentUnit
     return ""
   else:

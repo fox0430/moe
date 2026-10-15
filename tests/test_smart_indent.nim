@@ -172,6 +172,9 @@ suite "smart_indent - extraIndentForNewline (Nim, positive)":
   test "Custom indent unit (tab) is honored":
     check extraIndentForNewline("var", SourceLanguage.langNim, "\t") == "\t"
 
+  test "A carried closer right after an opener still triggers":
+    check extraIndentForNewline("foo(", SourceLanguage.langNim, "  ", ")") == "  "
+
 suite "smart_indent - extraIndentForNewline (negative)":
   test "Plain identifier ending in 'or' (coordinator) does not trigger":
     check extraIndentForNewline("let coordinator", SourceLanguage.langNim, "  ") == ""
@@ -244,6 +247,9 @@ suite "smart_indent - extraIndentForNewline (negative)":
 
   test "Balanced brackets do not trigger":
     check extraIndentForNewline("foo()", SourceLanguage.langNim, "  ") == ""
+
+  test "A carried closer after other text does not trigger":
+    check extraIndentForNewline("foo(a", SourceLanguage.langNim, "  ", "  )") == ""
 
   test "Empty line does not trigger":
     check extraIndentForNewline("", SourceLanguage.langNim, "  ") == ""
@@ -433,6 +439,54 @@ suite "Insert Commands - insertNewline smart indent (Nim)":
 
     check buf.getLine(1) == "  "
     check state.cursor.column == 2
+
+  test "A split line is indented by the text before the cursor":
+    let buf = newNimBuffer("foo(a, b)")
+    let state = createSmartIndentState()
+    state.cursor = BufferPosition(line: 0, column: 7)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "foo(a, "
+    check buf.getLine(1) == "  b)"
+    check state.cursor.column == 2
+
+  test "A closer carried down right after its opener takes the step":
+    let buf = newNimBuffer("foo()")
+    let state = createSmartIndentState()
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "foo("
+    check buf.getLine(1) == "  )"
+    check state.cursor.column == 2
+
+  test "A closer carried down after other text stays at the base indent":
+    let buf = newNimBuffer("  foo(a  )")
+    let state = createSmartIndentState()
+    state.cursor = BufferPosition(line: 0, column: 7)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "  foo(a"
+    check buf.getLine(1) == "  )"
+    check state.cursor.column == 2
+
+  test "Inside an outer bracket, a carried closer steps only after its opener":
+    let afterOpener = newNimBuffer("foo(bar(), baz")
+    let s1 = createSmartIndentState()
+    s1.cursor = BufferPosition(line: 0, column: 8)
+    insertNewline(afterOpener, s1)
+    check afterOpener.getLine(1) == "  ), baz"
+
+    let afterText = newNimBuffer("foo(bar(a), baz")
+    let s2 = createSmartIndentState()
+    s2.cursor = BufferPosition(line: 0, column: 9)
+    insertNewline(afterText, s2)
+    check afterText.getLine(0) == "foo(bar(a"
+    check afterText.getLine(1) == "), baz"
+    check s2.cursor.column == 0
 
 suite "Insert Commands - insertLineBelow smart indent (Nim)":
   test "'o' after 'var' line inserts indented line below":

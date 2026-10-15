@@ -743,6 +743,60 @@ suite "a move ends the auto-indent nothing was typed after, as in Vim":
       check e.lines == want
       check e.cursorAt == wantCursor
 
+suite "the text Enter carries down, as in Vim":
+  # Measured in Vim 9.2 (`vim -u NONE`, typed through a terminal). With
+  # autoindent the new line takes the indent of the text before the cursor and
+  # drops the blanks it carries. The indent stays untouched until something is
+  # typed: Escape or a move keeps it before carried text, and the next Enter
+  # takes it off the line it leaves.
+  const
+    Words = @["  abc def", "  ghi"]
+    Deep = @["    abc", "x"]
+    Trail = @["  abc   ", "x"]
+  for (lines, column, keys, want, wantCursor) in [
+    (Words, 6, "i<Enter><Escape>", @["  abc ", "  def", "  ghi"], (1, 1)),
+    (Words, 6, "i<Enter><Enter><Escape>", @["  abc ", "", "  def", "  ghi"], (2, 1)),
+    (Words, 6, "i<Enter><Enter>Y<Escape>", @["  abc ", "", "  Ydef", "  ghi"], (2, 2)),
+    (Words, 6, "iX<Enter><Up><Escape>", @["  abc X", "  def", "  ghi"], (0, 1)),
+    (Words, 6, "iX<Enter><Down><Escape>", @["  abc X", "  def", "  ghi"], (2, 1)),
+    (Words, 6, "a<Enter><Escape>", @["  abc d", "  ef", "  ghi"], (1, 1)),
+    (
+      Words,
+      6,
+      "i<Enter><Left><Enter><Escape>",
+      @["  abc ", " ", " def", "  ghi"],
+      (2, 0),
+    ),
+    (Words, 6, "i<Enter><Escape>j.", @["  abc ", "  def", " ", " ghi"], (3, 0)),
+    (Words, 5, "i<Enter><Escape>", @["  abc", "  def", "  ghi"], (1, 1)),
+    (Deep, 2, "i<Enter><Escape>", @["  ", "  abc", "x"], (1, 1)),
+    (Deep, 0, "i<Enter><Escape>", @["", "abc", "x"], (1, 0)),
+    (Deep, 2, "i<Enter><Enter><Escape>", @["  ", "", "  abc", "x"], (2, 1)),
+    (Trail, 5, "i<Enter><Escape>", @["  abc", "", "x"], (1, 0)),
+    (Trail, 5, "i<Enter><Enter><Escape>", @["  abc", "", "", "x"], (2, 0)),
+    (Trail, 5, "i<Enter><Up><Escape>", @["  abc", "", "x"], (0, 1)),
+    (@["\tabc \tdef", "x"], 4, "i<Enter><Escape>", @["\tabc", "\tdef", "x"], (1, 0)),
+    (@["abc def"], 3, "i<Enter><Escape>", @["abc", "def"], (1, 0)),
+    (@["    foo", "bar"], 4, "o<Enter><Escape>", @["    foo", "", "", "bar"], (2, 0)),
+  ]:
+    test keys & " at " & $column & " of " & $lines:
+      let e = newVimLikeEditor(lines, 0, column)
+      e.state.autoIndent = true
+      e.state.smartIndent = false
+      e.press(keys)
+      check e.lines == want
+      check e.cursorAt == wantCursor
+
+  # Without autoindent the blanks go down as they are.
+  for (lines, column, want) in [
+    (Words, 5, @["  abc", " def", "  ghi"]), (@["abc def"], 3, @["abc", " def"])
+  ]:
+    test "i<Enter><Escape> at " & $column & " of " & $lines & " without autoindent":
+      let e = newVimLikeEditor(lines, 0, column)
+      e.press("i<Enter><Escape>")
+      check e.lines == want
+      check e.cursorAt == (1, 0)
+
 suite "what completion and snippets leave for `.`":
   proc offer(e: Editor, words: openArray[string], prefix: string) =
     let completion = e.handlerManager.insertHandler.completionManager

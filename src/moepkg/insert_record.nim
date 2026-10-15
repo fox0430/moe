@@ -22,7 +22,7 @@
 ## changed the text goes on it; one that only moved the cursor ends it, as Vim's
 ## arrow keys do, and takes the untouched auto-indent with it.
 
-import std/options
+import std/[options, strutils]
 
 import pkg/results
 
@@ -126,14 +126,26 @@ proc noteTyped*(state: EditorState, typed: openArray[TypedInput]) =
     state.editState.insertRecord.addTyped(t)
 
 proc untouchedAutoIndent*(buffer: TextBuffer, state: EditorState): Option[int] =
-  ## The line holding only the indent Insert gave it, while nothing has changed
-  ## the buffer since. Typing there keeps the indent, even when deleted again.
+  ## The line Insert indented, while nothing has changed the buffer since. Text
+  ## Enter carried down may follow the indent. Typing there keeps the indent,
+  ## even when deleted again.
   let marked = state.editState.autoIndentedLine
   if marked.isSome and marked.get.version == buffer.contentVersion and
       marked.get.line < buffer.len:
     some(marked.get.line)
   else:
     none(int)
+
+proc clearUntouchedAutoIndent*(buffer: TextBuffer, line: int): Result[bool, string] =
+  ## Take the untouched auto-indent off `line` as Vim's stop_insert does: only
+  ## when nothing follows it, so text Enter carried down keeps it. True when
+  ## it came off.
+  if not buffer.getLine(line).allCharsInSet({' ', '\t'}):
+    return ok(false)
+  let cleared = buffer.replaceLine(line, "")
+  if cleared.isErr:
+    return err(cleared.error)
+  ok(true)
 
 proc noteMove(state: EditorState) =
   ## The cursor moved without typing: the record ends, and the auto-indent
@@ -143,7 +155,7 @@ proc noteMove(state: EditorState) =
   if not buffer.isNil:
     let untouched = buffer.untouchedAutoIndent(state)
     if untouched.isSome and untouched.get != state.cursor.line:
-      let cleared = buffer.replaceLine(untouched.get, "")
+      let cleared = buffer.clearUntouchedAutoIndent(untouched.get)
       if cleared.isErr:
         state.statusMessage = cleared.error
   state.editState.autoIndentedLine = none(AutoIndentedLine)
