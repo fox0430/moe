@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, times, options, unicode]
+import std/[unittest, os, strutils, tables, times, options, unicode]
 
 import pkg/[results, celina]
 
@@ -1202,7 +1202,7 @@ suite "Buffer - Sidebar Markers":
     # startLine's marker survives; endLine's must not slide into its slot.
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(2, LineMarkerKind.GitChanged)
     buf.setLineMarker(3, LineMarkerKind.GitDeleted)
 
@@ -1213,15 +1213,15 @@ suite "Buffer - Sidebar Markers":
 
     check buf.len == 3
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    # SyntaxError on the surviving merged row (was line 1) must be kept.
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    # The marker on the surviving merged row (was line 1) must be kept.
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     # GitDeleted (was on line 3, now line 2) shifts up.
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
 
   test "deleteRange multi-line with join preserves startLine marker":
     # Multi-line-plus-join: startLine's marker survives too.
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(4, LineMarkerKind.GitAdded)
 
     # Delete (1, 0)..(2, endOfLine): joins Line4 up into row 1.
@@ -1232,14 +1232,14 @@ suite "Buffer - Sidebar Markers":
 
     # Line2 and Line3 fully consumed, Line4 moves up into row 1 — 3 lines total.
     # Marker on startLine survives; markers below shift up by 2.
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitAdded
 
   test "undo of multi-line deleteRange restores markers":
     # Reverse dispatch must reinsert marker slots to match savedLineMarkers.
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(2, LineMarkerKind.GitChanged)
     buf.setLineMarker(3, LineMarkerKind.GitDeleted)
 
@@ -1250,13 +1250,13 @@ suite "Buffer - Sidebar Markers":
 
     check buf.len == 4
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitChanged
     check buf.getLineMarker(3).get == LineMarkerKind.GitDeleted
 
   test "redo of multi-line deleteRange re-applies marker shifts":
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(3, LineMarkerKind.GitDeleted)
 
     discard buf.deleteRange(
@@ -1266,14 +1266,14 @@ suite "Buffer - Sidebar Markers":
     discard buf.redo()
 
     check buf.len == 3
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
 
   test "undo of single-line-join deleteRange restores markers":
     # Single-line-join reverse must reinsert one marker slot at startLine+1.
     let buf = newTextBuffer("Line1\nLine2\nLine3")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(2, LineMarkerKind.GitDeleted)
 
     # Zero-width delete at end of Line1: endPos.column >= lineLen triggers
@@ -1287,14 +1287,14 @@ suite "Buffer - Sidebar Markers":
 
     check buf.len == 3
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
 
   test "undo of insertText with newlines restores markers":
     # Reverse must delete the slots inserted at firstAffectedRow+1..
     let buf = newTextBuffer("Line1\nLine2\nLine3")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
-    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(2, LineMarkerKind.GitDeleted)
 
     # Insert "\nX\nY" at (0, 3): line 0 stays, two new lines appear at 1..2,
@@ -1302,28 +1302,25 @@ suite "Buffer - Sidebar Markers":
     discard buf.insertText(BufferPosition(line: 0, column: 3), "\nX\nY")
     check buf.len == 5
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    check buf.getLineMarker(3).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(3).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(4).get == LineMarkerKind.GitDeleted
 
     discard buf.undo()
 
     check buf.len == 3
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
-    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(1).get == LineMarkerKind.GitChangedAndDeleted
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
 
   test "clearGitMarkers drops only the git-diff kinds":
-    # Called on every git diff refresh: anything it wipes beyond the diff kinds
-    # is silently lost until the next LSP/bookmark update repopulates it.
-    let buf = newTextBuffer("L0\nL1\nL2\nL3\nL4\nL5\nL6\nL7")
+    # Called on every git diff refresh: a conflict marker it wiped would be
+    # lost until the next conflict scan.
+    let buf = newTextBuffer("L0\nL1\nL2\nL3\nL4")
     buf.setLineMarker(0, LineMarkerKind.GitAdded)
     buf.setLineMarker(1, LineMarkerKind.GitChanged)
     buf.setLineMarker(2, LineMarkerKind.GitDeleted)
     buf.setLineMarker(3, LineMarkerKind.GitChangedAndDeleted)
     buf.setLineMarker(4, LineMarkerKind.GitConflict)
-    buf.setLineMarker(5, LineMarkerKind.SyntaxError)
-    buf.setLineMarker(6, LineMarkerKind.Bookmark)
-    buf.setLineMarker(7, LineMarkerKind.SessionModified)
 
     buf.clearGitMarkers()
 
@@ -1331,9 +1328,6 @@ suite "Buffer - Sidebar Markers":
       check buf.getLineMarker(line).isNone
     # GitConflict is not a diff kind: it marks conflict blocks in the file.
     check buf.getLineMarker(4).get == LineMarkerKind.GitConflict
-    check buf.getLineMarker(5).get == LineMarkerKind.SyntaxError
-    check buf.getLineMarker(6).get == LineMarkerKind.Bookmark
-    check buf.getLineMarker(7).get == LineMarkerKind.SessionModified
 
   test "isGitChangeMarker covers the diff kinds only":
     for kind in [GitAdded, GitChanged, GitDeleted, GitChangedAndDeleted]:
@@ -1416,81 +1410,57 @@ suite "Buffer - snapRangeToFolds":
 
 suite "Buffer - Row-ref subscribers dispatch (folds/bookmarks)":
   # Guards the refactor's promise that folds, bookmarks, lineMarkers, and
-  # modifiedLines all shift through the same emitRowColRemapEvents fan-out.
-  # The marker suite above covers the per-line-array half; these cover the
-  # row-reference half.
+  # modifiedLines all follow the same edits through `followChange`. The marker
+  # suite above covers the per-line-array half; these cover the row-reference
+  # half.
 
-  test "an insert that merged a character reports the row as changed":
+  test "an insert that merged a character leaves what is on the row in place":
     # The pasted bytes complete a lead byte left waiting on the line, so a
     # column before the insertion point changes and the row no longer maps by
-    # a column shift. Reporting one would move every decoration on the row
-    # three columns right, and undo would take three columns back off
-    # coordinates that never moved.
-    let buf = newTextBuffer("\xF0")
-    var kinds: seq[RowColRemapEventKind] = @[]
-    buf.registerRowColRemapCallback(
-      proc(b: TextBuffer, event: RowColRemapEvent) =
-        kinds.add(event.kind)
-    )
+    # a column shift. Taking one would move every mark on the row three
+    # columns right, and undo would take three columns back off coordinates
+    # that never moved.
+    let buf = newTextBuffer("\xF0ab")
+    buf.namedMarks['a'] = some(BufferPosition(line: 0, column: 2))
 
     discard buf.insertText(BufferPosition(line: 0, column: 1), "\x9F\x98\x81")
-    check buf.getLine(0).charLen == 1
-    check kinds == @[rrekMultiLine]
+    check buf.getLine(0).charLen == 3
+    check buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 2))
 
     discard buf.undo()
-    check buf.getLine(0) == "\xF0"
-    check kinds == @[rrekMultiLine, rrekMultiLine]
+    check buf.getLine(0) == "\xF0ab"
+    check buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 2))
 
-  test "an ordinary single-line insert still reports a column shift":
+  test "an ordinary single-line insert still shifts the columns after it":
     let buf = newTextBuffer("AB")
-    var events: seq[RowColRemapEvent] = @[]
-    buf.registerRowColRemapCallback(
-      proc(b: TextBuffer, event: RowColRemapEvent) =
-        events.add(event)
-    )
+    buf.namedMarks['a'] = some(BufferPosition(line: 0, column: 1))
 
     discard buf.insertText(BufferPosition(line: 0, column: 1), "xy")
-    check events.len == 1
-    check events[0].kind == rrekSingleLine
-    check events[0].editCol == 1
-    check events[0].colDelta == 2
-    check events[0].lineCharLenAfter == 4
+    check buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 3))
 
-  test "a delete that merged a character reports the row as changed":
+  test "a delete that merged a character leaves what is on the row in place":
     # Mirror of the insert case: removing the byte lets 0xF0 complete over what
     # followed the hole, so a column before the deletion point changes and the
     # row no longer maps by a column shift. Re-deriving the shift from the
-    # deleted text would report -1 where the row actually lost four columns.
-    let buf = newTextBuffer("\xF0a\x9F\x98\x81")
-    check buf.getLine(0).charLen == 5
-    var kinds: seq[RowColRemapEventKind] = @[]
-    buf.registerRowColRemapCallback(
-      proc(b: TextBuffer, event: RowColRemapEvent) =
-        kinds.add(event.kind)
-    )
+    # deleted text would take one column where the row actually lost four.
+    let buf = newTextBuffer("\xF0a\x9F\x98\x81b")
+    check buf.getLine(0).charLen == 6
+    buf.namedMarks['a'] = some(BufferPosition(line: 0, column: 5))
 
     discard buf.deleteChar(BufferPosition(line: 0, column: 1))
-    check buf.getLine(0).charLen == 1
-    check kinds == @[rrekMultiLine]
+    check buf.getLine(0).charLen == 2
+    check buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 5))
 
     discard buf.undo()
-    check buf.getLine(0) == "\xF0a\x9F\x98\x81"
-    check kinds == @[rrekMultiLine, rrekMultiLine]
+    check buf.getLine(0) == "\xF0a\x9F\x98\x81b"
+    check buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 5))
 
-  test "an ordinary single-character delete still reports a column shift":
+  test "an ordinary single-character delete still shifts the columns after it":
     let buf = newTextBuffer("ABCD")
-    var events: seq[RowColRemapEvent] = @[]
-    buf.registerRowColRemapCallback(
-      proc(b: TextBuffer, event: RowColRemapEvent) =
-        events.add(event)
-    )
+    buf.namedMarks['a'] = some(BufferPosition(line: 0, column: 3))
 
     discard buf.deleteChar(BufferPosition(line: 0, column: 1))
-    check events.len == 1
-    check events[0].kind == rrekSingleLine
-    check events[0].editCol == 1
-    check events[0].colDelta == -1
-    check events[0].lineCharLenAfter == 3
+    check buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 2))
 
   test "fold shifts down after ckInsertText with newlines":
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
@@ -1568,6 +1538,34 @@ suite "Buffer - Row-ref subscribers dispatch (folds/bookmarks)":
     discard buf.deleteLine(0)
     check buf.foldState.folds[0].startLine == 1
     check buf.foldState.folds[0].endLine == 2
+
+  test "joining onto an empty line keeps it, and undo keeps it too":
+    # The empty line stays and the next one leaves, as in Vim, though the text
+    # alone would allow either; undo has to put back the one that left, not
+    # push the empty line down.
+    let buf = newTextBuffer("\nabc\ndef")
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(2)
+
+    check buf.deleteRange(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0)
+    ).isOk
+    check buf.getLine(0) == "abc"
+    check buf.bookmarks == @[0, 1]
+
+    check buf.undo().isOk
+    check buf.bookmarks == @[0, 2]
+
+  test "a split at the start of a line pushes it down, and undo brings it up":
+    let buf = newTextBuffer("abc\ndef")
+    buf.toggleBookmark(1)
+
+    check buf.insertText(BufferPosition(line: 1, column: 0), "x\n").isOk
+    check buf.getLine(2) == "def"
+    check buf.bookmarks == @[2]
+
+    check buf.undo().isOk
+    check buf.bookmarks == @[1]
 
   test "bookmark shifts down after ckInsertText with newlines":
     let buf = newTextBuffer("Line1\nLine2\nLine3")
@@ -2101,10 +2099,10 @@ suite "Git Change Navigation - findNextGitChange":
     check result.isSome
     check result.get == 3
 
-  test "Non-git markers are ignored":
+  test "Conflict markers are ignored":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
-    buf.setLineMarker(1, SyntaxError)
+    buf.setLineMarker(1, GitConflict)
     buf.setLineMarker(3, GitAdded)
     let result = buf.findNextGitChange(0)
     check result.isSome
@@ -2377,20 +2375,376 @@ suite "Buffer - Bookmarks - line insert/delete integration":
     discard buf.undo()
     check buf.bookmarks == @[2, 3]
 
+suite "Buffer - diagnostics follow edits":
+  proc spans(b: TextBuffer, source = dsrcLsp): seq[(int, int, int, int)] =
+    ## (startLine, startCol, endLine, endCol) of each diagnostic.
+    for d in b.diagnostics[source].items:
+      result.add (d.startLine, d.startCol, d.endLine, d.endCol)
+
+  proc diagnose(b: TextBuffer, spans: varargs[(int, int, int, int)]) =
+    var items: seq[BufferDiagnostic]
+    for (startLine, startCol, endLine, endCol) in spans:
+      items.add BufferDiagnostic(
+        startLine: startLine,
+        startCol: startCol,
+        endLine: endLine,
+        endCol: endCol,
+        severity: bdsError,
+      )
+    b.setDiagnostics(dsrcLsp, items)
+    b.diagnosticsDirty = false
+
+  test "An inserted line moves the diagnostics below it and stretches one across it":
+    let buf = newTextBuffer("a\nb\nc\nd\ne")
+    buf.diagnose((0, 0, 0, 1), (1, 0, 3, 1), (4, 0, 4, 1))
+
+    check buf.insert(2, "new").isOk
+    check buf.spans == @[(0, 0, 0, 1), (1, 0, 4, 1), (5, 0, 5, 1)]
+    check buf.diagnosticsDirty
+
+  test "A diagnostic on a deleted line goes, and one reaching into it is cut back":
+    let buf = newTextBuffer("a\nbb\nccc\nd")
+    buf.diagnose((0, 0, 1, 1), (1, 0, 1, 2), (3, 0, 3, 1))
+
+    check buf.deleteLine(1).isOk
+    check buf.spans == @[(0, 0, 1, 0), (2, 0, 2, 1)]
+
+  test "Deleting the first line of a long diagnostic keeps the rest":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.diagnose((0, 0, 2, 1))
+
+    check buf.deleteLine(0).isOk
+    check buf.spans == @[(0, 0, 1, 1)]
+
+  test "An edit on another line moves nothing":
+    let buf = newTextBuffer("abc\ndef")
+    buf.diagnose((1, 0, 1, 2))
+
+    check buf.insertText(BufferPosition(line: 0, column: 1), "x").isOk
+    check buf.spans == @[(1, 0, 1, 2)]
+    check not buf.diagnosticsDirty
+
+  test "Typing before a diagnostic on its line moves it along":
+    let buf = newTextBuffer("let x = foo")
+    buf.diagnose((0, 8, 0, 11))
+
+    check buf.insertText(BufferPosition(line: 0, column: 4), "yy").isOk
+    check buf.spans == @[(0, 10, 0, 13)]
+    check buf.deleteChar(BufferPosition(line: 0, column: 0)).isOk
+    check buf.spans == @[(0, 9, 0, 12)]
+    check buf.diagnosticsDirty
+
+  test "Typing inside a diagnostic stretches it, typing at its end does not":
+    let buf = newTextBuffer("foo bar")
+    buf.diagnose((0, 0, 0, 3))
+
+    check buf.insertText(BufferPosition(line: 0, column: 1), "x").isOk
+    check buf.spans == @[(0, 0, 0, 4)]
+    check buf.insertText(BufferPosition(line: 0, column: 4), "y").isOk
+    check buf.spans == @[(0, 0, 0, 4)]
+
+  test "A diagnostic whose text is all deleted goes":
+    let buf = newTextBuffer("foo bar baz")
+    buf.diagnose((0, 4, 0, 7), (0, 8, 0, 11))
+
+    check buf.deleteRange(
+      BufferPosition(line: 0, column: 3), BufferPosition(line: 0, column: 7)
+    ).isOk
+    check buf.getLine(0) == "foobaz"
+    check buf.spans == @[(0, 3, 0, 6)]
+
+  test "Enter before a diagnostic takes it to the new line":
+    let buf = newTextBuffer("let x = foo(bar)\nnext")
+    buf.diagnose((0, 12, 0, 15), (1, 0, 1, 4))
+
+    check buf.insertText(BufferPosition(line: 0, column: 8), "\n  ").isOk
+    check buf.getLine(1) == "  foo(bar)"
+    check buf.spans == @[(1, 6, 1, 9), (2, 0, 2, 4)]
+
+  test "A line opened below leaves a diagnostic at the end of the line":
+    let buf = newTextBuffer("foo\nbar")
+    buf.diagnose((0, 3, 0, 3))
+
+    check buf.insertText(BufferPosition(line: 0, column: 3), "\n").isOk
+    check buf.spans == @[(0, 3, 0, 3)]
+
+  test "Enter at the end of a line leaves a diagnostic over the line on it":
+    # Ending at the start of the next line, as a server marks a whole line;
+    # the new line goes after it, as it would opened with `o`.
+    let buf = newTextBuffer("foo\nbar")
+    buf.diagnose((0, 0, 1, 0), (1, 0, 1, 3))
+
+    check buf.insertText(BufferPosition(line: 0, column: 3), "\n  ").isOk
+    check buf.getLine(1) == "  "
+    check buf.spans == @[(0, 0, 1, 0), (2, 0, 2, 3)]
+
+    check buf.undo().isOk
+    check buf.spans == @[(0, 0, 1, 0), (1, 0, 1, 3)]
+
+  test "Text ending in a line break pasted at the end of a line leaves a diagnostic over the line on it":
+    let buf = newTextBuffer("abc\nbar")
+    buf.diagnose((0, 0, 1, 0), (1, 0, 1, 3))
+
+    check buf.insertText(BufferPosition(line: 0, column: 3), "foo\n").isOk
+    check buf.getLine(0) == "abcfoo"
+    check buf.getLine(1) == ""
+    check buf.spans == @[(0, 0, 1, 0), (2, 0, 2, 3)]
+
+    check buf.undo().isOk
+    check buf.spans == @[(0, 0, 1, 0), (1, 0, 1, 3)]
+
+  test "Lines opened above an empty line take what is on it down with it":
+    let buf = newTextBuffer("a\n\nc")
+    buf.diagnose((1, 0, 1, 0))
+    buf.namedMarks['a'] = some(BufferPosition(line: 1, column: 0))
+    buf.toggleBookmark(1)
+
+    check buf.insertText(BufferPosition(line: 1, column: 0), "x\n", openLine = olAbove).isOk
+    check buf.getLine(1) == "x"
+    check buf.spans == @[(2, 0, 2, 0)]
+    check buf.namedMarks['a'] == some(BufferPosition(line: 2, column: 0))
+    check buf.bookmarks == @[2]
+
+  test "A line opened where the text breaks the line is taken as the break":
+    let buf = newTextBuffer("abc\nd", backend = GapBuffer)
+    check buf.insertText(BufferPosition(line: 0, column: 1), "\nx", openLine = olBelow).isOk
+    check buf.undoStack.peekLast.insertOpenLine == olNone
+
+  test "Deleting a line break brings the diagnostics after it up":
+    let buf = newTextBuffer("foo\nbar baz\nqux")
+    buf.diagnose((1, 4, 1, 7), (2, 0, 2, 3))
+
+    check buf.joinWithNextLine(0).isOk
+    check buf.getLine(0) == "foobar baz"
+    check buf.spans == @[(0, 7, 0, 10), (1, 0, 1, 3)]
+
+  test "A deletion across lines keeps what follows it on the merged line":
+    let buf = newTextBuffer("abc\ndef\nghij\nk")
+    buf.diagnose((0, 0, 0, 1), (1, 1, 1, 2), (2, 2, 2, 4), (3, 0, 3, 1))
+
+    check buf.deleteRange(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 2, column: 1)
+    ).isOk
+    check buf.getLine(0) == "abij"
+    check buf.spans == @[(0, 0, 0, 1), (0, 2, 0, 4), (1, 0, 1, 1)]
+
+  test "J brings the diagnostics on the joined line along":
+    let buf = newTextBuffer("foo  \n   bar(x)\nnext")
+    buf.diagnose((0, 0, 0, 3), (1, 3, 1, 6), (2, 0, 2, 4))
+    buf.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[BufferDiagnostic(startLine: 1, startCol: 7, endLine: 1, endCol: 7)],
+    )
+
+    check buf.joinLines(0).isOk
+    check buf.getLine(0) == "foo bar(x)"
+    check buf.spans == @[(0, 0, 0, 3), (0, 4, 0, 7), (1, 0, 1, 4)]
+    check buf.spans(dsrcSyntaxCheck) == @[(0, 8, 0, 8)]
+
+    check buf.undo().isOk
+    check buf.spans == @[(0, 0, 0, 3), (1, 3, 1, 6), (2, 0, 2, 4)]
+    check buf.spans(dsrcSyntaxCheck) == @[(1, 7, 1, 7)]
+
+    check buf.redo().isOk
+    check buf.spans == @[(0, 0, 0, 3), (0, 4, 0, 7), (1, 0, 1, 4)]
+    check buf.spans(dsrcSyntaxCheck) == @[(0, 8, 0, 8)]
+
+  test "A diagnostic over both joined lines ends where the second did":
+    let buf = newTextBuffer("ab\ncd\nef")
+    buf.diagnose((0, 1, 2, 0))
+
+    check buf.joinLines(0).isOk
+    check buf.getLine(0) == "ab cd"
+    check buf.spans == @[(0, 1, 1, 0)]
+
+  test "Undo brings back no diagnostic a deletion took or cut short":
+    # The next report has them again.
+    let buf = newTextBuffer("abc\ndef\nghi")
+    buf.diagnose((0, 1, 1, 2), (1, 0, 1, 3), (2, 0, 2, 3))
+
+    check buf.deleteLine(1).isOk
+    check buf.spans == @[(0, 1, 1, 0), (1, 0, 1, 3)]
+
+    check buf.undo().isOk
+    check buf.spans == @[(0, 1, 1, 0), (2, 0, 2, 3)]
+    check buf.redo().isOk
+    check buf.spans == @[(0, 1, 1, 0), (1, 0, 1, 3)]
+
+  test "J at the end of a line keeps an empty diagnostic there":
+    let buf = newTextBuffer("foo(\n  bar)")
+    buf.diagnose((0, 4, 0, 4), (1, 2, 1, 5))
+
+    check buf.joinLines(0).isOk
+    check buf.getLine(0) == "foo( bar)"
+    check buf.spans == @[(0, 4, 0, 4), (0, 5, 0, 8)]
+
+  test "An empty diagnostic goes with its line, not with its character":
+    let buf = newTextBuffer("foo bar\nbaz")
+    buf.diagnose((0, 4, 0, 4), (1, 0, 1, 0))
+
+    check buf.deleteChar(BufferPosition(line: 0, column: 4)).isOk
+    check buf.spans == @[(0, 4, 0, 4), (1, 0, 1, 0)]
+    check buf.deleteLine(1).isOk
+    check buf.spans == @[(0, 4, 0, 4)]
+
+  test "A rewritten line moves the diagnostics after what changed":
+    let buf = newTextBuffer("foo bar")
+    buf.diagnose((0, 4, 0, 7))
+
+    check buf.replaceLine(0, "    foo bar").isOk
+    check buf.spans == @[(0, 8, 0, 11)]
+    check buf.replaceLine(0, "    fooo bar").isOk
+    check buf.spans == @[(0, 9, 0, 12)]
+    check buf.replaceLine(0, "    fooo baz").isOk
+    check buf.spans == @[(0, 9, 0, 12)]
+    check buf.replaceLine(0, "    fooo qux").isOk
+    check buf.spans == @[(0, 9, 0, 12)]
+
+  test "A range deletion that completes a split character moves nothing on its line":
+    let buf = newTextBuffer("\xF0ab\x9F\x98\x81z\nnext")
+    buf.diagnose((0, 6, 0, 7), (1, 0, 1, 4))
+
+    check buf.deleteRange(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 2)
+    ).isOk
+    check buf.getLine(0) == "\xF0\x9F\x98\x81z"
+    check buf.spans == @[(0, 6, 0, 7), (1, 0, 1, 4)]
+
+  test "A line rewritten in two places keeps the diagnostic between them":
+    let buf = newTextBuffer("x foo x\ny")
+    buf.diagnose((0, 2, 0, 5), (1, 0, 1, 1))
+
+    check buf.replaceLine(0, "yy foo yy").isOk
+    check buf.spans == @[(0, 0, 0, 0), (1, 0, 1, 1)]
+
+  test "A range ending before its start is taken as empty":
+    let buf = newTextBuffer("foo bar")
+    buf.diagnose((0, 4, 0, 1))
+
+    check buf.spans == @[(0, 4, 0, 4)]
+    check buf.insertText(BufferPosition(line: 0, column: 2), "x").isOk
+    check buf.spans == @[(0, 5, 0, 5)]
+
+  test "Undo moves a rewritten line's diagnostics back":
+    let buf = newTextBuffer("x = é + bar")
+    buf.diagnose((0, 8, 0, 11))
+
+    check buf.replaceLine(0, "x = éé + bar").isOk
+    check buf.spans == @[(0, 9, 0, 12)]
+    check buf.undo().isOk
+    check buf.spans == @[(0, 8, 0, 11)]
+
+  test "Undo moves a report that came during the entry back across all of it":
+    let buf = newTextBuffer("abc\ndef\nghi")
+    check buf.beginTransaction("insert").isOk
+    check buf.insertText(BufferPosition(line: 0, column: 0), "xy\n").isOk
+    buf.diagnose((2, 1, 2, 2), (3, 0, 3, 3))
+    check buf.deleteLine(2).isOk
+    check buf.spans == @[(2, 0, 2, 3)]
+    check buf.commitTransaction().isOk
+
+    check buf.undo().isOk
+    check buf.spans == @[(2, 0, 2, 3)]
+    check buf.redo().isOk
+    check buf.spans == @[(2, 0, 2, 3)]
+
+  test "Undo of an edit moves a report that came after it back":
+    let buf = newTextBuffer("abc\ndef")
+    check buf.insertText(BufferPosition(line: 0, column: 0), "xy").isOk
+    buf.diagnose((0, 4, 0, 5))
+
+    check buf.undo().isOk
+    check buf.spans == @[(0, 2, 0, 3)]
+
+  test "The report keeps its start order through edits":
+    let buf = newTextBuffer("one\ntwo\nthree")
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(startLine: 2, endLine: 2, endCol: 1, severity: bdsError),
+        BufferDiagnostic(startLine: 0, endLine: 0, endCol: 1, severity: bdsError),
+        BufferDiagnostic(startLine: 1, endLine: 1, endCol: 1, severity: bdsError),
+      ],
+    )
+    check buf.spans == @[(0, 0, 0, 1), (1, 0, 1, 1), (2, 0, 2, 1)]
+
+    check buf.deleteRange(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 1, column: 1)
+    ).isOk
+    check buf.insert(0, "zero").isOk
+    check buf.spans == @[(1, 0, 1, 1), (2, 0, 2, 1)]
+    check buf.diagnosticMarker(1) == some(LineMarkerKind.SyntaxError)
+    check buf.diagnosticMarkers(0, 3) ==
+      @[
+        none(LineMarkerKind),
+        some(LineMarkerKind.SyntaxError),
+        some(LineMarkerKind.SyntaxError),
+      ]
+
+  test "The underline follows its diagnostic down":
+    let buf = newTextBuffer("hello\nworld")
+    buf.language = SourceLanguage.langNone
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[BufferDiagnostic(startLine: 1, endLine: 1, endCol: 5, severity: bdsError)],
+    )
+    buf.updateHighlight()
+    check 1 in buf.highlight.diagnosticOverlay
+
+    check buf.insert(0, "new").isOk
+    buf.updateHighlight()
+    check 1 notin buf.highlight.diagnosticOverlay
+    check 2 in buf.highlight.diagnosticOverlay
+
+  test "A range cut back to the start of a line underlines none of that line":
+    let buf = newTextBuffer("hello\nworld\nagain")
+    buf.language = SourceLanguage.langNone
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0, startCol: 1, endLine: 1, endCol: 3, severity: bdsError
+        )
+      ],
+    )
+
+    check buf.deleteLine(1).isOk
+    buf.updateHighlight()
+    check 0 in buf.highlight.diagnosticOverlay
+    check 1 notin buf.highlight.diagnosticOverlay
+
+  test "A gone diagnostic has no underline":
+    let buf = newTextBuffer("hello\nworld")
+    buf.language = SourceLanguage.langNone
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[BufferDiagnostic(startLine: 1, endLine: 1, endCol: 5, severity: bdsError)],
+    )
+    buf.updateHighlight()
+    check 1 in buf.highlight.diagnosticOverlay
+
+    check buf.deleteLine(1).isOk
+    buf.updateHighlight()
+    check buf.highlight.diagnosticOverlay.len == 0
+    check buf.getDiagnosticsAt(0, 0).len == 0
+
 suite "Buffer - Diagnostic Highlights":
   test "updateHighlight applies diagnostic underlines":
     let buf = newTextBuffer("hello world")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 5,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 5,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2405,16 +2759,19 @@ suite "Buffer - Diagnostic Highlights":
   test "updateHighlight with warning diagnostic":
     let buf = newTextBuffer("hello world")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 6,
-        endLine: 0,
-        endCol: 11,
-        severity: bdsWarning,
-        message: "test warning",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 6,
+          endLine: 0,
+          endCol: 11,
+          severity: bdsWarning,
+          message: "test warning",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2440,16 +2797,19 @@ suite "Buffer - Diagnostic Highlights":
     # preserve.
     let buf = newTextBuffer("line0\nline1\nline2\nline3")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 2,
-        endLine: 2,
-        endCol: 3,
-        severity: bdsError,
-        message: "multi-line err",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 2,
+          endLine: 2,
+          endCol: 3,
+          severity: bdsError,
+          message: "multi-line err",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2476,24 +2836,27 @@ suite "Buffer - Diagnostic Highlights":
     # deliberately, not silently.
     let buf = newTextBuffer("abcdefghij")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 5,
-        severity: bdsError,
-        message: "err first",
-      ),
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 2,
-        endLine: 0,
-        endCol: 8,
-        severity: bdsWarning,
-        message: "warn second",
-      ),
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 5,
+          severity: bdsError,
+          message: "err first",
+        ),
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 2,
+          endLine: 0,
+          endCol: 8,
+          severity: bdsWarning,
+          message: "warn second",
+        ),
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -2509,28 +2872,31 @@ suite "Buffer - Diagnostic Highlights":
     check buf.highlight.getSegmentModifiers(0, 8) == {}
 
   test "clearing diagnostics removes render-side underlines and colors":
-    # After buf.diagnostics.setLen(0) + updateHighlight, previously highlighted
+    # After buf.setDiagnostics(dsrcLsp, @[]) + updateHighlight, previously highlighted
     # cells must return to no-underline / non-syntaxCheck* color. Existing
     # tests only checked marker (sidebar) clearing; this pins the render path.
     let buf = newTextBuffer("hello world")
     buf.language = SourceLanguage.langNone
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 5,
-        severity: bdsError,
-        message: "boom",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 5,
+          severity: bdsError,
+          message: "boom",
+        )
+      ],
+    )
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
     check buf.highlight.getSegmentModifiers(0, 0) == {StyleModifier.Undercurl}
     check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.syntaxCheckErr
 
-    buf.diagnostics.setLen(0)
+    buf.setDiagnostics(dsrcLsp, @[])
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
@@ -3062,21 +3428,24 @@ suite "Buffer - reload preserves identity across a backend swap":
       removeFile(path)
 
     let buf = newTextBuffer(backend = PieceTable)
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 1,
-        severity: bdsError,
-        message: "boom",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 1,
+          severity: bdsError,
+          message: "boom",
+        )
+      ],
+    )
 
     check buf.loadFile(path).isOk
     check buf.backendKind == GapBuffer # the swap happened
 
-    check buf.diagnostics.len == 0
+    check buf.diagnostics[dsrcLsp].items.len == 0
 
   test "conflictBlocks are cleared on reload (not part of identity)":
     # conflictBlocks holds line ranges into the OLD content, so a reload makes them
@@ -3224,20 +3593,23 @@ suite "Buffer - reload resets stale content-keyed state":
       removeFile(path)
 
     let buf = newTextBuffer(backend = GapBuffer)
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 1,
-        severity: bdsError,
-        message: "stale",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 1,
+          severity: bdsError,
+          message: "stale",
+        )
+      ],
+    )
 
     check buf.loadFile(path).isOk
     check buf.backendKind == GapBuffer # same-backend path, no swap
-    check buf.diagnostics.len == 0
+    check buf.diagnostics[dsrcLsp].items.len == 0
 
   test "same-backend reload keeps contentVersion monotonic":
     # loadFile advances contentVersion once on its single reload path; a reload
@@ -3389,7 +3761,7 @@ suite "Buffer - an external reload lands as an edit":
     let buf = newTextBuffer()
     check buf.loadFile(path).isOk
     buf.toggleBookmark(2)
-    buf.setLineMarker(2, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitChanged)
 
     writeFile(path, "alpha\nBETA\ngamma\n")
     let reloaded = buf.reloadFileIfContentChanged()
@@ -3398,7 +3770,7 @@ suite "Buffer - an external reload lands as an edit":
 
     check buf.getLine(1) == "BETA"
     check buf.hasBookmark(2)
-    check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(2) == some(LineMarkerKind.GitChanged)
     # The buffer holds what is on disk, so nothing is owed a save.
     check not buf.isModified
 
@@ -3554,32 +3926,38 @@ suite "Buffer - an external reload lands as an edit":
     check buf.encoding == CharacterEncoding.utf8
     check buf.getLine(0) == "alpha"
 
-  test "Diagnostics go, because nothing carries them onto the new lines":
+  test "Diagnostics move with the reload's edit and come back on its undo":
     let path = getTempDir() / "moe_test_reload_diagnostics.txt"
     writeFile(path, "alpha\nbeta\n")
     defer:
       removeFile(path)
     let buf = newTextBuffer()
     check buf.loadFile(path).isOk
-    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 5,
-        severity: bdsError,
-        message: "stale",
-      )
-    ]
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0, endLine: 0, endCol: 5, severity: bdsError, message: "lsp"
+        )
+      ],
+    )
+    buf.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsWarning)],
+    )
+    buf.diagnosticsDirty = false
 
     writeFile(path, "INSERTED\nalpha\nbeta\n")
     check buf.reloadFileIfContentChanged().isOk
-    # The marker rides the edit down a line; the diagnostic cannot, so keeping
-    # it would leave the undercurl a line above the marker beside it.
-    check buf.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
-    check buf.diagnostics.len == 0
+    check buf.diagnostics[dsrcLsp].items[0].startLine == 1
+    check buf.diagnostics[dsrcSyntaxCheck].items[0].startLine == 2
+    check buf.diagnosticMarker(1) == some(LineMarkerKind.SyntaxError)
+    check buf.diagnosticMarker(2) == some(LineMarkerKind.SyntaxWarning)
     check buf.diagnosticsDirty
+
+    check buf.undo().isOk
+    check buf.diagnostics[dsrcLsp].items[0].startLine == 0
+    check buf.diagnostics[dsrcSyntaxCheck].items[0].startLine == 1
 
   test "Reloads that have spent their share of the undo stack go wholesale":
     let path = getTempDir() / "moe_test_reload_budget.txt"
@@ -4856,17 +5234,17 @@ suite "Buffer - replaceAllLines":
   test "A line between two changes keeps its marker":
     # Scattered changes: everything in between comes through untouched.
     let buf = bufferOf("head", "x", "middle", "y", "tail")
-    buf.setLineMarker(2, SyntaxError)
+    buf.setLineMarker(2, GitChanged)
     check buf.replaceAllLines(["head", "X", "middle", "Y", "tail"]).get.hunks.len == 2
     check buf[2] == "middle"
-    check buf.getLineMarker(2) == some(SyntaxError)
+    check buf.getLineMarker(2) == some(GitChanged)
 
   test "A marker below an inserted line moves down with it":
     let buf = bufferOf("a", "b", "c")
-    buf.setLineMarker(2, SyntaxError)
+    buf.setLineMarker(2, GitChanged)
     check buf.replaceAllLines(["a", "b", "new", "c"]).get.hunks.len == 1
     check buf[3] == "c"
-    check buf.getLineMarker(3) == some(SyntaxError)
+    check buf.getLineMarker(3) == some(GitChanged)
 
   test "Scattered changes are applied as separate hunks":
     let buf = bufferOf("a", "b", "c", "d", "e")
@@ -4964,7 +5342,11 @@ suite "Buffer - replaceAllLines":
     for i in 0 ..< lines.len:
       lines[i] = "line " & $i
     let buf = newTextBuffer(lines.join("\n"))
-    buf.setLineMarker(701, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(701, LineMarkerKind.GitChanged)
+    buf.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[BufferDiagnostic(startLine: 701, endLine: 701, severity: bdsError)],
+    )
     buf.toggleBookmark(701)
     var replacement = newSeq[string](lines.len)
     for i in 0 ..< lines.len:
@@ -4974,12 +5356,15 @@ suite "Buffer - replaceAllLines":
     check not diff.get.exact
     check buf[701] == "other 701"
     check buf.getLineMarker(701).isNone
+    check buf.diagnosticMarker(701).isNone
     check not buf.hasBookmark(701)
-    # Undo puts the text and its markers back. A bookmark on a deleted line
-    # does not survive undo anywhere in the buffer, so it is not checked here.
+    # Undo puts the text and its git marker back; the diagnostic waits for the
+    # next check. A bookmark on a deleted line does not survive undo anywhere
+    # in the buffer, so it is not checked here.
     check buf.undo().isOk
     check buf[701] == "line 701"
-    check buf.getLineMarker(701) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(701) == some(LineMarkerKind.GitChanged)
+    check buf.diagnosticMarker(701).isNone
 
   test "A replacement sharing no line takes the attachments with it":
     # The script is minimal -- deleting everything and inserting everything is
@@ -4989,7 +5374,7 @@ suite "Buffer - replaceAllLines":
     for i in 0 ..< lines.len:
       lines[i] = "line " & $i
     let buf = newTextBuffer(lines.join("\n"))
-    buf.setLineMarker(150, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(150, LineMarkerKind.GitChanged)
     buf.toggleBookmark(150)
     var replacement = newSeq[string](lines.len)
     for i in 0 ..< lines.len:
@@ -5007,12 +5392,12 @@ suite "Buffer - replaceAllLines":
 
   test "An exact script keeps the attachments on the lines it does not touch":
     let buf = bufferOf("a", "b", "c", "d", "e")
-    buf.setLineMarker(2, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitChanged)
     buf.toggleBookmark(2)
     let diff = buf.replaceAllLines(["a", "B", "c", "D", "e"])
     check diff.get.exact
     check not diff.get.coarse
-    check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(2) == some(LineMarkerKind.GitChanged)
     check buf.hasBookmark(2)
 
 suite "Buffer - decodeForBuffer":

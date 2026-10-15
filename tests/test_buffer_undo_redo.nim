@@ -1511,21 +1511,48 @@ suite "Buffer - Pending Snapshot Cleanup":
     # Only the first recorded change carries the pre-transaction side arrays;
     # undo walks the inner changes back to it, so the later ones need none.
     let b = newTextBuffer("aaa\nbbb\nccc\nddd")
-    b.setLineMarker(2, SessionModified)
+    b.setLineMarker(2, GitChanged)
 
     check b.beginTransaction("rewrite").isOk
     check b.replaceLine(0, "AAA").isOk
     check b.replaceLine(1, "BBB").isOk
     check b.replaceLine(3, "DDD").isOk
     check b.commitTransaction().isOk
-    check b.getLineMarker(2) == some(SessionModified)
+    check b.getLineMarker(2) == some(GitChanged)
 
     discard b.undo()
     check b.getLine(0) == "aaa"
     check b.getLine(1) == "bbb"
     check b.getLine(3) == "ddd"
-    check b.getLineMarker(2) == some(SessionModified)
+    check b.getLineMarker(2) == some(GitChanged)
     check not b.isModified
+
+  test "undo of a multi-change transaction moves the diagnostics it left back":
+    let b = newTextBuffer("aaa\nbbb\nccc\nddd")
+    b.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[
+        BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsError),
+        BufferDiagnostic(startLine: 3, endLine: 3, severity: bdsWarning),
+      ],
+    )
+
+    check b.beginTransaction("rewrite").isOk
+    check b.deleteLine(1).isOk
+    check b.insert(0, "new").isOk
+    check b.commitTransaction().isOk
+    check b.diagnosticMarker(1).isNone
+    check b.diagnosticMarker(2).isNone
+    check b.diagnosticMarker(3) == some(SyntaxWarning)
+
+    discard b.undo()
+    check b.diagnosticMarker(1).isNone
+    check b.diagnosticMarker(3) == some(SyntaxWarning)
+
+    discard b.redo()
+    check b.diagnosticMarker(1).isNone
+    check b.diagnosticMarker(2).isNone
+    check b.diagnosticMarker(3) == some(SyntaxWarning)
 
   test "PieceTable: failed edit does not leak pendingSnapshot":
     setConfiguredBackend(PieceTable)
@@ -1555,7 +1582,7 @@ suite "Buffer - Pending Snapshot Cleanup":
 
     # Fold and marker state established AFTER the (now-leaked) snapshot.
     check b.foldState.addFold(1, 2)
-    b.setLineMarker(0, SessionModified)
+    b.setLineMarker(0, GitChanged)
 
     # A real edit must capture the current fold/marker state, not the stale one.
     discard b.insertText(BufferPosition(line: 0, column: 3), "X")
@@ -1567,7 +1594,7 @@ suite "Buffer - Pending Snapshot Cleanup":
     check b.foldState.folds.len == 1
     check b.foldState.folds[0].startLine == 1
     check b.foldState.folds[0].endLine == 2
-    check b.getLineMarker(0) == some(SessionModified)
+    check b.getLineMarker(0) == some(GitChanged)
 
 suite "Buffer - Transaction Partial Failure Recovery":
   # These tests verify that the roll-forward / roll-back paths added in

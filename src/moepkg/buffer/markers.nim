@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Sidebar markers, git-change navigation, and LSP diagnostic queries.
+## Sidebar markers, git-change navigation, and diagnostic queries.
 
 import std/[options, tables]
 
@@ -27,20 +27,19 @@ import ../highlight
 import ./core
 
 proc setLineMarker*(b: TextBuffer, line: int, kind: LineMarkerKind) =
-  ## Set a sidebar marker for a specific line
-  ## Automatically resizes the marker array if needed
+  ## Set the git diff or conflict marker for a line
+  assert kind in {GitAdded .. GitConflict}
   b.ensureMarkersSize()
   if line >= 0 and line < b.lineMarkers.len:
     b.lineMarkers[line] = some(kind)
 
 proc clearLineMarker*(b: TextBuffer, line: int) =
-  ## Clear the sidebar marker for a specific line
+  ## Clear the git diff or conflict marker for a line
   if line >= 0 and line < b.lineMarkers.len:
     b.lineMarkers[line] = none(LineMarkerKind)
 
 proc getLineMarker*(b: TextBuffer, line: int): Option[LineMarkerKind] =
-  ## Get the sidebar marker for a specific line
-  ## Returns none if no marker is set or line is out of bounds
+  ## Git diff or conflict marker for a line, if any
   if line >= 0 and line < b.lineMarkers.len:
     return b.lineMarkers[line]
   else:
@@ -94,37 +93,51 @@ proc clearAllMarkers*(b: TextBuffer) =
   ## Clear all sidebar markers and diagnostics. A fresh (all-none) CowSeq node
   ## avoids cloning a shared/frozen array only to overwrite every slot.
   b.lineMarkers = initCowSeq[Option[LineMarkerKind]](b.lineMarkers.len)
-  b.diagnostics.setLen(0)
-  b.diagnosticsDirty = true
+  b.clearDiagnostics()
 
 proc clearGitMarkers*(b: TextBuffer) =
-  ## Clear only git-diff sidebar markers (added / changed / deleted).
-  ## Leaves LSP diagnostics and other marker kinds (SyntaxError, Bookmark,
-  ## SessionModified/Inserted, GitConflict) untouched. Used when
-  ## re-applying git diff results so that diagnostics survive the refresh.
+  ## Clear git-diff markers, keeping GitConflict. Used when re-applying git
+  ## diff results.
   for i in 0 ..< b.lineMarkers.len:
     let m = b.lineMarkers[i]
     if m.isSome and m.get.isGitChangeMarker:
       b.lineMarkers[i] = none(LineMarkerKind)
 
+func merge(
+    marker: var Option[LineMarkerKind],
+    source: DiagnosticSource,
+    severity: BufferDiagnosticSeverity,
+) =
+  ## Error outranks Warning; LSP info/hints count as Warning, syntax checker
+  ## marks none.
+  if severity == bdsError:
+    marker = some(SyntaxError)
+  elif marker.isNone and (severity == bdsWarning or source == dsrcLsp):
+    marker = some(SyntaxWarning)
+
+proc diagnosticMarkers*(
+    b: TextBuffer, firstLine, count: int
+): seq[Option[LineMarkerKind]] =
+  ## Diagnostic markers for `count` lines from `firstLine`, across all sources.
+  result = newSeq[Option[LineMarkerKind]](max(count, 0))
+  for source in DiagnosticSource:
+    for d in b.diagnostics[source].startingOn(firstLine ..< firstLine + result.len):
+      result[d.startLine - firstLine].merge(source, d.severity)
+
+proc diagnosticMarker*(b: TextBuffer, line: int): Option[LineMarkerKind] =
+  b.diagnosticMarkers(line, 1)[0]
+
 proc getDiagnosticsAt*(b: TextBuffer, line, col: int): seq[BufferDiagnostic] =
-  ## Return diagnostics whose range covers the given (line, col) position
-  for d in b.diagnostics:
-    if line >= d.startLine and line <= d.endLine:
+  ## LSP diagnostics covering (line, col)
+  for d in b.diagnostics[dsrcLsp].startingOn(0 .. line):
+    if line <= d.endLine:
       if (line > d.startLine or col >= d.startCol) and
           (line < d.endLine or col < d.endCol):
         result.add(d)
 
-proc applyDiagnosticHighlights*(
-    highlight: var Highlight, diagnostics: seq[BufferDiagnostic]
-) =
-  ## Populate the per-row diagnostic overlay. Read-only from render's
-  ## perspective — `colorSegments` are left alone so incremental highlighting
-  ## cannot cache stale diagnostic styling.
-  if diagnostics.len == 0:
-    return
-
-  for d in diagnostics:
+proc applyDiagnosticHighlights*(highlight: var Highlight, report: DiagnosticReport) =
+  ## Fill the per-row diagnostic overlay without touching `colorSegments`.
+  for d in report.items:
     let color =
       case d.severity
       of bdsError: EditorColorPairIndex.syntaxCheckErr
@@ -158,10 +171,11 @@ proc applyDiagnosticHighlights*(
           )
         )
 
-      highlight.diagnosticOverlay
-        .mgetOrPut(d.endLine, DiagnosticOverlayLine()).cells
-        .add(
-          DiagnosticOverlayCell(
-            firstColumn: 0, lastColumn: max(d.endCol - 1, 0), color: color, style: style
+      if d.endCol > 0:
+        highlight.diagnosticOverlay
+          .mgetOrPut(d.endLine, DiagnosticOverlayLine()).cells
+          .add(
+            DiagnosticOverlayCell(
+              firstColumn: 0, lastColumn: d.endCol - 1, color: color, style: style
+            )
           )
-        )

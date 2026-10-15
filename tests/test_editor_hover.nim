@@ -239,16 +239,19 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
 
   test "Shows popup when cursor is on diagnostic":
     let e = createTestEditorForAutoHover()
-    e.activeBuffer().diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 10,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    e.activeBuffer().setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 10,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     # Force cursor position change detection
     e.state.lspCache.autoHoverPoll.cursorLine = -1
     e.state.lspCache.autoHoverPoll.cursorColumn = -1
@@ -262,16 +265,19 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
   test "Does nothing while a macro is recorded":
     # The popup takes Escape, which the replay would not meet.
     let e = createTestEditorForAutoHover()
-    e.activeBuffer().diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 10,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    e.activeBuffer().setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 10,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     e.state.lspCache.autoHoverPoll.cursorLine = -1
     e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
@@ -283,16 +289,19 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
 
   test "Hides popup when cursor moves off diagnostic":
     let e = createTestEditorForAutoHover()
-    e.activeBuffer().diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 5,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    e.activeBuffer().setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 5,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     # Show popup first
     e.state.lspCache.hoverPopup.show("[Error] test error", 0, 0)
     check e.state.lspCache.hoverPopup.isActive
@@ -308,24 +317,27 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
 
   test "Shows multiple diagnostics at same position":
     let e = createTestEditorForAutoHover()
-    e.activeBuffer().diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 10,
-        severity: bdsError,
-        message: "error msg",
-      ),
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 10,
-        severity: bdsWarning,
-        message: "warning msg",
-      ),
-    ]
+    e.activeBuffer().setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 10,
+          severity: bdsError,
+          message: "error msg",
+        ),
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 10,
+          severity: bdsWarning,
+          message: "warning msg",
+        ),
+      ],
+    )
     e.state.lspCache.autoHoverPoll.cursorLine = -1
     e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
@@ -340,16 +352,19 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
   test "Debounce blocks rapid updates":
     let e = createTestEditorForAutoHover()
     e.config.lsp.diagnostics.autoHoverDelay = 999_999
-    e.activeBuffer().diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 10,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    e.activeBuffer().setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 10,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     # Set the last auto-hover time to now (within debounce window)
     e.state.lspCache.autoHoverPoll.lastUpdate = getMonoTime()
     e.state.lspCache.autoHoverPoll.cursorLine = -1
@@ -364,16 +379,19 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
   test "Works in Visual mode":
     let e = createTestEditorForAutoHover()
     e.state.mode = EditorMode.Visual
-    e.activeBuffer().diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 10,
-        severity: bdsWarning,
-        message: "visual warning",
-      )
-    ]
+    e.activeBuffer().setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 10,
+          severity: bdsWarning,
+          message: "visual warning",
+        )
+      ],
+    )
     e.state.lspCache.autoHoverPoll.cursorLine = -1
     e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
@@ -384,16 +402,19 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
 
   test "Auto-hover sets isAutoHover flag":
     let e = createTestEditorForAutoHover()
-    e.activeBuffer().diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 10,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    e.activeBuffer().setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 10,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     e.state.lspCache.autoHoverPoll.cursorLine = -1
     e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
@@ -417,16 +438,19 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
   test "Does nothing while a Command overlay is active":
     let e = createTestEditorForAutoHover()
     e.state.enterCommandOverlay()
-    e.activeBuffer().diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 10,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    e.activeBuffer().setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 10,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     e.state.lspCache.autoHoverPoll.cursorLine = -1
     e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
@@ -438,16 +462,19 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
   test "Debounce resets tracked position for retry":
     let e = createTestEditorForAutoHover()
     e.config.lsp.diagnostics.autoHoverDelay = 999_999
-    e.activeBuffer().diagnostics = @[
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 10,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    e.activeBuffer().setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 10,
+          severity: bdsError,
+          message: "test error",
+        )
+      ],
+    )
     e.state.lspCache.autoHoverPoll.lastUpdate = getMonoTime()
     e.state.lspCache.autoHoverPoll.cursorLine = -1
     e.state.lspCache.autoHoverPoll.cursorColumn = -1

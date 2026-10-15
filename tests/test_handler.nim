@@ -1359,7 +1359,9 @@ suite "Background op failures route through notify":
     editor.state.setStatusQuiet("")
 
     waitFor runSyntaxCheckJob(
-      editor, (path: "/nonexistent.txt", language: 0), JobStop()
+      editor,
+      (path: "/nonexistent.txt", language: 0, buffer: BufferId(0), awaited: 0, text: ""),
+      JobStop(),
     )
 
     check editor.state.notificationPopup.queue.len == 1
@@ -1373,7 +1375,9 @@ suite "Background op failures route through notify":
     editor.state.setStatusQuiet("")
 
     waitFor runSyntaxCheckJob(
-      editor, (path: "/nonexistent.txt", language: 0), JobStop()
+      editor,
+      (path: "/nonexistent.txt", language: 0, buffer: BufferId(0), awaited: 0, text: ""),
+      JobStop(),
     )
 
     check editor.state.notificationPopup.queue.len == 0
@@ -4665,15 +4669,9 @@ suite "handleKeyCombo - Insert resumes after the Ctrl-o command":
     let e = createEditorForCtrlO("abc")
     let path = getTempDir() / "ctrl_o_syntax_message.nim"
     e.activeBuffer.filePath = some(path)
-    e.state.syntaxCheckResults = (
-      path: path,
-      errors: @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 0, column: 0),
-          messageType: SyntaxCheckMessageType.error,
-          message: "bad",
-        )
-      ],
+    e.activeBuffer.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[BufferDiagnostic(startLine: 0, endLine: 0, severity: bdsError, message: "bad")],
     )
 
     e.press("i", "C-o", "'", "z")

@@ -2959,7 +2959,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       )
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
+    check buffer.diagnosticMarker(1) == some(LineMarkerKind.SyntaxError)
 
   test "applyDiagnosticsToBuffer sets warning markers":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -2979,7 +2979,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       )
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.getLineMarker(0) == some(LineMarkerKind.SyntaxWarning)
+    check buffer.diagnosticMarker(0) == some(LineMarkerKind.SyntaxWarning)
 
   test "applyDiagnosticsToBuffer error takes precedence over warning":
     let buffer = newTextBuffer("line1\nline2")
@@ -3012,18 +3012,37 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       ),
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.getLineMarker(0) == some(LineMarkerKind.SyntaxError)
+    check buffer.diagnosticMarker(0) == some(LineMarkerKind.SyntaxError)
 
-  test "applyDiagnosticsToBuffer clears existing markers":
+  test "applyDiagnosticsToBuffer replaces only the LSP diagnostics":
     let buffer = newTextBuffer("line1\nline2")
-    buffer.setLineMarker(0, LineMarkerKind.SyntaxError)
-    buffer.setLineMarker(1, LineMarkerKind.SyntaxWarning)
+    applyDiagnosticsToBuffer(
+      buffer,
+      @[Diagnostic(range: newRange(0, 0, 0, 5), severity: some(dsError), message: "e")],
+    )
+    buffer.setDiagnostics(
+      dsrcSyntaxCheck,
+      @[BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsWarning)],
+    )
 
     let diagnostics: seq[Diagnostic] = @[]
     applyDiagnosticsToBuffer(buffer, diagnostics)
 
-    check buffer.getLineMarker(0).isNone
-    check buffer.getLineMarker(1).isNone
+    check buffer.diagnosticMarker(0).isNone
+    check buffer.diagnosticMarker(1) == some(LineMarkerKind.SyntaxWarning)
+
+  test "information and hints get a warning marker":
+    let buffer = newTextBuffer("line1\nline2")
+    applyDiagnosticsToBuffer(
+      buffer,
+      @[
+        Diagnostic(range: newRange(0, 0, 0, 5), severity: some(dsInformation)),
+        Diagnostic(range: newRange(1, 0, 1, 5), severity: some(dsHint)),
+      ],
+    )
+    check buffer.diagnostics[dsrcLsp].items.len == 2
+    check buffer.diagnosticMarker(0) == some(LineMarkerKind.SyntaxWarning)
+    check buffer.diagnosticMarker(1) == some(LineMarkerKind.SyntaxWarning)
 
   test "applyDiagnosticsToBuffer ignores out of range lines":
     let buffer = newTextBuffer("line1")
@@ -3045,7 +3064,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     # Should not crash, line 0 should have no marker
-    check buffer.getLineMarker(0).isNone
+    check buffer.diagnosticMarker(0).isNone
 
   test "applyDiagnosticsToBuffer stores BufferDiagnostics":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -3074,16 +3093,17 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       ),
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.diagnostics.len == 2
-    check buffer.diagnostics[0].startLine == 1
-    check buffer.diagnostics[0].startCol == 2
-    check buffer.diagnostics[0].endLine == 1
+    # Kept in start order, whatever order the server sent them in.
+    check buffer.diagnostics[dsrcLsp].items.len == 2
+    check buffer.diagnostics[dsrcLsp].items[0].severity == bdsWarning
+    check buffer.diagnostics[dsrcLsp].items[0].message == "unused variable"
+    check buffer.diagnostics[dsrcLsp].items[1].startLine == 1
+    check buffer.diagnostics[dsrcLsp].items[1].startCol == 2
+    check buffer.diagnostics[dsrcLsp].items[1].endLine == 1
     # endCol 8 exceeds "line2" (5 runes) and is clamped to the line length.
-    check buffer.diagnostics[0].endCol == 5
-    check buffer.diagnostics[0].severity == bdsError
-    check buffer.diagnostics[0].message == "undeclared identifier"
-    check buffer.diagnostics[1].severity == bdsWarning
-    check buffer.diagnostics[1].message == "unused variable"
+    check buffer.diagnostics[dsrcLsp].items[1].endCol == 5
+    check buffer.diagnostics[dsrcLsp].items[1].severity == bdsError
+    check buffer.diagnostics[dsrcLsp].items[1].message == "undeclared identifier"
 
   test "applyDiagnosticsToBuffer converts UTF-16 columns to rune indexes":
     # "あいう abc": each hiragana is 1 UTF-16 unit = 1 rune, so a diagnostic
@@ -3115,11 +3135,11 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       ),
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.diagnostics.len == 2
-    check buffer.diagnostics[0].startCol == 4
-    check buffer.diagnostics[0].endCol == 7
-    check buffer.diagnostics[1].startCol == 2 # a(0) 😀(1) b(2)
-    check buffer.diagnostics[1].endCol == 4
+    check buffer.diagnostics[dsrcLsp].items.len == 2
+    check buffer.diagnostics[dsrcLsp].items[0].startCol == 4
+    check buffer.diagnostics[dsrcLsp].items[0].endCol == 7
+    check buffer.diagnostics[dsrcLsp].items[1].startCol == 2 # a(0) 😀(1) b(2)
+    check buffer.diagnostics[dsrcLsp].items[1].endCol == 4
 
   test "applyDiagnosticsToBuffer does not store out-of-range start lines":
     let buffer = newTextBuffer("line1\nline2")
@@ -3160,9 +3180,9 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     # Storage must match the marker pass: out-of-range start lines are skipped.
-    check buffer.diagnostics.len == 1
-    check buffer.diagnostics[0].startLine == 0
-    check buffer.diagnostics[0].message == "valid"
+    check buffer.diagnostics[dsrcLsp].items.len == 1
+    check buffer.diagnostics[dsrcLsp].items[0].startLine == 0
+    check buffer.diagnostics[dsrcLsp].items[0].message == "valid"
 
   test "applyDiagnosticsToBuffer clamps an out-of-range end line":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -3180,9 +3200,10 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       )
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.diagnostics.len == 1
-    check buffer.diagnostics[0].startLine == 1
-    check buffer.diagnostics[0].endLine == buffer.len - 1
+    check buffer.diagnostics[dsrcLsp].items.len == 1
+    check buffer.diagnostics[dsrcLsp].items[0].startLine == 1
+    check buffer.diagnostics[dsrcLsp].items[0].endLine == buffer.len - 1
+    check buffer.diagnostics[dsrcLsp].items[0].endCol == "line3".len
 
   test "applyDiagnosticsToBuffer degenerates a reversed range":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -3200,9 +3221,10 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       )
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.diagnostics.len == 1
-    check buffer.diagnostics[0].startLine == 2
-    check buffer.diagnostics[0].endLine == 2
+    check buffer.diagnostics[dsrcLsp].items.len == 1
+    check buffer.diagnostics[dsrcLsp].items[0].startLine == 2
+    check buffer.diagnostics[dsrcLsp].items[0].endLine == 2
+    check buffer.diagnostics[dsrcLsp].items[0].endCol == 0
 
 suite "LspIntegration - Additional Request Methods (disabled)":
   test "startDeclarationRequest returns error when disabled":
@@ -4844,32 +4866,38 @@ suite "LspIntegration - incremental didChange":
 suite "LspIntegration - getDiagnosticsAt":
   test "returns diagnostics at cursor position":
     let buffer = newTextBuffer("line1\nline2\nline3")
-    buffer.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 1,
-        startCol: 0,
-        endLine: 1,
-        endCol: 5,
-        severity: bdsError,
-        message: "error here",
-      )
-    ]
+    buffer.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 1,
+          startCol: 0,
+          endLine: 1,
+          endCol: 5,
+          severity: bdsError,
+          message: "error here",
+        )
+      ],
+    )
     let diags = buffer.getDiagnosticsAt(1, 3)
     check diags.len == 1
     check diags[0].message == "error here"
 
   test "returns empty for position outside diagnostic range":
     let buffer = newTextBuffer("line1\nline2\nline3")
-    buffer.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 1,
-        startCol: 0,
-        endLine: 1,
-        endCol: 5,
-        severity: bdsError,
-        message: "error here",
-      )
-    ]
+    buffer.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 1,
+          startCol: 0,
+          endLine: 1,
+          endCol: 5,
+          severity: bdsError,
+          message: "error here",
+        )
+      ],
+    )
     check buffer.getDiagnosticsAt(0, 0).len == 0
     check buffer.getDiagnosticsAt(2, 0).len == 0
     # endCol is exclusive (LSP spec): col == endCol should be outside.
@@ -4878,71 +4906,83 @@ suite "LspIntegration - getDiagnosticsAt":
 
   test "multi-line diagnostic - middle line matches at any column":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
-    buffer.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 1,
-        startCol: 3,
-        endLine: 3,
-        endCol: 2,
-        severity: bdsError,
-        message: "multi-line error",
-      )
-    ]
+    buffer.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 1,
+          startCol: 3,
+          endLine: 3,
+          endCol: 2,
+          severity: bdsError,
+          message: "multi-line error",
+        )
+      ],
+    )
     check buffer.getDiagnosticsAt(2, 0).len == 1
     check buffer.getDiagnosticsAt(2, 99).len == 1
 
   test "multi-line diagnostic - start line respects startCol":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
-    buffer.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 1,
-        startCol: 3,
-        endLine: 3,
-        endCol: 2,
-        severity: bdsError,
-        message: "multi-line error",
-      )
-    ]
+    buffer.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 1,
+          startCol: 3,
+          endLine: 3,
+          endCol: 2,
+          severity: bdsError,
+          message: "multi-line error",
+        )
+      ],
+    )
     check buffer.getDiagnosticsAt(1, 2).len == 0
     check buffer.getDiagnosticsAt(1, 3).len == 1
     check buffer.getDiagnosticsAt(1, 10).len == 1
 
   test "multi-line diagnostic - end line respects exclusive endCol":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
-    buffer.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 1,
-        startCol: 3,
-        endLine: 3,
-        endCol: 2,
-        severity: bdsError,
-        message: "multi-line error",
-      )
-    ]
+    buffer.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 1,
+          startCol: 3,
+          endLine: 3,
+          endCol: 2,
+          severity: bdsError,
+          message: "multi-line error",
+        )
+      ],
+    )
     check buffer.getDiagnosticsAt(3, 0).len == 1
     check buffer.getDiagnosticsAt(3, 1).len == 1
     check buffer.getDiagnosticsAt(3, 2).len == 0 # exclusive
 
   test "returns multiple diagnostics at same position":
     let buffer = newTextBuffer("line1\nline2\nline3")
-    buffer.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 1,
-        startCol: 0,
-        endLine: 1,
-        endCol: 10,
-        severity: bdsError,
-        message: "error",
-      ),
-      BufferDiagnostic(
-        startLine: 1,
-        startCol: 2,
-        endLine: 1,
-        endCol: 8,
-        severity: bdsWarning,
-        message: "warning",
-      ),
-    ]
+    buffer.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 1,
+          startCol: 0,
+          endLine: 1,
+          endCol: 10,
+          severity: bdsError,
+          message: "error",
+        ),
+        BufferDiagnostic(
+          startLine: 1,
+          startCol: 2,
+          endLine: 1,
+          endCol: 8,
+          severity: bdsWarning,
+          message: "warning",
+        ),
+      ],
+    )
     let diags = buffer.getDiagnosticsAt(1, 3)
     check diags.len == 2
 

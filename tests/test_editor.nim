@@ -1260,65 +1260,71 @@ suite "Editor - applyConfigSettings syncs display state":
     let e = createTestEditor()
     e.config.lsp.enable = true
     let buf = e.activeBuffer()
-    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
-    buf.diagnostics.add(
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 1,
-        severity: bdsError,
-        message: "boom",
-      )
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 1,
+          severity: bdsError,
+          message: "boom",
+        )
+      ],
     )
 
     e.config.lsp.diagnostics.enable = false
     e.applyConfigSettings(e.config)
 
-    check buf.diagnostics.len == 0
-    check buf.getLineMarker(0).isNone
+    check buf.diagnostics[dsrcLsp].items.len == 0
+    check buf.diagnosticMarker(0).isNone
 
   test "Keeps stored diagnostics while diagnostics stay enabled":
     let e = createTestEditor()
     let buf = e.activeBuffer()
-    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
-    buf.diagnostics.add(
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 1,
-        severity: bdsError,
-        message: "boom",
-      )
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 1,
+          severity: bdsError,
+          message: "boom",
+        )
+      ],
     )
 
     e.config.lsp.enable = true
     e.applyConfigSettings(e.config)
 
-    check buf.diagnostics.len == 1
-    check buf.getLineMarker(0).isSome
+    check buf.diagnostics[dsrcLsp].items.len == 1
+    check buf.diagnosticMarker(0).isSome
 
   test "Turning LSP off clears stored diagnostics and markers":
     let e = createTestEditor()
     let buf = e.activeBuffer()
-    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
-    buf.diagnostics.add(
-      BufferDiagnostic(
-        startLine: 0,
-        startCol: 0,
-        endLine: 0,
-        endCol: 1,
-        severity: bdsError,
-        message: "boom",
-      )
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 0,
+          startCol: 0,
+          endLine: 0,
+          endCol: 1,
+          severity: bdsError,
+          message: "boom",
+        )
+      ],
     )
 
     e.config.lsp.enable = false
     e.applyConfigSettings(e.config)
 
-    check buf.diagnostics.len == 0
-    check buf.getLineMarker(0).isNone
+    check buf.diagnostics[dsrcLsp].items.len == 0
+    check buf.diagnosticMarker(0).isNone
 
   proc fillOverlayCaches(e: Editor) =
     let id = e.activeBuffer().id

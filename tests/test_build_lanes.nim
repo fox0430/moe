@@ -25,11 +25,11 @@
 ## check only reads, and only the newest save's markers are worth having, so a
 ## newer check stops the one running on its file.
 
-import std/[unittest, os, strutils, sequtils]
+import std/[unittest, os, strutils, sequtils, options]
 
 import pkg/chronos
 
-import ../src/moepkg/[editor, config, types, editor_file_jobs, build, job_lanes]
+import ../src/moepkg/[editor, config, types, editor_file_jobs, build, job_lanes, buffer]
 import ../src/moepkg/editor_build_jobs {.all.}
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/handler
@@ -349,7 +349,9 @@ suite "Build lanes":
 
 suite "Syntax check lanes":
   proc check(e: Editor, path: string) =
-    e.submitSyntaxCheck((path: path, language: langNim.ord))
+    e.submitSyntaxCheck(
+      (path: path, language: langNim.ord, buffer: BufferId(0), awaited: 0, text: "")
+    )
 
   proc states(e: Editor): seq[JobState] =
     for job in e.jobLanes.jobs:
@@ -366,7 +368,7 @@ suite "Syntax check lanes":
 
     check e.states == @[jsWaiting]
     check e.settle()
-    check e.state.syntaxCheckResults.path == path
+    check "Syntax check: " in e.state.statusMessage
 
   test "A newer check stops the one running on the same file":
     let
@@ -381,7 +383,7 @@ suite "Syntax check lanes":
     e.check(path)
     check e.states == @[jsStopping, jsWaiting]
     check e.settle()
-    check e.state.syntaxCheckResults.path == path
+    check "Syntax check: " in e.state.statusMessage
 
   test "Checks of different files run side by side":
     let
@@ -408,5 +410,52 @@ suite "Syntax check lanes":
 
     check e.stopRunningCommands() == 1
     check e.settle()
-    check e.state.syntaxCheckResults.path == ""
     check e.state.statusMessage == ""
+
+  test "A check of a save another save replaced reports nothing":
+    let
+      e = newEditor(newEditorConfig())
+      dir = testDir("check_replaced")
+      path = dir / "a.nim"
+      buf = newTextBuffer("echo (\n", some(path))
+    writeFile(path, "echo (\n")
+    e.addBuffer(buf)
+    let replaced = buf.awaitReport(dsrcSyntaxCheck)
+    discard buf.awaitReport(dsrcSyntaxCheck)
+    e.state.statusMessage = ""
+
+    e.submitSyntaxCheck(
+      (
+        path: path,
+        language: langNim.ord,
+        buffer: buf.id,
+        awaited: replaced,
+        text: "echo (\n",
+      )
+    )
+    check e.settle()
+    check e.state.statusMessage == ""
+    check buf.diagnostics[dsrcSyntaxCheck].items.len == 0
+
+  test "A check reaches the buffer saved for it after the buffer's path changed":
+    let
+      e = newEditor(newEditorConfig())
+      dir = testDir("check_renamed")
+      path = dir / "a.nim"
+      buf = newTextBuffer("echo (\n", some(path))
+    writeFile(path, "echo (\n")
+    e.addBuffer(buf)
+    let awaited = buf.awaitReport(dsrcSyntaxCheck)
+    buf.filePath = some(dir / "b.nim")
+
+    e.submitSyntaxCheck(
+      (
+        path: path,
+        language: langNim.ord,
+        buffer: buf.id,
+        awaited: awaited,
+        text: "echo (\n",
+      )
+    )
+    check e.settle()
+    check buf.diagnostics[dsrcSyntaxCheck].items.len > 0

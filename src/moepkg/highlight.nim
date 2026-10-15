@@ -24,6 +24,7 @@ import celina_backend as celina
 
 import color, unicode_utils
 import types/highlight_types
+import buffer/span_edit
 import syntax/[tokenizer, dispatch]
 
 import lsp/protocol/types
@@ -2334,69 +2335,42 @@ proc addOverlayToken(
     newTokens.add(newTok)
   overlay[row].tokens = newTokens
 
-proc semanticShiftForSingleLineEdit*(
-    h: Highlight, row, editCol, colDelta, lineCharLenAfter: int
-) =
-  ## Adjust overlay tokens on `row` after an edit that inserts (`colDelta > 0`)
-  ## or deletes (`colDelta < 0`) `|colDelta|` runes at column `editCol`, without
-  ## changing the buffer's line count. Tokens fully before `editCol` are kept;
-  ## tokens fully at/after `editCol` are shifted by `colDelta` and clipped to
-  ## `lineCharLenAfter`; tokens straddling `editCol` are dropped (their extent
-  ## no longer corresponds to a single semantic entity).
-  if h.isNil:
-    return
-  if colDelta == 0:
-    return
-  if not h.semantic.hasKey(row):
-    return
-  var kept: seq[SemanticOverlayToken] = @[]
-  for tok in h.semantic[row].tokens:
-    let tokEnd = tok.firstColumn + tok.length
-    if tokEnd <= editCol:
-      kept.add tok
-    elif tok.firstColumn >= editCol:
-      var shifted = tok
-      shifted.firstColumn += colDelta
-      if shifted.firstColumn < 0:
-        continue
-      if shifted.firstColumn >= lineCharLenAfter:
-        continue
-      if shifted.firstColumn + shifted.length > lineCharLenAfter:
-        shifted.length = lineCharLenAfter - shifted.firstColumn
-        if shifted.length <= 0:
-          continue
-      kept.add shifted
-    # Straddling: drop.
-  if kept.len == 0:
-    h.semantic.del(row)
-  else:
-    h.semantic[row].tokens = kept
-
-proc semanticShiftForMultiLineEdit*(
-    h: Highlight, firstAffectedRow, lastAffectedRowBefore, lastAffectedRowAfter: int
-) =
-  ## Adjust overlay row keys after an edit that changes the buffer's line
-  ## count. Rows in `[firstAffectedRow, lastAffectedRowBefore]` are dropped;
-  ## rows `> lastAffectedRowBefore` are shifted by
-  ## `lastAffectedRowAfter - lastAffectedRowBefore`. When
-  ## `firstAffectedRow > lastAffectedRowBefore` (net insertion), nothing is
-  ## dropped and only the tail shift applies.
+proc semanticMoveAcross*(h: Highlight, edit: SpanEdit) =
+  ## Move overlay tokens across `edit`; drop tokens it cuts into.
   if h.isNil or h.semantic.len == 0:
     return
-  let delta = lastAffectedRowAfter - lastAffectedRowBefore
-  var newOverlay = initTable[int, SemanticOverlayLine]()
-  for row, line in h.semantic.pairs:
-    if row >= firstAffectedRow and row <= lastAffectedRowBefore:
-      continue
-    let newRow =
-      if row > lastAffectedRowBefore:
-        row + delta
-      else:
-        row
-    if newRow < 0:
-      continue
-    newOverlay[newRow] = line
-  h.semantic = newOverlay
+  var head, tail: seq[SemanticOverlayToken]
+  h.semantic.withValue(edit.start.line, line):
+    for tok in line.tokens:
+      if tok.firstColumn + tok.length <= edit.start.column:
+        head.add tok
+  h.semantic.withValue(edit.oldEnd.line, line):
+    for tok in line.tokens:
+      if tok.firstColumn >= edit.oldEnd.column:
+        var moved = tok
+        moved.firstColumn += edit.newEnd.column - edit.oldEnd.column
+        tail.add moved
+  let rowDelta = edit.newEnd.line - edit.oldEnd.line
+  if edit.oldEnd.line != edit.start.line or rowDelta != 0:
+    var moved = initTable[int, SemanticOverlayLine]()
+    for row, line in h.semantic.pairs:
+      if row < edit.start.line:
+        moved[row] = line
+      elif row > edit.oldEnd.line:
+        moved[row + rowDelta] = line
+    h.semantic = moved
+  template put(row: int, kept: seq[SemanticOverlayToken]) =
+    if kept.len > 0:
+      h.semantic[row] = SemanticOverlayLine(tokens: kept)
+    else:
+      h.semantic.del(row)
+
+  if edit.newEnd.line == edit.start.line:
+    head.add tail
+    put(edit.start.line, head)
+  else:
+    put(edit.start.line, head)
+    put(edit.newEnd.line, tail)
 
 proc applySemanticTokens*(
     highlight: Highlight,

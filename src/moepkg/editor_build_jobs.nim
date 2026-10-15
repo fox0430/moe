@@ -67,12 +67,14 @@ proc runSyntaxCheckJob(
       if outputResult.isErr:
         editor.notify("Syntax check error: " & outputResult.error, nlError)
         return
-      let errors = parseNimCheckResult(info.path, outputResult.get)
-      let bufIdx = editor.findBufferByPath(info.path)
-      if bufIdx >= 0:
-        applySyntaxCheckToBuffer(editor.buffers[bufIdx], errors)
-      # Kept for the status line.
-      editor.state.syntaxCheckResults = (path: info.path, errors: errors)
+      var errors = parseNimCheckResult(info.path, outputResult.get)
+      errors.measureColumns(info.text)
+      let buffer = editor.bufferById(info.buffer)
+      # Not taken: a later save or a reload replaced what it checked.
+      if buffer.isSome and not applySyntaxCheckToBuffer(
+        buffer.get, errors, info.awaited
+      ):
+        return
       let errorCount = errors.countIt(it.messageType == SyntaxCheckMessageType.error)
       let warnCount = errors.countIt(it.messageType == SyntaxCheckMessageType.warning)
       if errorCount > 0 or warnCount > 0:
@@ -82,6 +84,10 @@ proc runSyntaxCheckJob(
         editor.state.statusMessage = "Syntax check: OK"
     except Exception as ex:
       editor.notify("Syntax check error: " & ex.msg, nlError)
+    finally:
+      let bufIdx = editor.bufferIndexById(info.buffer)
+      if bufIdx >= 0:
+        editor.buffers[bufIdx].stopAwaiting(dsrcSyntaxCheck, info.awaited)
 
 proc runBuildJob(
     editor: Editor, info: BuildInfo, command: BackgroundProcessCommand, stop: JobStop

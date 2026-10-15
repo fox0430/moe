@@ -129,32 +129,21 @@ suite "TextBuffer lastVisual":
       check b.lastVisual == area(pos(1, 0), pos(1, 0))
 
     if backend == PieceTable:
-      test "a snapshot made with an area keeps no rows to replay":
-        let b = newTextBuffer("a\nb\nc\nd", backend = backend)
-        b.lastVisual = area(pos(1, 0), pos(2, 0))
-
-        let txr = withTransaction(b, "delete"):
-          check b.deleteLine(2).isOk
-          check b.deleteLine(1).isOk
-        check txr.isOk
-        check b.undoStack.peekLast.kind == ckSnapshot
-        check b.undoStack.peekLast.snapshotRows.len == 0
-
-      test "rows kept for replay leave no capacity behind and are shared by undo":
+      test "edits kept for replay leave no capacity behind and are shared by undo":
         let b = newTextBuffer("a\nb\nc\nd\ne\nf", backend = backend)
 
         let txr = withTransaction(b, "delete"):
           for _ in 0 ..< 4:
             check b.deleteLine(1).isOk
         check txr.isOk
-        check b.pendingSnapshotRows.capacity == 0
-        let rows = b.undoStack.peekLast.snapshotRows
-        check rows.len == 4
+        check b.pendingSnapshotEdits.capacity == 0
+        let edits = b.undoStack.peekLast.snapshotEdits
+        check edits.len == 4
 
         check b.undo().isOk
-        check b.redoStack.peekLast.snapshotRows.sharesStorage(rows)
+        check b.redoStack.peekLast.snapshotEdits.sharesStorage(edits)
         check b.redo().isOk
-        check b.undoStack.peekLast.snapshotRows.sharesStorage(rows)
+        check b.undoStack.peekLast.snapshotEdits.sharesStorage(edits)
 
     test "rollback restores the area (" & $backend & ")":
       let b = newTextBuffer("a\nb\nc", backend = backend)
@@ -175,16 +164,16 @@ suite "TextBuffer lastVisual":
       check b.replaceLines(0, 5, ["x", "y"], keepRows = false).isOk
       check b.lastVisual == area(pos(1, 0), pos(2, 0))
 
-    test "undo moves an area saved after a rewrite (" & $backend & ")":
+    test "undo moves an area saved after a rewrite, as Vim does (" & $backend & ")":
       let b = newTextBuffer("a\nb\nc\nd\ne", backend = backend)
       check b.replaceLines(1, 2, ["p", "q", "r"], keepRows = false).isOk
       b.lastVisual = area(pos(2, 0), pos(5, 0))
 
       check b.undo().isOk
-      check b.lastVisual == area(pos(2, 0), pos(4, 0))
+      check b.lastVisual == area(pos(1, 0), pos(4, 0))
 
       check b.redo().isOk
-      check b.lastVisual == area(pos(2, 0), pos(5, 0))
+      check b.lastVisual == area(pos(1, 0), pos(5, 0))
 
     test "undo moves an area saved after the edit (" & $backend & ")":
       let b = newTextBuffer("a\nb\nc\nd\ne\nf\ng", backend = backend)
@@ -266,6 +255,49 @@ suite "TextBuffer lastVisual":
 
       check b.redo().isOk
       check b.lastVisual == area(pos(0, 0), pos(7, 0))
+
+    test "undo moves an end on a line broken at its end onto that line, as Vim does (" &
+      $backend & ")":
+      let b = newTextBuffer("a\nb\nc\nd", backend = backend)
+      check b.insertText(pos(0, 1), "\nx").isOk
+      b.lastVisual = area(pos(1, 0), pos(1, 0))
+
+      check b.undo().isOk
+      check b.lastVisual == area(pos(0, 0), pos(0, 0))
+
+      b.lastVisual = area(pos(1, 0), pos(1, 0))
+      check b.redo().isOk
+      check b.lastVisual == area(pos(2, 0), pos(2, 0))
+
+    test "undo moves an end on a line opened below onto the next line, as Vim does (" &
+      $backend & ")":
+      let b = newTextBuffer("a\nb\nc\nd", backend = backend)
+      check b.insertText(pos(0, 1), "\nx", openLine = olBelow).isOk
+      b.lastVisual = area(pos(1, 0), pos(1, 0))
+
+      check b.undo().isOk
+      check b.lastVisual == area(pos(1, 0), pos(1, 0))
+
+      check b.redo().isOk
+      check b.lastVisual == area(pos(2, 0), pos(2, 0))
+
+    test "redo moves an end on a line a line is opened above, as Vim does (" & $backend &
+      ")":
+      let opened = newTextBuffer("a\nb\nc", backend = backend)
+      check opened.insertText(pos(1, 0), "x\n", openLine = olAbove).isOk
+      check opened.undo().isOk
+      opened.lastVisual = area(pos(1, 0), pos(1, 0))
+
+      check opened.redo().isOk
+      check opened.lastVisual == area(pos(2, 0), pos(2, 0))
+
+      let broken = newTextBuffer("a\nb\nc", backend = backend)
+      check broken.insertText(pos(1, 0), "\n").isOk
+      check broken.undo().isOk
+      broken.lastVisual = area(pos(1, 0), pos(1, 0))
+
+      check broken.redo().isOk
+      check broken.lastVisual == area(pos(1, 0), pos(1, 0))
 
     test "a rewrite across lines that keeps the breaks keeps the area (" & $backend & ")":
       let b = newTextBuffer("a1 bcd\n  e2 fgh\nijk", backend = backend)
@@ -406,6 +438,22 @@ suite "gv":
     check e.activeBuffer.len == 4
     check e.state.mode == EditorMode.VisualLine
     check e.selection == (pos(1, 0), pos(2, 0))
+
+  test "after undo of a line broken at its end, reselects that line, as Vim does":
+    let e = newTestEditor("a\nb\nc\nd")
+    e.press("A", "Enter", "x", "Esc", "V", "Esc", "u", "g", "v")
+
+    check e.activeBuffer.len == 4
+    check e.state.mode == EditorMode.VisualLine
+    check e.selection == (pos(0, 0), pos(0, 0))
+
+  test "after undo of a line opened below, reselects the line after it, as Vim does":
+    let e = newTestEditor("a\nb\nc\nd")
+    e.press("o", "x", "Esc", "V", "Esc", "u", "g", "v")
+
+    check e.activeBuffer.len == 4
+    check e.state.mode == EditorMode.VisualLine
+    check e.selection == (pos(1, 0), pos(1, 0))
 
   test "after a Visual put, selects the put text":
     let e = newTestEditor("ab cdef")

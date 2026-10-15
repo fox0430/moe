@@ -266,8 +266,7 @@ proc insertTextWithNewlines*(
       byteOffset: prefix.len,
     )
 
-  # Side-array shifts and the modified-line mark are deferred to the
-  # sideArrayCallbacks driven from pushUndoChange / undoChange / redoChange.
+  # Line arrays and modified mark follow in pushUndoChange.
 
 proc buildMergedLine*(prefix: string, suffix: string): string {.inline.} =
   ## Helper to build a merged line from prefix and suffix

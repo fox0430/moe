@@ -321,7 +321,7 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState): Result[(), string
       textToInsert = "\n" & newLineIndent
       indentLen = newLineIndent.len
 
-  let insertResult = buffer.insertText(insertPos, textToInsert)
+  let insertResult = buffer.insertText(insertPos, textToInsert, openLine = olBelow)
   if insertResult.isErr:
     return err(insertResult.error)
 
@@ -349,8 +349,9 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string
     if indent.len > 0:
       textToInsert = indent & "\n"
 
-  let insertResult =
-    buffer.insertText(BufferPosition(line: currentLine, column: 0), textToInsert)
+  let insertResult = buffer.insertText(
+    BufferPosition(line: currentLine, column: 0), textToInsert, openLine = olAbove
+  )
   if insertResult.isErr:
     return err(insertResult.error)
 
