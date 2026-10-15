@@ -28,9 +28,10 @@ import pkg/results
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_registry, render_utils,
-    uri_utils, key_router, unicode_utils, visual_selection, pending_input,
+    uri_utils, key_router, unicode_utils, visual_selection, pending_input, insert_record,
   ]
-import handler_types, visual_handler, insert_commands, command_passthrough
+import handler_types, visual_handler, command_passthrough
+from insert_commands import stepToAppend
 from visual_commands import reselectVisual
 import ../types/editor_types
 export handler_types
@@ -41,6 +42,7 @@ type
     nmrUnhandled
     nmrError
     nmrPlaybackMacro # Signal to handler_manager to playback a macro
+    nmrRepeatInsert # `.` entered Insert again: type the record there
     nmrExecCommand # Signal to handler_manager to execute a Command mode command
     nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
     nmrOpenUri # Signal to handler_manager to open URI/file under cursor
@@ -53,10 +55,10 @@ type
     of nmrHandled:
       modeTransition*: Option[EditorMode]
       overlayTransition*: Option[OverlayKind]
-      insertReplayCount*: int
-        # [count] for [count]i/a/I/A/o/O text replay; 0/1 mean no replay.
-        # Carried to handler_manager, which stores it on the Insert transition.
-      insertReplayLineEntry*: bool # entered via o/O (replay opens a new line)
+      insertEntry*: Option[InsertEntry]
+        # The command entering Insert, for handler_manager to start its record;
+        # none for Insert resumed after Ctrl-o.
+      insertCount*: int
     of nmrUnhandled:
       discard
     of nmrError:
@@ -64,6 +66,8 @@ type
     of nmrPlaybackMacro:
       macroKeys*: seq[string] # Keys to playback
       macroCount*: int # Number of times to playback (default 1)
+    of nmrRepeatInsert:
+      repeatTyped*: seq[TypedInput]
     of nmrExecCommand:
       execCommandText*: string # Command text to execute (without leading ":")
       execCommandCount*: int # Number of times to execute (default 1)
@@ -227,11 +231,12 @@ proc handleModeSwitch*(
     if buffer.readOnly:
       state.statusMessage = "Buffer is read-only"
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-    # Plain `i`: honour a [count] prefix by replaying the typed text on exit.
+    # Plain `i`: the count types the text that many times.
     return NormalModeResult(
       kind: nmrHandled,
       modeTransition: some(EditorMode.Insert),
-      insertReplayCount: max(1, count),
+      insertEntry: some(InsertEntry(kind: ieInsert)),
+      insertCount: count,
     )
   of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
     # Entering the mode starts the selection at the cursor.
@@ -293,85 +298,48 @@ proc handleModeSwitch*(
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
-proc handleInsertModeEntry*(
-    handler: NormalModeHandler,
-    buffer: TextBuffer,
-    state: EditorState,
-    insertType: string,
-    count: int = 1,
+proc resumeInsert*(
+    handler: NormalModeHandler, buffer: TextBuffer, state: EditorState, append: bool
 ): NormalModeResult =
-  ## Handle different types of insert mode entry (i, a, o, O, etc.)
-  ## `count` is the numeric prefix for [count]a/[count]o etc.; the typed text is
-  ## replayed (count - 1) more times when Insert mode is left.
+  ## Insert again after Ctrl-o, at the cursor or after it (`a` on the last
+  ## character). Nothing is recorded until something is typed.
   if buffer.readOnly:
     state.statusMessage = "Buffer is read-only"
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-  case insertType
-  of "insert":
-    # Simple insert at cursor
-    discard
-  of "insert-first-non-blank":
-    # Move to first non-blank character and insert
-    let motionCmd = MotionCommand(motion: Motion.FirstNonBlank, count: 1)
-    let r = handler.motionController.moveCursorByMotion(state, motionCmd)
-    if r.isErr:
-      return NormalModeResult(kind: nmrError, errorMessage: r.error)
-  of "append":
-    # Move cursor right if not at end of line
-    let lineContent = buffer.getLine(state.cursor.line)
-    # Use charLen (character count) not len (byte count) for multibyte character support
-    if state.cursor.column < lineContent.charLen:
-      state.cursor.column += 1
-  of "append-end":
-    # Move to end of line
-    let lineContent = buffer.getLine(state.cursor.line)
-    state.cursor.column = lineContent.charLen
-  of "open-below":
-    let beganTransactionHere = not buffer.inTransaction
-    if beganTransactionHere:
-      let txResult =
-        buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
-      if txResult.isErr:
-        return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
-    let openResult = insertLineBelow(buffer, state)
-    if openResult.isErr:
-      var errorMessage = openResult.error
-      if beganTransactionHere:
-        let rollbackResult = buffer.rollbackTransaction()
-        if rollbackResult.isErr:
-          errorMessage =
-            errorMessage & " (rollback failed: " & rollbackResult.error & ")"
-      return NormalModeResult(kind: nmrError, errorMessage: errorMessage)
-  of "open-above":
-    let beganTransactionHere = not buffer.inTransaction
-    if beganTransactionHere:
-      let txResult =
-        buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
-      if txResult.isErr:
-        return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
-    let openResult = insertLineAbove(buffer, state)
-    if openResult.isErr:
-      var errorMessage = openResult.error
-      if beganTransactionHere:
-        let rollbackResult = buffer.rollbackTransaction()
-        if rollbackResult.isErr:
-          errorMessage =
-            errorMessage & " (rollback failed: " & rollbackResult.error & ")"
-      return NormalModeResult(kind: nmrError, errorMessage: errorMessage)
-  else:
-    return NormalModeResult(
-      kind: nmrError, errorMessage: "Unknown insert type: " & insertType
-    )
-
-  return NormalModeResult(
-    kind: nmrHandled,
-    modeTransition: some(EditorMode.Insert),
-    insertReplayCount: max(1, count),
-    insertReplayLineEntry: insertType in ["open-below", "open-above"],
-  )
+  if append:
+    buffer.stepToAppend(state)
+  NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
 
 # All text manipulation (delete, yank, change) is now handled by the
 # operator+motion system in command_registry.nim
+
+proc repeatLastChange(
+    handler: NormalModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    cmd: Command,
+): NormalModeResult =
+  ## `.`: an Insert-mode change runs the command that entered Insert again and
+  ## types the record after it. Under Ctrl-o, `.` repeats the change before it.
+  let before = state.resumesInsert and state.insertResumeInChange
+  if before:
+    state.swapChangeBefore()
+  let last = state.editState.lastEditCommand
+  let typed =
+    if last.isSome and last.get.kind == lecInsert:
+      some(state.editState.insertRecord.typed)
+    else:
+      none(seq[TypedInput])
+  let ctx = handler.newContext(buffer, state, viewport, cmd.register)
+  let repeated = handler.commandRegistry.executeCommand(ctx, cmd)
+  if repeated.isErr:
+    if before:
+      state.swapChangeBefore()
+    return NormalModeResult(kind: nmrError, errorMessage: repeated.error)
+  if typed.isSome and state.mode == EditorMode.Insert:
+    return NormalModeResult(kind: nmrRepeatInsert, repeatTyped: typed.get)
+  NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
 proc requestMacroPlayback(keys: seq[string], count: int = 1): NormalModeResult =
   ## Request macro playback - actual playback is done by handler_manager
@@ -522,18 +490,16 @@ proc handleNormalModeKey*(
       return fromPassthrough(ptAction.get)
     # Handle various actions based on command ID
     case cmd.commandId
-    of "insert.append":
-      return handler.handleInsertModeEntry(buffer, state, "append", cmd.count)
-    of "insert.append.end":
-      return handler.handleInsertModeEntry(buffer, state, "append-end", cmd.count)
-    of "insert.first.non.blank":
-      return handler.handleInsertModeEntry(
-        buffer, state, "insert-first-non-blank", cmd.count
-      )
-    of "insert.line.below":
-      return handler.handleInsertModeEntry(buffer, state, "open-below", cmd.count)
-    of "insert.line.above":
-      return handler.handleInsertModeEntry(buffer, state, "open-above", cmd.count)
+    of "insert.append", "insert.append.end", "insert.first.non.blank",
+        "insert.line.below", "insert.line.above":
+      # With the count, which types the text that many times.
+      let ctx = handler.newContext(buffer, state, viewport, cmd.register)
+      let entered = handler.commandRegistry.executeCommand(ctx, cmd)
+      if entered.isErr:
+        return NormalModeResult(kind: nmrError, errorMessage: entered.error)
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    of "edit.repeat":
+      return handler.repeatLastChange(buffer, state, viewport, cmd)
     # dd, yy, cc are handled by operator doubling in command_registry
     of "edit.undo":
       let r = buffer.undo()

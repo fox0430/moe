@@ -196,14 +196,34 @@ proc shiftedLines(buffer: TextBuffer, range: OperatorRange): (int, int) =
       range.start.column >= buffer.getLine(range.start.line).charLen:
     result[0] += 1
 
+proc restoreTopLine(ctx: CommandContext, topLine: int) =
+  ## Put the viewport's top line back after a change, clamped so the cursor
+  ## stays in view.
+  let
+    bufferLen = ctx.buffer.len
+    cursorLine = ctx.cursor.line
+  if topLine >= bufferLen:
+    ctx.motionController.viewportManager.viewport.resetViewportTop(
+      max(0, min(cursorLine, bufferLen - 1))
+    )
+  elif cursorLine < topLine:
+    ctx.motionController.viewportManager.viewport.resetViewportTop(cursorLine)
+  else:
+    ctx.motionController.viewportManager.viewport.resetViewportTop(topLine)
+
 proc executeOperatorOnRange*(
     ctx: CommandContext,
     operatorType: OperatorType,
     rawRange: OperatorRange,
     operatorCount: int,
+    topLine = none(int),
 ): Result[(), string] =
   ## Execute an operator on the given range
   ## operatorCount: count before operator (e.g., "2" in "2d3w")
+  ## topLine: viewport top line when the operator started, put back after the
+  ## change; the current one when no motion ran since
+
+  let topLine = topLine.get(ctx.motionController.viewportManager.viewport.topLine)
 
   # The one place a closed fold widens an operator range, so every operator path
   # (motion spans, text objects, visual selections) consumes folds whole.
@@ -274,29 +294,7 @@ proc executeOperatorOnRange*(
       let line = ctx.buffer.getLine(ctx.cursor.line)
       ctx.cursor.column = min(ctx.cursor.column, max(0, line.charLen - 1))
 
-    # Restore viewport position to where it was before the operator started
-    # Use savedViewportTopLine which was saved when operator (d/c/y) was pressed
-    let newBufferLen = ctx.buffer.len
-    let restoredTopLine = ctx.state.windowDisplay.savedViewportTopLine
-    let cursorLine = ctx.cursor.line
-
-    # Restore viewport, but ensure cursor remains visible
-    # Cases:
-    # 1. restoredTopLine >= newBufferLen: clamp to valid range
-    # 2. cursor < restoredTopLine: use cursor position (e.g., dgg moves cursor up)
-    # 3. otherwise: restore saved position
-    if restoredTopLine >= newBufferLen:
-      # Saved position is beyond new buffer size
-      ctx.motionController.viewportManager.viewport.resetViewportTop(
-        max(0, min(cursorLine, newBufferLen - 1))
-      )
-    elif cursorLine < restoredTopLine:
-      # Cursor is above saved viewport (e.g., dgg), use cursor position
-      ctx.motionController.viewportManager.viewport.resetViewportTop(cursorLine)
-    else:
-      # Restore to saved position
-      ctx.motionController.viewportManager.viewport.resetViewportTop(restoredTopLine)
-
+    ctx.restoreTopLine(topLine)
     return ok(())
   of OpChange:
     # Change the range (delete and enter insert mode)
@@ -337,23 +335,7 @@ proc executeOperatorOnRange*(
         else:
           min(ctx.cursor.column, line.charLen)
 
-    # Restore viewport position (same logic as OpDelete)
-    let newBufferLen = ctx.buffer.len
-    let restoredTopLine = ctx.state.windowDisplay.savedViewportTopLine
-    let cursorLine = ctx.cursor.line
-
-    # Restore viewport, but ensure cursor remains visible
-    if restoredTopLine >= newBufferLen:
-      # Saved position is beyond new buffer size
-      ctx.motionController.viewportManager.viewport.resetViewportTop(
-        max(0, min(cursorLine, newBufferLen - 1))
-      )
-    elif cursorLine < restoredTopLine:
-      # Cursor is above saved viewport (e.g., cgg), use cursor position
-      ctx.motionController.viewportManager.viewport.resetViewportTop(cursorLine)
-    else:
-      # Restore to saved position
-      ctx.motionController.viewportManager.viewport.resetViewportTop(restoredTopLine)
+    ctx.restoreTopLine(topLine)
 
     # Enter insert mode (transaction remains open for insert mode input)
     ctx.state.mode = EditorMode.Insert
@@ -409,8 +391,22 @@ proc executeOperatorOnRange*(
     return err("Operator " & $operatorType & " not yet implemented")
 
 ## Operator command helpers
-## Use setPendingOperator() for all operators to save viewport position
-## before motion execution. This prevents unwanted scrolling.
+
+proc startOperator*(
+    ctx: CommandContext, operatorType: OperatorType, count = 1, countGiven = false
+) =
+  ## Wait for the operand of `operatorType`, keeping the top line the change
+  ## puts back.
+  ctx.state.pendingInput.pendingOperator = some(
+    PendingOperator(
+      operatorType: operatorType,
+      operatorCount: max(1, count),
+      countGiven: countGiven,
+      startPos: ctx.cursor,
+      register: ctx.register,
+      topLine: ctx.motionController.viewportManager.viewport.topLine,
+    )
+  )
 
 proc setPendingOperator*(
     ctx: CommandContext,
@@ -419,23 +415,12 @@ proc setPendingOperator*(
     countGiven: bool,
     statusMsg: string,
 ) =
-  ## Set pending operator and save viewport position for operator+motion
-  ## commands. An operator of another kind already waiting is cancelled
-  ## instead, as Vim's nv_operator: `dyw` neither deletes nor yanks.
+  ## Start the typed operator `operatorType`, cancelling one of another kind
+  ## already waiting (`dyw` neither deletes nor yanks).
   if ctx.state.pendingInput.cancelOperatorPending():
     ctx.state.statusMessage = ""
     return
-  ctx.state.windowDisplay.savedViewportTopLine =
-    ctx.motionController.viewportManager.viewport.topLine
-  ctx.state.pendingInput.pendingOperator = some(
-    PendingOperator(
-      operatorType: operatorType,
-      operatorCount: max(1, count),
-      countGiven: countGiven,
-      startPos: ctx.cursor,
-      register: ctx.register,
-    )
-  )
+  ctx.startOperator(operatorType, count, countGiven)
   ctx.state.statusMessage = statusMsg
 
 proc takeDoubledOperator*(

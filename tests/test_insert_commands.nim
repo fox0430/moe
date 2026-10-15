@@ -764,44 +764,6 @@ suite "Insert Commands - insertLineAbove":
     check state.cursor.column == 0
     check state.mode == EditorMode.Insert
 
-suite "Insert Commands - insertAppend":
-  test "Append after cursor":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
-    let state = createTestState()
-    state.mode = EditorMode.Normal
-    state.cursor = BufferPosition(line: 0, column: 2)
-
-    insertAppend(buf, state)
-
-    check state.cursor.column == 3
-    check state.mode == EditorMode.Insert
-
-  test "Append at end of line (no cursor move)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
-    let state = createTestState()
-    state.mode = EditorMode.Normal
-    state.cursor = BufferPosition(line: 0, column: 5)
-
-    insertAppend(buf, state)
-
-    check state.cursor.column == 5
-    check state.mode == EditorMode.Insert
-
-suite "Insert Commands - insertAppendEnd":
-  test "Append at end of line":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.mode = EditorMode.Normal
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    insertAppendEnd(buf, state)
-
-    check state.cursor.column == 11
-    check state.mode == EditorMode.Insert
-
 suite "Insert Commands - indentLine":
   test "Indent line with spaces (expandTab)":
     let buf = newTextBuffer()

@@ -27,11 +27,12 @@ import pkg/results
 import
   ../[
     cursor_util, types, motion, modes, registers, logger, unicode_utils,
-    visual_selection,
+    visual_selection, insert_record,
   ]
 import ../buffer/[core, edit, fold, undo]
 
-import core, operator_engine, operator_driver
+import core, operator_engine, operator_driver, insert_entry
+from ../command_handlers/insert_commands import getLineIndent
 
 proc finishPasteCursor(
     ctx: CommandContext,
@@ -495,28 +496,17 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
   logDebug("substitute", "handleSubstituteChar called with count=" & $count)
   if ctx.isOnCollapsedFold:
     let foldResult = ctx.editWholeFoldAtCursor(OpChange)
-    if foldResult.isOk:
-      ctx.state.editState.insertModeStartPos = some(ctx.cursor)
-      # Without this, Insert exit records the typing as a plain insert and `.`
-      # would no longer substitute. `skChar` as for any `s`; a repeat on a
-      # closed fold promotes it back to a whole-fold change.
-      ctx.state.editState.substituteContext =
-        some(SubstituteContext(kind: skChar, deleteCount: 1))
-      ctx.state.statusMessage = "-- INSERT --"
-    return foldResult
+    if foldResult.isErr:
+      return foldResult
+    # Recorded as `s`, so a repeat on a closed fold widens again.
+    return ctx.beginInsert(InsertEntry(kind: ieSubstitute), count)
   let actualCount = max(1, count)
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
   # Check if we're at or past the end of the line
   if ctx.cursor.column >= lineContent.charLen:
     # At end of line, just enter insert mode
-    ctx.state.mode = EditorMode.Insert
-    let transactionResult = ctx.buffer.beginTransaction("Substitute")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-    ctx.state.editState.insertModeStartPos = some(ctx.cursor)
-    ctx.state.statusMessage = "-- INSERT --"
-    return Result[(), string].ok ()
+    return ctx.beginInsert(InsertEntry(kind: ieSubstitute), count)
 
   # Calculate how many characters we can actually delete
   let charsAvailable = lineContent.charLen - ctx.cursor.column
@@ -541,16 +531,8 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
   # covered by the buffer transaction, so a rollback would not undo them)
   storeDeletedText(ctx, deletedText, false)
 
-  # Enter Insert mode (transaction remains open for insert mode input)
-  ctx.state.mode = EditorMode.Insert
-
-  # Record substitute context so Insert mode exit can properly record the command
-  ctx.state.editState.insertModeStartPos = some(ctx.cursor)
-  ctx.state.editState.substituteContext =
-    some(SubstituteContext(kind: skChar, deleteCount: charsToDelete))
-
-  ctx.state.statusMessage = "-- INSERT --"
-  return Result[(), string].ok ()
+  # The transaction stays open for what is typed in Insert mode.
+  ctx.beginInsert(InsertEntry(kind: ieSubstitute), count)
 
 proc cursorLineRange(
     ctx: CommandContext, count: int
@@ -578,15 +560,11 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
   let text = ctx.buffer.linewiseText(startLine, endLine)
 
   # Get indent; skipped for raw buffers.
-  let firstLine = ctx.buffer.getLine(startLine)
-  var indent = ""
-  if ctx.buffer.allowsTextTransforms:
-    for (rune, _) in firstLine.chars:
-      let ch = $rune
-      if ch == " " or ch == "\t":
-        indent.add(ch)
-      else:
-        break
+  var indent =
+    if ctx.buffer.allowsTextTransforms:
+      getLineIndent(ctx.buffer.getLine(startLine))
+    else:
+      ""
 
   # Begin transaction for all substitute operations (delete + insert mode input)
   let transactionResult = ctx.buffer.beginTransaction("Substitute line")
@@ -619,6 +597,8 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
       if insertResult.isErr:
         return
           rollbackAndPropagate(ctx, "Failed to insert indent: " & insertResult.error)
+    else:
+      indent = ""
 
   # Store in register only after the buffer change succeeded (registers are not
   # covered by the buffer transaction, so a rollback would not undo them)
@@ -628,18 +608,9 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
   ctx.cursor.line = startLine
   ctx.cursor.column = indent.len
 
-  # Enter Insert mode (transaction remains open for insert mode input)
-  ctx.state.mode = EditorMode.Insert
-
-  # Record substitute context so Insert mode exit can properly record the command
-  ctx.state.editState.insertModeStartPos = some(ctx.cursor)
-  # `.` repeats the typed count, not the widened one: replaying a fold's line
-  # count somewhere unfolded would substitute unrelated lines.
-  ctx.state.editState.substituteContext =
-    some(SubstituteContext(kind: skLine, deleteCount: max(1, count)))
-
-  ctx.state.statusMessage = "-- INSERT --"
-  return Result[(), string].ok ()
+  # The transaction stays open for what is typed in Insert mode. `.` repeats the
+  # typed count, not the count widened for a closed fold.
+  ctx.beginInsert(InsertEntry(kind: ieSubstituteLine), count)
 
 proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Toggle case of character(s) at cursor position (~ command)
@@ -1055,14 +1026,39 @@ proc handleOperatorUpperCase*(
   setPendingOperator(ctx, OpUpperCase, count, countGiven, "gU")
   ok(())
 
+proc handleChangeToEnd*(
+    registry: CommandRegistry, ctx: CommandContext, count = 1
+): Result[(), string] =
+  ## C: change to the end of the line, or over the count's lines (`2C`), as
+  ## `c$` does.
+  if count > 1:
+    ctx.startOperator(OpChange)
+    return registry.finishOperator(
+      ctx, Operand(kind: odMotion, motion: Motion.End, count: count, countGiven: true)
+    )
+  let
+    startPos = ctx.cursor
+    lineLen = ctx.buffer.getLine(startPos.line).charLen
+  # Empty line or cursor at/past end: just enter insert mode without deleting
+  if lineLen == 0 or startPos.column >= lineLen:
+    return ctx.beginInsert(InsertEntry(kind: ieChangeToEnd), 1)
+  let range = OperatorRange(
+    start: startPos,
+    endPos: BufferPosition(line: startPos.line, column: lineLen - 1),
+    isLinewise: false,
+  )
+  let changed = executeOperatorOnRange(ctx, OpChange, range, 1)
+  if changed.isOk:
+    ctx.state.startInsertRecord(InsertEntry(kind: ieChangeToEnd), 1, ctx.register)
+  changed
+
 ## Text object command handlers
 
 proc handleTextObjectInner*(
     ctx: CommandContext, count: int = 1, countGiven = false
 ): Result[(), string] =
   ## Handle inner text object (iw, i", i(, etc.) or enter Insert mode.
-  ## `count` is the [count] prefix; when this resolves to plain `i` it requests
-  ## the typed text be replayed (count - 1) more times on Insert-mode exit.
+  ## `count` is the [count] prefix; plain `i` types the text that many times.
 
   # Check if we have a pending operator
   if ctx.state.pendingInput.pendingOperator.isSome:
@@ -1085,29 +1081,13 @@ proc handleTextObjectInner*(
     return ok(())
   else:
     # No pending operator - enter Insert mode
-    if ctx.buffer.readOnly:
-      ctx.state.statusMessage = "Buffer is read-only"
-      return ok(())
-    ctx.state.mode = EditorMode.Insert
-    # Begin transaction for insert mode edit (guard for insert-normal mode)
-    if not ctx.buffer.inTransaction:
-      let transactionResult = ctx.buffer.beginTransaction("Insert mode edit")
-      if transactionResult.isErr:
-        return err("Failed to begin transaction: " & transactionResult.error)
-    # Track the insert origin and [count] so the typed text can be replayed
-    # (count - 1) more times when Insert mode is left, matching Vim's [count]i.
-    ctx.state.editState.insertModeStartPos = some(ctx.cursor)
-    ctx.state.editState.insertReplayCount = max(1, count)
-    ctx.state.editState.insertReplayLineEntry = false
-    ctx.state.statusMessage = "-- INSERT --"
-    return ok(())
+    return ctx.handleInsertAt(ieInsert, count)
 
 proc handleTextObjectAround*(
     ctx: CommandContext, count: int = 1, countGiven = false
 ): Result[(), string] =
   ## Handle around text object (aw, a", a(, etc.) or enter Append mode.
-  ## `count` is the [count] prefix; when this resolves to plain `a` it requests
-  ## the typed text be replayed (count - 1) more times on Insert-mode exit.
+  ## `count` is the [count] prefix; plain `a` types the text that many times.
 
   # Check if we have a pending operator
   if ctx.state.pendingInput.pendingOperator.isSome:
@@ -1129,30 +1109,8 @@ proc handleTextObjectAround*(
     )
     return ok(())
   else:
-    # No pending operator - enter Append mode (move cursor right, then Insert)
-    if ctx.buffer.readOnly:
-      ctx.state.statusMessage = "Buffer is read-only"
-      return ok(())
-    # Move cursor one position to the right if not at end of line
-    if ctx.cursor.line < ctx.buffer.len:
-      let currentLine = ctx.buffer.getLine(ctx.cursor.line)
-      # Use charLen for proper multi-byte character support
-      if ctx.cursor.column < currentLine.charLen:
-        ctx.cursor.column += 1
-    # Enter Insert mode
-    ctx.state.mode = EditorMode.Insert
-    # Begin transaction for insert mode edit (guard for insert-normal mode)
-    if not ctx.buffer.inTransaction:
-      let transactionResult = ctx.buffer.beginTransaction("Append mode edit")
-      if transactionResult.isErr:
-        return err("Failed to begin transaction: " & transactionResult.error)
-    # Track the append origin and [count] so the typed text can be replayed
-    # (count - 1) more times when Insert mode is left, matching Vim's [count]a.
-    ctx.state.editState.insertModeStartPos = some(ctx.cursor)
-    ctx.state.editState.insertReplayCount = max(1, count)
-    ctx.state.editState.insertReplayLineEntry = false
-    ctx.state.statusMessage = "-- INSERT --"
-    return ok(())
+    # No pending operator - append after the cursor
+    return ctx.handleInsertAt(ieAppend, count)
 
 proc findNumberAtOrAfterColumn*(
     line: string, startCol: int
@@ -1606,22 +1564,37 @@ proc registerEditCommands*(registry: CommandRegistry) =
           name = succ(name)
         ctx.register = some(name)
       lastCmd.register = ctx.register
+      # A count given to `.` replaces the change's own, and the next `.` keeps
+      # it: `dw` then `3.` is `3dw`. An Insert change takes it below.
+      if args.len > 0:
+        let count = parseCount(args)
+        case lastCmd.kind
+        of lecOperatorMotion:
+          lastCmd.operand.count = count
+          lastCmd.operand.countGiven = true
+        of lecReplaceChar:
+          lastCmd.replaceCount = count
+        of lecDeleteChar:
+          lastCmd.deleteCount = count
+        of lecDeleteLine:
+          lastCmd.deleteLineCount = count
+        of lecPaste:
+          lastCmd.pasteCount = count
+        of lecToggleCase:
+          lastCmd.toggleCaseCount = count
+        of lecJoinLines:
+          lastCmd.joinLinesCount = count
+        of lecOperatorLines:
+          lastCmd.operatorLineCount = count
+        of lecInsert, lecVisualReplace:
+          discard
       ctx.state.editState.lastEditCommand = some(lastCmd)
 
       case lastCmd.kind
       of lecOperatorMotion:
         # The operator acts again over what its operand finds from here (`dw`,
         # `diw`, `dn` then `.`).
-        ctx.state.pendingInput.pendingOperator = some(
-          PendingOperator(
-            operatorType: lastCmd.operator,
-            operatorCount: 1,
-            startPos: ctx.cursor,
-            register: ctx.register,
-          )
-        )
-        ctx.state.windowDisplay.savedViewportTopLine =
-          ctx.motionController.viewportManager.viewport.topLine
+        ctx.startOperator(lastCmd.operator)
         return registry.finishOperator(ctx, lastCmd.operand)
       of lecDeleteChar:
         # Repeat character deletion (x or X)
@@ -1643,141 +1616,31 @@ proc registerEditCommands*(registry: CommandRegistry) =
       of lecToggleCase:
         # Repeat toggle case (~)
         return handleToggleCase(ctx, lastCmd.toggleCaseCount)
-      of lecSubstitute:
-        # Repeat substitute (s/S/cc)
-        # Delete + insert the recorded text without entering Insert mode
-        # `s` on a closed fold changes the fold as a unit (see
-        # handleSubstituteChar), so its repeat has to do the same.
-        let substituteKind =
-          if lastCmd.substituteKind == skChar and ctx.isOnCollapsedFold:
-            skLine
+      of lecInsert:
+        # The command that entered Insert runs again, with the count given to
+        # `.`, and the caller types the record after it.
+        let record = ctx.state.editState.insertRecord
+        let count =
+          if args.len > 0:
+            parseCount(args)
           else:
-            lastCmd.substituteKind
-        case substituteKind
-        of skChar:
-          # Repeat s command - delete characters then insert text
-          let lineContent = ctx.buffer.getLine(ctx.cursor.line)
-
-          # Check if we're at or past the end of the line
-          if ctx.cursor.column >= lineContent.charLen:
-            # At end of line, just insert text
-            let insertResult = ctx.buffer.insertText(ctx.cursor, lastCmd.substituteText)
-            if insertResult.isErr:
-              return err("Failed to insert text: " & insertResult.error)
-          else:
-            # Delete characters
-            let charsAvailable = lineContent.charLen - ctx.cursor.column
-            let charsToDelete = min(lastCmd.substituteCount, charsAvailable)
-
-            let txr = withTransaction(
-              ctx.buffer, "substitute " & $charsToDelete & " char(s)"
-            ):
-              for i in 0 ..< charsToDelete:
-                let delResult = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
-                if delResult.isErr:
-                  return err(delResult.error)
-
-              let insertResult =
-                ctx.buffer.insertText(ctx.cursor, lastCmd.substituteText)
-              if insertResult.isErr:
-                return err("Failed to insert text: " & insertResult.error)
-            if txr.isErr:
-              return err(txr.error)
-
-          # Move cursor to last inserted character (Vim behavior)
-          let numNewlines = lastCmd.substituteText.count('\n')
-          if numNewlines > 0:
-            ctx.cursor.line += numNewlines
-            let lines = lastCmd.substituteText.split('\n')
-            let lastLine = lines[^1]
-            # Position cursor on last character (or at column 0 if empty)
-            ctx.cursor.column = max(0, lastLine.charLen - 1)
-          else:
-            # Single line - move cursor to last inserted character
-            ctx.cursor.column += lastCmd.substituteText.charLen
-            if ctx.cursor.column > 0:
-              ctx.cursor.column -= 1 # Stay on last inserted character
-
-          return ok(())
-        of skLine:
-          # Repeat S or cc command - delete lines then insert text
-          # A promoted char-substitute covers the one fold at the cursor; its
-          # recorded count counts characters, not lines.
-          let repeatLineCount =
-            if lastCmd.substituteKind == skLine: lastCmd.substituteCount else: 1
-          let (startLine, endLine, _) = ctx.cursorLineRange(repeatLineCount)
-
-          # The replacement text lands on startLine, which must not stay folded.
-          # `.` never enters Insert, so it opens the fold itself.
-          discard ctx.buffer.foldState.openFoldsInRange(startLine, endLine)
-
-          let txr = withTransaction(ctx.buffer, "Substitute line"):
-            for i in 0 ..< (endLine - startLine):
-              if startLine + 1 < ctx.buffer.len:
-                let deleteResult = ctx.buffer.deleteLine(startLine + 1)
-                if deleteResult.isErr:
-                  return err("Failed to delete line: " & deleteResult.error)
-
-            if startLine < ctx.buffer.len:
-              let line = ctx.buffer.getLine(startLine)
-              for i in 0 ..< line.charLen:
-                let deleteResult = ctx.buffer.deleteRange(
-                  BufferPosition(line: startLine, column: 0),
-                  BufferPosition(line: startLine, column: 0),
-                )
-                if deleteResult.isErr:
-                  return err("Failed to clear line: " & deleteResult.error)
-
-            let insertResult = ctx.buffer.insertText(
-              BufferPosition(line: startLine, column: 0), lastCmd.substituteText
-            )
-            if insertResult.isErr:
-              return err("Failed to insert text: " & insertResult.error)
-          if txr.isErr:
-            return err("Transaction failed: " & txr.error)
-
-          # Move cursor to last inserted character (Vim behavior)
-          let numNewlines = lastCmd.substituteText.count('\n')
-          if numNewlines > 0:
-            ctx.cursor.line = startLine + numNewlines
-            let lines = lastCmd.substituteText.split('\n')
-            let lastLine = lines[^1]
-            # Position cursor on last character (or at column 0 if empty)
-            ctx.cursor.column = max(0, lastLine.charLen - 1)
-          else:
-            ctx.cursor.line = startLine
-            # Position cursor on last character (or at column 0 if empty)
-            ctx.cursor.column = max(0, lastCmd.substituteText.charLen - 1)
-
-          return ok(())
-      of lecInsertText:
-        # Repeat insert text. Typing lands on the cursor line, which must not
-        # stay folded, and `.` never enters Insert to open it.
-        discard ctx.buffer.foldState.openFoldsInRange(ctx.cursor.line, ctx.cursor.line)
-        let insertResult = ctx.buffer.insertText(ctx.cursor, lastCmd.insertedText)
-        if insertResult.isErr:
-          return err("Failed to repeat insert: " & insertResult.error)
-
-        # Move cursor to last inserted character (Vim behavior: cursor on last char, not after)
-        # Count newlines to handle multi-line insertion
-        let numNewlines = lastCmd.insertedText.count('\n')
-        if numNewlines > 0:
-          # Multi-line insertion - move to last line
-          ctx.cursor.line += numNewlines
-          let lines = lastCmd.insertedText.split('\n')
-          let lastLine = lines[^1]
-          # Position cursor on last character (or at column 0 if last line is empty)
-          ctx.cursor.column = max(0, lastLine.charLen - 1)
-        else:
-          # Single line insertion - move cursor to last inserted character
-          if lastCmd.insertedText.len > 0:
-            ctx.cursor.column += lastCmd.insertedText.charLen
-            # Move back one to be on the last character, not after it
-            if ctx.cursor.column > 0:
-              ctx.cursor.column -= 1
-          # If empty string, cursor stays at current position
-
-        return ok(())
+            record.count
+        case record.entry.kind
+        of ieInsert, ieAppend, ieAppendEnd, ieInsertNonBlank, ieOpenBelow, ieOpenAbove:
+          return ctx.handleInsertAt(record.entry.kind, count)
+        of ieSubstitute:
+          return handleSubstituteChar(ctx, count)
+        of ieSubstituteLine:
+          return handleSubstituteLine(ctx, count)
+        of ieChangeToEnd:
+          return registry.handleChangeToEnd(ctx, count)
+        of ieChange:
+          var operand = record.entry.operand
+          if args.len > 0:
+            operand.count = count
+            operand.countGiven = true
+          ctx.startOperator(OpChange)
+          return registry.finishOperator(ctx, operand)
       of lecVisualReplace:
         # Repeat Visual `r` from the cursor with the recorded shape.
         # Ignores count; cursor stays put. Fails on raw buffers.
@@ -1964,13 +1827,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
       of lecOperatorLines:
         # Repeat a doubled linewise operator (>> / << / guu / gUU)
         return
-          handleOperatorOnLines(ctx, lastCmd.linesOperator, lastCmd.operatorLineCount)
-      of lecChangeLine:
-        # Note: This case should not be reached anymore as cc now uses lecSubstitute
-        # Kept for backwards compatibility if old state exists
-        return err("Repeating cc command is not yet implemented (use latest version)"),
+          handleOperatorOnLines(ctx, lastCmd.linesOperator, lastCmd.operatorLineCount),
     0,
-    0,
+    1,
   )
 
   # Operator commands (d, c, y) - these wait for motion/text object
@@ -2086,35 +1945,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Change To End Of Line",
     "Change from cursor to end of line (C command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      # Calculate range from cursor to end of line
-      let startPos = ctx.cursor
-      let line = ctx.buffer.getLine(startPos.line)
-      let lineLen = line.charLen
-
-      # Empty line or cursor at/past end: just enter insert mode without deleting
-      if lineLen == 0 or startPos.column >= lineLen:
-        ctx.state.mode = EditorMode.Insert
-        return ok(())
-
-      # End at last character (same as c$ / Motion.End)
-      let endPos = BufferPosition(line: startPos.line, column: lineLen - 1)
-
-      let range = OperatorRange(start: startPos, endPos: endPos, isLinewise: false)
-
-      # Execute change operation
-      let r = executeOperatorOnRange(ctx, OpChange, range, 1)
-      if r.isOk:
-        # Record this command for repeat (.)
-        ctx.recordChange(
-          LastEditCommand(
-            kind: lecOperatorMotion,
-            operator: OpChange,
-            operand: Operand(count: 1, kind: odMotion, motion: Motion.End),
-          )
-        )
-      return r,
+      registry.handleChangeToEnd(ctx, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   # Text object commands (i, a) - wait for text object kind

@@ -23,7 +23,7 @@ import std/[monotimes, options, times]
 
 import pkg/results
 
-import types/editor_types, buffer, logger
+import types/editor_types, buffer, logger, insert_record
 import command_handlers/mode_dispatchers
 import command_handlers/insert_commands
 from command_handlers/insert_handler import closeInsertPopups
@@ -42,11 +42,8 @@ func effectiveMode*(e: Editor, requestedMode: EditorMode): EditorMode =
     requestedMode
 
 proc clearInsertSessionTracking(e: Editor) =
-  e.state.editState.insertModeStartPos = none(BufferPosition)
-  e.state.editState.insertReplayCount = 0
-  e.state.editState.insertReplayLineEntry = false
+  e.state.endInsertRecord()
   e.state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
-  e.state.editState.substituteContext = none(types.SubstituteContext)
 
 proc finalizeInsertSessionForBufferSwitch*(e: Editor, oldBuffer: TextBuffer) =
   ## Abandon the Insert session before the active window is repointed at
@@ -57,8 +54,7 @@ proc finalizeInsertSessionForBufferSwitch*(e: Editor, oldBuffer: TextBuffer) =
   ## when no Insert session is active. Insert waiting after Ctrl-o has no
   ## session to abandon; it resumes in the window moved to, as in Vim.
   ##
-  ## The typed text stays in the undo history but is not recorded for
-  ## dot-repeat: abandoning a session is not a deliberate Insert exit.
+  ## `.` still repeats what was typed.
   if e.state.mode notin {EditorMode.Insert, EditorMode.Replace}:
     return
 
@@ -77,13 +73,10 @@ proc finalizeInsertSessionForBufferSwitch*(e: Editor, oldBuffer: TextBuffer) =
       e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
 
   # Clear all Insert tracking state regardless of entry path.
-  e.state.editState.insertModeStartPos = none(BufferPosition)
-  e.state.editState.substituteContext = none(types.SubstituteContext)
+  e.state.endInsertRecord()
   e.state.editState.replaceHistory = @[]
-  e.state.editState.insertReplayCount = 0
-  e.state.editState.insertReplayLineEntry = false
   e.state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
-  e.state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+  e.state.editState.autoIndentedLine = none(AutoIndentedLine)
 
   e.state.previousMode = e.state.mode
   e.state.mode = EditorMode.Normal
@@ -122,6 +115,9 @@ proc commitForcedInsertBoundary*(
       e.activeBuffer.readOnly:
     return ok()
 
+  # The undo step ends what `.` repeats, so the record does not grow for the
+  # whole session.
+  e.state.closeInsertRecord()
   let commitResult =
     if e.state.editState.visualBlockInsertContext.isSome:
       let finalizeResult = finalizeInsertExit(e.activeBuffer, e.state)

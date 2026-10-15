@@ -170,8 +170,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       cursorVisible: true,
       config: editorConfig,
       windowDisplay: WindowDisplayState(
-        viewportReservedLines: steadyBottomAreaHeight(), # Status+command share same row
-        savedViewportTopLine: 0, # Saved viewport position for operators
+        viewportReservedLines: steadyBottomAreaHeight() # Status+command share same row
       ),
       # Timing state (grouped in TimingState)
       timing: TimingState(
@@ -229,9 +228,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       lastKeyWasEscape: false,
       editState: EditState(
         lastEditCommand: none(LastEditCommand),
-        substituteContext: none(SubstituteContext),
         replaceHistory: @[],
-        insertModeStartPos: none(BufferPosition),
         visualBlockInsertContext: none(VisualBlockInsertContext),
       ),
       registers: initRegisters(),

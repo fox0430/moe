@@ -474,9 +474,9 @@ suite "Insert Commands - smart indent ESC cleanup":
     state.cursor = BufferPosition(line: 0, column: 3)
 
     insertNewline(buf, state)
-    # New line is "  " — autoIndentedLine should hold the full indent.
+    # New line is "  ", all of it auto-indent.
     check state.editState.autoIndentedLine.isSome
-    check state.editState.autoIndentedLine.get.indent == "  "
+    check buf.getLine(1) == "  "
 
     clearAutoIndentIfUnedited(buf, state)
 
@@ -490,7 +490,8 @@ suite "Insert Commands - smart indent ESC cleanup":
     state.cursor = BufferPosition(line: 0, column: 7)
 
     insertNewline(buf, state)
-    check state.editState.autoIndentedLine.get.indent == "      "
+    check state.editState.autoIndentedLine.isSome
+    check buf.getLine(1) == "      "
 
     clearAutoIndentIfUnedited(buf, state)
 

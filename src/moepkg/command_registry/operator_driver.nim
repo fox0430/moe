@@ -24,7 +24,7 @@ import std/[options, tables, unicode]
 
 import pkg/results
 
-import ../[types, motion, key_bindings, unicode_utils, modes]
+import ../[types, motion, key_bindings, unicode_utils, modes, insert_record]
 import ../buffer/core
 
 import core, operator_engine
@@ -336,10 +336,20 @@ proc finishOperator*(
   # starts, before any widening to lines, and the operator moves it on from
   # there: a yank leaves it (`yb`, `yj`), and so does a refusal (`gUb`).
   ctx.cursor = ctx.settle(min(target.get.start, target.get.finish))
-  let opResult = executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
+  let opResult = executeOperatorOnRange(
+    ctx, op.operatorType, range, op.operatorCount, some(op.topLine)
+  )
   if opResult.isErr:
     return opResult
-  if op.operatorType != OpYank:
+  case op.operatorType
+  of OpYank:
+    discard
+  of OpChange:
+    # What is typed next belongs to the change, so Insert records it.
+    ctx.state.startInsertRecord(
+      InsertEntry(kind: ieChange, operand: operand), 1, ctx.register
+    )
+  else:
     ctx.recordChange(
       LastEditCommand(
         kind: lecOperatorMotion, operator: op.operatorType, operand: operand

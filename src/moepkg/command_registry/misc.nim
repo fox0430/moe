@@ -30,7 +30,7 @@ import
   ]
 import ../command_handlers/[insert_commands, normal_commands]
 
-import core, operator_engine
+import core, insert_entry
 
 ## Command handler wrappers (delegate to mode-specific command modules)
 
@@ -64,36 +64,6 @@ proc handleDelete*(ctx: CommandContext): Result[(), string] =
 proc handleNewline*(ctx: CommandContext): Result[(), string] =
   ## Handle newline insertion
   insertNewline(ctx.buffer, ctx.state)
-  Result[(), string].ok ()
-
-proc handleInsertLineBelow*(ctx: CommandContext): Result[(), string] =
-  ## Handle 'o' command - insert line below and enter insert mode
-  let txnResult = ctx.buffer.beginTransaction("Insert line below")
-  if txnResult.isErr:
-    return err("Failed to begin transaction: " & txnResult.error)
-  let insertResult = insertLineBelow(ctx.buffer, ctx.state)
-  if insertResult.isErr:
-    return rollbackAndPropagate(ctx, insertResult.error)
-  Result[(), string].ok ()
-
-proc handleInsertLineAbove*(ctx: CommandContext): Result[(), string] =
-  ## Handle 'O' command - insert line above and enter insert mode
-  let txnResult = ctx.buffer.beginTransaction("Insert line above")
-  if txnResult.isErr:
-    return err("Failed to begin transaction: " & txnResult.error)
-  let insertResult = insertLineAbove(ctx.buffer, ctx.state)
-  if insertResult.isErr:
-    return rollbackAndPropagate(ctx, insertResult.error)
-  Result[(), string].ok ()
-
-proc handleAppend*(ctx: CommandContext): Result[(), string] =
-  ## Handle 'a' command - move cursor right and enter insert mode
-  insertAppend(ctx.buffer, ctx.state)
-  Result[(), string].ok ()
-
-proc handleAppendEnd*(ctx: CommandContext): Result[(), string] =
-  ## Handle 'A' command - move to end of line and enter insert mode
-  insertAppendEnd(ctx.buffer, ctx.state)
   Result[(), string].ok ()
 
 proc handleQuickRun*(ctx: CommandContext, args: seq[string]): Result[(), string] =
@@ -300,9 +270,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Insert Line Below",
     "Insert new line below current line and switch to insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleInsertLineBelow(ctx),
+      ctx.handleInsertAt(ieOpenBelow, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   # Insert new line above and switch to insert mode (O command)
@@ -311,9 +281,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Insert Line Above",
     "Insert new line above current line and switch to insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleInsertLineAbove(ctx),
+      ctx.handleInsertAt(ieOpenAbove, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   # Append command (a) - move cursor right and enter insert mode
@@ -322,9 +292,20 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Append",
     "Move cursor right and enter insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleAppend(ctx),
+      ctx.handleInsertAt(ieAppend, parseCount(args)),
     0,
+    1,
+  )
+
+  # Insert at first non-blank (I)
+  registry.register(
+    builtin(bcInsertFirstNonBlank),
+    "Insert at First Non-blank",
+    "Move to the first non-blank character and enter insert mode",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      ctx.handleInsertAt(ieInsertNonBlank, parseCount(args)),
     0,
+    1,
   )
 
   # Append at line end (A) - move to end of line and enter insert mode
@@ -333,9 +314,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Append at End",
     "Move to end of line and enter insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleAppendEnd(ctx),
+      ctx.handleInsertAt(ieAppendEnd, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   proc moveToMatch(

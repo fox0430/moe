@@ -266,7 +266,7 @@ proc processResultWithHost(
         " (folded by handleCommandMode)",
     )
     discard # Folded to hrHandled/hrError by handleCommandMode; unreachable here.
-  of hrPlaybackMacro, hrExecCommand:
+  of hrPlaybackMacro, hrExecCommand, hrRepeatInsert:
     logWarn(
       "result_processor",
       "unreachable kind reached processResult: " & $r.kind &
@@ -450,10 +450,9 @@ proc settleInsertResume*(e: Editor) =
     state.statusMessage = message
 
 template withInsertResumeAside(e: Editor, body: untyped): ReplayOutcome =
-  ## Run a macro with the Insert Ctrl-o waits for set aside, so none of its
-  ## keys resumes it, and put it back once the macro is done, as Vim queues
-  ## `i` after the register (put_reedit_in_typebuf). A macro that aborts drops
-  ## it with the rest of the register.
+  ## Run a macro or repeated keys with the Insert Ctrl-o waits for set aside, so
+  ## none of their keys resumes it, and put it back once they are done. An abort
+  ## drops it with the rest of the keys.
   let waiting = e.state.insertResume
   e.state.insertResume = irNone
   var replayed = roContinue
@@ -478,6 +477,8 @@ proc playbackKeyCombosImpl(
   e: Editor, combos: seq[KeyCombo], remapFrom: int, standsFor: seq[KeyCombo]
 ): ReplayOutcome
 
+proc repeatInsert(e: Editor, r: HandlerResult): ReplayOutcome
+
 proc runNestedKeyCombo*(
   manager: HandlerManager, e: Editor, key: KeyInput
 ): ReplayOutcome
@@ -501,6 +502,9 @@ proc processReplayedResult*(
       if outcome != roContinue:
         break
     return outcome
+  if r.kind == hrRepeatInsert:
+    # `<C-o>.` resumes Insert once the keys are typed and Insert is left.
+    return e.withInsertResumeAside(e.repeatInsert(r))
   if r.kind == hrPlaybackMacro:
     # Vim queues the Insert that Ctrl-o waits for after the register's keys
     # (put_reedit_in_typebuf), so the whole macro runs before it resumes, and
@@ -603,6 +607,59 @@ proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
           break
   finally:
     e.state.pendingInput.macroState.executingDepth -= 1
+
+proc typeAgain(e: Editor, typed: TypedInput): ReplayOutcome =
+  ## Type one recorded input again, a key unmapped.
+  case typed.kind
+  of tiKey:
+    runNestedKeyCombo(
+      e.handlerManager, e, KeyInput(combo: typed.key, remap: false, typed: false)
+    )
+  of tiText:
+    processReplayedResult(e, e.handlerManager.typeText(e, typed), e.activeBuffer)
+
+proc newLineAfterTyped(e: Editor, linesBelow: int): ReplayOutcome =
+  ## Enter at the end of what o or O typed, on the line above the last
+  ## `linesBelow` lines. A pair closed as typed leaves the cursor short of it.
+  let buffer = e.activeBuffer
+  let line = clamp(buffer.len - 1 - linesBelow, 0, buffer.len - 1)
+  e.state.cursor = BufferPosition(line: line, column: buffer.getLine(line).charLen)
+  e.typeAgain(TypedInput(kind: tiKey, key: KeyCombo(isSpecial: true, special: skEnter)))
+
+proc repeatInsert(e: Editor, r: HandlerResult): ReplayOutcome =
+  ## Type an Insert record again (`.`, Ctrl-A, the count of `3ifoo`), its keys
+  ## unmapped, and leave Insert after if asked. The count's repeats type what is
+  ## recorded, so the record does not take them again.
+  let wasRepeating = e.state.editState.typing.repeating
+  e.state.editState.typing.repeating = wasRepeating or not r.repeatAsTyping
+  try:
+    result = withPlaybackGuard(e):
+      block typing:
+        for _ in 0 ..< r.repeatTimes:
+          if r.repeatNewLine.isSome:
+            if e.state.mode != EditorMode.Insert:
+              break typing
+            outcome = e.newLineAfterTyped(r.repeatNewLine.get)
+            if outcome != roContinue:
+              break typing
+          for typed in r.repeatTyped:
+            if e.state.mode != EditorMode.Insert:
+              break typing
+            outcome = e.typeAgain(typed)
+            if outcome != roContinue:
+              break typing
+  finally:
+    e.state.editState.typing.repeating = wasRepeating
+  if result == roContinue and r.repeatLeave and e.state.mode == EditorMode.Insert:
+    result = processReplayedResult(e, e.handlerManager.leaveInsert(e), e.activeBuffer)
+  if result == roContinue and r.repeatThenExec.len > 0:
+    result = processReplayedResult(
+      e,
+      HandlerResult(
+        kind: hrExecCommand, execCommandText: r.repeatThenExec, execCommandCount: 1
+      ),
+      e.activeBuffer,
+    )
 
 proc stopRecursiveMapping(editor: Editor): ReplayOutcome =
   ## End a mapping that keeps expanding, as Vim's E223 does.
