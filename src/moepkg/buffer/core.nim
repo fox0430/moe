@@ -1067,6 +1067,11 @@ proc isWordChar*(r: Rune): bool =
   let c = r.int32
   return r.isAlpha or (c >= '0'.ord and c <= '9'.ord) or c == '_'.ord
 
+proc isSpaceOrBreak*(r: Rune): bool =
+  ## A space, a tab or a line break, which ends a word.
+  let c = r.int32
+  c == ' '.ord or c == '\t'.ord or c == '\n'.ord or c == '\r'.ord
+
 proc getWordAtPosition*(b: TextBuffer, pos: BufferPosition): string =
   ## Get the word at the given buffer position.
   ## A "word" follows `isWordChar` semantics, so CJK and other Unicode letters

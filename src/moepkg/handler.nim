@@ -374,7 +374,7 @@ proc handlePasteText(e: Editor, text: string): bool =
 
     e.activeWindow.cursor = insertResult.get.cursor
     # Record it as typed, so `.` types the pasted text.
-    e.state.noteTypedText(pastedText)
+    e.state.noteTypedText(pastedText, pos)
 
     if ownTransaction:
       let commitResult = activeBuffer.commitTransaction()
@@ -824,7 +824,7 @@ proc middleClickPaste(e: Editor, row, col: int) =
     return
 
   e.activeWindow.cursor = insertResult.get.cursor
-  e.state.noteTypedText(pastedText)
+  e.state.noteTypedText(pastedText, pos)
   # The click chose this window, so re-attach its viewport: a wheel-scrolled
   # split would otherwise keep the cursor off-screen after the insert.
   e.activeWindow.viewport.detachedFromCursor = false

@@ -38,6 +38,7 @@ import
     macro_recording,
   ]
 import handler_types, insert_commands
+import ../insert_record
 import ../types/editor_types
 export handler_types
 
@@ -173,6 +174,18 @@ proc handleDelete*(
   if r.isErr:
     return InsertModeResult(kind: imrError, errorMessage: r.error)
   InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+proc linesAddedAtOrAbove(edits: openArray[TextEdit], line: int): int =
+  ## Lines `edits` add at or above `line`, in the coordinates they were made in.
+  for e in edits:
+    if e.range.start.line <= line:
+      result += e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
+
+proc shiftTypingStart(state: EditorState, edits: openArray[TextEdit]) =
+  ## Keep where typing started on its text when `edits` add lines above it.
+  let start = state.insertStart
+  state.insertStart.at.line += edits.linesAddedAtOrAbove(start.at.line)
+  state.insertStart.stop.line += edits.linesAddedAtOrAbove(start.stop.line)
 
 proc handleNewline*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
@@ -556,6 +569,8 @@ proc commitCompletion*(
     else:
       (rawText, rawText.charLen)
 
+  # The change starts the typed text at the cursor, before any edit moves it.
+  state.stopArrow(state.cursor)
   if entry.additionalTextEdits.isSome and not keepPopupOpen:
     # Apply additionalTextEdits (auto-imports etc.) FIRST, while the buffer still
     # matches the coordinates the server computed them against. Edits inserted at
@@ -570,12 +585,9 @@ proc commitCompletion*(
     if addResult.isErr:
       # Some edits may have partially applied: shift tracked coordinates by
       # the ones that DID apply, then abort the completion.
-      var appliedShift = 0
-      for e in appliedAdds:
-        if e.range.start.line <= startLine:
-          appliedShift +=
-            e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
+      let appliedShift = appliedAdds.linesAddedAtOrAbove(startLine)
       state.cursor.line += appliedShift
+      state.shiftTypingStart(appliedAdds)
       if state.snippetSession.active:
         for stop in state.snippetSession.stops.mitems:
           stop.pos.line += appliedShift
@@ -583,13 +595,11 @@ proc commitCompletion*(
       return InsertModeResult(
         kind: imrError, errorMessage: addResult.error & " (completion aborted)"
       )
-    var lineShift = 0
-    for e in adds:
-      if e.range.start.line <= startLine:
-        lineShift += e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
+    let lineShift = adds.linesAddedAtOrAbove(startLine)
     startLine += lineShift
     endLine += lineShift
     state.cursor.line += lineShift
+    state.shiftTypingStart(adds)
     if state.snippetSession.active:
       # Session stops live at the completion site, below whole-line imports,
       # so they shift down with it.
@@ -1240,19 +1250,15 @@ proc handleInsertModeKey*(
           typedBefore: pendingResult.get,
           keyConsumed: true,
         )
-      if state.cursor.line < buffer.len and
-          state.cursor.column >= buffer.getLine(state.cursor.line).charLen:
-        # At end of line handleDelete is a no-op (no line join), so there is
-        # nothing to delete and nothing to remap against.
-        return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
-      let oldEnd =
-        BufferPosition(line: state.cursor.line, column: state.cursor.column + 1)
       let curBefore = session.stops[session.index]
-      let res = handler.handleDelete(buffer, state)
-      if res.kind != imrHandled:
-        # The edit did not land; remapping against a range that was never
-        # deleted would corrupt the stop coordinates.
+      let deleted = deleteAtCursor(buffer, state)
+      if deleted.isErr:
+        return InsertModeResult(kind: imrError, errorMessage: deleted.error)
+      let res = InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+      if deleted.get.isNone:
+        # The last line had no break to take; nothing moved.
         return res
+      let oldEnd = deleted.get.get
       remapAfterEdit(session, state.cursor, oldEnd, state.cursor)
       # Shrink the current stop if the deleted character sat inside it (see the
       # backspace path). handleDelete leaves the cursor in place, so the deleted
@@ -1328,20 +1334,12 @@ proc handleInsertModeKey*(
     deleteToLineStart(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  if keyCombo.isCtrlT:
-    # Ctrl+T - indent line
+  if keyCombo.isCtrlT or keyCombo.isCtrlD:
+    # Ctrl+T - indent line, Ctrl+D - dedent line
     handler.completionManager.cancelCompletion()
-    let indentRes = indentLine(buffer, state)
+    let indentRes = buffer.changeIndent(state, deeper = keyCombo.isCtrlT)
     if indentRes.isErr:
       state.statusMessage = indentRes.error
-    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
-
-  if keyCombo.isCtrlD:
-    # Ctrl+D - dedent line
-    handler.completionManager.cancelCompletion()
-    let dedentRes = dedentLine(buffer, state)
-    if dedentRes.isErr:
-      state.statusMessage = dedentRes.error
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   if keyCombo.isCtrlE or keyCombo.isCtrlY:

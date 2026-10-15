@@ -37,9 +37,29 @@ proc repeatsTyped*(entry: InsertEntry): bool =
 proc settleTyping*(state: EditorState) =
   ## Note where the last judged key left the cursor and the text, so the next
   ## key can tell whether anything else moved them (a click, a server edit).
+  ## Ctrl-W and Ctrl-U stop where the typed text starts again, unless a move
+  ## kept where they stopped.
   let buffer = state.activeWindow.buffer
   state.editState.typing.lastCursor = state.cursor
   state.editState.typing.lastVersion = if buffer.isNil: 0 else: buffer.contentVersion
+  if not state.insertStart.keepStop:
+    state.insertStart.stop = state.insertStart.at
+
+proc stopArrow*(state: EditorState, at: BufferPosition) =
+  ## A change at `at` after the cursor moved starts the typed text there, as
+  ## Vim's stop_arrow does. Moved right of where Ctrl-W and Ctrl-U stop, once
+  ## something was changed, they keep stopping there.
+  if state.insertStart.moved:
+    state.insertStart.moved = false
+    state.insertStart.at = at
+    if at.column > state.insertStart.stop.column and state.insertStart.changed:
+      state.insertStart.keepStop = true
+  state.insertStart.changed = true
+
+proc resumeTyping*(state: EditorState, at: BufferPosition) =
+  ## Typing starts at `at` again after a Ctrl-o command, as Vim's edit() with
+  ## restart_edit: the resume counts as a cursor move (arrow_used).
+  state.insertStart = InsertStart(at: at, stop: at, moved: true)
 
 proc keepChangeBefore(state: EditorState) =
   ## Keep what `.` repeats as the change before the record that starts now.
@@ -111,11 +131,12 @@ proc addTyped(record: var InsertRecord, typed: TypedInput) =
       return
   record.typed.add typed
 
-proc noteTyped*(state: EditorState, typed: openArray[TypedInput]) =
-  ## Add what a key typed, as a plain insert when nothing is being recorded.
-  ## The count's repeats type what is recorded already.
+proc noteTyped*(state: EditorState, typed: openArray[TypedInput], at: BufferPosition) =
+  ## Add what a key typed at `at`, as a plain insert when nothing is being
+  ## recorded. The count's repeats type what is recorded already.
   if state.editState.typing.repeating:
     return
+  state.stopArrow(at)
   if not state.editState.typing.open:
     state.keepChangeBefore()
     state.editState.insertRecord =
@@ -151,6 +172,7 @@ proc noteMove(state: EditorState) =
   ## The cursor moved without typing: the record ends, and the auto-indent
   ## nothing was typed after comes off the line if the cursor left it.
   state.closeInsertRecord()
+  state.insertStart.moved = true
   let buffer = state.activeWindow.buffer
   if not buffer.isNil:
     let untouched = buffer.untouchedAutoIndent(state)
@@ -186,14 +208,14 @@ proc noteKey*(
   if state.editState.typing.repeating:
     return
   if typedBefore.len > 0:
-    state.noteTyped(typedBefore)
+    state.noteTyped(typedBefore, cursorBefore)
     if not keyConsumed:
-      state.noteTyped([TypedInput(kind: tiKey, key: key)])
+      state.noteTyped([TypedInput(kind: tiKey, key: key)], cursorBefore)
   elif buffer.contentVersion != versionBefore:
-    state.noteTyped([TypedInput(kind: tiKey, key: key)])
+    state.noteTyped([TypedInput(kind: tiKey, key: key)], cursorBefore)
   elif moves or state.cursor != cursorBefore:
     state.noteMove()
 
-proc noteTypedText*(state: EditorState, text: string) =
-  state.noteTyped([TypedInput(kind: tiText, text: text, cursorAt: text.charLen)])
+proc noteTypedText*(state: EditorState, text: string, at: BufferPosition) =
+  state.noteTyped([TypedInput(kind: tiText, text: text, cursorAt: text.charLen)], at)
   state.settleTyping()

@@ -199,10 +199,11 @@ proc typeText*(
   ## Put text in at the cursor as typed (a paste, or text `.` types again).
   let state = editor.state
   state.noteOutsideChange()
+  let at = state.cursor
   let r = typeTextAgain(editor.activeBuffer, state, typed)
   if r.isErr:
     return HandlerResult(kind: hrError, errorMessage: r.error)
-  state.noteTyped([typed])
+  state.noteTyped([typed], at)
   state.settleTyping()
   HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
 
@@ -225,6 +226,8 @@ proc handleInsertMode*(
       # It ends a Visual-block insert, as in Vim.
       if state.config.standard.forceInsertMode and r.isCtrlOExit:
         state.closeInsertRecord()
+        # Insert goes on after the command line, as Ctrl-o resumes it.
+        state.resumeTyping(state.cursor)
         let replicationError = replicateBlockInsert(buffer, state)
         return HandlerResult(
           kind: hrHandled,

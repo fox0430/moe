@@ -551,10 +551,20 @@ const InsertModeCommands*: HelpGroup = HelpGroup(
     ),
     HelpEntry(syntax: "Ctrl-t", description: "Add an indent in current line"),
     HelpEntry(syntax: "Ctrl-d", description: "Remove an indent in current line"),
-    HelpEntry(syntax: "Ctrl-w", description: "Delete the word before the cursor"),
+    HelpEntry(
+      syntax: "Delete",
+      description:
+        "Delete the character at the cursor, or join the next line at the end",
+    ),
+    HelpEntry(
+      syntax: "Ctrl-w",
+      description:
+        "Delete the word before the cursor, stopping once where typing started, or join the line above at the start",
+    ),
     HelpEntry(
       syntax: "Ctrl-u",
-      description: "Delete all characters before the cursor in the current line",
+      description:
+        "Delete the characters typed before the cursor, or else all before it but the auto-indent, or join the line above at the start",
     ),
     HelpEntry(syntax: "Ctrl-r", description: "Signature Help (LSP)"),
     HelpEntry(

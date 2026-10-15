@@ -30,10 +30,6 @@ import ../buffer/[core, search]
 import handler_types
 export handler_types
 
-proc isWhitespace(r: Rune): bool =
-  let c = r.int32
-  c == ' '.ord or c == '\t'.ord or c == '\n'.ord or c == '\r'.ord
-
 type
   LogViewerResultKind* = enum
     lvrHandled # Command was handled successfully
@@ -199,13 +195,13 @@ proc handleLogViewerModeKey*(
         if isWordChar(firstCh):
           while pos < runes.len and isWordChar(runes[pos]):
             pos += 1
-        elif not isWhitespace(firstCh):
+        elif not isSpaceOrBreak(firstCh):
           while pos < runes.len and not isWordChar(runes[pos]) and
-              not isWhitespace(runes[pos]):
+              not isSpaceOrBreak(runes[pos]):
             pos += 1
 
       # Skip whitespace
-      while pos < runes.len and isWhitespace(runes[pos]):
+      while pos < runes.len and isSpaceOrBreak(runes[pos]):
         pos += 1
 
       # If at end of line, move to next line
@@ -221,7 +217,7 @@ proc handleLogViewerModeKey*(
             nextLine
         let nextRunes = nextContent.toRunes()
         while state.cursor.column < nextRunes.len and
-            isWhitespace(nextRunes[state.cursor.column]):
+            isSpaceOrBreak(nextRunes[state.cursor.column]):
           state.cursor.column += 1
       else:
         state.cursor.column = min(pos, max(0, runes.len - 1))
@@ -253,7 +249,7 @@ proc handleLogViewerModeKey*(
       let runes = lineContent.toRunes()
 
       # Skip whitespace backward
-      while pos > 0 and pos < runes.len and isWhitespace(runes[pos]):
+      while pos > 0 and pos < runes.len and isSpaceOrBreak(runes[pos]):
         pos -= 1
 
       # Skip word/symbol backward to find start
@@ -262,9 +258,9 @@ proc handleLogViewerModeKey*(
         if isWordChar(ch):
           while pos > 0 and isWordChar(runes[pos - 1]):
             pos -= 1
-        elif not isWhitespace(ch):
+        elif not isSpaceOrBreak(ch):
           while pos > 0 and not isWordChar(runes[pos - 1]) and
-              not isWhitespace(runes[pos - 1]):
+              not isSpaceOrBreak(runes[pos - 1]):
             pos -= 1
 
       state.cursor.line = line
@@ -286,7 +282,7 @@ proc handleLogViewerModeKey*(
         pos += 1
 
       # Skip whitespace
-      while pos < runes.len and isWhitespace(runes[pos]):
+      while pos < runes.len and isSpaceOrBreak(runes[pos]):
         pos += 1
 
       # If at end of line, move to next line
@@ -301,7 +297,7 @@ proc handleLogViewerModeKey*(
         let nextRunes = nextContent.toRunes()
         pos = 0
         # Skip leading whitespace
-        while pos < nextRunes.len and isWhitespace(nextRunes[pos]):
+        while pos < nextRunes.len and isSpaceOrBreak(nextRunes[pos]):
           pos += 1
         # Find end of word
         if pos < nextRunes.len:
@@ -309,9 +305,9 @@ proc handleLogViewerModeKey*(
           if isWordChar(ch):
             while pos < nextRunes.len - 1 and isWordChar(nextRunes[pos + 1]):
               pos += 1
-          elif not isWhitespace(ch):
+          elif not isSpaceOrBreak(ch):
             while pos < nextRunes.len - 1 and not isWordChar(nextRunes[pos + 1]) and
-                not isWhitespace(nextRunes[pos + 1]):
+                not isSpaceOrBreak(nextRunes[pos + 1]):
               pos += 1
         state.cursor.column = pos
       else:
@@ -321,9 +317,9 @@ proc handleLogViewerModeKey*(
           if isWordChar(ch):
             while pos < runes.len - 1 and isWordChar(runes[pos + 1]):
               pos += 1
-          elif not isWhitespace(ch):
+          elif not isSpaceOrBreak(ch):
             while pos < runes.len - 1 and not isWordChar(runes[pos + 1]) and
-                not isWhitespace(runes[pos + 1]):
+                not isSpaceOrBreak(runes[pos + 1]):
               pos += 1
         state.cursor.column = min(pos, max(0, runes.len - 1))
       return LogViewerResult(kind: lvrHandled)
