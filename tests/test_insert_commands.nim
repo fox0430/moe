@@ -365,8 +365,9 @@ suite "Insert Commands - insertNewline":
 
     insertNewline(buf, state)
 
+    # The blank carried down gives way to the indent, as in Vim.
     check buf.getLine(0) == "    hello"
-    check buf.getLine(1) == "     world"
+    check buf.getLine(1) == "    world"
     check state.cursor.line == 1
     check state.cursor.column == 4
 

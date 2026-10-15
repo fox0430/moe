@@ -615,7 +615,8 @@ type
     line*: int
     version*: int
       # contentVersion once the indent went in: while it holds, nothing was
-      # typed there, and Escape, Enter or a move takes the indent off
+      # typed there. Enter takes the indent off, and so do Escape and a move
+      # unless text Enter carried down follows it
 
   InsertEntryKind* = enum
     ## The command a change entered Insert mode with, which `.` runs again
