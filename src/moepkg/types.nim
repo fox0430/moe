@@ -1215,6 +1215,9 @@ proc cursor*(s: EditorState): var BufferPosition =
 proc insertStart*(s: EditorState): var InsertStart =
   s.activeWindow.insertStart
 
+proc `insertStart=`*(s: EditorState, v: InsertStart) =
+  s.activeWindow.insertStart = v
+
 proc `cursor=`*(s: EditorState, pos: BufferPosition) =
   ## Set cursor position on the active window
   s.activeWindow.cursor = pos
