@@ -31,18 +31,25 @@ from ../encoding import sanitizeInvalidUtf8
 import core, internal_mutations, line_diff, undo
 export LineEdit, LineDiff
 
-# NoUndo procs: skip undo/changeSeq but must shift semantic overlay / folds /
-# bookmarks. lineMarkers/modifiedLines are held back via includeSideArrays=false
-# so substitute-preview does not mark previewed lines as modified in the sidebar.
+# NoUndo procs skip undo/changeSeq but move other followers, so previews
+# leave no marks or diagnostics behind.
+const NoUndoFollowers = AllFollowers - {efLineArrays, efDiagnostics}
+
 proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Replace line content without recording undo. Used by substitute preview etc.
   if b.readOnly:
     return
+  let old = b.getLine(lineNumber)
   b.backendReplaceLine(lineNumber, content)
   b.advanceContentVersion()
-  b.emitRowColRemapEvents(
-    BufferChange(kind: ckReplaceLine, replaceLineIdx: lineNumber),
-    includeSideArrays = false,
+  b.followChange(
+    BufferChange(
+      kind: ckReplaceLine,
+      replaceLineIdx: lineNumber,
+      replaceLineOldText: old,
+      replaceLineNewText: content,
+    ),
+    NoUndoFollowers,
   )
 
 proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
@@ -51,9 +58,8 @@ proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
     return
   b.backendDeleteLine(lineNumber)
   b.advanceContentVersion()
-  b.emitRowColRemapEvents(
-    BufferChange(kind: ckDeleteLine, deleteLineIdx: lineNumber),
-    includeSideArrays = false,
+  b.followChange(
+    BufferChange(kind: ckDeleteLine, deleteLineIdx: lineNumber), NoUndoFollowers
   )
 
 proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
@@ -62,9 +68,8 @@ proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
     return
   b.backendInsertLine(lineNumber, content)
   b.advanceContentVersion()
-  b.emitRowColRemapEvents(
-    BufferChange(kind: ckInsertLine, insertLineIdx: lineNumber),
-    includeSideArrays = false,
+  b.followChange(
+    BufferChange(kind: ckInsertLine, insertLineIdx: lineNumber), NoUndoFollowers
   )
 
 proc stripCarriageReturns(b: TextBuffer, content: string): string =
@@ -122,10 +127,16 @@ proc preparePastedText*(b: TextBuffer, text: string): string =
 
 # Editing operations
 proc insertTextEnd*(
-    b: TextBuffer, pos: BufferPosition, text: string, cursorByte: int = -1
+    b: TextBuffer,
+    pos: BufferPosition,
+    text: string,
+    cursorByte: int = -1,
+    openLine = olNone,
 ): Result[InsertOutcome, string] =
   ## Insert text at `pos`, handling newlines. CR normalized for decoded buffers only.
-  ## Returns end and cursor positions, or error if out of bounds.
+  ## Returns end and cursor positions, or error if out of bounds. `openLine`
+  ## marks text opening whole lines beside `pos`; ignored where it does not
+  ## apply.
   if b.readOnly:
     return err("Buffer is read-only")
   if text.len == 0:
@@ -142,6 +153,14 @@ proc insertTextEnd*(
     # Recorded before the mutation: afterwards this tail is indistinguishable
     # from the inserted text.
     splitTailLen = max(0, b.getLine(pos.line).charLen - pos.column)
+    opened =
+      case openLine
+      of olBelow:
+        if splitTailLen == 0 and normalized[0] == '\n': olBelow else: olNone
+      of olAbove:
+        if pos.column == 0 and normalized[^1] == '\n': olAbove else: olNone
+      of olNone:
+        olNone
 
   b.captureSnapshotIfNeeded()
 
@@ -164,14 +183,17 @@ proc insertTextEnd*(
       insertColDelta: outcome.colDelta,
       insertByteOffset: outcome.byteOffset,
       insertSplitTailLen: splitTailLen,
+      insertOpenLine: opened,
     )
   )
 
   return ok(outcome)
 
-proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
+proc insertText*(
+    b: TextBuffer, pos: BufferPosition, text: string, openLine = olNone
+): Result[(), string] =
   ## `insertTextEnd` for callers that place no cursor after the insertion.
-  let r = b.insertTextEnd(pos, text)
+  let r = b.insertTextEnd(pos, text, openLine = openLine)
   if r.isErr:
     return err(r.error)
   ok(())
@@ -256,7 +278,7 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
       b.discardPendingSnapshot()
       return err("Failed to insert line: " & e.msg)
 
-  # Side-array shifts run via the emitRowColRemapEvents subscribers.
+  # Line arrays follow in pushUndoChange.
   b.pushUndoChange(
     BufferChange(
       kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: normalizedContent
@@ -286,7 +308,7 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
       b.discardPendingSnapshot()
       return err("Failed to delete line: " & e.msg)
 
-  # Side-array shifts run via the emitRowColRemapEvents subscribers.
+  # Line arrays follow in pushUndoChange.
   b.pushUndoChange(
     BufferChange(
       kind: ckDeleteLine, deleteLineIdx: lineIndex, deletedLineText: deletedContent
@@ -356,7 +378,7 @@ proc replaceLines*(
       return err("Failed to replace lines, buffer left partially rewritten: " & e.msg)
     return err("Failed to replace lines: " & e.msg)
 
-  # Side-array shifts run via the emitRowColRemapEvents subscribers.
+  # Line arrays follow in pushUndoChange.
   b.pushUndoChange(
     BufferChange(
       kind: ckReplaceLines,
@@ -481,7 +503,7 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
     else:
       0
 
-  # Side-array shifts run via the emitRowColRemapEvents subscribers.
+  # Line arrays follow in pushUndoChange.
   b.pushUndoChange(
     BufferChange(
       kind: ckDeleteRange,
@@ -538,7 +560,11 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
   if linesToJoin < 2:
     return err("Not enough lines to join")
 
-  let txr = withTransaction(b, "join " & $linesToJoin & " lines"):
+  let txr = withTransaction(
+    b,
+    "join " & $linesToJoin & " lines",
+    some(BufferPosition(line: startLine, column: 0)),
+  ):
     for i in 1 ..< linesToJoin:
       let currentLine = b.getLine(startLine)
       let nextLine = b.getLine(startLine + 1)
@@ -546,7 +572,7 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
         marksBeforeJoin = b.namedMarks
         visualBeforeJoin = b.lastVisual
 
-      var trimmedCurrent = currentLine.strip(leading = false, trailing = true)
+      let trimmedCurrent = currentLine.strip(leading = false, trailing = true)
       let trimmedNext = nextLine.strip(leading = true, trailing = false)
       let leadingTrim = nextLine.charLen - trimmedNext.charLen
 
@@ -558,23 +584,25 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
       # then adds no space.
       let vimNextStart =
         currentLine.charLen + ord(separated and trimmedCurrent.len == currentLine.len)
+      let joinAt = BufferPosition(line: startLine, column: trimmedCurrent.charLen)
+      let joinedPrefixLen = joinAt.column + ord(separated)
+
+      # Edit as text so followers on either side move with it, on undo too;
+      # space goes in first.
       if separated:
-        trimmedCurrent.add(' ')
-
-      let joinedLine = trimmedCurrent & trimmedNext
-      let joinedPrefixLen = trimmedCurrent.charLen
-
-      let deleteResult = b.deleteLine(startLine)
+        let insertResult = b.insertText(joinAt, " ")
+        if insertResult.isErr:
+          return err(insertResult.error)
+      let blanksEnd =
+        if leadingTrim > 0:
+          BufferPosition(line: startLine + 1, column: leadingTrim - 1)
+        else:
+          BufferPosition(line: startLine, column: currentLine.charLen + ord(separated))
+      let deleteResult = b.deleteRange(
+        BufferPosition(line: startLine, column: joinedPrefixLen), blanksEnd
+      )
       if deleteResult.isErr:
         return err(deleteResult.error)
-
-      let deleteNextResult = b.deleteLine(startLine)
-      if deleteNextResult.isErr:
-        return err(deleteNextResult.error)
-
-      let insertResult = b.insert(startLine, joinedLine)
-      if insertResult.isErr:
-        return err(insertResult.error)
 
       # Not clamped to the joined line, as in Vim: readers clamp. A column in
       # the trailing blanks trimmed here goes to the join; one past the line

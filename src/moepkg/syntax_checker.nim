@@ -21,7 +21,7 @@ import std/[strutils, options]
 
 import pkg/[results, chronos, regex]
 
-import background_process, primitives, buffer/[core, markers]
+import background_process, primitives, buffer/core
 import syntax/tokenizer
 
 import types/syntax_checker_types
@@ -61,7 +61,7 @@ proc parseNimCheckResult*(path: string, output: seq[string]): seq[SyntaxCheckErr
     if not line.find(nimCheckPosPattern, m):
       continue
     let lineNum = parseInt(line[m.group(0)]) - 1 # 0-based
-    let col = parseInt(line[m.group(1)])
+    let col = max(parseInt(line[m.group(1)]) - 1, 0) # 0-based, in bytes
     # Extract message type and message after the position
     let afterPos = m.boundaries.b + 1
     let rest = line[afterPos ..< line.len].strip()
@@ -112,39 +112,48 @@ proc waitForAsync*(
   ## error.
   return await bp.process.waitForAsync(timeout, stop)
 
-proc clearSyntaxMarkers*(b: TextBuffer) =
-  ## Clear only SyntaxError and SyntaxWarning markers from the buffer,
-  ## preserving git diff markers.
-  for i in 0 ..< b.lineMarkers.len:
-    if b.lineMarkers[i].isSome:
-      let kind = b.lineMarkers[i].get
-      if kind == LineMarkerKind.SyntaxError or kind == LineMarkerKind.SyntaxWarning:
-        b.lineMarkers[i] = none(LineMarkerKind)
+proc measureColumns*(errors: var seq[SyntaxCheckError], checked: string) =
+  ## Convert `nim check` byte columns to char columns in `checked`.
+  let lines = checked.splitLines
+  for err in errors.mitems:
+    if err.position.line in 0 ..< lines.len:
+      err.position.column = lines[err.position.line].byteToCharPos(err.position.column)
 
-proc applySyntaxCheckToBuffer*(b: TextBuffer, errors: seq[SyntaxCheckError]) =
-  ## Apply syntax check errors to buffer line markers.
-  ## Clears existing syntax markers first, then sets new ones.
-  b.clearSyntaxMarkers()
+proc applySyntaxCheckToBuffer*(
+    b: TextBuffer, errors: seq[SyntaxCheckError], awaited = 0
+): bool {.discardable.} =
+  ## Replace syntax-check diagnostics with `errors`; say whether taken. Moves
+  ## the `awaited` check across edits since the save.
+  var items: seq[BufferDiagnostic]
   for err in errors:
-    if err.position.line >= 0 and err.position.line < b.len:
-      case err.messageType
-      of SyntaxCheckMessageType.error:
-        b.setLineMarker(err.position.line, LineMarkerKind.SyntaxError)
-      of SyntaxCheckMessageType.warning:
-        b.setLineMarker(err.position.line, LineMarkerKind.SyntaxWarning)
-      of SyntaxCheckMessageType.hint, SyntaxCheckMessageType.info:
-        discard # Don't show hints/info in sidebar
-
-proc formattedMessage*(errors: seq[SyntaxCheckError], line: int): Option[string] =
-  ## Get formatted error/warning message for the given line.
-  ## Returns the first matching error for that line.
-  for err in errors:
-    if err.position.line == line:
-      let prefix =
+    if err.position.line >= 0:
+      let severity =
         case err.messageType
-        of SyntaxCheckMessageType.error: "Error"
-        of SyntaxCheckMessageType.warning: "Warning"
-        of SyntaxCheckMessageType.hint: "Hint"
-        of SyntaxCheckMessageType.info: "Info"
-      return some(prefix & ": " & err.message)
-  return none(string)
+        of SyntaxCheckMessageType.error: bdsError
+        of SyntaxCheckMessageType.warning: bdsWarning
+        of SyntaxCheckMessageType.info: bdsInformation
+        of SyntaxCheckMessageType.hint: bdsHint
+      items.add BufferDiagnostic(
+        startLine: err.position.line,
+        startCol: err.position.column,
+        endLine: err.position.line,
+        endCol: err.position.column,
+        severity: severity,
+        message: err.message,
+      )
+  b.setDiagnostics(dsrcSyntaxCheck, items, awaited)
+
+proc syntaxCheckMessage*(b: TextBuffer, line: int): Option[string] =
+  ## Most severe message for `line`; leftmost on ties.
+  var found: Option[BufferDiagnostic]
+  for d in b.diagnostics[dsrcSyntaxCheck].startingOn(line .. line):
+    if found.isNone or d.severity < found.get.severity:
+      found = some(d)
+  if found.isSome:
+    let prefix =
+      case found.get.severity
+      of bdsError: "Error"
+      of bdsWarning: "Warning"
+      of bdsInformation: "Info"
+      of bdsHint: "Hint"
+    return some(prefix & ": " & found.get.message)

@@ -109,7 +109,8 @@ proc handlePasteAfter*(
 
         # The lines go after the current one's line break.
         let textToInsert = "\n" & pasteText.withoutLastLineBreak
-        let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
+        let insertResult =
+          ctx.buffer.insertText(pastePos, textToInsert, openLine = olBelow)
         if insertResult.isErr:
           # Rollback transaction on error
           if actualCount > 1:
@@ -216,7 +217,8 @@ proc handlePasteBefore*(
 
         # The lines go before the current one, each ending in a line break.
         let textToInsert = pasteText
-        let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
+        let insertResult =
+          ctx.buffer.insertText(pastePos, textToInsert, openLine = olAbove)
         if insertResult.isErr:
           # Rollback transaction on error
           if actualCount > 1:

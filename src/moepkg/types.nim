@@ -892,7 +892,10 @@ type
       automatic: bool
   QuickRunInfo* =
     tuple[cmd: string, args: seq[string], filePath: string, workDir: string]
-  SyntaxCheckInfo* = tuple[path: string, language: int]
+  SyntaxCheckInfo* =
+    tuple[path: string, language: int, buffer: BufferId, awaited: int, text: string]
+    ## `buffer` checked (0 for none), `awaited` its report id, `text` the saved
+    ## content.
   FilterInfo* =
     tuple[
       bufferId: BufferId,
@@ -1003,8 +1006,6 @@ type
       # Command mode auto-completion manager
     # LSP cache state (grouped in LspCacheState)
     lspCache*: LspCacheState # LSP cache and picker state
-    # Active syntax check results (for status message display)
-    syntaxCheckResults*: tuple[path: string, errors: seq[SyntaxCheckError]]
     # LSP Rename state
     renameState*: RenameState # State for LSP rename mode
     # Overlay state for transient modes (Command, Search, Rename)

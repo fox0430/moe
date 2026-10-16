@@ -349,11 +349,8 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
     if b.highlight == nil:
       b.highlight = Highlight(colorSegments: @[])
 
-    # Fallback: drop a stale overlay when the forward-edit path (`pushUndoChange`
-    # -> `emitRowColRemapEvents`) did not shift the overlay to the new
-    # `contentVersion`. Catches undo/redo, NoUndo previews, reload, and the
-    # ckSnapshot bail — the design doc §6 stale-but-close preservation lives
-    # in `emitRowColRemapEvents`, not here.
+    # Fallback: drop a stale overlay the forward-edit path missed (undo/redo,
+    # reload, ckSnapshot).
     if b.highlight.semantic.len > 0 and
         b.highlight.semanticContentVersion != b.contentVersion:
       b.highlight.semantic.clear()
@@ -476,13 +473,11 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           b, uriStart, uriEnd, applyToCache = not highlightRebuilt
         )
 
-    # Diagnostics are only mutated by the LSP publish path / reset/clear paths;
-    # a pure edit keeps them untouched, so the overlay rebuilt on the previous
-    # tick is still current. Skip the O(D + R) clear+rebuild in that case.
+    # Only LSP diagnostics are underlined; skip the rebuild when an edit moved
+    # none.
     if b.diagnosticsDirty:
       b.highlight.diagnosticOverlay.clear()
-      if b.diagnostics.len > 0:
-        applyDiagnosticHighlights(b.highlight, b.diagnostics)
+      applyDiagnosticHighlights(b.highlight, b.diagnostics[dsrcLsp])
       b.diagnosticsDirty = false
 
     if highlightRebuilt:

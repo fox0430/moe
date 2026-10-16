@@ -280,11 +280,6 @@ proc replaceWithDecodedText*(
   let replaced = b.replaceAllLines(decoded.lines, description)
   if replaced.isErr:
     return err(replaced.error)
-  # Diagnostics have no remap path; drop them when lines moved. An empty diff
-  # (EOL-only rewrite) moved none.
-  if replaced.get.hunks.len > 0:
-    b.diagnostics.setLen(0)
-    b.diagnosticsDirty = true
   b.noteDecodedContent(decoded)
   if adoptShape:
     b.adoptFileShape(decoded.shape)
@@ -447,8 +442,7 @@ proc loadFileWithDecoded*(
   b.savedSeq = 0
 
   b.clearUndoRedoState()
-  b.diagnostics.setLen(0)
-  b.diagnosticsDirty = true
+  b.clearDiagnostics()
   b.conflictBlocks.setLen(0)
   b.lastChangedLines = 0
   b.changeList.setLen(0)

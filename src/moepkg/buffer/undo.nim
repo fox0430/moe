@@ -53,6 +53,15 @@ proc changedMarkNames(change: BufferChange): set[char] =
     for inner in change.transactionChanges:
       result = result + changedMarkNames(inner)
 
+func undoFollowers(change: BufferChange): set[EditFollower] =
+  ## Followers undo/redo moves across `change`: all but wholesale-restored
+  ## line arrays; only diagnostics for ckSnapshot, without semantic overlay or
+  ## Visual area.
+  if change.kind == ckSnapshot:
+    {efDiagnostics}
+  else:
+    AllFollowers - {efLineArrays, efSemantic, efLastVisual}
+
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Apply the inverse of a single change (internal helper)
   ## Returns error if the operation fails
@@ -119,16 +128,13 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       applyUndo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
       b.bookmarks = change.snapshotBookmarks
-      for i in countdown(change.snapshotRows.len - 1, 0):
-        b.shiftLastVisual(change.snapshotRows[i].reversed)
       b.lastChangedLines = 0
 
-    # Drive the row-remap subscribers backwards. ckSnapshot restored state
-    # wholesale; ckTransaction recurses through its inner changes.
-    # `includeSideArrays=false`: the wholesale savedLineMarkers /
-    # savedModifiedLines restore below would clobber their output.
-    if change.kind notin {ckSnapshot, ckTransaction}:
-      b.emitRowColRemapEvents(change, reverse = true, includeSideArrays = false)
+    # Move followers back; ckTransaction recurses.
+    if change.kind != ckTransaction:
+      b.followChange(change, change.undoFollowers, undone = true)
+      if change.visualAcross == nil:
+        b.lastVisualAcrossUndo(change, undone = true)
     b.namedMarks.applyNamedMarkChanges(change.namedMarkChanges, useAfter = false)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
@@ -176,6 +182,7 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     modifiedLinesDelta: change.modifiedLinesDelta,
     snapshotFoldState: b.foldState,
     snapshotBookmarks: b.bookmarks,
+    snapshotEdits: change.snapshotEdits,
     snapshotRows: change.snapshotRows,
     namedMarkChanges: change.namedMarkChanges,
     noChangeListPosition: change.noChangeListPosition,
@@ -271,6 +278,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
             computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
           snapshotFoldState: b.pendingSnapshotFolds,
           snapshotBookmarks: b.pendingSnapshotBookmarks,
+          snapshotEdits: b.takePendingSnapshotEdits(),
           snapshotRows: b.takePendingSnapshotRows(),
           namedMarkChanges:
             diffNamedMarks(b.pendingSnapshotNamedMarks, b.namedMarks, touchedMarks),
@@ -389,6 +397,7 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
     b.foldState = b.pendingSnapshotFolds
     b.namedMarks = b.pendingSnapshotNamedMarks
     b.bookmarks = b.pendingSnapshotBookmarks
+    b.followBack(b.pendingSnapshotEdits, {efDiagnostics})
   else:
     for i in countdown(transaction.changes.len - 1, 0):
       let r = b.undoChange(transaction.changes[i])
@@ -612,15 +621,13 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       applyRedo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
       b.bookmarks = change.snapshotBookmarks
-      for i in 0 ..< change.snapshotRows.len:
-        b.shiftLastVisual(change.snapshotRows[i])
       b.lastChangedLines = 0
 
-    # Drive the row-remap subscribers forward. Symmetric to undoChange:
-    # ckSnapshot/ckTransaction opt out; savedLineMarkers / savedModifiedLines
-    # below overwrite the two per-line arrays so `includeSideArrays=false`.
-    if change.kind notin {ckSnapshot, ckTransaction}:
-      b.emitRowColRemapEvents(change, includeSideArrays = false)
+    # Move followers forward; symmetric to undoChange.
+    if change.kind != ckTransaction:
+      b.followChange(change, change.undoFollowers)
+      if change.visualAcross == nil:
+        b.lastVisualAcrossUndo(change, undone = false)
     b.namedMarks.applyNamedMarkChanges(change.namedMarkChanges, useAfter = true)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot

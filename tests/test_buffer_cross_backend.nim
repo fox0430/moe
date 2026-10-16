@@ -21,7 +21,7 @@
 ## all BufferBackend variants. Tests iterate over backends with fixed
 ## expected values so adding a new backend automatically gets coverage.
 
-import std/[unittest, os, options, strutils, deques]
+import std/[unittest, os, options, random, sequtils, strutils, deques]
 
 import pkg/results
 
@@ -277,12 +277,12 @@ suite "CrossBackend - Undo/Redo":
 
     test "undo deleteLine restores lineMarkers at correct positions [" & $be & "]":
       let b = buf("aaa\nbbb\nccc", be)
-      b.setLineMarker(2, SyntaxError)
-      check b.lineMarkers[2] == some(SyntaxError)
+      b.setLineMarker(2, GitChanged)
+      check b.lineMarkers[2] == some(GitChanged)
 
       discard b.deleteLine(0)
       check b.lineMarkers.len == 2
-      check b.lineMarkers[1] == some(SyntaxError)
+      check b.lineMarkers[1] == some(GitChanged)
 
       discard b.undo()
       check b.len == 3
@@ -291,29 +291,151 @@ suite "CrossBackend - Undo/Redo":
       check b[2] == "ccc"
       check b.lineMarkers[0].isNone
       check b.lineMarkers[1].isNone
-      check b.lineMarkers[2] == some(SyntaxError)
+      check b.lineMarkers[2] == some(GitChanged)
+
+    test "undo of deleteLine moves the diagnostics below back, not the line's own [" &
+      $be & "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      b.setDiagnostics(
+        dsrcSyntaxCheck,
+        @[
+          BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsError),
+          BufferDiagnostic(startLine: 2, endLine: 2, severity: bdsWarning),
+        ],
+      )
+
+      discard b.deleteLine(1)
+      check b.diagnosticMarker(1) == some(SyntaxWarning)
+      check b.diagnosticMarker(2).isNone
+
+      discard b.undo()
+      check b.diagnosticMarker(1).isNone
+      check b.diagnosticMarker(2) == some(SyntaxWarning)
+
+      discard b.redo()
+      check b.diagnosticMarker(1) == some(SyntaxWarning)
+      check b.diagnosticMarker(2).isNone
+
+    test "undo moves a report that came after the edit back [" & $be & "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      check b.insert(1, "new").isOk
+      # A report on the inserted line and one below it.
+      b.setDiagnostics(
+        dsrcLsp,
+        @[
+          BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsWarning),
+          BufferDiagnostic(startLine: 2, endLine: 2, severity: bdsError),
+        ],
+      )
+
+      discard b.undo()
+      check b.diagnosticMarker(1) == some(SyntaxError)
+      check b.diagnosticMarker(2).isNone
+
+      discard b.redo()
+      check b.diagnosticMarker(1).isNone
+      check b.diagnosticMarker(2) == some(SyntaxError)
+
+    test "undo does not bring back a report a clear dropped [" & $be & "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      b.setDiagnostics(
+        dsrcLsp, @[BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsError)]
+      )
+      b.setDiagnostics(
+        dsrcSyntaxCheck,
+        @[BufferDiagnostic(startLine: 2, endLine: 2, severity: bdsWarning)],
+      )
+      discard b.deleteLine(1)
+      b.clearDiagnostics({dsrcLsp})
+
+      discard b.undo()
+      check b.diagnosticMarker(1).isNone
+      check b.diagnosticMarker(2) == some(SyntaxWarning)
+
+    test "rollback moves the diagnostics back [" & $be & "]":
+      let b = buf("line0\nline1", be)
+      b.setDiagnostics(
+        dsrcSyntaxCheck,
+        @[
+          BufferDiagnostic(startLine: 0, endLine: 0, severity: bdsError),
+          BufferDiagnostic(startLine: 1, endLine: 1, severity: bdsWarning),
+        ],
+      )
+
+      discard b.beginTransaction("test")
+      discard b.deleteLine(0)
+      check b.diagnosticMarker(0) == some(SyntaxWarning)
+      discard b.rollbackTransaction()
+
+      check b[0] == "line0"
+      check b.diagnosticMarker(0).isNone
+      check b.diagnosticMarker(1) == some(SyntaxWarning)
+
+    test "a report awaited before edits is moved across them [" & $be & "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      let awaited = b.awaitReport(dsrcSyntaxCheck)
+      check b.insert(0, "new").isOk
+      check b.insertText(BufferPosition(line: 2, column: 0), "xy").isOk
+      discard b.undo()
+      b.setDiagnostics(
+        dsrcSyntaxCheck,
+        @[
+          BufferDiagnostic(startLine: 1, startCol: 1, endLine: 1, endCol: 2),
+          BufferDiagnostic(startLine: 2, endLine: 2, endCol: 3),
+        ],
+        awaited,
+      )
+      check b.diagnostics[dsrcSyntaxCheck].items.len == 2
+      check b.diagnostics[dsrcSyntaxCheck].items[0].span ==
+        Span(
+          first: BufferPosition(line: 2, column: 1),
+          last: BufferPosition(line: 2, column: 2),
+        )
+      check b.diagnostics[dsrcSyntaxCheck].items[1].startLine == 3
+
+    test "a report whose wait was replaced or dropped is dropped [" & $be & "]":
+      let b = buf("aaa\nbbb", be)
+      let first = b.awaitReport(dsrcSyntaxCheck)
+      let second = b.awaitReport(dsrcSyntaxCheck)
+      let report = @[BufferDiagnostic(startLine: 1, endLine: 1, endCol: 1)]
+      b.setDiagnostics(dsrcSyntaxCheck, report, first)
+      check b.diagnostics[dsrcSyntaxCheck].items.len == 0
+
+      b.stopAwaiting(dsrcSyntaxCheck, first)
+      b.setDiagnostics(dsrcSyntaxCheck, report, second)
+      check b.diagnostics[dsrcSyntaxCheck].items.len == 1
+
+      let third = b.awaitReport(dsrcSyntaxCheck)
+      b.clearDiagnostics({dsrcSyntaxCheck})
+      b.setDiagnostics(dsrcSyntaxCheck, report, third)
+      check b.diagnostics[dsrcSyntaxCheck].items.len == 0
+
+      let fourth = b.awaitReport(dsrcSyntaxCheck)
+      b.stopAwaiting(dsrcSyntaxCheck, fourth)
+      b.setDiagnostics(dsrcSyntaxCheck, report, fourth)
+      check b.diagnostics[dsrcSyntaxCheck].items.len == 0
 
     test "undo deleteLine (variant) restores lineMarkers at correct positions [" & $be &
       "]":
       let b = buf("aaa\nbbb\nccc", be)
-      b.setLineMarker(0, SyntaxError)
-      b.setLineMarker(2, Bookmark)
-      check b.lineMarkers[0] == some(SyntaxError)
-      check b.lineMarkers[2] == some(Bookmark)
+      b.setLineMarker(0, GitChanged)
+      b.setLineMarker(2, GitDeleted)
+      check b.lineMarkers[0] == some(GitChanged)
+      check b.lineMarkers[2] == some(GitDeleted)
 
       discard b.deleteLine(1)
       check b.lineMarkers.len == 2
-      check b.lineMarkers[0] == some(SyntaxError)
-      check b.lineMarkers[1] == some(Bookmark)
+      check b.lineMarkers[0] == some(GitChanged)
+      check b.lineMarkers[1] == some(GitDeleted)
 
       discard b.undo()
       check b.len == 3
       check b[0] == "aaa"
       check b[1] == "bbb"
       check b[2] == "ccc"
-      check b.lineMarkers[0] == some(SyntaxError)
+      check b.lineMarkers[0] == some(GitChanged)
       check b.lineMarkers[1].isNone
-      check b.lineMarkers[2] == some(Bookmark)
+      check b.lineMarkers[2] == some(GitDeleted)
 
     test "undo insertLine restores lineMarkers at correct positions [" & $be & "]":
       let b = buf("aaa\nccc", be)
@@ -333,16 +455,16 @@ suite "CrossBackend - Undo/Redo":
 
     test "redo after undo restores lineMarkers to post-edit state [" & $be & "]":
       let b = buf("aaa\nbbb\nccc", be)
-      b.setLineMarker(2, Bookmark)
+      b.setLineMarker(2, GitDeleted)
       discard b.deleteLine(0)
       discard b.undo()
-      check b.lineMarkers[2] == some(Bookmark)
+      check b.lineMarkers[2] == some(GitDeleted)
       discard b.redo()
       check b.len == 2
       check b[0] == "bbb"
       check b[1] == "ccc"
       check b.lineMarkers[0].isNone
-      check b.lineMarkers[1] == some(Bookmark)
+      check b.lineMarkers[1] == some(GitDeleted)
 
   for be in BufferBackend:
     test "undo multi-line insertText shifts bookmarks back [" & $be & "]":
@@ -935,10 +1057,10 @@ suite "PieceTable - Snapshot Undo/Redo Integration":
 
   test "lineMarkers preserved across undo/redo":
     let b = buf("line0\nline1\nline2", PieceTable)
-    b.setLineMarker(1, SyntaxError)
-    check b.lineMarkers[1] == some(SyntaxError)
+    b.setLineMarker(1, GitChanged)
+    check b.lineMarkers[1] == some(GitChanged)
 
-    # Edit and record snapshot (captures markers with SyntaxError on line 1)
+    # Edit and record snapshot (captures markers with GitChanged on line 1)
     discard b.replaceLine(0, "CHANGED")
     check b[0] == "CHANGED"
 
@@ -946,10 +1068,10 @@ suite "PieceTable - Snapshot Undo/Redo Integration":
     b.clearLineMarker(1)
     check b.lineMarkers[1].isNone
 
-    # Undo should restore the snapshot (which had SyntaxError on line 1)
+    # Undo should restore the snapshot (which had GitChanged on line 1)
     discard b.undo()
     check b[0] == "line0"
-    check b.lineMarkers[1] == some(SyntaxError)
+    check b.lineMarkers[1] == some(GitChanged)
 
   test "foldState preserved across undo/redo":
     let b = buf("line0\nline1\nline2\nline3", PieceTable)
@@ -1022,7 +1144,7 @@ suite "PieceTable - Snapshot Undo/Redo Integration":
 
     discard b.beginTransaction("test")
     discard b.replaceLine(0, "CHANGED")
-    b.setLineMarker(0, SyntaxError)
+    b.setLineMarker(0, GitChanged)
     discard b.rollbackTransaction()
 
     check b[0] == "line0"
@@ -1075,3 +1197,183 @@ suite "PieceTable - Snapshot Undo/Redo Integration":
     # Buffer should be unchanged
     check b[0] == "Hello"
     check b.undoStack.len == 0
+
+suite "CrossBackend - diagnostics through random edits":
+  proc spans(b: TextBuffer): seq[(Span, string)] =
+    for source in DiagnosticSource:
+      for d in b.diagnostics[source].items:
+        result.add (d.span, d.message)
+
+  proc inStartOrder(b: TextBuffer): bool =
+    for source in DiagnosticSource:
+      let items = b.diagnostics[source].items
+      for i in 1 ..< items.len:
+        if (items[i].startLine, items[i].startCol) <
+            (items[i - 1].startLine, items[i - 1].startCol):
+          return false
+    true
+
+  proc diagnose(b: TextBuffer, rng: var Rand) =
+    for source in DiagnosticSource:
+      var items: seq[BufferDiagnostic]
+      for i in 0 .. rng.rand(5):
+        let
+          startLine = rng.rand(b.len - 1)
+          endLine = startLine + rng.rand(min(2, b.len - 1 - startLine))
+          startCol = rng.rand(b.getLineLen(startLine))
+          endCol =
+            if endLine == startLine:
+              startCol + rng.rand(b.getLineLen(endLine) - startCol)
+            else:
+              rng.rand(b.getLineLen(endLine))
+        items.add BufferDiagnostic(
+          startLine: startLine,
+          startCol: startCol,
+          endLine: endLine,
+          endCol: endCol,
+          severity: bdsError,
+          message: $source & $i,
+        )
+      b.setDiagnostics(source, items)
+
+  proc edit(b: TextBuffer, rng: var Rand, nested = false) =
+    let
+      line = rng.rand(b.len - 1)
+      pos = BufferPosition(line: line, column: rng.rand(b.getLineLen(line)))
+    case rng.rand(if nested: 6 else: 7)
+    of 0:
+      discard b.insertText(pos, rng.sample(["x", "yz", "\n", "a\nb", "\n\n", " c\n"]))
+    of 1:
+      if pos.column < b.getLineLen(line):
+        discard b.deleteChar(pos)
+    of 2:
+      let lastLine = line + rng.rand(min(2, b.len - 1 - line))
+      let lastCol =
+        if lastLine == line:
+          pos.column + rng.rand(b.getLineLen(line) - pos.column)
+        else:
+          rng.rand(b.getLineLen(lastLine))
+      discard b.deleteRange(pos, BufferPosition(line: lastLine, column: lastCol))
+    of 3:
+      if b.len > 1:
+        discard b.deleteLine(line)
+    of 4:
+      discard b.insert(line, "new")
+    of 5:
+      if not nested and line + 1 < b.len:
+        discard b.joinLines(line, rng.rand(1) + 1)
+    of 6:
+      let replacement = @["p", "  q"][0 ..< rng.rand(2)]
+      discard b.replaceLines(
+        line, rng.rand(min(2, b.len - line)), replacement, keepRows = rng.rand(1) == 0
+      )
+    else:
+      if b.beginTransaction("two").isOk:
+        b.edit(rng, nested = true)
+        b.edit(rng, nested = true)
+        discard b.commitTransaction()
+
+  proc inBounds(b: TextBuffer): bool =
+    ## An end may be the start of the line past the last, as an LSP range's is.
+    for source in DiagnosticSource:
+      for d in b.diagnostics[source].items:
+        if d.startLine >= b.len or d.startCol > b.getLineLen(d.startLine) or
+            (d.endLine, d.endCol) < (d.startLine, d.startCol) or
+            (d.endLine, d.endCol) > (b.len, 0) or
+            (d.endLine < b.len and d.endCol > b.getLineLen(d.endLine)):
+          return false
+    true
+
+  proc shuffle(b: TextBuffer, rng: var Rand) =
+    ## Random edits, undos and redos, and maybe a new report among them.
+    for _ in 0 .. rng.rand(12):
+      case rng.rand(5)
+      of 0:
+        discard b.undo()
+      of 1:
+        discard b.redo()
+      of 2:
+        if rng.rand(3) == 0:
+          b.diagnose(rng)
+      else:
+        b.edit(rng)
+
+  const text = "let x = foo(bar)\n  baz  \n\nqux(1, 2)\n   end"
+
+  test "every backend moves the diagnostics alike":
+    for seed in 0 ..< 300:
+      var moved: seq[seq[(Span, string)]]
+      for be in BufferBackend:
+        var rng = initRand(seed)
+        let b = buf(text, be)
+        b.diagnose(rng)
+        b.shuffle(rng)
+        check b.inStartOrder
+        check b.inBounds
+        moved.add b.spans
+      for spans in moved:
+        check spans == moved[0]
+      if moved.anyIt(it != moved[0]):
+        checkpoint "seed " & $seed
+        break
+
+  for be in BufferBackend:
+    test "an awaited report lands where the live one went [" & $be & "]":
+      for seed in 0 ..< 300:
+        var rng = initRand(seed)
+        let b = buf(text, be)
+        b.diagnose(rng)
+        let report = b.diagnostics[dsrcLsp].items
+        let awaited = b.awaitReport(dsrcSyntaxCheck)
+        for _ in 0 .. rng.rand(12):
+          case rng.rand(3)
+          of 0:
+            discard b.undo()
+          of 1:
+            discard b.redo()
+          else:
+            b.edit(rng)
+        b.setDiagnostics(dsrcSyntaxCheck, report, awaited)
+        check b.diagnostics[dsrcSyntaxCheck].items == b.diagnostics[dsrcLsp].items
+        if b.diagnostics[dsrcSyntaxCheck].items != b.diagnostics[dsrcLsp].items:
+          checkpoint "seed " & $seed
+          break
+
+    test "undoing insertions puts every diagnostic back [" & $be & "]":
+      for seed in 0 ..< 300:
+        var rng = initRand(seed)
+        let b = buf(text, be)
+        b.diagnose(rng)
+        let original = b.spans
+        for _ in 0 .. rng.rand(8):
+          let
+            line = rng.rand(b.len - 1)
+            pos = BufferPosition(line: line, column: rng.rand(b.getLineLen(line)))
+          if rng.rand(3) == 0:
+            discard b.insert(line, "new")
+          else:
+            discard
+              b.insertText(pos, rng.sample(["x", "yz", "\n", "a\nb", "\n\n", " c\n"]))
+          check b.inStartOrder
+        while b.undoStack.len > 0:
+          check b.undo().isOk
+        check b.spans == original
+        if b.spans != original:
+          checkpoint "seed " & $seed
+          break
+
+  test "a run of typing is one edit to move the diagnostics across":
+    let b = buf("abc", PieceTable)
+    check b.beginTransaction("insert").isOk
+    for i, c in "he\nllo":
+      let pos =
+        if i < 3:
+          BufferPosition(line: 0, column: 1 + i)
+        else:
+          BufferPosition(line: 1, column: i - 3)
+      check b.insertText(pos, $c).isOk
+    check b.commitTransaction().isOk
+    check b[0] == "ahe"
+    check b[1] == "llobc"
+    check b.undoStack.peekLast.kind == ckSnapshot
+    check b.undoStack.peekLast.snapshotEdits.len == 1

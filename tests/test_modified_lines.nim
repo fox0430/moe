@@ -274,47 +274,48 @@ suite "ModifiedLines - multi-line edit-point shift":
 
   test "insertText with newline shifts lineMarkers below the edit":
     let b = newTextBuffer("aaa\nbbb\nccc")
-    b.setLineMarker(2, LineMarkerKind.SyntaxError)
-    check b.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+    b.setLineMarker(2, LineMarkerKind.GitAdded)
+    check b.getLineMarker(2) == some(LineMarkerKind.GitAdded)
 
     discard b.insertText(BufferPosition(line: 0, column: 1), "\n")
     check b.getLineMarker(0).isNone
     check b.getLineMarker(1).isNone
     check b.getLineMarker(2).isNone
-    check b.getLineMarker(3) == some(LineMarkerKind.SyntaxError)
+    check b.getLineMarker(3) == some(LineMarkerKind.GitAdded)
 
   test "multi-line deleteRange preserves marker below the range":
     let b = newTextBuffer("a\nb\nc\nd\ne")
-    b.setLineMarker(4, LineMarkerKind.SyntaxError)
+    b.setLineMarker(4, LineMarkerKind.GitAdded)
 
     discard b.deleteRange(
       BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 1)
     )
-    check b.getLineMarker(b.len - 1) == some(LineMarkerKind.SyntaxError)
+    check b.getLineMarker(b.len - 1) == some(LineMarkerKind.GitAdded)
 
   test "single-line deleteRange joining next line drops the joined-away marker":
     let b = newTextBuffer("aa\nbb\ncc")
-    b.setLineMarker(1, LineMarkerKind.SyntaxError)
-    b.setLineMarker(2, LineMarkerKind.Bookmark)
+    b.setLineMarker(1, LineMarkerKind.GitAdded)
+    b.setLineMarker(2, LineMarkerKind.GitDeleted)
 
     discard b.deleteRange(
       BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 5)
     )
     check b.len == 2
     check b.getLineMarker(0).isNone
-    check b.getLineMarker(1) == some(LineMarkerKind.Bookmark)
+    check b.getLineMarker(1) == some(LineMarkerKind.GitDeleted)
 
 suite "ModifiedLines - joinLines":
-  test "joinLines marks resulting line as inserted (delete+insert internally)":
+  test "joinLines marks the joined line as modified":
     let b = newTextBuffer("line1\nline2\nline3")
     discard b.joinLines(0)
-    # joinLines uses deleteLine×2 + insert, so the result is lmkInserted
-    check b.modifiedLines[0] == lmkInserted
+    # The join edits the text of the line it keeps, so the line is not new.
+    check b.modifiedLines[0] == lmkModified
+    check b.modifiedLines[1] == lmkUnmodified
 
   test "Undo joinLines restores modifiedLines":
     let b = newTextBuffer("line1\nline2")
     discard b.joinLines(0)
-    check b.modifiedLines[0] == lmkInserted
+    check b.modifiedLines[0] == lmkModified
 
     discard b.undo()
     check b.modifiedLines[0] == lmkUnmodified
@@ -471,7 +472,9 @@ suite "Sidebar - Session Modified/Inserted Markers":
   test "Syntax marker takes priority over session modified marker":
     let buf = newTextBuffer("line1\nline2")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "!")
-    buf.setLineMarker(0, SyntaxError)
+    buf.setDiagnostics(
+      dsrcLsp, @[BufferDiagnostic(startLine: 0, endLine: 0, severity: bdsError)]
+    )
 
     let sidebar = generateSidebarFromBuffer(
       buf, 0, 2, modifiedLines = buf.modifiedLines, showModifiedLines = true
@@ -697,36 +700,36 @@ suite "LineMarkers - PieceTable snapshot (CowSeq) undo/redo":
     # setLineMarker after the snapshot was captured must not bleed into the
     # stored (frozen) snapshot, and undo must restore the pre-edit markers.
     let b = ptBuf("a\nb\nc")
-    b.setLineMarker(0, SyntaxError)
+    b.setLineMarker(0, GitAdded)
     discard b.insertText(BufferPosition(line: 2, column: 1), "Z") # captures markers
     b.setLineMarker(1, GitChanged) # mutate live AFTER capture
     discard b.undo()
-    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(0) == some(GitAdded)
     check b.getLineMarker(1).isNone # post-capture mutation must not survive undo
     discard b.redo()
-    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(0) == some(GitAdded)
 
   test "mutating live markers between undo and redo does not corrupt the snapshot":
     let b = ptBuf("a\nb")
-    b.setLineMarker(0, SyntaxError)
+    b.setLineMarker(0, GitAdded)
     discard b.insertText(BufferPosition(line: 0, column: 1), "X")
     discard b.undo()
-    b.setLineMarker(1, Bookmark) # live now shares a frozen node with redo entry
+    b.setLineMarker(1, GitDeleted) # live now shares a frozen node with redo entry
     discard b.redo()
-    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(0) == some(GitAdded)
 
   test "clearAllMarkers after snapshot does not corrupt the undo snapshot":
     # clearAllMarkers creates a fresh all-none CowSeq node. It must not mutate
     # the frozen snapshot node that the undo entry references.
     let b = ptBuf("a\nb\nc")
-    b.setLineMarker(0, SyntaxError)
+    b.setLineMarker(0, GitAdded)
     b.setLineMarker(1, GitChanged)
     discard b.insertText(BufferPosition(line: 2, column: 1), "Z") # captures markers
     b.clearAllMarkers() # mutate live AFTER capture
     check b.getLineMarker(0).isNone
     check b.getLineMarker(1).isNone
     discard b.undo()
-    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(0) == some(GitAdded)
     check b.getLineMarker(1) == some(GitChanged)
     check b.getLineMarker(2).isNone
 
@@ -735,21 +738,21 @@ suite "LineMarkers - PieceTable snapshot (CowSeq) undo/redo":
     # snapshot with pendingSnapshotMarkers; undo must restore the pre-transaction
     # marker state, not drop the marker set during the transaction.
     let b = ptBuf("a\nb\nc")
-    b.setLineMarker(0, SyntaxError)
+    b.setLineMarker(0, GitAdded)
     discard b.beginTransaction("marker-txn")
-    b.setLineMarker(1, Bookmark)
+    b.setLineMarker(1, GitDeleted)
     discard b.insertText(BufferPosition(line: 2, column: 1), "Z")
     discard b.commitTransaction()
-    check b.getLineMarker(0) == some(SyntaxError)
-    check b.getLineMarker(1) == some(Bookmark)
+    check b.getLineMarker(0) == some(GitAdded)
+    check b.getLineMarker(1) == some(GitDeleted)
     check b.getLine(2) == "cZ"
     discard b.undo()
-    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(0) == some(GitAdded)
     check b.getLineMarker(1).isNone
     check b.getLine(2) == "c"
     discard b.redo()
-    check b.getLineMarker(0) == some(SyntaxError)
-    check b.getLineMarker(1) == some(Bookmark)
+    check b.getLineMarker(0) == some(GitAdded)
+    check b.getLineMarker(1) == some(GitDeleted)
     check b.getLine(2) == "cZ"
 
 suite "Transaction - rollback then edit (no stale delta base)":

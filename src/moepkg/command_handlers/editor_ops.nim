@@ -284,7 +284,15 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
         )
       if e.config.syntaxChecker.enable and
           syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
-        e.submitSyntaxCheck((path: savedPath, language: activeBuffer.language.ord))
+        e.submitSyntaxCheck(
+          (
+            path: savedPath,
+            language: activeBuffer.language.ord,
+            buffer: activeBuffer.id,
+            awaited: activeBuffer.awaitReport(dsrcSyntaxCheck),
+            text: activeBuffer.getTextString(),
+          )
+        )
 
 proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
   ## Move the cursor to the specified line number.

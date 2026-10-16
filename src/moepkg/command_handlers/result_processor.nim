@@ -388,14 +388,10 @@ proc processResultEpilogue(
     e.state.statusMessage = statusMsg
 
   # Show syntax check message for current cursor line (if no other status message)
-  if statusMsg.len == 0 and e.state.syntaxCheckResults.errors.len > 0:
-    let activeBuf = e.activeBuffer()
-    let activePath = if activeBuf.filePath.isSome: activeBuf.filePath.get else: ""
-    if activePath.len > 0 and activePath == e.state.syntaxCheckResults.path:
-      let syntaxMsg =
-        formattedMessage(e.state.syntaxCheckResults.errors, e.activeWindow.cursor.line)
-      if syntaxMsg.isSome:
-        e.state.statusMessage = syntaxMsg.get
+  if statusMsg.len == 0:
+    let syntaxMsg = e.activeBuffer().syntaxCheckMessage(e.activeWindow.cursor.line)
+    if syntaxMsg.isSome:
+      e.state.statusMessage = syntaxMsg.get
 
   return true # Continue running
 

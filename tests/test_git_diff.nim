@@ -547,42 +547,49 @@ suite "GitDiff - applyGitDiffToBuffer":
     check buf.getLineMarker(0) == some(GitAdded)
     check buf.getLineMarker(1) == none(LineMarkerKind)
 
-  test "Apply diff preserves LSP diagnostics and non-git markers":
+  test "Apply diff preserves diagnostics and conflict markers":
     let buf = newTextBuffer()
     discard buf.insertText(
       BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3\nLine 4"
     )
 
-    # Pre-seed LSP diagnostics and a non-git marker.
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 1,
-        startCol: 0,
-        endLine: 1,
-        endCol: 5,
-        severity: bdsError,
-        message: "oops",
-      )
-    ]
-    buf.setLineMarker(1, SyntaxError)
-    buf.setLineMarker(3, Bookmark)
+    buf.setDiagnostics(
+      dsrcLsp,
+      @[
+        BufferDiagnostic(
+          startLine: 1,
+          startCol: 0,
+          endLine: 1,
+          endCol: 5,
+          severity: bdsError,
+          message: "oops",
+        )
+      ],
+    )
+    buf.setLineMarker(3, GitConflict)
     # And a pre-existing git marker that should be cleared on re-apply.
     buf.setLineMarker(0, GitAdded)
 
-    let diffInfo = GitDiffInfo(lines: @[GitDiffLine(lineNumber: 2, kind: Modified)])
+    let diffInfo = GitDiffInfo(
+      lines: @[
+        GitDiffLine(lineNumber: 1, kind: Modified),
+        GitDiffLine(lineNumber: 2, kind: Modified),
+        GitDiffLine(lineNumber: 3, kind: Added),
+      ]
+    )
 
     buf.applyGitDiffToBuffer(diffInfo)
 
-    # New git marker applied.
+    # New git markers applied, one of them on the diagnostic's line.
+    check buf.getLineMarker(1) == some(GitChanged)
     check buf.getLineMarker(2) == some(GitChanged)
     # Old git marker cleared.
     check buf.getLineMarker(0) == none(LineMarkerKind)
-    # Non-git markers preserved.
-    check buf.getLineMarker(1) == some(SyntaxError)
-    check buf.getLineMarker(3) == some(Bookmark)
+    check buf.getLineMarker(3) == some(GitConflict)
     # Diagnostics untouched.
-    check buf.diagnostics.len == 1
-    check buf.diagnostics[0].message == "oops"
+    check buf.diagnosticMarker(1) == some(SyntaxError)
+    check buf.diagnostics[dsrcLsp].items.len == 1
+    check buf.diagnostics[dsrcLsp].items[0].message == "oops"
 
 suite "GitDiff - startGitDiffFromBufferAsync":
   test "Buffer without file path returns error":
