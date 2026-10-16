@@ -29,6 +29,11 @@ import core, operator_engine
 
 proc enterInsert(ctx: CommandContext, entry: InsertEntry, count: int) =
   ctx.state.mode = EditorMode.Insert
+  if entry.kind in {ieOpenBelow, ieOpenAbove}:
+    # The typed text starts at the line start, indent and all, as Vim's edit()
+    # with startln.
+    ctx.state.insertStart.at.column = 0
+    ctx.state.insertStart.stop.column = 0
   ctx.state.statusMessage = "-- INSERT --"
   ctx.state.startInsertRecord(entry, count, ctx.register)
 

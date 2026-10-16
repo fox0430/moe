@@ -189,6 +189,31 @@ suite "Insert Commands - raw buffer gates":
     check "raw undecodable bytes" in res.error
     check buf.getLine(0) == "    hello"
 
+  test "Ctrl-U in a raw buffer deletes the indent too":
+    # Auto-indent is off for raw buffers, so there is no indent to keep.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    foo")
+    buf.keepRaw = true
+    let state = createTestState()
+    state.config.standard.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 7)
+
+    deleteToLineStart(buf, state)
+
+    check buf.getLine(0) == ""
+
+  test "a refused Ctrl-T leaves where typing started":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    buf.keepRaw = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+    let start = BufferPosition(line: 0, column: 6)
+    state.insertStart = InsertStart(at: start, stop: start)
+
+    check changeIndent(buf, state, deeper = true).isErr
+    check state.insertStart.at == start
+
 suite "Insert Commands - dedentLine with shiftWidth":
   test "Dedent uses shiftWidth when set":
     let buf = newTextBuffer()

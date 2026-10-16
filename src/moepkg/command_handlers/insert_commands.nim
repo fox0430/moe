@@ -101,65 +101,89 @@ proc insertTab*(buffer: TextBuffer, state: EditorState) =
   # Move cursor right after insertion
   state.cursor.column += 1
 
+proc passStop(state: EditorState) =
+  ## Deleting back past where Ctrl-W and Ctrl-U stop takes it along, as Vim's
+  ## Insstart_orig.
+  let stop = state.insertStart.stop
+  if state.cursor.line == stop.line and state.cursor.column < stop.column:
+    state.insertStart.stop.column = state.cursor.column
+
+proc joinLineAbove(buffer: TextBuffer, state: EditorState): Result[void, string] =
+  ## Backspace at the start of a line joins it to the line above. Typing that
+  ## started on the line starts where the two meet, as Vim's Insstart does,
+  ## and a stop right of there comes back to it.
+  let line = state.cursor.line
+  let joined = buffer.joinWithNextLine(line - 1)
+  if joined.isErr:
+    return err(joined.error)
+  state.cursor = joined.get
+  if state.insertStart.at.line == line:
+    state.insertStart.at = joined.get
+  state.passStop()
+  ok()
+
+proc deleteCharsBefore(buffer: TextBuffer, state: EditorState): Result[void, string] =
+  ## Delete an auto-paired pair, back to a soft tab stop or one character
+  ## before the cursor, which is past the start of the line.
+  let pos = state.cursor
+  if state.autoDeleteParen:
+    let currentLine = buffer.getLine(pos.line)
+
+    try:
+      # Auto-delete adjacent pairs only: cursor must be between open and close
+      # e.g., (|), [|], {|}, "|", '|'
+      if isAdjacentPair(currentLine, pos.column - 1):
+        # Delete the opening char first; the closing char then shifts into the
+        # same column. Move the cursor only after both edits succeed.
+        let pairPos = BufferPosition(line: pos.line, column: pos.column - 1)
+        let openResult = buffer.deleteChar(pairPos)
+        if openResult.isErr:
+          return err(openResult.error)
+        let closeResult = buffer.deleteChar(pairPos)
+        if closeResult.isErr:
+          return err(closeResult.error)
+        state.cursor.column -= 1
+        return ok()
+    except IndexDefect, CatchableError:
+      # If accessing rune fails, fall through to normal backspace
+      discard
+
+  # softTabStop-aware backspace: in leading whitespace, delete back to the
+  # previous boundary; elsewhere one character.
+  var deleteCount = 1
+  if state.expandTab:
+    let upToCursor = buffer.getLine(pos.line).charSubStr(0, pos.column)
+    var allSpaces = upToCursor.charLen == pos.column
+    if allSpaces:
+      for (ch, _) in upToCursor.chars:
+        if ch != Rune(' ') and ch != Rune('\t'):
+          allSpaces = false
+          break
+    if allSpaces:
+      let tabWidth = max(1, effectiveSoftTabStop(state))
+      let remainder = pos.column mod tabWidth
+      deleteCount = min(if remainder == 0: tabWidth else: remainder, pos.column)
+  # Delete from the top down so each position is stable, and move the
+  # cursor only after each edit succeeds.
+  for i in 0 ..< deleteCount:
+    let deletePos = BufferPosition(line: pos.line, column: pos.column - 1 - i)
+    let deleteResult = buffer.deleteChar(deletePos)
+    if deleteResult.isErr:
+      return err(deleteResult.error)
+    state.cursor.column -= 1
+  ok()
+
 proc deleteBeforeCursor*(buffer: TextBuffer, state: EditorState): Result[void, string] =
   ## Backspace in Insert mode: an auto-paired pair, a soft tab stop, a
   ## character, or the line break before the line.
   let pos = state.cursor
-
-  if pos.column > 0:
-    if state.autoDeleteParen:
-      let currentLine = buffer.getLine(pos.line)
-
-      try:
-        # Auto-delete adjacent pairs only: cursor must be between open and close
-        # e.g., (|), [|], {|}, "|", '|'
-        if isAdjacentPair(currentLine, pos.column - 1):
-          # Delete the opening char first; the closing char then shifts into the
-          # same column. Move the cursor only after both edits succeed.
-          let pairPos = BufferPosition(line: pos.line, column: pos.column - 1)
-          let openResult = buffer.deleteChar(pairPos)
-          if openResult.isErr:
-            return err(openResult.error)
-          let closeResult = buffer.deleteChar(pairPos)
-          if closeResult.isErr:
-            return err(closeResult.error)
-          state.cursor.column -= 1
-          return ok()
-      except IndexDefect, CatchableError:
-        # If accessing rune fails, fall through to normal backspace
-        discard
-
-    # softTabStop-aware backspace: in leading whitespace, delete back to the
-    # previous boundary; elsewhere one character.
-    var deleteCount = 1
-    if state.expandTab:
-      let upToCursor = buffer.getLine(pos.line).charSubStr(0, pos.column)
-      var allSpaces = upToCursor.charLen == pos.column
-      if allSpaces:
-        for (ch, _) in upToCursor.chars:
-          if ch != Rune(' ') and ch != Rune('\t'):
-            allSpaces = false
-            break
-      if allSpaces:
-        let tabWidth = max(1, effectiveSoftTabStop(state))
-        let remainder = pos.column mod tabWidth
-        deleteCount = min(if remainder == 0: tabWidth else: remainder, pos.column)
-    # Delete from the top down so each position is stable, and move the
-    # cursor only after each edit succeeds.
-    for i in 0 ..< deleteCount:
-      let deletePos = BufferPosition(line: pos.line, column: pos.column - 1 - i)
-      let deleteResult = buffer.deleteChar(deletePos)
-      if deleteResult.isErr:
-        return err(deleteResult.error)
-      state.cursor.column -= 1
-  elif pos.line > 0:
-    # At start of line, join with previous line
-    let joinResult = buffer.joinWithNextLine(pos.line - 1)
-    if joinResult.isErr:
-      return err(joinResult.error)
-    state.cursor = joinResult.get
-
-  ok()
+  if pos.line == 0 and pos.column == 0:
+    return ok()
+  state.stopArrow(pos)
+  if pos.column == 0:
+    return buffer.joinLineAbove(state)
+  result = buffer.deleteCharsBefore(state)
+  state.passStop()
 
 proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
   ## Handle backspace key in insert mode
@@ -167,16 +191,26 @@ proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
   if r.isErr:
     state.statusMessage = r.error
 
-proc deleteAtCursor*(buffer: TextBuffer, state: EditorState): Result[void, string] =
-  ## Delete in Insert mode; nothing at the end of a line.
+proc deleteAtCursor*(
+    buffer: TextBuffer, state: EditorState
+): Result[Option[BufferPosition], string] =
+  ## Delete in Insert mode; at the end of a line it joins the next line, as
+  ## Vim's does with "eol" in 'backspace'. The end of what was deleted, none at
+  ## the end of the last line.
   let pos = state.cursor
   if pos.line >= 0 and pos.line < buffer.len and
       pos.column >= buffer.getLine(pos.line).charLen:
-    return ok()
+    if pos.line + 1 >= buffer.len:
+      return ok(none(BufferPosition))
+    let joined = buffer.joinWithNextLine(pos.line)
+    if joined.isErr:
+      return err(joined.error)
+    state.cursor = joined.get
+    return ok(some(BufferPosition(line: pos.line + 1, column: 0)))
   let r = buffer.deleteChar(pos)
   if r.isErr:
     return err(r.error)
-  ok()
+  ok(some(BufferPosition(line: pos.line, column: pos.column + 1)))
 
 proc insertDelete*(buffer: TextBuffer, state: EditorState) =
   ## Handle delete key in insert mode
@@ -412,81 +446,32 @@ proc dedentLine*(
     return err(failure)
   ok(())
 
-proc isWhitespace(r: Rune): bool =
-  ## Check if a character is whitespace
-  let c = r.int32
-  return c == ' '.ord or c == '\t'.ord or c == '\n'.ord or c == '\r'.ord
-
-proc deleteWordBackward*(buffer: TextBuffer, state: EditorState) =
-  ## Delete word before cursor (Ctrl-W in insert mode)
-  ## Deletes backward from cursor to start of previous word
-  ## At start of line, does nothing (matches Vim behavior)
+proc changeIndent*(
+    buffer: TextBuffer, state: EditorState, deeper: bool
+): Result[(), string] =
+  ## Ctrl-T or Ctrl-D in Insert mode. The typed text on the line starts as far
+  ## along as the indent moved the text, or at the start of the line when the
+  ## cursor was in the indent or at its end, as Vim's change_indent.
   let pos = state.cursor
-
-  if pos.column == 0:
-    # At start of line, do nothing (Vim behavior)
+  if pos.line < 0 or pos.line >= buffer.len:
+    return ok(())
+  state.stopArrow(pos)
+  let before = getLineIndent(buffer.getLine(pos.line)).len
+  result =
+    if deeper:
+      buffer.indentLine(state)
+    else:
+      buffer.dedentLine(state)
+  let after = getLineIndent(buffer.getLine(pos.line)).len
+  if result.isErr and after == before:
     return
-
-  # `pos.column` is a buffer column, so the runes must be counted the same way.
-  let line = buffer.getLine(pos.line)
-  let runes = line.toCharRunes()
-
-  # Clamp column to valid range
-  var newCol = min(pos.column, runes.len)
-
-  # Skip whitespace backwards first
-  while newCol > 0 and isWhitespace(runes[newCol - 1]):
-    newCol -= 1
-
-  # Then skip the word/symbol sequence
-  if newCol > 0:
-    if isWordChar(runes[newCol - 1]):
-      # Skip word characters backwards
-      while newCol > 0 and isWordChar(runes[newCol - 1]):
-        newCol -= 1
-    elif not isWhitespace(runes[newCol - 1]):
-      # Skip symbol characters backwards
-      while newCol > 0 and not isWordChar(runes[newCol - 1]) and
-          not isWhitespace(runes[newCol - 1]):
-        newCol -= 1
-
-  # Delete characters from newCol to pos.column. Delete from the top down so
-  # each position is stable, and move the cursor only after each edit succeeds
-  # so a failure cannot desync cursor and buffer.
-  let deleteCount = min(pos.column, runes.len) - newCol
-  for i in 0 ..< deleteCount:
-    let deletePos = BufferPosition(line: pos.line, column: pos.column - 1 - i)
-    let deleteResult = buffer.deleteChar(deletePos)
-    if deleteResult.isErr:
-      state.statusMessage = deleteResult.error
-      return
-    state.cursor.column -= 1
-
-proc deleteToLineStart*(buffer: TextBuffer, state: EditorState) =
-  ## Delete from cursor to beginning of line (Ctrl-U in insert mode)
-  let pos = state.cursor
-
-  if pos.column == 0:
-    return # Nothing to delete
-
-  # Get line length to clamp column
-  let line = buffer.getLine(pos.line)
-  let lineLen = line.charLen
-
-  # Delete all characters from column 0 to cursor position. Repeatedly delete
-  # at column 0 (each removal shifts the next character down), and derive the
-  # final cursor position from the number of characters actually removed so a
-  # failure cannot desync cursor and buffer.
-  let deleteCount = min(pos.column, lineLen)
-  var deleted = 0
-  for _ in 0 ..< deleteCount:
-    let deleteResult = buffer.deleteChar(BufferPosition(line: pos.line, column: 0))
-    if deleteResult.isErr:
-      state.statusMessage = deleteResult.error
-      break
-    inc deleted
-
-  state.cursor.column = min(max(0, pos.column - deleted), lineLen - deleted)
+  let at = state.insertStart.at
+  if at.line == pos.line and at.column != 0:
+    state.insertStart.at.column =
+      if pos.column <= before:
+        0
+      else:
+        max(0, at.column + after - before)
 
 proc stepToAppend*(buffer: TextBuffer, state: EditorState) =
   ## Put the cursor after the character under it, where `a` types.
@@ -509,6 +494,69 @@ proc deleteBetween*(
   if removed.isErr:
     return err(removed.error)
   ok()
+
+type BackspaceUnit = enum
+  buWord ## Ctrl-W: the word before the cursor
+  buLine ## Ctrl-U: all before the cursor
+
+proc deleteTypedBefore(
+    buffer: TextBuffer, state: EditorState, unit: BackspaceUnit
+): Result[void, string] =
+  ## Ctrl-W and Ctrl-U in Insert mode, as Vim's: delete the word or all before
+  ## the cursor, stopping once where the typed text starts. Ctrl-U keeps the
+  ## auto-indent, and at the start of a line both join it to the line above.
+  let pos = state.cursor
+  if pos.line == 0 and pos.column == 0:
+    return ok()
+  state.stopArrow(pos)
+  if pos.column == 0:
+    return buffer.joinLineAbove(state)
+  let
+    line = buffer.getLine(pos.line)
+    runes = line.charSubStr(0, pos.column).toCharRunes
+    stop = state.insertStart.stop
+    keepsIndent = unit == buLine and state.autoIndent and buffer.allowsTextTransforms
+    indent =
+      if keepsIndent:
+        getLineIndent(line).len
+      else:
+        0
+    floor = if indent < pos.column: indent else: 0
+    last = BufferPosition(line: pos.line, column: runes.len)
+  if last.column == 0:
+    return ok()
+  var
+    col = last.column
+    word = none(bool) # Whether the word being deleted is of word characters
+  while true:
+    dec col
+    if unit == buWord:
+      if word.isNone:
+        if not runes[col].isSpaceOrBreak:
+          word = some(runes[col].isWordChar)
+      elif runes[col].isSpaceOrBreak or runes[col].isWordChar != word.get:
+        inc col
+        break
+    if col <= floor or (pos.line == stop.line and col == stop.column):
+      break
+  let deleted = buffer.deleteBetween(BufferPosition(line: pos.line, column: col), last)
+  if deleted.isErr:
+    return err(deleted.error)
+  state.cursor.column = col
+  state.passStop()
+  ok()
+
+proc deleteWordBackward*(buffer: TextBuffer, state: EditorState) =
+  ## Ctrl-W in Insert mode
+  let r = buffer.deleteTypedBefore(state, buWord)
+  if r.isErr:
+    state.statusMessage = r.error
+
+proc deleteToLineStart*(buffer: TextBuffer, state: EditorState) =
+  ## Ctrl-U in Insert mode
+  let r = buffer.deleteTypedBefore(state, buLine)
+  if r.isErr:
+    state.statusMessage = r.error
 
 proc charsBetween*(buffer: TextBuffer, a, b: BufferPosition): int =
   ## Characters from `a` up to `b`, a line break counting as one. 0 when `b`

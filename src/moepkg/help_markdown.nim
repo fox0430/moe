@@ -41,9 +41,9 @@ const
     # form produced by `tokenizeKey`'s normalization; source data using
     # `any` / `any key` is rewritten before lookup, so only the lowercase-`k`
     # variant needs to be in this list.
-    "Page Up", "Page Down", "Any key", "Backspace", "Enter", "Space", "Tab", "Escape",
-    "Esc", "ESC", "Home", "End", "Up", "Down", "Left", "Right", "Ctrl", "Alt", "Shift",
-    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+    "Page Up", "Page Down", "Any key", "Backspace", "Delete", "Enter", "Space", "Tab",
+    "Escape", "Esc", "ESC", "Home", "End", "Up", "Down", "Left", "Right", "Ctrl", "Alt",
+    "Shift", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
   ]
 
   KbdTableHeader = "| Keys | Description |\n|:---|:---|\n"

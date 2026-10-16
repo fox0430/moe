@@ -246,7 +246,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
   registry.register(
     builtin(bcInsertDelete),
     "Delete",
-    "Delete character at cursor",
+    "Delete character at cursor, or join the next line at the end",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleDelete(ctx),
     0,

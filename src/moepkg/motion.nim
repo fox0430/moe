@@ -273,7 +273,7 @@ proc moveLastNonBlank(e: MotionExecutor, currentPos: CursorPosition): CursorPosi
 
     # Find last non-whitespace character by scanning backwards
     for i in countdown(runes.len - 1, 0):
-      if not isWhitespace(runes[i]):
+      if not isSpaceOrBreak(runes[i]):
         result.x = i
         break
 
@@ -369,14 +369,9 @@ proc searchChar(
     col -= step
   some(CursorPosition(x: col, y: currentPos.y))
 
-proc isWhitespace(r: Rune): bool =
-  ## Check if a character is whitespace
-  let c = r.int32
-  return c == ' '.ord or c == '\t'.ord or c == '\n'.ord or c == '\r'.ord
-
 proc isSymbolChar(r: Rune): bool =
   ## Check if a character is a symbol (non-word, non-whitespace)
-  return not isWordChar(r) and not isWhitespace(r)
+  return not isWordChar(r) and not isSpaceOrBreak(r)
 
 type WordWalker = object
   ## Steps through a buffer as Vim's inc_cursor/dec_cursor do: the end of a
@@ -588,7 +583,7 @@ proc isBlankLine(line: string): bool =
 
   # Check if all characters are whitespace
   for (r, _) in content.chars:
-    if not isWhitespace(r):
+    if not isSpaceOrBreak(r):
       return false
   return true
 
@@ -1487,14 +1482,14 @@ proc findWordBoundaries(
   let cursorCol = min(cursor.column, runes.len - 1)
 
   # Case 1: Cursor is on whitespace
-  if isWhitespace(runes[cursorCol]):
+  if isSpaceOrBreak(runes[cursorCol]):
     if inner:
       # Inner whitespace: select the whitespace sequence
       var startCol = cursorCol
-      while startCol > 0 and isWhitespace(runes[startCol - 1]):
+      while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
         startCol.dec
       var endCol = cursorCol
-      while endCol + 1 < runes.len and isWhitespace(runes[endCol + 1]):
+      while endCol + 1 < runes.len and isSpaceOrBreak(runes[endCol + 1]):
         endCol.inc
       return ok(
         TextObjectRange(
@@ -1506,7 +1501,7 @@ proc findWordBoundaries(
     else:
       # Around: skip whitespace and include the next word
       var wordStart = cursorCol
-      while wordStart < runes.len and isWhitespace(runes[wordStart]):
+      while wordStart < runes.len and isSpaceOrBreak(runes[wordStart]):
         wordStart.inc
 
       if wordStart >= runes.len:
@@ -1519,7 +1514,7 @@ proc findWordBoundaries(
           let searchRunes = searchLineStr.toCharRunes()
           var col = 0
           # Skip leading whitespace
-          while col < searchRunes.len and isWhitespace(searchRunes[col]):
+          while col < searchRunes.len and isSpaceOrBreak(searchRunes[col]):
             col.inc
           if col < searchRunes.len:
             # Found a non-whitespace character
@@ -1539,7 +1534,7 @@ proc findWordBoundaries(
         if foundLine >= 0:
           # Include leading whitespace on current line
           var startCol = cursorCol
-          while startCol > 0 and isWhitespace(runes[startCol - 1]):
+          while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
             startCol.dec
           return ok(
             TextObjectRange(
@@ -1566,7 +1561,7 @@ proc findWordBoundaries(
 
       # Include leading whitespace
       var startCol = cursorCol
-      while startCol > 0 and isWhitespace(runes[startCol - 1]):
+      while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
         startCol.dec
       return ok(
         TextObjectRange(
@@ -1597,7 +1592,7 @@ proc findWordBoundaries(
     else:
       # Around word: word + trailing whitespace
       var extendedEnd = endCol + 1
-      while extendedEnd < runes.len and isWhitespace(runes[extendedEnd]):
+      while extendedEnd < runes.len and isSpaceOrBreak(runes[extendedEnd]):
         extendedEnd.inc
 
       if extendedEnd > endCol + 1:
@@ -1613,7 +1608,7 @@ proc findWordBoundaries(
       # No trailing whitespace, try leading
       if startCol > 0:
         var extendedStart = startCol
-        while extendedStart > 0 and isWhitespace(runes[extendedStart - 1]):
+        while extendedStart > 0 and isSpaceOrBreak(runes[extendedStart - 1]):
           extendedStart.dec
         return ok(
           TextObjectRange(
@@ -1652,7 +1647,7 @@ proc findWordBoundaries(
     else:
       # Around symbol: symbols + trailing whitespace
       var extendedEnd = endCol + 1
-      while extendedEnd < runes.len and isWhitespace(runes[extendedEnd]):
+      while extendedEnd < runes.len and isSpaceOrBreak(runes[extendedEnd]):
         extendedEnd.inc
 
       if extendedEnd > endCol + 1:
@@ -1667,7 +1662,7 @@ proc findWordBoundaries(
       # No trailing whitespace, try leading
       if startCol > 0:
         var extendedStart = startCol
-        while extendedStart > 0 and isWhitespace(runes[extendedStart - 1]):
+        while extendedStart > 0 and isSpaceOrBreak(runes[extendedStart - 1]):
           extendedStart.dec
         return ok(
           TextObjectRange(
@@ -1707,14 +1702,14 @@ proc findWideWordBoundaries(
   let cursorCol = min(cursor.column, runes.len - 1)
 
   # Case 1: Cursor is on whitespace
-  if isWhitespace(runes[cursorCol]):
+  if isSpaceOrBreak(runes[cursorCol]):
     if inner:
       # Inner whitespace: select the whitespace sequence
       var startCol = cursorCol
-      while startCol > 0 and isWhitespace(runes[startCol - 1]):
+      while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
         startCol.dec
       var endCol = cursorCol
-      while endCol + 1 < runes.len and isWhitespace(runes[endCol + 1]):
+      while endCol + 1 < runes.len and isSpaceOrBreak(runes[endCol + 1]):
         endCol.inc
       return ok(
         TextObjectRange(
@@ -1726,7 +1721,7 @@ proc findWideWordBoundaries(
     else:
       # Around: skip whitespace and include the next WORD
       var wordStart = cursorCol
-      while wordStart < runes.len and isWhitespace(runes[wordStart]):
+      while wordStart < runes.len and isSpaceOrBreak(runes[wordStart]):
         wordStart.inc
 
       if wordStart >= runes.len:
@@ -1738,20 +1733,20 @@ proc findWideWordBoundaries(
           let searchLineStr = buffer.getLine(searchLine)
           let searchRunes = searchLineStr.toCharRunes()
           var col = 0
-          while col < searchRunes.len and isWhitespace(searchRunes[col]):
+          while col < searchRunes.len and isSpaceOrBreak(searchRunes[col]):
             col.inc
           if col < searchRunes.len:
             foundLine = searchLine
             nextCol = col
             nextEndCol = col
             while nextEndCol + 1 < searchRunes.len and
-                not isWhitespace(searchRunes[nextEndCol + 1]):
+                not isSpaceOrBreak(searchRunes[nextEndCol + 1]):
               nextEndCol.inc
             break
 
         if foundLine >= 0:
           var startCol = cursorCol
-          while startCol > 0 and isWhitespace(runes[startCol - 1]):
+          while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
             startCol.dec
           return ok(
             TextObjectRange(
@@ -1769,11 +1764,11 @@ proc findWideWordBoundaries(
 
       # Found WORD on same line after whitespace
       var endCol = wordStart
-      while endCol + 1 < runes.len and not isWhitespace(runes[endCol + 1]):
+      while endCol + 1 < runes.len and not isSpaceOrBreak(runes[endCol + 1]):
         endCol.inc
 
       var startCol = cursorCol
-      while startCol > 0 and isWhitespace(runes[startCol - 1]):
+      while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
         startCol.dec
       return ok(
         TextObjectRange(
@@ -1785,11 +1780,11 @@ proc findWideWordBoundaries(
 
   # Case 2: Cursor is on a non-whitespace character (WORD)
   var startCol = cursorCol
-  while startCol > 0 and not isWhitespace(runes[startCol - 1]):
+  while startCol > 0 and not isSpaceOrBreak(runes[startCol - 1]):
     startCol.dec
 
   var endCol = cursorCol
-  while endCol + 1 < runes.len and not isWhitespace(runes[endCol + 1]):
+  while endCol + 1 < runes.len and not isSpaceOrBreak(runes[endCol + 1]):
     endCol.inc
 
   if inner:
@@ -1803,7 +1798,7 @@ proc findWideWordBoundaries(
   else:
     # Around WORD: WORD + trailing whitespace
     var extendedEnd = endCol + 1
-    while extendedEnd < runes.len and isWhitespace(runes[extendedEnd]):
+    while extendedEnd < runes.len and isSpaceOrBreak(runes[extendedEnd]):
       extendedEnd.inc
 
     if extendedEnd > endCol + 1:
@@ -1818,7 +1813,7 @@ proc findWideWordBoundaries(
     # No trailing whitespace, try leading
     if startCol > 0:
       var extendedStart = startCol
-      while extendedStart > 0 and isWhitespace(runes[extendedStart - 1]):
+      while extendedStart > 0 and isSpaceOrBreak(runes[extendedStart - 1]):
         extendedStart.dec
       return ok(
         TextObjectRange(
@@ -2197,8 +2192,8 @@ proc findSentenceBoundaries(
       var k = i + 1
       while k < flat.len and isCloser(flat[k]):
         k.inc
-      if k < flat.len and isWhitespace(flat[k]):
-        while k < flat.len and isWhitespace(flat[k]):
+      if k < flat.len and isSpaceOrBreak(flat[k]):
+        while k < flat.len and isSpaceOrBreak(flat[k]):
           k.inc
         if k < flat.len:
           starts.add k
@@ -2220,7 +2215,7 @@ proc findSentenceBoundaries(
 
   # Last non-whitespace char of this sentence (its terminator).
   var textEnd = nextStart - 1
-  while textEnd > s and isWhitespace(flat[textEnd]):
+  while textEnd > s and isSpaceOrBreak(flat[textEnd]):
     textEnd.dec
 
   # A cursor sitting on the whitespace run *between* two sentences is its own
@@ -2247,7 +2242,7 @@ proc findSentenceBoundaries(
         if st > nextStart:
           nextEnd = st - 1
           break
-      while nextEnd > nextStart and isWhitespace(flat[nextEnd]):
+      while nextEnd > nextStart and isSpaceOrBreak(flat[nextEnd]):
         nextEnd.dec
       return ok(
         TextObjectRange(
@@ -2258,7 +2253,7 @@ proc findSentenceBoundaries(
   var endIdx = nextStart - 1
   if inner:
     # Inner drops trailing whitespace (and the synthetic line separators).
-    while endIdx > s and isWhitespace(flat[endIdx]):
+    while endIdx > s and isSpaceOrBreak(flat[endIdx]):
       endIdx.dec
   else:
     # Around keeps trailing whitespace but not a synthetic line-break edge.
@@ -2267,7 +2262,7 @@ proc findSentenceBoundaries(
     # vim's `as`: when the last sentence has no trailing whitespace, include the
     # *leading* whitespace instead. Stay on the same line (skip synthetics).
     if endIdx == textEnd and nextStart == flat.len:
-      while s > 0 and not isSynthetic(s - 1) and isWhitespace(flat[s - 1]):
+      while s > 0 and not isSynthetic(s - 1) and isSpaceOrBreak(flat[s - 1]):
         s.dec
   if endIdx < s:
     endIdx = s

@@ -122,7 +122,11 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
     "insert-backspace", "Delete character before cursor (insert mode)",
     "insert.backspace",
   ),
-  ("insert-delete", "Delete character at cursor (insert mode)", "insert.delete"),
+  (
+    "insert-delete",
+    "Delete character at cursor, or join the next line at the end (insert mode)",
+    "insert.delete",
+  ),
   ("insert-newline", "Insert newline (insert mode)", "insert.newline"),
   ("visual-move-left", "Move left in visual mode", "visual.move.left"),
   ("visual-move-right", "Move right in visual mode", "visual.move.right"),

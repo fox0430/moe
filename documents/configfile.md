@@ -886,7 +886,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | Command | Description |
 |:----|:----|
 | insert-backspace | Delete character before cursor (insert mode) |
-| insert-delete | Delete character at cursor (insert mode) |
+| insert-delete | Delete character at cursor, or join the next line at the end (insert mode) |
 | insert-newline | Insert newline (insert mode) |
 
 ##### Miscellaneous

@@ -224,6 +224,8 @@ type
     holdLastVisual: bool
       # Set from `saveLastVisualAhead` to `settleLastVisual`. The area was saved
       # for `gv` before the edit moved it, so leaving Visual keeps it.
+    insertStart*: InsertStart
+      # Where the window's Insert typing starts, from the cursor on entering Insert.
     active*: bool # Whether this is the active window
     mode*: EditorMode
       # Current mode for this window. Enter a Visual mode through `setMode`,
@@ -652,6 +654,15 @@ type
     linesBelow*: int # Lines below where typing started, which it leaves as they are
     lastCursor*: BufferPosition # Where the last key left the cursor
     lastVersion*: int # and the buffer's contentVersion
+
+  InsertStart* = object
+    ## Where the text typed in Insert starts, which Ctrl-W and Ctrl-U stop at
+    ## once: Vim's Insstart and Insstart_orig.
+    at*: BufferPosition # Where typing began, again after each cursor move
+    stop*: BufferPosition # Where Ctrl-W and Ctrl-U stop, `at` unless kept
+    keepStop*: bool # A move right after a change keeps `stop` where it is
+    moved*: bool # The cursor moved since the last change (Vim's arrow_used)
+    changed*: bool # Insert changed the text (Vim's !ins_need_undo)
 
   LastEditCommandKind* = enum
     ## Types of repeatable edit commands
@@ -1201,6 +1212,12 @@ proc cursor*(s: EditorState): var BufferPosition =
   ## Get cursor position from the active window (returns var for in-place mutation)
   s.activeWindow.cursor
 
+proc insertStart*(s: EditorState): var InsertStart =
+  s.activeWindow.insertStart
+
+proc `insertStart=`*(s: EditorState, v: InsertStart) =
+  s.activeWindow.insertStart = v
+
 proc `cursor=`*(s: EditorState, pos: BufferPosition) =
   ## Set cursor position on the active window
   s.activeWindow.cursor = pos
@@ -1325,17 +1342,19 @@ proc setMode*(win: EditorWindow, m: EditorMode) =
   ## Set the window's mode. Entering a Visual mode from outside starts the
   ## selection at the cursor, so no entry path can resume a stale anchor.
   ## Entering Insert or Replace and leaving Visual take the column vertical
-  ## moves want from the cursor again, as Vim's edit() and Esc do. Leaving
-  ## Visual saves the selection for `gv`, as Vim does, and for a mode other
-  ## than Insert or Replace brings the cursor back onto the line, off the end
-  ## `$` left it at.
+  ## moves want from the cursor again, as Vim's edit() and Esc do, and start
+  ## the typed text there. Leaving Visual saves the selection for `gv`, as Vim
+  ## does, and for a mode other than Insert or Replace brings the cursor back
+  ## onto the line, off the end `$` left it at.
   let leavingVisual = win.mode.isVisualAllMode and not m.isVisualAllMode
-  if m.isVisualAllMode and not win.mode.isVisualAllMode:
-    win.visualAnchor = win.cursor
-  if leavingVisual or (
+  let entersInsert =
     m in {EditorMode.Insert, EditorMode.Replace} and
     win.mode notin {EditorMode.Insert, EditorMode.Replace}
-  ):
+  if m.isVisualAllMode and not win.mode.isVisualAllMode:
+    win.visualAnchor = win.cursor
+  if entersInsert:
+    win.insertStart = InsertStart(at: win.cursor, stop: win.cursor)
+  if leavingVisual or entersInsert:
     win.preferredColumn = -1
   if leavingVisual and not win.holdLastVisual:
     win.saveLastVisual()

@@ -5315,6 +5315,20 @@ suite "forced Insert mode":
     check e.activeBuffer.undoStack.len == 1
     check e.activeBuffer.currentTransaction.get.changes.len == 0
 
+  test "Ctrl-U after the Ctrl-O command line stops where typing resumed":
+    # As Vim's `Aabc<C-o>:<Esc>d<C-u>`.
+    let e = createForcedInsertEditor()
+    e.typeKeys("abc")
+    check e.handleKeyCombo(ctrlOKey)
+    check e.state.isCommandOverlay
+    check e.handleKeyCombo(escapeKey)
+    check e.state.mode == EditorMode.Insert
+    e.typeKeys("d")
+    check e.handleKeyCombo(
+      KeyCombo(isSpecial: false, char: "u", modifiers: {key_bindings.kmCtrl})
+    )
+    check $e.activeBuffer.getLine(0) == "abc"
+
   test "Ctrl-C commits the edit boundary and remains in Insert mode":
     let e = createForcedInsertEditor()
     check e.handleTextInput("a")

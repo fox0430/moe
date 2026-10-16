@@ -40,7 +40,7 @@ import
     lsp_integration,
   ]
 import ../src/moepkg/syntax/tokenizer
-import ../src/moepkg/command_handlers/insert_handler
+import ../src/moepkg/command_handlers/[insert_handler, insert_commands]
 import ../src/moepkg/lsp_service {.all.}
 import ../src/moepkg/lsp/protocol/types as lsp_protocol_types
 import ../src/moepkg/types/lsp_integration_types
@@ -2333,6 +2333,55 @@ suite "InsertModeHandler - completion commit":
     check state.cursor.column == 6
     check not handler.completionManager.isActive()
 
+  test "an auto-import above keeps where typing started on its text":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\nx = Fo")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 6)
+    let start = BufferPosition(line: 1, column: 4)
+    state.insertStart = InsertStart(at: start, stop: start)
+
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "Foo",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 1, character: 4),
+              `end`: lspTypes.Position(line: 1, character: 6),
+            ),
+            newText: "Foo",
+          )
+        ),
+        additionalTextEdits: some(
+          @[
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: 0, character: 0),
+                `end`: lspTypes.Position(line: 0, character: 0),
+              ),
+              newText: "import foo\n",
+            )
+          ]
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "Fo"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    check handler.commitCompletion(buf, state).kind == imrHandled
+    check buf.getLine(2) == "x = Foo"
+    check state.insertStart.at == BufferPosition(line: 2, column: 4)
+    check state.insertStart.stop == BufferPosition(line: 2, column: 4)
+
+    deleteToLineStart(buf, state)
+    check buf.getLine(2) == "x = "
+
   test "Cycling preview defers additionalTextEdits until the final commit":
     # Hybrid: Tab previews the completion text into the buffer immediately, but
     # the auto-import (additionalTextEdits) must NOT be applied while cycling -
@@ -3148,9 +3197,7 @@ suite "InsertModeHandler - snippet session":
     check state.cursor == BufferPosition(line: 0, column: 12)
     check state.snippetSession.stops[1].pos.column == 14
 
-  test "Delete at end of line during a session is a no-op for stops":
-    # handleDelete is a no-op at end of line (no line join), so the session
-    # must not remap the stops against a range that was never deleted.
+  test "Delete at end of line during a session joins the next line, stops and all":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
     let handler = createTestHandler(buf)
@@ -3165,15 +3212,37 @@ suite "InsertModeHandler - snippet session":
     discard handler.handleInsertModeKey(buf, state, qKey)
     handler.completionManager.cancelCompletion()
     check state.cursor == BufferPosition(line: 0, column: 6)
+    let stopBefore = state.snippetSession.stops[0]
+
+    let delKey = KeyCombo(isSpecial: true, special: skDelete, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, delKey)
+    check buf.getLine(0) == "    xqbb"
+    check state.cursor == BufferPosition(line: 0, column: 6)
+    check state.snippetSession.stops[0] == stopBefore
+    check state.snippetSession.stops[1].pos == BufferPosition(line: 0, column: 6)
+
+  test "Delete at end of the last line during a session is a no-op for stops":
+    # Nothing is deleted, so the session must not remap the stops against a
+    # range that was never deleted.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("x${1:aaa} ${2:bb}")
+    discard handler.commitCompletion(buf, state)
+
+    let qKey = KeyCombo(isSpecial: false, char: "q", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, qKey)
+    handler.completionManager.cancelCompletion()
+    state.cursor = BufferPosition(line: 0, column: buf.getLine(0).len)
     let stopsBefore = state.snippetSession.stops
 
     let delKey = KeyCombo(isSpecial: true, special: skDelete, fnNum: 0, modifiers: {})
     discard handler.handleInsertModeKey(buf, state, delKey)
-    check buf.getLine(0) == "    xq"
-    check buf.getLine(1) == "bb"
-    check state.cursor == BufferPosition(line: 0, column: 6)
+    check buf.getLine(0) == "    xq bb"
+    check buf.len == 1
     check state.snippetSession.stops == stopsBefore
-    check state.snippetSession.stops[1].pos.line == 1
 
   test "Enter on a pending default replaces it before splitting the line":
     # Enter on a selected default deletes it first (selection semantics), so the

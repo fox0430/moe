@@ -345,8 +345,9 @@
 | <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd> | Delete the character before the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**t**</kbd> | Add an indent in current line |
 | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Remove an indent in current line |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> | Delete the word before the cursor |
-| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Delete all characters before the cursor in the current line |
+| <kbd>**Delete**</kbd> | Delete the character at the cursor, or join the next line at the end |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> | Delete the word before the cursor, stopping once where typing started, or join the line above at the start |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Delete the characters typed before the cursor, or else all before it but the auto-indent, or join the line above at the start |
 | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> | Signature Help (LSP) |
 | <kbd>**Ctrl**</kbd> <kbd>**o**</kbd> | Execute one Normal mode command and return to Insert mode |
 | <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> | Insert the previously inserted text |
