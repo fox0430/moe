@@ -9074,8 +9074,9 @@ suite "handleKeyCombo - the registers a yank or delete fills, as Vim's op_yank a
       ("one\nab\nef", 0, @["C-v", "j", "l", "P"], @["one", "one", "", ""], (1, 0)),
     ]:
       let e = createEditorForRegisters(content)
-      e.press("y", "y", "j")
-      e.activeWindow.cursor.column = column
+      e.press("y", "y", "j", "0")
+      for _ in 1 .. column:
+        e.press("l")
 
       e.press(keys)
 
@@ -9102,7 +9103,7 @@ suite "handleKeyCombo - the registers a yank or delete fills, as Vim's op_yank a
       let e = createEditorForRegisters("one\nabcd\nefgh\nijkl")
       e.press("y", "y")
       e.press(setup)
-      e.activeWindow.cursor.column = 1
+      e.press("l")
 
       e.press(keys)
 
@@ -9119,3 +9120,169 @@ suite "handleKeyCombo - the registers a yank or delete fills, as Vim's op_yank a
 
       e.press("y", "y", "k", "p")
       check e.activeWindow.cursor == BufferPosition(line: 1, column: column)
+
+suite "handleKeyCombo - a count and the shape of a motion, as in Vim":
+  # Expectations are Vim 9.2's.
+  proc createEditorForCounts(content: string, line = 0, column = 0): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.activeWindow.cursor = BufferPosition(line: line, column: column)
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  proc at(line, column: int): BufferPosition =
+    BufferPosition(line: line, column: column)
+
+  test "a count goes to the count-th match of n, N, * and #":
+    for (content, column, search, keys, cursor) in [
+      ("x foo x foo x foo", 0, "foo", @["3", "n"], at(0, 14)),
+      ("x foo x foo x foo", 14, "foo", @["2", "N"], at(0, 2)),
+      ("foo x foo x foo", 0, "", @["2", "*"], at(0, 12)),
+      ("foo x foo x foo", 0, "", @["3", "#"], at(0, 0)),
+    ]:
+      let e = createEditorForCounts(content, column = column)
+      e.state.input.search.last.pattern = search
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.activeWindow.cursor == cursor
+
+  test "_ goes count-1 lines down and takes whole lines":
+    for (content, line, column, keys, lines, cursor, register) in [
+      ("a\n  b\n  c\nd", 0, 0, @["3", "_"], @["a", "  b", "  c", "d"], at(2, 2), ""),
+      ("a\n  b\n  c\nd", 0, 0, @["d", "3", "_"], @["d"], at(0, 0), "a\n  b\n  c\n"),
+      # A yank leaves the cursor where it is.
+      ("  foo bar\nx", 0, 6, @["y", "_"], @["  foo bar", "x"], at(0, 6), "  foo bar\n"),
+      ("  foo bar\nx", 0, 6, @["d", "_"], @["x"], at(0, 0), "  foo bar\n"),
+      ("foo\nx", 0, 1, @["c", "_", "X", "Escape"], @["X", "x"], at(0, 0), "foo\n"),
+      # There is no line to go to from the last one.
+      ("a\nb", 1, 0, @["2", "_"], @["a", "b"], at(1, 0), ""),
+      ("a\nb", 1, 0, @["d", "2", "_"], @["a", "b"], at(1, 0), ""),
+    ]:
+      let e = createEditorForCounts(content, line, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.activeWindow.cursor == cursor
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "a count takes $, D and C to the end of a later line":
+    for (line, column, keys, lines, cursor, register) in [
+      (0, 0, @["2", "$"], @["abc", "def", "ghi"], at(1, 2), ""),
+      (0, 0, @["9", "$"], @["abc", "def", "ghi"], at(2, 2), ""),
+      (0, 1, @["d", "2", "$"], @["a", "ghi"], at(0, 0), "bc\ndef"),
+      (0, 1, @["2", "D"], @["a", "ghi"], at(0, 0), "bc\ndef"),
+      (0, 1, @["D"], @["a", "def", "ghi"], at(0, 0), "bc"),
+      (0, 1, @["2", "C", "X", "Escape"], @["aX", "ghi"], at(0, 1), "bc\ndef"),
+      # There is no line to go to from the last one.
+      (2, 0, @["2", "$"], @["abc", "def", "ghi"], at(2, 0), ""),
+      (2, 0, @["d", "2", "$"], @["abc", "def", "ghi"], at(2, 0), ""),
+    ]:
+      let e = createEditorForCounts("abc\ndef\nghi", line, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.activeWindow.cursor == cursor
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "gN puts the cursor at the start of the match":
+    let e = createEditorForCounts("foo bar foo baz", column = 14)
+    e.state.input.search.last.pattern = "baz"
+
+    e.press("g", "N")
+
+    check e.state.mode == EditorMode.Visual
+    check e.state.visualSelection.start == at(0, 14)
+    check e.activeWindow.cursor == at(0, 12)
+
+    e.press("y", "g", "v")
+
+    check e.state.visualSelection.start == at(0, 14)
+    check e.activeWindow.cursor == at(0, 12)
+
+  test "a count reaches the Visual h, j, k, l and $":
+    for (content, line, column, keys, lines, register) in [
+      ("a\nb\nc\nd\ne", 0, 0, @["V", "2", "j", "d"], @["d", "e"], "a\nb\nc\n"),
+      ("a\nb\nc\nd\ne", 4, 0, @["V", "2", "k", "d"], @["a", "b"], "c\nd\ne\n"),
+      ("a\nb\nc\nd\ne", 0, 0, @["V", "9", "j", "d"], @[""], "a\nb\nc\nd\ne\n"),
+      ("abcdef", 0, 0, @["v", "3", "l", "y"], @["abcdef"], "abcd"),
+      ("abcdef", 0, 5, @["v", "3", "h", "y"], @["abcdef"], "cdef"),
+      ("abc\ndef\nghi", 0, 0, @["v", "2", "$", "d"], @["ghi"], "abc\ndef\n"),
+      # There is no line to go to from the last one.
+      ("abc\ndef\nghi", 2, 0, @["v", "2", "$", "d"], @["abc", "def", "hi"], "g"),
+    ]:
+      let e = createEditorForCounts(content, line, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "the Visual j and k keep the column they aim for over a shorter line":
+    for keys in [@["v", "j", "j", "y"], @["v", "2", "j", "y"]]:
+      let e = createEditorForCounts("abcdef\nx\nabcdef", column = 4)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.state.registers.getRegisterContent('"') == "ef\nx\nabcde"
+
+    # The shorter line puts the cursor on its line break.
+    let e = createEditorForCounts("abcdef\nx\nabcdef", column = 4)
+    e.press("v", "j", "y")
+    check e.state.registers.getRegisterContent('"') == "ef\nx\n"
+
+  test "a closed fold counts as one line for a count, as Vim's cursor_down":
+    const TenLines = "l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9"
+    for (line, keys, cursor) in [
+      (0, @["3", "j"], at(7, 0)),
+      (0, @["4", "$"], at(7, 1)),
+      (0, @["3", "+"], at(7, 0)),
+      (7, @["3", "k"], at(0, 0)),
+      (7, @["2", "-"], at(1, 0)),
+      (0, @["v", "3", "j"], at(7, 0)),
+    ]:
+      let e = createEditorForCounts(TenLines, line)
+      check e.activeBuffer.foldState.addFold(1, 5)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.activeWindow.cursor == cursor
+
+    let e = createEditorForCounts(TenLines)
+    check e.activeBuffer.foldState.addFold(1, 5)
+    e.press("d", "3", "_")
+    check e.lines == @["l7", "l8", "l9"]
+
+  test "_, + and - that find no line keep the column vertical moves want":
+    for (content, line, keys) in [
+      ("abcdefghijk\nab", 0, @["j", "2", "_", "k"]),
+      ("abcdefghijk\nab", 0, @["j", "2", "+", "k"]),
+      ("ab\nabcdefghijk", 1, @["k", "2", "-", "j"]),
+    ]:
+      let e = createEditorForCounts(content, line, 10)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.activeWindow.cursor.column == 10

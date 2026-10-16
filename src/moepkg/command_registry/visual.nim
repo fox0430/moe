@@ -28,27 +28,27 @@ import core
 
 ## Visual mode command handlers (wrappers for visual_commands functions)
 
-proc handleVisualMoveLeft*(ctx: CommandContext): Result[(), string] =
-  ## Move left in visual mode and update selection
-  visualMoveLeft(ctx.buffer, ctx.state)
+proc handleVisualMoveLeft*(ctx: CommandContext, count = 1): Result[(), string] =
+  ## Move left `count` times in visual mode and update selection
+  visualMoveLeft(ctx.buffer, ctx.state, count)
   ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
   Result[(), string].ok ()
 
-proc handleVisualMoveRight*(ctx: CommandContext): Result[(), string] =
-  ## Move right in visual mode and update selection
-  visualMoveRight(ctx.buffer, ctx.state)
+proc handleVisualMoveRight*(ctx: CommandContext, count = 1): Result[(), string] =
+  ## Move right `count` times in visual mode and update selection
+  visualMoveRight(ctx.buffer, ctx.state, count)
   ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
   Result[(), string].ok ()
 
-proc handleVisualMoveUp*(ctx: CommandContext): Result[(), string] =
-  ## Move up in visual mode and update selection
-  visualMoveUp(ctx.buffer, ctx.state)
+proc handleVisualMoveUp*(ctx: CommandContext, count = 1): Result[(), string] =
+  ## Move up `count` times in visual mode and update selection
+  visualMoveUp(ctx.buffer, ctx.state, count)
   ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
   Result[(), string].ok ()
 
-proc handleVisualMoveDown*(ctx: CommandContext): Result[(), string] =
-  ## Move down in visual mode and update selection
-  visualMoveDown(ctx.buffer, ctx.state)
+proc handleVisualMoveDown*(ctx: CommandContext, count = 1): Result[(), string] =
+  ## Move down `count` times in visual mode and update selection
+  visualMoveDown(ctx.buffer, ctx.state, count)
   ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
   Result[(), string].ok ()
 
@@ -106,9 +106,9 @@ proc handleVisualMoveHome*(ctx: CommandContext): Result[(), string] =
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
-proc handleVisualMoveEnd*(ctx: CommandContext): Result[(), string] =
-  ## Move to end of line in visual mode
-  visualMoveEnd(ctx.buffer, ctx.state)
+proc handleVisualMoveEnd*(ctx: CommandContext, count = 1): Result[(), string] =
+  ## Move to end of line, `count - 1` lines down, in visual mode
+  visualMoveEnd(ctx.buffer, ctx.state, count)
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
@@ -233,9 +233,9 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Move Left",
     "Move left and update visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveLeft(ctx),
+      handleVisualMoveLeft(ctx, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   registry.register(
@@ -243,9 +243,9 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Move Right",
     "Move right and update visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveRight(ctx),
+      handleVisualMoveRight(ctx, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   registry.register(
@@ -253,9 +253,9 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Move Up",
     "Move up and update visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveUp(ctx),
+      handleVisualMoveUp(ctx, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   registry.register(
@@ -263,9 +263,9 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Move Down",
     "Move down and update visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveDown(ctx),
+      handleVisualMoveDown(ctx, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   registry.register(
@@ -365,9 +365,9 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Move End",
     "Move to end of line in visual mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveEnd(ctx),
+      handleVisualMoveEnd(ctx, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   registry.register(

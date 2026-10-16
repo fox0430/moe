@@ -31,7 +31,7 @@ import
     cursor_util, types, registers, motion, modes, config, unicode_utils,
     visual_selection,
   ]
-import ../buffer/[core, edit, fold, undo]
+import ../buffer/[core, edit, undo]
 import insert_commands
 
 template checkVisualEdit(state: EditorState, r: Result[(), string]) =
@@ -81,47 +81,36 @@ proc getSelectionRange*(
     else:
       return (selection.current, selection.start)
 
-proc visualMoveLeft*(buffer: TextBuffer, state: EditorState) =
-  ## Move left in visual mode and update selection
-  if state.cursor.column > 0:
-    state.cursor.column -= 1
+proc visualMoveLeft*(buffer: TextBuffer, state: EditorState, count = 1) =
+  ## Move left `count` characters in visual mode and update selection
+  state.cursor.column = max(0, state.cursor.column - max(1, count))
 
-proc visualMoveRight*(buffer: TextBuffer, state: EditorState) =
-  ## Move right in visual mode and update selection
+proc visualMoveRight*(buffer: TextBuffer, state: EditorState, count = 1) =
+  ## Move right `count` characters in visual mode and update selection. The
+  ## cursor may go one past the last character, taking the line break.
   let lineLen = buffer.getLine(state.cursor.line).charLen
   if state.cursor.column < lineLen:
-    state.cursor.column += 1
+    state.cursor.column = min(lineLen, state.cursor.column + max(1, count))
 
-proc visualMoveUp*(buffer: TextBuffer, state: EditorState) =
-  ## Move up in visual mode and update selection
-  if state.cursor.line > 0:
-    var targetLine = state.cursor.line - 1
-    # Skip to a collapsed fold's start so the selection crosses the whole fold
-    # instead of stalling on a hidden interior line. getPrevVisibleLine always
-    # returns a visible line.
-    if buffer.foldState.isLineInCollapsedFold(targetLine):
-      targetLine = buffer.foldState.getPrevVisibleLine(targetLine)
-    state.cursor.line = targetLine
-    # Clamp cursor to new line length
-    let newLineLen = buffer.getLine(state.cursor.line).charLen
-    if state.cursor.column > newLineLen:
-      state.cursor.column = newLineLen
+proc moveVisualToLine(buffer: TextBuffer, state: EditorState, line: int) =
+  ## Move the cursor onto `line` at the column vertical moves aim for, as Vim
+  ## keeps curswant in Visual mode too. A shorter line puts it past its last
+  ## character, on the line break. `line` the cursor is on goes nowhere, as
+  ## Vim's cursor_down fails.
+  if line == state.cursor.line:
+    return
+  let aimed = state.aimedColumn
+  state.cursor =
+    BufferPosition(line: line, column: min(aimed, buffer.getLine(line).charLen))
+  state.preferredColumn = aimed
 
-proc visualMoveDown*(buffer: TextBuffer, state: EditorState) =
-  ## Move down in visual mode and update selection
-  if state.cursor.line < buffer.len - 1:
-    var targetLine = state.cursor.line + 1
-    # Skip past a collapsed fold so the selection crosses the whole fold instead
-    # of stalling on a hidden interior line.
-    if buffer.foldState.isLineInCollapsedFold(targetLine):
-      targetLine = buffer.foldState.getNextVisibleLine(targetLine, buffer.len - 1)
-    # A collapsed fold that runs to the buffer end can't be crossed; stay put.
-    if not buffer.foldState.isLineInCollapsedFold(targetLine):
-      state.cursor.line = targetLine
-      # Clamp cursor to new line length
-      let newLineLen = buffer.getLine(state.cursor.line).charLen
-      if state.cursor.column > newLineLen:
-        state.cursor.column = newLineLen
+proc visualMoveUp*(buffer: TextBuffer, state: EditorState, count = 1) =
+  ## Move up `count` lines in visual mode and update selection
+  buffer.moveVisualToLine(state, buffer.linesUp(state.cursor.line, max(1, count)))
+
+proc visualMoveDown*(buffer: TextBuffer, state: EditorState, count = 1) =
+  ## Move down `count` lines in visual mode and update selection
+  buffer.moveVisualToLine(state, buffer.linesDown(state.cursor.line, max(1, count)))
 
 proc getBlockText(buffer: TextBuffer, selection: VisualSelection): string =
   ## Get text from a block (rectangular) selection
@@ -495,13 +484,18 @@ proc visualMoveHome*(buffer: TextBuffer, state: EditorState) =
   ## Move to beginning of line (0/Home) and update selection
   state.cursor.column = 0
 
-proc visualMoveEnd*(buffer: TextBuffer, state: EditorState) =
-  ## Move to end of line ($) and update selection.
+proc visualMoveEnd*(buffer: TextBuffer, state: EditorState, count = 1) =
+  ## Move to end of line ($), `count - 1` lines down, and update selection.
   ## In Visual mode, cursor can be placed one past the last character
   ## (at column == lineLen) so the selection can include the newline
-  ## and `d` can delete the entire line.
-  let lineLen = buffer.getLine(state.cursor.line).charLen
-  state.cursor.column = lineLen
+  ## and `d` can delete the entire line. Like Vim, a count from the last line
+  ## goes nowhere.
+  var line = state.cursor.line
+  if count > 1:
+    line = buffer.linesDown(line, count - 1)
+    if line == state.cursor.line:
+      return
+  state.cursor = BufferPosition(line: line, column: buffer.getLine(line).charLen)
 
 proc visualMoveFirstNonBlank*(buffer: TextBuffer, state: EditorState) =
   ## Move to first non-whitespace character (^) and update selection

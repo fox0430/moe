@@ -181,9 +181,9 @@ proc searchMatchAndSelect(
   let match = findGnMatch(buffer, state, forward, count)
   if match.isErr:
     return NormalModeResult(kind: nmrError, errorMessage: match.error)
-  let (first, last) = match.get
+  let area = gnArea(match.get, forward)
   recordJump(state)
-  state.enterVisual(vskChar, first, last)
+  state.enterVisual(vskChar, area.start, area.cursor)
   return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
 
 proc handleModeSwitchToOverlay*(
@@ -490,14 +490,6 @@ proc handleNormalModeKey*(
       return fromPassthrough(ptAction.get)
     # Handle various actions based on command ID
     case cmd.commandId
-    of "insert.append", "insert.append.end", "insert.first.non.blank",
-        "insert.line.below", "insert.line.above":
-      # With the count, which types the text that many times.
-      let ctx = handler.newContext(buffer, state, viewport, cmd.register)
-      let entered = handler.commandRegistry.executeCommand(ctx, cmd)
-      if entered.isErr:
-        return NormalModeResult(kind: nmrError, errorMessage: entered.error)
-      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     of "edit.repeat":
       return handler.repeatLastChange(buffer, state, viewport, cmd)
     # dd, yy, cc are handled by operator doubling in command_registry
@@ -655,9 +647,9 @@ proc handleNormalModeKey*(
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
       return NormalModeResult(kind: nmrHandled, modeTransition: some(r.get))
     else:
-      # Try to execute using command registry for other actions
+      # With the count for a command that takes one (`3n`, `3A`).
       let ctx = handler.newContext(buffer, state, viewport, cmd.register)
-      let cmdResult = handler.commandRegistry.execute(ctx, cmd.commandId, cmd.args)
+      let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
       if cmdResult.isOk:
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:

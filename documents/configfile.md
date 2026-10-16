@@ -674,6 +674,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | line-home | Move to beginning of line |
 | line-end | Move to end of line |
 | line-first-non-blank | Move to first non-whitespace character |
+| linewise-first-non-blank | Move count-1 lines down to the first non-whitespace character (linewise) |
 | line-last-non-blank | Move to last non-whitespace character |
 | next-line-first-non-blank | Move to next line's first non-whitespace character |
 | previous-line-first-non-blank | Move to previous line's first non-whitespace character |

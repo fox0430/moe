@@ -41,6 +41,11 @@ const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
     "line-first-non-blank", "Move to first non-whitespace character",
     Motion.FirstNonBlank,
   ),
+  (
+    "linewise-first-non-blank",
+    "Move count-1 lines down to the first non-whitespace character (linewise)",
+    Motion.LinewiseFirstNonBlank,
+  ),
   ("line-last-non-blank", "Move to last non-whitespace character", Motion.LastNonBlank),
   ("line-end", "Move to end of line", Motion.End),
   ("goto-first-line", "Go to first line", Motion.FirstLine),

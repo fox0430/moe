@@ -81,6 +81,6 @@ proc handleInsertAt*(
     # The session began before the line went in, so the line is part of it.
     ctx.enterInsert(InsertEntry(kind: kind), count)
     return ok(())
-  of ieSubstitute, ieSubstituteLine, ieChangeToEnd, ieChange:
+  of ieSubstitute, ieSubstituteLine, ieChange:
     return err("Not an insert command: " & $kind)
   ctx.beginInsert(InsertEntry(kind: kind), count)

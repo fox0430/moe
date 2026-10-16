@@ -146,6 +146,15 @@ proc stepMatches(
     if result == first:
       left = left mod taken
 
+proc gnArea*(match: (BufferPosition, BufferPosition), forward: bool): VisualArea =
+  ## The Visual area gn/gN select over `match`: like Vim's current_search, the
+  ## cursor ends at the end of the match for gn and at its start for gN.
+  let (first, last) = match
+  if forward:
+    VisualArea(start: first, cursor: last, kind: vskChar)
+  else:
+    VisualArea(start: last, cursor: first, kind: vskChar)
+
 proc findGnMatch*(
     buffer: TextBuffer, state: EditorState, forward: bool, count: int
 ): Result[(BufferPosition, BufferPosition), string] =
@@ -413,9 +422,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Next",
     "Find next occurrence of last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.moveToMatch(ctx.findNextMatch(1)),
+      ctx.moveToMatch(ctx.findNextMatch(parseCount(args))),
     0,
-    0,
+    1,
   )
   registry.registerTarget("search.next", searchTarget(findNextMatch))
 
@@ -424,9 +433,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Previous",
     "Find previous occurrence of last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.moveToMatch(ctx.findPrevMatch(1)),
+      ctx.moveToMatch(ctx.findPrevMatch(parseCount(args))),
     0,
-    0,
+    1,
   )
   registry.registerTarget("search.prev", searchTarget(findPrevMatch))
 
@@ -687,9 +696,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Word Forward",
     "Search for word under cursor forward (*)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.moveToMatch(ctx.findWordForward(1)),
+      ctx.moveToMatch(ctx.findWordForward(parseCount(args))),
     0,
-    0,
+    1,
   )
   registry.registerTarget("search.word.forward", searchTarget(findWordForward))
 
@@ -699,9 +708,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Word Backward",
     "Search for word under cursor backward (#)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.moveToMatch(ctx.findWordBackward(1)),
+      ctx.moveToMatch(ctx.findWordBackward(parseCount(args))),
     0,
-    0,
+    1,
   )
   registry.registerTarget("search.word.backward", searchTarget(findWordBackward))
 
@@ -712,12 +721,12 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     proc(
         ctx: CommandContext, op: PendingOperator, count: int, countGiven: bool
     ): Result[Option[MotionTarget], string] =
-      let (first, last) = ?findGnMatch(ctx.buffer, ctx.state, forward, count)
+      let match = ?findGnMatch(ctx.buffer, ctx.state, forward, count)
+      let (first, last) = match
       recordJump(ctx.state)
       # Like Vim, the match is the Visual area the operator worked on, for
       # `gv`, kept before the operator runs and whether or not it succeeds.
-      ctx.buffer.lastVisual =
-        some(VisualArea(start: first, cursor: last, kind: vskChar))
+      ctx.buffer.lastVisual = some(gnArea(match, forward))
       ok(
         some(
           MotionTarget(start: first, finish: last, motionType: mtInclusive, area: true)

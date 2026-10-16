@@ -151,46 +151,59 @@ proc moveRight(
   else:
     logDebug("motion", "moveRight: buffer bounds check failed")
 
+proc foldStart(buffer: TextBuffer, line: int): int =
+  ## The first line of the closed fold `line` is in, or `line`.
+  let fold = buffer.foldState.getCollapsedFoldAt(line)
+  if fold.isSome: fold.get.startLine else: line
+
+proc foldEnd(buffer: TextBuffer, line: int): int =
+  ## The last line of the closed fold `line` is in, or `line`.
+  let fold = buffer.foldState.getCollapsedFoldAt(line)
+  if fold.isSome: fold.get.endLine else: line
+
+proc linesDown*(buffer: TextBuffer, line, count: int): int =
+  ## The line `count` lines below `line`, a closed fold counting as one line,
+  ## as Vim's cursor_down_inner: the last line when there are fewer, and the
+  ## start of a closed fold it lands in. `line` itself when there is no line
+  ## below.
+  let last = buffer.len - 1
+  if last < 0:
+    return 0
+  if line + count >= last:
+    return buffer.foldStart(last)
+  if buffer.foldState.folds.len == 0:
+    return line + count
+  result = line
+  for _ in 1 .. count:
+    if result >= last:
+      break
+    result = buffer.foldEnd(result) + 1
+  result = buffer.foldStart(min(result, last))
+
+proc linesUp*(buffer: TextBuffer, line, count: int): int =
+  ## The line `count` lines above `line`, a closed fold counting as one line,
+  ## as Vim's cursor_up_inner: the first line when there are fewer, and the
+  ## start of a closed fold it lands in. `line` itself when there is no line
+  ## above.
+  if buffer.len == 0 or count > line:
+    return 0
+  if buffer.foldState.folds.len == 0:
+    return line - count
+  result = buffer.foldStart(line)
+  for _ in 1 .. count:
+    if result <= 0:
+      break
+    result = buffer.foldStart(result - 1)
+
 proc moveUp(e: MotionExecutor, currentPos: CursorPosition, count: int): CursorPosition =
   result = currentPos
-  var targetY = max(0, currentPos.y - count)
-
-  # Skip over folded lines when moving up (with safety limit to prevent infinite loop)
-  var iterations = 0
-  let maxIterations = e.buffer.len + 1
-  while targetY > 0 and e.buffer.foldState.isLineInCollapsedFold(targetY) and
-      iterations < maxIterations:
-    let newY = e.buffer.foldState.getPrevVisibleLine(targetY)
-    if newY == targetY:
-      # getPrevVisibleLine didn't make progress, break to prevent infinite loop
-      break
-    targetY = newY
-    inc iterations
-
-  result.y = targetY
+  result.y = e.buffer.linesUp(currentPos.y, count)
 
 proc moveDown(
     e: MotionExecutor, currentPos: CursorPosition, count: int
 ): CursorPosition =
   result = currentPos
-  if e.buffer.len > 0:
-    var targetY = min(e.buffer.len - 1, currentPos.y + count)
-
-    # Skip over folded lines when moving down (with safety limit to prevent infinite loop)
-    var iterations = 0
-    let maxIterations = e.buffer.len + 1
-    while targetY < e.buffer.len - 1 and
-        e.buffer.foldState.isLineInCollapsedFold(targetY) and iterations < maxIterations:
-      let newY = e.buffer.foldState.getNextVisibleLine(targetY, e.buffer.len - 1)
-      if newY == targetY:
-        # getNextVisibleLine didn't make progress, break to prevent infinite loop
-        break
-      targetY = newY
-      inc iterations
-
-    result.y = targetY
-  else:
-    result.y = 0
+  result.y = e.buffer.linesDown(currentPos.y, count)
 
 proc pageTarget(
     e: MotionExecutor, rl: RowLayout, currentPos: CursorPosition, rows: int
@@ -291,13 +304,7 @@ proc moveNextLineFirstNonBlank(
 ): CursorPosition =
   ## Move to next line's first non-whitespace character (Enter/+ key in normal mode)
   ## This is like pressing j followed by ^
-  result = currentPos
-
-  # Move down by count lines
-  if e.buffer.len > 0:
-    result.y = min(e.buffer.len - 1, currentPos.y + count)
-  else:
-    result.y = 0
+  result = e.moveDown(currentPos, count)
 
   # Move to first non-blank character on the new line
   result.x = 0
@@ -309,10 +316,7 @@ proc movePreviousLineFirstNonBlank(
 ): CursorPosition =
   ## Move to previous line's first non-whitespace character (- key in normal mode)
   ## This is like pressing k followed by ^
-  result = currentPos
-
-  # Move up by count lines
-  result.y = max(0, currentPos.y - count)
+  result = e.moveUp(currentPos, count)
 
   # Move to first non-blank character on the new line
   result.x = 0
@@ -820,6 +824,18 @@ proc landMotion*(
     else:
       at(pos, mtLinewise)
 
+  proc countLinesDown(): Option[CursorPosition] =
+    ## The line `count - 1` lines down, as Vim's cursor_down goes for `$` and
+    ## `_`: as far as there are lines, and none from the last line.
+    let n = cmd.count - 1
+    if n <= 0:
+      return some(currentPos)
+    let pos = e.moveDown(currentPos, n)
+    if pos.y == currentPos.y:
+      none(CursorPosition)
+    else:
+      some(pos)
+
   case cmd.motion
   of Motion.Left:
     at(e.moveLeft(currentPos, cmd.count), mtExclusive)
@@ -844,10 +860,23 @@ proc landMotion*(
     at(e.moveHome(currentPos), mtExclusive)
   of Motion.FirstNonBlank:
     at(e.moveFirstNonBlank(currentPos), mtExclusive)
+  of Motion.LinewiseFirstNonBlank:
+    let down = countLinesDown()
+    if down.isNone:
+      stuck(mtLinewise)
+    elif operator == some(OpYank):
+      # As Vim's nv_lineop, a yank leaves the cursor's column.
+      at(down.get, mtLinewise)
+    else:
+      at(e.moveFirstNonBlank(down.get), mtLinewise)
   of Motion.LastNonBlank:
     at(e.moveLastNonBlank(currentPos), mtInclusive)
   of Motion.End:
-    at(e.moveEnd(currentPos, mode), mtInclusive)
+    let down = countLinesDown()
+    if down.isNone:
+      stuck(mtInclusive)
+    else:
+      at(e.moveEnd(down.get, mode), mtInclusive)
   of Motion.FirstLine:
     at(e.moveFirstLine(currentPos), mtLinewise)
   of Motion.LastLine:
@@ -1214,9 +1243,9 @@ const
     Motion.HalfPageDown,
   } ## Motions that aim for the wanted column (Vim's curswant).
   LineEdgeMotions = {
-    Motion.Home, Motion.FirstNonBlank, Motion.End, Motion.FirstLine, Motion.LastLine,
-    Motion.ViewportHigh, Motion.ViewportMiddle, Motion.ViewportLow,
-    Motion.NextLineFirstNonBlank, Motion.PreviousLineFirstNonBlank,
+    Motion.Home, Motion.FirstNonBlank, Motion.LinewiseFirstNonBlank, Motion.End,
+    Motion.FirstLine, Motion.LastLine, Motion.ViewportHigh, Motion.ViewportMiddle,
+    Motion.ViewportLow, Motion.NextLineFirstNonBlank, Motion.PreviousLineFirstNonBlank,
   } ## Motions onto a line's start or end.
 
 proc landMotion*(
@@ -1277,12 +1306,12 @@ proc executeMotion*(
     currentCursorPos: BufferPosition,
     updateViewport: bool = true,
     aimedColumn = -1,
-): Result[BufferPosition, string] =
-  ## Execute motion and return new cursor position. A failed motion leaves the
-  ## cursor as far as it went. A vertical motion aims for `aimedColumn`, or for
-  ## the column of `currentCursorPos` when it is -1.
-  let landing = controller.landMotion(cmd, currentCursorPos, aimedColumn = aimedColumn)
-  let newPos = CursorPosition(x: landing.pos.column, y: landing.pos.line)
+): MotionLanding =
+  ## Execute motion and return where the cursor goes. A failed motion leaves
+  ## the cursor as far as it went. A vertical motion aims for `aimedColumn`, or
+  ## for the column of `currentCursorPos` when it is -1.
+  result = controller.landMotion(cmd, currentCursorPos, aimedColumn = aimedColumn)
+  let newPos = CursorPosition(x: result.pos.column, y: result.pos.line)
 
   let
     actualReservedLines = controller.cursorManager.state.motionReservedLines()
@@ -1299,8 +1328,6 @@ proc executeMotion*(
   if lineWrap:
     controller.viewportManager.viewport.leftColumn = 0
 
-  return ok(BufferPosition(line: newPos.y, column: newPos.x))
-
 proc moveCursorByMotion*(
     controller: MotionController,
     state: EditorState,
@@ -1310,18 +1337,18 @@ proc moveCursorByMotion*(
   ## Move the cursor of `state` by `cmd`. A vertical motion keeps the column it
   ## aimed for, as Vim keeps curswant. Another motion drops it when it moves the
   ## cursor, or even in place onto a line's start or end, as Vim's beginline
-  ## does; one that fails in place keeps it. `$` drops it too, where Vim makes
-  ## vertical moves stick to line ends.
+  ## does; one that fails in place keeps it (`2_` on the last line). `$` drops
+  ## it too, where Vim makes vertical moves stick to line ends.
   let
     start = state.cursor
     aimed = state.aimedColumn
-  result = controller.executeMotion(cmd, start, updateViewport, aimed)
-  if result.isOk:
-    state.cursor = result.get
-    if cmd.motion in VerticalMotions:
-      state.preferredColumn = aimed
-    elif result.get != start or cmd.motion in LineEdgeMotions:
-      state.preferredColumn = -1
+    landing = controller.executeMotion(cmd, start, updateViewport, aimed)
+  state.cursor = landing.pos
+  if cmd.motion in VerticalMotions:
+    state.preferredColumn = aimed
+  elif landing.pos != start or (cmd.motion in LineEdgeMotions and not landing.failed):
+    state.preferredColumn = -1
+  ok(landing.pos)
 
 proc snapOperatorRange*(buffer: TextBuffer, range: OperatorRange): OperatorRange =
   ## Widen an operator range so a closed fold either end lies in is covered
