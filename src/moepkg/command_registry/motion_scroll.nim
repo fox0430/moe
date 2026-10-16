@@ -379,9 +379,7 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     bcMotionFirstNonBlank, "First Non-Blank", "Move to first non-whitespace character",
     Motion.FirstNonBlank, false,
   )
-  registry.registerMotionCommand(
-    bcMotionEnd, "End", "Move to end of line", Motion.End, false
-  )
+  registry.registerMotionCommand(bcMotionEnd, "End", "Move to end of line", Motion.End)
   registry.registerMotionCommand(
     bcMotionFirstLine,
     "First Line",

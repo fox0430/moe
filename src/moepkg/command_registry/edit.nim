@@ -27,7 +27,7 @@ import pkg/results
 import
   ../[
     cursor_util, types, motion, modes, registers, logger, unicode_utils,
-    visual_selection, insert_record,
+    visual_selection,
   ]
 import ../buffer/[core, edit, fold, undo]
 
@@ -1026,31 +1026,25 @@ proc handleOperatorUpperCase*(
   setPendingOperator(ctx, OpUpperCase, count, countGiven, "gU")
   ok(())
 
+proc handleDeleteToEnd*(
+    registry: CommandRegistry, ctx: CommandContext, count = 1
+): Result[(), string] =
+  ## D: delete to the end of the line, or over the count's lines (`2D`), as
+  ## `d$` does.
+  ctx.startOperator(OpDelete)
+  registry.finishOperator(
+    ctx, Operand(kind: odMotion, motion: Motion.End, count: count, countGiven: true)
+  )
+
 proc handleChangeToEnd*(
     registry: CommandRegistry, ctx: CommandContext, count = 1
 ): Result[(), string] =
   ## C: change to the end of the line, or over the count's lines (`2C`), as
   ## `c$` does.
-  if count > 1:
-    ctx.startOperator(OpChange)
-    return registry.finishOperator(
-      ctx, Operand(kind: odMotion, motion: Motion.End, count: count, countGiven: true)
-    )
-  let
-    startPos = ctx.cursor
-    lineLen = ctx.buffer.getLine(startPos.line).charLen
-  # Empty line or cursor at/past end: just enter insert mode without deleting
-  if lineLen == 0 or startPos.column >= lineLen:
-    return ctx.beginInsert(InsertEntry(kind: ieChangeToEnd), 1)
-  let range = OperatorRange(
-    start: startPos,
-    endPos: BufferPosition(line: startPos.line, column: lineLen - 1),
-    isLinewise: false,
+  ctx.startOperator(OpChange)
+  registry.finishOperator(
+    ctx, Operand(kind: odMotion, motion: Motion.End, count: count, countGiven: true)
   )
-  let changed = executeOperatorOnRange(ctx, OpChange, range, 1)
-  if changed.isOk:
-    ctx.state.startInsertRecord(InsertEntry(kind: ieChangeToEnd), 1, ctx.register)
-  changed
 
 ## Text object command handlers
 
@@ -1632,8 +1626,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
           return handleSubstituteChar(ctx, count)
         of ieSubstituteLine:
           return handleSubstituteLine(ctx, count)
-        of ieChangeToEnd:
-          return registry.handleChangeToEnd(ctx, count)
         of ieChange:
           var operand = record.entry.operand
           if args.len > 0:
@@ -1909,34 +1901,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete To End Of Line",
     "Delete from cursor to end of line (D command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      # Calculate range from cursor to end of line
-      let startPos = ctx.cursor
-      let line = ctx.buffer.getLine(startPos.line)
-      let lineLen = line.charLen
-
-      # Empty line or cursor at/past end: nothing to delete
-      if lineLen == 0 or startPos.column >= lineLen:
-        return ok(())
-
-      # End at last character (same as d$ / Motion.End)
-      let endPos = BufferPosition(line: startPos.line, column: lineLen - 1)
-
-      let range = OperatorRange(start: startPos, endPos: endPos, isLinewise: false)
-
-      # Execute delete operation
-      let r = executeOperatorOnRange(ctx, OpDelete, range, 1)
-      if r.isOk:
-        # Record this command for repeat (.)
-        ctx.recordChange(
-          LastEditCommand(
-            kind: lecOperatorMotion,
-            operator: OpDelete,
-            operand: Operand(count: 1, kind: odMotion, motion: Motion.End),
-          )
-        )
-      return r,
+      registry.handleDeleteToEnd(ctx, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   # C - Change to end of line (equivalent to c$)

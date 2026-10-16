@@ -486,6 +486,7 @@ type
     HalfPageDown # Ctrl-d - scroll half page down
     Home
     FirstNonBlank # ^ - move to first non-whitespace character
+    LinewiseFirstNonBlank # _ - count-1 lines down, to the first non-blank (linewise)
     LastNonBlank # g_ - move to last non-whitespace character
     End
     FirstLine
@@ -630,8 +631,7 @@ type
     ieOpenAbove # O
     ieSubstitute # s
     ieSubstituteLine # S, cc
-    ieChangeToEnd # C
-    ieChange # c{motion}
+    ieChange # c{motion}, and C as c$
 
   InsertEntry* = object
     case kind*: InsertEntryKind
