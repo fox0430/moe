@@ -39,7 +39,7 @@ when not defined(moe.embedded):
 import
   ../[
     types, buffer, modes, key_bindings, keybind_config, filer, filetree, diff_viewer,
-    recent_file_mode, command_line, visual_selection, insert_record,
+    recent_file_mode, command_line, visual_selection, insert_record, wanted_column,
   ]
 
 when not defined(moe.embedded):
@@ -137,19 +137,20 @@ proc finalizeInsertInterrupt*(
   commitInsertModeBoundary(buffer, state)
 
 proc leaveInsertForCtrlO(state: EditorState, buffer: TextBuffer) =
-  ## Past the end of the line, Vim's Ctrl-o puts the cursor on the last
-  ## character for the Normal command, keeping its column for vertical
-  ## motions, and Insert goes back past the end if it resumes there
-  ## (ins_at_eol). Elsewhere the cursor stays where it is.
-  let lineLen = buffer.getLine(state.cursor.line).charLen
+  ## Vim's Ctrl-o keeps for vertical motions the column the cursor showed on
+  ## in Insert, a tab's first cell. Past the end of the line, it puts the
+  ## cursor on the last character for the Normal command, and Insert goes back
+  ## past the end if it resumes there (ins_at_eol). Elsewhere the cursor stays
+  ## where it is.
+  let
+    wanted = state.aimedColumn
+    lineLen = buffer.getLine(state.cursor.line).charLen
   if state.cursor.column < lineLen:
     state.insertResumeLineEnd = none(int)
-    return
-  state.insertResumeLineEnd = some(state.cursor.line)
-  if lineLen > 0:
-    let wanted = state.aimedColumn
-    state.cursor.column = lineLen - 1
-    state.preferredColumn = wanted
+  else:
+    state.insertResumeLineEnd = some(state.cursor.line)
+    state.cursor.column = max(0, lineLen - 1)
+  state.preferredColumn = wanted
 
 proc leaveInsert*(
     manager: HandlerManager, editor: Editor, target = EditorMode.Normal, thenExec = ""

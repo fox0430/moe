@@ -1269,8 +1269,8 @@ proc spot(win: EditorWindow): WindowSpot =
   )
 
 proc preferredColumn*(win: EditorWindow): int =
-  ## The column vertical moves aim for (Vim's curswant), or -1 to take the
-  ## cursor's.
+  ## The screen cell vertical moves aim for (Vim's curswant), or -1 to take
+  ## the cursor's.
   win.wantedColumn.get(-1)
 
 proc `preferredColumn=`*(win: EditorWindow, column: int) =
@@ -1280,35 +1280,6 @@ proc `preferredColumn=`*(win: EditorWindow, column: int) =
   else:
     win.wantedColumn = some(column)
     win.wantedColumnSince = win.spot
-
-proc aimedColumn*(win: EditorWindow): int =
-  ## The column vertical moves and scrolls aim for: the one kept, else the
-  ## cursor's, as Vim's update_curswant.
-  let wanted = win.preferredColumn
-  if wanted < 0: win.cursor.column else: wanted
-
-proc scrollCursor*(win: EditorWindow, to: BufferPosition) =
-  ## Move the cursor as a scroll does, which keeps the column it aimed for as
-  ## the one vertical moves want, as Vim keeps curswant.
-  if to == win.cursor:
-    return
-  let aimed = win.aimedColumn
-  win.cursor = to
-  win.preferredColumn = aimed
-
-proc scrollCursor*(win: EditorWindow, line: int) =
-  ## Move the cursor to `line` as a scroll does: onto the column it aims for,
-  ## as Vim's coladvance(curswant).
-  let lineLen =
-    if win.buffer.isNil or line < 0 or line >= win.buffer.len:
-      0
-    else:
-      win.buffer.getLineLen(line)
-  win.scrollCursor(
-    BufferPosition(
-      line: line, column: min(win.aimedColumn, maxCursorColumn(lineLen, win.mode))
-    )
-  )
 
 proc takeWantedColumn*(win, src: EditorWindow) =
   ## Start with the column `src` wants, as Vim's win_init copies curswant into
@@ -1401,9 +1372,6 @@ proc preferredColumn*(s: EditorState): int =
 proc `preferredColumn=`*(s: EditorState, v: int) =
   ## Set preferred column on the active window
   s.activeWindow.preferredColumn = v
-
-proc aimedColumn*(s: EditorState): int =
-  s.activeWindow.aimedColumn
 
 proc screenCursor*(s: EditorState): var CursorPosition =
   ## Get screen cursor from the active window (returns var for in-place mutation)

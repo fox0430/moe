@@ -310,8 +310,10 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
   let actualCount = max(1, count)
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
-  # Check if we're at or past the end of the line
+  # Check if we're at or past the end of the line. Vim's `dl` still drops
+  # curswant there.
   if ctx.cursor.column >= lineContent.charLen:
+    ctx.state.preferredColumn = -1
     return err("Nothing to delete")
 
   # Auto-delete adjacent paren pairs only (e.g., [] () {} "" '')
@@ -403,8 +405,10 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
   logDebug("delete", "handleDeleteCharBefore called with count=" & $count)
   let actualCount = max(1, count)
 
-  # Check if we're at the beginning of the line
+  # Check if we're at the beginning of the line. Vim's `dh` still drops
+  # curswant there.
   if ctx.cursor.column == 0:
+    ctx.state.preferredColumn = -1
     return err("Nothing to delete")
 
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)

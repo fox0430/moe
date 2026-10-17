@@ -50,7 +50,7 @@ from command_handlers/insert_handler import runAutoTrigger
 import
   config, git_cache, render_utils, logger, message_log, debug_viewer, completion,
   signature_help, hover_popup, notification_popup, unicode_utils, motion, buffer,
-  lsp_integration, editor_window_layout, editor_notify, macro_recording
+  lsp_integration, editor_window_layout, editor_notify, macro_recording, wanted_column
 
 export editor_notify
 
@@ -387,7 +387,7 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
       e.state.windowDisplay.scrollAnimation, e.config.smoothScroll, reservedLines,
       bufferLen,
     )
-    e.activeWindow.scrollCursor(cursorLine)
+    e.state.scrollCursor(cursorLine)
 
   # Keep the active cursor off lines hidden inside a collapsed fold. Many cursor
   # moves (search, :N, LSP jumps, mouse clicks, cursor restore on open) bypass

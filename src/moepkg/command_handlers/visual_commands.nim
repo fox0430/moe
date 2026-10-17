@@ -29,7 +29,7 @@ import pkg/results
 import
   ../[
     cursor_util, types, registers, motion, modes, config, unicode_utils,
-    visual_selection,
+    visual_selection, wanted_column,
   ]
 import ../buffer/[core, edit, undo]
 import insert_commands
@@ -100,8 +100,10 @@ proc moveVisualToLine(buffer: TextBuffer, state: EditorState, line: int) =
   if line == state.cursor.line:
     return
   let aimed = state.aimedColumn
-  state.cursor =
-    BufferPosition(line: line, column: min(aimed, buffer.getLine(line).charLen))
+  state.cursor = BufferPosition(
+    line: line,
+    column: buffer.getLine(line).columnAtCell(aimed, state.tabStop, state.mode),
+  )
   state.preferredColumn = aimed
 
 proc visualMoveUp*(buffer: TextBuffer, state: EditorState, count = 1) =
@@ -489,13 +491,15 @@ proc visualMoveEnd*(buffer: TextBuffer, state: EditorState, count = 1) =
   ## In Visual mode, cursor can be placed one past the last character
   ## (at column == lineLen) so the selection can include the newline
   ## and `d` can delete the entire line. Like Vim, a count from the last line
-  ## goes nowhere.
-  var line = state.cursor.line
-  if count > 1:
-    line = buffer.linesDown(line, count - 1)
-    if line == state.cursor.line:
-      return
-  state.cursor = BufferPosition(line: line, column: buffer.getLine(line).charLen)
+  ## goes nowhere. Vertical moves stick to line ends after it, even then.
+  let line =
+    if count > 1:
+      buffer.linesDown(state.cursor.line, count - 1)
+    else:
+      state.cursor.line
+  if count <= 1 or line != state.cursor.line:
+    state.cursor = BufferPosition(line: line, column: buffer.getLine(line).charLen)
+  state.preferredColumn = LineEnd
 
 proc visualMoveFirstNonBlank*(buffer: TextBuffer, state: EditorState) =
   ## Move to first non-whitespace character (^) and update selection

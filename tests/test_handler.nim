@@ -36,7 +36,7 @@ import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
     render_utils, clipboard, message_log, frontend_input, pending_input, key_router,
-    completion, signature_help, macro_recording,
+    completion, signature_help, macro_recording, wanted_column,
   ]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/editor_build_jobs {.all.}
@@ -6932,6 +6932,121 @@ suite "handleKeyCombo - the column vertical moves want":
       @["q", "a", "l", "j", "q", "k", "4", "l", "@", "a", "j", "i"],
       "abcdefZghij",
     ),
+    # The column is a screen cell from the line start (tabstop 2 here).
+    (
+      "a tab on the way keeps the screen column",
+      "\tbcdef\nabcdefgh",
+      @["l", "j", "i"],
+      "abZcdefgh",
+    ),
+    (
+      "the cursor on a tab aims for its last cell",
+      "\tbcdef\nabcdefgh",
+      @["j", "i"],
+      "aZbcdefgh",
+    ),
+    (
+      "a wide character on the way keeps the screen column",
+      "日本語x\nabcdefgh",
+      @["l", "j", "i"],
+      "abZcdefgh",
+    ),
+    (
+      "a vertical move into a wide character lands on it",
+      "abcdefgh\n日本語x\nabcdefgh",
+      @["3", "l", "j", "i"],
+      "日Z本語x",
+    ),
+    (
+      "Insert aims for a tab's first cell",
+      "\tbcdef\nabcdefgh",
+      @["i", "Down"],
+      "Zabcdefgh",
+    ),
+    (
+      "a scroll that pushes the cursor off a tab aims for its last cell",
+      "\tb\nabcdefgh\n" & "x\n".repeat(30),
+      @["C-e", "i"],
+      "aZbcdefgh",
+    ),
+    (
+      "$ makes vertical moves stick to line ends",
+      "abc\nab\nabcdefgh",
+      @["$", "j", "j", "a"],
+      "abcdefghZ",
+    ),
+    (
+      "$ sticks to line ends even with a count past the last line",
+      "abcdefgh\nab\nab",
+      @["G", "9", "$", "k", "k", "a"],
+      "abcdefghZ",
+    ),
+    (
+      "$ on an empty line sticks to line ends",
+      "abcdefgh\n\nabcdefgh",
+      @["j", "$", "j", "a"],
+      "abcdefghZ",
+    ),
+    (
+      "Insert <End> makes vertical moves stick to line ends",
+      "abc\nab\nabcdefgh",
+      @["i", "End", "Down", "Down"],
+      "abcdefghZ",
+    ),
+    (
+      "a scroll that pushes the cursor after $ keeps it on line ends",
+      "abcdefgh\nab\nabcdefghij\n" & "x\n".repeat(30),
+      @["$", "C-e", "C-e", "a"],
+      "abcdefghijZ",
+    ),
+    (
+      "g_ takes it again",
+      "abcdefgh\nab\nabcdefgh",
+      @["$", "j", "g", "_", "k", "a"],
+      "abZcdefgh",
+    ),
+    (
+      "g_ sticks to line ends when its count goes past the last line",
+      "abcdefgh\nab\nab",
+      @["G", "9", "g", "_", "k", "k", "a"],
+      "abcdefghZ",
+    ),
+    (
+      "g_ goes count - 1 lines down",
+      "abc  \nab  \nabcdefgh",
+      @["2", "g", "_", "a"],
+      "abZ  ",
+    ),
+    (
+      "going back to Insert after <C-o>$ goes past the end",
+      "abcdef\nab",
+      @["i", "C-o", "$"],
+      "abcdefZ",
+    ),
+    (
+      "a <C-o> command aims for the cell Insert showed",
+      "abcdefgh\n日\tx",
+      @["j", "l", "i", "C-o", "k"],
+      "abZcdefgh",
+    ),
+    (
+      "going back to Insert compares the column with the cell Insert shows",
+      "abcdef\n\t",
+      @["l", "i", "C-o", "j"],
+      "\tZ",
+    ),
+    (
+      "x on an empty line takes it again",
+      "abcdefgh\n\nabcdefgh",
+      @["7", "l", "j", "x", "j", "i"],
+      "Zabcdefgh",
+    ),
+    (
+      "yl on an empty line takes it again",
+      "abcdefgh\n\nabcdefgh",
+      @["7", "l", "j", "y", "l", "j", "i"],
+      "Zabcdefgh",
+    ),
   ]:
     test name & ", as in Vim":
       let e = createEditorForColumn(content)
@@ -6940,6 +7055,49 @@ suite "handleKeyCombo - the column vertical moves want":
         check e.handleKeyCombo(parseKeyCombo(key).get)
 
       check e.activeBuffer.getLine(e.cursor.line) == typed
+
+  for (name, content, keys, lines) in [
+    (
+      "v$ makes vertical moves stick to line ends",
+      "abc\nabcdefgh\nab",
+      @["v", "$", "j", "d"],
+      @["ab"],
+    ),
+    (
+      "Visual keeps the line end $ made",
+      "abcdef\nab\nabcdefghij",
+      @["$", "v", "j", "j", "d"],
+      @["abcde"],
+    ),
+    (
+      "Visual started on a tab aims for its last cell, as Normal showed it",
+      "a\t\tb\nabcdefghijkl",
+      @["2", "l", "v", "j", "d"],
+      @["a\tefghijkl"],
+    ),
+    (
+      "Visual back on its start aims for a tab's first cell",
+      "a\t\tb\nabcdefghijkl",
+      @["2", "l", "v", "l", "h", "j", "d"],
+      @["a\tdefghijkl"],
+    ),
+    (
+      "Visual back on its start from past the end aims for a tab's first cell",
+      "a\t\t\nabcdefghijkl",
+      @["2", "l", "v", "$", "h", "j", "d"],
+      @["a\tdefghijkl"],
+    ),
+  ]:
+    test name & ", as in Vim":
+      let e = createEditorForColumn(content)
+
+      for key in keys:
+        check e.handleKeyCombo(parseKeyCombo(key).get)
+
+      var got: seq[string]
+      for i in 0 ..< e.activeBuffer.len:
+        got.add e.activeBuffer.getLine(i)
+      check got == lines
 
   test "a smooth half-page scroll keeps it as the plain one does":
     let e = createEditorForColumn("ab\n" & "abcdefgh\n".repeat(60))
@@ -7037,7 +7195,7 @@ suite "handleKeyCombo - the column vertical moves want":
 
   test "a command that puts another buffer in the window takes it again":
     let e = createEditorForColumn("abcdefgh\nab")
-    e.press("$", "j")
+    e.press("7", "l", "j")
     let win = e.activeWindow
     let at = win.cursor
     require win.preferredColumn == 7
@@ -7123,7 +7281,7 @@ suite "handleKeyCombo - the column vertical moves want":
     e.press("$", "j")
     let win = e.activeWindow
     e.asCommand:
-      win.scrollCursor(BufferPosition(line: 2, column: 7))
+      e.state.scrollCursor(BufferPosition(line: 2, column: 7))
       win.cursor = BufferPosition(line: 2, column: 2)
 
     check win.preferredColumn == -1

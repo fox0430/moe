@@ -26,7 +26,8 @@ import std/[options, unicode, monotimes, times]
 
 import pkg/results
 
-import cursor_util, types, unicode_utils, logger, render_utils, config, modes
+import
+  cursor_util, types, unicode_utils, logger, render_utils, config, modes, wanted_column
 import buffer/[core, edit, fold, undo]
 import visible_rows
 
@@ -870,7 +871,11 @@ proc landMotion*(
     else:
       at(e.moveFirstNonBlank(down.get), mtLinewise)
   of Motion.LastNonBlank:
-    at(e.moveLastNonBlank(currentPos), mtInclusive)
+    let down = countLinesDown()
+    if down.isNone:
+      stuck(mtInclusive)
+    else:
+      at(e.moveLastNonBlank(down.get), mtInclusive)
   of Motion.End:
     let down = countLinesDown()
     if down.isNone:
@@ -1243,10 +1248,11 @@ const
     Motion.HalfPageDown,
   } ## Motions that aim for the wanted column (Vim's curswant).
   LineEdgeMotions = {
-    Motion.Home, Motion.FirstNonBlank, Motion.LinewiseFirstNonBlank, Motion.End,
-    Motion.FirstLine, Motion.LastLine, Motion.ViewportHigh, Motion.ViewportMiddle,
-    Motion.ViewportLow, Motion.NextLineFirstNonBlank, Motion.PreviousLineFirstNonBlank,
-  } ## Motions onto a line's start or end.
+    Motion.Home, Motion.FirstNonBlank, Motion.LinewiseFirstNonBlank,
+    Motion.LastNonBlank, Motion.FirstLine, Motion.LastLine, Motion.ViewportHigh,
+    Motion.ViewportMiddle, Motion.ViewportLow, Motion.NextLineFirstNonBlank,
+    Motion.PreviousLineFirstNonBlank,
+  } ## Motions onto a line's start or end, other than `$`.
 
 proc landMotion*(
     controller: MotionController,
@@ -1257,12 +1263,10 @@ proc landMotion*(
 ): MotionLanding =
   ## Where `cmd` takes the cursor from `start`, how `operator`, when one
   ## waits, takes the text up to there, and whether the motion fails. A
-  ## vertical motion aims for `aimedColumn`, or for the column of `start` when
-  ## it is -1. Leaves the viewport alone. Only a cursor move is kept on the
-  ## line and out of closed folds; an operator widens over folds itself.
-  let effectiveX =
-    if cmd.motion in VerticalMotions and aimedColumn >= 0: aimedColumn else: start.column
-
+  ## vertical motion aims for the screen cell `aimedColumn`, or for the cell
+  ## `start` begins at when it is -1. Leaves the viewport alone. Only a cursor
+  ## move is kept on the line and out of closed folds; an operator widens over
+  ## folds itself.
   let
     actualReservedLines = controller.cursorManager.state.motionReservedLines()
     lineWrap = controller.cursorManager.state.effectiveLineWrap()
@@ -1277,7 +1281,7 @@ proc landMotion*(
     )
 
   result = controller.executor.landMotion(
-    CursorPosition(x: effectiveX, y: start.line),
+    CursorPosition(x: start.column, y: start.line),
     cmd,
     controller.viewportManager.viewport.height,
     controller.viewportManager.viewport.topLine,
@@ -1287,12 +1291,21 @@ proc landMotion*(
     controller.viewportManager.viewport.topWrapOffset,
     operator,
   )
-  # A failed motion that did not move stays where it started, even off the
-  # aimed column.
-  if result.failed and result.pos == BufferPosition(
-    line: start.line, column: effectiveX
-  ):
-    result.pos = start
+  # A vertical motion that failed stays where it started, off the aimed column.
+  let buffer = controller.executor.buffer
+  if cmd.motion in VerticalMotions and not result.failed and
+      result.pos.line in 0 ..< buffer.len and start.line in 0 ..< buffer.len:
+    let
+      state = controller.cursorManager.state
+      aimed =
+        if aimedColumn >= 0:
+          aimedColumn
+        else:
+          buffer.getLine(start.line).cursorCell(
+            start.column, state.tabStop, onTabEnd = false
+          )
+    result.pos.column =
+      buffer.getLine(result.pos.line).columnAtCell(aimed, state.tabStop, state.mode)
   if operator.isNone:
     let clamped = controller.cursorManager.clampPosition(
       CursorPosition(x: result.pos.column, y: result.pos.line),
@@ -1308,8 +1321,8 @@ proc executeMotion*(
     aimedColumn = -1,
 ): MotionLanding =
   ## Execute motion and return where the cursor goes. A failed motion leaves
-  ## the cursor as far as it went. A vertical motion aims for `aimedColumn`, or
-  ## for the column of `currentCursorPos` when it is -1.
+  ## the cursor as far as it went. A vertical motion aims for the screen cell
+  ## `aimedColumn`, or for the cell `currentCursorPos` begins at when it is -1.
   result = controller.landMotion(cmd, currentCursorPos, aimedColumn = aimedColumn)
   let newPos = CursorPosition(x: result.pos.column, y: result.pos.line)
 
@@ -1335,10 +1348,11 @@ proc moveCursorByMotion*(
     updateViewport: bool = true,
 ): Result[BufferPosition, string] =
   ## Move the cursor of `state` by `cmd`. A vertical motion keeps the column it
-  ## aimed for, as Vim keeps curswant. Another motion drops it when it moves the
+  ## aimed for, as Vim keeps curswant. `$` makes vertical moves stick to line
+  ## ends, even when its count goes past the last line, as Vim's nv_dollar;
+  ## `g_` does too only then. Another motion drops the column when it moves the
   ## cursor, or even in place onto a line's start or end, as Vim's beginline
-  ## does; one that fails in place keeps it (`2_` on the last line). `$` drops
-  ## it too, where Vim makes vertical moves stick to line ends.
+  ## does; one that fails in place keeps it (`2_` on the last line).
   let
     start = state.cursor
     aimed = state.aimedColumn
@@ -1346,6 +1360,10 @@ proc moveCursorByMotion*(
   state.cursor = landing.pos
   if cmd.motion in VerticalMotions:
     state.preferredColumn = aimed
+  elif cmd.motion == Motion.End or (
+    cmd.motion == Motion.LastNonBlank and landing.failed
+  ):
+    state.preferredColumn = LineEnd
   elif landing.pos != start or (cmd.motion in LineEdgeMotions and not landing.failed):
     state.preferredColumn = -1
   ok(landing.pos)
