@@ -34,6 +34,7 @@ type
     # Motion commands
     bcMotionLeft = "motion.left"
     bcMotionRight = "motion.right"
+    bcMotionBackspace = "motion.backspace"
     bcMotionUp = "motion.up"
     bcMotionDown = "motion.down"
     bcMotionPageUp = "motion.pageup"

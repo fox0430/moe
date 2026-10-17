@@ -115,7 +115,7 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   ("End", "line-end"),
   ("PageUp", "page-up"),
   ("PageDown", "page-down"),
-  ("Backspace", "move-left"),
+  ("Backspace", "move-backspace"),
   ("Enter", "next-line-first-non-blank"),
 ]
 

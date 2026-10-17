@@ -19,12 +19,11 @@
 
 ## Tests for motion.nim
 
-import std/[unittest, strutils, monotimes]
+import std/[unittest, strutils, monotimes, options]
 
 import pkg/results
 
-import ../src/moepkg/unicode_utils
-import ../src/moepkg/types
+import ../src/moepkg/[unicode_utils, types, modes]
 import ../src/moepkg/types/config_types
 import ../src/moepkg/buffer/[core, fold]
 import ../src/moepkg/motion {.all.}
@@ -124,6 +123,65 @@ suite "Basic Motion - Left/Right":
     let currentPos = CursorPosition(x: 4, y: 0)
     let result = executor.moveRight(currentPos, 1)
     check result.x == 4 # Should stay at last character
+
+suite "Backspace Motion - whichwrap b":
+  test "Backspace at column 0 wraps to previous line end":
+    let buffer = newTextBuffer("abc\ndef")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.move(CursorPosition(x: 0, y: 1), Motion.Backspace, 1)
+    check result == CursorPosition(x: 2, y: 0)
+
+  test "Backspace within line moves left":
+    let buffer = newTextBuffer("abc\ndef")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.move(CursorPosition(x: 2, y: 0), Motion.Backspace, 1)
+    check result == CursorPosition(x: 1, y: 0)
+
+  test "Backspace at first line stays":
+    let buffer = newTextBuffer("abc\ndef")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.move(CursorPosition(x: 0, y: 0), Motion.Backspace, 1)
+    check result == CursorPosition(x: 0, y: 0)
+
+  test "Backspace with count wraps across lines":
+    let buffer = newTextBuffer("abc\ndef")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.move(CursorPosition(x: 1, y: 1), Motion.Backspace, 2)
+    check result == CursorPosition(x: 2, y: 0)
+
+  test "Backspace from empty line wraps to previous line end":
+    let buffer = newTextBuffer("abc\n\ndef")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.move(CursorPosition(x: 0, y: 1), Motion.Backspace, 1)
+    check result == CursorPosition(x: 2, y: 0)
+
+  test "Backspace in Visual mode wraps past line end":
+    let buffer = newTextBuffer("abc\ndef")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.calculateNewPosition(
+      CursorPosition(x: 0, y: 1),
+      MotionCommand(motion: Motion.Backspace, count: 1),
+      mode = EditorMode.Visual,
+    )
+    check result == CursorPosition(x: 3, y: 0)
+
+  test "Left at column 0 does not wrap":
+    let buffer = newTextBuffer("abc\ndef")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.move(CursorPosition(x: 0, y: 1), Motion.Left, 1)
+    check result == CursorPosition(x: 0, y: 1)
+
+  test "Backspace with operator wraps":
+    let buffer = newTextBuffer("abc\ndef")
+    let executor = newMotionExecutor(buffer)
+    let landing = executor.landMotion(
+      CursorPosition(x: 0, y: 1),
+      MotionCommand(motion: Motion.Backspace, count: 1),
+      operator = some(OpDelete),
+    )
+    check landing.pos == BufferPosition(line: 0, column: 2)
+    check landing.motionType == mtExclusive
+    check not landing.failed
 
 suite "Basic Motion - Up/Down":
   test "moveDown from first line":
