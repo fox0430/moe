@@ -205,6 +205,40 @@ proc moveDown(
   result = currentPos
   result.y = e.buffer.linesDown(currentPos.y, count)
 
+proc moveBackspace(
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    count: int,
+    mode: EditorMode = EditorMode.Normal,
+): CursorPosition =
+  ## <BS> in Normal/Visual, like Left but wraps to the previous line (Vim 'whichwrap' b).
+  result = currentPos
+  if e.buffer.isNil or e.buffer.len == 0:
+    return
+  if currentPos.y < 0 or currentPos.y >= e.buffer.len:
+    return
+  var remaining = max(1, count)
+  while remaining > 0:
+    if result.x > 0:
+      if result.x >= remaining:
+        result.x -= remaining
+        remaining = 0
+      elif result.y <= 0:
+        result.x = 0
+        remaining = 0
+      else:
+        let prev = e.buffer.linesUp(result.y, 1)
+        remaining -= result.x + 1
+        result.y = prev
+        result.x = maxCursorColumn(e.buffer.lineRunesNoNl(prev).len, mode)
+    else:
+      if result.y <= 0:
+        break
+      let prev = e.buffer.linesUp(result.y, 1)
+      result.y = prev
+      result.x = maxCursorColumn(e.buffer.lineRunesNoNl(prev).len, mode)
+      dec remaining
+
 proc pageTarget(
     e: MotionExecutor, rl: RowLayout, currentPos: CursorPosition, rows: int
 ): int =
@@ -844,6 +878,8 @@ proc landMotion*(
   case cmd.motion
   of Motion.Left:
     at(e.moveLeft(currentPos, cmd.count), mtExclusive)
+  of Motion.Backspace:
+    at(e.moveBackspace(currentPos, cmd.count, mode), mtExclusive)
   of Motion.Right:
     if operator.isSome:
       e.buffer.rightForOperator(start, cmd.count)

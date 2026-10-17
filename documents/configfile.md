@@ -664,6 +664,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | Command | Description |
 |:----|:----|
 | move-left | Move cursor left |
+| move-backspace | Move cursor left, wrapping to the previous line |
 | move-right | Move cursor right |
 | move-up | Move cursor up |
 | move-down | Move cursor down |
@@ -810,6 +811,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | Command | Description |
 |:----|:----|
 | visual-move-left | Move left in visual mode |
+| visual-move-backspace | Move left in visual mode, wrapping to the previous line |
 | visual-move-right | Move right in visual mode |
 | visual-move-up | Move up in visual mode |
 | visual-move-down | Move down in visual mode |

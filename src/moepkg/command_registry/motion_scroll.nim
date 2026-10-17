@@ -354,6 +354,10 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     bcMotionLeft, "Move Left", "Move cursor left", Motion.Left
   )
   registry.registerMotionCommand(
+    bcMotionBackspace, "Move Backspace",
+    "Move cursor left, wrapping to the previous line", Motion.Backspace,
+  )
+  registry.registerMotionCommand(
     bcMotionRight, "Move Right", "Move cursor right", Motion.Right
   )
   registry.registerMotionCommand(bcMotionUp, "Move Up", "Move cursor up", Motion.Up)
