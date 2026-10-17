@@ -188,6 +188,8 @@ proc executeCommand*(
         ctx, motion, last.targetChar, max(1, cmd.count), isRepeat = true
       )
 
+    # Bare G targets the last line, so a missing count is the 0 sentinel;
+    # bare gg and 1gg both target line 1, so FirstLine needs no such case.
     let motionCount =
       if cmd.motion == Motion.LastLine and not cmd.hasCount: 0 else: cmd.count
     let motionCmd = MotionCommand(motion: cmd.motion, count: motionCount)

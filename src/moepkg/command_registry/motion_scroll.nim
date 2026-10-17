@@ -383,7 +383,7 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     "First Line",
     "Move to first line",
     Motion.FirstLine,
-    false,
+    acceptsCount = true,
     shouldRecordJump = true,
   )
   registry.registerMotionCommand(
