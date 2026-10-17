@@ -322,9 +322,14 @@ proc movePreviousLineFirstNonBlank(
   if result.y >= 0 and result.y < e.buffer.len:
     result.x = firstNonBlankColumn(e.buffer.getLine(result.y))
 
-proc moveFirstLine(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
+proc moveFirstLine(
+    e: MotionExecutor, currentPos: CursorPosition, count: int = 1
+): CursorPosition =
+  ## Bare gg and 1gg both go to the first line, so count 1 is the default.
   result = currentPos
-  result.y = 0
+  if e.buffer.len == 0:
+    return
+  result.y = clamp(count - 1, 0, e.buffer.len - 1)
   result.x = 0
 
 proc moveLastLine(
@@ -881,7 +886,7 @@ proc landMotion*(
     else:
       at(e.moveEnd(down.get, mode), mtInclusive)
   of Motion.FirstLine:
-    at(e.moveFirstLine(currentPos), mtLinewise)
+    at(e.moveFirstLine(currentPos, cmd.count), mtLinewise)
   of Motion.LastLine:
     at(e.moveLastLine(currentPos, cmd.count), mtLinewise)
   of Motion.FindChar, Motion.FindCharBackward, Motion.TillChar, Motion.TillCharBackward:

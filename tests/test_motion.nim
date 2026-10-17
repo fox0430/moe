@@ -444,6 +444,38 @@ suite "First/Last Line Motion":
     let result = executor.moveLastLine(currentPos, 1)
     check result.y == 0
 
+  test "moveFirstLine with count 1 goes to first line (1gg)":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 2, y: 2)
+    let result = executor.moveFirstLine(currentPos, 1)
+    check result.y == 0
+    check result.x == 0
+
+  test "moveFirstLine with count goes to specific line":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 2, y: 0)
+    let result = executor.moveFirstLine(currentPos, 3)
+    check result.y == 2
+    check result.x == 0
+
+  test "moveFirstLine with count exceeding buffer clamps to last line":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveFirstLine(currentPos, 99)
+    check result.y == 2
+    check result.x == 0
+
+  test "FirstLine motion with count lands on counted line":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 2, y: 4)
+    let result = executor.move(currentPos, Motion.FirstLine, 3)
+    check result.y == 2
+    check result.x == 0
+
 suite "Matching Bracket":
   test "moveToMatchingBracket forward":
     let buffer = newTextBuffer("(hello)")

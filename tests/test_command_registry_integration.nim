@@ -182,6 +182,30 @@ suite "executeCommand - Motion commands":
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.line == 1
 
+  test "1gg goes to line 1":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 4, column: 2)
+    let registry = createTestRegistry()
+
+    let cmd =
+      Command(kind: ctMotion, motion: Motion.FirstLine, count: 1, hasCount: true)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor.line == 0
+
+  test "3gg goes to line 3":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 4, column: 2)
+    let registry = createTestRegistry()
+
+    let cmd =
+      Command(kind: ctMotion, motion: Motion.FirstLine, count: 3, hasCount: true)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor.line == 2
+
 suite "executeCommand - Mode switch commands":
   test "switch to Insert mode":
     let buffer = newTextBuffer("hello")
@@ -5381,6 +5405,16 @@ suite "Handler - Basic Motion Commands":
     check registry.execute(ctx, builtin(bcMotionFirstLine)).isOk
     check ctx.cursor.line == 0
 
+  test "motion first line with count (3gg)":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(4, 2)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcMotionFirstLine), @["3"]).isOk
+    check ctx.cursor.line == 2
+
   test "motion last line (G)":
     let buffer = newTextBuffer("line1\nline2\nline3")
     let ctx = createTestContext(buffer)
@@ -7422,6 +7456,23 @@ suite "Operator + Paragraph/File motions":
     )
 
     let cmd = Command(kind: ctMotion, motion: Motion.FirstLine, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "line4"
+    check buffer.len == 1
+
+  test "delete to line 1 (d1gg) from lower line":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(2, 0)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd =
+      Command(kind: ctMotion, motion: Motion.FirstLine, count: 1, hasCount: true)
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "line4"
