@@ -58,11 +58,19 @@ type
     newMode*: Option[EditorMode]
     handled*: bool
 
+proc restsPastLineEnd*(mode: EditorMode): bool =
+  ## Whether the cursor may rest one past the last character (on the line
+  ## break): Insert, Replace and Visual, as Vim's check_cursor_col and
+  ## adjust_cursor allow with the default 'selection'.
+  mode in {
+    EditorMode.Insert, EditorMode.Replace, EditorMode.Visual, EditorMode.VisualBlock,
+    EditorMode.VisualLine,
+  }
+
 proc maxCursorColumn*(lineCharLen: int, mode: EditorMode): int =
   ## Rightmost column the cursor may occupy on a line of `lineCharLen`
-  ## characters. Insert/Replace let it rest one past the last character (end of
-  ## line); other modes stop on the last character.
-  if mode in {EditorMode.Insert, EditorMode.Replace}:
+  ## characters.
+  if mode.restsPastLineEnd:
     lineCharLen
   else:
     max(0, lineCharLen - 1)

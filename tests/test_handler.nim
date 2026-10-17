@@ -1570,6 +1570,7 @@ proc createTestEditorWithBuffer(content: string): Editor =
   result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
   result.motionController.viewportManager.viewport = result.viewport
+  result.motionController.bindToWindow(result.activeWindow)
   result.state.mode = EditorMode.Normal
 
 proc makeWheelEvent(button: MouseButton, x, y: int): Event =
@@ -9533,3 +9534,82 @@ suite "handleKeyCombo - a count and the shape of a motion, as in Vim":
 
       checkpoint($keys)
       check e.activeWindow.cursor.column == 10
+
+suite "handleKeyCombo - Visual mode moves by Normal's motions, as in Vim":
+  # Expectations are Vim 9.2's.
+  proc createEditorForVisual(content: string, line = 0, column = 0): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.activeWindow.cursor = BufferPosition(line: line, column: column)
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc at(line, column: int): BufferPosition =
+    BufferPosition(line: line, column: column)
+
+  const Text = "foo(bar) baz\n  qux end  \nlast a"
+
+  test "the motions Normal mode has extend the selection":
+    for (line, column, keys, register) in [
+      (0, 0, @["v", "f", ")", "y"], "foo(bar)"),
+      (0, 0, @["v", "t", ")", "y"], "foo(bar"),
+      (0, 0, @["v", "2", "f", "a", "y"], "foo(bar) ba"),
+      (0, 0, @["v", "f", "a", ";", "y"], "foo(bar) ba"),
+      (0, 0, @["v", "f", "a", ";", ",", "y"], "foo(ba"),
+      (0, 3, @["v", "F", "f", "y"], "foo("),
+      (0, 3, @["v", "%", "y"], "(bar)"),
+      (1, 4, @["v", "g", "_", "y"], "x end"),
+      (0, 3, @["v", "+", "y"], "(bar) baz\n  q"),
+      (1, 4, @["v", "-", "y"], "foo(bar) baz\n  qux"),
+      (0, 3, @["v", "n", "y"], "(ba"),
+      (1, 4, @["v", "2", "n", "y"], "x end  \nlast a"),
+      (0, 3, @["V", "2", "_", "y"], "foo(bar) baz\n  qux end  \n"),
+    ]:
+      let e = createEditorForVisual(Text, line, column)
+      e.state.input.search.last.pattern = "a"
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "the cursor rests on the line break, which the selection takes":
+    for (line, column, keys, cursor, register) in [
+      (0, 3, @["v", "9", "l"], at(0, 12), "(bar) baz\n"),
+      (0, 0, @["v", "$"], at(0, 12), "foo(bar) baz\n"),
+      (0, 0, @["v", "j", "$"], at(1, 11), "foo(bar) baz\n  qux end  \n"),
+      (2, 2, @["v", "w", "w"], at(2, 6), "st a"),
+    ]:
+      let e = createEditorForVisual(Text, line, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.state.mode == EditorMode.Visual
+      check e.activeWindow.cursor == cursor
+      e.press("y")
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "Esc leaves the line break for the last character":
+    let e = createEditorForVisual(Text)
+
+    e.press("v", "$", "Escape")
+
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.cursor == at(0, 11)
+
+  test "the earlier visual-move-* names still run the motion":
+    let e = createEditorForVisual(Text)
+    let registry = e.keyRouter.registry
+    for name in ["visual-move-end", "visual-move-word", "visual-move-down"]:
+      check registry.commandRegistry.hasKey(name)
+      check registry.commandRegistry[name].kind == ctMotion

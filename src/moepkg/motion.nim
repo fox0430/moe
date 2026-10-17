@@ -139,8 +139,7 @@ proc moveRight(
         $lineByteLen,
     )
 
-    # Move right by character count, not byte count. Insert/Replace may rest one
-    # past the last character (end of line); other modes stop on it.
+    # Move right by character count, not byte count.
     let maxPos = maxCursorColumn(lineCharLen, mode)
     let newX = min(currentPos.x + count, maxPos)
     logDebug(
@@ -297,7 +296,6 @@ proc moveEnd(
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     let lineCharLen = e.buffer.getLine(currentPos.y).charLen
-    # Insert/Replace land at end of line; other modes on the last character.
     result.x = maxCursorColumn(lineCharLen, mode)
 
 proc moveNextLineFirstNonBlank(
@@ -526,10 +524,10 @@ proc landWord(
 ): MotionLanding =
   ## Vim's adjust_cursor: a word motion that went forward onto the end of a
   ## line steps back onto its last character, which an operator then takes.
-  ## Insert/Replace may rest there.
+  ## Insert, Replace and Visual may rest there.
   result = MotionLanding(pos: w.pos, motionType: motionType)
   if start < w.pos and w.pos.column > 0 and w.pos.column >= w.runes.len and
-      mode notin {EditorMode.Insert, EditorMode.Replace}:
+      not mode.restsPastLineEnd:
     result.pos.column -= 1
     result.motionType = mtInclusive
 
@@ -993,8 +991,6 @@ proc clampPosition*(
   # Clamp column - ensure line index is valid before accessing
   if result.y >= 0 and result.y < buf.len:
     let lineCharLen = buf.getLine(result.y).charLen # character count, not bytes
-    # Insert/Replace may rest one past the last character (end of line); other
-    # modes keep the cursor on the last character.
     let maxCol =
       maxCursorColumn(lineCharLen, if mode.isSome: mode.get else: mgr.state.mode)
     if result.x > maxCol:

@@ -68,6 +68,10 @@ proc setCursor(ctx: CommandContext, line, column: int) =
   ## Set cursor position on the state
   ctx.state.cursor = BufferPosition(line: line, column: column)
 
+proc motionCommand(motion: Motion, count = 0): Command =
+  ## `motion` as its key runs it, with `count` typed before it unless 0.
+  Command(kind: ctMotion, motion: motion, count: max(1, count), hasCount: count > 0)
+
 proc setupVisual(
     ctx: CommandContext, startLine, startCol, endLine, endCol: int, kind = vskChar
 ) =
@@ -4567,14 +4571,14 @@ suite "Handler - Clipboard operations":
     check buffer[0] == "heorld"
     check ctx.state.visualSelection.active == false
 
-suite "Handler - Visual Paragraph motion":
+suite "Handler - Visual Paragraph motion (Normal's motion in Visual mode)":
   test "visual move paragraph forward":
     let buffer = newTextBuffer("line1\nline2\n\nline4\nline5")
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 0, 0)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveParagraphForward)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.ParagraphForward)).isOk
     # Cursor should move to blank line or past it
     check ctx.state.cursor.line >= 2
 
@@ -4584,7 +4588,7 @@ suite "Handler - Visual Paragraph motion":
     ctx.setupVisual(4, 0, 4, 0)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveParagraphBackward)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.ParagraphBackward)).isOk
     # Cursor should move to blank line or before it
     check ctx.state.cursor.line <= 2
 
@@ -4594,7 +4598,7 @@ suite "Handler - Visual Paragraph motion":
     ctx.setupVisual(0, 0, 0, 0)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveParagraphForward), @["2"]).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.ParagraphForward, 2)).isOk
     # Should move past 2 paragraph boundaries
     check ctx.state.cursor.line >= 3
 
@@ -4844,14 +4848,14 @@ suite "Handler - Visual mode extended operations":
     check registry.execute(ctx, builtin(bcVisualPaste)).isOk
     # Result depends on implementation - just check it succeeded
 
-suite "Handler - Visual Move Commands":
+suite "Handler - Normal's motions in Visual mode":
   test "visual move left":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 0, 5)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveLeft)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.Left)).isOk
     # Cursor should have moved left
     check ctx.state.cursor.column == 4
 
@@ -4861,7 +4865,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 0, 5)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveRight)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.Right)).isOk
     # Cursor should have moved right
     check ctx.state.cursor.column == 6
 
@@ -4871,7 +4875,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 1, 2)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveUp)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.Up)).isOk
     check ctx.state.cursor.line == 0
 
   test "visual move down":
@@ -4880,7 +4884,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 1, 2)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveDown)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.Down)).isOk
     check ctx.state.cursor.line == 2
 
   test "visual move home (0)":
@@ -4889,7 +4893,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 4, 0, 8)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveHome)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.Home)).isOk
     check ctx.state.cursor.column == 0
 
   test "visual move end ($)":
@@ -4898,7 +4902,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 0, 3)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveEnd)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.End)).isOk
     # In Visual mode, cursor can go one past the last character (== lineLen)
     # so the selection can include the newline.
     check ctx.state.cursor.column == 11
@@ -4909,7 +4913,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 8, 0, 10)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveFirstNonBlank)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.FirstNonBlank)).isOk
     check ctx.state.cursor.column == 4 # First non-blank
 
   test "visual move first line (gg)":
@@ -4918,7 +4922,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(1, 0, 2, 2)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveFirstLine)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.FirstLine)).isOk
     check ctx.state.cursor.line == 0
 
   test "visual move last line (G)":
@@ -4927,7 +4931,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 1, 2)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveLastLine)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.LastLine)).isOk
     check ctx.state.cursor.line == 2 # Last line
 
   test "visual 1G goes to line 1, not last line":
@@ -4936,7 +4940,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(2, 0, 2, 0)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveLastLine), @["1"]).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.LastLine, 1)).isOk
     check ctx.state.cursor.line == 0
 
   test "visual move word (w)":
@@ -4945,7 +4949,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 0, 0)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveWord)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.WordForward)).isOk
     check ctx.state.cursor.column == 6 # Start of "world"
 
   test "visual move word back (b)":
@@ -4954,7 +4958,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 6, 0, 10)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveWordBack)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.WordBackward)).isOk
     check ctx.state.cursor.column == 6 # Back to "world"
 
   test "visual move word end (e)":
@@ -4963,7 +4967,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 0, 0)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcVisualMoveWordEnd)).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.WordEnd)).isOk
     check ctx.state.cursor.column == 4 # End of "hello"
 
 suite "Handler - Insert Mode Operations":
@@ -8315,14 +8319,9 @@ suite "executeCommand - read-only gate allowlists stay in sync":
     # other direction: a new visual binding fails until it is gated or listed.
     const VisualNonEditCommandIds = [
       # Selection-only or non-buffer commands: safe on a read-only buffer.
-      "fold.create", "lsp.selection.range", "macro.record", "textobject.around",
-      "textobject.inner", "visual.move.down", "visual.move.end",
-      "visual.move.firstline", "visual.move.firstnonblank", "visual.move.home",
-      "visual.move.lastline", "visual.move.left", "visual.move.paragraph.backward",
-      "visual.move.paragraph.forward", "visual.move.right", "visual.move.up",
-      "visual.move.word", "visual.move.word.back", "visual.move.word.end",
-      "visual.move.word.end.backward", "visual.reselect", "visual.swap.selection",
-      "visual.yank",
+      "fold.create", "lsp.selection.range", "macro.record", "search.next",
+      "search.prev", "search.word.backward", "search.word.forward", "textobject.around",
+      "textobject.inner", "visual.reselect", "visual.swap.selection", "visual.yank",
     ]
     for id in visualModeCommandIds():
       # EditCommandIds covers the cursor-edit ids also bound in visual modes.
@@ -8376,19 +8375,18 @@ suite "executeCommand - count prefix respects handler maxArgs":
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "lo"
 
-  test "count 1 with hasCount is still prefixed for a maxArgs>=1 handler (1G)":
-    # Without the prefix, visual.move.lastline falls back to its no-arg
-    # default (last line), so this asserts the hasCount + count 1 branch.
+  test "count 1 with hasCount is still prefixed for a maxArgs>=1 handler (1d)":
+    # Without the prefix, operator.delete takes no count, so this asserts the
+    # hasCount + count 1 branch.
     let buffer = newTextBuffer("line1\nline2\nline3")
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(2, 0, 2, 0)
     let registry = createTestRegistry()
 
-    let cmd = Command(
-      kind: ctCustom, commandId: "visual.move.lastline", count: 1, hasCount: true
-    )
+    let cmd =
+      Command(kind: ctOperator, commandId: "operator.delete", count: 1, hasCount: true)
     check registry.executeCommand(ctx, cmd).isOk
-    check ctx.state.cursor.line == 0
+    check ctx.state.pendingInput.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.get.countGiven
 
   test "count 1 with hasCount is not prefixed for a maxArgs=0 handler (1y)":
     let buffer = newTextBuffer("hello world")

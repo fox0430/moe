@@ -1962,4 +1962,4 @@ suite "Vim parity - CTRL-J (<NL>) down motion":
     for mode in [EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]:
       let v = registry.findBinding(mode, ctrlJ)
       check v.isSome
-      check v.get.name == "visual-move-down"
+      check v.get.name == "move-down"

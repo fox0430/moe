@@ -231,8 +231,6 @@ suite "help / keybinding consistency":
     )
     let allowCmds = toHashSet(
       [
-        # Cursor motions shared with Normal mode — not re-listed in the
-        # Visual help section.
         "visual-swap-selection",
         "visual-paste",
         # Exit alias (C-c). Esc is documented; C-c is the bare alias.
@@ -243,10 +241,13 @@ suite "help / keybinding consistency":
         "register-select",
       ]
     )
-    let allVisual =
-      @SharedVisualBindings & @VisualOnlyBindings & @VisualBlockOnlyBindings
-    let missing =
-      findUndocumented(allVisual, help, allowKeys, allowCmds, @["visual-move"])
+    var allVisual: seq[tuple[key, cmd: string]]
+    for b in @SharedVisualBindings & @VisualOnlyBindings & @VisualBlockOnlyBindings:
+      # Motions shared with Normal mode are documented there, not re-listed in
+      # the Visual help section.
+      if b notin NormalBindings:
+        allVisual.add b
+    let missing = findUndocumented(allVisual, help, allowKeys, allowCmds)
     report("Visual", missing)
     check missing.len == 0
 

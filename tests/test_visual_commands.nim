@@ -167,121 +167,6 @@ suite "Visual Commands - getSelectionRange":
     check selEnd.line == 0
     check selEnd.column == 5
 
-suite "Visual Commands - visualMoveLeft":
-  test "Move left from middle of line":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
-
-    visualMoveLeft(buf, state)
-
-    check state.cursor.column == 4
-    check state.visualSelection.current.column == 4
-
-  test "Move left from beginning of line (no-op)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    visualMoveLeft(buf, state)
-
-    check state.cursor.column == 0
-    check state.visualSelection.current.column == 0
-
-suite "Visual Commands - visualMoveRight":
-  test "Move right from middle of line":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
-
-    visualMoveRight(buf, state)
-
-    check state.cursor.column == 6
-    check state.visualSelection.current.column == 6
-
-  test "Move right at end of line (no-op)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 11)
-
-    visualMoveRight(buf, state)
-
-    check state.cursor.column == 11
-
-suite "Visual Commands - visualMoveUp":
-  test "Move up from second line":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
-    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 1, column: 3)
-
-    visualMoveUp(buf, state)
-
-    check state.cursor.line == 0
-    check state.visualSelection.current.line == 0
-
-  test "Move up from first line (no-op)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 3)
-
-    visualMoveUp(buf, state)
-
-    check state.cursor.line == 0
-
-  test "Move up clamps cursor to new line length":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "short")
-    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nlonger line")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 1, column: 10)
-
-    visualMoveUp(buf, state)
-
-    check state.cursor.line == 0
-    check state.cursor.column == 5 # clamped to "short" length
-
-suite "Visual Commands - visualMoveDown":
-  test "Move down from first line":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
-    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 3)
-
-    visualMoveDown(buf, state)
-
-    check state.cursor.line == 1
-    check state.visualSelection.current.line == 1
-
-  test "Move down from last line (no-op)":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 3)
-
-    visualMoveDown(buf, state)
-
-    check state.cursor.line == 0
-
-  test "Move down clamps cursor to new line length":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "longer line")
-    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nshort")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 10)
-
-    visualMoveDown(buf, state)
-
-    check state.cursor.line == 1
-    check state.cursor.column == 5 # clamped to "short" length
-
 suite "Visual Commands - getVisualSelectionText":
   test "vskChar returns char range only":
     let buf = newTextBuffer()
@@ -475,12 +360,9 @@ suite "Visual Commands - visualDelete":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-    state.selectVisual(state.cursor, state.cursor)
-
-    for _ in 1 .. 5:
-      visualMoveRight(buf, state)
-    check state.cursor.column == 5 # == lineLen
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5)
+    )
 
     visualDelete(buf, state)
 
@@ -492,11 +374,9 @@ suite "Visual Commands - visualDelete":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-    state.selectVisual(state.cursor, state.cursor)
-
-    visualMoveEnd(buf, state)
-    check state.cursor.column == 5 # == lineLen
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5)
+    )
 
     visualDelete(buf, state)
 
@@ -1136,162 +1016,6 @@ suite "Visual Commands - visualJoinLines":
 
     check buf.len == 1
     check state.statusMessage == "2 lines joined"
-
-suite "Visual Commands - visualMoveHome":
-  test "Move to beginning of line":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
-
-    visualMoveHome(buf, state)
-
-    check state.cursor.column == 0
-    check state.visualSelection.current.column == 0
-
-suite "Visual Commands - visualMoveEnd":
-  test "Move to end of line":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    visualMoveEnd(buf, state)
-
-    # In Visual mode, cursor can go to column == lineLen (one past last char)
-    # so that the selection includes the newline.
-    check state.cursor.column == 11
-
-  test "Move to end of empty line":
-    let buf = newTextBuffer()
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    visualMoveEnd(buf, state)
-
-    check state.cursor.column == 0
-
-suite "Visual Commands - visualMoveFirstNonBlank":
-  test "Move to first non-blank character":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "   hello world")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 10)
-
-    visualMoveFirstNonBlank(buf, state)
-
-    check state.cursor.column == 3
-
-suite "Visual Commands - visualMoveFirstLine":
-  test "Move to first line":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
-    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
-    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 2, column: 3)
-
-    visualMoveFirstLine(buf, state)
-
-    check state.cursor.line == 0
-    check state.cursor.column == 0
-    check state.visualSelection.current.line == 0
-
-suite "Visual Commands - visualMoveLastLine":
-  test "Move to last line":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
-    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
-    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 3)
-
-    visualMoveLastLine(buf, state)
-
-    check state.cursor.line == 2
-    check state.visualSelection.current.line == 2
-
-  test "Move to specific line number":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
-    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
-    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    visualMoveLastLine(buf, state, 2) # Go to line 2 (1-indexed)
-
-    check state.cursor.line == 1
-
-suite "Visual Commands - visualMoveWord":
-  test "Move to next word":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    visualMoveWord(buf, state)
-
-    check state.cursor.column == 6 # start of "world"
-    check state.visualSelection.current.column == 6
-
-  test "Move word with count":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test foo")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    visualMoveWord(buf, state, 2)
-
-    check state.cursor.column == 12 # start of "test"
-
-suite "Visual Commands - visualMoveWordBack":
-  test "Move to previous word":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 12)
-
-    visualMoveWordBack(buf, state)
-
-    check state.cursor.column == 6 # start of "world"
-
-suite "Visual Commands - visualMoveWordEnd":
-  test "Move to end of word":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    visualMoveWordEnd(buf, state)
-
-    check state.cursor.column == 4 # end of "hello"
-
-suite "Visual Commands - visualMoveParagraphForward":
-  test "Move to next paragraph":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "paragraph 1")
-    discard buf.insertText(BufferPosition(line: 0, column: 11), "\n")
-    discard buf.insertText(BufferPosition(line: 1, column: 0), "\nparagraph 2")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    visualMoveParagraphForward(buf, state)
-
-    check state.cursor.line >= 1
-
-suite "Visual Commands - visualMoveParagraphBackward":
-  test "Move to previous paragraph":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "paragraph 1")
-    discard buf.insertText(BufferPosition(line: 0, column: 11), "\n")
-    discard buf.insertText(BufferPosition(line: 1, column: 0), "\nparagraph 2")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 2, column: 0)
-
-    visualMoveParagraphBackward(buf, state)
-
-    check state.cursor.line <= 1
 
 suite "Visual Commands - visualToInsertMode":
   test "Switch from visual to insert mode":
@@ -2226,26 +1950,6 @@ suite "Visual Commands - Edge Cases":
     check lines[1] == ""
     check lines[2] == "line"
 
-  test "visualMoveRight at exact line length":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5) # At end
-
-    visualMoveRight(buf, state)
-
-    check state.cursor.column == 5 # Should not move past end
-
-  test "visualMoveDown at buffer end":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "only line")
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
-
-    visualMoveDown(buf, state)
-
-    check state.cursor.line == 0 # Should stay on same line
-
   test "Join lines with inactive selection (no-op)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
@@ -2669,40 +2373,6 @@ suite "Visual Commands - visualSurround":
 
     check buf.getLine(0) == "[あいう] world"
     check buf.getLine(1) == "[かきく] bar"
-
-suite "Visual Commands - fold-aware movement":
-  test "visualMoveDown crosses a collapsed fold":
-    let buf = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
-    discard buf.foldState.addFold(2, 4, collapsed = true)
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 1, column: 0)
-    # j onto the fold start line.
-    visualMoveDown(buf, state)
-    check state.cursor.line == 2
-    # j again crosses the whole collapsed fold to the line after it.
-    visualMoveDown(buf, state)
-    check state.cursor.line == 5
-    check state.visualSelection.current.line == 5
-
-  test "visualMoveUp crosses a collapsed fold":
-    let buf = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
-    discard buf.foldState.addFold(2, 4, collapsed = true)
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 5, column: 0)
-    # k from below the fold jumps to the fold start.
-    visualMoveUp(buf, state)
-    check state.cursor.line == 2
-    check state.visualSelection.current.line == 2
-    visualMoveUp(buf, state)
-    check state.cursor.line == 1
-
-  test "visualMoveDown stays put on a fold running to the buffer end":
-    let buf = newTextBuffer("0\n1\n2\n3\n4")
-    discard buf.foldState.addFold(2, 4, collapsed = true)
-    let state = createTestState()
-    state.cursor = BufferPosition(line: 2, column: 0)
-    visualMoveDown(buf, state)
-    check state.cursor.line == 2
 
 suite "Visual paste - cursor on a rolled-back paste":
   # The paste moves the cursor to the paste anchor before the edit that can

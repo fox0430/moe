@@ -27,10 +27,7 @@ import std/[options, strutils]
 import pkg/results
 
 import
-  ../[
-    cursor_util, types, registers, motion, modes, config, unicode_utils,
-    visual_selection, wanted_column,
-  ]
+  ../[cursor_util, types, registers, modes, config, unicode_utils, visual_selection]
 import ../buffer/[core, edit, undo]
 import insert_commands
 
@@ -80,39 +77,6 @@ proc getSelectionRange*(
       return (selection.start, selection.current)
     else:
       return (selection.current, selection.start)
-
-proc visualMoveLeft*(buffer: TextBuffer, state: EditorState, count = 1) =
-  ## Move left `count` characters in visual mode and update selection
-  state.cursor.column = max(0, state.cursor.column - max(1, count))
-
-proc visualMoveRight*(buffer: TextBuffer, state: EditorState, count = 1) =
-  ## Move right `count` characters in visual mode and update selection. The
-  ## cursor may go one past the last character, taking the line break.
-  let lineLen = buffer.getLine(state.cursor.line).charLen
-  if state.cursor.column < lineLen:
-    state.cursor.column = min(lineLen, state.cursor.column + max(1, count))
-
-proc moveVisualToLine(buffer: TextBuffer, state: EditorState, line: int) =
-  ## Move the cursor onto `line` at the column vertical moves aim for, as Vim
-  ## keeps curswant in Visual mode too. A shorter line puts it past its last
-  ## character, on the line break. `line` the cursor is on goes nowhere, as
-  ## Vim's cursor_down fails.
-  if line == state.cursor.line:
-    return
-  let aimed = state.aimedColumn
-  state.cursor = BufferPosition(
-    line: line,
-    column: buffer.getLine(line).columnAtCell(aimed, state.tabStop, state.mode),
-  )
-  state.preferredColumn = aimed
-
-proc visualMoveUp*(buffer: TextBuffer, state: EditorState, count = 1) =
-  ## Move up `count` lines in visual mode and update selection
-  buffer.moveVisualToLine(state, buffer.linesUp(state.cursor.line, max(1, count)))
-
-proc visualMoveDown*(buffer: TextBuffer, state: EditorState, count = 1) =
-  ## Move down `count` lines in visual mode and update selection
-  buffer.moveVisualToLine(state, buffer.linesDown(state.cursor.line, max(1, count)))
 
 proc getBlockText(buffer: TextBuffer, selection: VisualSelection): string =
   ## Get text from a block (rectangular) selection
@@ -479,111 +443,6 @@ proc visualJoinLines*(buffer: TextBuffer, state: EditorState) =
     state.cursor.column = 0
 
     state.leaveVisual()
-
-# Visual mode movement commands using motion executor
-
-proc visualMoveHome*(buffer: TextBuffer, state: EditorState) =
-  ## Move to beginning of line (0/Home) and update selection
-  state.cursor.column = 0
-
-proc visualMoveEnd*(buffer: TextBuffer, state: EditorState, count = 1) =
-  ## Move to end of line ($), `count - 1` lines down, and update selection.
-  ## In Visual mode, cursor can be placed one past the last character
-  ## (at column == lineLen) so the selection can include the newline
-  ## and `d` can delete the entire line. Like Vim, a count from the last line
-  ## goes nowhere. Vertical moves stick to line ends after it, even then.
-  let line =
-    if count > 1:
-      buffer.linesDown(state.cursor.line, count - 1)
-    else:
-      state.cursor.line
-  if count <= 1 or line != state.cursor.line:
-    state.cursor = BufferPosition(line: line, column: buffer.getLine(line).charLen)
-  state.preferredColumn = LineEnd
-
-proc visualMoveFirstNonBlank*(buffer: TextBuffer, state: EditorState) =
-  ## Move to first non-whitespace character (^) and update selection
-  let executor = newMotionExecutor(buffer)
-  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-  let cmd = MotionCommand(motion: Motion.FirstNonBlank, count: 1)
-  let newPos = executor.calculateNewPosition(currentPos, cmd)
-  state.cursor.line = newPos.y
-  state.cursor.column = newPos.x
-
-proc visualMoveFirstLine*(buffer: TextBuffer, state: EditorState) =
-  ## Move to first line (gg) and update selection
-  state.cursor.line = 0
-  state.cursor.column = 0
-
-proc visualMoveLastLine*(buffer: TextBuffer, state: EditorState, count: int = 0) =
-  ## Move to last line (G) or specific line number and update selection
-  if count > 0:
-    # Go to specific line (1-indexed)
-    state.cursor.line = min(count - 1, buffer.len - 1)
-  else:
-    # Go to last line
-    state.cursor.line = max(0, buffer.len - 1)
-  state.cursor.column = 0
-
-proc visualMoveWord*(buffer: TextBuffer, state: EditorState, count: int = 1) =
-  ## Move to next word (w) and update selection
-  let executor = newMotionExecutor(buffer)
-  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-  let cmd = MotionCommand(motion: Motion.WordForward, count: count)
-  let newPos = executor.calculateNewPosition(currentPos, cmd)
-  state.cursor.line = newPos.y
-  state.cursor.column = newPos.x
-
-proc visualMoveWordBack*(buffer: TextBuffer, state: EditorState, count: int = 1) =
-  ## Move to previous word (b) and update selection
-  let executor = newMotionExecutor(buffer)
-  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-  let cmd = MotionCommand(motion: Motion.WordBackward, count: count)
-  let newPos = executor.calculateNewPosition(currentPos, cmd)
-  state.cursor.line = newPos.y
-  state.cursor.column = newPos.x
-
-proc visualMoveWordEnd*(buffer: TextBuffer, state: EditorState, count: int = 1) =
-  ## Move to end of word (e) and update selection
-  let executor = newMotionExecutor(buffer)
-  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-  let cmd = MotionCommand(motion: Motion.WordEnd, count: count)
-  let newPos = executor.calculateNewPosition(currentPos, cmd)
-  state.cursor.line = newPos.y
-  state.cursor.column = newPos.x
-
-proc visualMoveWordEndBackward*(
-    buffer: TextBuffer, state: EditorState, count: int = 1
-) =
-  ## Move to end of previous word (ge) and update selection
-  let executor = newMotionExecutor(buffer)
-  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-  let cmd = MotionCommand(motion: Motion.WordEndBackward, count: count)
-  let newPos = executor.calculateNewPosition(currentPos, cmd)
-  state.cursor.line = newPos.y
-  state.cursor.column = newPos.x
-
-proc visualMoveParagraphForward*(
-    buffer: TextBuffer, state: EditorState, count: int = 1
-) =
-  ## Move to next paragraph (}) and update selection
-  let executor = newMotionExecutor(buffer)
-  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-  let cmd = MotionCommand(motion: Motion.ParagraphForward, count: count)
-  let newPos = executor.calculateNewPosition(currentPos, cmd)
-  state.cursor.line = newPos.y
-  state.cursor.column = newPos.x
-
-proc visualMoveParagraphBackward*(
-    buffer: TextBuffer, state: EditorState, count: int = 1
-) =
-  ## Move to previous paragraph ({) and update selection
-  let executor = newMotionExecutor(buffer)
-  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-  let cmd = MotionCommand(motion: Motion.ParagraphBackward, count: count)
-  let newPos = executor.calculateNewPosition(currentPos, cmd)
-  state.cursor.line = newPos.y
-  state.cursor.column = newPos.x
 
 proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
   ## Switch from visual mode to insert mode (I command)
