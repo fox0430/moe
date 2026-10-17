@@ -1506,6 +1506,9 @@ suite "Integration - mode_switch out of Visual":
     let editor = createTestEditor(
       buffer, state, createTestViewport(), manager.keyBindingRegistry, manager
     )
+    # `$` moves through the motion controller, so it needs the buffer.
+    manager.visualHandler.motionController =
+      newMotionController(buffer, state, createTestViewport())
 
     for key in ["v", "$", "q"]:
       discard manager.runKeyCombo(editor, parseKeyCombo(key).get)

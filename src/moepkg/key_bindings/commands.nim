@@ -73,6 +73,36 @@ const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("repeat-find-reverse", "Repeat last f/F/t/T reversed", Motion.RepeatFindReverse),
 ]
 
+const VisualMotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
+  ("visual-move-left", "Move left in visual mode", Motion.Left),
+  ("visual-move-right", "Move right in visual mode", Motion.Right),
+  ("visual-move-up", "Move up in visual mode", Motion.Up),
+  ("visual-move-down", "Move down in visual mode", Motion.Down),
+  ("visual-move-home", "Move to beginning of line in visual mode", Motion.Home),
+  ("visual-move-end", "Move to end of line in visual mode", Motion.End),
+  (
+    "visual-move-firstnonblank", "Move to first non-blank character in visual mode",
+    Motion.FirstNonBlank,
+  ),
+  ("visual-move-firstline", "Move to first line in visual mode", Motion.FirstLine),
+  ("visual-move-lastline", "Move to last line in visual mode", Motion.LastLine),
+  ("visual-move-word", "Move to next word in visual mode", Motion.WordForward),
+  ("visual-move-word-back", "Move to previous word in visual mode", Motion.WordBackward),
+  ("visual-move-word-end", "Move to end of word in visual mode", Motion.WordEnd),
+  (
+    "visual-move-word-end-backward", "Move to end of previous word in visual mode",
+    Motion.WordEndBackward,
+  ),
+  (
+    "visual-move-paragraph-forward", "Move to next paragraph in visual mode",
+    Motion.ParagraphForward,
+  ),
+  (
+    "visual-move-paragraph-backward", "Move to previous paragraph in visual mode",
+    Motion.ParagraphBackward,
+  ),
+] ## Names Visual mode had for these motions, which existing configs bind
+
 const ScrollCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("page-up", "Scroll page up", Motion.PageUp),
   ("page-down", "Scroll page down", Motion.PageDown),
@@ -133,10 +163,6 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
     "insert.delete",
   ),
   ("insert-newline", "Insert newline (insert mode)", "insert.newline"),
-  ("visual-move-left", "Move left in visual mode", "visual.move.left"),
-  ("visual-move-right", "Move right in visual mode", "visual.move.right"),
-  ("visual-move-up", "Move up in visual mode", "visual.move.up"),
-  ("visual-move-down", "Move down in visual mode", "visual.move.down"),
   ("visual-delete", "Delete visual selection", "visual.delete"),
   ("visual-yank", "Yank visual selection", "visual.yank"),
   ("visual-indent", "Indent visual selection", "visual.indent"),
@@ -145,35 +171,6 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("visual-uppercase", "Convert visual selection to uppercase", "visual.uppercase"),
   ("visual-toggle-case", "Toggle case of visual selection", "visual.togglecase"),
   ("visual-joinlines", "Join lines in visual selection", "visual.joinlines"),
-  ("visual-move-home", "Move to beginning of line in visual mode", "visual.move.home"),
-  ("visual-move-end", "Move to end of line in visual mode", "visual.move.end"),
-  (
-    "visual-move-firstnonblank", "Move to first non-blank character in visual mode",
-    "visual.move.firstnonblank",
-  ),
-  (
-    "visual-move-firstline", "Move to first line in visual mode",
-    "visual.move.firstline",
-  ),
-  ("visual-move-lastline", "Move to last line in visual mode", "visual.move.lastline"),
-  ("visual-move-word", "Move to next word in visual mode", "visual.move.word"),
-  (
-    "visual-move-word-back", "Move to previous word in visual mode",
-    "visual.move.word.back",
-  ),
-  ("visual-move-word-end", "Move to end of word in visual mode", "visual.move.word.end"),
-  (
-    "visual-move-word-end-backward", "Move to end of previous word in visual mode",
-    "visual.move.word.end.backward",
-  ),
-  (
-    "visual-move-paragraph-forward", "Move to next paragraph in visual mode",
-    "visual.move.paragraph.forward",
-  ),
-  (
-    "visual-move-paragraph-backward", "Move to previous paragraph in visual mode",
-    "visual.move.paragraph.backward",
-  ),
   (
     "visual-swap-selection", "Swap cursor to other end of selection",
     "visual.swap.selection",
@@ -349,7 +346,7 @@ const OperatorPendingCommands: seq[tuple[name, desc, opType: string, reverse: bo
 ]
 
 proc registerMotionCommands(reg: KeyBindingRegistry) =
-  for commands in [MotionCommands, ScrollCommands]:
+  for commands in [MotionCommands, VisualMotionCommands, ScrollCommands]:
     for (name, desc, motion) in commands:
       reg.registerCommand(
         Command(name: name, description: desc, kind: ctMotion, motion: motion)

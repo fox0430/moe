@@ -339,10 +339,6 @@ suite "CommandRegistry - BuiltinCommandId":
     check $bcInsertAppendEnd == "insert.append.end"
 
   test "visual commands have correct string values":
-    check $bcVisualMoveLeft == "visual.move.left"
-    check $bcVisualMoveRight == "visual.move.right"
-    check $bcVisualMoveUp == "visual.move.up"
-    check $bcVisualMoveDown == "visual.move.down"
     check $bcVisualDelete == "visual.delete"
     check $bcVisualYank == "visual.yank"
     check $bcVisualIndent == "visual.indent"
@@ -419,10 +415,6 @@ suite "CommandRegistry - registerBuiltinCommands":
     let registry = newCommandRegistry()
     registerBuiltinCommands(registry)
 
-    check registry.findCommand(builtin(bcVisualMoveLeft)).isSome
-    check registry.findCommand(builtin(bcVisualMoveRight)).isSome
-    check registry.findCommand(builtin(bcVisualMoveUp)).isSome
-    check registry.findCommand(builtin(bcVisualMoveDown)).isSome
     check registry.findCommand(builtin(bcVisualDelete)).isSome
     check registry.findCommand(builtin(bcVisualYank)).isSome
     check registry.findCommand(builtin(bcVisualIndent)).isSome

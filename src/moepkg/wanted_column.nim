@@ -48,12 +48,8 @@ proc cursorCell*(text: string, column, tabStop: int, onTabEnd: bool): int =
 
 proc columnAtCell*(text: string, cell, tabStop: int, mode: EditorMode): int =
   ## The character of `text` that covers `cell`, as Vim's coladvance: on a
-  ## shorter line the last character, or past it in Insert and Visual.
-  let last =
-    if mode in {EditorMode.Insert, EditorMode.Replace} or mode.isVisualAllMode:
-      text.charLen
-    else:
-      max(0, text.charLen - 1)
+  ## shorter line the last character, or past it when the mode rests past it.
+  let last = maxCursorColumn(text.charLen, mode)
   if cell == LineEnd:
     return last
   min(screenXToCharIndex(text, 0, cell, tabStop), last)

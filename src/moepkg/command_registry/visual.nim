@@ -28,30 +28,6 @@ import core
 
 ## Visual mode command handlers (wrappers for visual_commands functions)
 
-proc handleVisualMoveLeft*(ctx: CommandContext, count = 1): Result[(), string] =
-  ## Move left `count` times in visual mode and update selection
-  visualMoveLeft(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
-  Result[(), string].ok ()
-
-proc handleVisualMoveRight*(ctx: CommandContext, count = 1): Result[(), string] =
-  ## Move right `count` times in visual mode and update selection
-  visualMoveRight(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
-  Result[(), string].ok ()
-
-proc handleVisualMoveUp*(ctx: CommandContext, count = 1): Result[(), string] =
-  ## Move up `count` times in visual mode and update selection
-  visualMoveUp(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
-  Result[(), string].ok ()
-
-proc handleVisualMoveDown*(ctx: CommandContext, count = 1): Result[(), string] =
-  ## Move down `count` times in visual mode and update selection
-  visualMoveDown(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
-  Result[(), string].ok ()
-
 proc handleVisualDelete*(ctx: CommandContext): Result[(), string] =
   ## Delete visual selection
   visualDelete(ctx.buffer, ctx.state, ctx.register)
@@ -97,82 +73,6 @@ proc handleVisualToggleCase*(ctx: CommandContext): Result[(), string] =
 proc handleVisualJoinLines*(ctx: CommandContext): Result[(), string] =
   ## Join lines in visual selection
   visualJoinLines(ctx.buffer, ctx.state)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveHome*(ctx: CommandContext): Result[(), string] =
-  ## Move to beginning of line in visual mode
-  visualMoveHome(ctx.buffer, ctx.state)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveEnd*(ctx: CommandContext, count = 1): Result[(), string] =
-  ## Move to end of line, `count - 1` lines down, in visual mode
-  visualMoveEnd(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveFirstNonBlank*(ctx: CommandContext): Result[(), string] =
-  ## Move to first non-blank character in visual mode
-  visualMoveFirstNonBlank(ctx.buffer, ctx.state)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveFirstLine*(ctx: CommandContext): Result[(), string] =
-  ## Move to first line in visual mode
-  visualMoveFirstLine(ctx.buffer, ctx.state)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveLastLine*(
-    ctx: CommandContext, count: int = 0
-): Result[(), string] =
-  ## Move to last line (or specific line number) in visual mode
-  visualMoveLastLine(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveWord*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Move to next word in visual mode
-  visualMoveWord(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveWordBack*(
-    ctx: CommandContext, count: int = 1
-): Result[(), string] =
-  ## Move to previous word in visual mode
-  visualMoveWordBack(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveWordEnd*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Move to end of word in visual mode
-  visualMoveWordEnd(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveWordEndBackward*(
-    ctx: CommandContext, count: int = 1
-): Result[(), string] =
-  ## Move to end of previous word in visual mode
-  visualMoveWordEndBackward(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveParagraphForward*(
-    ctx: CommandContext, count: int = 1
-): Result[(), string] =
-  ## Move to next paragraph in visual mode
-  visualMoveParagraphForward(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualMoveParagraphBackward*(
-    ctx: CommandContext, count: int = 1
-): Result[(), string] =
-  ## Move to previous paragraph in visual mode
-  visualMoveParagraphBackward(ctx.buffer, ctx.state, count)
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
@@ -225,48 +125,7 @@ proc handleVisualReselect*(ctx: CommandContext): Result[(), string] =
   Result[(), string].ok ()
 
 proc registerVisualCommands*(registry: CommandRegistry) =
-  ## Register all 32 visual mode commands.
-
-  # Visual mode movement commands
-  registry.register(
-    builtin(bcVisualMoveLeft),
-    "Visual Move Left",
-    "Move left and update visual selection",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveLeft(ctx, parseCount(args)),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveRight),
-    "Visual Move Right",
-    "Move right and update visual selection",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveRight(ctx, parseCount(args)),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveUp),
-    "Visual Move Up",
-    "Move up and update visual selection",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveUp(ctx, parseCount(args)),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveDown),
-    "Visual Move Down",
-    "Move down and update visual selection",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveDown(ctx, parseCount(args)),
-    0,
-    1,
-  )
+  ## Register all 17 visual mode commands.
 
   registry.register(
     builtin(bcVisualDelete),
@@ -348,123 +207,6 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualJoinLines(ctx),
     0,
     0,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveHome),
-    "Visual Move Home",
-    "Move to beginning of line in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveHome(ctx),
-    0,
-    0,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveEnd),
-    "Visual Move End",
-    "Move to end of line in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveEnd(ctx, parseCount(args)),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveFirstNonBlank),
-    "Visual Move First Non-Blank",
-    "Move to first non-blank character in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveFirstNonBlank(ctx),
-    0,
-    0,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveFirstLine),
-    "Visual Move First Line",
-    "Move to first line in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualMoveFirstLine(ctx),
-    0,
-    0,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveLastLine),
-    "Visual Move Last Line",
-    "Move to last line (or specific line number) in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 0)
-      handleVisualMoveLastLine(ctx, count),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveWord),
-    "Visual Move Word",
-    "Move to next word in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleVisualMoveWord(ctx, count),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveWordBack),
-    "Visual Move Word Back",
-    "Move to previous word in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleVisualMoveWordBack(ctx, count),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveWordEnd),
-    "Visual Move Word End",
-    "Move to end of word in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleVisualMoveWordEnd(ctx, count),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveWordEndBackward),
-    "Visual Move Word End Backward",
-    "Move to end of previous word in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleVisualMoveWordEndBackward(ctx, count),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveParagraphForward),
-    "Visual Move Paragraph Forward",
-    "Move to next paragraph in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleVisualMoveParagraphForward(ctx, count),
-    0,
-    1,
-  )
-
-  registry.register(
-    builtin(bcVisualMoveParagraphBackward),
-    "Visual Move Paragraph Backward",
-    "Move to previous paragraph in visual mode",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleVisualMoveParagraphBackward(ctx, count),
-    0,
-    1,
   )
 
   registry.register(
