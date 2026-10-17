@@ -30,7 +30,7 @@ import std/[options, sequtils, strutils]
 
 import config_macros, unicode_utils
 
-import syntax/tokenizer
+import lsp/default_servers, syntax/tokenizer
 
 import types/config_types
 
@@ -92,6 +92,10 @@ type
     detail*: string ## Right-hand column of the popup
     documentation*: string
     kind*: ConfigContextKind ## Which of section/key/value this offers
+
+const
+  LspGroupName = cfgGroupName(LspConfig)
+  LspFeatureNames = generateSectionGroupChildNames(LspConfig)
 
 const ThemeKindValues = block:
   # Derived from the enum the loader parses.
@@ -162,10 +166,44 @@ proc buildSchema(): seq[ConfigSchemaSection] =
 const ConfigSchema* = buildSchema()
   ## Every section `moerc.toml` accepts, in declaration order.
 
+func languageFeatureSection(language, feature: string): Option[ConfigSchemaSection] =
+  ## `[Lsp.<language>.<feature>]`: the `enable` of `[Lsp.<feature>]`. Only a
+  ## built-in language: the loader rejects feature tables under any other
+  ## language whose table has no server keys, which completion cannot see.
+  if not isDefaultLspLanguage(language) or feature notin LspFeatureNames:
+    return
+  let global = LspGroupName & "." & feature
+  for s in ConfigSchema:
+    if s.name == global:
+      var keys = s.keys.filterIt(it.name == LspLanguageFeatureKey)
+      for k in keys.mitems:
+        k.description &= " for " & language
+      return some(
+        ConfigSchemaSection(
+          name: LspGroupName & "." & language & "." & feature,
+          description:
+            s.description & " for " & language & " (overrides [" & global & "])",
+          keys: keys,
+        )
+      )
+
+func languageFeatureSections(head: string): seq[ConfigSchemaSection] =
+  ## The `[Lsp.<languageId>.<Feature>]` tables a typed `Lsp.<languageId>.`
+  ## continues to.
+  let parts = head.split('.')
+  if parts.len == 3 and parts[0] == LspGroupName and parts[2].len == 0:
+    for feature in LspFeatureNames:
+      let s = languageFeatureSection(parts[1], feature)
+      if s.isSome:
+        result.add s.get
+
 func findSection*(name: string): Option[ConfigSchemaSection] =
   for s in ConfigSchema:
     if s.name == name:
       return some(s)
+  let parts = name.split('.')
+  if parts.len == 3 and parts[0] == LspGroupName:
+    return languageFeatureSection(parts[1], parts[2])
 
 func sectionForHeader*(name: string, arrayOfTables: bool): string =
   ## The section a `[name]` / `[[name]]` header names, or "" when the two
@@ -494,7 +532,8 @@ func candidates*(ctx: ConfigCompletionContext): seq[ConfigCandidate] =
   of cckNone:
     @[]
   of cckSection:
-    sectionCandidates(ctx.head, ctx.arrayOfTables, ConfigSchema)
+    sectionCandidates(ctx.head, ctx.arrayOfTables, ConfigSchema) &
+      sectionCandidates(ctx.head, ctx.arrayOfTables, languageFeatureSections(ctx.head))
   of cckKey:
     keyCandidates(ctx.section)
   of cckValue:

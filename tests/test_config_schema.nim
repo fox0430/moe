@@ -19,7 +19,7 @@
 
 import std/[algorithm, unittest, options, sequtils, strutils]
 
-import ../src/moepkg/[config_schema, config_loader]
+import ../src/moepkg/[config, config_schema, config_loader]
 import ../src/moepkg/config_loader/base
 
 proc texts(cs: seq[ConfigCandidate]): seq[string] =
@@ -115,6 +115,11 @@ suite "Config schema - drift against the loader":
     let sec = findSection("DisabledCommandAliases")
     check sec.isSome
     check sec.get.keys.mapIt(it.name).sorted == (@DisabledCommandAliasesKeys).sorted
+
+  test "[Lsp.<languageId>.<Feature>] keys match the loader":
+    let sec = findSection("Lsp.rust.Completion")
+    check sec.isSome
+    check sec.get.keys.mapIt(it.name) == @[LspLanguageFeatureKey]
 
 suite "Config schema - section headers":
   test "Parse a section header":
@@ -370,6 +375,44 @@ suite "Config schema - candidates":
   test "Unknown sections and keys offer nothing":
     check candidates(analyzeLine("foo", 3, "NoSuchSection")).len == 0
     check candidates(analyzeLine("noSuchKey = ", 12, "Standard")).len == 0
+
+  test "A language's feature tables complete after its name":
+    let cs = candidates(analyzeLine("[Lsp.rust.Compl", 15, ""))
+    check "Completion" in cs.texts
+    check "Lsp.rust.Completion" in cs.labels
+    check not cs.texts.anyIt(it.startsWith("Lsp.") or it.startsWith("rust."))
+
+  test "Feature tables are not offered under a feature or as arrays":
+    check candidates(analyzeLine("[Lsp.Completion.", 16, "")).len == 0
+    check candidates(analyzeLine("[[Lsp.rust.", 11, "")).len == 0
+
+  test "Feature tables are not offered under an [Lsp] key":
+    for key in ["enable", "timeout"]:
+      let head = "[Lsp." & key & "."
+      check candidates(analyzeLine(head, head.len, "")).len == 0
+      check findSection("Lsp." & key & ".Completion").isNone
+
+  test "Feature tables are offered only under a built-in language":
+    check candidates(analyzeLine("[Lsp.rsut.", 10, "")).len == 0
+    check findSection("Lsp.rsut.Hover").isNone
+    check candidates(analyzeLine("a", 1, "Lsp.rsut.Hover")).len == 0
+
+  test "A language's feature table takes only enable":
+    let keys = candidates(analyzeLine("a", 1, "Lsp.rust.Diagnostics"))
+    check keys.texts == @["enable"]
+    let values = candidates(analyzeLine("enable = ", 9, "Lsp.rust.Diagnostics"))
+    check values.texts == @["true", "false"]
+    check findKey("Lsp.rust.Diagnostics", "autoHover").isNone
+
+  test "A language's feature table names its language":
+    let sec = candidates(analyzeLine("[Lsp.rust.Compl", 15, ""))
+    check sec.anyIt(
+      it.label == "Lsp.rust.Completion" and
+        it.documentation == "LSP Completion for rust (overrides [Lsp.Completion])"
+    )
+    let key = candidates(analyzeLine("a", 1, "Lsp.rust.Completion"))
+    check key.mapIt(it.documentation) == @["Enable LSP Completion for rust"]
+    check findKey("Lsp.Completion", "enable").get.description == "Enable LSP Completion"
 
   test "An array header does not offer single-table sections":
     let single = candidates(analyzeLine("[Lsp.", 5, ""))
