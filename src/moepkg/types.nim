@@ -478,7 +478,8 @@ type
   Motion* = enum
     Left
     Right
-    Backspace # <BS> in Normal/Visual, like Left but wraps to the previous line (Vim 'whichwrap' b)
+    Backspace
+      # <BS> in Normal/Visual, like Left but wraps to the previous line (Vim 'whichwrap' b)
     Up
     Down
     PageUp

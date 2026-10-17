@@ -33,7 +33,10 @@ export window_commands
 
 const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("move-left", "Move cursor left", Motion.Left),
-  ("move-backspace", "Move cursor left, wrapping to the previous line", Motion.Backspace),
+  (
+    "move-backspace", "Move cursor left, wrapping to the previous line",
+    Motion.Backspace,
+  ),
   ("move-right", "Move cursor right", Motion.Right),
   ("move-up", "Move cursor up", Motion.Up),
   ("move-down", "Move cursor down", Motion.Down),
