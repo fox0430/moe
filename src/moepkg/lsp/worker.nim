@@ -230,6 +230,7 @@ type
       diagUri*: string
       diagnosticsJson*: string # JSON array of LSP Diagnostic objects
       diagVersion*: Option[int] # LSP optional, used to drop stale publishes
+      diagGeneration*: int # Server generation that published it
     of levLogMessage, levShowMessage:
       msgType*: MessageType
       message*: string
@@ -304,6 +305,7 @@ type
     languageId*: string
     nextRequestId: int # For generating unique request IDs
     traceLevel: LspTrace # Forwarded to the worker context on start()
+    serverGeneration: int # Servers started; the thread counts the same
 
   LspWorker* = ref LspWorkerObj
 
@@ -1049,7 +1051,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       )
 
   proc handleNotification(meth: string, params: JsonNode) =
-    ctx.eventQueue[].push(notificationToEvents(meth, params))
+    var evt = notificationToEvents(meth, params)
+    if evt.kind == levDiagnostics:
+      evt.diagGeneration = serverGeneration
+    ctx.eventQueue[].push(evt)
 
   proc sendRequest(
       meth: string, paramsJson: string
@@ -1940,6 +1945,7 @@ proc startServer*(
   # Mark starting before queuing so liveness checks see it; otherwise a sync
   # in the gap re-opens an already-opened document.
   worker.sharedState.stateVal.store(lwsStarting.ord, moRelease)
+  inc worker.serverGeneration
 
   let cmd = LspCommand(
     kind: lcmdStart,
@@ -2035,6 +2041,10 @@ proc enqueueEventForTest*(worker: LspWorker, evt: LspEvent) =
   ## Deliberately compiled into release builds so the test suite (which has no
   ## `testing` define) can call it.
   push(worker.eventQueue, evt)
+
+proc serverGeneration*(worker: LspWorker): int =
+  ## Generation of the server last started, as the thread stamps its events.
+  worker.serverGeneration
 
 proc state*(worker: LspWorker): LspWorkerState =
   ## Get the current worker state (thread-safe)

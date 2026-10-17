@@ -90,6 +90,8 @@ type
     ackedVersion: int ## Last version confirmed on the wire within `generation`.
     attempt: Option[LspSyncAttempt]
       ## Last memo; none until the first attempt. Written only by `recordSyncAttempt`.
+    publishedUnderUri: bool
+      ## The server published under this URI, so it names the document as we do.
 
   LspProgressState* = object ## State of an active LSP progress operation
     token*: string ## Progress token (unique identifier)
@@ -118,6 +120,8 @@ type
     serverStatus*: Table[string, LspStatusState]
     # Per-language colour table cache, built lazily to avoid per-token lookup.
     semanticTypeColorTables*: Table[string, SemanticTypeColorTable]
+    # Run once a server's documents are retracted after it went away.
+    onServerLost*: proc(langId: string) {.gcsafe, raises: [].}
 
   WorkspaceEditResult* = object ## Outcome of applyWorkspaceEdit
     modifiedCount*: int ## Total buffers modified
@@ -230,6 +234,14 @@ proc ackedVersion*(doc: LspDocumentState): int =
   ## Last version the worker confirmed on the wire within the generation.
   doc.ackedVersion
 
+proc publishedUnderUri*(doc: LspDocumentState): bool =
+  ## Whether the server published under this URI within the generation.
+  doc.publishedUnderUri
+
+proc notePublishedUnderUri*(doc: var LspDocumentState) =
+  ## Record a publish under this URI.
+  doc.publishedUnderUri = true
+
 proc noteServerHolds*(doc: var LspDocumentState, text: string) =
   ## Record that the server has `text`. Call only after a successful hand-over.
   doc.shadow = text
@@ -248,6 +260,7 @@ proc nextGeneration*(doc: var LspDocumentState) =
   ## Start a new epoch; old-generation acks are dropped.
   inc doc.generation
   doc.ackedVersion = 0
+  doc.publishedUnderUri = false
   doc.retractDelivery()
   doc.forgetSyncAttempt()
 
