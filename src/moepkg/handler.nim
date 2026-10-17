@@ -1030,10 +1030,9 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## none if not a window command key.
   if e.state.pendingInput.pendingCommand == PendingWindowCmd:
     e.state.pendingInput.pendingCommand = PendingNone
-    if not keyCombo.isSpecial:
-      let r = windowSecondKeyToHandlerResult(keyCombo.char)
-      if r.isSome:
-        return some(e.processResult(r.get, e.activeBuffer()))
+    let r = windowSecondKeyToHandlerResult(keyCombo)
+    if r.isSome:
+      return some(e.processResult(r.get, e.activeBuffer()))
     return some(true) # Unknown window command, cancel
 
   # Check for Ctrl-w to enter window command mode

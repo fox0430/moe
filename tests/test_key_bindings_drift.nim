@@ -42,6 +42,7 @@ import ../src/moepkg/key_bindings/normal_bindings {.all.}
 import ../src/moepkg/key_bindings/insert_bindings {.all.}
 import ../src/moepkg/key_bindings/visual_bindings {.all.}
 import ../src/moepkg/key_bindings/commands {.all.}
+import ../src/moepkg/key_bindings/registry
 import ../src/moepkg/command_handlers/command_passthrough {.all.}
 
 proc registeredCommands(): Table[string, string] =
@@ -177,9 +178,6 @@ suite "key bindings — command name drift detection":
     var seenKeys: HashSet[string]
     var problems: seq[string]
     for (key, name, _, _) in WindowSecondKeyCommands:
-      if key in seenKeys:
-        problems.add("duplicate key: " & key)
-      seenKeys.incl key
       if name notin registered:
         problems.add("unregistered command: " & key & " → " & name)
         continue
@@ -189,10 +187,28 @@ suite "key bindings — command name drift detection":
         continue
       if lookupPassthrough(commandId.get).isNone:
         problems.add("no passthrough: " & commandId.get)
-      if windowSecondKeyToHandlerResult(key).isNone:
+      let expected = windowSecondKeyToHandlerResult(parseKeyCombo(key).get)
+      if expected.isNone:
         problems.add("no handler result: " & key)
-    if windowSecondKeyToHandlerResult("z").isSome:
-      problems.add("unknown key resolves: z")
+        continue
+      for k in windowSecondKeys(key):
+        if k in seenKeys:
+          problems.add("duplicate key: " & k)
+        seenKeys.incl k
+        let combo = parseKeyCombo(k)
+        if combo.isNone:
+          problems.add("unparseable key: " & k)
+          continue
+        let r = windowSecondKeyToHandlerResult(combo.get)
+        if r.isNone or r.get.kind != expected.get.kind:
+          problems.add("does not run " & name & ": " & k)
+    for a in WindowSecondKeyAlternates:
+      if not WindowSecondKeyCommands.anyIt(it.key == a.key):
+        problems.add("alternates for an unknown key: " & a.key)
+    # `C-w C-c` does nothing in Vim.
+    for k in ["z", "C-c"]:
+      if windowSecondKeyToHandlerResult(parseKeyCombo(k).get).isSome:
+        problems.add("unknown key resolves: " & k)
 
     for entry in problems:
       echo "  window key drift: ", entry

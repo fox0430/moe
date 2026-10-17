@@ -226,4 +226,5 @@ proc bindNormalMode*(registry: KeyBindingRegistry) =
   for (key, cmd) in NormalBindings:
     registry.bindKey(EditorMode.Normal, key, cmd)
   for c in WindowSecondKeyCommands:
-    registry.bindKey(EditorMode.Normal, "C-w " & c.key, c.name)
+    for key in windowSecondKeys(c.key):
+      registry.bindKey(EditorMode.Normal, "C-w " & key, c.name)

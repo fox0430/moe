@@ -5853,6 +5853,77 @@ suite "processMiscResult - hrDeleteLines":
     check e.processMiscResult(r, e.activeBuffer())
     check e.activeWindow.cursor.line == 0
 
+suite "Ctrl-w second keys Vim takes for the same command":
+  # As `CTRL-W CTRL-J`, `CTRL-W <Down>` and `CTRL-W <BS>`, so Ctrl may stay
+  # held after Ctrl-w.
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  for second in ["j", "C-j", "Down"]:
+    test "Ctrl-w " & second & " moves to the window below":
+      let e = createTestEditorWithBuffer("line0\nline1")
+      check e.hsplit().isOk
+      let upper = e.activeWindow
+
+      e.press("C-w", second)
+
+      check e.activeWindow != upper
+      check e.activeWindow.viewport.y > upper.viewport.y
+
+  for second in ["k", "C-k", "Up"]:
+    test "Ctrl-w " & second & " moves to the window above":
+      let e = createTestEditorWithBuffer("line0\nline1")
+      check e.hsplit().isOk
+      let upper = e.activeWindow
+      e.press("C-w", "j")
+
+      e.press("C-w", second)
+
+      check e.activeWindow == upper
+
+  for second in ["l", "C-l", "Right"]:
+    test "Ctrl-w " & second & " moves to the window on the right":
+      let e = createTestEditorWithBuffer("line0\nline1")
+      check e.vsplit().isOk
+      let left = e.activeWindow
+
+      e.press("C-w", second)
+
+      check e.activeWindow != left
+      check e.activeWindow.viewport.x > left.viewport.x
+
+  for second in ["h", "C-h", "Backspace", "Left"]:
+    test "Ctrl-w " & second & " moves to the window on the left":
+      let e = createTestEditorWithBuffer("line0\nline1")
+      check e.vsplit().isOk
+      let left = e.activeWindow
+      e.press("C-w", "l")
+
+      e.press("C-w", second)
+
+      check e.activeWindow == left
+
+  test "Ctrl-w Ctrl-w and Ctrl-w Ctrl-p move as Ctrl-w w and Ctrl-w p":
+    let e = createTestEditorWithBuffer("line0\nline1")
+    check e.hsplit().isOk
+    let first = e.activeWindow
+
+    e.press("C-w", "C-w")
+    check e.activeWindow != first
+    e.press("C-w", "C-p")
+    check e.activeWindow == first
+
+  test "Ctrl-w Ctrl-c closes nothing, as in Vim":
+    let e = createTestEditorWithBuffer("line0\nline1")
+    check e.hsplit().isOk
+    let win = e.activeWindow
+
+    e.press("C-w", "C-c")
+
+    check e.windowManager.windows.len == 2
+    check e.activeWindow == win
+
 suite "Ctrl-w window commands in special modes":
   proc createSplitEditorInFileTree(): Editor =
     let e = createTestEditorWithBuffer("line0\nline1")
@@ -5884,6 +5955,26 @@ suite "Ctrl-w window commands in special modes":
 
     check e.windowManager.windows[e.windowManager.activeWindowIndex].viewport.width <
       width
+
+  for second in ["C-l", "Right"]:
+    test "Ctrl-w " & second & " moves as Ctrl-w l":
+      let e = createSplitEditorInFileTree()
+      let tree = e.activeWindow
+      require tree.mode == EditorMode.FileTree
+
+      check e.handleKeyCombo(parseKeyCombo("C-w").get)
+      check e.handleKeyCombo(parseKeyCombo(second).get)
+
+      check e.activeWindow.viewport.x > tree.viewport.x
+
+  test "Ctrl-w Ctrl-c closes nothing, as in Vim":
+    let e = createSplitEditorInFileTree()
+    let windowsBefore = e.windowManager.windows.len
+
+    check e.handleKeyCombo(parseKeyCombo("C-w").get)
+    check e.handleKeyCombo(parseKeyCombo("C-c").get)
+
+    check e.windowManager.windows.len == windowsBefore
 
   proc editorOnTempFile(name: string): tuple[e: Editor, path: string] =
     let path = getTempDir() / name
