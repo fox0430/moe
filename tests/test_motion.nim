@@ -468,6 +468,17 @@ suite "First/Last Line Motion":
     check result.y == 2
     check result.x == 0
 
+  test "gg and G land on the first non-blank (startofline)":
+    let buffer = newTextBuffer("  line1\n\tline2\n\n    ")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 2)
+    check executor.moveFirstLine(currentPos) == CursorPosition(x: 2, y: 0)
+    check executor.moveFirstLine(currentPos, 2) == CursorPosition(x: 1, y: 1)
+    check executor.moveLastLine(currentPos, 2) == CursorPosition(x: 1, y: 1)
+    check executor.moveLastLine(currentPos, 3) == CursorPosition(x: 0, y: 2)
+    # An all-blank line lands on its last character.
+    check executor.moveLastLine(currentPos) == CursorPosition(x: 3, y: 3)
+
   test "FirstLine motion with count lands on counted line":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
     let executor = newMotionExecutor(buffer)
