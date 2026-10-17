@@ -7478,6 +7478,21 @@ suite "Operator + Paragraph/File motions":
     check buffer[0] == "line4"
     check buffer.len == 1
 
+  test "yank to first line (ygg) leaves the cursor on its first non-blank":
+    let buffer = newTextBuffer("  l0\n    l1\n  l2")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(2, 3)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.FirstLine, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 2)
+
   test "delete to last line (dG)":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
     let ctx = createTestContext(buffer)

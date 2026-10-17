@@ -326,11 +326,12 @@ proc moveFirstLine(
     e: MotionExecutor, currentPos: CursorPosition, count: int = 1
 ): CursorPosition =
   ## Bare gg and 1gg both go to the first line, so count 1 is the default.
+  ## Lands on the first non-blank, as Vim's 'startofline' does.
   result = currentPos
   if e.buffer.len == 0:
     return
   result.y = clamp(count - 1, 0, e.buffer.len - 1)
-  result.x = 0
+  result.x = firstNonBlankColumn(e.buffer.getLine(result.y))
 
 proc moveLastLine(
     e: MotionExecutor, currentPos: CursorPosition, count: int = 0
@@ -344,7 +345,7 @@ proc moveLastLine(
     result.y = e.buffer.len - 1
   else:
     result.y = min(count - 1, e.buffer.len - 1)
-  result.x = 0
+  result.x = firstNonBlankColumn(e.buffer.getLine(result.y))
 
 proc searchChar(
     e: MotionExecutor, currentPos: CursorPosition, cmd: MotionCommand
