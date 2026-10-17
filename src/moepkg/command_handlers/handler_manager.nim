@@ -38,6 +38,7 @@ import
   ../[
     types, buffer, modes, motion, key_bindings, command_line, command_config,
     command_registry, lsp_integration, logger, key_router, pending_input, insert_record,
+    wanted_column,
   ]
 import ../types/editor_types
 # The shared handler-module list lives in handler_modules (single source of
@@ -307,7 +308,7 @@ proc completeScrollAnimation*(e: Editor) =
     let (completed, cursorLine) =
       completeScrollAnimation(e.state.windowDisplay.scrollAnimation)
     if completed:
-      e.state.activeWindow.scrollCursor(cursorLine)
+      e.state.scrollCursor(cursorLine)
 
 proc handleKeyCombo*(
     manager: HandlerManager, e: Editor, keyCombo: KeyCombo

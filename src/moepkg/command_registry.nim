@@ -28,7 +28,7 @@ from std/strutils import repeat
 
 import pkg/results
 
-import types, motion, key_bindings, modes, logger, visual_selection
+import types, motion, key_bindings, modes, logger, visual_selection, wanted_column
 import buffer/[core, edit, undo]
 
 import command_handlers/visual_commands
@@ -230,7 +230,7 @@ proc executeCommand*(
     if skipViewportUpdate and targetCursorLine != prevCursorLine:
       # Scroll the cursor back to where the animation starts, keeping the
       # column the move aimed for.
-      ctx.state.activeWindow.scrollCursor(prevCursorLine)
+      ctx.state.scrollCursor(prevCursorLine)
       startScrollAnimation(
         ctx.state.windowDisplay.scrollAnimation, prevCursorLine, targetCursorLine,
         ctx.smoothScrollConfig,

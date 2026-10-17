@@ -23,7 +23,7 @@ import std/options
 
 import pkg/results
 
-import ../[types, motion, render_utils, visible_rows, visual_selection]
+import ../[types, motion, render_utils, visible_rows, visual_selection, wanted_column]
 import ../buffer/[core, fold]
 
 import core
@@ -163,26 +163,24 @@ proc moveCursorToRow(
     ctx: CommandContext, layout: RowLayout, row: VisibleRow, visibleHeight: int
 ) =
   let
-    win = ctx.state.activeWindow
+    state = ctx.state
     leftColumn = ctx.motionController.viewportManager.viewport.leftColumn
   template sameScreenColumn(): BufferPosition =
-    let (_, cellX) = layout.cursorCell(win.cursor.line, win.cursor.column, leftColumn)
+    let (_, cellX) =
+      layout.cursorCell(state.cursor.line, state.cursor.column, leftColumn)
     BufferPosition(
       line: row.line,
       column: layout.cellToColumn(row.line, row.wrapSeg, cellX, leftColumn),
     )
 
   if row.fold.isSome:
-    win.scrollCursor(BufferPosition(line: row.line, column: 0))
-  elif win.preferredColumn < 0:
-    # With no column kept, Vim aims for the cursor's screen column.
-    win.scrollCursor(sameScreenColumn())
+    state.scrollCursor(BufferPosition(line: row.line, column: 0))
   else:
-    win.scrollCursor(row.line)
+    state.scrollCursor(row.line)
     # A wrapped line may show only some of its rows: off them, stay on the row
     # at the same screen column.
     if ctx.cursorRow(layout, visibleHeight) notin 0 ..< visibleHeight:
-      win.scrollCursor(sameScreenColumn())
+      state.scrollCursor(sameScreenColumn())
 
 proc keepCursorInScrolledViewport(
     ctx: CommandContext, layout: RowLayout, visibleHeight: int

@@ -30,7 +30,7 @@ import
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
     syntax_checker, quick_run_utils, command_completion, key_bindings, key_router,
     lsp_integration, command_registry, command_line, editor_window_state, pending_input,
-    macro_recording, insert_record,
+    macro_recording, insert_record, wanted_column,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -335,6 +335,10 @@ proc processResultEpilogue(
       if hostHandled:
         return true
     elif not focused:
+      # Until the cursor moves, Visual aims for the cell the cursor showed on
+      # before, a tab's last in Normal mode, as Vim keeps w_virtcol.
+      if newMode.isVisualAllMode and not oldMode.isVisualAllMode:
+        e.state.preferredColumn = e.state.aimedColumn
       e.setMode(newMode)
 
       # Adjust cursor when transitioning from Insert or Replace to Normal mode
@@ -431,13 +435,17 @@ proc settleInsertResume*(e: Editor) =
     return
   # Vim resumes past the end of the line if the cursor is on its last character
   # and either Ctrl-o left that line there (ins_at_eol) or the column vertical
-  # moves want is right of it. It keeps that column (arrow_used).
+  # moves want is right of it, as Insert shows it: a tab on its first cell. It
+  # keeps that column (arrow_used).
   let
     wanted = state.preferredColumn
-    lastColumn = e.activeBuffer.getLine(state.cursor.line).charLen - 1
+    line = e.activeBuffer.getLine(state.cursor.line)
+    lastColumn = line.charLen - 1
     append =
-      state.cursor.column == lastColumn and
-      (state.insertResumeLineEnd == some(state.cursor.line) or wanted > lastColumn)
+      state.cursor.column == lastColumn and (
+        state.insertResumeLineEnd == some(state.cursor.line) or
+        wanted > line.cursorCell(state.cursor.column, state.tabStop, onTabEnd = false)
+      )
     message = state.statusMessage
     resumedAt = state.cursor
   discard e.processResult(e.handlerManager.runInsertCommand(e, append), e.activeBuffer)
