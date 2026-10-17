@@ -44,3 +44,24 @@ const WindowSecondKeyCommands*: seq[tuple[key, name, desc, commandId: string]] =
   ## command's ActionCommands entry. Single source for `normal_bindings`
   ## (`C-w <key>` entries), `command_passthrough.windowSecondKeyToHandlerResult`
   ## (special-mode `C-w`) and the `Ctrl-w` help entries.
+
+const WindowSecondKeyAlternates*: seq[tuple[key: string, alternates: seq[string]]] = @[
+  ("w", @["C-w"]),
+  ("p", @["C-p"]),
+  # The terminal sends Ctrl-H as Backspace.
+  ("h", @["C-h", "Backspace", "Left"]),
+  ("j", @["C-j", "Down"]),
+  ("k", @["C-k", "Up"]),
+  ("l", @["C-l", "Right"]),
+  ("x", @["C-x"]),
+  ("n", @["C-n"]),
+]
+  ## Other second keys Vim runs the same window command for, so `C-w` works
+  ## with Ctrl still held. Not `C-c`, which does nothing in Vim.
+
+func windowSecondKeys*(key: string): seq[string] =
+  ## `key` and its `WindowSecondKeyAlternates`.
+  result = @[key]
+  for a in WindowSecondKeyAlternates:
+    if a.key == key:
+      result.add a.alternates

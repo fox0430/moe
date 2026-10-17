@@ -29,9 +29,9 @@
 ## insert.*, edit.{undo,redo}) are NOT handled here and remain in
 ## normal_handler.nim with full editor context.
 
-import std/options
+import std/[options, sequtils]
 
-import ../key_bindings/commands
+import ../key_bindings/[commands, registry]
 import ./handler_result
 
 type PassthroughKind* = enum
@@ -245,11 +245,11 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
   of ptLspDocumentSymbol:
     HandlerResult(kind: hrLspDocumentSymbol)
 
-proc windowSecondKeyToHandlerResult*(key: string): Option[HandlerResult] =
+proc windowSecondKeyToHandlerResult*(key: KeyCombo): Option[HandlerResult] =
   ## HandlerResult for a `C-w <key>` second key, resolved through the same
   ## command names as the Normal-mode bindings. None for unknown keys.
   for c in WindowSecondKeyCommands:
-    if c.key == key:
+    if windowSecondKeys(c.key).anyIt(parseKeyCombo(it) == some(key)):
       let commandId = actionCommandId(c.name)
       if commandId.isNone:
         return none(HandlerResult)
