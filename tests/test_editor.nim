@@ -25,13 +25,13 @@ import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
     render_utils, lsp_service, lsp_integration, setting_options, editor_init,
-    command_config, command_registry, logger, modes,
+    command_config, command_registry, logger, modes, types, viewer_mode, buffer_manager,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
 import visual_test_helper
 import
   ../src/moepkg/command_handlers/
-    [command_mode_handler, handler_result, result_processor]
+    [command_mode_handler, editor_ops, handler_result, result_processor]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -2343,6 +2343,58 @@ suite "Editor - BufferManager delete keeps state.windowDisplay.currentBufferId f
 
     check e.bufferById(f1Id).isNone
     check e.state.windowDisplay.currentBufferId == f2Id # unchanged
+
+suite "Editor - BufferManager delete refuses a modified buffer":
+  test "D keeps a buffer with unsaved changes as :bd does":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_bmgrdel_modified_1.txt"
+    let f2 = getTempDir() / "moe_test_bmgrdel_modified_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.editFile(f2)
+    let f1Buf = e.buffers[1]
+    discard f1Buf.insertText(BufferPosition(line: 0, column: 1), "x")
+    require f1Buf.isModified
+    let bufferCount = e.buffers.len
+
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: f1Buf.id)
+    discard e.processResult(r, e.activeBuffer())
+
+    check e.bufferById(f1Buf.id).isSome
+    check e.buffers.len == bufferCount
+    check e.state.statusMessage == "No write since last change (add ! to override)"
+
+  test "the list keeps the refused entry":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_bmgrdel_modified_list.txt"
+    writeFile(f1, "1")
+    defer:
+      removeFile(f1)
+
+    discard e.editFile(f1)
+    let f1Buf = e.activeBuffer()
+    discard f1Buf.insertText(BufferPosition(line: 0, column: 1), "x")
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
+    let listBefore = e.activeWindow.buffer.getTextString
+
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: f1Buf.id)
+    discard e.processResult(r, e.activeBuffer())
+
+    check e.activeWindow.modeState.kind == mskBufferManager
+    check e.activeWindow.buffer.getTextString == listBefore
+    check e.activeWindow.tabBufferId == f1Buf.id
 
 suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
   test "switches the active window to a survivor when other buffers exist":
