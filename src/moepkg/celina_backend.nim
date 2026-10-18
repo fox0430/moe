@@ -47,6 +47,7 @@ when defined(moe.embedded):
       FocusIn
       FocusOut
       Quit
+      InputClosed
       Unknown
 
     MouseEvent* = object
@@ -64,7 +65,7 @@ when defined(moe.embedded):
         mouse*: MouseEvent
       of Paste:
         pastedText*: string
-      of Resize, FocusIn, FocusOut, Quit, Unknown:
+      of Resize, FocusIn, FocusOut, Quit, InputClosed, Unknown:
         discard
 
 else:
