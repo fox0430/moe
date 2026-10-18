@@ -519,15 +519,39 @@ suite "gv":
     check e.state.mode == EditorMode.VisualLine
     check e.selection == (pos(0, 0), pos(0, 0))
 
-  test "deleting every line drops the marks on the last one":
-    let e = newTestEditor("abc\ndef\nghi")
-    e.press("l", "m", "a")
-    e.activeBuffer.toggleBookmark(0)
-    e.press("V", "G", "d")
+  for keys in [
+    @["V", "G", "d"], @[":", "%", "d", "Enter"], @["g", "g", "d", "G"], @["3", "d", "d"]
+  ]:
+    let name = keys.join(" ")
 
-    check e.activeBuffer.len == 1
-    check e.activeBuffer.namedMarks['a'].isNone
-    check e.activeBuffer.bookmarks.len == 0
+    test "after " & name & " from below the first line, gv selects the line left":
+      let e = newTestEditor("a\nb\nc")
+      e.press("j", "V", "j", "Esc", "g", "g")
+      e.press(keys)
+      e.press("g", "v")
+
+      check e.activeBuffer.len == 1
+      check e.state.mode == EditorMode.VisualLine
+      check e.selection == (pos(0, 0), pos(0, 0))
+
+    test name & " drops marks, bookmarks and folds, and undo brings them back":
+      let e = newTestEditor("abc\ndef\nghi")
+      e.press("l", "m", "a")
+      e.activeBuffer.toggleBookmark(0)
+      check e.activeBuffer.foldState.addFold(0, 1)
+      e.press(keys)
+
+      check e.activeBuffer.len == 1
+      check e.activeBuffer.getLine(0) == ""
+      check e.activeBuffer.namedMarks['a'].isNone
+      check e.activeBuffer.bookmarks.len == 0
+      check e.activeBuffer.foldState.folds.len == 0
+
+      e.press("u")
+      check e.activeBuffer.len == 3
+      check e.activeBuffer.namedMarks['a'] == some(pos(0, 1))
+      check e.activeBuffer.bookmarks == @[0]
+      check e.activeBuffer.foldState.folds.len == 1
 
   test "after a blockwise put, selects the put text blockwise":
     let e = newTestEditor("ab\ncd\n0123456789\n0123456789")

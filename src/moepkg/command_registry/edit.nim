@@ -681,36 +681,19 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
 
   let deletedText = ctx.buffer.linewiseText(startLine, endLine)
 
-  var clearedWholeBuffer = false
   let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
-    var brokeEarly = false
-    for i in 1 .. lineCount:
-      if startLine < ctx.buffer.len:
-        if ctx.buffer.len == 1:
-          brokeEarly = true
-          break
-        let delResult = ctx.buffer.deleteLine(startLine)
-        if delResult.isErr:
-          return err(delResult.error)
-
-    if brokeEarly:
-      let lastLine = ctx.buffer.getLine(0)
-      if lastLine.len > 0:
-        let clearResult = ctx.buffer.deleteRange(
-          BufferPosition(line: 0, column: 0),
-          BufferPosition(line: 0, column: lastLine.charLen - 1),
-        )
-        if clearResult.isErr:
-          return err(clearResult.error)
-      clearedWholeBuffer = true
+    if startLine == 0 and endLine >= ctx.buffer.len - 1:
+      let delResult = ctx.buffer.deleteAllLines()
+      if delResult.isErr:
+        return err(delResult.error)
+    else:
+      for i in 1 .. lineCount:
+        if startLine < ctx.buffer.len:
+          let delResult = ctx.buffer.deleteLine(startLine)
+          if delResult.isErr:
+            return err(delResult.error)
   if txr.isErr:
     return err("Transaction failed: " & txr.error)
-
-  # Clearing the last line is not a deletion, so the fold shift never sees it go
-  # and every fold is now empty. Dropped after the commit: fold state is outside
-  # the transaction.
-  if clearedWholeBuffer:
-    ctx.buffer.foldState.deleteAllFolds()
 
   # Store in register only after the buffer change succeeded (registers are not
   # covered by the buffer transaction, so a rollback would not undo them)
@@ -885,25 +868,16 @@ proc handleOperatorDelete*(
     let text = ctx.buffer.linewiseText(startLine, endLine)
 
     let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
-      var brokeEarly = false
-      for i in 0 ..< lineCount:
-        if startLine < ctx.buffer.len:
-          if ctx.buffer.len == 1:
-            brokeEarly = true
-            break
-          let deleteResult = ctx.buffer.deleteLine(startLine)
-          if deleteResult.isErr:
-            return err("Failed to delete line: " & deleteResult.error)
-
-      if brokeEarly:
-        let lastLine = ctx.buffer.getLine(0)
-        if lastLine.len > 0:
-          let clearResult = ctx.buffer.deleteRange(
-            BufferPosition(line: 0, column: 0),
-            BufferPosition(line: 0, column: lastLine.charLen - 1),
-          )
-          if clearResult.isErr:
-            return err("Failed to clear last line: " & clearResult.error)
+      if startLine == 0 and endLine >= ctx.buffer.len - 1:
+        let deleteResult = ctx.buffer.deleteAllLines()
+        if deleteResult.isErr:
+          return err("Failed to delete line: " & deleteResult.error)
+      else:
+        for i in 0 ..< lineCount:
+          if startLine < ctx.buffer.len:
+            let deleteResult = ctx.buffer.deleteLine(startLine)
+            if deleteResult.isErr:
+              return err("Failed to delete line: " & deleteResult.error)
     if txr.isErr:
       return err("Transaction failed: " & txr.error)
 

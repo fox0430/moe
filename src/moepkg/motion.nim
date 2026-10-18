@@ -1486,29 +1486,13 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
 
 proc deleteLinesInRange(buffer: TextBuffer, range: OperatorRange): Result[(), string] =
   ## Delete every line the linewise range covers, keeping the buffer at one line.
-  var brokeEarly = false
+  if range.start.line == 0 and range.endPos.line >= buffer.len - 1:
+    return buffer.deleteAllLines()
   for i in 0 .. (range.endPos.line - range.start.line):
     if range.start.line < buffer.len:
-      if buffer.len == 1:
-        brokeEarly = true
-        break
       let deleteResult = buffer.deleteLine(range.start.line)
       if deleteResult.isErr:
         return err(deleteResult.error)
-
-  if brokeEarly:
-    let lastLine = buffer.getLine(0)
-    if lastLine.len > 0:
-      let clearResult = buffer.deleteRange(
-        BufferPosition(line: 0, column: 0),
-        BufferPosition(line: 0, column: lastLine.charLen - 1),
-      )
-      if clearResult.isErr:
-        return err(clearResult.error)
-    # Clearing the last line is not a deletion, so the fold shift never sees it
-    # go and every fold is now empty. Dropped only once the clear succeeded:
-    # fold state is outside the caller's transaction.
-    buffer.foldState.deleteAllFolds()
   ok(())
 
 proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] =
