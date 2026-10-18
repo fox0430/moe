@@ -551,12 +551,17 @@ proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)
         deletedText = getLineText(buffer, sel)
         deletedIsLine = true
 
-        # The first line stays and is cleared, as `cc` does.
+        # The first line stays with only its indent under autoindent, as `cc`.
+        let indent =
+          if state.autoIndent and buffer.allowsTextTransforms:
+            getLineIndent(buffer.getLine(startLine))
+          else:
+            ""
         for _ in startLine + 1 .. endLine:
           checkVisualEdit(state, buffer.deleteLine(startLine + 1))
-        checkVisualEdit(state, buffer.replaceLine(startLine, ""))
+        checkVisualEdit(state, buffer.replaceLine(startLine, indent))
         state.cursor.line = startLine
-        state.cursor.column = 0
+        state.cursor.column = indent.len
       of vskChar:
         let (selStart, selEnd) = sel.getSelectionRange()
 
