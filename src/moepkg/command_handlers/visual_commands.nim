@@ -204,17 +204,16 @@ proc deleteLineSelection(
   # Get text to yank first
   deletedText = getLineText(buffer, sel)
 
-  # Delete lines from end to start to preserve line numbers. The last line is
-  # deleted too, after an empty one is added below it: clearing it would keep
-  # its marks and bookmarks, and the area then lands on the empty line.
-  for lineNum in countdown(endLine, startLine):
-    if buffer.len == 1:
-      let insResult = buffer.insert(1, "")
-      if insResult.isErr:
-        return err(insResult.error)
-    let delResult = buffer.deleteLine(lineNum)
+  if startLine == 0 and endLine >= buffer.len - 1:
+    let delResult = buffer.deleteAllLines()
     if delResult.isErr:
       return err(delResult.error)
+  else:
+    # Delete lines from end to start to preserve line numbers.
+    for lineNum in countdown(endLine, startLine):
+      let delResult = buffer.deleteLine(lineNum)
+      if delResult.isErr:
+        return err(delResult.error)
 
   # Move cursor to start line (or last line if start was beyond buffer)
   let newLine = min(startLine, buffer.len - 1)

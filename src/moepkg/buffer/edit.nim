@@ -392,6 +392,21 @@ proc replaceLines*(
 
   return ok(())
 
+proc deleteAllLines*(b: TextBuffer): Result[(), string] =
+  ## Delete every line, leaving one empty line. The empty line is added below
+  ## first so the old rows are all dropped: their marks, folds and bookmarks
+  ## go (and come back on undo), and the last Visual area lands on line 0.
+  if not b.inTransaction:
+    return withTransaction(b, "delete all lines"):
+      let r = b.deleteAllLines()
+      if r.isErr:
+        return r
+  let count = b.len
+  let inserted = b.insert(count, "")
+  if inserted.isErr:
+    return inserted
+  b.replaceLines(0, count, [], keepRows = false)
+
 proc linewiseText*(b: TextBuffer, first, last: int): string =
   ## Lines `first` to `last` as linewise register text: each ends in a line
   ## break.

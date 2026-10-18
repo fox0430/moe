@@ -535,13 +535,9 @@ proc executeDelete*(
     try:
       withTransaction(buffer, "delete lines"):
         if deletingAll:
-          for i in countdown(buffer.len - 1, 1):
-            let deleteResult = buffer.deleteLine(i)
-            if deleteResult.isErr:
-              return HandlerResult(kind: hrError, errorMessage: deleteResult.error)
-          let replaceResult = buffer.replaceLine(0, "")
-          if replaceResult.isErr:
-            return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
+          let deleteResult = buffer.deleteAllLines()
+          if deleteResult.isErr:
+            return HandlerResult(kind: hrError, errorMessage: deleteResult.error)
         else:
           for i in countdown(rangeEnd, rangeStart):
             let deleteResult = buffer.deleteLine(i)
@@ -554,11 +550,6 @@ proc executeDelete*(
       )
   if txr.isErr:
     return HandlerResult(kind: hrError, errorMessage: txr.error)
-
-  # Clearing the last line is not a deletion, so the fold shift never sees it go.
-  # Dropped after the commit: fold state is outside the transaction.
-  if deletingAll:
-    buffer.foldState.deleteAllFolds()
 
   HandlerResult(
     kind: hrDeleteLines,
