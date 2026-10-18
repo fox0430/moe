@@ -34,6 +34,7 @@
 import std/[atomics, os, posix, termios]
 
 import pkg/[chronos, results]
+from pkg/celina import EmergencyResetSeq, CursorStyleDefault, AlternateScreenExit
 import pkg/chronos/threadsync
 
 import deadly_signals, logger
@@ -68,13 +69,10 @@ proc moveFrom(expected: Stage, next: Stage): bool =
   stage.compareExchange(e, ord(next))
 
 const TerminalReset =
-  "\x18" & # Abort an escape sequence a frame write left open.
-  "\e[?2026l" & # Synchronized output, which a frame write may have left on.
-  "\e[?9l\e[?1000l\e[?1002l\e[?1003l\e[?1006l" & # Mouse reporting.
-  "\e[?1004l" & # Focus reporting.
-  "\e[?2004l" & # Bracketed paste.
-  "\e[0 q\e[?25h" & # Cursor style and visibility.
-  "\e[?1049l" # Alternate screen, last: it restores the cursor position.
+  # Aborts a cut escape sequence, then every mode celina enables.
+  EmergencyResetSeq & CursorStyleDefault &
+  # Alternate screen last: it restores the cursor position.
+  AlternateScreenExit & "\e[0m"
 
 const
   Slice = 100.milliseconds ## How often a command being ended is looked at.

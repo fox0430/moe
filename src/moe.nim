@@ -23,7 +23,6 @@ when not defined(posix):
 import std/[strformat, os, options, tables]
 
 import pkg/[celina, results, chronos]
-from pkg/celina/async/async_io import tryWriteBlocking
 from std/posix import isatty, STDERR_FILENO, Sigset, SIGTTOU
 
 import
@@ -192,10 +191,8 @@ proc preserveAndExit(
   # and the user must not wait in raw mode.
   try:
     if not app.isNil and not background:
-      # CAN aborts an escape sequence a suspended frame write left open.
-      # Blocking, since that write was suspended on a full tty.
-      tryWriteBlocking("\x18")
-      app.restoreTerminal()
+      # Aborts an escape sequence a cut frame write left open, then restores.
+      app.emergencyRestore()
 
     if not background or isatty(STDERR_FILENO) != 1:
       if death.kind == ckSignal:
@@ -305,8 +302,8 @@ proc runEditor(
     app.onEventAsync proc(e: Event, app: AsyncApp): Future[EventResult] {.async.} =
       editorCallback(editor, app, cmdLineConfig, log):
         if e.kind == EventKind.Resize:
-          # celina's async_app already updates the terminal size, clears the
-          # screen and forces a full render on the next frame.
+          # celina's async_app already updates the terminal size and clears
+          # the screen; the next frame redraws against the cleared screen.
           return erContinue
 
         case editor.exitWaitAction(e.kind == EventKind.Quit)
