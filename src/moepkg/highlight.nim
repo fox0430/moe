@@ -127,8 +127,6 @@ type
     chunkLen*: int
       ## Chunk window; doubles while it sits inside one multi-line construct,
       ## reset after each accepted chunk.
-    allNewLineStates*: seq[TokenizerState]
-      ## One tokenizer state per re-parsed row, from `reparseStart`.
     staleTail*: seq[ColorSegment]
       ## Segments trimmed at `reparseStart`; spliced back if the re-parse
       ## converges early, dropped at EOF or restart.
@@ -1705,7 +1703,6 @@ proc updateHighlightIncremental*(
     currentState: TokenizerState
     reparseEnd: int
     chunkLen: int
-    allNewLineStates: seq[TokenizerState]
     staleTail: seq[ColorSegment]
 
   if pr != nil:
@@ -1715,7 +1712,6 @@ proc updateHighlightIncremental*(
     reparseStart = pr.reparseStart
     reparseEnd = pr.reparseEnd
     chunkLen = pr.chunkLen
-    allNewLineStates = pr.allNewLineStates
     staleTail = pr.staleTail
     tailAligned = pr.tailAligned
     convergeBarrier = pr.convergeBarrier
@@ -1841,7 +1837,6 @@ proc updateHighlightIncremental*(
     # Keep lines currentStart .. handoff - 1; the cache stays sorted.
     let segCut = newSegments.segmentCutIndex(handoff)
     incrHighlight.segments.add(newSegments[0 ..< segCut])
-    allNewLineStates.add(newLineStates[0 ..< (handoff - currentStart)])
     reparseEnd = handoff - 1
 
     # Keep the per-line state cache fresh up to the frontier for render-side
@@ -1852,14 +1847,14 @@ proc updateHighlightIncremental*(
       if incrHighlight.lineStates.states.len < handoff:
         incrHighlight.lineStates.states.setLen(min(lineCount, handoff))
       for i in currentStart ..< handoff:
-        incrHighlight.lineStates.states[i] = allNewLineStates[i - reparseStart]
+        incrHighlight.lineStates.states[i] = newLineStates[i - currentStart]
 
     if chunkEnd >= lastLine:
       refreshStateCache()
       reparseDone = true
       break
 
-    currentState = allNewLineStates[^1]
+    currentState = newLineStates[handoff - currentStart - 1]
     chunkLen = ChunkSize
 
     # If the state entering the next line matches the cache, later lines
@@ -1892,7 +1887,6 @@ proc updateHighlightIncremental*(
       currentState: currentState,
       reparseEnd: reparseEnd,
       chunkLen: chunkLen,
-      allNewLineStates: allNewLineStates,
       staleTail: staleTail,
       tailAligned: tailAligned,
       convergeBarrier: convergeBarrier,
