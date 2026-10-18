@@ -567,6 +567,24 @@ suite "Matching Bracket":
     let result = executor.moveToMatchingBracket(currentPos)
     check result.x == 8 # Outer closing ')'
 
+  test "moveToMatchingBracket starts from the next bracket on the line":
+    let buffer = newTextBuffer("x [a(b)]")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveToMatchingBracket(CursorPosition(x: 0, y: 0))
+    check result.x == 7
+
+  test "moveToMatchingBracket fails when the next bracket has no match":
+    let buffer = newTextBuffer("a ) (b)")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveToMatchingBracket(CursorPosition(x: 0, y: 0))
+    check result.x == 0
+
+  test "moveToMatchingBracket fails with no bracket after the cursor":
+    let buffer = newTextBuffer("(b) c")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveToMatchingBracket(CursorPosition(x: 4, y: 0))
+    check result.x == 4
+
   test "moveToMatchingBracket with braces":
     let buffer = newTextBuffer("{hello}")
     let executor = newMotionExecutor(buffer)

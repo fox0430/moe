@@ -672,41 +672,36 @@ proc moveToMatchingBracket(
     e: MotionExecutor, currentPos: CursorPosition
 ): CursorPosition =
   ## Move to matching bracket (% motion)
-  ## Finds the matching bracket for (, ), {, }, [, ]
+  ## Finds the matching bracket for (, ), {, }, [, ]. Off a bracket, starts
+  ## from the first one at or after the cursor on the line, as Vim does.
   result = currentPos
 
   # Bounds check
   if currentPos.y < 0 or currentPos.y >= e.buffer.len:
     return
 
-  let currentLine = e.buffer.getLine(currentPos.y)
-  if currentPos.x >= currentLine.charLen:
+  let lineRunes = e.buffer.getLine(currentPos.y).toCharRunes
+  var startX = max(currentPos.x, 0)
+  while startX < lineRunes.len and not lineRunes[startX].isBracket:
+    startX += 1
+  if startX >= lineRunes.len:
     return
 
-  # Get character at cursor
-  var charIdx = 0
-  var currentRune: Rune
-  for (r, _) in currentLine.chars:
-    if charIdx == currentPos.x:
-      currentRune = r
-      break
-    charIdx += 1
-
-  if not currentRune.isBracket:
-    return
+  let currentRune = lineRunes[startX]
+  let bracketPos = CursorPosition(x: startX, y: currentPos.y)
 
   if currentRune.isOpenBracket:
     # Search forward for closing bracket
     let closeBracket = correspondingCloseBracket(currentRune)
     var depth = 1
-    var lineIdx = currentPos.y
-    var colIdx = currentPos.x + 1
+    var lineIdx = bracketPos.y
+    var colIdx = bracketPos.x + 1
 
     while lineIdx < e.buffer.len:
       # Index a one-time rune copy of the line instead of a skip scan plus a
       # sliced toCharRunes copy per line.
       let runes = e.buffer.getLine(lineIdx).toCharRunes
-      var charPos = if lineIdx == currentPos.y: colIdx else: 0
+      var charPos = if lineIdx == bracketPos.y: colIdx else: 0
 
       while charPos < runes.len:
         let r = runes[charPos]
@@ -726,8 +721,8 @@ proc moveToMatchingBracket(
     # Search backward for opening bracket
     let openBracket = correspondingOpenBracket(currentRune)
     var depth = 1
-    var lineIdx = currentPos.y
-    var colIdx = currentPos.x - 1
+    var lineIdx = bracketPos.y
+    var colIdx = bracketPos.x - 1
 
     while lineIdx >= 0:
       # Index a one-time rune copy of the line instead of rescanning from the
@@ -735,7 +730,7 @@ proc moveToMatchingBracket(
       let runes = e.buffer.getLine(lineIdx).toCharRunes
 
       # Set starting column
-      if lineIdx != currentPos.y:
+      if lineIdx != bracketPos.y:
         colIdx = runes.len - 1
 
       # Search backward for matching bracket
