@@ -7705,6 +7705,36 @@ suite "Operator + Matching bracket":
     check buffer[0] == "foo(bar)baz" # Buffer unchanged
     check ctx.state.registers.getNoNamedRegister().getContent() == "(bar)"
 
+  test "delete from before a bracket to its match (d%)":
+    let buffer = newTextBuffer("ab (c) d")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.MatchBracket, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == " d"
+
+  test "d% before an unmatched bracket deletes nothing":
+    let buffer = newTextBuffer("a ) (b)")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.MatchBracket, count: 1)
+
+    discard registry.executeCommand(ctx, cmd)
+    check buffer[0] == "a ) (b)"
+
 suite "Operator with compound counts":
   test "count before operator (2dw via operatorCount)":
     let buffer = newTextBuffer("one two three four")
