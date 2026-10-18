@@ -90,6 +90,12 @@ suite "CommandLine - parseSubstituteCommand basic":
     check result.replacement == ""
     check result.hasReplacement == true
 
+  test "The range in front of s is kept, unresolved":
+    check parseSubstituteCommand(":s/foo/bar/").range.kind == erkCurrent
+    check parseSubstituteCommand(":%s/foo/bar/").range.kind == erkAll
+    check parseSubstituteCommand(":2,.+1s/foo/bar/").range ==
+      exAddresses(exLine(2), exCurrent(1))
+
   test "Pattern only :s/foo/":
     let result = parseSubstituteCommand(":s/foo/")
     check result.isValid == true

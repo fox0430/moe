@@ -381,7 +381,7 @@ proc resolveAddress(
     return err("Line out of range")
   ok max(line, 0)
 
-proc resolveExRange(
+proc resolveExRange*(
     buffer: TextBuffer, range: ExLineRange, currentLine: int
 ): Result[tuple[first, last: int], string] =
   ## Turn the range an Ex command was given into the 0-based span of lines it

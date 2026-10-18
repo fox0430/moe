@@ -31,29 +31,34 @@ import
     editor, key_bindings, buffer, types, command_line, command_completion,
     unicode_utils, key_router,
   ]
-import ./editor_ops
-import ./result_processor
+import editor_ops, result_processor
+from command_handler import resolveExRange
 export editor_ops
 
 proc findFirstSubstituteMatch*(
-    lines: seq[string], pattern: string
+    lines: seq[string], pattern: string, firstLine: int = 0, lastLine: int = high(int)
 ): Option[BufferPosition] =
-  ## Find the first occurrence of pattern in the given lines (plain string match).
+  ## Find the first occurrence of pattern in lines `firstLine .. lastLine`
+  ## (plain string match).
   ## Matches the plain-string semantics used by executeSubstitute / updateSubstitutePreview.
   if pattern.len == 0:
     return none(BufferPosition)
-  for lineIdx in 0 ..< lines.len:
+  for lineIdx in max(firstLine, 0) .. min(lastLine, lines.len - 1):
     let idx = lines[lineIdx].find(pattern)
     if idx >= 0:
       let charCol = byteToCharPos(lines[lineIdx], idx)
       return some(BufferPosition(line: lineIdx, column: charCol))
   return none(BufferPosition)
 
-proc jumpToFirstSubstituteMatch*(e: Editor, pattern: string) =
-  ## Move cursor/viewport to the first pattern match (incsearch-like behavior).
+proc jumpToFirstSubstituteMatch*(
+    e: Editor, pattern: string, firstLine: int = 0, lastLine: int = high(int)
+) =
+  ## Move cursor/viewport to the first pattern match in lines
+  ## `firstLine .. lastLine` (incsearch-like behavior).
   ## If no match is found, restore cursor to the position captured at preview start.
-  let match =
-    findFirstSubstituteMatch(e.state.ui.substitutePreview.originalLines, pattern)
+  let match = findFirstSubstituteMatch(
+    e.state.ui.substitutePreview.originalLines, pattern, firstLine, lastLine
+  )
   if match.isSome:
     let pos = match.get
     e.cursor = pos
@@ -75,20 +80,26 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ##   in the buffer when config.highlight.replaceText is enabled.
   let commandText = normalizeSubstituteLongForm(e.state.input.commandText)
   if commandText.contains("s/"):
-    let pattern = extractSubstitutePattern(commandText)
-    let (replacement, hasReplacement) = extractSubstituteReplacement(commandText)
-    let flags = extractSubstituteFlags(commandText)
-    let isGlobal = "g" in flags
-    if pattern.len > 0:
+    let parsed = parseSubstituteCommand(commandText)
+    if parsed.pattern.len > 0:
       if not e.state.ui.substitutePreview.isActive:
         e.startSubstitutePreview()
-      if hasReplacement and e.config.highlight.replaceText:
-        e.updateSubstitutePreview(pattern, replacement, isGlobal)
+        if not e.state.ui.substitutePreview.isActive:
+          return
+      # The lines `:s` would run on, from where the cursor was before the
+      # preview moved it. A range it would refuse previews nothing.
+      let (firstLine, lastLine) = e.activeBuffer
+        .resolveExRange(parsed.range, e.state.ui.substitutePreview.originalCursor.line)
+        .valueOr((0, -1))
+      if parsed.hasReplacement and e.config.highlight.replaceText:
+        e.updateSubstitutePreview(
+          parsed.pattern, parsed.replacement, "g" in parsed.flags, firstLine, lastLine
+        )
       else:
         # Pattern-only state: restore buffer (in case a replacement preview was
         # previously applied) but keep the preview active for cursor tracking.
         e.restoreFromPreview()
-      e.jumpToFirstSubstituteMatch(pattern)
+      e.jumpToFirstSubstituteMatch(parsed.pattern, firstLine, lastLine)
     elif e.state.ui.substitutePreview.isActive:
       e.cancelSubstitutePreview()
 
