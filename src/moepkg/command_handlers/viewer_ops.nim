@@ -145,12 +145,13 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
       e.state.statusMessage = activated.error
     return true
   of hrBufferManagerDeleteBuffer:
-    # deleteBufferById also tears down a Terminal PTY.
+    # closeBuffer refuses a modified buffer as :bd does and tears down a
+    # Terminal PTY.
     let deleteId = r.deleteBufferId
     if e.buffers.len > 1:
       # Can only delete if there's more than one buffer
       if e.bufferIndexById(deleteId) >= 0:
-        let deleteResult = e.deleteBufferById(deleteId)
+        let deleteResult = e.closeBuffer(deleteId)
         if deleteResult.isErr:
           e.state.statusMessage = deleteResult.error
         else:
