@@ -1064,6 +1064,38 @@ suite "Visual Commands - visualChange":
     check buf.len == 2 # empty line + line 3
     check state.mode == EditorMode.Insert
 
+  test "Change line selection keeps the first line's indent under autoindent":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\t  foo\n    bar\nbaz")
+    let state = createTestState()
+    state.autoIndent = true
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 2), vskLine
+    )
+
+    visualChange(buf, state)
+
+    check buf.len == 2
+    check buf.getLine(0) == "\t  "
+    check buf.getLine(1) == "baz"
+    check state.cursor == BufferPosition(line: 0, column: 3)
+    check state.mode == EditorMode.Insert
+    check state.registers.getNoNamedRegister().getContent() == "\t  foo\n    bar\n"
+
+  test "Change line selection drops the indent without autoindent":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  foo\nbar")
+    let state = createTestState()
+    state.autoIndent = false
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2), vskLine
+    )
+
+    visualChange(buf, state)
+
+    check buf.getLine(0) == ""
+    check state.cursor == BufferPosition(line: 0, column: 0)
+
   test "Change char selection stores deleted text into named register":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
