@@ -879,6 +879,8 @@ type
     originalLines*: seq[string] # Snapshot of original buffer content
     lastPattern*: string # Last pattern used for preview
     lastReplacement*: string # Last replacement used for preview
+    lastGlobal*: bool # Whether the last preview replaced every match in a line
+    lastLines*: Slice[int] # Lines the last preview covered
     originalCursor*: BufferPosition # Cursor position when preview started
     originalTopLine*: int # Viewport top line when preview started
     originalLeftColumn*: int # Viewport left column when preview started

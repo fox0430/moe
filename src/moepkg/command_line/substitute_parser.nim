@@ -76,6 +76,7 @@ type SubstituteParseResult* = object ## Result of parsing a substitute command
   replacement*: string # Replacement text
   flags*: string # Flags (e.g., "g" for global within line)
   hasReplacement*: bool # Whether we've reached the replacement section
+  range*: ExLineRange # The lines in front of `s`, unresolved
 
 proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
   ## Parse a substitute command and extract pattern, replacement, and flags
@@ -105,11 +106,12 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
     return
   if not cmd.continuesWith("s/", prefix.rest):
     return
-  # The range is skipped, not kept: `parseCommandLine` has already stripped it
-  # and it is the copy the executor reads.
+  # The executor reads the range `parseCommandLine` stripped, not this copy;
+  # the live preview reads this one.
   let startIdx = prefix.rest + 2
 
   result.isValid = true
+  result.range = prefix.range
 
   # Parse using state machine to properly handle escapes
   type ParseState = enum

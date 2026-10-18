@@ -9613,3 +9613,98 @@ suite "handleKeyCombo - Visual mode moves by Normal's motions, as in Vim":
     for name in ["visual-move-end", "visual-move-word", "visual-move-down"]:
       check registry.commandRegistry.hasKey(name)
       check registry.commandRegistry[name].kind == ctMotion
+
+suite "handleKeyCombo - the :s preview covers the lines :s runs on, as Vim's incsearch":
+  proc createEditorForPreview(content: string, line: int): Editor =
+    result = createTestEditorWithBuffer(content)
+    result.cursor = BufferPosition(line: line, column: 0)
+
+  proc typeKeys(e: Editor, text: string) =
+    for c in text:
+      check e.handleKeyCombo(parseKeyCombo($c).get)
+
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  test "without a range only the cursor line is previewed":
+    let e = createEditorForPreview("foo\nfoo\nfoo", 1)
+
+    e.typeKeys(":s/foo/bar")
+
+    check e.lines == @["foo", "bar", "foo"]
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "% previews every line":
+    let e = createEditorForPreview("foo\nfoo\nfoo", 1)
+
+    e.typeKeys(":%s/foo/bar")
+
+    check e.lines == @["bar", "bar", "bar"]
+
+  test "an address range previews only its lines":
+    let e = createEditorForPreview("foo\nfoo\nfoo\nfoo", 0)
+
+    e.typeKeys(":2,3s/foo/bar")
+
+    check e.lines == @["foo", "bar", "bar", "foo"]
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "the cursor goes to the first match in the range, not above it":
+    let e = createEditorForPreview("foo\nx\nfoo", 2)
+
+    e.typeKeys(":s/foo")
+
+    check e.cursor == BufferPosition(line: 2, column: 0)
+
+  test "no match in the range leaves the cursor where it was":
+    let e = createEditorForPreview("foo\nx", 1)
+
+    e.typeKeys(":s/foo/bar")
+
+    check e.lines == @["foo", "x"]
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "a range :s would refuse previews nothing":
+    let e = createEditorForPreview("foo\nfoo", 0)
+
+    e.typeKeys(":9s/foo/bar")
+
+    check e.lines == @["foo", "foo"]
+    check e.cursor == BufferPosition(line: 0, column: 0)
+
+  test "a relative range counts from the cursor before the preview moved it":
+    let e = createEditorForPreview("foo\nx\nfoo\nfoo", 1)
+
+    e.typeKeys(":.,+2s/foo/bar")
+
+    check e.lines == @["foo", "x", "bar", "bar"]
+
+  test "a flag typed after the replacement updates the preview":
+    let e = createEditorForPreview("foo foo", 0)
+
+    e.typeKeys(":s/foo/bar/")
+    check e.lines == @["bar foo"]
+    e.typeKeys("g")
+
+    check e.lines == @["bar bar"]
+
+  test "Enter substitutes what the preview showed":
+    let e = createEditorForPreview("foo\nfoo\nfoo", 0)
+
+    e.typeKeys(":2s/foo/bar")
+    let previewed = e.lines
+    check e.handleKeyCombo(parseKeyCombo("Enter").get)
+
+    check e.lines == previewed
+    check e.lines == @["foo", "bar", "foo"]
+
+  test "Enter substitutes what a relative-range preview showed":
+    let e = createEditorForPreview("foo\nx\nfoo\nfoo", 1)
+
+    e.typeKeys(":.,+2s/foo/bar")
+    let previewed = e.lines
+    check previewed == @["foo", "x", "bar", "bar"]
+    check e.handleKeyCombo(parseKeyCombo("Enter").get)
+
+    check e.lines == previewed

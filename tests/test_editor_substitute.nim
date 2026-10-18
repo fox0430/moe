@@ -74,6 +74,26 @@ suite "editor_substitute":
     check e.activeBuffer.getLine(0) == "qux bar foo"
     check e.activeBuffer.getLine(1) == "qux baz"
 
+  test "updateSubstitutePreview replaces only lines firstLine .. lastLine":
+    let e = createTestEditor()
+    setBufferContent(e, "foo\nfoo\nfoo")
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview("foo", "qux", firstLine = 1, lastLine = 1)
+    check e.activeBuffer.getLine(0) == "foo"
+    check e.activeBuffer.getLine(1) == "qux"
+    check e.activeBuffer.getLine(2) == "foo"
+
+  test "updateSubstitutePreview reapplies when only the lines or the flag change":
+    let e = createTestEditor()
+    setBufferContent(e, "foo foo\nfoo foo")
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview("foo", "qux", isGlobalFlag = false, lastLine = 0)
+    e.updateSubstitutePreview("foo", "qux", isGlobalFlag = true, lastLine = 0)
+    check e.activeBuffer.getLine(0) == "qux qux"
+    e.updateSubstitutePreview("foo", "qux", isGlobalFlag = true, firstLine = 1)
+    check e.activeBuffer.getLine(0) == "foo foo"
+    check e.activeBuffer.getLine(1) == "qux qux"
+
   test "updateSubstitutePreview with an empty pattern is a no-op":
     let e = createTestEditor()
     setBufferContent(e, "foo bar")
