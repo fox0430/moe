@@ -42,6 +42,7 @@ import
   highlight,
   highlight_config,
   logger,
+  path_key,
   buffer,
   lsp_integration
 
@@ -362,20 +363,47 @@ proc resolveBufferArg*(e: Editor, arg: string): Result[BufferId, string] =
   except ValueError:
     discard # Not a number, try matching by name
 
-  # Pick the best-ranked buffer in one scan. `matchRank` owns the precedence,
-  # and strict `>` keeps the earliest buffer on a tie.
-  var
-    bestIndex = -1
-    bestRank = bmrNone
+  # Take the first attempt, strictest first, that leaves a single buffer; at
+  # each one a session name goes before a file name. Several buffers for one
+  # file count once.
+  let cwd =
+    try:
+      normalizedPath(getCurrentDir())
+    except OSError:
+      ""
+  var names = newSeq[seq[string]](e.buffers.len)
+  var paths = newSeq[string](e.buffers.len)
   for i, buf in e.buffers:
-    let rank = buf.matchRank(arg)
-    if rank > bestRank:
-      bestRank = rank
-      bestIndex = i
+    names[i] = buf.fileMatchNames(cwd)
+    if buf.filePath.isSome:
+      paths[i] = pathKey(buf.filePath.get)
 
-  if bestIndex >= 0:
-    return ok(e.buffers[bestIndex].id)
+  var ambiguous = false
+  for attempt in BufferMatchAttempt:
+    for bySession in [true, false]:
+      var found = -1
+      for i, buf in e.buffers:
+        let hit =
+          if bySession:
+            buf.matchAliases.matchesAt(arg, attempt)
+          else:
+            names[i].matchesAt(arg, attempt)
+        if not hit:
+          continue
+        if found >= 0:
+          if paths[i].len > 0 and
+              (paths[i] == paths[found] or sameFileEntity(paths[i], paths[found])):
+            continue
+          found = -2
+          break
+        found = i
+      if found >= 0:
+        return ok(e.buffers[found].id)
+      if found == -2:
+        ambiguous = true
 
+  if ambiguous:
+    return err("E93: More than one match for " & arg)
   err("E94: No matching buffer for " & arg)
 
 proc switchToBuffer*(e: Editor, arg: string): bool =

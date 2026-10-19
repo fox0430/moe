@@ -19,11 +19,12 @@
 
 ## Core buffer types: TextBuffer, BufferChange, FoldState, and supporting enums.
 
-from std/strutils import contains, find
+from std/strutils import contains, endsWith, find, startsWith
 
 import std/[algorithm, deques, hashes, options, os, tables, times, unicode]
 
-import ../[encoding, highlight, logger, primitives, setting_issue, unicode_utils]
+import
+  ../[encoding, highlight, logger, path_key, primitives, setting_issue, unicode_utils]
 import ../types/highlight_types
 when defined(moe.matter) or defined(features.moe.matter):
   import ../syntax/matter_backend
@@ -895,33 +896,58 @@ proc canonicalLabel*(b: TextBuffer, baseNameOnly = false): string {.inline.} =
   ## Full display label for `b`. See `displayLabel` for the priority.
   displayLabel(b.displayName, b.filePath, baseNameOnly)
 
-type BufferMatchRank* = enum
-  ## How well an argument names a buffer; `>` reads as "a better match". The
-  ## switcher keeps the best rank, and the earliest buffer on a tie.
-  bmrNone = 0
-  bmrPathPartial ## `arg` is a substring of the buffer's path
-  bmrAliasPartial ## `arg` is a substring of an authored `matchAliases` entry
-  bmrPathExact ## `arg` is the buffer's path or its filename
-  bmrAliasExact ## `arg` is an authored `matchAliases` entry
+type BufferMatchAttempt* = enum
+  ## How `:b` compares an argument with a buffer's names, strictest first. Each
+  ## looser attempt holds every buffer a stricter one does, so taking the first
+  ## attempt that leaves a single buffer picks what Vim's `buflist_findpat`
+  ## (loosest first, stop on a single match) does.
+  bmaWhole
+  bmaPrefix
+  bmaSuffix
+  bmaSubstring
 
-proc matchRank*(b: TextBuffer, arg: string): BufferMatchRank =
-  ## How well `arg` names `b`. Identity is `matchAliases` plus `filePath`; the
-  ## display label is never a key, so relabelling cannot change what `:b` takes.
+proc fileMatchNames*(b: TextBuffer, cwd: string): seq[string] =
+  ## The file names `:b` matches: the path relative to `cwd` when it lies under
+  ## it (Vim's short name) or else the filename, the path as stored, and the
+  ## full path. Session names are `matchAliases`; the display label is never a
+  ## key, so relabelling cannot change what `:b` takes.
+  if b.filePath.isNone:
+    return @[]
+  let
+    stored = b.filePath.get
+    full = pathKey(stored)
+    base =
+      if cwd.len == 0 or cwd.endsWith(DirSep):
+        cwd
+      else:
+        cwd & DirSep
+  if base.len > 0 and full.startsWith(base) and full.len > base.len:
+    result.add full[base.len .. ^1]
+  else:
+    result.add full.extractFilename
+  for name in [stored, full]:
+    if name notin result:
+      result.add name
+
+proc matchesAt*(
+    names: openArray[string], arg: string, attempt: BufferMatchAttempt
+): bool =
   if arg.len == 0:
-    return bmrNone
-  for alias in b.matchAliases:
-    if alias == arg:
-      return bmrAliasExact
-  if b.filePath.isSome:
-    let path = b.filePath.get
-    if path == arg or path.extractFilename == arg:
-      return bmrPathExact
-  for alias in b.matchAliases:
-    if alias.contains(arg):
-      return bmrAliasPartial
-  if b.filePath.isSome and b.filePath.get.contains(arg):
-    return bmrPathPartial
-  bmrNone
+    return false
+  for name in names:
+    let hit =
+      case attempt
+      of bmaSubstring:
+        name.contains(arg)
+      of bmaPrefix:
+        name.startsWith(arg)
+      of bmaSuffix:
+        name.endsWith(arg)
+      of bmaWhole:
+        name == arg
+    if hit:
+      return true
+  false
 
 proc allocateChangeId*(b: TextBuffer): int64 {.inline.} =
   ## Preinc so 0 stays reserved for "initial state".

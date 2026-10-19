@@ -687,6 +687,10 @@ suite "CommandLine - execute":
     check result.kind == claBuffer
     check result.bufferArg == "3"
 
+  test "Execute :b and :bd keep a name with spaces whole":
+    check parser.parseAndExecute(":b htop (1)").bufferArg == "htop (1)"
+    check parser.parseAndExecute(":bd make test").deleteBufferArg == "make test"
+
   test "Execute :b without argument returns error":
     let result = parser.parseAndExecute(":b")
     check result.kind == claUnknown

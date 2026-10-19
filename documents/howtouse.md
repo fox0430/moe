@@ -533,6 +533,9 @@ switch, close, or delete them. The number in front of each entry is the buffer
 number taken by `:b number`; it stays with the buffer for its whole life, so
 deleting a buffer never renumbers the others.
 
+When `:b name` or `:bd name` matches several buffers equally, it reports
+`E93: More than one match`; use the number from `:ls` or a longer path instead.
+
 <!-- AUTO-GEN:start BufferManagerMode -->
 | Keys | Description |
 |:---|:---|

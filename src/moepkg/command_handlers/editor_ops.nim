@@ -414,11 +414,29 @@ when not defined(moe.embedded):
     let activeWin = e.activeWindow
     # A session with no command still needs a name, so it takes the shell it
     # runs. The spawn command itself stays empty (an interactive shell).
-    let name =
+    let base =
       if command.len > 0:
         command
       else:
         defaultShellName()
+    # A second session of the same command gets its own name, as in Vim, so
+    # `:b` can still tell them apart. The suffix only grows, so a new session
+    # never takes a number that sorts before a live one.
+    var last = -1
+    for buf in e.buffers:
+      for alias in buf.matchAliases:
+        if alias == base:
+          last = max(last, 0)
+        elif alias.startsWith(base & " (") and alias.endsWith(")"):
+          try:
+            last = max(last, parseInt(alias[base.len + 2 .. ^2]))
+          except ValueError:
+            discard
+    let name =
+      if last < 0:
+        base
+      else:
+        base & " (" & $(last + 1) & ")"
     result = newTextBuffer("")
     result.displayName = some("[Terminal: " & name & "]")
     # The name is the session's stable `:b` key; the label is presentation
