@@ -174,15 +174,11 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(
       kind: claBufferDelete,
       forceBufferDelete: "force" in cmd.flags,
-      deleteBufferArg:
-        if cmd.args.len > 0:
-          cmd.args[0]
-        else:
-          "",
+      deleteBufferArg: cmd.args.join(" "),
     )
   of claBuffer:
     if cmd.args.len > 0:
-      return CommandLineResult(kind: claBuffer, bufferArg: cmd.args[0])
+      return CommandLineResult(kind: claBuffer, bufferArg: cmd.args.join(" "))
     else:
       return
         CommandLineResult(kind: claUnknown, errorMessage: "E86: Buffer name required")

@@ -1117,6 +1117,31 @@ suite "Terminal tabs - a session with no command":
     check termBuf.displayName == some("[Terminal: htop]")
     check termBuf.matchAliases == @["htop"]
 
+  test "A second session of the same command gets its own name":
+    let e = createTestEditor()
+    let first = registerFakeTerminal(e, "htop")
+    let second = registerFakeTerminal(e, "htop")
+    let third = registerFakeTerminal(e, "htop")
+
+    check second.displayName == some("[Terminal: htop (1)]")
+    check second.matchAliases == @["htop (1)"]
+    check third.matchAliases == @["htop (2)"]
+
+    check e.switchToBuffer("htop")
+    check e.activeWindow.tabBufferId == first.id
+    check e.switchToBuffer("htop (1)")
+    check e.activeWindow.tabBufferId == second.id
+
+  test "A new session never reuses a number below a live one":
+    let e = createTestEditor()
+    let first = registerFakeTerminal(e, "htop")
+    let second = registerFakeTerminal(e, "htop")
+    check e.deleteBufferById(first.id).isOk
+
+    let third = registerFakeTerminal(e, "htop")
+    check second.matchAliases == @["htop (1)"]
+    check third.matchAliases == @["htop (2)"]
+
   test "defaultShell falls back to /bin/sh when SHELL is unset or empty":
     let savedShell = getEnv("SHELL")
     defer:

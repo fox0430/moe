@@ -153,55 +153,47 @@ suite "BufferEntry - initBufferManagerEntries":
     check entries[0].name == "\x1b[2J"
     check '\x1b' notin formatLine(entries[0])
 
-suite "TextBuffer.matchRank - :b precedence":
-  test "an authored alias outranks the path":
+suite "TextBuffer.fileMatchNames - :b names":
+  test "a file under cwd is named by its path relative to cwd":
     let buf = newTextBuffer()
-    buf.filePath = some("/tmp/bash")
-    buf.matchAliases = @["bash"]
-    check buf.matchRank("bash") == bmrAliasExact
+    buf.filePath = some("/proj/src/main.nim")
+    check buf.fileMatchNames("/proj") == @["src/main.nim", "/proj/src/main.nim"]
 
-  test "a whole path and its filename rank as the same exact match":
+  test "a file outside cwd is named by its filename":
     let buf = newTextBuffer()
-    buf.filePath = some("/tmp/dir/file.nim")
-    check buf.matchRank("/tmp/dir/file.nim") == bmrPathExact
-    check buf.matchRank("file.nim") == bmrPathExact
+    buf.filePath = some("/proj/src/main.nim")
+    check buf.fileMatchNames("/other") == @["main.nim", "/proj/src/main.nim"]
+    check buf.fileMatchNames("") == @["main.nim", "/proj/src/main.nim"]
 
-  test "a path partial never outranks an alias exact":
-    let aliasExact = newTextBuffer()
-    aliasExact.filePath = some("/tmp/bash_backup")
-    aliasExact.matchAliases = @["bash"]
-    let pathPartial = newTextBuffer()
-    pathPartial.filePath = some("/tmp/bash")
-    check aliasExact.matchRank("bash") > pathPartial.matchRank("bash")
-
-  test "an alias partial outranks a path partial":
+  test "cwd at the root still yields a relative name":
     let buf = newTextBuffer()
-    buf.filePath = some("/tmp/bash_backup.log")
-    buf.matchAliases = @["bash_backup"]
-    check buf.matchRank("bash") == bmrAliasPartial
+    buf.filePath = some("/etc/hosts")
+    check buf.fileMatchNames("/") == @["etc/hosts", "/etc/hosts"]
+
+  test "the path as stored stays a name":
+    let buf = newTextBuffer()
+    buf.filePath = some("../lib/x.nim")
+    check "../lib/x.nim" in buf.fileMatchNames("/proj")
+
+  test "each attempt anchors the argument as Vim does":
+    let names = ["src/main.nim", "/proj/src/main.nim"]
+    check names.matchesAt("c/ma", bmaSubstring)
+    check not names.matchesAt("c/ma", bmaPrefix)
+    check names.matchesAt("src/m", bmaPrefix)
+    check names.matchesAt("main.nim", bmaSuffix)
+    check not names.matchesAt("main.nim", bmaWhole)
+    check names.matchesAt("src/main.nim", bmaWhole)
 
   test "the display label is never a match key":
     let buf = newTextBuffer()
     buf.displayName = some("[Terminal: bash]")
     buf.matchAliases = @["bash"]
-    # The label's own text and any substring of it are not identity.
-    check buf.matchRank("[Terminal: bash]") == bmrNone
-    check buf.matchRank("Terminal") == bmrNone
-    check buf.matchRank("bash") == bmrAliasExact
-
-  test "rewriting the label leaves the rank unchanged":
-    let buf = newTextBuffer()
-    buf.displayName = some("[Terminal: bash]")
-    buf.matchAliases = @["bash"]
-    let before = buf.matchRank("bash")
-    buf.displayName = some("session-1")
-    check buf.matchRank("bash") == before
+    check buf.fileMatchNames("/proj").len == 0
 
   test "an empty argument matches nothing":
-    let buf = newTextBuffer()
-    buf.filePath = some("/tmp/file.nim")
-    buf.matchAliases = @["bash"]
-    check buf.matchRank("") == bmrNone
+    let names = ["bash", "/tmp/file.nim"]
+    for attempt in BufferMatchAttempt:
+      check not names.matchesAt("", attempt)
 
 suite "BufferEntry - number":
   test "each row carries the number of the buffer it describes":

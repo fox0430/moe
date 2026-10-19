@@ -2697,6 +2697,181 @@ suite "Editor - :bd with a buffer argument":
     check byName.isErr
     check byName.error == "E94: No matching buffer for nonexistent_file.txt"
 
+  test "reports E93 and keeps both buffers when two names tie":
+    let e = createTestEditor()
+    let d1 = getTempDir() / "moe_test_bd_arg_tie_a"
+    let d2 = getTempDir() / "moe_test_bd_arg_tie_b"
+    createDir(d1)
+    createDir(d2)
+    let f1 = d1 / "main.nim"
+    let f2 = d2 / "main.nim"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeDir(d1)
+      removeDir(d2)
+
+    discard e.editFile(f1)
+    let f1Id = e.activeBuffer().id
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+
+    let exact = e.deleteBufferByArg("main.nim")
+    check exact.isErr
+    check exact.error == "E93: More than one match for main.nim"
+
+    let partial = e.deleteBufferByArg("moe_test_bd_arg_tie")
+    check partial.isErr
+    check partial.error == "E93: More than one match for moe_test_bd_arg_tie"
+
+    check e.bufferById(f1Id).isSome
+    check e.bufferById(f2Id).isSome
+
+    check not e.switchToBuffer("main.nim")
+    check e.activeBuffer().id == f2Id
+    check e.state.statusMessage == "E93: More than one match for main.nim"
+
+  test "a relative tail picks the buffer it ends":
+    let e = createTestEditor()
+    let d = getTempDir() / "moe_test_bd_arg_tail"
+    createDir(d / "src")
+    createDir(d / "test" / "src")
+    defer:
+      removeDir(d)
+    let outer = d / "src" / "main.nim"
+    let inner = d / "test" / "src" / "main.nim"
+    writeFile(outer, "")
+    writeFile(inner, "")
+
+    discard e.editFile(outer)
+    let outerId = e.activeBuffer().id
+    discard e.editFile(inner)
+    let innerId = e.activeBuffer().id
+
+    check e.deleteBufferByArg("test/src/main.nim").isOk
+    check e.bufferById(innerId).isNone
+    check e.bufferById(outerId).isSome
+
+  test "a stricter attempt settles a looser tie":
+    let e = createTestEditor()
+    let d = getTempDir() / "moe_test_bd_arg_rank"
+    createDir(d)
+    defer:
+      removeDir(d)
+    let partial1 = d / "a.rank.nim.bak"
+    let partial2 = d / "b.rank.nim.bak"
+    let exact = d / "rank.nim"
+    for f in [partial1, partial2, exact]:
+      writeFile(f, "")
+
+    discard e.editFile(partial1)
+    let partial1Id = e.activeBuffer().id
+    discard e.editFile(partial2)
+    let partial2Id = e.activeBuffer().id
+    discard e.editFile(exact)
+    let exactId = e.activeBuffer().id
+
+    check e.deleteBufferByArg("rank.nim").isOk
+    check e.bufferById(exactId).isNone
+    check e.bufferById(partial1Id).isSome
+    check e.bufferById(partial2Id).isSome
+
+  test "a prefix of the short name under cwd settles a substring tie":
+    let e = createTestEditor()
+    let d = getTempDir() / "moe_test_bd_arg_prefix"
+    createDir(d)
+    let saved = getCurrentDir()
+    setCurrentDir(d)
+    defer:
+      setCurrentDir(saved)
+      removeDir(d)
+    writeFile(d / "domain.nim", "")
+    writeFile(d / "main.nim", "")
+
+    discard e.editFile(d / "domain.nim")
+    let domainId = e.activeBuffer().id
+    discard e.editFile(d / "main.nim")
+    let mainId = e.activeBuffer().id
+
+    check e.deleteBufferByArg("mai").isOk
+    check e.bufferById(mainId).isNone
+    check e.bufferById(domainId).isSome
+
+  test "the whole short name under cwd beats the same name deeper down":
+    let e = createTestEditor()
+    let d = getTempDir() / "moe_test_bd_arg_short"
+    createDir(d / "test")
+    let saved = getCurrentDir()
+    setCurrentDir(d)
+    defer:
+      setCurrentDir(saved)
+      removeDir(d)
+    writeFile(d / "main.nim", "")
+    writeFile(d / "test" / "main.nim", "")
+
+    discard e.editFile(d / "test" / "main.nim")
+    let deepId = e.activeBuffer().id
+    discard e.editFile(d / "main.nim")
+    let topId = e.activeBuffer().id
+
+    check e.deleteBufferByArg("main.nim").isOk
+    check e.bufferById(topId).isNone
+    check e.bufferById(deepId).isSome
+
+  test "a filename outside cwd settles a suffix tie":
+    let e = createTestEditor()
+    let d = getTempDir() / "moe_test_bd_arg_outside"
+    createDir(d)
+    defer:
+      removeDir(d)
+    writeFile(d / "domain.nim", "")
+    writeFile(d / "main.nim", "")
+
+    discard e.editFile(d / "domain.nim")
+    let domainId = e.activeBuffer().id
+    discard e.editFile(d / "main.nim")
+    let mainId = e.activeBuffer().id
+
+    check e.deleteBufferByArg("main.nim").isOk
+    check e.bufferById(mainId).isNone
+    check e.bufferById(domainId).isSome
+
+  test "a buffer reached through a symlink is the same file":
+    let e = createTestEditor()
+    let d = getTempDir() / "moe_test_bd_arg_link"
+    createDir(d / "real")
+    defer:
+      removeDir(d)
+    writeFile(d / "real" / "a.nim", "")
+    createSymlink(d / "real", d / "link")
+
+    discard e.editFile(d / "real" / "a.nim")
+    let realId = e.activeBuffer().id
+    let twin = newTextBuffer("")
+    twin.filePath = some(d / "link" / "a.nim")
+    e.addBuffer(twin)
+
+    let resolved = e.resolveBufferArg("a.nim")
+    check resolved.isOk
+    check resolved.get == realId
+
+  test "two buffers of one file are one match":
+    let e = createTestEditor()
+    let f = getTempDir() / "moe_test_bd_arg_same.txt"
+    writeFile(f, "")
+    defer:
+      removeFile(f)
+
+    discard e.editFile(f)
+    let firstId = e.activeBuffer().id
+    let twin = newTextBuffer("")
+    twin.filePath = some(getTempDir() / "." / "moe_test_bd_arg_same.txt")
+    e.addBuffer(twin)
+
+    let resolved = e.resolveBufferArg("moe_test_bd_arg_same.txt")
+    check resolved.isOk
+    check resolved.get == firstId
+
   test "processResult(hrBufferDelete) deletes the named buffer":
     let e = createTestEditor()
     let f1 = getTempDir() / "moe_test_bd_arg_wired_1.txt"
