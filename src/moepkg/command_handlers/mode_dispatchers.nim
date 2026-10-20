@@ -439,7 +439,7 @@ proc handleVisualMode*(
     # Check if we're entering Insert mode (e.g., visual block I command)
     if r.modeTransition.isSome and r.modeTransition.get == EditorMode.Insert:
       # Begin a transaction so commitTransaction() succeeds when leaving Insert mode
-      # Guard: visualChange already commits its delete transaction, so don't double-begin
+      # visualChange leaves its delete transaction open for Insert to type into.
       if not buffer.inTransaction:
         let transactionResult = buffer.beginTransaction(
           "Visual to insert mode", cursorPos = some(state.cursor)

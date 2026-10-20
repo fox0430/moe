@@ -26,7 +26,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, modes, unicode_utils, insert_record]
+import ../[cursor_util, types, modes, unicode_utils, insert_record]
 import ../buffer/[core, edit, undo]
 import smart_indent
 
@@ -62,6 +62,40 @@ proc getLineIndent*(line: string): string =
       result.add(ch)
     else:
       break
+
+proc linewiseChangeStart*(buffer: TextBuffer, line: int): BufferPosition =
+  ## Where undo of a linewise change from `line` puts the cursor, as Vim: the
+  ## first non-blank there.
+  let line = clamp(line, 0, max(0, buffer.len - 1))
+  BufferPosition(line: line, column: firstNonBlankColumn(buffer.getLine(line)))
+
+proc emptyLinesForChange*(
+    buffer: TextBuffer, state: EditorState, startLine, endLine: int
+): Result[(), string] =
+  ## Empty `startLine .. endLine` down to one line to type on, as a linewise
+  ## change (`cc`, `S`, `Vc`) does, and put the cursor there. Under autoindent
+  ## the line keeps its indent, which comes off again when nothing is typed.
+  if startLine < 0 or startLine >= buffer.len:
+    return err("Line out of range: " & $startLine)
+  if endLine < startLine:
+    return err("Line range is reversed: " & $startLine & ".." & $endLine)
+  let indent =
+    if state.autoIndent and buffer.allowsTextTransforms:
+      getLineIndent(buffer.getLine(startLine))
+    else:
+      ""
+  # Recorded where typing starts, which `g;` goes back to.
+  let emptied = buffer.replaceLines(
+    startLine,
+    min(endLine, buffer.len - 1) - startLine + 1,
+    [indent],
+    column = indent.len,
+  )
+  if emptied.isErr:
+    return err(emptied.error)
+  buffer.markAutoIndented(state, startLine, indent)
+  state.cursor = BufferPosition(line: startLine, column: indent.len)
+  ok(())
 
 proc effectiveShiftWidth*(state: EditorState): int =
   ## Get the effective shift width (for >>/<<, auto-indent)

@@ -20,7 +20,7 @@
 ## Operator engine: executes operators (yank/delete/change/indent/case) on a
 ## range, plus register dispatch helpers and pending-operator state setter.
 
-import std/[options, strutils, unicode]
+import std/[options, strutils]
 
 import pkg/results
 
@@ -145,46 +145,6 @@ proc applyCaseOperator(
   if range.isLinewise:
     # guu/gUU land on the first non-blank (matches >>/<<)
     moveToFirstNonBlank(ctx, range.start.line)
-  ok(())
-
-proc changeLinesInRange(ctx: CommandContext, range: OperatorRange): Result[(), string] =
-  ## Linewise change: vim empties the range down to a single blank line to type
-  ## on rather than removing its lines outright. The kept line's indent survives
-  ## under autoindent, matching `cc`/`S`.
-  let startLine = range.start.line
-  if startLine >= ctx.buffer.len:
-    return ok(())
-
-  var indent = ""
-  if ctx.state.autoIndent and ctx.buffer.allowsTextTransforms:
-    for (rune, _) in ctx.buffer.getLine(startLine).chars:
-      let ch = $rune
-      if ch != " " and ch != "\t":
-        break
-      indent.add(ch)
-
-  for _ in 0 ..< (range.endPos.line - startLine):
-    if startLine + 1 >= ctx.buffer.len:
-      break
-    let delResult = ctx.buffer.deleteLine(startLine + 1)
-    if delResult.isErr:
-      return err(delResult.error)
-
-  let line = ctx.buffer.getLine(startLine)
-  if line.charLen > 0:
-    let clearResult = ctx.buffer.deleteRange(
-      BufferPosition(line: startLine, column: 0),
-      BufferPosition(line: startLine, column: line.charLen - 1),
-    )
-    if clearResult.isErr:
-      return err(clearResult.error)
-
-  if indent.len > 0:
-    let insResult =
-      ctx.buffer.insertText(BufferPosition(line: startLine, column: 0), indent)
-    if insResult.isErr:
-      return err(insResult.error)
-
   ok(())
 
 proc shiftedLines(buffer: TextBuffer, range: OperatorRange): (int, int) =
@@ -316,40 +276,34 @@ proc executeOperatorOnRange*(
     # Change the range (delete and enter insert mode)
     let text = extractRangeText(ctx.buffer, range)
 
-    # Begin transaction for all change operations (delete + insert mode input)
-    let transactionResult = ctx.buffer.beginTransaction("Change operation")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    # Delete the text
-    let delResult =
+    let undoCursor =
       if range.isLinewise:
-        ctx.changeLinesInRange(range)
+        ctx.buffer.linewiseChangeStart(range.start.line)
       else:
-        deleteRange(ctx.buffer, range)
-    if delResult.isErr:
-      return rollbackAndPropagate(ctx, delResult.error)
+        range.start
+    let txr = withTransactionForInsert(ctx.buffer, "Change operation", undoCursor):
+      if range.isLinewise:
+        let emptied =
+          ctx.buffer.emptyLinesForChange(ctx.state, range.start.line, range.endPos.line)
+        if emptied.isErr:
+          return err(emptied.error)
+      else:
+        let delResult = deleteRange(ctx.buffer, range)
+        if delResult.isErr:
+          return err(delResult.error)
+        ctx.cursor = range.start
+        ctx.cursor.line = min(ctx.cursor.line, max(0, ctx.buffer.len - 1))
+        # Insert mode allows cursor at charLen (append position).
+        ctx.cursor.column =
+          min(ctx.cursor.column, ctx.buffer.getLine(ctx.cursor.line).charLen)
+    if txr.isErr:
+      return err("Failed to begin transaction: " & txr.error)
 
     if not range.isEmpty:
       # Store in register only after the buffer change succeeded (registers are
       # not covered by the transaction). An empty object (e.g. cit on <a></a>)
       # removes nothing, so leave the registers untouched.
       storeDeletedText(ctx, text, range.isLinewise, range.useRegOne)
-
-    # Move cursor to start of change
-    ctx.cursor = range.start
-    # Clamp cursor to valid position
-    if ctx.cursor.line >= ctx.buffer.len:
-      ctx.cursor.line = max(0, ctx.buffer.len - 1)
-    if ctx.cursor.line < ctx.buffer.len:
-      let line = ctx.buffer.getLine(ctx.cursor.line)
-      # Insert mode allows cursor at charLen (append position). A linewise
-      # change leaves only the kept indent, so typing starts after it.
-      ctx.cursor.column =
-        if range.isLinewise:
-          line.charLen
-        else:
-          min(ctx.cursor.column, line.charLen)
 
     ctx.restoreTopLine(topLine)
 

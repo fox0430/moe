@@ -743,6 +743,77 @@ suite "a move ends the auto-indent nothing was typed after, as in Vim":
       check e.lines == want
       check e.cursorAt == wantCursor
 
+suite "the indent a linewise change keeps comes off when nothing is typed":
+  for (keys, want, wantCursor) in [
+    ("cc<Escape>", @["", "  bar", "baz"], (0, 0)),
+    ("ccx<Escape>", @["    x", "  bar", "baz"], (0, 4)),
+    ("S<Escape>", @["", "  bar", "baz"], (0, 0)),
+    ("cj<Escape>", @["", "baz"], (0, 0)),
+    ("Vjc<Escape>", @["", "baz"], (0, 0)),
+    ("Vjcx<Escape>", @["    x", "baz"], (0, 4)),
+  ]:
+    test keys:
+      let e = newVimLikeEditor(@["    foo", "  bar", "baz"], 0, 4)
+      e.state.autoIndent = true
+      e.state.smartIndent = false
+      e.press(keys)
+      check e.lines == want
+      check e.cursorAt == wantCursor
+
+suite "one undo takes back a change and what was typed, as in Vim":
+  # Measured in Vim 9.2 (`vim -u NONE`, `set ai`, typed through a terminal).
+  for (keys, wantCursor) in [
+    ("ccx<Escape>u", (0, 4)),
+    ("cbx<Escape>u", (0, 8)),
+    ("sx<Escape>u", (0, 9)),
+    ("Sx<Escape>u", (0, 4)),
+    ("vhcx<Escape>u", (0, 8)),
+    ("Vcx<Escape>u", (0, 0)),
+  ]:
+    test keys:
+      let e = newVimLikeEditor(@["    foo bar", "  bar", "baz"], 0, 9)
+      e.state.autoIndent = true
+      e.state.smartIndent = false
+      e.press(keys)
+      check e.lines == @["    foo bar", "  bar", "baz"]
+      check e.cursorAt == wantCursor
+
+  test "<C-v>jlcx<Escape>u":
+    let e = newVimLikeEditor(@["    foo", "  bar", "baz"], 0, 4)
+    e.press("<C-v>jlcx<Escape>u")
+    check e.lines == @["    foo", "  bar", "baz"]
+    check e.cursorAt == (0, 4)
+
+  # Vim puts the cursor on the second line after undoing a change over two
+  # lines; the first line, where the change started, is kept here.
+  for keys in ["cjx<Escape>u", "2Sx<Escape>u", "Vjc<Escape>u", "Vjcx<Escape>u"]:
+    test keys:
+      let e = newVimLikeEditor(@["    foo", "  bar", "baz"], 0, 4)
+      e.state.autoIndent = true
+      e.state.smartIndent = false
+      e.press(keys)
+      check e.lines == @["    foo", "  bar", "baz"]
+      check e.cursorAt[0] == 0
+
+suite "g; goes to where a change was typed, as in Vim":
+  # Measured in Vim 9.2 (`vim -u NONE`, `set ai`, typed through a terminal).
+  for (keys, wantCursor) in [
+    ("ccxyz<Escape>Gg;", (0, 4)),
+    ("cc<Escape>Gg;", (0, 0)),
+    ("cj<Escape>Gg;", (0, 0)),
+    ("2Sxy<Escape>Gg;", (0, 4)),
+    ("sxy<Escape>Gg;", (0, 4)),
+    ("Vjc<Escape>Gg;", (0, 0)),
+    ("Vjcx<Escape>Gg;", (0, 4)),
+    ("vlcxy<Escape>Gg;", (0, 4)),
+  ]:
+    test keys:
+      let e = newVimLikeEditor(@["    foo", "  bar", "baz"], 0, 4)
+      e.state.autoIndent = true
+      e.state.smartIndent = false
+      e.press(keys)
+      check e.cursorAt == wantCursor
+
 suite "the text Enter carries down, as in Vim":
   # Measured in Vim 9.2 (`vim -u NONE`, typed through a terminal). With
   # autoindent the new line takes the indent of the text before the cursor and
