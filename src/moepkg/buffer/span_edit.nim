@@ -46,6 +46,28 @@ type
     start*, before*, after*: int
     joinsAbove*: bool ## Dropped rows were joined onto the row above.
 
+  RowMove* = object ## Rows an edit moved, or undo/redo put back.
+    rows*: RowSpan
+    restoring*: bool ## Undo/redo putting `rows` back: marks in them go to their start.
+
+func moved*(line: int, move: RowMove): int =
+  ## Where a mark on `line` goes across `move`, as Vim's mark_adjust keeps it.
+  ## An edit leaves kept rows, sends dropped rows after the rewrite (or onto
+  ## the row they joined) and shifts rows below. Undo/redo sends rows it
+  ## restores to their start, as u_undoredo does.
+  let rows = move.rows
+  if line >= rows.start + rows.before:
+    line + rows.after - rows.before
+  elif move.restoring:
+    if line >= rows.start and rows.before != rows.after: rows.start else: line
+  elif line >= rows.start + rows.after:
+    if rows.joinsAbove:
+      rows.start - 1
+    else:
+      rows.start + rows.after
+  else:
+    line
+
 func reversed*(edit: SpanEdit): SpanEdit =
   SpanEdit(
     start: edit.start,

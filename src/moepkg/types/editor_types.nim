@@ -177,18 +177,22 @@ proc bufferIndexById*(e: Editor, id: BufferId): int =
 
 proc addBuffer*(e: Editor, buf: TextBuffer) =
   ## Append `buf` to `e.buffers` and register it in `bufferIdIndex`, and
-  ## subscribe the editor to the buffer's wholesale content replacements.
-  ## Use this instead of `e.buffers.add` so the lookup table stays in sync.
+  ## subscribe the editor to the buffer's wholesale content replacements and
+  ## row moves. Use this instead of `e.buffers.add` so the lookup table stays
+  ## in sync.
   e.buffers.add(buf)
   e.bufferIdIndex[buf.id] = buf
+  let editor = e
+  buf.setRowsMovedHook(
+    proc(b: TextBuffer, move: RowMove) =
+      editor.state.jumpList.moveAcross(b.id, move)
+  )
   if e.onBufferContentReplaced != nil:
-    let editor = e
     buf.setContentReplacedHook(
       proc(b: TextBuffer) =
         editor.onBufferContentReplaced(editor, b)
     )
   if e.onBufferFileRead != nil:
-    let editor = e
     buf.setFileReadHook(
       proc(b: TextBuffer) =
         editor.onBufferFileRead(editor, b)
@@ -207,6 +211,7 @@ proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   e.bufferIdIndex.del(id)
   # Unsubscribe: an untracked buffer must not keep reaching back into the
   # editor, which the hook also keeps alive.
+  buf.setRowsMovedHook(nil)
   buf.setContentReplacedHook(nil)
   buf.setFileReadHook(nil)
   forgetSyncReport(id)

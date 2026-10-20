@@ -55,12 +55,12 @@ proc changedMarkNames(change: BufferChange): set[char] =
 
 func undoFollowers(change: BufferChange): set[EditFollower] =
   ## Followers undo/redo moves across `change`: all but wholesale-restored
-  ## line arrays; only diagnostics for ckSnapshot, without semantic overlay or
-  ## Visual area.
+  ## line arrays; only diagnostics for ckSnapshot, without semantic overlay.
+  ## The Visual area and the jump list move by `rowsAcrossUndo` instead.
   if change.kind == ckSnapshot:
     {efDiagnostics}
   else:
-    AllFollowers - {efLineArrays, efSemantic, efLastVisual}
+    AllFollowers - {efLineArrays, efSemantic, efLastVisual, efJumps}
 
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Apply the inverse of a single change (internal helper)
@@ -133,8 +133,7 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     # Move followers back; ckTransaction recurses.
     if change.kind != ckTransaction:
       b.followChange(change, change.undoFollowers, undone = true)
-      if change.visualAcross == nil:
-        b.lastVisualAcrossUndo(change, undone = true)
+      b.rowsAcrossUndo(change, undone = true)
     b.namedMarks.applyNamedMarkChanges(change.namedMarkChanges, useAfter = false)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
@@ -398,6 +397,7 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
     b.namedMarks = b.pendingSnapshotNamedMarks
     b.bookmarks = b.pendingSnapshotBookmarks
     b.followBack(b.pendingSnapshotEdits, {efDiagnostics})
+    b.restoreRows(b.pendingSnapshotRows, undone = true)
   else:
     for i in countdown(transaction.changes.len - 1, 0):
       let r = b.undoChange(transaction.changes[i])
@@ -626,8 +626,7 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     # Move followers forward; symmetric to undoChange.
     if change.kind != ckTransaction:
       b.followChange(change, change.undoFollowers)
-      if change.visualAcross == nil:
-        b.lastVisualAcrossUndo(change, undone = false)
+      b.rowsAcrossUndo(change, undone = false)
     b.namedMarks.applyNamedMarkChanges(change.namedMarkChanges, useAfter = true)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot

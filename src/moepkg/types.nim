@@ -1092,6 +1092,13 @@ const MaxLspDebounceBackoffShift* = 6
 proc buffer*(win: EditorWindow): TextBuffer {.inline.} =
   win.viewBuffer
 
+proc moveAcross*(jumps: var JumpListState, bufferId: BufferId, move: RowMove) =
+  ## Move the jumps into `bufferId` with its text, as Vim's mark_adjust moves
+  ## the jump list.
+  for jump in jumps.list.mitems:
+    if jump.bufferId == bufferId:
+      jump.line = jump.line.moved(move)
+
 proc setTab*(win: EditorWindow, buf: TextBuffer) {.inline.} =
   ## Move the window to another tab: view and identity change together.
   win.viewBuffer = buf

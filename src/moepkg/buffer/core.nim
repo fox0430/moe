@@ -343,10 +343,15 @@ type
     efLastVisual
     efLineArrays ## `lineMarkers` and `modifiedLines`
     efDiagnostics
+    efJumps ## The editor's jump list, through `rowsMovedHook`
 
   BufferFileReadHook* = proc(b: TextBuffer) {.closure.}
     ## Called whenever `lastLoadedContent` is taken from the file: the buffer
     ## just read it, or wrote it.
+
+  BufferRowsMovedHook* = proc(b: TextBuffer, move: RowMove) {.closure, raises: [].}
+    ## Called whenever an edit or undo/redo moves rows, so positions kept
+    ## outside the buffer follow its text.
 
   BufferContentReplacedHook* = proc(b: TextBuffer) {.closure.}
     ## Called once whenever the buffer's contents are replaced wholesale from
@@ -534,6 +539,7 @@ type
     # the buffer twice cannot accumulate duplicates.
     contentReplacedHook: BufferContentReplacedHook
     fileReadHook: BufferFileReadHook ## A single slot, like the one above.
+    rowsMovedHook: BufferRowsMovedHook ## A single slot, like the one above.
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
@@ -1253,37 +1259,11 @@ func boxed*(area: Option[VisualArea]): ref VisualArea =
     result = new VisualArea
     result[] = area.get
 
-proc shiftLastVisual*(b: TextBuffer, rows: RowSpan) =
-  ## Move the last Visual area across `rows`: ends on kept rows stay, ends on
-  ## dropped rows go after the rewrite (or onto the joined row), ends below
-  ## shift.
-  if b.lastVisual.isNone:
-    return
-  template adjust(line: var int) =
-    if line >= rows.start + rows.before:
-      line += rows.after - rows.before
-    elif line >= rows.start + rows.after:
-      line =
-        if rows.joinsAbove:
-          rows.start - 1
-        else:
-          rows.start + rows.after
-
-  adjust(b.lastVisual.get.start.line)
-  adjust(b.lastVisual.get.cursor.line)
-
-proc collapseLastVisual(b: TextBuffer, rows: RowSpan) =
-  ## Move the last Visual area across undo/redo restoring `rows`, as Vim does.
-  if b.lastVisual.isNone or rows.before == rows.after:
-    return
-  template adjust(line: var int) =
-    if line >= rows.start + rows.before:
-      line += rows.after - rows.before
-    elif line >= rows.start:
-      line = rows.start
-
-  adjust(b.lastVisual.get.start.line)
-  adjust(b.lastVisual.get.cursor.line)
+proc moveLastVisual(b: TextBuffer, move: RowMove) =
+  ## Move the last Visual area's ends across `move`.
+  if b.lastVisual.isSome:
+    b.lastVisual.get.start.line = b.lastVisual.get.start.line.moved(move)
+    b.lastVisual.get.cursor.line = b.lastVisual.get.cursor.line.moved(move)
 
 proc moveLastVisualEnds*(b: TextBuffer, start, cursor: Option[BufferPosition]) =
   ## Place each re-placed end of the last Visual area.
@@ -1594,27 +1574,49 @@ iterator savedRows(change: BufferChange): RowSpan =
     discard
 
 proc wantsSnapshotRows(b: TextBuffer): bool =
-  ## Whether an entry made without a Visual area needs its rows replayed.
-  if b.inTransaction and b.currentTransaction.isSome:
+  ## Whether an entry needs its rows replayed: for the jump list, or for a
+  ## Visual area it was not made with.
+  if b.rowsMovedHook != nil:
+    true
+  elif b.inTransaction and b.currentTransaction.isSome:
     b.currentTransaction.get.lastVisualBefore.isNone
   else:
     b.lastVisual.isNone
 
-proc lastVisualAcrossUndo*(b: TextBuffer, change: BufferChange, undone: bool) =
-  ## Move the last Visual area across undo/redo of `change`, as Vim does.
-  if b.lastVisual.isNone:
-    return
+proc notifyRowsMoved(b: TextBuffer, move: RowMove) =
+  if b.rowsMovedHook != nil:
+    b.rowsMovedHook(b, move)
+
+proc restoreRows*(
+    b: TextBuffer, rows: openArray[RowSpan], undone: bool, visual = false
+) =
+  ## Move the jump list, and the last Visual area when `visual`, across undo
+  ## (`undone`) or redo of edits to `rows`, as Vim's u_undoredo does.
+  template restore(r: RowSpan) =
+    let move = RowMove(rows: r, restoring: true)
+    if visual:
+      b.moveLastVisual(move)
+    b.notifyRowsMoved(move)
+
   if undone:
-    var rows: seq[RowSpan]
-    for r in change.savedRows:
-      rows.add r
     for i in countdown(rows.high, 0):
-      b.collapseLastVisual(
+      restore(
         RowSpan(start: rows[i].start, before: rows[i].after, after: rows[i].before)
       )
   else:
-    for r in change.savedRows:
-      b.collapseLastVisual(r)
+    for r in rows:
+      restore(r)
+
+proc rowsAcrossUndo*(b: TextBuffer, change: BufferChange, undone: bool) =
+  ## Move the last Visual area, unless `change` restores it, and the jump list
+  ## across undo/redo of `change`.
+  let visual = change.visualAcross == nil and b.lastVisual.isSome
+  if not visual and b.rowsMovedHook == nil:
+    return
+  var rows: seq[RowSpan]
+  for r in change.savedRows:
+    rows.add r
+  b.restoreRows(rows, undone, visual)
 
 proc moveDiagnostics(b: TextBuffer, edit: SpanEdit) =
   ## Move diagnostics across `edit`; drop those it deleted.
@@ -1666,7 +1668,9 @@ proc follow(
     if efBookmarks in followers:
       shift(b.adjustBookmarksForDelete, b.adjustBookmarksForInsert)
     if efLastVisual in followers:
-      b.shiftLastVisual(rows)
+      b.moveLastVisual(RowMove(rows: rows))
+    if efJumps in followers:
+      b.notifyRowsMoved(RowMove(rows: rows))
     if efLineArrays in followers:
       shiftPerLineArray(b.lineMarkers, none(LineMarkerKind), rows)
       shiftPerLineArray(b.modifiedLines, lmkInserted, rows)
@@ -1788,6 +1792,10 @@ proc setContentReplacedHook*(b: TextBuffer, cb: BufferContentReplacedHook) =
   ## Install the hook run after a wholesale content replacement. Replaces any
   ## previous one.
   b.contentReplacedHook = cb
+
+proc setRowsMovedHook*(b: TextBuffer, cb: BufferRowsMovedHook) =
+  ## Install the hook run whenever rows move. Replaces any previous one.
+  b.rowsMovedHook = cb
 
 proc setFileReadHook*(b: TextBuffer, cb: BufferFileReadHook) =
   ## Install the hook run whenever `lastLoadedContent` is taken from the file.

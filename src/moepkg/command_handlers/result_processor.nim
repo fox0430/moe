@@ -1036,13 +1036,19 @@ proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
     if e.interceptHostCommand(parsed):
       r = HandlerResult(kind: hrHandled)
     else:
+      let cmdResult = e.commandLineParser.execute(parsed)
+      # As Vim's setpcmark, where the command starts is a jump, which its edit
+      # then moves. A command that fails takes it back.
+      var jumpsBefore = none(JumpListState)
+      if cmdResult.kind in JumpActions:
+        jumpsBefore = some(e.state.jumpList)
+        e.addToJumpList(e.jumpOrigin())
       r = e.handlerManager.handleCommandMode(
-        activeBuffer,
-        e.commandLineParser.execute(parsed),
-        isShared,
-        e.activeWindow.cursor.line,
+        activeBuffer, cmdResult, isShared, e.activeWindow.cursor.line,
         otherModifiedCount,
       )
+      if r.kind == hrError and jumpsBefore.isSome:
+        e.state.jumpList = jumpsBefore.get
   if commandMode == EditorMode.Config and r.kind == hrCloseWindow:
     r = HandlerResult(kind: hrConfigQuit)
   if commandText.len > 1:
