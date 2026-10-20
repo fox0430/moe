@@ -353,6 +353,20 @@ suite "Visual Commands - visualDelete":
     check buf.len == 1
     check buf.getLine(0) == "line 3"
     check state.registers.getNoNamedRegister().isLine == true
+    check state.cursor == BufferPosition(line: 0, column: 0)
+
+  test "Linewise delete lands on the following line's first non-blank":
+    let buf = newTextBuffer("    line 1\n    line 2\n    line 3")
+    let state = createTestState()
+    state.selectVisual(
+      BufferPosition(line: 0, column: 4), BufferPosition(line: 1, column: 4), vskLine
+    )
+
+    visualDelete(buf, state)
+
+    check buf.len == 1
+    check buf.getLine(0) == "    line 3"
+    check state.cursor == BufferPosition(line: 0, column: 4)
 
   test "Delete inactive selection (no-op)":
     let buf = newTextBuffer()

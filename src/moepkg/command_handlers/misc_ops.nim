@@ -25,7 +25,8 @@ import std/[options, os]
 
 import
   ../[
-    editor, editor_build_jobs, editor_file_jobs, editor_notify, logger, registers, types
+    cursor_util, editor, editor_build_jobs, editor_file_jobs, editor_notify, logger,
+    registers, types,
   ]
 
 import editor_ops, handler_result
@@ -95,11 +96,14 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
     let count = r.hrDeletedLineCount
     e.state.statusMessage =
       $count & " line" & (if count == 1: "" else: "s") & " deleted"
-    # Vim leaves the cursor on the line that followed the deleted range, which is
-    # now its start line. A fold can widen the range above the old cursor line.
-    let maxLine = e.activeBuffer().len - 1
+    # Vim leaves the cursor on the first non-blank of the line that followed the
+    # deleted range, which is now its start line. A fold can widen the range
+    # above the old cursor line.
+    let maxLine = activeBuffer.len - 1
     e.activeWindow.cursor.line = min(max(0, r.hrDeleteStartLine), maxLine)
-    e.activeWindow.cursor.column = 0
+    e.activeWindow.cursor.column =
+      firstNonBlankColumn(activeBuffer.getLine(e.activeWindow.cursor.line))
+    e.state.preferredColumn = -1
     return true
   of hrBuild:
     let filePath = if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: ""
