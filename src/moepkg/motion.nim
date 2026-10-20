@@ -156,7 +156,7 @@ proc foldStart(buffer: TextBuffer, line: int): int =
   let fold = buffer.foldState.getCollapsedFoldAt(line)
   if fold.isSome: fold.get.startLine else: line
 
-proc foldEnd(buffer: TextBuffer, line: int): int =
+proc foldEnd*(buffer: TextBuffer, line: int): int =
   ## The last line of the closed fold `line` is in, or `line`.
   let fold = buffer.foldState.getCollapsedFoldAt(line)
   if fold.isSome: fold.get.endLine else: line

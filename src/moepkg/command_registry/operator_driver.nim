@@ -24,10 +24,10 @@ import std/[options, tables, unicode]
 
 import pkg/results
 
-import ../[types, motion, key_bindings, unicode_utils, modes, insert_record]
+import ../[types, motion, key_bindings, unicode_utils, modes]
 import ../buffer/core
 
-import core, operator_engine
+import core, operator_engine, insert_entry
 
 const
   ScrollMotions* =
@@ -241,6 +241,30 @@ proc textObjectTarget(
     )
   )
 
+proc linesTarget(
+    ctx: CommandContext, op: PendingOperator, operand: Operand
+): Option[MotionTarget] =
+  ## The operator's line and the `count - 1` lines below it, a closed fold
+  ## counting as one, as Vim's nv_lineop. None when there are lines to go down
+  ## over and none below (`2dd` on the last line).
+  let
+    start = op.startPos
+    below = max(1, operand.count) - 1
+  # A stale cursor names no line, and the lines below it are not its own.
+  if start.line notin 0 ..< ctx.buffer.len:
+    return none(MotionTarget)
+  if below > 0 and ctx.buffer.foldEnd(start.line) >= ctx.buffer.len - 1:
+    return none(MotionTarget)
+  some(
+    MotionTarget(
+      start: start,
+      finish: BufferPosition(
+        line: ctx.buffer.linesDown(start.line, below), column: start.column
+      ),
+      motionType: mtLinewise,
+    )
+  )
+
 proc isMotion*(registry: CommandRegistry, cmd: Command): bool =
   ## A waiting operator acts over `cmd` (`dw`, `dfx`, `dn`).
   case cmd.kind
@@ -328,6 +352,8 @@ proc finishOperator*(
       if operand.commandId notin registry.targets:
         return err("Not a motion: " & operand.commandId)
       ?registry.targets[operand.commandId](ctx, op, operand.count, operand.countGiven)
+    of odLines:
+      ctx.linesTarget(op, operand)
   if target.isNone:
     return ok(())
 
@@ -346,9 +372,7 @@ proc finishOperator*(
     discard
   of OpChange:
     # What is typed next belongs to the change, so Insert records it.
-    ctx.state.startInsertRecord(
-      InsertEntry(kind: ieChange, operand: operand), 1, ctx.register
-    )
+    ctx.enterInsert(InsertEntry(kind: ieChange, operand: operand), 1)
   else:
     ctx.recordChange(
       LastEditCommand(
@@ -356,3 +380,38 @@ proc finishOperator*(
       )
     )
   ok(())
+
+proc operatorKey*(
+    registry: CommandRegistry,
+    ctx: CommandContext,
+    operatorType: OperatorType,
+    count: int,
+    countGiven: bool,
+    statusMsg: string,
+): Result[(), string] =
+  ## An operator's key: over lines when the same operator waits (`dd`, `2d3d`
+  ## for six lines), else wait for what it acts over, cancelling an operator of
+  ## another kind (`dy`).
+  let op = ctx.state.pendingInput.pendingOperator
+  if op.isSome and op.get.operatorType == operatorType:
+    return registry.finishOperator(
+      ctx,
+      Operand(
+        kind: odLines,
+        count: op.get.operandCount(count),
+        countGiven: op.get.countGiven or countGiven,
+      ),
+    )
+  ctx.setPendingOperator(operatorType, count, countGiven, statusMsg)
+  ok(())
+
+proc operateOnLines*(
+    registry: CommandRegistry,
+    ctx: CommandContext,
+    operatorType: OperatorType,
+    count: int,
+): Result[(), string] =
+  ## Apply `operatorType` over the count's lines from the cursor, as its
+  ## doubled key does (`S` is `cc`).
+  ctx.startOperator(operatorType)
+  registry.finishOperator(ctx, Operand(kind: odLines, count: max(1, count)))

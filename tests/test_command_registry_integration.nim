@@ -1200,7 +1200,7 @@ suite "executeCommand - visual replace dot-repeat":
     check buffer[1] == "fghij"
 
   test "dot after linewise visual r widens over a closed fold":
-    # cursorLineRange widens like dd/yy/S: the 2-line shape from line 2
+    # cursorLineRange widens over the fold: the 2-line shape from line 2
     # touches the fold at 3-4, so lines 2-4 are replaced and the fold stays
     # closed instead of replaying into hidden text.
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
@@ -8072,7 +8072,7 @@ suite "executeCommand - closed folds are edited as a whole":
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.state.editState.lastEditCommand =
-      some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: 7))
+      some(LastEditCommand(kind: lecJoinLines, joinLinesCount: 7))
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -8097,8 +8097,10 @@ suite "executeCommand - closed folds are edited as a whole":
     # The fold widened the edit to three lines, but `.` elsewhere must still
     # substitute the one line the user asked for.
     check buffer.len == 2
-    check ctx.state.editState.insertRecord.entry.kind == ieSubstituteLine
-    check ctx.state.editState.insertRecord.count == 1
+    let entry = ctx.state.editState.insertRecord.entry
+    check entry.kind == ieChange
+    check entry.operand.kind == odLines
+    check entry.operand.count == 1
 
   test "dd on a hidden fold line leaves the cursor where the fold was":
     # `:42` and friends can park the cursor on a line the fold marker hides.
@@ -8881,3 +8883,153 @@ suite "Handler - Whole word search":
     check registry.execute(ctx, custom("search.word.forward")).isOk
     check registry.execute(ctx, custom("search.prev")).isOk
     check ctx.cursor == BufferPosition(line: 0, column: 0)
+
+suite "Doubled operators over lines":
+  # The operator's own key again takes the cursor line and the count's lines
+  # below it, a closed fold counting as one line, as Vim 9.2 does.
+  proc key(commandId: string, count = 0): Command =
+    Command(
+      kind: ctCustom, commandId: commandId, count: max(1, count), hasCount: count > 0
+    )
+
+  proc lines(buffer: TextBuffer): seq[string] =
+    for i in 0 ..< buffer.len:
+      result.add buffer[i]
+
+  test "dd on a closed fold deletes the whole fold":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(2, 0)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, key("operator.delete")).isOk
+    check registry.executeCommand(ctx, key("operator.delete")).isOk
+    check buffer.lines == @["0", "1", "5", "6"]
+    check ctx.cursor.line == 2
+
+  test "a count counts a closed fold as one line":
+    for (cursorLine, left) in [(2, @["0", "1", "6"]), (1, @["0", "5", "6"])]:
+      let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+      check buffer.foldState.addFold(2, 4, collapsed = true)
+      let ctx = createTestContext(buffer)
+      ctx.setCursor(cursorLine, 0)
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, key("operator.delete", 2)).isOk
+      check registry.executeCommand(ctx, key("operator.delete")).isOk
+      check buffer.lines == left
+
+  test "a count on the last line does nothing":
+    for (foldFrom, cursorLine) in [(-1, 6), (4, 4)]:
+      let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+      if foldFrom >= 0:
+        check buffer.foldState.addFold(foldFrom, 6, collapsed = true)
+      let ctx = createTestContext(buffer)
+      ctx.setCursor(cursorLine, 0)
+      let registry = createTestRegistry()
+
+      for id in ["operator.delete", "operator.indent", "operator.change"]:
+        check registry.executeCommand(ctx, key(id, 2)).isOk
+        check registry.executeCommand(ctx, key(id)).isOk
+        check buffer.lines == @["0", "1", "2", "3", "4", "5", "6"]
+        check ctx.state.mode == EditorMode.Normal
+        check ctx.state.pendingInput.pendingOperator.isNone
+
+  test "a count past the end stops at the last line, and . repeats the typed count":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(5, 0)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, key("operator.delete", 3)).isOk
+    check registry.executeCommand(ctx, key("operator.delete")).isOk
+    check buffer.lines == @["0", "1", "2", "3", "4"]
+
+    ctx.setCursor(0, 0)
+    check registry.executeCommand(ctx, key("edit.repeat")).isOk
+    check buffer.lines == @["3", "4"]
+
+  test "2d3d deletes six lines, and . deletes six again":
+    let buffer = newTextBuffer("a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\nl\nm\nn\no")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, key("operator.delete", 2)).isOk
+    check registry.executeCommand(ctx, key("operator.delete", 3)).isOk
+    check buffer[0] == "g"
+
+    ctx.setCursor(1, 0)
+    check registry.executeCommand(ctx, key("edit.repeat")).isOk
+    check buffer.lines == @["g", "n", "o"]
+
+  test "yy on a closed fold yanks the fold, a count counting it as one line":
+    for (count, last) in [(0, 4), (2, 5)]:
+      let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+      check buffer.foldState.addFold(2, 4, collapsed = true)
+      let ctx = createTestContext(buffer)
+      ctx.setCursor(2, 0)
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, key("operator.yank", count)).isOk
+      check registry.executeCommand(ctx, key("operator.yank")).isOk
+      check ctx.state.registers.noNamed.isLine
+      check ctx.state.registers.noNamed.getContent() == buffer.linewiseText(2, last)
+      check ctx.cursor.line == 2
+
+  test "yy keeps the cursor where it is":
+    let buffer = newTextBuffer("  abcdef\n  ghijkl\n  mnopqr")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(1, 6)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, key("operator.yank", 2)).isOk
+    check registry.executeCommand(ctx, key("operator.yank")).isOk
+    check ctx.state.registers.noNamed.getContent() == "  ghijkl\n  mnopqr\n"
+    check ctx.cursor == BufferPosition(line: 1, column: 6)
+
+  test "2>> on a closed fold shifts the fold and the line after it":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(2, 0)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, key("operator.indent", 2)).isOk
+    check registry.executeCommand(ctx, key("operator.indent")).isOk
+    check buffer[1] == "1"
+    for i in 2 .. 5:
+      check buffer[i].strip == $i
+      check buffer[i] != $i
+    check buffer[6] == "6"
+
+  test "2cc and 2S on a closed fold change the fold and the line after it":
+    for (keys, wanted) in [
+      (@[key("operator.change", 2), key("operator.change")], "2cc"),
+      (@[key("substitute.line", 2)], "2S"),
+    ]:
+      checkpoint wanted
+      let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+      check buffer.foldState.addFold(2, 4, collapsed = true)
+      let ctx = createTestContext(buffer)
+      ctx.setCursor(2, 0)
+      let registry = createTestRegistry()
+
+      for k in keys:
+        check registry.executeCommand(ctx, k).isOk
+      check buffer.lines == @["0", "1", "", "6"]
+      check ctx.state.mode == EditorMode.Insert
+      let entry = ctx.state.editState.insertRecord.entry
+      check entry.kind == ieChange
+      check entry.operand.kind == odLines
+      check entry.operand.count == 2
+
+  test "dj reports the lines it deleted as dd does":
+    let buffer = newTextBuffer("0\n1\n2\n3")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, key("operator.delete")).isOk
+    check registry.executeCommand(ctx, motionCommand(Motion.Down)).isOk
+    check buffer.lines == @["2", "3"]
+    check ctx.state.statusMessage == "Deleted 2 line(s)"

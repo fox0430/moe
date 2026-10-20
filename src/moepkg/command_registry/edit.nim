@@ -32,7 +32,6 @@ import
 import ../buffer/[core, edit, fold, undo]
 
 import core, operator_engine, operator_driver, insert_entry
-from ../command_handlers/insert_commands import getLineIndent
 
 proc finishPasteCursor(
     ctx: CommandContext,
@@ -544,7 +543,7 @@ proc cursorLineRange(
     ctx: CommandContext, count: int
 ): tuple[startLine, endLine, lineCount: int] =
   ## Inclusive line range for a count-prefixed linewise command at the cursor,
-  ## widened so every closed fold it touches is covered whole, as dd/yy/S do.
+  ## widened so every closed fold it touches is covered whole.
   let first = ctx.cursor.line
   if first < 0 or first >= ctx.buffer.len:
     # A stale cursor names no line. `snapRangeToFolds` normalizes a reversed
@@ -554,69 +553,6 @@ proc cursorLineRange(
     last = min(first + max(1, count) - 1, ctx.buffer.len - 1)
     (lo, hi) = ctx.buffer.foldState.snapRangeToFolds(first, last)
   (lo, hi, hi - lo + 1)
-
-proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Substitute line(s) (S command or cc)
-  ## Deletes line content and enters Insert mode
-  ## count: number of lines to substitute (default: 1)
-
-  logDebug("substitute", "handleSubstituteLine called with count=" & $count)
-  let (startLine, endLine, _) = ctx.cursorLineRange(count)
-
-  let text = ctx.buffer.linewiseText(startLine, endLine)
-
-  # Get indent; skipped for raw buffers.
-  var indent =
-    if ctx.buffer.allowsTextTransforms:
-      getLineIndent(ctx.buffer.getLine(startLine))
-    else:
-      ""
-
-  # Begin transaction for all substitute operations (delete + insert mode input)
-  let transactionResult = ctx.buffer.beginTransaction("Substitute line")
-  if transactionResult.isErr:
-    return err("Failed to begin transaction: " & transactionResult.error)
-
-  # Delete all but first line
-  for i in 0 ..< (endLine - startLine):
-    if startLine + 1 < ctx.buffer.len:
-      let deleteResult = ctx.buffer.deleteLine(startLine + 1)
-      if deleteResult.isErr:
-        return rollbackAndPropagate(ctx, "Failed to delete line: " & deleteResult.error)
-
-  # Clear the first line but preserve indent
-  if startLine < ctx.buffer.len:
-    let line = ctx.buffer.getLine(startLine)
-    # Delete all characters in the line
-    for i in 0 ..< line.charLen:
-      let deleteResult = ctx.buffer.deleteRange(
-        BufferPosition(line: startLine, column: 0),
-        BufferPosition(line: startLine, column: 0),
-      )
-      if deleteResult.isErr:
-        return rollbackAndPropagate(ctx, "Failed to clear line: " & deleteResult.error)
-
-    # Insert indent if auto-indent is enabled
-    if ctx.state.autoIndent and indent.len > 0:
-      let insertResult =
-        ctx.buffer.insertText(BufferPosition(line: startLine, column: 0), indent)
-      if insertResult.isErr:
-        return
-          rollbackAndPropagate(ctx, "Failed to insert indent: " & insertResult.error)
-    else:
-      indent = ""
-
-  # Store in register only after the buffer change succeeded (registers are not
-  # covered by the buffer transaction, so a rollback would not undo them)
-  storeDeletedText(ctx, text, true)
-
-  # Move cursor to beginning of line (after indent)
-  ctx.cursor.line = startLine
-  ctx.cursor.column = indent.len
-
-  # The transaction stays open for what is typed in Insert mode. `.` repeats the
-  # typed count, not the count widened for a closed fold.
-  ctx.beginInsert(InsertEntry(kind: ieSubstituteLine), count)
 
 proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Toggle case of character(s) at cursor position (~ command)
@@ -669,86 +605,6 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
 
   # Record this command for repeat (.)
   ctx.recordChange(LastEditCommand(kind: lecToggleCase, toggleCaseCount: charsToToggle))
-
-  return Result[(), string].ok ()
-
-proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Delete current line(s) and store in yank register (dd command)
-  ## count: number of lines to delete (default: 1)
-
-  logDebug("delete", "handleDeleteLine called with count=" & $count)
-  let (startLine, endLine, lineCount) = ctx.cursorLineRange(count)
-
-  let deletedText = ctx.buffer.linewiseText(startLine, endLine)
-
-  let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
-    if startLine == 0 and endLine >= ctx.buffer.len - 1:
-      let delResult = ctx.buffer.deleteAllLines()
-      if delResult.isErr:
-        return err(delResult.error)
-    else:
-      for i in 1 .. lineCount:
-        if startLine < ctx.buffer.len:
-          let delResult = ctx.buffer.deleteLine(startLine)
-          if delResult.isErr:
-            return err(delResult.error)
-  if txr.isErr:
-    return err("Transaction failed: " & txr.error)
-
-  # Store in register only after the buffer change succeeded (registers are not
-  # covered by the buffer transaction, so a rollback would not undo them)
-  storeDeletedText(ctx, deletedText, true)
-
-  # A closed fold can put `startLine` above the cursor, so the cursor follows
-  # the range rather than its own old line.
-  landOnFirstNonBlank(ctx, startLine)
-
-  # Record this command for repeat (.)
-  ctx.recordChange(LastEditCommand(kind: lecDeleteLine, deleteLineCount: max(1, count)))
-
-  # Delete screen notification (controlled by config)
-  if ctx.notificationConfig.screenNotifications and
-      ctx.notificationConfig.deleteScreenNotify:
-    ctx.notify("Deleted " & $lineCount & " line(s)")
-
-  # Delete log notification (controlled by config)
-  if ctx.notificationConfig.logNotifications and ctx.notificationConfig.deleteLogNotify:
-    logInfo("delete", "Deleted " & $lineCount & " line(s)")
-
-  return Result[(), string].ok ()
-
-proc handleYankLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Yank (copy) the current line(s) to internal register and optionally to system clipboard
-  ## count: number of lines to yank (default: 1)
-
-  logDebug("yank", "handleYankLine called with count=" & $count)
-  # The cursor stays, but Vim's operators drop curswant.
-  ctx.state.preferredColumn = -1
-  let (startLine, endLine, lineCount) = ctx.cursorLineRange(count)
-  logDebug("yank", "lineCount=" & $lineCount)
-
-  let yankText = ctx.buffer.linewiseText(startLine, endLine)
-
-  # Debug: log the yanked text
-  logDebug("yank", "Yanking " & $lineCount & " line(s), total length: " & $yankText.len)
-  logDebug("yank", "Yanked text: '" & yankText & "'")
-
-  storeYankedText(ctx, yankText, true)
-
-  let storedReg = ctx.state.registers.noNamed
-  logDebug(
-    "yank",
-    "Stored in register: '" & storedReg.getContent() & "', isLine=" & $storedReg.isLine,
-  )
-
-  # Yank screen notification (controlled by config)
-  if ctx.notificationConfig.screenNotifications and
-      ctx.notificationConfig.yankScreenNotify:
-    ctx.notify("Yanked " & $lineCount & " line(s)")
-
-  # Yank log notification (controlled by config)
-  if ctx.notificationConfig.logNotifications and ctx.notificationConfig.yankLogNotify:
-    logInfo("yank", "Yanked " & $lineCount & " line(s)")
 
   return Result[(), string].ok ()
 
@@ -810,187 +666,6 @@ proc handleShowCharInfo*(ctx: CommandContext): Result[(), string] =
     ctx.state.statusMessage = "No character under cursor"
 
   return Result[(), string].ok ()
-
-proc handleOperatorYank*(
-    ctx: CommandContext, count: int = 1, countGiven = false
-): Result[(), string] =
-  ## Yank operator - waits for motion (y2w, y$, etc.) or yy for line
-  ## count: number of times to apply the operator (default: 1)
-
-  # Check if same operator was pressed (yy for yank line)
-  let lines = ctx.takeDoubledOperator(OpYank, count)
-  if lines.isSome:
-    # Execute line yank. The cursor stays, but Vim's operators drop curswant.
-    ctx.state.preferredColumn = -1
-    let startLine = ctx.cursor.line
-    let endLine = min(startLine + lines.get - 1, ctx.buffer.len - 1)
-
-    let text = ctx.buffer.linewiseText(startLine, endLine)
-
-    storeYankedText(ctx, text, true)
-
-    let lineCount = endLine - startLine + 1
-    # Yank screen notification (controlled by config)
-    if ctx.notificationConfig.screenNotifications and
-        ctx.notificationConfig.yankScreenNotify:
-      ctx.notify("Yanked " & $lineCount & " line(s)")
-    # Yank log notification (controlled by config)
-    if ctx.notificationConfig.logNotifications and ctx.notificationConfig.yankLogNotify:
-      logInfo("yank", "Yanked " & $lineCount & " line(s)")
-    return ok(())
-  else:
-    # Set pending operator for motion
-    setPendingOperator(ctx, OpYank, count, countGiven, "y")
-    return ok(())
-
-proc handleOperatorDelete*(
-    ctx: CommandContext, count: int = 1, countGiven = false
-): Result[(), string] =
-  ## Delete operator - waits for motion (d2w, d$, etc.) or dd for line
-  ## count: number of times to apply the operator (default: 1)
-
-  # Check if same operator was pressed (dd for delete line)
-  let lines = ctx.takeDoubledOperator(OpDelete, count)
-  if lines.isSome:
-    # Execute line deletion
-    let startLine = ctx.cursor.line
-    let endLine = min(startLine + lines.get - 1, ctx.buffer.len - 1)
-    let lineCount = endLine - startLine + 1
-
-    let text = ctx.buffer.linewiseText(startLine, endLine)
-
-    let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
-      if startLine == 0 and endLine >= ctx.buffer.len - 1:
-        let deleteResult = ctx.buffer.deleteAllLines()
-        if deleteResult.isErr:
-          return err("Failed to delete line: " & deleteResult.error)
-      else:
-        for i in 0 ..< lineCount:
-          if startLine < ctx.buffer.len:
-            let deleteResult = ctx.buffer.deleteLine(startLine)
-            if deleteResult.isErr:
-              return err("Failed to delete line: " & deleteResult.error)
-    if txr.isErr:
-      return err("Transaction failed: " & txr.error)
-
-    # Store in register only after the buffer change succeeded (registers are not
-    # covered by the buffer transaction, so a rollback would not undo them)
-    storeDeletedText(ctx, text, true)
-
-    # Vim's op_delete lands on the first non-blank of the line that follows.
-    landOnFirstNonBlank(ctx, startLine)
-
-    # Record this command for repeat (.)
-    ctx.recordChange(LastEditCommand(kind: lecDeleteLine, deleteLineCount: lineCount))
-
-    # Delete screen notification (controlled by config)
-    if ctx.notificationConfig.screenNotifications and
-        ctx.notificationConfig.deleteScreenNotify:
-      ctx.notify("Deleted " & $lineCount & " line(s)")
-    # Delete log notification (controlled by config)
-    if ctx.notificationConfig.logNotifications and ctx.notificationConfig.deleteLogNotify:
-      logInfo("delete", "Deleted " & $lineCount & " line(s)")
-    return ok(())
-  else:
-    # Set pending operator for motion
-    setPendingOperator(ctx, OpDelete, count, countGiven, "d")
-    return ok(())
-
-proc handleOperatorChange*(
-    ctx: CommandContext, count: int = 1, countGiven = false
-): Result[(), string] =
-  ## Change operator - waits for motion (c2w, c$, etc.) or cc for line
-  ## count: number of times to apply the operator (default: 1)
-
-  # cc changes lines as S does
-  let lines = ctx.takeDoubledOperator(OpChange, count)
-  if lines.isSome:
-    return handleSubstituteLine(ctx, lines.get)
-  setPendingOperator(ctx, OpChange, count, countGiven, "c")
-  ok(())
-
-proc handleOperatorOnLines*(
-    ctx: CommandContext, operatorType: OperatorType, count: int = 1
-): Result[(), string] =
-  ## Apply a doubled operator (>>, <<, guu, gUU) to whole lines and record it
-  ## for repeat (.)
-  ## operatorType: OpIndent, OpOutdent, OpLowerCase or OpUpperCase
-  ## count: number of lines (default: 1)
-
-  let
-    lineCount = max(1, count)
-    startLine = ctx.cursor.line
-    endLine = min(startLine + lineCount - 1, ctx.buffer.len - 1)
-    range = OperatorRange(
-      start: BufferPosition(line: startLine, column: 0),
-      endPos: BufferPosition(line: endLine, column: 0),
-      isLinewise: true,
-    )
-
-  let opResult = executeOperatorOnRange(ctx, operatorType, range, 1)
-  if opResult.isErr:
-    return opResult
-
-  # Record this command for repeat (.)
-  ctx.recordChange(
-    LastEditCommand(
-      kind: lecOperatorLines, linesOperator: operatorType, operatorLineCount: lineCount
-    )
-  )
-
-  return ok(())
-
-proc handleOperatorIndent*(
-    ctx: CommandContext, count: int = 1, countGiven = false
-): Result[(), string] =
-  ## Indent operator - waits for motion (>2w, >$, etc.) or >> for line
-  ## count: number of times to apply the operator (default: 1)
-
-  # Counts on both halves multiply (2>3> is six lines)
-  let lines = ctx.takeDoubledOperator(OpIndent, count)
-  if lines.isSome:
-    return handleOperatorOnLines(ctx, OpIndent, lines.get)
-  setPendingOperator(ctx, OpIndent, count, countGiven, ">")
-  ok(())
-
-proc handleOperatorOutdent*(
-    ctx: CommandContext, count: int = 1, countGiven = false
-): Result[(), string] =
-  ## Outdent operator - waits for motion (<2w, <$, etc.) or << for line
-  ## count: number of times to apply the operator (default: 1)
-
-  # Counts on both halves multiply (2<3< is six lines)
-  let lines = ctx.takeDoubledOperator(OpOutdent, count)
-  if lines.isSome:
-    return handleOperatorOnLines(ctx, OpOutdent, lines.get)
-  setPendingOperator(ctx, OpOutdent, count, countGiven, "<")
-  ok(())
-
-proc handleOperatorLowerCase*(
-    ctx: CommandContext, count: int = 1, countGiven = false
-): Result[(), string] =
-  ## Lowercase operator - waits for motion (guw, gu$, etc.) or guu/gugu for line
-  ## count: number of times to apply the operator (default: 1)
-
-  # Counts on both halves multiply (2gu3u is six lines)
-  let lines = ctx.takeDoubledOperator(OpLowerCase, count)
-  if lines.isSome:
-    return handleOperatorOnLines(ctx, OpLowerCase, lines.get)
-  setPendingOperator(ctx, OpLowerCase, count, countGiven, "gu")
-  ok(())
-
-proc handleOperatorUpperCase*(
-    ctx: CommandContext, count: int = 1, countGiven = false
-): Result[(), string] =
-  ## Uppercase operator - waits for motion (gUw, gU$, etc.) or gUU/gUgU for line
-  ## count: number of times to apply the operator (default: 1)
-
-  # Counts on both halves multiply (2gU3U is six lines)
-  let lines = ctx.takeDoubledOperator(OpUpperCase, count)
-  if lines.isSome:
-    return handleOperatorOnLines(ctx, OpUpperCase, lines.get)
-  setPendingOperator(ctx, OpUpperCase, count, countGiven, "gU")
-  ok(())
 
 proc handleDeleteToEnd*(
     registry: CommandRegistry, ctx: CommandContext, count = 1
@@ -1204,8 +879,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete Line",
     "Delete current line(s)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleDeleteLine(ctx, count),
+      registry.operateOnLines(ctx, OpDelete, parseCount(args, default = 1)),
     0,
     1, # Accept optional count argument
   )
@@ -1248,8 +922,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Substitute Line",
     "Substitute line(s) (S command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleSubstituteLine(ctx, count),
+      registry.operateOnLines(ctx, OpChange, parseCount(args, default = 1)),
     0,
     1, # Accept optional count argument
   )
@@ -1270,8 +943,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Yank Line",
     "Yank (copy) current line(s) to clipboard",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleYankLine(ctx, count),
+      registry.operateOnLines(ctx, OpYank, parseCount(args, default = 1)),
     0,
     1, # Accept optional count argument
   )
@@ -1326,7 +998,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Indent current line (>> command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       # Count is a line count, like vim's [count]>>
-      handleOperatorOnLines(ctx, OpIndent, parseCount(args, default = 1)),
+      registry.operateOnLines(ctx, OpIndent, parseCount(args, default = 1)),
     0,
     1, # Accept optional count argument
   )
@@ -1336,7 +1008,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Dedent Line",
     "Dedent current line (<< command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleOperatorOnLines(ctx, OpOutdent, parseCount(args, default = 1)),
+      registry.operateOnLines(ctx, OpOutdent, parseCount(args, default = 1)),
     0,
     1, # Accept optional count argument
   )
@@ -1536,16 +1208,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
           lastCmd.replaceCount = count
         of lecDeleteChar:
           lastCmd.deleteCount = count
-        of lecDeleteLine:
-          lastCmd.deleteLineCount = count
         of lecPaste:
           lastCmd.pasteCount = count
         of lecToggleCase:
           lastCmd.toggleCaseCount = count
         of lecJoinLines:
           lastCmd.joinLinesCount = count
-        of lecOperatorLines:
-          lastCmd.operatorLineCount = count
         of lecInsert, lecVisualReplace:
           discard
       ctx.state.editState.lastEditCommand = some(lastCmd)
@@ -1564,9 +1232,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
         else:
           # X command - delete backward
           return handleDeleteCharBefore(ctx, lastCmd.deleteCount)
-      of lecDeleteLine:
-        # Repeat line deletion (dd)
-        return handleDeleteLine(ctx, lastCmd.deleteLineCount)
       of lecPaste:
         # Repeat paste operation (p, P, gp, or gP)
         if lastCmd.pasteBefore:
@@ -1590,8 +1255,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
           return ctx.handleInsertAt(record.entry.kind, count)
         of ieSubstitute:
           return handleSubstituteChar(ctx, count)
-        of ieSubstituteLine:
-          return handleSubstituteLine(ctx, count)
         of ieChange:
           var operand = record.entry.operand
           if args.len > 0:
@@ -1786,11 +1449,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         return ok(())
       of lecJoinLines:
         # Repeat join lines (J command)
-        return handleJoinLines(ctx, lastCmd.joinLinesCount)
-      of lecOperatorLines:
-        # Repeat a doubled linewise operator (>> / << / guu / gUU)
-        return
-          handleOperatorOnLines(ctx, lastCmd.linesOperator, lastCmd.operatorLineCount),
+        return handleJoinLines(ctx, lastCmd.joinLinesCount),
     0,
     1,
   )
@@ -1801,7 +1460,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete Operator",
     "Delete operator - waits for motion (d2w, d$, etc.) or dd for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleOperatorDelete(ctx, parseCount(args), countGiven = args.len > 0),
+      registry.operatorKey(ctx, OpDelete, parseCount(args), args.len > 0, "d"),
     0,
     1, # Accept optional count
   )
@@ -1811,7 +1470,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Change Operator",
     "Change operator - waits for motion (c2w, c$, etc.) or cc for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleOperatorChange(ctx, parseCount(args), countGiven = args.len > 0),
+      registry.operatorKey(ctx, OpChange, parseCount(args), args.len > 0, "c"),
     0,
     1, # Accept optional count
   )
@@ -1821,7 +1480,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Yank Operator",
     "Yank operator - waits for motion (y2w, y$, etc.) or yy for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleOperatorYank(ctx, parseCount(args), countGiven = args.len > 0),
+      registry.operatorKey(ctx, OpYank, parseCount(args), args.len > 0, "y"),
     0,
     1, # Accept optional count
   )
@@ -1831,7 +1490,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Indent Operator",
     "Indent operator - waits for motion (>w, >$, etc.) or >> for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleOperatorIndent(ctx, parseCount(args), countGiven = args.len > 0),
+      registry.operatorKey(ctx, OpIndent, parseCount(args), args.len > 0, ">"),
     0,
     1, # Accept optional count
   )
@@ -1841,7 +1500,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Outdent Operator",
     "Outdent operator - waits for motion (<w, <$, etc.) or << for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleOperatorOutdent(ctx, parseCount(args), countGiven = args.len > 0),
+      registry.operatorKey(ctx, OpOutdent, parseCount(args), args.len > 0, "<"),
     0,
     1, # Accept optional count
   )
@@ -1851,7 +1510,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Lowercase Operator",
     "Lowercase operator - waits for motion (guw, gu$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleOperatorLowerCase(ctx, parseCount(args), countGiven = args.len > 0),
+      registry.operatorKey(ctx, OpLowerCase, parseCount(args), args.len > 0, "gu"),
     0,
     1, # Accept optional count
   )
@@ -1861,7 +1520,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Uppercase Operator",
     "Uppercase operator - waits for motion (gUw, gU$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleOperatorUpperCase(ctx, parseCount(args), countGiven = args.len > 0),
+      registry.operatorKey(ctx, OpUpperCase, parseCount(args), args.len > 0, "gU"),
     0,
     1, # Accept optional count
   )

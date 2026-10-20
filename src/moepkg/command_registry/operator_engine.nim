@@ -93,16 +93,6 @@ proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
   ctx.cursor.line = lineNum
   ctx.cursor.column = firstNonBlankColumn(line)
 
-proc landOnFirstNonBlank*(ctx: CommandContext, lineNum: int) =
-  ## Put the cursor on the first non-blank of `lineNum`, clamped to the last
-  ## line, and drop the column vertical moves want, as a linewise delete does.
-  if ctx.buffer.len == 0:
-    return
-
-  ctx.cursor.line = max(0, min(lineNum, ctx.buffer.len - 1))
-  ctx.cursor.column = firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line))
-  ctx.state.preferredColumn = -1
-
 proc textRewriteAction*(operatorType: OperatorType): Option[string] =
   ## Rewrite name for operator, or none if safe. Listing marks byte-unsafe for raw buffers.
   case operatorType
@@ -221,6 +211,22 @@ proc restoreTopLine(ctx: CommandContext, topLine: int) =
   else:
     ctx.motionController.viewportManager.viewport.resetViewportTop(topLine)
 
+proc lineCount(range: OperatorRange): int =
+  range.endPos.line - range.start.line + 1
+
+proc report(ctx: CommandContext, operatorType: OperatorType, msg: string) =
+  ## Tell of a yank or a delete as the notification settings ask.
+  let cfg = ctx.notificationConfig
+  let (screen, log, tag) =
+    if operatorType == OpYank:
+      (cfg.yankScreenNotify, cfg.yankLogNotify, "yank")
+    else:
+      (cfg.deleteScreenNotify, cfg.deleteLogNotify, "delete")
+  if cfg.screenNotifications and screen:
+    ctx.notify(msg)
+  if cfg.logNotifications and log:
+    logInfo(tag, msg)
+
 proc executeOperatorOnRange*(
     ctx: CommandContext,
     operatorType: OperatorType,
@@ -267,16 +273,13 @@ proc executeOperatorOnRange*(
 
     storeYankedText(ctx, text, range.isLinewise)
 
-    let lineCount =
+    ctx.report(
+      OpYank,
       if range.isLinewise:
-        range.endPos.line - range.start.line + 1
+        "Yanked " & $range.lineCount & " line(s)"
       else:
-        0
-    ctx.state.statusMessage =
-      if range.isLinewise:
-        "Yanked " & $lineCount & " line(s)"
-      else:
-        "Yanked " & $text.len & " character(s)"
+        "Yanked " & $text.len & " character(s)",
+    )
 
     # Don't move cursor for yank
     return ok(())
@@ -305,6 +308,8 @@ proc executeOperatorOnRange*(
       let line = ctx.buffer.getLine(ctx.cursor.line)
       ctx.cursor.column = min(ctx.cursor.column, max(0, line.charLen - 1))
 
+    if range.isLinewise:
+      ctx.report(OpDelete, "Deleted " & $range.lineCount & " line(s)")
     ctx.restoreTopLine(topLine)
     return ok(())
   of OpChange:
@@ -433,18 +438,6 @@ proc setPendingOperator*(
     return
   ctx.startOperator(operatorType, count, countGiven)
   ctx.state.statusMessage = statusMsg
-
-proc takeDoubledOperator*(
-    ctx: CommandContext, operatorType: OperatorType, count: int
-): Option[int] =
-  ## The line count when an operator of `operatorType` already waits (`dd`,
-  ## `2d3d` for six lines), ending it. none when it starts the operator instead.
-  let op = ctx.state.pendingInput.pendingOperator
-  if op.isNone or op.get.operatorType != operatorType:
-    return none(int)
-  ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-  ctx.register = op.get.register
-  some(op.get.operatorCount * max(1, count))
 
 proc namedMarkPosition*(
     ctx: CommandContext, name: char

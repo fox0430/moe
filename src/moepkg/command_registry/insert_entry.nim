@@ -27,7 +27,9 @@ import ../command_handlers/insert_commands
 
 import core, operator_engine
 
-proc enterInsert(ctx: CommandContext, entry: InsertEntry, count: int) =
+proc enterInsert*(ctx: CommandContext, entry: InsertEntry, count: int) =
+  ## Enter Insert for `entry` once its command has made its own edits, and
+  ## record what is typed for `.`.
   ctx.state.mode = EditorMode.Insert
   if entry.kind in {ieOpenBelow, ieOpenAbove}:
     # The typed text starts at the line start, indent and all, as Vim's edit()
@@ -81,6 +83,6 @@ proc handleInsertAt*(
     # The session began before the line went in, so the line is part of it.
     ctx.enterInsert(InsertEntry(kind: kind), count)
     return ok(())
-  of ieSubstitute, ieSubstituteLine, ieChange:
+  of ieSubstitute, ieChange:
     return err("Not an insert command: " & $kind)
   ctx.beginInsert(InsertEntry(kind: kind), count)

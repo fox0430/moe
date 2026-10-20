@@ -245,7 +245,6 @@ let Invariants = @[
     match: matchRecordStart,
     allow: @[
       ("moepkg/command_registry/insert_entry.nim", 1),
-      ("moepkg/command_registry/operator_driver.nim", 1),
       ("moepkg/command_handlers/handler_manager.nim", 1),
       ("moepkg/command_handlers/mode_dispatchers.nim", 1),
     ],
