@@ -527,64 +527,61 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
 
 proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)) =
   ## Delete visual selection into `register` (else the delete registers) and
-  ## enter insert mode (c command)
+  ## enter insert mode (c command). The transaction stays open for what Insert
+  ## types, so one undo takes back both.
   let sel = state.operandSelection(buffer)
   if sel.active:
     var deletedText = ""
     var deletedIsLine = false
 
-    let txr = withTransaction(buffer, "Visual change"):
+    let
+      startLine = min(sel.start.line, sel.current.line)
+      endLine = max(sel.start.line, sel.current.line)
+
+    # As Vim, undo returns to the top left of the selection, the first column
+    # of a linewise one.
+    let undoCursor =
       case sel.kind
       of vskBlock:
-        let startCol = sel.blockColumns.startCol
-        let startLine = min(sel.start.line, sel.current.line)
-        let endLine = max(sel.start.line, sel.current.line)
+        BufferPosition(line: startLine, column: sel.blockColumns.startCol)
+      of vskLine:
+        BufferPosition(line: startLine, column: 0)
+      of vskChar:
+        sel.getSelectionRange()[0]
+    let txr = withTransactionForInsert(buffer, "Visual change", undoCursor):
+      case sel.kind
+      of vskBlock:
         checkVisualEdit(state, deleteBlockSelection(buffer, state, sel, deletedText))
-        state.cursor.line = startLine
-        state.cursor.column = startCol
+        # Insert may start past the last character, which the delete clamps.
+        state.cursor.column = undoCursor.column
         state.editState.visualBlockInsertContext = some(
           VisualBlockInsertContext(
             kind: vbiChange,
             startLine: startLine,
             endLine: endLine,
-            insertColumn: startCol,
+            insertColumn: undoCursor.column,
             firstLineLen: buffer.getLine(startLine).charLen,
           )
         )
       of vskLine:
-        let
-          startLine = min(sel.start.line, sel.current.line)
-          endLine = max(sel.start.line, sel.current.line)
-
         deletedText = getLineText(buffer, sel)
         deletedIsLine = true
 
-        # The first line stays with only its indent under autoindent, as `cc`.
-        let indent =
-          if state.autoIndent and buffer.allowsTextTransforms:
-            getLineIndent(buffer.getLine(startLine))
-          else:
-            ""
-        for _ in startLine + 1 .. endLine:
-          checkVisualEdit(state, buffer.deleteLine(startLine + 1))
-        checkVisualEdit(state, buffer.replaceLine(startLine, indent))
-        state.cursor.line = startLine
-        state.cursor.column = indent.len
+        checkVisualEdit(state, buffer.emptyLinesForChange(state, startLine, endLine))
       of vskChar:
-        let (selStart, selEnd) = sel.getSelectionRange()
+        let selEnd = sel.getSelectionRange()[1]
+        deletedText = buffer.getTextInRange(undoCursor, selEnd)
 
-        deletedText = buffer.getTextInRange(selStart, selEnd)
+        checkVisualEdit(state, buffer.deleteRange(undoCursor, selEnd))
 
-        checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
-
-        state.cursor = selStart
+        state.cursor = undoCursor
     if txr.isErr:
       if state.statusMessage.len == 0:
         state.statusMessage = txr.error
       state.leaveVisual()
       return
 
-    # Registers are outside the buffer transaction, so store after commit.
+    # Registers are outside the buffer transaction, so store after the delete.
     state.registers.storeDeleted(register, deletedText, deletedIsLine)
 
     state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
