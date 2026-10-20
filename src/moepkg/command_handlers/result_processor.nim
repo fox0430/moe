@@ -119,7 +119,8 @@ proc processHistoryResult(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
   if activeBuffer.inTransaction:
     boundaryResult =
       if e.state.editState.visualBlockInsertContext.isSome:
-        let finalizeResult = finalizeInsertExit(activeBuffer, e.state)
+        let finalizeResult =
+          finalizeInsertExit(activeBuffer, e.state, staysInInsert = resumeInsert)
         if finalizeResult.isErr:
           Result[void, string].err(finalizeResult.error)
         else:

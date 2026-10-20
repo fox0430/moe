@@ -22,57 +22,14 @@
 
 import std/[unittest, options, strutils, tables]
 
-import
-  ../src/moepkg/[buffer, types, registers, editor, config, key_bindings, completion]
+import ../src/moepkg/[buffer, types, registers, editor, key_bindings, completion]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
-
-proc newVimLikeEditor(lines: seq[string], line, column: int): Editor =
-  ## An editor typing as `vim -u NONE` does: no indent, pair or expanded tab.
-  var config = newEditorConfig()
-  config.standard.autoIndent = false
-  config.standard.autoCloseParen = false
-  config.standard.autoDeleteParen = false
-  config.standard.expandTab = false
-  config.standard.tabStop = 8
-  result = newEditor(config)
-  # newEditor's registers reach the system clipboard.
-  result.state.registers = initRegisters()
-  let buffer = newTextBuffer(lines.join("\n") & "\n")
-  result.windowManager.windows[0].setTab(buffer)
-  result.windowManager.windows[0].bufferIds = @[buffer.id]
-  result.windowManager.windows[0].viewport =
-    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-  result.motionController.bindToWindow(result.activeWindow)
-  result.state.mode = EditorMode.Normal
-  result.activeWindow.cursor = BufferPosition(line: line, column: column)
-
-proc keysOf(spec: string): seq[KeyCombo] =
-  ## `<Name>` is one key (`<Escape>`, `<C-a>`), any other character a key.
-  var i = 0
-  while i < spec.len:
-    if spec[i] == '<':
-      let close = spec.find('>', i)
-      let name = spec[i + 1 ..< close]
-      result.add(
-        if name == "C-@":
-          # Ctrl-@ arrives as NUL, which celina reports as Ctrl+Space.
-          KeyCombo(isSpecial: false, char: " ", modifiers: {kmCtrl})
-        else:
-          parseKeyCombo(name).get
-      )
-      i = close + 1
-    else:
-      result.add(KeyCombo(isSpecial: false, char: $spec[i]))
-      inc i
+import vim_like_test_helper
 
 proc press(e: Editor, spec: string) =
   for key in keysOf(spec):
     check e.handleKeyCombo(key)
-
-proc lines(e: Editor): seq[string] =
-  for i in 0 ..< e.activeBuffer.len:
-    result.add e.activeBuffer.getLine(i)
 
 proc cursorAt(e: Editor): (int, int) =
   (e.activeWindow.cursor.line, e.activeWindow.cursor.column)

@@ -113,17 +113,19 @@ proc replicateBlockInsert*(buffer: TextBuffer, state: EditorState): string =
   ""
 
 proc finalizeInsertExit*(
-    buffer: TextBuffer, state: EditorState
+    buffer: TextBuffer, state: EditorState, staysInInsert = false
 ): Result[string, string] =
   ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, the end of what
   ## `.` repeats, visual-block replication and transaction commit.
+  ## `staysInInsert` is for a boundary that goes on in Insert, where no Escape
+  ## keeps the column after the auto-indent taken off.
   ##
   ## ok carries a non-fatal warning to surface (empty when clean), which must
   ## not block the mode transition. err is a fatal commit failure.
   state.snippetSession.active = false
   state.endInsertRecord()
 
-  clearAutoIndentIfUnedited(buffer, state)
+  clearAutoIndentIfUnedited(buffer, state, keepColumn = not staysInInsert)
 
   # Not typed, so `.` repeats what was typed, not the copies.
   let replicationError = replicateBlockInsert(buffer, state)
