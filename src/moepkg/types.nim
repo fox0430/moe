@@ -599,6 +599,7 @@ type
     odMark ## ' or ` to a named mark
     odCommand ## A registered command that finds a place (n, *, gn)
     odTextObject
+    odLines ## The operator's own key again, over lines (`dd`, `3>>`)
 
   Operand* = object ## What a waiting operator acts over, kept so `.` finds it again
     count*: int ## The operator's and the motion's counts multiplied (`2d3w`: 6)
@@ -616,6 +617,8 @@ type
     of odTextObject:
       textObjectModifier*: TextObjectModifier
       textObjectKind*: TextObjectKind
+    of odLines:
+      discard
 
   AutoIndentedLine* = object ## A line Insert mode indented by itself
     line*: int
@@ -633,8 +636,7 @@ type
     ieOpenBelow # o
     ieOpenAbove # O
     ieSubstitute # s
-    ieSubstituteLine # S, cc
-    ieChange # c{motion}, and C as c$
+    ieChange # c{motion}, cc and S, and C as c$
 
   InsertEntry* = object
     case kind*: InsertEntryKind
@@ -669,16 +671,14 @@ type
 
   LastEditCommandKind* = enum
     ## Types of repeatable edit commands
-    lecOperatorMotion # Operator + motion (e.g., dw, d2w, y$)
+    lecOperatorMotion # Operator + motion (e.g., dw, d2w, dd, >>)
     lecInsert # A change made in Insert mode, kept in EditState.insertRecord
     lecReplaceChar # Character replacement with r command
     lecVisualReplace # Visual-mode replace (r) with recorded selection shape
     lecDeleteChar # Character deletion with x/X
-    lecDeleteLine # Delete line(s) with dd
     lecPaste # Paste operation (p/P/gp/gP)
     lecToggleCase # Toggle case with ~
     lecJoinLines # Join lines with J
-    lecOperatorLines # Doubled linewise operator (>>, <<, guu, gUU)
 
   LastEditCommand* = object
     ## Represents the last change command that can be repeated with "."
@@ -706,8 +706,6 @@ type
     of lecDeleteChar:
       deleteCount*: int # Number of characters to delete
       deleteForward*: bool # true for x, false for X
-    of lecDeleteLine:
-      deleteLineCount*: int # Number of lines to delete
     of lecPaste:
       pasteCount*: int # Number of times to paste
       pasteBefore*: bool # true for P/gP (before), false for p/gp (after)
@@ -716,9 +714,6 @@ type
       toggleCaseCount*: int # Number of characters to toggle
     of lecJoinLines:
       joinLinesCount*: int # Number of lines to join
-    of lecOperatorLines:
-      linesOperator*: OperatorType # OpIndent, OpOutdent, OpLowerCase, OpUpperCase
-      operatorLineCount*: int # Number of lines the operator was applied to
 
   VisualSelection* = object
     ## A window's Visual selection, derived from its anchor, cursor and mode.

@@ -75,8 +75,13 @@ suite "Repeat Command (.) - Delete Operations":
     state.mode = EditorMode.Normal
 
     # Simulate: dd (delete line)
-    state.editState.lastEditCommand =
-      some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: 1))
+    state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecOperatorMotion,
+        operator: OpDelete,
+        operand: Operand(kind: odLines, count: 1),
+      )
+    )
 
     # Execute repeat command (.) - should delete line2
     let registry = newCommandRegistry()
