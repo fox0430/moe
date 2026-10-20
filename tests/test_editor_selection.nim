@@ -63,7 +63,21 @@ suite "editor selection API":
       BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 2), vskBlock
     )
     check e.currentSelection().get.kind == EditorSelectionKind.Block
+    check e.currentSelection().get.extendsToLineEnd == false
     check e.selectedText() == "lp\net\nam"
+
+  test "block selection extended to each line end reports it":
+    let e = createSelectionEditor("abXX\ncDEFGH\nIJ")
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 3), vskBlock
+    )
+    e.state.preferredColumn = LineEnd
+
+    let selection = e.currentSelection().get
+
+    check selection.kind == EditorSelectionKind.Block
+    check selection.extendsToLineEnd
+    check e.selectedText() == "bXX\nDEFGH\nJ"
 
   test "a selection ending in a closed fold reports the text a yank would take":
     let e = createSelectionEditor("alpha\nbeta\ngamma\ndelta")

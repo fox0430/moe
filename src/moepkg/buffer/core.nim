@@ -195,6 +195,9 @@ type
     start*: BufferPosition ## The anchor
     cursor*: BufferPosition ## The end the cursor was on
     kind*: VisualSelectionKind
+    wantedColumn*: int = -1
+      ## The column vertical moves aimed for, as Vim's vi_curswant, or -1 for
+      ## the cursor's. `LineEnd` keeps a block following each line's end.
 
   OpenLine* = enum
     ## How a multi-line insert meets its line; decides rows saved for undo, as

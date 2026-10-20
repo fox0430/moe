@@ -29,7 +29,7 @@ import pkg/results
 import
   ../[
     buffer, modes, motion, types, key_bindings, command_registry, key_router,
-    pending_input,
+    pending_input, visual_selection,
   ]
 import ../types/editor_types
 import handler_types
@@ -111,8 +111,7 @@ proc isPositionInSelection*(selection: VisualSelection, pos: BufferPosition): bo
   case selection.kind
   of vskBlock:
     # Block selection: column range applies to all lines in the selection
-    let colStart = min(selection.start.column, selection.current.column)
-    let colEnd = max(selection.start.column, selection.current.column)
+    let (colStart, colEnd) = selection.blockColumns
     return pos.column >= colStart and pos.column <= colEnd
   of vskLine:
     # Line selection: entire lines are selected

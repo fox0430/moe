@@ -512,6 +512,7 @@ type
     PreviousLineFirstNonBlank
       # - - move to previous line's first non-whitespace character
     MatchBracket # % - move to matching bracket
+    ScreenColumn # | - move to screen column (Vim's nv_pipe)
 
   TypedCommandKind* = enum
     MovementCommand
@@ -699,6 +700,9 @@ type
         # Single-line charwise: width from cursor;
         # multi-line charwise: last-line width from col 0; linewise: unused;
         # blockwise: block width.
+      visualReplaceToLineEnd*: bool
+        # Blockwise after `<C-v>$`: each line to its end, as Vim's
+        # redo_VIsual_vcol == MAXCOL.
     of lecDeleteChar:
       deleteCount*: int # Number of characters to delete
       deleteForward*: bool # true for x, false for X
@@ -722,6 +726,9 @@ type
     current*: BufferPosition # Cursor
     active*: bool # False outside the Visual modes
     kind*: VisualSelectionKind # Follows the Visual mode
+    extendsToLineEnd*: bool
+      ## A block whose end follows each line's end, as in Vim after `<C-v>$`
+      ## (curswant == MAXCOL).
 
   PointerSelectionGranularity* = enum
     ## Unit established by the primary-button press for the rest of a gesture.
@@ -786,6 +793,7 @@ type
     startLine*: int # First line of the block selection
     endLine*: int # Last line of the block selection
     insertColumn*: int # Column where text should be inserted/replicated
+    atLineEnd*: bool # An append after `<C-v>$`: each line takes it at its end
     firstLineLen*: int ## Characters on the first line when the insert began
 
   LspLocationItem* = object ## Single location item for LSP results display
@@ -1231,6 +1239,14 @@ proc mode*(s: EditorState): EditorMode =
   ## Get current mode from the active window
   s.activeWindow.mode
 
+const LineEnd* = high(int)
+  ## The column `$` aims for: past the end of every line, as Vim's MAXCOL.
+
+proc preferredColumn*(win: EditorWindow): int =
+  ## The screen cell vertical moves aim for (Vim's curswant), or -1 to take
+  ## the cursor's.
+  win.wantedColumn.get(-1)
+
 proc clampedAnchor*(win: EditorWindow): BufferPosition =
   ## The anchor, pulled back onto the last line when lines under it went away.
   result = win.visualAnchor
@@ -1245,7 +1261,10 @@ proc saveLastVisual*(win: EditorWindow) =
   if win.mode.isVisualAllMode and not win.buffer.isNil:
     win.buffer.lastVisual = some(
       VisualArea(
-        start: win.clampedAnchor, cursor: win.cursor, kind: win.mode.visualKind
+        start: win.clampedAnchor,
+        cursor: win.cursor,
+        kind: win.mode.visualKind,
+        wantedColumn: win.preferredColumn,
       )
     )
 
@@ -1271,11 +1290,6 @@ proc spot(win: EditorWindow): WindowSpot =
     buffer: win.buffer,
     version: if win.buffer.isNil: 0 else: win.buffer.contentVersion,
   )
-
-proc preferredColumn*(win: EditorWindow): int =
-  ## The screen cell vertical moves aim for (Vim's curswant), or -1 to take
-  ## the cursor's.
-  win.wantedColumn.get(-1)
 
 proc `preferredColumn=`*(win: EditorWindow, column: int) =
   ## Keep `column` for vertical moves; -1 drops it.
@@ -1330,10 +1344,10 @@ proc setMode*(win: EditorWindow, m: EditorMode) =
     win.visualAnchor = win.cursor
   if entersInsert:
     win.insertStart = InsertStart(at: win.cursor, stop: win.cursor)
-  if leavingVisual or entersInsert:
-    win.preferredColumn = -1
   if leavingVisual and not win.holdLastVisual:
     win.saveLastVisual()
+  if leavingVisual or entersInsert:
+    win.preferredColumn = -1
   win.mode = m
   if leavingVisual and m notin {EditorMode.Insert, EditorMode.Replace} and
       not win.buffer.isNil and win.cursor.line < win.buffer.len:

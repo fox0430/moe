@@ -80,6 +80,7 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("^", "line-first-non-blank"),
   ("_", "linewise-first-non-blank"),
   ("$", "line-end"),
+  ("|", "goto-column"),
   # Arrow keys and aliases
   ("Left", "move-left"),
   ("Right", "move-right"),

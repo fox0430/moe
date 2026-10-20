@@ -45,6 +45,7 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   ("^", "line-first-non-blank"),
   ("_", "linewise-first-non-blank"),
   ("$", "line-end"),
+  ("|", "goto-column"),
   ("g _", "line-last-non-blank"),
   ("g g", "goto-first-line"),
   ("G", "goto-last-line"),

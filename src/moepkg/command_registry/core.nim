@@ -51,6 +51,7 @@ type
     bcMotionViewportMiddle = "motion.viewport.middle"
     bcMotionViewportLow = "motion.viewport.low"
     bcMotionMatchBracket = "motion.match.bracket" # % - jump to matching bracket
+    bcMotionScreenColumn = "motion.screen.column" # | - to screen column
     # Scroll commands
     bcScrollCursorTop = "scroll.cursor.top"
     bcScrollCursorCenter = "scroll.cursor.center"

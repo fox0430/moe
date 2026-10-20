@@ -383,6 +383,9 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
   )
   registry.registerMotionCommand(bcMotionEnd, "End", "Move to end of line", Motion.End)
   registry.registerMotionCommand(
+    bcMotionScreenColumn, "Screen Column", "Move to screen column", Motion.ScreenColumn
+  )
+  registry.registerMotionCommand(
     bcMotionFirstLine,
     "First Line",
     "Move to first line",

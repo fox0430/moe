@@ -33,7 +33,9 @@ type
   EditorSelection* = object
     ## Snapshot of the active buffer's selection. Positions use zero-based
     ## rune columns and inclusive endpoints, matching Moe's editing model.
-    ## Block selections describe a rectangle rather than one contiguous range.
+    ## Block selections describe a rectangle rather than one contiguous range,
+    ## unless `extendsToLineEnd` is set: the right edge then follows each
+    ## line's end, as after `<C-v>$`.
     ## `anchor`/`focus` are the ends the user placed; `kind`/`first`/`last` are
     ## what the selection covers, a closed fold at either end whole, which is
     ## what a yank takes and `selectedText` returns.
@@ -43,6 +45,10 @@ type
     focus*: BufferPosition
     first*: BufferPosition
     last*: BufferPosition
+    extendsToLineEnd*: bool
+      ## A Block selection whose right edge follows each line's end. As for
+      ## any block, `first`/`last` are its ends in line order, not its
+      ## corners: it covers the smaller of their columns to each line's end.
 
 func toEditorSelectionKind(kind: VisualSelectionKind): EditorSelectionKind =
   case kind
@@ -71,6 +77,7 @@ proc currentSelection*(e: Editor): Option[EditorSelection] =
       focus: selection.current,
       first: first,
       last: last,
+      extendsToLineEnd: operand.extendsToLineEnd,
     )
   )
 

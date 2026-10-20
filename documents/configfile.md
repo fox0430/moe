@@ -691,6 +691,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | paragraph-forward | Move to next paragraph |
 | paragraph-backward | Move to previous paragraph |
 | match-bracket | Jump to matching bracket (%) |
+| goto-column | Move to screen column |
 | jump-back | Jump to previous position in jump list |
 | jump-forward | Jump to next position in jump list |
 | changelist-prev | Jump to previous change position |

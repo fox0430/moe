@@ -45,6 +45,7 @@ proc visualSelection*(win: EditorWindow): VisualSelection =
     current: win.cursor,
     active: true,
     kind: win.mode.visualKind,
+    extendsToLineEnd: win.mode.visualKind == vskBlock and win.preferredColumn == LineEnd,
   )
 
 proc selectVisualRange*(state: EditorState, anchor, focus: BufferPosition) =
@@ -76,8 +77,20 @@ proc operandSelection*(win: EditorWindow, buffer: TextBuffer): VisualSelection =
     return
   let snapped = buffer.foldState.snapRangeToFolds(lo, hi)
   result.kind = vskLine
+  result.extendsToLineEnd = false
   result.start = BufferPosition(line: snapped.startLine, column: 0)
   result.current = BufferPosition(line: snapped.endLine, column: 0)
 
 proc operandSelection*(state: EditorState, buffer: TextBuffer): VisualSelection =
   state.activeWindow.operandSelection(buffer)
+
+func blockColumns*(sel: VisualSelection): tuple[startCol, endCol: int] =
+  ## The columns a block selection covers on each of its lines, inclusive. A
+  ## block whose end follows each line's end (after `<C-v>$`) ends at
+  ## `LineEnd`, past every line's end, as Vim's MAXCOL: a bound to clamp to
+  ## the line, not a column to count from.
+  let startCol = min(sel.start.column, sel.current.column)
+  if sel.extendsToLineEnd:
+    (startCol, LineEnd)
+  else:
+    (startCol, max(sel.start.column, sel.current.column))

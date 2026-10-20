@@ -1728,7 +1728,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
             return err(txr.error)
           return ok(())
         of vskBlock:
-          # Blockwise: same rows x columns from the cursor, clamped per line.
+          # Blockwise: same rows x columns from the cursor, clamped per line,
+          # or to each line's end after `<C-v>$`.
           let firstLine = ctx.cursor.line
           if firstLine < 0 or firstLine >= ctx.buffer.len:
             return err("Nothing to replace")
@@ -1752,7 +1753,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
               for lineNum in firstLine .. lastLine:
                 let lineLen = ctx.buffer.getLine(lineNum).charLen
                 if startCol < lineLen:
-                  let actualEndCol = min(endCol, lineLen - 1)
+                  let actualEndCol =
+                    if lastCmd.visualReplaceToLineEnd:
+                      lineLen - 1
+                    else:
+                      min(endCol, lineLen - 1)
                   let res = ctx.buffer.transformRange(
                     BufferPosition(line: lineNum, column: startCol),
                     BufferPosition(line: lineNum, column: actualEndCol),
