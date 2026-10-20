@@ -400,8 +400,8 @@ suite "HandlerManager - Visual Block insert replication":
     check buffer.getLine(1) == "XXbbbb"
     check buffer.getLine(2) == "XXcccc"
 
-  test "Block I pads short lines with spaces":
-    ## When a line is shorter than the insert column, spaces should be added.
+  test "Block I leaves lines that end before the block alone":
+    ## As Vim's v_b_I, a line shorter than the insert column is not changed.
     let manager = createTestManager()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "abcdef\nab\nabcdef")
@@ -428,9 +428,8 @@ suite "HandlerManager - Visual Block insert replication":
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), escKey
     )
 
-    # Verify line 0 and 2 have "Z" at col 4, line 1 is padded
     check buffer.getLine(0) == "abcdZef"
-    check buffer.getLine(1) == "ab  Z"
+    check buffer.getLine(1) == "ab"
     check buffer.getLine(2) == "abcdZef"
 
   test "Block A appends text after block end column on all lines":

@@ -26,9 +26,6 @@ import std/unicode
 import types, modes, render_utils, unicode_utils
 import buffer/core
 
-const LineEnd* = high(int)
-  ## The column `$` aims for: past the end of every line, as Vim's MAXCOL.
-
 proc cursorCell*(text: string, column, tabStop: int, onTabEnd: bool): int =
   ## The cell character `column` of `text` starts at, or with `onTabEnd` its
   ## last cell when it is a tab. Past the end, the width of `text`.

@@ -168,6 +168,20 @@ suite "VisualModeHandler - isPositionInSelection":
     # Outside line range
     check isPositionInSelection(selection, BufferPosition(line: 3, column: 4)) == false
 
+  test "Position in block selection with extendsToLineEnd":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 2, column: 6),
+      active: true,
+      kind: vskBlock,
+      extendsToLineEnd: true,
+    )
+
+    check isPositionInSelection(selection, BufferPosition(line: 1, column: 2)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 1, column: 100)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 1, column: 1)) == false
+    check isPositionInSelection(selection, BufferPosition(line: 3, column: 4)) == false
+
   test "Position in inactive selection":
     let selection = VisualSelection(
       start: BufferPosition(line: 0, column: 2),

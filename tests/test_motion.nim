@@ -27,6 +27,7 @@ import ../src/moepkg/[unicode_utils, types, modes]
 import ../src/moepkg/types/config_types
 import ../src/moepkg/buffer/[core, fold]
 import ../src/moepkg/motion {.all.}
+import ../src/moepkg/visible_rows
 
 proc move(
     executor: MotionExecutor,
@@ -1788,3 +1789,108 @@ suite "ScrollAnimation":
     check res.cursorLine >= viewport.topLine
     check res.cursorLine <= viewport.topLine + 7
     check viewport.topLine > 0
+
+suite "ScreenColumn Motion":
+  test "moves to the screen column":
+    let buffer = newTextBuffer("hello")
+    let executor = newMotionExecutor(buffer)
+    var rl = initRowLayout(buffer, nil, false, 80, 8)
+    let pos = CursorPosition(x: 4, y: 0)
+    let first = executor.landMotion(
+      pos,
+      MotionCommand(motion: Motion.ScreenColumn, count: 1),
+      24,
+      0,
+      1,
+      EditorMode.Normal,
+      rl,
+      0,
+      none(OperatorType),
+    )
+    check first.pos.column == 0
+    check first.motionType == mtExclusive
+    check not first.failed
+    let third = executor.landMotion(
+      pos,
+      MotionCommand(motion: Motion.ScreenColumn, count: 3),
+      24,
+      0,
+      1,
+      EditorMode.Normal,
+      rl,
+      0,
+      none(OperatorType),
+    )
+    check third.pos.column == 2
+
+  test "a tab occupies its display cells":
+    let buffer = newTextBuffer("\thello")
+    let executor = newMotionExecutor(buffer)
+    var rl = initRowLayout(buffer, nil, false, 80, 8)
+    let pos = CursorPosition(x: 0, y: 0)
+    let first = executor.landMotion(
+      pos,
+      MotionCommand(motion: Motion.ScreenColumn, count: 1),
+      24,
+      0,
+      1,
+      EditorMode.Normal,
+      rl,
+      0,
+      none(OperatorType),
+    )
+    check first.pos.column == 0
+    let insideTab = executor.landMotion(
+      pos,
+      MotionCommand(motion: Motion.ScreenColumn, count: 2),
+      24,
+      0,
+      1,
+      EditorMode.Normal,
+      rl,
+      0,
+      none(OperatorType),
+    )
+    check insideTab.pos.column == 0
+    let afterTab = executor.landMotion(
+      pos,
+      MotionCommand(motion: Motion.ScreenColumn, count: 9),
+      24,
+      0,
+      1,
+      EditorMode.Normal,
+      rl,
+      0,
+      none(OperatorType),
+    )
+    check afterTab.pos.column == 1
+
+  test "past the end clamps to the line end":
+    let buffer = newTextBuffer("hi")
+    let executor = newMotionExecutor(buffer)
+    var rl = initRowLayout(buffer, nil, false, 80, 8)
+    let pos = CursorPosition(x: 0, y: 0)
+    let normal = executor.landMotion(
+      pos,
+      MotionCommand(motion: Motion.ScreenColumn, count: 10),
+      24,
+      0,
+      1,
+      EditorMode.Normal,
+      rl,
+      0,
+      none(OperatorType),
+    )
+    check normal.pos.column == 1
+    let visual = executor.landMotion(
+      pos,
+      MotionCommand(motion: Motion.ScreenColumn, count: 10),
+      24,
+      0,
+      1,
+      EditorMode.Visual,
+      rl,
+      0,
+      none(OperatorType),
+    )
+    check visual.pos.column == 2

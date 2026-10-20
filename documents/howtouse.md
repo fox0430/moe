@@ -80,6 +80,7 @@
 | <kbd>**G**</kbd> | Go to the last line |
 | <kbd>**0**</kbd> | Go to the first character of the line |
 | <kbd>**$**</kbd> | Go to the end of the line |
+| <kbd>**\|**</kbd> | Go to the screen column |
 | <kbd>**^**</kbd> | Go to the first non-blank character of the line |
 | <kbd>**{**</kbd> | Go to the previous blank line |
 | <kbd>**}**</kbd> | Go to the next blank line |

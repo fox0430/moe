@@ -1556,6 +1556,7 @@ suite "Default bindings coverage":
     let zero = registry.findSingleBinding(EditorMode.Normal, toKeyCombo('0'))
     let caret = registry.findSingleBinding(EditorMode.Normal, toKeyCombo('^'))
     let dollar = registry.findSingleBinding(EditorMode.Normal, toKeyCombo('$'))
+    let pipe = registry.findSingleBinding(EditorMode.Normal, toKeyCombo('|'))
 
     check zero.isSome
     check zero.get.name == "line-home"
@@ -1563,6 +1564,8 @@ suite "Default bindings coverage":
     check caret.get.name == "line-first-non-blank"
     check dollar.isSome
     check dollar.get.name == "line-end"
+    check pipe.isSome
+    check pipe.get.name == "goto-column"
 
   test "Undo/redo bindings":
     let registry = newKeyBindingRegistry()

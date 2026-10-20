@@ -106,6 +106,7 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "G", description: "Go to the last line"),
     HelpEntry(syntax: "0", description: "Go to the first character of the line"),
     HelpEntry(syntax: "$", description: "Go to the end of the line"),
+    HelpEntry(syntax: "|", description: "Go to the screen column"),
     HelpEntry(
       syntax: "^", description: "Go to the first non-blank character of the line"
     ),

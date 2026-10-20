@@ -364,14 +364,13 @@ proc executeCommand*(
       if not ctx.state.mode.isVisualAllMode:
         return err("No visual selection active")
 
-      # Record the selection shape for `.` (Vim-compatible sizes).
-      # `$`-extended ends keep the raw column; repeat clamps to the line.
+      # Record the selection shape for `.` (Vim-compatible sizes). A charwise
+      # `$` end keeps its raw column and repeat clamps it to the line; a block
+      # after `<C-v>$` repeats to each line's end, as Vim's MAXCOL.
       let
         sel = ctx.state.operandSelection(ctx.buffer)
         loLine = min(sel.start.line, sel.current.line)
         hiLine = max(sel.start.line, sel.current.line)
-        loCol = min(sel.start.column, sel.current.column)
-        hiCol = max(sel.start.column, sel.current.column)
       let visualRepeatCmd =
         case sel.kind
         of vskChar:
@@ -381,7 +380,7 @@ proc executeCommand*(
               visualReplaceChar: cmd.targetChar,
               visualReplaceKind: vskChar,
               visualReplaceRows: 1,
-              visualReplaceCols: hiCol - loCol + 1,
+              visualReplaceCols: abs(sel.current.column - sel.start.column) + 1,
             )
           else:
             let lastCol =
@@ -410,7 +409,8 @@ proc executeCommand*(
             visualReplaceChar: cmd.targetChar,
             visualReplaceKind: vskBlock,
             visualReplaceRows: hiLine - loLine + 1,
-            visualReplaceCols: hiCol - loCol + 1,
+            visualReplaceCols: abs(sel.current.column - sel.start.column) + 1,
+            visualReplaceToLineEnd: sel.extendsToLineEnd,
           )
 
       # Surface a failed rollback (untrustworthy buffer) as a status message

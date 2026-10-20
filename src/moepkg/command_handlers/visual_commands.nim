@@ -83,8 +83,7 @@ proc getBlockText(buffer: TextBuffer, selection: VisualSelection): string =
   let
     startLine = min(selection.start.line, selection.current.line)
     endLine = max(selection.start.line, selection.current.line)
-    startCol = min(selection.start.column, selection.current.column)
-    endCol = max(selection.start.column, selection.current.column)
+    (startCol, endCol) = selection.blockColumns
 
   var lines: seq[string]
   for lineNum in startLine .. endLine:
@@ -159,8 +158,7 @@ proc deleteBlockSelection(
   let
     startLine = min(sel.start.line, sel.current.line)
     endLine = max(sel.start.line, sel.current.line)
-    startCol = min(sel.start.column, sel.current.column)
-    endCol = max(sel.start.column, sel.current.column)
+    (startCol, endCol) = sel.blockColumns
 
   # Get text to yank first
   deletedText = getBlockText(buffer, sel)
@@ -346,8 +344,7 @@ proc applyVisualTextTransform(
       let
         startLine = min(sel.start.line, sel.current.line)
         endLine = max(sel.start.line, sel.current.line)
-        startCol = min(sel.start.column, sel.current.column)
-        endCol = max(sel.start.column, sel.current.column)
+        (startCol, endCol) = sel.blockColumns
 
       for lineNum in startLine .. endLine:
         let line = buffer.getLine(lineNum)
@@ -454,7 +451,7 @@ proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
     let startLine = min(sel.start.line, sel.current.line)
 
     if sel.kind == vskBlock:
-      let startCol = min(sel.start.column, sel.current.column)
+      let startCol = sel.blockColumns.startCol
       let endLine = max(sel.start.line, sel.current.line)
       state.cursor.line = startLine
       state.cursor.column = startCol
@@ -479,8 +476,9 @@ proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
 
 proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
   ## Switch from visual block mode to insert mode at end of block (A command)
-  ## Moves cursor to (startLine, endCol + 1) and sets up
-  ## VisualBlockInsertContext for text replication across all selected lines.
+  ## Moves cursor to (startLine, endCol + 1), or to the first line's end after
+  ## `<C-v>$`, and sets up VisualBlockInsertContext for text replication across
+  ## all selected lines, each at its own end after `<C-v>$`.
   ## A selection a closed fold turned line-shaped has no block columns to
   ## replicate into, so it appends at the end of the last selected line.
   let sel = state.operandSelection(buffer)
@@ -495,19 +493,26 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
     state.mode = EditorMode.Insert
     return
 
-  let startLine = min(sel.start.line, sel.current.line)
-  let endLine = max(sel.start.line, sel.current.line)
-  let endCol = max(sel.start.column, sel.current.column)
+  let
+    startLine = min(sel.start.line, sel.current.line)
+    endLine = max(sel.start.line, sel.current.line)
+    firstLineLen = buffer.getLine(startLine).charLen
+    insertColumn =
+      if sel.extendsToLineEnd:
+        firstLineLen
+      else:
+        sel.blockColumns.endCol + 1
 
   state.cursor.line = startLine
-  state.cursor.column = endCol + 1
+  state.cursor.column = insertColumn
   state.editState.visualBlockInsertContext = some(
     VisualBlockInsertContext(
       kind: vbiAppend,
       startLine: startLine,
       endLine: endLine,
-      insertColumn: endCol + 1,
-      firstLineLen: buffer.getLine(startLine).charLen,
+      insertColumn: insertColumn,
+      atLineEnd: sel.extendsToLineEnd,
+      firstLineLen: firstLineLen,
     )
   )
 
@@ -528,7 +533,7 @@ proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)
     let txr = withTransaction(buffer, "Visual change"):
       case sel.kind
       of vskBlock:
-        let startCol = min(sel.start.column, sel.current.column)
+        let startCol = sel.blockColumns.startCol
         let startLine = min(sel.start.line, sel.current.line)
         let endLine = max(sel.start.line, sel.current.line)
         checkVisualEdit(state, deleteBlockSelection(buffer, state, sel, deletedText))
@@ -583,16 +588,20 @@ proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)
     state.mode = EditorMode.Insert
 
 proc visualSwapSelection*(buffer: TextBuffer, state: EditorState) =
-  ## Swap the cursor between the start and end of the selection (o command)
+  ## Swap the cursor between the start and end of the selection (o command).
+  ## Vertical moves then aim for the cursor's new column, even when it did not
+  ## move, as Vim's v_swap_corners sets w_set_curswant.
   let sel = state.activeWindow.visualSelection
   if sel.active:
     state.selectVisualRange(anchor = sel.current, focus = sel.start)
+    state.preferredColumn = -1
 
 proc reselectVisual*(
     buffer: TextBuffer, state: EditorState
 ): Result[EditorMode, string] =
-  ## `gv`: select the buffer's last Visual area again, in the mode it had, and
-  ## return that mode. From Visual mode the current and last areas swap.
+  ## `gv`: select the buffer's last Visual area again, in the mode it had and
+  ## with the column vertical moves aimed for, and return that mode. From
+  ## Visual mode the current and last areas swap.
   if buffer.lastVisual.isNone or buffer.lastVisual.get.start.line >= buffer.len:
     return Result[EditorMode, string].err "No previous visual selection"
 
@@ -606,7 +615,7 @@ proc reselectVisual*(
     BufferPosition(line: line, column: min(pos.column, buffer.getLine(line).charLen))
 
   state.enterVisual(area.kind, clamped(area.start), clamped(area.cursor))
-  state.preferredColumn = -1
+  state.preferredColumn = area.wantedColumn
   Result[EditorMode, string].ok area.kind.visualMode
 
 proc visualPaste*(
@@ -643,6 +652,7 @@ proc visualPaste*(
     var deletedText = ""
     var deletedIsLine = false
     let cursorBeforePaste = state.cursor
+    let wantedColumn = state.preferredColumn
     let selKind = sel.kind
     var pasteStart = BufferPosition()
     var pastedLineCount = 0
@@ -660,7 +670,7 @@ proc visualPaste*(
         checkPasteErr(deleteBlockSelection(buffer, state, sel, deletedText))
         let
           firstLine = min(sel.start.line, sel.current.line)
-          startColumn = min(sel.start.column, sel.current.column)
+          startColumn = sel.blockColumns.startCol
         if isFullLine:
           # Like Vim, lines go below the line the cursor ended on (its
           # b_visual.vi_end, which can be the top one), or above the block
@@ -751,8 +761,8 @@ proc visualPaste*(
       afterPut = pasteEndPos(pasteStart, pasteText)
       putLines = selKind == vskLine or isFullLine
 
-    # Like Vim, the next `gv` selects the put text, in the mode the replaced
-    # selection had.
+    # Like Vim, the next `gv` selects the put text, in the mode and with the
+    # column the replaced selection had.
     let putEnd =
       if putLines:
         BufferPosition(
@@ -766,8 +776,11 @@ proc visualPaste*(
         BufferPosition(
           line: afterPut.line - 1, column: buffer.getLine(afterPut.line - 1).charLen
         )
-    buffer.lastVisual =
-      some(VisualArea(start: pasteStart, cursor: putEnd, kind: selKind))
+    buffer.lastVisual = some(
+      VisualArea(
+        start: pasteStart, cursor: putEnd, kind: selKind, wantedColumn: wantedColumn
+      )
+    )
 
     if putLines:
       # Like Vim's put of lines, the cursor goes to the first non-blank.
@@ -854,8 +867,7 @@ proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: string) =
         let
           startLine = min(sel.start.line, sel.current.line)
           endLine = max(sel.start.line, sel.current.line)
-          startCol = min(sel.start.column, sel.current.column)
-          endCol = max(sel.start.column, sel.current.column)
+          (startCol, endCol) = sel.blockColumns
         for lineNum in countdown(endLine, startLine):
           let lineLen = buffer.getLine(lineNum).charLen
           if startCol < lineLen:

@@ -41,7 +41,7 @@ type
 
   MotionType* = enum
     ## How an operator takes the text up to where a motion lands
-    mtExclusive ## Up to the place, not including it (w b h l 0 ^ F T { } ` n *)
+    mtExclusive ## Up to the place, not including it (w b h l 0 ^ | F T { } ` n *)
     mtInclusive ## Up to and including it (e ge $ g_ f t % gn)
     mtLinewise ## Whole lines (j k gg G H M L + - ')
 
@@ -331,6 +331,25 @@ proc moveEnd(
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     let lineCharLen = e.buffer.getLine(currentPos.y).charLen
     result.x = maxCursorColumn(lineCharLen, mode)
+
+func screenColumnCell(count: int): int =
+  ## The 0-based screen column `[count]|` aims for; no count is the first.
+  max(0, count - 1)
+
+proc moveToScreenColumn(
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    targetCell: int,
+    tabStop: int,
+    mode: EditorMode = EditorMode.Normal,
+): CursorPosition =
+  ## Move to the screen column `targetCell` (0-based) on the current line, as
+  ## Vim's `|` (nv_pipe) does: tabs and wide characters occupy their display
+  ## cells, and the column past the line end clamps to the line end.
+  result = currentPos
+  if currentPos.y < 0 or currentPos.y >= e.buffer.len:
+    return
+  result.x = e.buffer.getLine(currentPos.y).columnAtCell(targetCell, tabStop, mode)
 
 proc moveNextLineFirstNonBlank(
     e: MotionExecutor, currentPos: CursorPosition, count: int
@@ -966,6 +985,13 @@ proc landMotion*(
       stuck(mtInclusive)
     else:
       at(pos, mtInclusive).usingRegOne
+  of Motion.ScreenColumn:
+    at(
+      e.moveToScreenColumn(
+        currentPos, cmd.count.screenColumnCell, rowLayout.tabStop, mode
+      ),
+      mtExclusive,
+    )
   of Motion.RepeatFind, Motion.RepeatFindReverse:
     # Must be resolved to a concrete motion before reaching here.
     raiseAssert "RepeatFind must be resolved before landMotion"
@@ -1383,9 +1409,10 @@ proc moveCursorByMotion*(
   ## Move the cursor of `state` by `cmd`. A vertical motion keeps the column it
   ## aimed for, as Vim keeps curswant. `$` makes vertical moves stick to line
   ## ends, even when its count goes past the last line, as Vim's nv_dollar;
-  ## `g_` does too only then. Another motion drops the column when it moves the
-  ## cursor, or even in place onto a line's start or end, as Vim's beginline
-  ## does; one that fails in place keeps it (`2_` on the last line).
+  ## `g_` does too only then. `|` aims for its screen column, as Vim's nv_pipe
+  ## does. Another motion drops the column when it moves the cursor, or even in
+  ## place onto a line's start or end, as Vim's beginline does; one that fails
+  ## in place keeps it (`2_` on the last line).
   let
     start = state.cursor
     aimed = state.aimedColumn
@@ -1397,6 +1424,8 @@ proc moveCursorByMotion*(
     cmd.motion == Motion.LastNonBlank and landing.failed
   ):
     state.preferredColumn = LineEnd
+  elif cmd.motion == Motion.ScreenColumn:
+    state.preferredColumn = cmd.count.screenColumnCell
   elif landing.pos != start or (cmd.motion in LineEdgeMotions and not landing.failed):
     state.preferredColumn = -1
   ok(landing.pos)

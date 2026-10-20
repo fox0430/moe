@@ -207,6 +207,17 @@ suite "Visual Commands - getVisualSelectionText":
     )
     check getVisualSelectionText(buf, selection) == "bcd\nhij\nnop"
 
+  test "vskBlock with extendsToLineEnd takes each line to its end":
+    let buf = newTextBuffer("short\na very long line\nmid")
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 2, column: 5),
+      active: true,
+      kind: vskBlock,
+      extendsToLineEnd: true,
+    )
+    check getVisualSelectionText(buf, selection) == "short\na very long line\nmid"
+
   test "vskLine with reversed selection still returns full lines":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
@@ -438,6 +449,21 @@ suite "Visual Commands - visualDelete":
     visualDelete(buf, state, register = some('a'))
 
     check state.registers.getNamedRegister('a').getContent() == "ab\nde"
+
+  test "Delete block with extendsToLineEnd removes to each line end":
+    let buf = newTextBuffer("abXX\ncDEFGH\nIJ")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 3), vskBlock
+    )
+    state.preferredColumn = LineEnd
+
+    visualDelete(buf, state)
+
+    check buf.getLine(0) == "a"
+    check buf.getLine(1) == "c"
+    check buf.getLine(2) == "I"
 
   test "Delete charwise selection into clipboard register":
     let buf = newTextBuffer()
@@ -709,6 +735,21 @@ suite "Visual Commands - visualLowercase":
     check buf.getLine(0) == "AbcdEF"
     check buf.getLine(1) == "GhijKL"
     check buf.getLine(2) == "MnopQR"
+
+  test "Lowercase block with extendsToLineEnd lowers to each line end":
+    let buf = newTextBuffer("ABC\nDEFGHI\nJK")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 5), vskBlock
+    )
+    state.preferredColumn = LineEnd
+
+    visualLowercase(buf, state)
+
+    check buf.getLine(0) == "Abc"
+    check buf.getLine(1) == "Defghi"
+    check buf.getLine(2) == "Jk"
 
   test "Lowercase multiline char selection preserves newlines":
     let buf = newTextBuffer()
@@ -2279,6 +2320,21 @@ suite "Visual Commands - visualSurround":
 
     check buf.getLine(0) == "[hel]lo world"
     check buf.getLine(1) == "[foo] bar"
+
+  test "Surround block with extendsToLineEnd surrounds to each line end":
+    let buf = newTextBuffer("abXX\ncDEFGH\nIJ")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.selectVisual(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 3), vskBlock
+    )
+    state.preferredColumn = LineEnd
+
+    visualSurround(buf, state, "x")
+
+    check buf.getLine(0) == "axbXXx"
+    check buf.getLine(1) == "cxDEFGHx"
+    check buf.getLine(2) == "IxJx"
 
   test "Surround inactive selection (no-op)":
     let buf = newTextBuffer()

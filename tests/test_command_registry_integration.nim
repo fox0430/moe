@@ -206,6 +206,62 @@ suite "executeCommand - Motion commands":
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.line == 2
 
+  test "ScreenColumn (|) moves to the screen column":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, motionCommand(Motion.ScreenColumn, 1)).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+    check ctx.state.preferredColumn == 0
+
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    check registry.executeCommand(ctx, motionCommand(Motion.ScreenColumn, 3)).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 2)
+    check ctx.state.preferredColumn == 2
+
+  test "ScreenColumn (|) counts a tab's display cells":
+    let buffer = newTextBuffer("\thello")
+    let ctx = createTestContext(buffer)
+    ctx.state.config.standard.tabStop = 8
+    ctx.motionController.executor.buffer = buffer
+    let registry = createTestRegistry()
+
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    check registry.executeCommand(ctx, motionCommand(Motion.ScreenColumn, 2)).isOk
+    check ctx.cursor.column == 0
+
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    check registry.executeCommand(ctx, motionCommand(Motion.ScreenColumn, 9)).isOk
+    check ctx.cursor.column == 1
+    check ctx.state.preferredColumn == 8
+
+  test "ScreenColumn (|) keeps its column over a vertical move":
+    let buffer = newTextBuffer("abcdefgh\nab\nabcdefgh")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, motionCommand(Motion.ScreenColumn, 8)).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 7)
+    check registry.executeCommand(ctx, motionCommand(Motion.Down, 1)).isOk
+    check ctx.cursor == BufferPosition(line: 1, column: 1)
+    check registry.executeCommand(ctx, motionCommand(Motion.Down, 1)).isOk
+    check ctx.cursor == BufferPosition(line: 2, column: 7)
+
+  test "delete to a screen column (d|) is exclusive":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    check registry.executeCommand(ctx, motionCommand(Motion.ScreenColumn, 3)).isOk
+    check buffer[0] == "llo world"
+
 suite "executeCommand - Mode switch commands":
   test "switch to Insert mode":
     let buffer = newTextBuffer("hello")

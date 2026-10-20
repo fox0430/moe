@@ -63,6 +63,20 @@ proc commitInsertModeBoundary*(
 
   ok()
 
+func replicaColumn(ctx: types.VisualBlockInsertContext, lineLen: int): Option[int] =
+  ## Where a line `lineLen` long takes the copied text, as Vim's block_insert
+  ## and op_change: `I` and `c` leave a line that ends before the block alone,
+  ## `A` pads it out to the block, and `A` after `<C-v>$` appends at each
+  ## line's end.
+  case ctx.kind
+  of vbiInsert, vbiChange:
+    if lineLen < ctx.insertColumn:
+      none(int)
+    else:
+      some(ctx.insertColumn)
+  of vbiAppend:
+    some(if ctx.atLineEnd: lineLen else: ctx.insertColumn)
+
 proc replicateBlockInsert*(buffer: TextBuffer, state: EditorState): string =
   ## End a Visual-block insert: copy what the first line gained, from the block
   ## column, onto the other lines, as Vim does. Nothing is copied when the
@@ -82,7 +96,10 @@ proc replicateBlockInsert*(buffer: TextBuffer, state: EditorState): string =
 
   for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
     let lineCharLen = buffer.getLine(lineNum).charLen
-    let col = ctx.insertColumn
+    let column = ctx.replicaColumn(lineCharLen)
+    if column.isNone:
+      continue
+    let col = column.get
     if col > lineCharLen:
       let padding = ' '.repeat(col - lineCharLen)
       let padResult =
