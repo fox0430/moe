@@ -5841,6 +5841,23 @@ suite "processMiscResult - hrDeleteLines":
     check e.activeWindow.cursor.line == 2
     check e.activeWindow.cursor.column == 0
 
+  test "the cursor lands on the first non-blank of that line":
+    let e = createTestEditorWithBuffer("    a\n    b\n    f")
+    e.activeWindow.cursor = BufferPosition(line: 0, column: 4)
+    # A curswant left by an earlier vertical move must not survive the delete.
+    e.state.preferredColumn = 8
+    let r = HandlerResult(
+      kind: hrDeleteLines,
+      hrDeletedText: "    a\n",
+      hrDeletedLineCount: 1,
+      hrDeleteStartLine: 1,
+    )
+
+    check e.processMiscResult(r, e.activeBuffer())
+    check e.activeWindow.cursor.line == 1
+    check e.activeWindow.cursor.column == 4
+    check e.state.preferredColumn == -1
+
   test "a start line past the end of the buffer is clamped":
     let e = createTestEditorWithBuffer("a")
     e.activeWindow.cursor = BufferPosition(line: 0, column: 0)

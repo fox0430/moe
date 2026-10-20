@@ -93,6 +93,16 @@ proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
   ctx.cursor.line = lineNum
   ctx.cursor.column = firstNonBlankColumn(line)
 
+proc landOnFirstNonBlank*(ctx: CommandContext, lineNum: int) =
+  ## Put the cursor on the first non-blank of `lineNum`, clamped to the last
+  ## line, and drop the column vertical moves want, as a linewise delete does.
+  if ctx.buffer.len == 0:
+    return
+
+  ctx.cursor.line = max(0, min(lineNum, ctx.buffer.len - 1))
+  ctx.cursor.column = firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line))
+  ctx.state.preferredColumn = -1
+
 proc textRewriteAction*(operatorType: OperatorType): Option[string] =
   ## Rewrite name for operator, or none if safe. Listing marks byte-unsafe for raw buffers.
   case operatorType

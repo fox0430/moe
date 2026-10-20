@@ -701,15 +701,7 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
 
   # A closed fold can put `startLine` above the cursor, so the cursor follows
   # the range rather than its own old line.
-  ctx.cursor.line = startLine
-  if ctx.cursor.line >= ctx.buffer.len:
-    ctx.cursor.line = max(0, ctx.buffer.len - 1)
-  # Preserve column position, clamped to end of new current line
-  let newLine = ctx.buffer.getLine(ctx.cursor.line)
-  if newLine.charLen > 0:
-    ctx.cursor.column = min(ctx.cursor.column, newLine.charLen - 1)
-  else:
-    ctx.cursor.column = 0
+  landOnFirstNonBlank(ctx, startLine)
 
   # Record this command for repeat (.)
   ctx.recordChange(LastEditCommand(kind: lecDeleteLine, deleteLineCount: max(1, count)))
@@ -885,14 +877,8 @@ proc handleOperatorDelete*(
     # covered by the buffer transaction, so a rollback would not undo them)
     storeDeletedText(ctx, text, true)
 
-    # Move cursor to start line, preserve column position
-    ctx.cursor.line = min(startLine, ctx.buffer.len - 1)
-    # Preserve column position, clamped to end of new current line
-    let newLine = ctx.buffer.getLine(ctx.cursor.line)
-    if newLine.charLen > 0:
-      ctx.cursor.column = min(ctx.cursor.column, newLine.charLen - 1)
-    else:
-      ctx.cursor.column = 0
+    # Vim's op_delete lands on the first non-blank of the line that follows.
+    landOnFirstNonBlank(ctx, startLine)
 
     # Record this command for repeat (.)
     ctx.recordChange(LastEditCommand(kind: lecDeleteLine, deleteLineCount: lineCount))

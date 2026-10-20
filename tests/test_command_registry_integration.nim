@@ -2406,43 +2406,88 @@ suite "Handler - Delete line operations":
     check buffer[0] == "line1"
     check ctx.cursor.line == 0
 
-  test "dd preserves column position when next line is long enough":
-    let buffer = newTextBuffer("short\nhello world\nlong enough line")
+  test "dd moves to the first non-blank of the line that follows":
+    let buffer = newTextBuffer("    short\n    hello world\n    long enough line")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 8)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("delete.line")).isOk
     check buffer.len == 2
-    check buffer[0] == "short"
-    check buffer[1] == "long enough line"
+    check buffer[0] == "    short"
+    check buffer[1] == "    long enough line"
     check ctx.cursor.line == 1
-    check ctx.cursor.column == 8
+    check ctx.cursor.column == 4
 
-  test "dd clamps column to end of shorter line":
-    let buffer = newTextBuffer("hello world\nhi\nthird")
+  test "doubled delete operator lands on the next first non-blank":
+    let buffer = newTextBuffer("  abc def\n    xyz\n      next")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6)
+    # A curswant left by an earlier vertical move must not survive the delete.
+    ctx.state.preferredColumn = 8
+    let registry = createTestRegistry()
+
+    # d then d ends the pending operator as a linewise delete.
+    let cmd = Command(kind: ctCustom, commandId: "operator.delete", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 2
+    check buffer[0] == "    xyz"
+    check ctx.cursor == BufferPosition(line: 0, column: 4)
+    check ctx.state.preferredColumn == -1
+    check registry.executeCommand(ctx, motionCommand(Motion.Down)).isOk
+    check ctx.cursor == BufferPosition(line: 1, column: 4)
+
+  test "doubled delete operator on the last line uses the previous line":
+    let buffer = newTextBuffer("    hello\n    world!")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 6)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "operator.delete", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 1
+    check ctx.cursor == BufferPosition(line: 0, column: 4)
+
+  test "dd drops the old curswant":
+    let buffer = newTextBuffer("    abc def\n  next line is long\n      third")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6)
+    # A curswant left by an earlier vertical move must not survive the delete.
+    ctx.state.preferredColumn = 8
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.line")).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 2)
+    check ctx.state.preferredColumn == -1
+    check registry.executeCommand(ctx, motionCommand(Motion.Down)).isOk
+    check ctx.cursor == BufferPosition(line: 1, column: 2)
+
+  test "dd lands on a shorter line's first non-blank":
+    let buffer = newTextBuffer("hello world\n    hi\nthird")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 9)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("delete.line")).isOk
     check buffer.len == 2
-    check buffer[0] == "hi"
+    check buffer[0] == "    hi"
     check buffer[1] == "third"
     check ctx.cursor.line == 0
-    check ctx.cursor.column == 1 # "hi" has charLen 2, so max column is 1
+    check ctx.cursor.column == 4
 
-  test "dd preserves column when deleting last line":
-    let buffer = newTextBuffer("hello\nworld!")
+  test "dd on the last line lands on the previous line's first non-blank":
+    let buffer = newTextBuffer("    hello\n    world!")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 3)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("delete.line")).isOk
     check buffer.len == 1
-    check buffer[0] == "hello"
+    check buffer[0] == "    hello"
     check ctx.cursor.line == 0
-    check ctx.cursor.column == 3
+    check ctx.cursor.column == 4
 
   test "dd on single line buffer clears line content":
     let buffer = newTextBuffer("only line")
@@ -3245,6 +3290,31 @@ suite "Handler - Visual mode operations":
 
     check registry.execute(ctx, builtin(bcVisualDelete)).isOk
     check buffer[0] == " world"
+    check ctx.state.mode == EditorMode.Normal
+
+  test "linewise visual delete lands on the following line's first non-blank":
+    let buffer = newTextBuffer("    aaa\n    bbb\n    ccc\n    ddd")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(1, 4, 2, 4, vskLine)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualDelete)).isOk
+    check buffer.len == 2
+    check buffer[0] == "    aaa"
+    check buffer[1] == "    ddd"
+    check ctx.cursor == BufferPosition(line: 1, column: 4)
+    check ctx.state.mode == EditorMode.Normal
+
+  test "linewise visual delete at the end lands on the previous first non-blank":
+    let buffer = newTextBuffer("    aaa\n    bbb\n    ccc")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(1, 4, 2, 4, vskLine)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualDelete)).isOk
+    check buffer.len == 1
+    check buffer[0] == "    aaa"
+    check ctx.cursor == BufferPosition(line: 0, column: 4)
     check ctx.state.mode == EditorMode.Normal
 
   test "visual yank":
@@ -4733,8 +4803,8 @@ suite "Handler - Operator commands":
     check buffer[0] == "line1"
     check buffer[1] == "line3"
 
-  test "double operator (dd) preserves column position":
-    let buffer = newTextBuffer("first line\nsecond line here\nthird line!!")
+  test "double operator (dd) moves to the next first non-blank":
+    let buffer = newTextBuffer("first line\n  second line here\n    third line!!")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 10)
     ctx.state.mode = EditorMode.Normal
@@ -4746,12 +4816,12 @@ suite "Handler - Operator commands":
     check registry.execute(ctx, custom("operator.delete")).isOk
     check buffer.len == 2
     check buffer[0] == "first line"
-    check buffer[1] == "third line!!"
+    check buffer[1] == "    third line!!"
     check ctx.cursor.line == 1
-    check ctx.cursor.column == 10 # preserved
+    check ctx.cursor.column == 4
 
-  test "double operator (dd) clamps column to shorter line":
-    let buffer = newTextBuffer("first line\nlong second line\nhi")
+  test "double operator (dd) lands on a shorter line's first non-blank":
+    let buffer = newTextBuffer("first line\nlong second line\n    hi")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 14)
     ctx.state.mode = EditorMode.Normal
@@ -4763,9 +4833,9 @@ suite "Handler - Operator commands":
     check registry.execute(ctx, custom("operator.delete")).isOk
     check buffer.len == 2
     check buffer[0] == "first line"
-    check buffer[1] == "hi"
+    check buffer[1] == "    hi"
     check ctx.cursor.line == 1
-    check ctx.cursor.column == 1 # "hi" has charLen 2, clamped to 1
+    check ctx.cursor.column == 4
 
   test "double operator (dd) on single line buffer clears line":
     let buffer = newTextBuffer("only line")

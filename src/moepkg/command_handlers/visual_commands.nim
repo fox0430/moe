@@ -213,9 +213,12 @@ proc deleteLineSelection(
       if delResult.isErr:
         return err(delResult.error)
 
-  # Move cursor to start line (or last line if start was beyond buffer)
-  let newLine = min(startLine, buffer.len - 1)
-  state.cursor = BufferPosition(line: newLine, column: 0)
+  # Vim lands on the first non-blank of the line that takes the deleted
+  # range's place, the new last line when it ran to the end of the buffer.
+  # Leaving Visual mode then drops the old curswant, as Vim does here.
+  let newLine = max(0, min(startLine, buffer.len - 1))
+  state.cursor =
+    BufferPosition(line: newLine, column: firstNonBlankColumn(buffer.getLine(newLine)))
 
   return ok(())
 
