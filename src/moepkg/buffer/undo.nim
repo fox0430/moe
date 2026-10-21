@@ -317,11 +317,16 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
 
   return ok(())
 
-template withTransaction*(
-    b: TextBuffer, description: string, cursorPos: Option[BufferPosition], body: untyped
+template guardedTransaction(
+    b: TextBuffer,
+    description: string,
+    cursorPos: Option[BufferPosition],
+    body: untyped,
+    onSuccess: untyped,
 ): Result[(), string] =
-  ## Scope-guarded begin/commit. Rolls back if `body` raises or returns from the
-  ## enclosing proc, so `inTransaction` never leaks across edits.
+  ## Begin a transaction, run `body` and then `onSuccess`, the result. Rolls
+  ## back if `body` raises or returns from the enclosing proc, so
+  ## `inTransaction` never leaks across edits.
   ## `body` runs inside a `block`, so a bare `break` escapes the template rather
   ## than an enclosing loop and leaves the result uninitialized: every `break` in
   ## `body` must belong to a loop `body` itself owns.
@@ -370,12 +375,28 @@ template withTransaction*(
               TransactionRollbackError,
               "withTransaction: failed to roll back: " & rollbackResult.error & cause,
             )
-      b.commitTransaction()
+      onSuccess
+
+template withTransaction*(
+    b: TextBuffer, description: string, cursorPos: Option[BufferPosition], body: untyped
+): Result[(), string] =
+  ## Scope-guarded begin/commit; see guardedTransaction.
+  guardedTransaction(b, description, cursorPos, body, b.commitTransaction())
 
 template withTransaction*(
     b: TextBuffer, description: string, body: untyped
 ): Result[(), string] =
   withTransaction(b, description, none(BufferPosition), body)
+
+template withTransactionForInsert*(
+    b: TextBuffer, description: string, undoCursor: BufferPosition, body: untyped
+): Result[(), string] =
+  ## As withTransaction, but a success leaves the transaction open for the
+  ## Insert session the change enters, so one undo takes back the change and
+  ## what was typed, putting the cursor at `undoCursor`. The change list gets
+  ## the first change's position, so `body` makes it where typing starts.
+  guardedTransaction(b, description, some(undoCursor), body):
+    Result[(), string].ok(())
 
 proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
   ## Rollback the current transaction by undoing all changes

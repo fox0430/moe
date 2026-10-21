@@ -95,8 +95,7 @@ jobs:
           build-essential \
           x11-xserver-utils \
           xsel \
-          xclip \
-          libpcre3
+          xclip
 
     - name: Cache nimble
       id: cache-nimble
@@ -138,8 +137,7 @@ jobs:
           build-essential \
           x11-xserver-utils \
           xsel \
-          xclip \
-          libpcre3
+          xclip
 
     # Separate key from the shards': this cache also holds the lasm binary, and
     # a shared key would race with the shards over which content wins.

@@ -519,18 +519,18 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
 
   let deletedText = lineContent.charSubStr(ctx.cursor.column, charsToDelete)
 
-  # Begin transaction for delete + insert mode (all in one undo unit)
-  let txnResult =
-    ctx.buffer.beginTransaction("substitute " & $charsToDelete & " char(s)")
-  if txnResult.isErr:
-    return err(txnResult.error)
-
-  # Delete the characters
-  for i in 0 ..< charsToDelete:
-    let endPos = ctx.cursor
-    let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
+  # One undo takes back the delete and what Insert types.
+  let txr = withTransactionForInsert(
+    ctx.buffer, "substitute " & $charsToDelete & " char(s)", ctx.cursor
+  ):
+    let last = BufferPosition(
+      line: ctx.cursor.line, column: ctx.cursor.column + charsToDelete - 1
+    )
+    let delResult = ctx.buffer.deleteRange(ctx.cursor, last)
     if delResult.isErr:
-      return rollbackAndPropagate(ctx, delResult.error)
+      return err(delResult.error)
+  if txr.isErr:
+    return err("Failed to begin transaction: " & txr.error)
 
   # Store in register only after the buffer change succeeded (registers are not
   # covered by the buffer transaction, so a rollback would not undo them)

@@ -41,7 +41,8 @@ const
     "replaceLine", "replaceLines", "deleteAllLines", "splitLine", "joinLines",
     "joinWithNextLine", "transformRange", "replaceWholeLines", "replaceAllLines",
     "beginTransaction", "commitTransaction", "rollbackTransaction", "withTransaction",
-    "deleteBlockSelection", "deleteLineSelection", "undo", "redo",
+    "withTransactionForInsert", "deleteBlockSelection", "deleteLineSelection", "undo",
+    "redo",
   ].toHashSet
 
   ## Intentional discards that cannot propagate. Keyed by (path suffix,
