@@ -144,44 +144,6 @@ suite "VisualModeHandler - isPositionInSelection":
     check isPositionInSelection(selection, BufferPosition(line: 0, column: 0)) == false
     check isPositionInSelection(selection, BufferPosition(line: 4, column: 0)) == false
 
-  test "Position in block selection":
-    let selection = VisualSelection(
-      start: BufferPosition(line: 0, column: 2),
-      current: BufferPosition(line: 2, column: 6),
-      active: true,
-      kind: vskBlock,
-    )
-
-    # Within block
-    check isPositionInSelection(selection, BufferPosition(line: 0, column: 3)) == true
-    check isPositionInSelection(selection, BufferPosition(line: 1, column: 4)) == true
-    check isPositionInSelection(selection, BufferPosition(line: 2, column: 5)) == true
-
-    # On boundaries
-    check isPositionInSelection(selection, BufferPosition(line: 0, column: 2)) == true
-    check isPositionInSelection(selection, BufferPosition(line: 2, column: 6)) == true
-
-    # Outside column range
-    check isPositionInSelection(selection, BufferPosition(line: 1, column: 1)) == false
-    check isPositionInSelection(selection, BufferPosition(line: 1, column: 7)) == false
-
-    # Outside line range
-    check isPositionInSelection(selection, BufferPosition(line: 3, column: 4)) == false
-
-  test "Position in block selection with extendsToLineEnd":
-    let selection = VisualSelection(
-      start: BufferPosition(line: 0, column: 2),
-      current: BufferPosition(line: 2, column: 6),
-      active: true,
-      kind: vskBlock,
-      extendsToLineEnd: true,
-    )
-
-    check isPositionInSelection(selection, BufferPosition(line: 1, column: 2)) == true
-    check isPositionInSelection(selection, BufferPosition(line: 1, column: 100)) == true
-    check isPositionInSelection(selection, BufferPosition(line: 1, column: 1)) == false
-    check isPositionInSelection(selection, BufferPosition(line: 3, column: 4)) == false
-
   test "Position in inactive selection":
     let selection = VisualSelection(
       start: BufferPosition(line: 0, column: 2),

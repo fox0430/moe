@@ -1183,25 +1183,32 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
   of ckSnapshot:
     return change.snapshotCursorPos
 
-proc modifiedLineSpan(change: BufferChange): Slice[int] =
+iterator modifiedLinesOf(change: BufferChange): int =
   ## The lines a change leaves marked modified in the sidebar. Every kind but
   ## ckReplaceLines touches one line; that one marks what the insert/delete/
-  ## replace sequence it stands for would have: the rows overwritten in place
-  ## plus the row a shrinking span closed over. An empty slice marks nothing.
+  ## replace sequence it stands for would have, the rows overwritten in place
+  ## plus the row a shrinking span closed over, but leaves a row given back
+  ## its own text unmarked.
   let pos = getChangePosition(change).line
   if change.kind != ckReplaceLines:
-    return pos .. pos
-  let
-    oldCount = change.replaceLinesOldText.len
-    newCount = change.replaceLinesNewText.len
-  if change.replaceLinesKeepRows:
-    let overlap = min(oldCount, newCount)
-    pos .. (pos + overlap - 1 + ord(oldCount > newCount))
+    yield pos
   else:
-    # Nothing was overwritten in place: the old rows left and the replacement
-    # arrived as fresh ones, so the only mark is the one the departing rows
-    # leave on the row below them, as deleting them line by line would.
-    (pos + newCount) .. (pos + newCount - 1 + ord(oldCount > 0))
+    let
+      oldCount = change.replaceLinesOldText.len
+      newCount = change.replaceLinesNewText.len
+    if change.replaceLinesKeepRows:
+      let overlap = min(oldCount, newCount)
+      for i in 0 ..< overlap:
+        if change.replaceLinesOldText[i] != change.replaceLinesNewText[i]:
+          yield pos + i
+      if oldCount > newCount:
+        yield pos + overlap
+    elif oldCount > 0:
+      # Nothing was overwritten in place: the old rows left and the
+      # replacement arrived as fresh ones, so the only mark is the one the
+      # departing rows leave on the row below them, as deleting them line by
+      # line would.
+      yield pos + newCount
 
 proc countNewlines(s: string): int {.inline.} =
   for c in s:
@@ -2065,10 +2072,9 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # Mark the changed lines as modified
   b.ensureMarkersSize()
   b.ensureModifiedLinesSize()
-  let span = modifiedLineSpan(change)
-  for line in max(span.a, 0) .. min(span.b, b.modifiedLines.len - 1):
+  for line in modifiedLinesOf(change):
     # Only upgrade to lmkModified if not already marked as inserted
-    if b.modifiedLines[line] != lmkInserted:
+    if line in 0 ..< b.modifiedLines.len and b.modifiedLines[line] != lmkInserted:
       b.modifiedLines[line] = lmkModified
 
   # Record change position in changelist

@@ -32,7 +32,7 @@ proc copySelection(ctx: CommandContext, sel: VisualSelection): Result[(), string
   if not sel.active:
     return err("No text selected")
 
-  let selectedText = getVisualSelectionText(ctx.buffer, sel)
+  let selectedText = getVisualSelectionText(ctx.buffer, sel, ctx.state.tabStop)
   if selectedText.len == 0 and sel.kind == vskChar:
     return err("No text selected")
 

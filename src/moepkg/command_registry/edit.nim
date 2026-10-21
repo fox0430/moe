@@ -24,7 +24,11 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, motion, modes, registers, logger, unicode_utils, visual_selection]
+import
+  ../[
+    types, motion, modes, registers, logger, unicode_utils, visual_selection,
+    visual_block,
+  ]
 import ../buffer/[core, edit, fold, undo]
 
 import ../command_handlers/put_text
@@ -1174,44 +1178,33 @@ proc registerEditCommands*(registry: CommandRegistry) =
             return err(txr.error)
           return ok(())
         of vskBlock:
-          # Blockwise: same rows x columns from the cursor, clamped per line,
-          # or to each line's end after `<C-v>$`.
+          # Blockwise: as many lines, and screen cells from where the cursor's
+          # character starts, or to each line's end after `<C-v>$` (Vim's
+          # redo_VIsual).
           let firstLine = ctx.cursor.line
           if firstLine < 0 or firstLine >= ctx.buffer.len:
             return err("Nothing to replace")
-          let
-            startCol = ctx.cursor.column
-            endCol = startCol + max(1, lastCmd.visualReplaceCols) - 1
-            lastLine =
-              min(firstLine + max(1, lastCmd.visualReplaceRows) - 1, ctx.buffer.len - 1)
+          let area = ctx.buffer.repeatedBlock(
+            ctx.cursor, lastCmd.visualReplaceRows, lastCmd.visualReplaceCols,
+            lastCmd.visualReplaceToLineEnd, ctx.state.tabStop,
+          )
           let (snapLo, snapHi) =
-            ctx.buffer.foldState.snapRangeToFolds(firstLine, lastLine)
+            ctx.buffer.foldState.snapRangeToFolds(area.firstLine, area.lastLine)
           let txr = withTransaction(ctx.buffer, "repeat visual replace"):
             # A closed fold at either end repeats whole, linewise. One the range
             # ends exactly on does not widen it, so test the ends, not a widening.
-            if ctx.buffer.foldState.endsInCollapsedFold(firstLine, lastLine):
+            if ctx.buffer.foldState.endsInCollapsedFold(area.firstLine, area.lastLine):
               let res = ctx.buffer.replaceWholeLines(
                 snapLo, snapHi, "replace characters", repFill
               )
               if res.isErr:
                 return err(res.error)
             else:
-              for lineNum in firstLine .. lastLine:
-                let lineLen = ctx.buffer.getLine(lineNum).charLen
-                if startCol < lineLen:
-                  let actualEndCol =
-                    if lastCmd.visualReplaceToLineEnd:
-                      lineLen - 1
-                    else:
-                      min(endCol, lineLen - 1)
-                  let res = ctx.buffer.transformRange(
-                    BufferPosition(line: lineNum, column: startCol),
-                    BufferPosition(line: lineNum, column: actualEndCol),
-                    "replace characters",
-                    repFill,
-                  )
-                  if res.isErr:
-                    return err(res.error)
+              if not ctx.buffer.allowsTextTransforms:
+                return err(rawBytesRejection("replace characters"))
+              let res = ctx.buffer.replaceBlock(area, ctx.state.tabStop, repChar)
+              if res.isErr:
+                return err(res.error)
           if txr.isErr:
             return err(txr.error)
           return ok(())

@@ -118,6 +118,7 @@ type
     cursorCol*: int
     cursorDisplayCol*: int ## Screen column of cursor (accounting for tabs/wide chars)
     selection*: VisualSelection ## The rendered window's own selection
+    blockArea*: BlockArea ## The cells `selection` covers when it is a block
     windowMode*: EditorMode ## Mode of the window being rendered
     windowRightEdge*: int ## Absolute screen X of window's right edge
     isActiveWindow*: bool ## Whether the window being rendered is the active one

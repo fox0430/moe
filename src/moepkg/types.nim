@@ -700,9 +700,9 @@ type
       visualReplaceKind*: VisualSelectionKind # Recorded selection shape
       visualReplaceRows*: int # Line/row span (1 for single-line charwise)
       visualReplaceCols*: int
-        # Single-line charwise: width from cursor;
-        # multi-line charwise: last-line width from col 0; linewise: unused;
-        # blockwise: block width.
+        # Single-line charwise: width from cursor in characters;
+        # multi-line charwise: last-line width from col 0 in characters;
+        # linewise: unused; blockwise: block width in screen cells.
       visualReplaceToLineEnd*: bool
         # Blockwise after `<C-v>$`: each line to its end, as Vim's
         # redo_VIsual_vcol == MAXCOL.
@@ -727,6 +727,16 @@ type
     extendsToLineEnd*: bool
       ## A block whose end follows each line's end, as in Vim after `<C-v>$`
       ## (curswant == MAXCOL).
+
+  BlockArea* = object
+    ## The screen cells a Visual block covers on each of its lines, inclusive,
+    ## as Vim's oap->start_vcol and end_vcol.
+    firstLine*, lastLine*: int
+    startCell*, endCell*: int
+    toLineEnd*: bool ## After `<C-v>$`, where `endCell` ends the widest line.
+    topLeft*: BufferPosition
+      ## The first line's character at `startCell`, or its end on a shorter
+      ## line (Vim's oap->start).
 
   PointerSelectionGranularity* = enum
     ## Unit established by the primary-button press for the rest of a gesture.
@@ -788,10 +798,8 @@ type
   VisualBlockInsertContext* = object
     ## Context for replicating inserted text across block-selected lines
     kind*: VisualBlockInsertKind
-    startLine*: int # First line of the block selection
-    endLine*: int # Last line of the block selection
-    insertColumn*: int # Column where text should be inserted/replicated
-    atLineEnd*: bool # An append after `<C-v>$`: each line takes it at its end
+    area*: BlockArea ## The block the insert came from
+    insertColumn*: int ## Where typing starts on the first line
     firstLineLen*: int ## Characters on the first line when the insert began
 
   LspLocationItem* = object ## Single location item for LSP results display

@@ -29,7 +29,7 @@ import pkg/results
 import
   ../[
     buffer, modes, motion, types, key_bindings, command_registry, key_router,
-    pending_input, visual_selection,
+    pending_input,
   ]
 import ../types/editor_types
 import handler_types
@@ -98,7 +98,9 @@ proc getSelectionRange*(
       return (selection.current, selection.start)
 
 proc isPositionInSelection*(selection: VisualSelection, pos: BufferPosition): bool =
-  ## Check if a position is within the current selection
+  ## Check if a position is within a character or line selection. A block
+  ## covers screen cells, which only the line's text gives (`shownOn`), so
+  ## none of its positions are decided here.
   if not selection.active:
     return false
 
@@ -110,9 +112,7 @@ proc isPositionInSelection*(selection: VisualSelection, pos: BufferPosition): bo
 
   case selection.kind
   of vskBlock:
-    # Block selection: column range applies to all lines in the selection
-    let (colStart, colEnd) = selection.blockColumns
-    return pos.column >= colStart and pos.column <= colEnd
+    return false
   of vskLine:
     # Line selection: entire lines are selected
     return true # Already checked line range above

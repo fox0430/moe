@@ -565,8 +565,8 @@ suite "HandlerManager - Visual Block insert replication":
     check state.cursor.column == 0
     check state.editState.visualBlockInsertContext.isSome
     let ctx = state.editState.visualBlockInsertContext.get
-    check ctx.startLine == 0
-    check ctx.endLine == 2
+    check ctx.area.firstLine == 0
+    check ctx.area.lastLine == 2
     check ctx.insertColumn == 0
 
     # Type "X" and Escape
@@ -1406,7 +1406,7 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge full finalize":
     check buffer.beginTransaction("test insert").isOk
     state.editState.visualBlockInsertContext = some(
       types.VisualBlockInsertContext(
-        kind: vbiInsert, startLine: 0, endLine: 2, insertColumn: 0
+        kind: vbiInsert, area: BlockArea(firstLine: 0, lastLine: 2), insertColumn: 0
       )
     )
 
@@ -1472,7 +1472,7 @@ suite "HandlerManager - Insert-mode line-join backspace":
     check buffer.beginTransaction("test insert").isOk
     state.editState.visualBlockInsertContext = some(
       types.VisualBlockInsertContext(
-        kind: vbiInsert, startLine: 1, endLine: 3, insertColumn: 0
+        kind: vbiInsert, area: BlockArea(firstLine: 1, lastLine: 3), insertColumn: 0
       )
     )
 

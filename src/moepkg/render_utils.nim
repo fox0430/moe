@@ -200,6 +200,13 @@ func tabAdvance*(currentWidth, tabStop: int): int {.inline.} =
   let safeTabStop = if tabStop > 0: tabStop else: 1
   safeTabStop - (currentWidth mod safeTabStop)
 
+proc runeCells*(rune: Rune, cell, tabStop: int): int =
+  ## The cells `rune` takes when it starts at `cell`.
+  if rune == TAB_CHAR:
+    tabAdvance(cell, tabStop)
+  else:
+    charWidth(rune)
+
 func startsNewWrapSegment*(segmentWidth, runeWidth, maxWidth: int): bool {.inline.} =
   ## Canonical wrap-boundary rule shared by every wrap walker
   ## (calculateWrapCount, cursorWrapPosition, displayWidthSubstrFromByte):
@@ -538,10 +545,7 @@ proc displayWidthWithTabs*(text: string, tabStop: int): int =
 
   result = 0
   for (rune, _) in text.chars:
-    if rune == TAB_CHAR:
-      result += tabAdvance(result, tabStop)
-    else:
-      result += charWidth(rune)
+    result += rune.runeCells(result, tabStop)
 
 proc cursorWrapPosition*(
     text: string, cursorChar: int, maxWidth: int, tabStop: int

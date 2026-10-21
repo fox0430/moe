@@ -83,14 +83,3 @@ proc operandSelection*(win: EditorWindow, buffer: TextBuffer): VisualSelection =
 
 proc operandSelection*(state: EditorState, buffer: TextBuffer): VisualSelection =
   state.activeWindow.operandSelection(buffer)
-
-func blockColumns*(sel: VisualSelection): tuple[startCol, endCol: int] =
-  ## The columns a block selection covers on each of its lines, inclusive. A
-  ## block whose end follows each line's end (after `<C-v>$`) ends at
-  ## `LineEnd`, past every line's end, as Vim's MAXCOL: a bound to clamp to
-  ## the line, not a column to count from.
-  let startCol = min(sel.start.column, sel.current.column)
-  if sel.extendsToLineEnd:
-    (startCol, LineEnd)
-  else:
-    (startCol, max(sel.start.column, sel.current.column))

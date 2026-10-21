@@ -4123,3 +4123,202 @@ suite "newLineStyleContext - search highlight":
     e.state.input.search.text = ""
 
     check e.searchRangesFor("foobar foo") == @[ColumnRange(startCol: 7, endCol: 10)]
+
+suite "renderWindow - Visual block over screen cells":
+  test "A block shows over the cells it covers":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.lineWrap = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.tabStop = 4
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abcdefgh\na\tb")
+    # Cells 2-4: `cde` on line 0; on line 1 the tab's last two cells (it
+    # takes 1-3) and `b`, as Vim draws a block by cell.
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 2), BufferPosition(line: 1, column: 2), vskBlock
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visBg = visualStyle().bg
+    for x in 0 .. 6:
+      check (buffer[x, 0].style.bg == visBg) == (x in 2 .. 4)
+    for x in 0 .. 6:
+      check (buffer[x, 1].style.bg == visBg) == (x in 2 .. 4)
+
+  test "A block leaves an empty line unselected":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.lineWrap = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abc\n\nabc")
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 1), vskBlock
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visBg = visualStyle().bg
+    check buffer[0, 0].style.bg == visBg
+    check buffer[0, 1].style.bg != visBg
+
+  test "A block shows the first cell of an empty anchor or cursor line":
+    for wrap in [false, true]:
+      let e = createTestEditor()
+      var buffer = createTestBuffer()
+      e.state.lineWrap = wrap
+      e.state.showSidebar = false
+      e.state.showLineNumbers = false
+      discard
+        e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abc\n\nabc")
+      # Vim 9.2 draws the anchor's empty line selected, as it does the
+      # cursor's.
+      e.state.selectVisual(
+        BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: 1), vskBlock
+      )
+
+      let window = e.windowManager.windows[0]
+      window.viewport.width = 40
+      window.viewport.height = 24
+      window.viewport.x = 0
+      window.viewport.y = 0
+      window.viewport.leftColumn = 0
+      window.active = true
+
+      e.renderWindow(buffer, window, 0, true, true, 0)
+
+      let visBg = visualStyle().bg
+      check buffer[0, 1].style.bg == visBg
+      check buffer[1, 1].style.bg != visBg
+      check buffer[0, 2].style.bg == visBg
+      check buffer[0, 0].style.bg != visBg
+
+  test "A block shows the cell after a cursor line's end it starts at":
+    for wrap in [false, true]:
+      let e = createTestEditor()
+      var buffer = createTestBuffer()
+      e.state.lineWrap = wrap
+      e.state.showSidebar = false
+      e.state.showLineNumbers = false
+      discard
+        e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abcdef\nab")
+      # As `<C-v>j` from `f` leaves it, the cursor past the end of `ab`.
+      e.state.selectVisual(
+        BufferPosition(line: 0, column: 5), BufferPosition(line: 1, column: 2), vskBlock
+      )
+
+      let window = e.windowManager.windows[0]
+      window.viewport.width = 40
+      window.viewport.height = 24
+      window.viewport.x = 0
+      window.viewport.y = 0
+      window.viewport.leftColumn = 0
+      window.active = true
+
+      e.renderWindow(buffer, window, 0, true, true, 0)
+
+      let visBg = visualStyle().bg
+      for x in 0 .. 6:
+        check (buffer[x, 0].style.bg == visBg) == (x in 2 .. 5)
+      for x in 0 .. 4:
+        check (buffer[x, 1].style.bg == visBg) == (x == 2)
+
+  test "Scrolled sideways, a block shows the line's end where the screen starts":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.lineWrap = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abcdef\nab\n")
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 5), BufferPosition(line: 1, column: 2), vskBlock
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 2
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visBg = visualStyle().bg
+    # Line 1 is scrolled to just its end, which is selected.
+    check buffer[0, 1].style.bg == visBg
+    check buffer[1, 1].style.bg != visBg
+
+  test "Scrolled sideways past an empty line, its end is off the screen":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.lineWrap = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "\nabcdef")
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 3), vskBlock
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 2
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    check buffer[0, 0].style.bg != visualStyle().bg
+
+  test "A cut tab drawn at another width shows whole":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.lineWrap = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.tabStop = 4
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abcdefgh\nab\tc")
+    # Cells 3-4: on line 1 the tab takes cells 2-3, but scrolled by a column
+    # it is drawn from the second cell, three wide.
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 3), vskBlock
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 1
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visBg = visualStyle().bg
+    # `b` at x 0, the tab at x 1-3, `c` at x 4.
+    check buffer[0, 1].style.bg != visBg
+    for x in 1 .. 4:
+      check buffer[x, 1].style.bg == visBg

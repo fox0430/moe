@@ -26,22 +26,55 @@ import std/unicode
 import types, modes, render_utils, unicode_utils
 import buffer/core
 
+iterator cellsOf*(
+    text: string, tabStop: int
+): tuple[column: int, rune: Rune, cell, width: int] =
+  ## Each character of `text` with the cell it starts at and how many it takes.
+  var
+    column = 0
+    cell = 0
+  for (rune, _) in text.chars:
+    let width = rune.runeCells(cell, tabStop)
+    yield (column, rune, cell, width)
+    cell += width
+    column.inc
+
+proc cellSpan*(text: string, column, tabStop: int): tuple[first, last: int] =
+  ## The cells character `column` of `text` takes, as Vim's getvvcol: a
+  ## combining mark's are those of the character it follows. Past the end, the
+  ## one cell after the text.
+  var base = (first: 0, last: 0)
+  for (at, _, cell, width) in text.cellsOf(tabStop):
+    if width > 0 or at == 0:
+      base = (cell, cell + max(width, 1) - 1)
+    if at == column:
+      return base
+    result = (cell + width, cell + width)
+
+proc columnStartingAt*(text: string, cell, tabStop: int): int =
+  ## The character of `text` that starts at `cell`, or its end when the text
+  ## ends there, else -1, as Vim's getvpos succeeds or fails. A combining mark
+  ## starts nowhere, as it goes with the character it follows.
+  var width = 0
+  for (column, _, at, cells) in text.cellsOf(tabStop):
+    if cells == 0 and column > 0:
+      continue
+    if at >= cell:
+      return if at == cell: column else: -1
+    width = at + cells
+  if width == cell: text.charLen else: -1
+
 proc cursorCell*(text: string, column, tabStop: int, onTabEnd: bool): int =
   ## The cell character `column` of `text` starts at, or with `onTabEnd` its
   ## last cell when it is a tab. Past the end, the width of `text`.
-  var current = 0
-  for (rune, _) in text.chars:
-    let width =
-      if rune == TAB_CHAR:
-        tabAdvance(result, tabStop)
-      else:
-        charWidth(rune)
-    if current == column:
-      if onTabEnd and rune == TAB_CHAR:
-        result += width - 1
+  for (at, rune, cell, width) in text.cellsOf(tabStop):
+    if at == column:
       return
-    result += width
-    current.inc
+        if onTabEnd and rune == TAB_CHAR:
+          cell + width - 1
+        else:
+          cell
+    result = cell + width
 
 proc columnAtCell*(text: string, cell, tabStop: int, mode: EditorMode): int =
   ## The character of `text` that covers `cell`, as Vim's coladvance: on a
