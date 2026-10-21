@@ -499,6 +499,24 @@ suite "Insert Commands - insertNewline bracket split":
     check state.cursor.line == 1
     check state.cursor.column == 0
 
+  test "with 'autoindent', the empty middle line bsmNoIndent leaves is auto-indented":
+    # As after `o`, so an indent Ctrl-T adds there comes off on Escape.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    test[]")
+    let state = createTestState()
+    state.autoIndent = true
+    state.expandTab = true
+    state.tabStop = 4
+    state.bracketSplit = bsmNoIndent
+    state.cursor = BufferPosition(line: 0, column: 9)
+
+    insertNewline(buf, state)
+    check changeIndent(buf, state, deeper = true).isOk
+    check buf.getLine(1) == "    "
+    clearAutoIndentIfUnedited(buf, state)
+
+    check buf.getLine(1) == ""
+
   test "bsmIndent splits () pair":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "f()")
@@ -685,11 +703,11 @@ suite "Insert Commands - insertNewline bracket split":
     check buf.getLine(2) == "    )"
     check state.cursor.column == 0
 
-  test "bsmNoIndent does not register for Esc cleanup":
+  test "bsmNoIndent without 'autoindent' does not register for Esc cleanup":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "f()")
     let state = createTestState()
-    state.autoIndent = true
+    state.autoIndent = false
     state.bracketSplit = bsmNoIndent
     state.cursor = BufferPosition(line: 0, column: 2)
 
@@ -1117,7 +1135,8 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
 
     check state.editState.autoIndentedLine.isNone
 
-  test "No indentation on source line, no tracking":
+  test "No indentation on source line, tracked with nothing to remove":
+    # As Vim's did_ai, so an indent Ctrl-T adds there comes off on Escape.
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
@@ -1126,7 +1145,11 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
 
     check insertLineBelow(buf, state).isOk
 
-    check state.editState.autoIndentedLine.isNone
+    check state.editState.autoIndentedLine.isSome
+    let version = buf.contentVersion
+    clearAutoIndentIfUnedited(buf, state)
+    check buf.getLine(1) == ""
+    check buf.contentVersion == version
 
   test "o unedited exit uses replaceLine to remove indent in transaction":
     let buf = newTextBuffer()

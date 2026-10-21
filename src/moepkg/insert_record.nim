@@ -161,7 +161,8 @@ proc clearUntouchedAutoIndent*(buffer: TextBuffer, line: int): Result[bool, stri
   ## Take the untouched auto-indent off `line` as Vim's stop_insert does: only
   ## when nothing follows it, so text Enter carried down keeps it. True when
   ## it came off.
-  if not buffer.getLine(line).allCharsInSet({' ', '\t'}):
+  let text = buffer.getLine(line)
+  if text.len == 0 or not text.allCharsInSet({' ', '\t'}):
     return ok(false)
   let cleared = buffer.replaceLine(line, "")
   if cleared.isErr:

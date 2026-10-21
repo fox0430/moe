@@ -234,6 +234,9 @@ type
     wantedColumn: Option[int] # Read through `preferredColumn`
     wantedColumnSince: WindowSpot
       # Where the window stood when its command began or it last kept a column.
+    keptAfterIndent: Option[WindowSpot]
+      # Where leaving Insert took the auto-indent off under the cursor and kept
+      # the column after it, for parking the cursor to leave alone.
     screenCursor*: CursorPosition # Screen cursor position (x/y)
     modeState*: ModeState # Per-window mode-specific state (variant)
     viewerEntry*: Option[ViewerEntry]
@@ -1307,13 +1310,23 @@ proc takeWantedColumn*(win, src: EditorWindow) =
   win.wantedColumn = src.wantedColumn
   win.wantedColumnSince = src.wantedColumnSince
 
+proc keepColumnAfterIndent*(win: EditorWindow, column: int) =
+  ## Leaving Insert took the auto-indent off under the cursor: vertical moves
+  ## still aim at `column` after it, as Vim's ins_esc keeps curswant.
+  win.preferredColumn = column
+  win.keptAfterIndent = some(win.spot)
+
 proc adjustCursorAfterInsertExit*(win: EditorWindow) =
   ## Put the cursor where leaving Insert leaves it, and take the column
-  ## vertical moves want from it again, as Vim's ins_esc.
+  ## vertical moves want from it again, as Vim's ins_esc, unless leaving kept
+  ## the column after the auto-indent it took off (`keepColumnAfterIndent`).
+  let kept = win.keptAfterIndent == some(win.spot)
+  win.keptAfterIndent = none(WindowSpot)
   if win.buffer.isNil or win.cursor.line >= win.buffer.len:
     return
   win.cursor.adjustCursorAfterInsertExit(win.buffer.getLineLen(win.cursor.line))
-  win.preferredColumn = -1
+  if not kept:
+    win.preferredColumn = -1
 
 proc noteCommandStart*(win: EditorWindow) =
   ## Note where `win` stands as a command, or the rest of one, begins.
@@ -1346,6 +1359,8 @@ proc setMode*(win: EditorWindow, m: EditorMode) =
     win.visualAnchor = win.cursor
   if entersInsert:
     win.insertStart = InsertStart(at: win.cursor, stop: win.cursor)
+  if m in {EditorMode.Insert, EditorMode.Replace}:
+    win.keptAfterIndent = none(WindowSpot)
   if leavingVisual and not win.holdLastVisual:
     win.saveLastVisual()
   if leavingVisual or entersInsert:

@@ -5340,6 +5340,21 @@ suite "forced Insert mode":
     check e.activeBuffer.undoStack.len == 1
     check e.activeBuffer.currentTransaction.get.changes.len == 0
 
+  test "Escape and Ctrl-C keep the column vertical moves want":
+    let downKey = KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})
+    for leaveKey in [escapeKey, ctrlCKey]:
+      let e = createForcedInsertEditor()
+      check e.handleTextInput("abcdefgh\nab\nabcdefgh")
+      e.cursor = BufferPosition(line: 0, column: 6)
+      check e.handleKeyCombo(downKey)
+      check e.cursor == BufferPosition(line: 1, column: 2)
+
+      check e.handleKeyCombo(leaveKey)
+      check e.handleKeyCombo(downKey)
+
+      check e.state.mode == EditorMode.Insert
+      check e.cursor == BufferPosition(line: 2, column: 6)
+
   test "an Insert Ctrl-C remap runs without leaving Insert mode":
     let e = createTestEditorWithBuffer("")
     check e.keyBindingRegistry.addRuntimeMapping(

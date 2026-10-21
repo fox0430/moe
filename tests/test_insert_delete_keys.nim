@@ -21,49 +21,11 @@
 ## Ctrl-U stop once where the typed text starts, and the keys join lines at a
 ## line's start or end ('backspace' is "indent,eol,start").
 
-import std/[unittest, options, strutils]
+import std/unittest
 
-import ../src/moepkg/[buffer, types, registers, editor, config, key_bindings]
+import ../src/moepkg/[types, editor]
 import ../src/moepkg/handler {.all.}
-
-proc newVimLikeEditor(
-    lines: seq[string], line, column: int, autoIndent, expandTab: bool
-): Editor =
-  ## An editor typing as `vim -u NONE` with `shiftwidth=2` does.
-  var config = newEditorConfig()
-  config.standard.autoIndent = autoIndent
-  config.standard.autoCloseParen = false
-  config.standard.autoDeleteParen = false
-  config.standard.expandTab = expandTab
-  config.standard.tabStop = 8
-  config.standard.shiftWidth = 2
-  result = newEditor(config)
-  # newEditor's registers reach the system clipboard.
-  result.state.registers = initRegisters()
-  let buffer = newTextBuffer(lines.join("\n") & "\n")
-  result.windowManager.windows[0].setTab(buffer)
-  result.windowManager.windows[0].bufferIds = @[buffer.id]
-  result.windowManager.windows[0].viewport =
-    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-  result.motionController.bindToWindow(result.activeWindow)
-  result.state.mode = EditorMode.Normal
-  result.activeWindow.cursor = BufferPosition(line: line, column: column)
-
-proc keysOf(spec: string): seq[KeyCombo] =
-  ## `<Name>` is one key (`<Escape>`, `<C-u>`), any other character a key.
-  var i = 0
-  while i < spec.len:
-    if spec[i] == '<':
-      let close = spec.find('>', i)
-      result.add parseKeyCombo(spec[i + 1 ..< close]).get
-      i = close + 1
-    else:
-      result.add KeyCombo(isSpecial: false, char: $spec[i])
-      inc i
-
-proc lines(e: Editor): seq[string] =
-  for i in 0 ..< e.activeBuffer.len:
-    result.add e.activeBuffer.getLine(i)
+import vim_like_test_helper
 
 # Measured in Vim 9.2 (`vim -u NONE`, `set shiftwidth=2`, 'autoindent' and
 # 'expandtab' as each case says).
@@ -483,8 +445,14 @@ const VimCases = [
 suite "Insert Backspace, Ctrl-W, Ctrl-U and Delete, as in Vim":
   for c in VimCases:
     test c.name:
-      let e =
-        newVimLikeEditor(c.lines, c.cursor[0], c.cursor[1], c.autoIndent, c.expandTab)
+      let e = newVimLikeEditor(
+        c.lines,
+        c.cursor[0],
+        c.cursor[1],
+        autoIndent = c.autoIndent,
+        expandTab = c.expandTab,
+        shiftWidth = 2,
+      )
       e.state.smartIndent = false
       for key in keysOf(c.keys):
         check e.handleKeyCombo(key)

@@ -26,7 +26,10 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[cursor_util, types, modes, unicode_utils, insert_record]
+import
+  ../[
+    cursor_util, types, modes, unicode_utils, insert_record, render_utils, wanted_column
+  ]
 import ../buffer/[core, edit, undo]
 import smart_indent
 
@@ -44,11 +47,12 @@ proc beginInsertModeSession*(
   ok(true)
 
 proc markAutoIndented(
-    buffer: TextBuffer, state: EditorState, line: int, indent: string
+    buffer: TextBuffer, state: EditorState, line: int, indented: bool
 ) =
-  ## Note that Insert indented `line` by itself.
+  ## Note that Insert indented `line` by itself, as Vim's did_ai: with
+  ## 'autoindent' even when the indent came out empty.
   state.editState.autoIndentedLine =
-    if indent.len > 0:
+    if indented:
       some(AutoIndentedLine(line: line, version: buffer.contentVersion))
     else:
       none(AutoIndentedLine)
@@ -79,8 +83,9 @@ proc emptyLinesForChange*(
     return err("Line out of range: " & $startLine)
   if endLine < startLine:
     return err("Line range is reversed: " & $startLine & ".." & $endLine)
+  let autoIndent = state.autoIndent and buffer.allowsTextTransforms
   let indent =
-    if state.autoIndent and buffer.allowsTextTransforms:
+    if autoIndent:
       getLineIndent(buffer.getLine(startLine))
     else:
       ""
@@ -93,7 +98,7 @@ proc emptyLinesForChange*(
   )
   if emptied.isErr:
     return err(emptied.error)
-  buffer.markAutoIndented(state, startLine, indent)
+  buffer.markAutoIndented(state, startLine, autoIndent)
   state.cursor = BufferPosition(line: startLine, column: indent.len)
   ok(())
 
@@ -265,8 +270,9 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
       isAdjacentBracketPair(currentLineText, pos.column - 1):
     let indented = state.bracketSplit == bsmIndent
     # Raw buffer: copied indent is unintended edit.
+    let autoIndent = state.autoIndent and buffer.allowsTextTransforms
     let baseIndent =
-      if state.autoIndent and buffer.allowsTextTransforms:
+      if autoIndent:
         getLineIndent(currentLineText)
       else:
         ""
@@ -286,7 +292,9 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
     # Register the middle line for auto-indent cleanup on Esc — if the user
     # leaves Insert mode without typing anything, the whitespace we just
     # inserted is removed (the bracket pair itself stays intact).
-    buffer.markAutoIndented(state, state.cursor.line, middleIndent)
+    buffer.markAutoIndented(
+      state, state.cursor.line, autoIndent or middleIndent.len > 0
+    )
     return
 
   # As Vim's open_line: the text Enter leaves gives the indent, and the blanks
@@ -328,7 +336,7 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   state.cursor.line += 1
   state.cursor.column = newLineIndent.len
 
-  buffer.markAutoIndented(state, state.cursor.line, newLineIndent)
+  buffer.markAutoIndented(state, state.cursor.line, autoIndent)
 
 proc insertLineBelow*(buffer: TextBuffer, state: EditorState): Result[(), string] =
   ## Handle 'o' command - insert line below and enter insert mode with auto-indent
@@ -342,7 +350,8 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState): Result[(), string
   var newLineIndent = ""
 
   # Auto-indent skipped for raw buffers.
-  if state.autoIndent and buffer.allowsTextTransforms:
+  let autoIndent = state.autoIndent and buffer.allowsTextTransforms
+  if autoIndent:
     let baseIndent = getLineIndent(lineContent)
     let extraIndent =
       if state.smartIndent:
@@ -362,7 +371,7 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState): Result[(), string
   state.cursor.line = currentLine + 1
   state.cursor.column = indentLen
 
-  buffer.markAutoIndented(state, currentLine + 1, newLineIndent)
+  buffer.markAutoIndented(state, currentLine + 1, autoIndent)
 
   state.mode = EditorMode.Insert
   ok(())
@@ -378,7 +387,8 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string
   var indent = ""
 
   # Auto-indent skipped for raw buffers.
-  if state.autoIndent and buffer.allowsTextTransforms:
+  let autoIndent = state.autoIndent and buffer.allowsTextTransforms
+  if autoIndent:
     indent = getLineIndent(lineContent)
     if indent.len > 0:
       textToInsert = indent & "\n"
@@ -392,7 +402,7 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string
   state.cursor.line = currentLine
   state.cursor.column = indent.len
 
-  buffer.markAutoIndented(state, currentLine, indent)
+  buffer.markAutoIndented(state, currentLine, autoIndent)
 
   state.mode = EditorMode.Insert
   ok(())
@@ -481,32 +491,106 @@ proc dedentLine*(
     return err(failure)
   ok(())
 
+proc indentFor(columns, tabStop: int, expandTab: bool): string =
+  ## An indent `columns` wide: tabs and then spaces, or only spaces with
+  ## 'expandtab', as Vim's set_indent.
+  if expandTab:
+    return " ".repeat(columns)
+  "\t".repeat(columns div tabStop) & " ".repeat(columns mod tabStop)
+
 proc changeIndent*(
     buffer: TextBuffer, state: EditorState, deeper: bool
 ): Result[(), string] =
-  ## Ctrl-T or Ctrl-D in Insert mode. The typed text on the line starts as far
-  ## along as the indent moved the text, or at the start of the line when the
-  ## cursor was in the indent or at its end, as Vim's change_indent.
+  ## Ctrl-T or Ctrl-D in Insert mode, as Vim's change_indent: the indent goes to
+  ## the next or previous multiple of 'shiftwidth'. The cursor stays on its
+  ## character, or as many screen columns before the first non-blank. The typed
+  ## text on the line starts as far along as the indent moved the text, or at
+  ## the start of the line when the cursor was in the indent or at its end.
   let pos = state.cursor
   if pos.line < 0 or pos.line >= buffer.len:
     return ok(())
   state.stopArrow(pos)
-  let before = getLineIndent(buffer.getLine(pos.line)).len
-  result =
-    if deeper:
-      buffer.indentLine(state)
+  if not buffer.allowsTextTransforms:
+    return err(rawBytesRejection(if deeper: "indent" else: "dedent"))
+
+  let
+    tabStop = max(1, state.tabStop)
+    shift = max(1, effectiveShiftWidth(state))
+    autoIndented = buffer.untouchedAutoIndent(state) == some(pos.line)
+    indent = getLineIndent(buffer.getLine(pos.line))
+    width = displayWidthWithTabs(indent, tabStop)
+    shifts =
+      if deeper:
+        width div shift + 1
+      elif width mod shift != 0:
+        width div shift
+      else:
+        max(0, width div shift - 1)
+    newWidth = shifts * shift
+    offset = pos.column - indent.len
+  var
+    newIndent = indentFor(newWidth, tabStop, state.expandTab)
+    # The cursor's column once the line has `newIndent`.
+    column = newIndent.len + offset
+  if offset < 0:
+    # Keep the screen distance to the first non-blank. Inside a tab, spaces go
+    # in before it so the cursor can stand there.
+    let target =
+      max(0, newWidth - width + displayWidthUpToWithTabs(indent, pos.column, tabStop))
+    column = screenXToCharIndex(newIndent, 0, target, tabStop)
+    let padding = target - displayWidthUpToWithTabs(newIndent, column, tabStop)
+    newIndent.insert(" ".repeat(padding), column)
+    column += padding
+
+  var same = 0
+  while same < min(indent.len, newIndent.len) and indent[same] == newIndent[same]:
+    inc same
+  # The indent the line has now: short of `newIndent` when an edit fails.
+  var
+    have = indent
+    failure = ""
+  if same < indent.len:
+    let removed = buffer.deleteRange(
+      BufferPosition(line: pos.line, column: same),
+      BufferPosition(line: pos.line, column: indent.len - 1),
+    )
+    if removed.isErr:
+      return err(removed.error)
+    have = indent[0 ..< same]
+  if same < newIndent.len:
+    let added = buffer.insertText(
+      BufferPosition(line: pos.line, column: same), newIndent[same ..^ 1]
+    )
+    if added.isOk:
+      have = newIndent
     else:
-      buffer.dedentLine(state)
-  let after = getLineIndent(buffer.getLine(pos.line)).len
-  if result.isErr and after == before:
-    return
+      failure = added.error
+  if failure.len > 0 and have == indent:
+    return err(failure)
+
+  # After a failed edit, the cursor stays on its character.
+  state.cursor.column =
+    if failure.len == 0:
+      column
+    elif offset >= 0:
+      have.len + offset
+    else:
+      min(pos.column, have.len)
   let at = state.insertStart.at
   if at.line == pos.line and at.column != 0:
     state.insertStart.at.column =
-      if pos.column <= before:
+      if offset <= 0:
         0
       else:
-        max(0, at.column + after - before)
+        max(0, at.column + have.len - indent.len)
+  # As Vim's ins_shift, the indent stays an auto-indent while nothing follows.
+  if autoIndented:
+    buffer.markAutoIndented(
+      state, pos.line, buffer.getLine(pos.line).allCharsInSet({' ', '\t'})
+    )
+  if failure.len > 0:
+    return err(failure)
+  ok(())
 
 proc stepToAppend*(buffer: TextBuffer, state: EditorState) =
   ## Put the cursor after the character under it, where `a` types.
@@ -709,13 +793,21 @@ proc insertCharFromBelow*(buffer: TextBuffer, state: EditorState): bool =
   state.cursor = insertResult.get.cursor
   return true
 
-proc clearAutoIndentIfUnedited*(buffer: TextBuffer, state: EditorState) =
+proc clearAutoIndentIfUnedited*(
+    buffer: TextBuffer, state: EditorState, keepColumn = true
+) =
   ## Remove auto-indent whitespace when leaving Insert mode without editing.
+  ## When it comes off under the cursor, vertical moves still aim after it, as
+  ## Vim's ins_esc keeps curswant, unless `keepColumn` is false.
   let untouched = buffer.untouchedAutoIndent(state)
   if untouched.isSome:
-    let cleared = buffer.clearUntouchedAutoIndent(untouched.get)
+    let
+      aimed = state.aimedColumn
+      cleared = buffer.clearUntouchedAutoIndent(untouched.get)
     if cleared.isErr:
       state.statusMessage = cleared.error
     elif cleared.get and state.cursor.line == untouched.get:
       state.cursor.column = 0
+      if keepColumn:
+        state.activeWindow.keepColumnAfterIndent(aimed)
   state.editState.autoIndentedLine = none(AutoIndentedLine)
