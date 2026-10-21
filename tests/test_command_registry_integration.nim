@@ -1710,55 +1710,6 @@ suite "Handler - Paste operations":
     check buffer[0] == "hello"
     check ctx.cursor == BufferPosition(line: 5, column: 0)
 
-  test "paste exception rollback restores buffer and cursor (own transaction)":
-    # Direct unit test of the paste loops' exception tail.
-    let buffer = newTextBuffer("hello")
-    let ctx = createTestContext(buffer)
-    ctx.cursor = BufferPosition(line: 0, column: 6)
-    check buffer.beginTransaction("paste 2 times").isOk
-    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
-    let savedCursor = BufferPosition(line: 0, column: 0)
-    let result = rollbackPasteOnException(ctx, "boom", actualCount = 2, savedCursor)
-
-    check result.isErr
-    check "Paste failed: boom" in result.error
-    check not buffer.inTransaction
-    check buffer[0] == "hello"
-    check ctx.cursor == savedCursor
-
-  test "paste exception keeps a joined session transaction open":
-    # actualCount == 1 in a live session: the paste owns no transaction, so
-    # nothing is rolled back and the partial edit stays in the session.
-    let buffer = newTextBuffer("hello")
-    let ctx = createTestContext(buffer)
-    ctx.cursor = BufferPosition(line: 0, column: 0)
-    check buffer.beginTransaction("Insert mode edit").isOk
-    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
-    let savedCursor = BufferPosition(line: 0, column: 5)
-    let result = rollbackPasteOnException(ctx, "boom", actualCount = 1, savedCursor)
-
-    check result.isErr
-    check "Paste failed: boom" in result.error
-    check "joined transaction" in result.error
-    check "may remain applied" in result.error
-    check buffer.inTransaction
-    check buffer[0] == "hellox"
-    check ctx.cursor == BufferPosition(line: 0, column: 0)
-    check buffer.commitTransaction().isOk
-    check buffer[0] == "hellox"
-
-  test "paste exception without any transaction reports a plain failure":
-    let buffer = newTextBuffer("hello")
-    let ctx = createTestContext(buffer)
-    ctx.cursor = BufferPosition(line: 0, column: 0)
-    let result = rollbackPasteOnException(
-      ctx, "boom", actualCount = 1, BufferPosition(line: 0, column: 0)
-    )
-
-    check result.isErr
-    check result.error == "Paste failed: boom"
-    check not buffer.inTransaction
-
   test "paste before cursor (P) - characterwise":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
@@ -1817,8 +1768,8 @@ suite "Handler - Paste operations":
 
     check registry.execute(ctx, custom("paste.after")).isOk
     check buffer[0] == "helloあいう world"
-    # Cursor lands on the first pasted char (column 4 + 1)
-    check ctx.cursor.column == 5
+    # Cursor lands on the last pasted char, as Vim's
+    check ctx.cursor.column == 7
 
   test "paste before cursor (P) - multibyte characterwise":
     let buffer = newTextBuffer("hello world")
@@ -1829,8 +1780,8 @@ suite "Handler - Paste operations":
 
     check registry.execute(ctx, custom("paste.before")).isOk
     check buffer[0] == "helloあいう world"
-    # Cursor lands on the first pasted char (column 5)
-    check ctx.cursor.column == 5
+    # Cursor lands on the last pasted char, as Vim's
+    check ctx.cursor.column == 7
 
   test "paste after cursor (p) - charwise multi-line":
     let buffer = newTextBuffer("hello")

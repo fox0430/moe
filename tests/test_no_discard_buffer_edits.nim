@@ -42,7 +42,7 @@ const
     "joinWithNextLine", "transformRange", "replaceWholeLines", "replaceAllLines",
     "beginTransaction", "commitTransaction", "rollbackTransaction", "withTransaction",
     "withTransactionForInsert", "deleteBlockSelection", "deleteLineSelection", "undo",
-    "redo",
+    "redo", "putText",
   ].toHashSet
 
   ## Intentional discards that cannot propagate. Keyed by (path suffix,

@@ -101,10 +101,10 @@ proc handleVisualSwapSelection*(ctx: CommandContext): Result[(), string] =
   Result[(), string].ok ()
 
 proc handleVisualPaste*(
-    ctx: CommandContext, cursorAfter: bool = false, before = false
+    ctx: CommandContext, args: seq[string], cursorAfter: bool = false, before = false
 ): Result[(), string] =
-  ## Paste over selection (p). `cursorAfter` is gp/gP, `before` is P/gP; P also
-  ## keeps the registers.
+  ## Paste over selection (p) as many times as the count in `args` says.
+  ## `cursorAfter` is gp/gP, `before` is P/gP; P also keeps the registers.
   result = visualPaste(
     ctx.buffer,
     ctx.state,
@@ -113,6 +113,7 @@ proc handleVisualPaste*(
     ctx.register,
     keepRegisters = before and not cursorAfter,
     before = before,
+    count = parseCount(args, default = 1),
   )
   ctx.cursor = ctx.state.cursor
 
@@ -254,9 +255,9 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Paste",
     "Paste over selection (p command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualPaste(ctx),
+      handleVisualPaste(ctx, args),
     0,
-    0,
+    1, # Accept optional count argument
   )
 
   registry.register(
@@ -264,9 +265,9 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Paste Before",
     "Paste over selection, keeping the registers (P command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualPaste(ctx, before = true),
+      handleVisualPaste(ctx, args, before = true),
     0,
-    0,
+    1, # Accept optional count argument
   )
 
   registry.register(
@@ -284,9 +285,9 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Paste End",
     "Paste over selection and leave cursor after pasted text (gp)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualPaste(ctx, cursorAfter = true),
+      handleVisualPaste(ctx, args, cursorAfter = true),
     0,
-    0,
+    1, # Accept optional count argument
   )
 
   registry.register(
@@ -294,7 +295,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Paste Before End",
     "Paste over selection and leave cursor after pasted text (gP)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualPaste(ctx, cursorAfter = true, before = true),
+      handleVisualPaste(ctx, args, cursorAfter = true, before = true),
     0,
-    0,
+    1, # Accept optional count argument
   )

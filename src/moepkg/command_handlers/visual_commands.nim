@@ -29,7 +29,7 @@ import pkg/results
 import
   ../[cursor_util, types, registers, modes, config, unicode_utils, visual_selection]
 import ../buffer/[core, edit, undo]
-import insert_commands
+import insert_commands, put_text
 
 template checkVisualEdit(state: EditorState, r: Result[(), string]) =
   ## For use inside a withTransaction body of a Visual command: on an edit
@@ -50,13 +50,6 @@ template checkVisualEditAt(
   if checkVisualEditAtResult.isErr:
     state.cursor = cursorBefore
   checkVisualEdit(state, checkVisualEditAtResult)
-
-template checkVisualEditErr(state: EditorState, r: Result[(), string]) =
-  ## Like `checkVisualEdit` but returns error via Result for caller reporting.
-  let checkVisualEditErrResult = r
-  if checkVisualEditErrResult.isErr:
-    state.leaveVisual()
-    return Result[(), string].err(checkVisualEditErrResult.error)
 
 proc getSelectionRange*(
     selection: VisualSelection
@@ -626,189 +619,138 @@ proc visualPaste*(
     register = none(char),
     keepRegisters = false,
     before = false,
+    count = 1,
 ): Result[(), string] =
-  ## Delete selection and paste the content of `register` (else the unnamed
-  ## one). The deleted text goes to the registers as a delete's does, unless
-  ## `keepRegisters` (Vim's `v_P`). `before` is `P`/`gP`, which put lines
-  ## above a block rather than below it.
+  ## Vim's v_p: delete the selection, then put the content `register` (else
+  ## the unnamed one) held before it `count` times where the selection was.
+  ## The deleted text goes to the registers as a delete's does, unless
+  ## `keepRegisters` (`P`). `cursorAfter` is `gp`/`gP`, and `before` (`P`,
+  ## `gP`) puts lines above a block rather than below it. The next `gv`
+  ## selects the put text, or where it would have gone.
   let sel = state.operandSelection(buffer)
   result = Result[(), string].ok ()
-  if sel.active:
-    let regName = register.get('"')
-    let put = state.registers.textToPut(regName, clipboardConfig)
-    if put.isErr:
-      state.leaveVisual()
-      return Result[(), string].err(put.error)
-    let
-      isFullLine = put.get.isLine
-      pasteText = buffer.preparePastedText(put.get.getContent)
-
-    # Like Vim, the selection goes even when there is nothing to put. The black
-    # hole register puts an empty string, which over whole lines is a blank
-    # line; an empty register puts nothing and reports it.
-    let putsNothing =
-      pasteText.len == 0 and not isFullLine and not regName.isBlackHoleRegisterName
-
-    var deletedText = ""
-    var deletedIsLine = false
-    let cursorBeforePaste = state.cursor
-    let wantedColumn = state.preferredColumn
-    let selKind = sel.kind
-    var pasteStart = BufferPosition()
-    var pastedLineCount = 0
-
-    template checkPasteErr(r: Result[(), string]) =
-      ## Like checkVisualEditErr but also restores cursor for rollback.
-      let checkPasteErrResult = r
-      if checkPasteErrResult.isErr:
-        state.cursor = cursorBeforePaste
-        checkVisualEditErr(state, checkPasteErrResult)
-
-    let txr = withTransaction(buffer, "Visual paste"):
-      case sel.kind
-      of vskBlock:
-        checkPasteErr(deleteBlockSelection(buffer, state, sel, deletedText))
-        let
-          firstLine = min(sel.start.line, sel.current.line)
-          startColumn = sel.blockColumns.startCol
-        if isFullLine:
-          # Like Vim, lines go below the line the cursor ended on (its
-          # b_visual.vi_end, which can be the top one), or above the block
-          # for `P`. `P` puts them below the first line when the block
-          # reached its end, as the cursor then rests before where it was.
-          let firstLen = buffer.getLine(firstLine).charLen
-          if before and not (startColumn > 0 and startColumn >= firstLen):
-            checkPasteErr(
-              buffer.insertText(BufferPosition(line: firstLine, column: 0), pasteText)
-            )
-            pasteStart = BufferPosition(line: firstLine, column: 0)
-          else:
-            let afterLine = if before: firstLine else: sel.current.line
-            checkPasteErr(
-              buffer.insertText(
-                BufferPosition(
-                  line: afterLine, column: buffer.getLine(afterLine).charLen
-                ),
-                "\n" & pasteText.withoutLastLineBreak,
-              )
-            )
-            pasteStart = BufferPosition(line: afterLine + 1, column: 0)
-          pastedLineCount = pasteText.count('\n')
-        else:
-          pasteStart = BufferPosition(line: firstLine, column: startColumn)
-          if pasteText.len > 0:
-            checkPasteErr(buffer.insertText(pasteStart, pasteText))
-        state.cursor = pasteStart
-      of vskLine:
-        let
-          startLine = min(sel.start.line, sel.current.line)
-          endLine = max(sel.start.line, sel.current.line)
-
-        deletedText = getLineText(buffer, sel)
-        deletedIsLine = true
-
-        for _ in startLine .. endLine:
-          checkPasteErr(buffer.deleteLine(startLine))
-
-        var lines: seq[string]
-        if not putsNothing:
-          lines = pasteText.linewiseLines
-        if lines.len == 0 and buffer.len == 0:
-          # The selection was every line, and a buffer keeps one.
-          lines.add ""
-        pastedLineCount = lines.len
-        for i, line in lines:
-          checkPasteErr(buffer.insert(startLine + i, line))
-        pasteStart = BufferPosition(line: min(startLine, buffer.len - 1), column: 0)
-        state.cursor = pasteStart
-      of vskChar:
-        let (selStart, selEnd) = sel.getSelectionRange()
-
-        deletedText = buffer.getTextInRange(selStart, selEnd)
-
-        checkPasteErr(buffer.deleteRange(selStart, selEnd))
-
-        if isFullLine:
-          # Like Vim, lines go on lines of their own: the line splits where
-          # the selection was, and they go between.
-          checkPasteErr(buffer.insertText(selStart, "\n" & pasteText))
-          pasteStart = BufferPosition(line: selStart.line + 1, column: 0)
-          pastedLineCount = pasteText.count('\n')
-        else:
-          pasteStart = selStart
-          if pasteText.len > 0:
-            checkPasteErr(buffer.insertText(selStart, pasteText))
-        state.cursor = pasteStart
-    if txr.isErr:
-      # The transaction rolled the buffer back, so the paste anchor is gone.
-      state.cursor = cursorBeforePaste
-      state.leaveVisual()
-      return Result[(), string].err(txr.error)
-
-    # Registers are not covered by the buffer transaction, so write the
-    # replaced text only after the transaction committed.
-    if not keepRegisters:
-      state.registers.storeDeleted(none(char), deletedText, deletedIsLine)
-
-    state.statusMessage = ""
+  if not sel.active:
+    return
+  let regName = register.get('"')
+  let source = buffer.putSource(state.registers, regName, clipboardConfig).valueOr:
     state.leaveVisual()
-    if pasteText.len == 0:
-      # The deletion may have left the cursor past the end of its line.
-      clampCursorToLastChar(state.cursor, buffer.getLine(state.cursor.line).charLen)
+    return Result[(), string].err(error)
+  let
+    # Like Vim, the selection goes even when there is nothing to put. The
+    # black hole register puts an empty string, which over whole lines is a
+    # blank line.
+    putsNothing = source.isNothing and not regName.isBlackHoleRegisterName
+    cursorBeforePaste = state.cursor
+    wantedColumn = state.preferredColumn
+    startLine = min(sel.start.line, sel.current.line)
+    endLine = max(sel.start.line, sel.current.line)
+    # Deleting every line leaves one empty line, which goes after the put.
+    emptied = sel.kind == vskLine and startLine == 0 and endLine >= buffer.len - 1
 
-    let
-      lastPutLine = min(pasteStart.line + max(pastedLineCount, 1) - 1, buffer.len - 1)
-      afterPut = pasteEndPos(pasteStart, pasteText)
-      putLines = selKind == vskLine or isFullLine
+  var
+    deletedText = ""
+    area = PutArea()
 
-    # Like Vim, the next `gv` selects the put text, in the mode and with the
-    # column the replaced selection had.
-    let putEnd =
-      if putLines:
-        BufferPosition(
-          line: lastPutLine, column: max(0, buffer.getLine(lastPutLine).charLen - 1)
-        )
-      elif pasteText.len == 0:
-        pasteStart
-      elif afterPut.column > 0:
-        BufferPosition(line: afterPut.line, column: afterPut.column - 1)
+  template failPaste(error: string) =
+    ## Leave Visual mode with the cursor where it was, as a rollback leaves
+    ## the buffer, and return `error`.
+    state.cursor = cursorBeforePaste
+    state.leaveVisual()
+    return Result[(), string].err(error)
+
+  template checkPasteErr(r: Result[(), string]) =
+    let checkPasteErrResult = r
+    if checkPasteErrResult.isErr:
+      failPaste(checkPasteErrResult.error)
+
+  # Undo puts the cursor back where Vim's delete starts: over lines, at the
+  # cursor when it is above where Visual started, else at the start of the
+  # line it started on.
+  let undoCursor =
+    case sel.kind
+    of vskChar:
+      sel.getSelectionRange()[0]
+    of vskLine:
+      if sel.current < sel.start:
+        sel.current
       else:
-        BufferPosition(
-          line: afterPut.line - 1, column: buffer.getLine(afterPut.line - 1).charLen
-        )
-    buffer.lastVisual = some(
-      VisualArea(
-        start: pasteStart, cursor: putEnd, kind: selKind, wantedColumn: wantedColumn
-      )
-    )
-
-    if putLines:
-      # Like Vim's put of lines, the cursor goes to the first non-blank.
-      state.cursor.column = firstNonBlankColumn(buffer.getLine(state.cursor.line))
-
-    if cursorAfter and buffer.len > 0:
-      if putLines:
-        let afterLine = lastPutLine + 1
-        if afterLine < buffer.len:
-          state.cursor.line = afterLine
-          state.cursor.column = 0
-        else:
-          # Unlike Normal gp: col 0 unless the put replaced the whole buffer
-          # (then last char).
-          state.cursor.line = lastPutLine
-          if pasteStart.line == 0:
-            let lineLen = buffer.getLine(state.cursor.line).charLen
-            state.cursor.column = lineLen
-            clampCursorToLastChar(state.cursor, lineLen)
-          else:
-            state.cursor.column = 0
-      else:
-        state.cursor = afterPut
-        if buffer.len > 0:
-          clampCursorToLastChar(state.cursor, buffer.getLine(state.cursor.line).charLen)
+        BufferPosition(line: sel.start.line, column: 0)
+    of vskBlock:
+      BufferPosition(line: startLine, column: sel.blockColumns.startCol)
+  let txr = withTransaction(buffer, "Visual paste", some(undoCursor)):
+    var
+      flags: set[PutFlag]
+      forward = false
+      blockEnd = -1
+    if cursorAfter:
+      flags.incl pfCursorEnd
+    # As Vim, the put goes after the cursor when the delete left it before
+    # where the selection started: at the end of the line, or of the buffer.
+    case sel.kind
+    of vskBlock:
+      checkPasteErr(deleteBlockSelection(buffer, state, sel, deletedText))
+      forward = state.cursor.column < sel.blockColumns.startCol
+      blockEnd = endLine
+      if source.isLine and not before:
+        # Lines go below the line the cursor ended on (Vim's b_visual.vi_end),
+        # which can be the top one.
+        state.cursor = BufferPosition(line: sel.current.line, column: 0)
+        forward = true
+    of vskLine:
+      checkPasteErr(deleteLineSelection(buffer, state, sel, deletedText))
+      forward = state.cursor.line < startLine
+      flags.incl pfLines
+    of vskChar:
+      let (selStart, selEnd) = sel.getSelectionRange()
+      deletedText = buffer.getTextInRange(selStart, selEnd)
+      checkPasteErr(buffer.deleteRange(selStart, selEnd))
+      state.cursor = selStart
+      clampCursorToLastChar(state.cursor, buffer.getLine(selStart.line).charLen)
+      forward = state.cursor.column < selStart.column
+      flags.incl pfSplitLine
 
     if putsNothing:
-      result = Result[(), string].err(nothingInRegister(regName))
+      area = PutArea(first: state.cursor, last: state.cursor)
+    else:
+      # Vim leaves folding off for the put, as the delete may have opened one.
+      area = buffer.putText(
+        state,
+        source.text,
+        source.isLine,
+        forward,
+        count,
+        flags,
+        blockEnd,
+        byFolds = false,
+      ).valueOr:
+        failPaste(error)
+      if emptied and buffer.len > 1 and buffer.getLine(buffer.len - 1).len == 0:
+        checkPasteErr(buffer.deleteLine(buffer.len - 1))
+        if state.cursor.line >= buffer.len:
+          let last = buffer.len - 1
+          state.cursor =
+            BufferPosition(line: last, column: max(0, buffer.getLine(last).charLen - 1))
+  if txr.isErr:
+    failPaste(txr.error)
+
+  # Registers are not covered by the buffer transaction, so write the
+  # replaced text only after the transaction committed. Like Vim, deleting
+  # nothing (an empty line, the only one) leaves them as they were.
+  if not keepRegisters and (deletedText.len > 0 or sel.kind == vskLine):
+    state.registers.storeDeleted(none(char), deletedText, sel.kind == vskLine)
+
+  state.statusMessage = ""
+  # Ctrl-o `p` leaves the cursor past the text for Insert to resume there.
+  let cursor = state.cursor
+  state.leaveVisual()
+  state.cursor = cursor
+  buffer.lastVisual = some(
+    VisualArea(
+      start: area.first, cursor: area.last, kind: sel.kind, wantedColumn: wantedColumn
+    )
+  )
+  if putsNothing:
+    result = Result[(), string].err(nothingInRegister(regName))
 
 const SurroundPairs = [
   ("(", ")"),

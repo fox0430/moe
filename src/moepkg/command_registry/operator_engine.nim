@@ -49,27 +49,6 @@ proc rollbackAndPropagate*(
     ctx.cursor = savedCursor.get
   err(primaryError)
 
-proc rollbackPasteOnException*(
-    ctx: CommandContext, excMsg: string, actualCount: int, savedCursor: BufferPosition
-): Result[(), string] =
-  ## Exception-safety tail for the paste loops: on an unexpected error, roll
-  ## back the paste's own transaction (`actualCount > 1`) and restore the
-  ## cursor; a joined outer transaction is left for its own commit path.
-  if actualCount > 1 and ctx.buffer.inTransaction:
-    let rollbackResult = ctx.buffer.rollbackTransaction()
-    if rollbackResult.isErr:
-      logError "paste", "Failed to rollback transaction: " & rollbackResult.error
-      return err(
-        "Paste failed: " & excMsg & " (rollback failed: " & rollbackResult.error & ")"
-      )
-    ctx.cursor = savedCursor
-  elif ctx.buffer.inTransaction:
-    return err(
-      "Paste failed: " & excMsg &
-        " (joined transaction: earlier edits may remain applied)"
-    )
-  err("Paste failed: " & excMsg)
-
 proc storeYankedText*(ctx: CommandContext, text: string, isLine: bool) =
   ## Store yanked text in the register this command names, else the yank register.
   if not ctx.state.registers.isNil:

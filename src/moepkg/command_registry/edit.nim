@@ -24,261 +24,64 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import
-  ../[
-    cursor_util, types, motion, modes, registers, logger, unicode_utils,
-    visual_selection,
-  ]
+import ../[types, motion, modes, registers, logger, unicode_utils, visual_selection]
 import ../buffer/[core, edit, fold, undo]
+
+import ../command_handlers/put_text
 
 import core, operator_engine, operator_driver, insert_entry
 
-proc finishPasteCursor(
-    ctx: CommandContext,
-    isFullLine, cursorAfter: bool,
-    firstPastedChar: Option[BufferPosition],
-    lastPastedEndLine: int,
-) =
-  ## p/P: first pasted char (characterwise). gp/gP: after the pasted text.
-  if cursorAfter:
-    if isFullLine:
-      if ctx.buffer.len > 0:
-        let afterLine = min(lastPastedEndLine + 1, ctx.buffer.len - 1)
-        ctx.cursor.line = afterLine
-        ctx.cursor.column = 0
-    elif ctx.buffer.len > 0:
-      clampCursorToLastChar(ctx.cursor, ctx.buffer.getLine(ctx.cursor.line).charLen)
-  elif not isFullLine and firstPastedChar.isSome:
-    ctx.cursor = firstPastedChar.get
-
-proc pasteSource(
-    ctx: CommandContext
-): Result[tuple[text: string, isLine: bool], string] =
-  ## What `p`/`P` put: the register this command names, else the unnamed one,
-  ## made fit for the buffer. Linewise text ends in a line break.
+proc pasteSource(ctx: CommandContext): Result[PutSource, string] =
+  ## What `p`/`P` put: the register this command names, else the unnamed one.
   let name = ctx.register.get('"')
   if ctx.register.isSome:
     ctx.state.statusMessage = ""
-  let reg = ?ctx.state.registers.textToPut(name, ctx.clipboardConfig)
-  if reg.isEmpty:
+  let source = ?ctx.buffer.putSource(ctx.state.registers, name, ctx.clipboardConfig)
+  if source.isNothing:
     return err(nothingInRegister(name))
-  let text = ctx.buffer.preparePastedText(reg.getContent)
   logDebug(
     "paste",
-    "Using register '" & $name & "', length: " & $text.len & ", isLine=" & $reg.isLine,
+    "Using register '" & $name & "', length: " & $source.text.len & ", isLine=" &
+      $source.isLine,
   )
-  ok((text, reg.isLine))
+  ok(source)
 
-proc handlePasteAfter*(
-    ctx: CommandContext, count: int = 1, cursorAfter: bool = false
+proc handlePut*(
+    ctx: CommandContext, count: int, forward: bool, cursorEnd = false
 ): Result[(), string] =
-  ## Paste after cursor (p). `cursorAfter` is gp. Uses register or clipboard fallback.
-  logDebug("paste", "handlePasteAfter called with count=" & $count)
+  ## `p` (`forward`), `P`, and `gp`/`gP` (`cursorEnd`): put the register this
+  ## command names, else the unnamed one, `count` times. Undo puts the cursor
+  ## back where it was.
   if ctx.register.isSome and ctx.register.get.isBlackHoleRegisterName:
     # The black hole register reads as nothing, and nothing is put.
     return ok(())
-  let actualCount = max(1, count)
-  let (pasteText, isFullLine) = ?ctx.pasteSource()
+  let count = max(1, count)
+  let source = ?ctx.pasteSource()
+  let flags =
+    if cursorEnd:
+      {pfCursorEnd}
+    else:
+      {}
+  template put() =
+    ctx.buffer.putText(ctx.state, source.text, source.isLine, forward, count, flags).isOkOr:
+      return err(error)
 
-  # Begin transaction if count > 1 to group all pastes into single undo entry
-  if actualCount > 1:
-    let txnResult = ctx.buffer.beginTransaction("paste " & $actualCount & " times")
-    if txnResult.isErr:
-      return err(txnResult.error)
-
-  # Saved before the fold snap below: a failed paste must restore the cursor.
-  let savedCursor = ctx.cursor
-
-  # A closed fold is a unit: a linewise paste lands after its last line, not
-  # after whichever of its lines the cursor sits on.
-  if isFullLine:
-    let fold = ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line)
-    if fold.isSome:
-      ctx.cursor.line = fold.get.endLine
-  try:
-    # Paste count times
-    var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
-    var lastPastedEndLine = -1
-    for i in 1 .. actualCount:
-      if isFullLine:
-        # Paste on new line below current line (Vim 'p' behavior for linewise yank)
-        let currentLine = ctx.buffer.getLine(ctx.cursor.line)
-        let pastePos =
-          BufferPosition(line: ctx.cursor.line, column: currentLine.charLen)
-
-        # The lines go after the current one's line break.
-        let textToInsert = "\n" & pasteText.withoutLastLineBreak
-        let insertResult =
-          ctx.buffer.insertText(pastePos, textToInsert, openLine = olBelow)
-        if insertResult.isErr:
-          # Rollback transaction on error
-          if actualCount > 1:
-            return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
-          ctx.cursor = savedCursor
-          return err(insertResult.error)
-
-        # Track last pasted line across count repeats.
-        let n = textToInsert.count('\n')
-        if lastPastedEndLine > ctx.cursor.line:
-          lastPastedEndLine += n
-        lastPastedEndLine = max(lastPastedEndLine, ctx.cursor.line + n)
-        # Move cursor to the first non-whitespace character of pasted line
-        ctx.cursor.line = ctx.cursor.line + 1
-        ctx.cursor.column = firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line))
-      else:
-        # Paste after cursor position (Vim 'p' behavior for characterwise yank)
-        let lineContent = ctx.buffer.getLine(ctx.cursor.line)
-        var pastePos = ctx.cursor
-
-        # Move one character right if not at end of line (only for first paste)
-        if i == 1 and ctx.cursor.column < lineContent.charLen:
-          pastePos.column = ctx.cursor.column + 1
-
-        if firstPastedChar.isNone:
-          firstPastedChar = some(pastePos)
-
-        let insertResult = ctx.buffer.insertText(pastePos, pasteText)
-        if insertResult.isErr:
-          # Rollback transaction on error
-          if actualCount > 1:
-            return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
-          ctx.cursor = savedCursor
-          return err(insertResult.error)
-
-        # Move the cursor to the end of the inserted text so the next
-        # iteration inserts after it. For multi-line paste, land on the final
-        # line at its column: '\n' must not count as a column-adding rune.
-        let endPos = pasteEndPos(pastePos, pasteText)
-        ctx.cursor.line = endPos.line
-        ctx.cursor.column = endPos.column
-
-    finishPasteCursor(ctx, isFullLine, cursorAfter, firstPastedChar, lastPastedEndLine)
-
-    # Commit transaction if we started one
-    if actualCount > 1:
-      let txnResult = ctx.buffer.commitTransaction()
-      if txnResult.isErr:
-        return err(txnResult.error)
-  except Exception as exc:
-    if exc of Defect:
-      # Defects stay fatal (codebase policy): roll back first, then re-raise.
-      discard rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
-      raise
-    return rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
-
-  # Record this command for repeat (.)
+  if ctx.buffer.inTransaction:
+    # A live session's transaction takes the put in as one of its changes.
+    put()
+  else:
+    let txr = withTransaction(ctx.buffer, "put", some(ctx.cursor)):
+      put()
+    discard ?txr
   ctx.recordChange(
     LastEditCommand(
       kind: lecPaste,
-      pasteCount: actualCount,
-      pasteBefore: false,
-      pasteCursorAfter: cursorAfter,
+      pasteCount: count,
+      pasteBefore: not forward,
+      pasteCursorAfter: cursorEnd,
     )
   )
-
-  return Result[(), string].ok ()
-
-proc handlePasteBefore*(
-    ctx: CommandContext, count: int = 1, cursorAfter: bool = false
-): Result[(), string] =
-  ## Paste before cursor (P). `cursorAfter` is gP. Uses register or clipboard fallback.
-
-  logDebug("paste", "handlePasteBefore called with count=" & $count)
-  if ctx.register.isSome and ctx.register.get.isBlackHoleRegisterName:
-    # The black hole register reads as nothing, and nothing is put.
-    return ok(())
-  let actualCount = max(1, count)
-  let (pasteText, isFullLine) = ?ctx.pasteSource()
-
-  # Begin transaction if count > 1 to group all pastes into single undo entry
-  if actualCount > 1:
-    let txnResult = ctx.buffer.beginTransaction("paste " & $actualCount & " times")
-    if txnResult.isErr:
-      return err(txnResult.error)
-
-  # Saved before the fold snap below: a failed paste must restore the cursor.
-  let savedCursor = ctx.cursor
-
-  # A closed fold is a unit: a linewise paste lands above its first line, not
-  # above whichever of its lines the cursor sits on.
-  if isFullLine:
-    let fold = ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line)
-    if fold.isSome:
-      ctx.cursor.line = fold.get.startLine
-  try:
-    # Paste count times
-    var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
-    var lastPastedEndLine = -1
-    for i in 1 .. actualCount:
-      if isFullLine:
-        # Paste on new line above current line (Vim 'P' behavior for linewise yank)
-        let pastePos = BufferPosition(line: ctx.cursor.line, column: 0)
-
-        # The lines go before the current one, each ending in a line break.
-        let textToInsert = pasteText
-        let insertResult =
-          ctx.buffer.insertText(pastePos, textToInsert, openLine = olAbove)
-        if insertResult.isErr:
-          # Rollback transaction on error
-          if actualCount > 1:
-            return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
-          ctx.cursor = savedCursor
-          return err(insertResult.error)
-
-        # Track last pasted line across count repeats.
-        let n = textToInsert.count('\n')
-        if lastPastedEndLine >= ctx.cursor.line:
-          lastPastedEndLine += n
-        lastPastedEndLine = max(lastPastedEndLine, ctx.cursor.line + n - 1)
-        # Move cursor to the first non-whitespace character of pasted line
-        ctx.cursor.column = firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line))
-      else:
-        # Paste at cursor position (Vim 'P' behavior for characterwise yank)
-        let pastePos = ctx.cursor
-
-        if firstPastedChar.isNone:
-          firstPastedChar = some(pastePos)
-
-        let insertResult = ctx.buffer.insertText(pastePos, pasteText)
-        if insertResult.isErr:
-          # Rollback transaction on error
-          if actualCount > 1:
-            return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
-          ctx.cursor = savedCursor
-          return err(insertResult.error)
-
-        # Move the cursor to the end of the inserted text so the next
-        # iteration inserts after it. For multi-line paste, land on the final
-        # line at its column: '\n' must not count as a column-adding rune.
-        let endPos = pasteEndPos(pastePos, pasteText)
-        ctx.cursor.line = endPos.line
-        ctx.cursor.column = endPos.column
-
-    finishPasteCursor(ctx, isFullLine, cursorAfter, firstPastedChar, lastPastedEndLine)
-
-    # Commit transaction if we started one
-    if actualCount > 1:
-      let txnResult = ctx.buffer.commitTransaction()
-      if txnResult.isErr:
-        return err(txnResult.error)
-  except Exception as exc:
-    if exc of Defect:
-      # Defects stay fatal (codebase policy): roll back first, then re-raise.
-      discard rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
-      raise
-    return rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
-
-  # Record this command for repeat (.)
-  ctx.recordChange(
-    LastEditCommand(
-      kind: lecPaste,
-      pasteCount: actualCount,
-      pasteBefore: true,
-      pasteCursorAfter: cursorAfter,
-    )
-  )
-
-  return Result[(), string].ok ()
+  ok(())
 
 proc isOnCollapsedFold(ctx: CommandContext): bool =
   ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line).isSome
@@ -953,8 +756,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Paste After",
     "Paste clipboard content after cursor (p command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handlePasteAfter(ctx, count),
+      handlePut(ctx, parseCount(args, default = 1), forward = true),
     0,
     1, # Accept optional count argument
   )
@@ -964,8 +766,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Paste Before",
     "Paste clipboard content before cursor (P command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handlePasteBefore(ctx, count),
+      handlePut(ctx, parseCount(args, default = 1), forward = false),
     0,
     1, # Accept optional count argument
   )
@@ -975,8 +776,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Paste After End",
     "Paste clipboard content after cursor and leave cursor after pasted text (gp)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handlePasteAfter(ctx, count, cursorAfter = true),
+      handlePut(ctx, parseCount(args, default = 1), forward = true, cursorEnd = true),
     0,
     1, # Accept optional count argument
   )
@@ -986,8 +786,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Paste Before End",
     "Paste clipboard content before cursor and leave cursor after pasted text (gP)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handlePasteBefore(ctx, count, cursorAfter = true),
+      handlePut(ctx, parseCount(args, default = 1), forward = false, cursorEnd = true),
     0,
     1, # Accept optional count argument
   )
@@ -1233,11 +1032,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
           # X command - delete backward
           return handleDeleteCharBefore(ctx, lastCmd.deleteCount)
       of lecPaste:
-        # Repeat paste operation (p, P, gp, or gP)
-        if lastCmd.pasteBefore:
-          return handlePasteBefore(ctx, lastCmd.pasteCount, lastCmd.pasteCursorAfter)
-        else:
-          return handlePasteAfter(ctx, lastCmd.pasteCount, lastCmd.pasteCursorAfter)
+        return handlePut(
+          ctx, lastCmd.pasteCount, not lastCmd.pasteBefore, lastCmd.pasteCursorAfter
+        )
       of lecToggleCase:
         # Repeat toggle case (~)
         return handleToggleCase(ctx, lastCmd.toggleCaseCount)

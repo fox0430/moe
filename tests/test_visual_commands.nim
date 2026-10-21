@@ -1401,9 +1401,10 @@ suite "Visual Commands - visualPaste":
 
     discard visualPaste(buf, state, cursorAfter = true)
 
-    # Rectangle ("hel"/"foo") is deleted; register text is inserted at the top-left.
+    # Rectangle ("hel"/"foo") is deleted; text within a line goes into each of
+    # its lines, as Vim's do_put.
     check buf.getLine(0) == "XYZlo world"
-    check buf.getLine(1) == " bar"
+    check buf.getLine(1) == "XYZ bar"
     check state.cursor.line == 0
     check state.cursor.column == 3
     check state.mode == EditorMode.Normal
