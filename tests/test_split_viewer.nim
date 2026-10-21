@@ -1391,7 +1391,7 @@ suite "Tab commands from the FileTree sidebar":
         check e.activeWindow == tree
         e.checkUntouched(tree, width)
 
-  test ":w and :w <name> are refused: the listing is not a file":
+  test ":w <name> writes a copy and :w is refused: the listing is not a file":
     const name = "moe_sidebar_tab_write"
     let (e, _, _) = twoFiles(name)
     let dst = getTempDir() / (name & "_dst.txt")
@@ -1402,9 +1402,13 @@ suite "Tab commands from the FileTree sidebar":
     let tree = e.openFileTree()
     let width = tree.viewport.width
 
-    # Regression: `:w <name>` wrote the listing's text to the file.
+    # As Vim's 'buftype' nofile: the listing's text, under no name of its own.
     check e.executeCommandOverlay(":w " & dst) != roQuit
-    check not fileExists(dst)
+    check fileExists(dst)
+    check e.state.statusMessage.contains("Saved a copy")
+
+    check e.executeCommandOverlay(":saveas " & dst & "_as") != roQuit
+    check not fileExists(dst & "_as")
     check e.state.statusMessage.contains("Cannot write a listing")
 
     check e.executeCommandOverlay(":w") != roQuit

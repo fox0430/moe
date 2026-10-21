@@ -717,7 +717,13 @@ suite "editor_lsp - save-as":
       buf, "nim", @[lspTypes.Diagnostic(`range`: lspTypes.newRange(0, 0, 0, 1))]
     )
 
+    # A copy leaves the buffer, and its document, on the old path.
     check e.saveFile(buf, some(target)).isOk
+    check buf.diagnostics[dsrcLsp].items.len == 1
+    check e.lsp.openedPaths[buf.id] == key
+
+    removeFile(target)
+    check e.saveFile(buf, some(target), saveAs = true).isOk
 
     check buf.diagnostics[dsrcLsp].items.len == 0
     check e.lsp.openedPaths[buf.id] == canonicalPath(target)

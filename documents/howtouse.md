@@ -781,6 +781,9 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `e` | Reload current file (error if unsaved changes) |
 | `e!` | Force reload current file (discard unsaved changes) |
 | `e! filename` | Open file (discard unsaved changes) |
+| `saveas filename` | Write to filename and edit it |
+| `saveas! filename` | Write to filename even if it exists, and edit it |
+| `w filename` | Write a copy to filename; a buffer without a name takes it |
 | `ene` | Create a new empty buffer |
 | `new` | Create a new empty buffer in a horizontally split window |
 | `vnew` | Create a new empty buffer in a vertically split window |

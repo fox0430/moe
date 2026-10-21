@@ -226,6 +226,7 @@ type
     of hrSave:
       saveFilename*: Option[string]
       forceSave*: bool
+      saveAs*: bool ## `:saveas`: the buffer takes the name of the file written.
     of hrSaveAll:
       forceSaveAll*: bool
     of hrSaveAndQuit:

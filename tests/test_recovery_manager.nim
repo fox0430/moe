@@ -1506,7 +1506,13 @@ suite "recovery manager - settling a restored copy":
 
     let e = createNoticeEditor()
     e.restoreInto(file)
+    # A copy is no save of the buffer.
     check e.saveFile(e.activeBuffer, some(other)).isOk
+    check e.activeBuffer.isModified
+    check not newRecoveryStore(TestRecoveryDir).sessions()[0].files[0].reviewed
+    removeFile(other)
+
+    check e.saveFile(e.activeBuffer, some(other), saveAs = true).isOk
     check readFile(file) == "disk"
     check not newRecoveryStore(TestRecoveryDir).sessions()[0].files[0].reviewed
 

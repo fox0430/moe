@@ -1317,6 +1317,7 @@ Available command names:
 | quit | Quit |
 | quitall | Quit all |
 | save | Save |
+| saveas | Write to filename and edit it |
 | saveall | Save all |
 | saveandquit | Save and quit |
 | saveallandquit | Save all and quit |

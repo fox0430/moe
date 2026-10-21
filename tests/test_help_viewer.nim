@@ -449,13 +449,20 @@ suite "HelpViewer - Command mode rendering (snapshot)":
       "bg                 - Pause the editor and show the recent terminal output"
     )
 
-  test "head group 2 (:e family) is aligned to width 11":
+  test "head group 2 (:e family) is aligned to width 16":
     let state = newHelpViewerState()
-    check state.items.contains("e filename  - Open file")
+    check state.items.contains("e filename       - Open file")
     check state.items.contains(
-      "e           - Reload current file (error if unsaved changes)"
+      "e                - Reload current file (error if unsaved changes)"
     )
-    check state.items.contains("e! filename - Open file (discard unsaved changes)")
+    check state.items.contains("e! filename      - Open file (discard unsaved changes)")
+    check state.items.contains("saveas filename  - Write to filename and edit it")
+    check state.items.contains(
+      "saveas! filename - Write to filename even if it exists, and edit it"
+    )
+    check state.items.contains(
+      "w filename       - Write a copy to filename; a buffer without a name takes it"
+    )
 
   test "head group 3 (:delete family) is aligned to width 21":
     let state = newHelpViewerState()

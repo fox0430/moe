@@ -81,7 +81,7 @@ const
 
   TargetExistsErrorMsg* = "File exists (add ! to override)."
 
-  HeldByAnotherBufferMsg* = "File is loaded in another buffer. Use :w! to force save."
+  HeldByAnotherBufferMsg* = "File is loaded in another buffer"
 
   TranscodedEncodings = {
     CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
@@ -743,6 +743,16 @@ proc putBufferOnFile(
     logDebug("buffer", "File written successfully: " & path)
 
     return Result[string, string].ok content
+
+proc writeCopy*(
+    buffer: TextBuffer, path: string, checkExternalMod: bool = false
+): Result[(), string] =
+  ## Write the buffer to `path` as a copy (Vim's `:w {file}`): the buffer keeps
+  ## its name, baseline and unsaved state.
+  let written = buffer.putBufferOnFile(path, checkExternalMod)
+  if written.isErr:
+    return Result[(), string].err written.error
+  return Result[(), string].ok ()
 
 proc saveFile*(
     buffer: TextBuffer, path: string, checkExternalMod: bool = false

@@ -935,8 +935,8 @@ proc renderCommandModeHead*(): string {.compileTime.} =
       CommandLineSpecialHelp.lineNumber, CommandLineSpecialHelp.lineAddress,
       CommandLineSpecialHelp.shellCommand, CommandLineSpecialHelp.filter,
     ] & helpEntriesFor("bg") & helpEntriesFor("man"),
-    helpEntriesFor("e") & helpEntriesFor("ene") & helpEntriesFor("new") &
-      helpEntriesFor("vnew"),
+    helpEntriesFor("e") & helpEntriesFor("saveas") & helpEntriesFor("ene") &
+      helpEntriesFor("new") & helpEntriesFor("vnew"),
     helpEntriesFor("undo") & helpEntriesFor("redo"),
     @[CommandLineSpecialHelp.substitute] & helpEntriesFor("delete") &
       @[CommandLineSpecialHelp.deleteAll, CommandLineSpecialHelp.deleteRange],

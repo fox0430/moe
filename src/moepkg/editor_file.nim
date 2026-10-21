@@ -25,6 +25,7 @@ import pkg/results
 
 import
   types/editor_types,
+  editor_buffers,
   logger,
   git_cache,
   git_conflict,
@@ -346,6 +347,17 @@ proc revertTrimIfNeeded(
   buffer.changeListIndex = changeListIndexBefore
   ok(())
 
+proc queueWriteHooks(e: Editor, buffer: TextBuffer, writtenPath: string) =
+  ## Queue `BufWritePost` hooks for `buffer` written to `writtenPath`.
+  # Match by the written file: after `:w <other-ext>`, `buffer.language` still
+  # names the old one.
+  let language =
+    if buffer.allowsTextTransforms:
+      detectLanguage(writtenPath)
+    else:
+      buffer.language
+  e.queueHooks(heBufWritePost, writtenPath, language)
+
 proc noteBufferSaved*(
     e: Editor, buffer: TextBuffer, savedPath: string, automatic = false
 ) =
@@ -353,14 +365,7 @@ proc noteBufferSaved*(
   ## restored copies after `buffer` was written to `savedPath`.
   ## `automatic` (timer write) fires hooks only when `onAutoSave` is set.
   if not automatic or e.config.hooks.onAutoSave:
-    # Match by the saved file: after `:w <other-ext>`, `buffer.language` still
-    # names the old one.
-    let language =
-      if buffer.allowsTextTransforms:
-        detectLanguage(savedPath)
-      else:
-        buffer.language
-    e.queueHooks(heBufWritePost, savedPath, language)
+    e.queueWriteHooks(buffer, savedPath)
   e.noteSavedForRecovery(buffer)
   if e.showGitDiff:
     e.state.git.requestGitRefresh(buffer)
@@ -389,6 +394,16 @@ type
     refusal*: WriteRefusal
     premise*: WritePremise
 
+  WriteKind* = enum
+    ## What a `:w` does to the buffer.
+    wkOwnFile ## Writes the buffer's own file and marks it saved.
+    wkTakesName ## Takes the name of the file written, then is saved as wkOwnFile.
+    wkCopy ## Writes a copy; the buffer keeps its name and unsaved state.
+
+  WriteOutcome* = object
+    kind*: WriteKind
+    path*: string ## The file written.
+
 proc writeDecisionInSession*(
     e: Editor,
     buffer: TextBuffer,
@@ -397,9 +412,17 @@ proc writeDecisionInSession*(
     choice = chosenByUser,
 ): WriteDecision =
   ## Session-aware write gate. `:wa`/auto save refuse a file two edited buffers
-  ## hold; `:w` writes this buffer; save-as refuses any holder. `!` overrides.
-  ## Own vs save-as is the file, not the spelling.
-  if force or buffer.isNil:
+  ## hold; `:w` writes this buffer. Writing another file refuses any buffer
+  ## holding it even with `!`, as Vim's E139 does; `!` overrides the rest.
+  ## Own vs other is the file, not the spelling.
+  if buffer.isNil:
+    return WriteDecision(refusal: writeAllowed, premise: wpForce)
+
+  let isOther = not buffer.bufferHoldsFile(savePath)
+  if isOther and bufferHoldingPath(e.buffers, savePath, excluding = buffer).isSome:
+    return WriteDecision(refusal: writeRefusedHeldByAnotherBuffer, premise: wpForce)
+
+  if force:
     return WriteDecision(refusal: writeAllowed, premise: wpForce)
 
   let gate = writeGate(buffer, savePath, force)
@@ -407,15 +430,9 @@ proc writeDecisionInSession*(
   if gate.refusal != writeAllowed:
     return WriteDecision(refusal: gate.refusal, premise: premise)
 
-  let isSaveAs = not buffer.bufferHoldsFile(savePath)
-  if choice == chosenByEditor or isSaveAs:
-    let holder =
-      if isSaveAs:
-        bufferHoldingPath(e.buffers, savePath, excluding = buffer)
-      else:
-        editedBufferHoldingPath(e.buffers, savePath, excluding = buffer)
-    if holder.isSome:
-      return WriteDecision(refusal: writeRefusedHeldByAnotherBuffer, premise: premise)
+  if choice == chosenByEditor and not isOther and
+      editedBufferHoldingPath(e.buffers, savePath, excluding = buffer).isSome:
+    return WriteDecision(refusal: writeRefusedHeldByAnotherBuffer, premise: premise)
 
   WriteDecision(refusal: writeAllowed, premise: premise)
 
@@ -429,23 +446,46 @@ proc writeRefusalInSession*(
   ## `writeDecisionInSession` without the premise; for callers that only refuse.
   e.writeDecisionInSession(buffer, savePath, force, choice).refusal
 
+proc isListing*(e: Editor, buffer: TextBuffer): bool =
+  ## Text no file stands behind, like Vim's 'buftype' nofile or terminal: a
+  ## listing, a viewer's unregistered view, command output or a terminal.
+  buffer.isUtilityBuffer or e.bufferById(buffer.id).isNone or
+    buffer.id == e.state.commandOutputBufferId or e.isTerminalBuffer(buffer.id)
+
+proc writeKindFor(
+    buffer: TextBuffer, savePath: string, saveAs, listing: bool
+): WriteKind =
+  ## As Vim's `:w {file}`: only `:saveas` or a buffer without a name takes the
+  ## name; anything else gets a copy.
+  if listing:
+    wkCopy
+  elif buffer.bufferHoldsFile(savePath):
+    wkOwnFile
+  elif saveAs or buffer.filePath.isNone:
+    wkTakesName
+  else:
+    wkCopy
+
 proc saveFile*(
     e: Editor,
     buffer: TextBuffer,
     path: Option[string] = none(string),
     force: bool = false,
-): Result[(), string] =
-  ## Write `buffer` to file. If `path` is given, save there (`:w <name>`).
-  ## Without `force`, refuse when the target was modified externally or is
-  ## already held by another buffer. A listing is never written: its
-  ## `filePath` is the directory it lists, and `:w <name>` would make it that
-  ## file.
-  if buffer.isUtilityBuffer:
+    saveAs: bool = false,
+): Result[WriteOutcome, string] =
+  ## Write `buffer` to its file, or to `path` (`:w <name>`, `:saveas` with
+  ## `saveAs`); see `WriteKind` for what the write does to the buffer.
+  ## Without `force`, refuse when the target was modified externally or
+  ## already exists. Another buffer holding the target refuses even with
+  ## `force`. A listing only writes copies: its `filePath` is the directory it
+  ## lists.
+  let listing = e.isListing(buffer)
+  if listing and (path.isNone or saveAs):
     logError("editor", "Save refused: the buffer is a listing")
     return err("Cannot write a listing")
 
   # `:w ~/f` keeps the tilde, so expand it like the open commands do.
-  let savePath =
+  let requested =
     if path.isSome:
       expandTilde(path.get)
     elif buffer.filePath.isSome:
@@ -453,6 +493,12 @@ proc saveFile*(
     else:
       logError("editor", "Save failed: No file path specified")
       return err("No file path specified")
+  if dirExists(requested):
+    # Vim's E17/E502, with or without `!`; a listing's own path is one too.
+    return err("\"" & requested & "\" is a directory")
+  let kind = writeKindFor(buffer, requested, saveAs, listing)
+  # Another spelling of the buffer's own file keeps the buffer's name, as Vim.
+  let savePath = if kind == wkOwnFile: buffer.filePath.get else: requested
 
   # Check before trimming, and again just before writing.
   let refusal = e.writeRefusalInSession(buffer, savePath, force)
@@ -465,6 +511,19 @@ proc saveFile*(
     return err(insertBoundaryResult.error)
   defer:
     e.enforceModePolicy()
+
+  if kind == wkCopy:
+    # The buffer is not saved, so leave its text and its file's state alone.
+    let copyResult = buffer.writeCopy(savePath, checkExternalMod = not force)
+    if copyResult.isErr:
+      logError("editor", "Failed to write copy " & savePath & ": " & copyResult.error)
+      return err(copyResult.error)
+    logInfo("editor", "Wrote a copy: " & savePath)
+    # A listing fires no hooks, as `queueHooks` for a buffer skips it: it is a
+    # utility buffer or has no path.
+    if not listing:
+      e.queueWriteHooks(buffer, savePath)
+    return ok(WriteOutcome(kind: kind, path: savePath))
 
   # Trim trailing whitespace if EditorConfig says so; reverted on save failure.
   let didTrimRes = trimTrailingWhitespaceTracked(buffer)
@@ -497,7 +556,7 @@ proc saveFile*(
 
   e.noteBufferSaved(buffer, savePath)
 
-  ok(())
+  ok(WriteOutcome(kind: kind, path: savePath))
 
 proc batchFileKey(path: string): string =
   ## Batch key for `path`: entity when resolvable, else spelling.
