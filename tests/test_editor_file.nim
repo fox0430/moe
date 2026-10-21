@@ -1428,10 +1428,9 @@ suite "Editor - invalid bytes roundtrip":
         check e.activeBuffer.getLine(0) == raw.splitLines()[0]
         check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == raw
-        # Overwrite via saveFile() to the buffer's own path (now dst, since
-        # the save-as above re-pointed filePath) must also be exact.
+        # The copy above leaves the buffer on `src`; writing it back is exact too.
         check e.saveFile(e.activeBuffer()).isOk
-        check readFile(dst) == raw
+        check readFile(src) == raw
         removeFile(src)
         if fileExists(dst):
           removeFile(dst)
@@ -1775,7 +1774,7 @@ suite "Editor - saveFile explicit buffer":
     e.state.git.diffEntries.del(fgBuf.id)
     e.state.git.diffEntries.del(bgBuf.id)
 
-    check e.saveFile(bgBuf, some(target)).isOk
+    check e.saveFile(bgBuf, some(target), saveAs = true).isOk
     check readFile(target) == "B:bg-original\n"
     check bgBuf.filePath.get == target
     # Neither the active buffer nor its file is affected.
@@ -1807,7 +1806,7 @@ suite "Editor - save-as onto a path another buffer holds":
     check e.activeBuffer.filePath.get == srcFile
     check readFile(heldFile) == "held\n"
 
-  test "Allowed with force":
+  test "Refused even with force, as Vim's E139":
     let e = createTestEditor()
     let srcFile = getTempDir() / "moe_test_saveas_force_src.txt"
     let heldFile = getTempDir() / "moe_test_saveas_force_held.txt"
@@ -1821,9 +1820,12 @@ suite "Editor - save-as onto a path another buffer holds":
     let heldBuf = newTextBuffer("held\n", some(heldFile))
     e.addBuffer(heldBuf)
 
-    check e.saveFile(e.activeBuffer(), some(heldFile), force = true).isOk
-    check readFile(heldFile) == "src\n"
-    check e.activeBuffer.filePath.get == heldFile
+    for saveAs in [false, true]:
+      let res =
+        e.saveFile(e.activeBuffer(), some(heldFile), force = true, saveAs = saveAs)
+      check res.isErr and res.error == HeldByAnotherBufferMsg
+      check readFile(heldFile) == "held\n"
+      check e.activeBuffer.filePath.get == srcFile
 
   test "A plain save to the buffer's own path is unaffected":
     # Guard is save-as, not a duplicate already on the path.
@@ -1860,6 +1862,9 @@ suite "Editor - save through a file alias":
       check e.saveFile(e.activeBuffer(), some(real)).isOk
       check readFile(real) == "A:original\n"
       check readFile(link) == "A:original\n"
+      # Written through the link the buffer is named by, not renamed to `real`.
+      check e.activeBuffer.filePath.get == link
+      check symlinkExists(link)
     else:
       skip()
 
@@ -2434,3 +2439,278 @@ suite "Editor - save all and quit":
 
     e.processSaveAllResult(HandlerResult(kind: hrSaveAll, forceSaveAll: true))
     check "left unsaved" in e.state.statusMessage
+
+suite "Editor - :w {file} writes a copy, as Vim":
+  # Measured in Vim 9.2: only a buffer without a name, or `:saveas`, takes the
+  # name of the file written; anything else gets a copy.
+  let src = getTempDir() / "moe_test_wcopy_src.txt"
+  let dst = getTempDir() / "moe_test_wcopy_dst.txt"
+
+  setup:
+    writeFile(src, "orig\n")
+    removeFile(dst)
+
+  teardown:
+    removeFile(src)
+    removeFile(dst)
+
+  test "A named buffer keeps its name and unsaved changes":
+    let e = createTestEditor()
+    e.showGitDiff = true
+    check e.loadFile(src).isOk
+    let buf = e.activeBuffer
+    check buf.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    e.state.git.diffEntries.del(buf.id)
+
+    let res = e.saveFile(buf, some(dst))
+    require res.isOk
+    check res.get.kind == wkCopy
+    check res.get.path == dst
+    check readFile(dst) == "A:orig\n"
+    check readFile(src) == "orig\n"
+    check buf.filePath.get == src
+    check buf.isModified
+    # Nothing that follows a save of the buffer runs.
+    check not e.state.git.diffEntries.hasKey(buf.id)
+
+    # `:w` still writes the buffer's own file.
+    let own = e.saveFile(buf)
+    require own.isOk
+    check own.get.kind == wkOwnFile
+    check readFile(src) == "A:orig\n"
+    check not buf.isModified
+
+  test "An unmodified buffer stays unmodified":
+    let e = createTestEditor()
+    check e.loadFile(src).isOk
+    let buf = e.activeBuffer
+
+    check e.saveFile(buf, some(dst)).isOk
+    check readFile(dst) == "orig\n"
+    check buf.filePath.get == src
+    check not buf.isModified
+
+  test "An existing file needs force":
+    let e = createTestEditor()
+    check e.loadFile(src).isOk
+    let buf = e.activeBuffer
+    check buf.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    writeFile(dst, "other\n")
+
+    let res = e.saveFile(buf, some(dst))
+    check res.isErr and res.error == TargetExistsErrorMsg
+    check readFile(dst) == "other\n"
+
+    check e.saveFile(buf, some(dst), force = true).isOk
+    check readFile(dst) == "A:orig\n"
+    check buf.filePath.get == src
+    check buf.isModified
+
+  test "A copy leaves trailing whitespace in the buffer":
+    # The trim belongs to saving the buffer's own file.
+    let e = createTestEditor()
+    writeFile(src, "hello   \n")
+    check e.loadFile(src).isOk
+    let buf = e.activeBuffer
+    buf.editorConfig = some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
+    check buf.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+
+    check e.saveFile(buf, some(dst)).isOk
+    check readFile(dst) == "xhello   \n"
+    check buf.getLine(0) == "xhello   "
+
+  test "A buffer without a name takes the name":
+    let e = createTestEditor()
+    let buf = e.activeBuffer
+    check buf.filePath.isNone
+    check buf.insertText(BufferPosition(line: 0, column: 0), "new").isOk
+
+    let res = e.saveFile(buf, some(dst))
+    require res.isOk
+    check res.get.kind == wkTakesName
+    check readFile(dst) == "new\n"
+    check buf.filePath.get == dst
+    check not buf.isModified
+
+  test "saveAs names a named buffer and leaves its old file":
+    let e = createTestEditor()
+    check e.loadFile(src).isOk
+    let buf = e.activeBuffer
+    check buf.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+
+    let res = e.saveFile(buf, some(dst), saveAs = true)
+    require res.isOk
+    check res.get.kind == wkTakesName
+    check readFile(dst) == "A:orig\n"
+    check readFile(src) == "orig\n"
+    check buf.filePath.get == dst
+    check not buf.isModified
+
+  test "saveAs onto an existing file needs force":
+    let e = createTestEditor()
+    check e.loadFile(src).isOk
+    let buf = e.activeBuffer
+    writeFile(dst, "other\n")
+
+    let res = e.saveFile(buf, some(dst), saveAs = true)
+    check res.isErr and res.error == TargetExistsErrorMsg
+    check buf.filePath.get == src
+    check readFile(dst) == "other\n"
+
+    check e.saveFile(buf, some(dst), force = true, saveAs = true).isOk
+    check buf.filePath.get == dst
+    check readFile(dst) == "orig\n"
+
+  test ":wq quits after writing the buffer's own file mid-transaction":
+    # `isModified` stays true while an open transaction holds changes.
+    let e = createTestEditor()
+    check e.loadFile(src).isOk
+    let buf = e.activeBuffer
+    check buf.beginTransaction("insert").isOk
+    defer:
+      if buf.inTransaction:
+        discard buf.commitTransaction()
+    check buf.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+
+    let r = HandlerResult(
+      kind: hrSaveAndQuit, saveAndQuitFilename: none(string), forceQuitAfterSave: false
+    )
+    check not e.processSaveAndQuitResult(r)
+    check readFile(src) == "A:orig\n"
+
+  test "Another spelling of the buffer's own file keeps the buffer's name":
+    # Vim: `:w ./a.txt` is no other file.
+    let e = createTestEditor()
+    check e.loadFile(src).isOk
+    let buf = e.activeBuffer
+    check buf.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    let alias = src.parentDir & $DirSep & "." & $DirSep & src.extractFilename
+
+    let res = e.saveFile(buf, some(alias))
+    require res.isOk
+    check res.get.kind == wkOwnFile
+    check res.get.path == src
+    check buf.filePath.get == src
+    check readFile(src) == "A:orig\n"
+    check not buf.isModified
+
+  test "saveAs to the buffer's own file is a plain save":
+    let e = createTestEditor()
+    check e.loadFile(src).isOk
+    let buf = e.activeBuffer
+    check buf.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+
+    let res = e.saveFile(buf, some(src), saveAs = true)
+    require res.isOk
+    check res.get.kind == wkOwnFile
+    check readFile(src) == "A:orig\n"
+    check not buf.isModified
+
+suite "Editor - :w on text no file stands behind":
+  # Vim's 'buftype' nofile: `:w {file}` writes a copy, `:w` refuses (E382).
+  let dst = getTempDir() / "moe_test_wlisting_dst.txt"
+
+  setup:
+    removeFile(dst)
+
+  teardown:
+    removeFile(dst)
+
+  test "A viewer's unregistered view":
+    let e = createTestEditor()
+    let view = newTextBuffer("listing\n")
+    check e.isListing(view)
+
+    let plain = e.saveFile(view)
+    check plain.isErr and plain.error == "Cannot write a listing"
+
+    let res = e.saveFile(view, some(dst))
+    require res.isOk
+    check res.get.kind == wkCopy
+    check readFile(dst) == "listing\n"
+    check view.filePath.isNone
+
+    removeFile(dst)
+    check e.saveFile(view, some(dst), saveAs = true).isErr
+    check not fileExists(dst)
+    check view.filePath.isNone
+
+  test "A utility buffer, whose path is the directory it lists":
+    let e = createTestEditor()
+    let filerLike = newTextBuffer("a.txt\n")
+    filerLike.filePath = some(getTempDir())
+    filerLike.isUtilityBuffer = true
+    e.addBuffer(filerLike)
+    check e.isListing(filerLike)
+
+    check e.saveFile(filerLike).isErr
+    check e.saveFile(filerLike, some(dst)).isOk
+    check readFile(dst) == "a.txt\n"
+    check filerLike.filePath.get == getTempDir()
+
+  test "Command output":
+    let e = createTestEditor()
+    check e.showCommandOutput(@["out"], keepFocus = false)
+    let output = e.bufferById(e.state.commandOutputBufferId).get
+    check e.isListing(output)
+
+    check e.saveFile(output).isErr
+    check e.saveFile(output, some(dst)).isOk
+    check readFile(dst) == "out\n"
+    check output.filePath.isNone
+
+  test "A terminal":
+    when defined(moe.embedded):
+      skip()
+    else:
+      let e = createTestEditor()
+      let term = newTextBuffer("")
+      e.addBuffer(term)
+      e.terminalStates[term.id] = TerminalState()
+      defer:
+        e.terminalStates.del(term.id)
+      check e.isListing(term)
+
+      let res = e.saveFile(term, some(dst))
+      require res.isOk
+      check res.get.kind == wkCopy
+      check term.filePath.isNone
+
+  test "Config takes no file name: its view is empty":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Config
+    for saveAs in [false, true]:
+      e.processSaveResult(
+        HandlerResult(
+          kind: hrSave, saveFilename: some(dst), forceSave: false, saveAs: saveAs
+        ),
+        e.activeBuffer,
+      )
+      check "takes no file name" in e.state.statusMessage
+      check not fileExists(dst)
+
+    # `:wq {file}` stays too, rather than writing an empty copy and quitting.
+    e.state.statusMessage = ""
+    check e.processSaveAndQuitResult(
+      HandlerResult(
+        kind: hrSaveAndQuit, saveAndQuitFilename: some(dst), forceQuitAfterSave: true
+      )
+    )
+    check "takes no file name" in e.state.statusMessage
+    check not fileExists(dst)
+
+  test "A directory is refused, the listing's own one too":
+    let e = createTestEditor()
+    let filerLike = newTextBuffer("a.txt\n")
+    filerLike.filePath = some(getTempDir())
+    filerLike.isUtilityBuffer = true
+    e.addBuffer(filerLike)
+    for force in [false, true]:
+      let fromListing = e.saveFile(filerLike, some(getTempDir()), force = force)
+      check fromListing.isErr and "is a directory" in fromListing.error
+      let fromFile = e.saveFile(e.activeBuffer, some(getTempDir()), force = force)
+      check fromFile.isErr and "is a directory" in fromFile.error
+
+  test "A file buffer is not one":
+    let e = createTestEditor()
+    check not e.isListing(e.activeBuffer)

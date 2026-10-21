@@ -473,6 +473,7 @@ suite "CommandLine - execute":
     parser.addAlias("noh", claClearSearchHighlight)
     parser.addAlias("man", claMan)
     parser.addAlias("theme", claTheme)
+    parser.addAlias("saveas", claSaveAs)
 
   test "Execute :q":
     let result = parser.parseAndExecute(":q")
@@ -500,6 +501,22 @@ suite "CommandLine - execute":
     check result.kind == claSave
     check result.filename.isSome
     check result.filename.get() == "myfile.txt"
+
+  test "Execute :saveas! filename":
+    let result = parser.parseAndExecute(":saveas! myfile.txt")
+    check result.kind == claSaveAs
+    check result.filename.get() == "myfile.txt"
+    check result.forceSave
+
+  test "A file name command takes one name, as Vim's E172":
+    # The words after the first would be dropped.
+    for input in [
+      ":w my notes.txt", ":saveas a b", ":wq a b", ":x a b", ":e a b", ":vs a b",
+      ":sp a b",
+    ]:
+      let result = parser.parseAndExecute(input)
+      check result.kind == claUnknown
+      check result.errorMessage == "Only one file name allowed"
 
   test "Execute :wq":
     let result = parser.parseAndExecute(":wq")

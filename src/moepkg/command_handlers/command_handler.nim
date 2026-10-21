@@ -112,6 +112,14 @@ proc executeSave*(
   ## Execute save command (:w, :w!)
   HandlerResult(kind: hrSave, saveFilename: filename, forceSave: force)
 
+proc executeSaveAs*(
+    handler: CommandModeHandler, filename: Option[string], force: bool
+): HandlerResult =
+  ## Execute :saveas, :saveas!
+  if filename.isNone:
+    return HandlerResult(kind: hrError, errorMessage: "Argument required")
+  HandlerResult(kind: hrSave, saveFilename: filename, forceSave: force, saveAs: true)
+
 proc executeSaveAll*(handler: CommandModeHandler, force: bool): HandlerResult =
   ## Execute save all command (:wa, :wa!)
   HandlerResult(kind: hrSaveAll, forceSaveAll: force)
@@ -578,6 +586,8 @@ proc handleCommandModeInput*(
     handler.executeQuitAll(buffer, cmdResult.forceQuitAll, otherModifiedCount)
   of claSave:
     handler.executeSave(buffer, cmdResult.filename, cmdResult.forceSave)
+  of claSaveAs:
+    handler.executeSaveAs(cmdResult.filename, cmdResult.forceSave)
   of claSaveAll:
     handler.executeSaveAll(cmdResult.forceSaveAll)
   of claSaveAndQuit:

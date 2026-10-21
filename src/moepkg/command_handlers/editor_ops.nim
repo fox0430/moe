@@ -113,8 +113,15 @@ proc closeLastWindowError*(e: Editor, visible: TextBuffer): string =
   "No write since last change: " & $others & " other buffer" &
     (if others > 1: "s" else: "") & " modified" & hint
 
+const ConfigTakesNoFileName =
+  "Error: Config saves its settings to the config file and takes no file name"
+  ## Config's view is empty, so a copy of it would be too.
+
 proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
   ## Save and quit: return false on success, true on failure.
+  if e.state.mode == EditorMode.Config and r.saveAndQuitFilename.isSome:
+    e.state.statusMessage = ConfigTakesNoFileName
+    return true
   if not r.forceQuitAfterSave:
     # :wq/:x end the session, not just the window, so the other buffers go too.
     let discardErr = e.quitDiscardsBuffersError(e.activeBuffer())
@@ -127,9 +134,15 @@ proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
     logError("handler", "Save and quit failed: " & saveResult.error)
     e.state.statusMessage = "Error: " & saveResult.error
     return true
-  else:
-    logInfo("handler", "File saved, quitting editor")
-    return false
+  if not r.forceQuitAfterSave and saveResult.get.kind == wkCopy and
+      e.activeBuffer().isModified:
+    # `:wq {file}` wrote a copy; the buffer's own changes are still unsaved.
+    e.state.statusMessage =
+      "Saved a copy: " & saveResult.get.path &
+      "; No write since last change (add ! to override)"
+    return true
+  logInfo("handler", "File saved, quitting editor")
+  return false
 
 proc skippedSummary(skipped: seq[SkippedSave]): string =
   ## Batch skip reasons, counted per reason.
@@ -225,10 +238,12 @@ proc processSaveAllAndQuitResult*(e: Editor, r: HandlerResult): bool =
 proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
   ## Save the active buffer (or LogViewer/Config content) and run the
   ## buildOnSave / syntaxCheckOnSave side effects.
-  if e.state.mode == EditorMode.LogViewer:
+  if e.state.mode == EditorMode.LogViewer and r.saveFilename.isNone:
     let msg = e.trySaveLogViewerBuffer()
     if msg.len > 0:
       e.state.statusMessage = msg
+  elif e.state.mode == EditorMode.Config and r.saveFilename.isSome:
+    e.state.statusMessage = ConfigTakesNoFileName
   elif e.state.mode == EditorMode.Config:
     let configPath = getConfigPath()
     var backupOk = true
@@ -250,18 +265,28 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
         e.state.statusMessage = "Failed to save config: " & saveResult.error
         logError("config", "Failed to save config: " & saveResult.error)
   else:
-    let saveResult = e.saveFile(activeBuffer, r.saveFilename, r.forceSave)
+    let saveResult =
+      e.saveFile(activeBuffer, r.saveFilename, r.forceSave, saveAs = r.saveAs)
     if saveResult.isErr:
       logError("handler", "Save command failed: " & saveResult.error)
       e.state.statusMessage = "Error: " & saveResult.error
     else:
-      let savedPath =
-        if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: "file"
+      let
+        savedPath = saveResult.get.path
+        isCopy = saveResult.get.kind == wkCopy
       if e.config.notification.logNotifications and e.config.notification.saveLogNotify:
-        logInfo("handler", "File saved via command: " & savedPath)
+        logInfo(
+          "handler",
+          (if isCopy: "Copy written via command: " else: "File saved via command: ") &
+            savedPath,
+        )
       if e.config.notification.screenNotifications and
           e.config.notification.saveScreenNotify:
-        e.state.statusMessage = "Saved: " & savedPath
+        e.state.statusMessage =
+          (if isCopy: "Saved a copy: " else: "Saved: ") & savedPath
+      if isCopy:
+        # Not a save of the buffer, so nothing runs on save.
+        return
       if e.config.buildOnSave.enable:
         let customCmd =
           if e.config.buildOnSave.command.isSome:

@@ -25,17 +25,24 @@
 import std/[options, strutils]
 
 import types, substitute_parser
+import ../command_line_commands
 
 proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult =
   ## Execute a parsed command and return the result
-  case cmd.action
+  # A local, so a branch can construct with it as the discriminator.
+  let action = cmd.action
+  if action in FileNameActions and cmd.args.len > 1:
+    # Vim's E172; the rest of the name would be dropped.
+    return
+      CommandLineResult(kind: claUnknown, errorMessage: "Only one file name allowed")
+  case action
   of claQuit:
     return CommandLineResult(kind: claQuit, forceQuit: "force" in cmd.flags)
   of claQuitAll:
     return CommandLineResult(kind: claQuitAll, forceQuitAll: "force" in cmd.flags)
-  of claSave:
+  of claSave, claSaveAs:
     return CommandLineResult(
-      kind: claSave,
+      kind: action,
       filename:
         if cmd.args.len > 0:
           some(cmd.args[0])
@@ -45,19 +52,9 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     )
   of claSaveAll:
     return CommandLineResult(kind: claSaveAll, forceSaveAll: "force" in cmd.flags)
-  of claSaveAndQuit:
+  of claSaveAndQuit, claSaveIfModifiedAndQuit:
     return CommandLineResult(
-      kind: claSaveAndQuit,
-      saveFilename:
-        if cmd.args.len > 0:
-          some(cmd.args[0])
-        else:
-          none(string),
-      forceSaveAndQuit: "force" in cmd.flags,
-    )
-  of claSaveIfModifiedAndQuit:
-    return CommandLineResult(
-      kind: claSaveIfModifiedAndQuit,
+      kind: action,
       saveFilename:
         if cmd.args.len > 0:
           some(cmd.args[0])

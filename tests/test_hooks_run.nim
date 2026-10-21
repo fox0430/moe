@@ -1092,6 +1092,19 @@ suite "Hooks - one file at a time":
     check "sleep" notin editor.state.statusMessage
 
 suite "Hooks - what fires nothing":
+  test "A copy written from a listing fires nothing":
+    let dir = testDir("listingcopy")
+    defer:
+      removeDir(dir)
+    let editor = newEditor(newEditorConfig())
+    editor.config.hooks.entries =
+      @[HookEntry(event: heBufWritePost, command: "true", timeout: 5)]
+
+    let view = newTextBuffer("listing\n")
+    check editor.saveFile(view, some(dir / "out.txt")).isOk
+    check fileExists(dir / "out.txt")
+    check editor.hookJobs.len == 0
+
   test "A utility buffer fires nothing":
     # The filer and the file tree sidebar hold the directory they are listing
     # in `filePath`, and the filer is rebuilt as a new buffer on every

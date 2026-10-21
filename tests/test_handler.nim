@@ -2631,7 +2631,8 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
   test "Overlay exited and error shown after :wq on externally modified file":
     # Regression: :wq early-returned on save failure, skipping exitOverlay() and
     # leaving the editor stuck in command mode with the error message hidden.
-    let e = createTestEditorWithBuffer("hello")
+    # A registered buffer: an unregistered one is a viewer's listing.
+    let e = newEditor(newEditorConfig())
     let testFile = getTempDir() / "moe_test_wq_extmod.txt"
     writeFile(testFile, "Original content")
     defer:
@@ -2655,6 +2656,105 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
     check not e.state.isCommandOverlay # overlay exited
     check e.state.input.commandText == "" # command line cleared
     check "modified externally" in e.state.statusMessage
+
+suite "Command mode - :w {file}, :wq {file} and :saveas, as Vim":
+  # Measured in Vim 9.2 with a modified buffer on `src`.
+  let src = getTempDir() / "moe_test_cmd_wcopy_src.txt"
+  let dst = getTempDir() / "moe_test_cmd_wcopy_dst.txt"
+
+  setup:
+    writeFile(src, "orig\n")
+    removeFile(dst)
+
+  teardown:
+    removeFile(src)
+    removeFile(dst)
+
+  proc modifiedOnSrc(): Editor =
+    result = newEditor(newEditorConfig())
+    check result.loadFile(src).isOk
+    check result.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+
+  proc run(e: Editor, command: string): bool =
+    e.state.enterCommandOverlay()
+    e.state.input.commandText = command
+    e.state.input.commandCursor = command.len
+    handleCommandModeEvent(e, makeEnterEvent())
+
+  test ":w {file} writes a copy":
+    let e = modifiedOnSrc()
+    check e.run(":w " & dst)
+    check readFile(dst) == "A:orig\n"
+    check readFile(src) == "orig\n"
+    check e.activeBuffer.filePath.get == src
+    check e.activeBuffer.isModified
+    check e.state.statusMessage == "Saved a copy: " & dst
+
+  test ":wq {file} writes a copy and stays (E37)":
+    let e = modifiedOnSrc()
+    check e.run(":wq " & dst)
+    check readFile(dst) == "A:orig\n"
+    check e.activeBuffer.isModified
+    # The copy is reported too, or retrying would meet E13.
+    check e.state.statusMessage ==
+      "Saved a copy: " & dst & "; No write since last change (add ! to override)"
+
+  test ":wq! {file} writes a copy and quits":
+    let e = modifiedOnSrc()
+    check not e.run(":wq! " & dst)
+    check readFile(dst) == "A:orig\n"
+    check readFile(src) == "orig\n"
+
+  test ":x {file} on a modified buffer stays like :wq":
+    let e = modifiedOnSrc()
+    check e.run(":x " & dst)
+    check readFile(dst) == "A:orig\n"
+    check "No write since last change" in e.state.statusMessage
+
+  test ":x {file} on an unmodified buffer quits without writing":
+    let e = newEditor(newEditorConfig())
+    check e.loadFile(src).isOk
+    check not e.run(":x " & dst)
+    check not fileExists(dst)
+
+  test ":wq {file} on a buffer without a name names it and quits":
+    let e = newEditor(newEditorConfig())
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "new").isOk
+    check not e.run(":wq " & dst)
+    check readFile(dst) == "new\n"
+    check e.activeBuffer.filePath.get == dst
+
+  test ":saveas {file} names the buffer":
+    let e = modifiedOnSrc()
+    check e.run(":saveas " & dst)
+    check readFile(dst) == "A:orig\n"
+    check readFile(src) == "orig\n"
+    check e.activeBuffer.filePath.get == dst
+    check not e.activeBuffer.isModified
+
+  test ":saveas onto an existing file needs !":
+    let e = modifiedOnSrc()
+    writeFile(dst, "other\n")
+    check e.run(":saveas " & dst)
+    check readFile(dst) == "other\n"
+    check e.activeBuffer.filePath.get == src
+
+    check e.run(":saveas! " & dst)
+    check readFile(dst) == "A:orig\n"
+    check e.activeBuffer.filePath.get == dst
+
+  test ":w with two file names writes nothing (E172)":
+    let e = modifiedOnSrc()
+    check e.run(":w " & dst & " other")
+    check e.state.statusMessage == "Only one file name allowed"
+    check not fileExists(dst)
+
+  test ":saveas without a file name (E471)":
+    let e = modifiedOnSrc()
+    check e.run(":saveas")
+    check e.state.statusMessage == "Argument required"
+    check e.activeBuffer.filePath.get == src
+    check e.activeBuffer.isModified
 
 suite "handleCommandModeEvent - exitOverlay on self-managed branches":
   test "Overlay exited after :recent with no xbel file (empty list)":

@@ -32,6 +32,7 @@ type
     claQuit # :q
     claQuitAll # :qa (quit all)
     claSave # :w
+    claSaveAs # :saveas
     claSaveAll # :wa (write all)
     claSaveAndQuit # :wq
     claSaveIfModifiedAndQuit # :x, :xit
@@ -140,7 +141,7 @@ type
       forceQuit*: bool # true for :q!
     of claQuitAll:
       forceQuitAll*: bool # true for :qa!
-    of claSave:
+    of claSave, claSaveAs:
       filename*: Option[string]
       forceSave*: bool # true for :w!
     of claSaveAll:
@@ -281,6 +282,7 @@ const JumpActions* = {claDeleteLines}
 # time), because accepting a no-argument command in the completion popup runs it.
 const ArgumentRequiredActions* = {
   claEdit, # requires filename
+  claSaveAs, # requires filename
   claGoto, # requires line number
   claSet, # requires option name
   claSubstitute, # requires pattern

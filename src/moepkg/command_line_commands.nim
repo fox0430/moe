@@ -199,11 +199,32 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     takesFilePath: true,
   ),
   CommandLineCommandSpec(
+    name: "saveas",
+    completionDescription: "Write to filename and edit it",
+    # `:w filename` is listed here, by the other file commands: `:w`'s own entries
+    # go to the Exiting table, which renders its syntax as keys.
+    helpEntries: @[
+      HelpEntry(syntax: "saveas filename", description: "Write to filename and edit it"),
+      HelpEntry(
+        syntax: "saveas! filename",
+        description: "Write to filename even if it exists, and edit it",
+      ),
+      HelpEntry(
+        syntax: "w filename",
+        description: "Write a copy to filename; a buffer without a name takes it",
+      ),
+    ],
+    action: some(claSaveAs),
+    isCanonicalLong: true,
+    takesFilePath: true,
+  ),
+  CommandLineCommandSpec(
     name: "wq",
     completionDescription: "Write and quit",
     helpEntries: @[HelpEntry(syntax: ":wq", description: "Write and quit")],
     action: some(claSaveAndQuit),
     isCanonicalLong: false,
+    takesFilePath: true,
     keymapBaseDescription: "Save and quit",
   ),
   CommandLineCommandSpec(
@@ -229,6 +250,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
       @[HelpEntry(syntax: ":x or :xit", description: "Write if modified and quit")],
     action: some(claSaveIfModifiedAndQuit),
     isCanonicalLong: false,
+    takesFilePath: true,
     keymapBaseDescription: "Save if modified and quit",
   ),
   CommandLineCommandSpec(
@@ -1174,6 +1196,14 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     isCanonicalLong: true,
   ),
 ]
+
+const FileNameActions*: set[CommandLineAction] = block:
+  ## Actions that take one file name (Vim's E172 for more), from `takesFilePath`.
+  var actions: set[CommandLineAction]
+  for spec in CommandLineCommandTable:
+    if spec.takesFilePath and spec.action.isSome:
+      actions.incl spec.action.get
+  actions
 
 const CommandLineSpecialHelp*:
   tuple[

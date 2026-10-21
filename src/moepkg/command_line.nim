@@ -49,5 +49,7 @@ proc isQuitCommand*(cmdResult: CommandLineResult): bool =
 
 proc isSaveCommand*(cmdResult: CommandLineResult): bool =
   ## Check if the result belongs to the save-command family.
-  cmdResult.kind in
-    {claSave, claSaveAll, claSaveAndQuit, claSaveIfModifiedAndQuit, claSaveAllAndQuit}
+  cmdResult.kind in {
+    claSave, claSaveAs, claSaveAll, claSaveAndQuit, claSaveIfModifiedAndQuit,
+    claSaveAllAndQuit,
+  }
