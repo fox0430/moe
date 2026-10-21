@@ -24,7 +24,7 @@
 ## - Search mode event handling helpers
 
 import std/[unittest, options, tables, os, osproc, times, posix]
-from std/strutils import contains, continuesWith, repeat, strip
+from std/strutils import contains, continuesWith, join, repeat, strip
 
 import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
@@ -5870,6 +5870,80 @@ suite "processMiscResult - hrDeleteLines":
 
     check e.processMiscResult(r, e.activeBuffer())
     check e.activeWindow.cursor.line == 0
+
+suite "handleKeyCombo - :d marks where it started as a jump, as Vim's ex_operators":
+  # Vim 9.2 over "  line0".."  line9".
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc exCommand(e: Editor, command: string) =
+    e.press(":")
+    for c in command:
+      e.press($c)
+    e.press("Enter")
+
+  proc createEditorForJumps(): Editor =
+    var content: seq[string]
+    for i in 0 .. 9:
+      content.add "  line" & $i
+    result = createTestEditorWithBuffer(content.join("\n"))
+    # Registered and active as a loaded buffer is, so the jump list follows
+    # its edits.
+    result.addBuffer(result.activeBuffer)
+    result.syncActiveWindow()
+    result.state.registers = initRegisters()
+
+  proc jumps(e: Editor): seq[(int, int)] =
+    for jump in e.state.jumpList.list:
+      result.add (jump.line, jump.column)
+
+  test "Ctrl-o goes back there, moved as the deletion moved its line":
+    for (start, command, back) in [
+      ((7, 4), "3,4d", (5, 4)), # below the range: up past the deleted lines
+      ((3, 4), "3,5d", (2, 4)), # inside it: onto its start
+      ((1, 4), "3,4d", (1, 4)), # above it: where it was
+    ]:
+      checkpoint(command & " from " & $start)
+      let e = createEditorForJumps()
+      e.activeWindow.cursor = BufferPosition(line: start[0], column: start[1])
+
+      e.exCommand(command)
+      check e.cursor == BufferPosition(line: 2, column: 2)
+
+      e.press("C-o")
+      check e.cursor == BufferPosition(line: back[0], column: back[1])
+
+  test "undo and redo move it with the lines they put back and take again":
+    # Vim's `u` also marks where it starts; moe's does not.
+    let e = createEditorForJumps()
+    e.activeWindow.cursor = BufferPosition(line: 7, column: 4)
+
+    e.exCommand("3,4d")
+    check e.jumps == @[(5, 4)]
+    e.press("u")
+    check e.jumps == @[(7, 4)]
+    e.press("C-r")
+    check e.jumps == @[(5, 4)]
+
+  test "an earlier jump below the deleted lines moves up with them":
+    let e = createEditorForJumps()
+    e.activeWindow.cursor = BufferPosition(line: 9, column: 2)
+
+    e.press("g", "g")
+    e.exCommand("3,4d")
+
+    check e.jumps == @[(7, 2), (0, 2)]
+
+  test "a :d that fails marks no jump":
+    let e = createEditorForJumps()
+    e.activeBuffer.readOnly = true
+    e.activeWindow.cursor = BufferPosition(line: 7, column: 4)
+
+    e.exCommand("3,4d")
+
+    check e.activeBuffer.len == 10
+    check e.jumps.len == 0
 
 suite "Ctrl-w second keys Vim takes for the same command":
   # As `CTRL-W CTRL-J`, `CTRL-W <Down>` and `CTRL-W <BS>`, so Ctrl may stay

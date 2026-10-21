@@ -2236,6 +2236,19 @@ suite "Editor - bufferIdIndex synchronization":
     check not e.bufferIdIndex.hasKey(bufId)
     check e.bufferById(bufId).isNone
 
+  test "deleteBufferAt stops the jump list following the buffer's edits":
+    let e = createTestEditor()
+    let buf = newTextBuffer("0\n1\n2\n3\n4")
+    e.addBuffer(buf)
+    e.state.jumpList.list = @[JumpPosition(bufferId: buf.id, line: 3)]
+
+    check buf.deleteLine(0).isOk
+    check e.state.jumpList.list[0].line == 2
+
+    e.deleteBufferAt(e.bufferIndexById(buf.id))
+    check buf.deleteLine(0).isOk
+    check e.state.jumpList.list[0].line == 2
+
   test "newEditor initializes bufferIdIndex with the initial buffer":
     let e = createTestEditor()
     check e.bufferIdIndex.len == e.buffers.len

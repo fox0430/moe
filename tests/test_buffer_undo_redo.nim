@@ -1982,3 +1982,84 @@ suite "Buffer - holdsChange":
     check not b.reloadedSince(0)
     check b.redo().isOk
     check b.reloadedSince(0)
+
+suite "Buffer - rows moved hook":
+  # A line held outside the buffer, as the editor's jump list holds one. The
+  # expected lines are Vim 9.2's jump list across `:{range}d`, `u` and `<C-r>`.
+  proc holdLine(b: TextBuffer, line: int): ref int =
+    let held = new int
+    held[] = line
+    b.setRowsMovedHook(
+      proc(b: TextBuffer, move: RowMove) =
+        held[] = held[].moved(move)
+    )
+    held
+
+  proc deleteLines(b: TextBuffer, first, last: int) =
+    ## Delete `first .. last` in one undo step, as `:d` does.
+    discard b.beginTransaction("delete lines")
+    for i in countdown(last, first):
+      check b.deleteLine(i).isOk
+    check b.commitTransaction().isOk
+
+  for backend in [GapBuffer, PieceTable]:
+    test $backend & ": a line below deleted rows moves up, and back on undo":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+      let held = b.holdLine(7)
+
+      b.deleteLines(2, 3)
+      check held[] == 5
+      check b.undo().isOk
+      check held[] == 7
+      check b.redo().isOk
+      check held[] == 5
+
+    test $backend & ": a rolled back transaction moves it back":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+      let held = b.holdLine(7)
+
+      discard b.beginTransaction("delete lines")
+      check b.deleteLine(3).isOk
+      check b.deleteLine(2).isOk
+      check held[] == 5
+      check b.rollbackTransaction().isOk
+      check held[] == 7
+
+    test $backend & ": a deleted line goes to their start, and undo moves it past them":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+      let held = b.holdLine(3)
+
+      b.deleteLines(2, 4)
+      check held[] == 2
+      check b.undo().isOk
+      check held[] == 5
+
+    test $backend & ": undo moves it with a Visual area to restore":
+      # A change made over a Visual area restores that area whole on undo, so
+      # its rows are kept only for the held line.
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+      b.lastVisual = some(
+        VisualArea(
+          start: BufferPosition(line: 0, column: 0),
+          cursor: BufferPosition(line: 1, column: 0),
+          kind: vskLine,
+        )
+      )
+      let held = b.holdLine(7)
+
+      b.deleteLines(2, 3)
+      check held[] == 5
+      check b.undo().isOk
+      check held[] == 7
