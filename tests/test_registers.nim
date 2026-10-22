@@ -246,6 +246,66 @@ suite "Registers":
 
     check r.getNamedRegister('h').getLines() == @["one"]
 
+  test "a block keeps its rows and width, and reads as its rows joined":
+    let r = initRegisters()
+    r.storeYanked(none(char), blockRegister(@["ab", "  "], 2))
+
+    let reg = r.getNumberRegister(0)
+    check reg.kind == rkBlock
+    check reg.width == 2
+    check reg.getLines() == @["ab", "  "]
+    check reg.getContent() == "ab\n  "
+    check r.getNoNamedRegister().kind == rkBlock
+
+  test "an uppercase name appends to a block as rows and keeps its width":
+    # Vim's op_yank: the register keeps its type unless lines are added.
+    let r = initRegisters()
+    r.storeYanked(some('i'), blockRegister(@["ab", "cd"], 2))
+    r.storeYanked(some('I'), "xyz", false)
+
+    let reg = r.getNamedRegister('i')
+    check reg.kind == rkBlock
+    check reg.width == 2
+    check reg.getLines() == @["ab", "cd", "xyz"]
+
+  test "an uppercase name appends a block to characters as characters":
+    let r = initRegisters()
+    r.storeYanked(some('j'), "x", false)
+    r.storeYanked(some('J'), blockRegister(@["ab", "cd"], 2))
+
+    check r.getNamedRegister('j').kind == rkChars
+    check r.getNamedRegister('j').getContent() == "xab\ncd"
+
+  test "an uppercase name appends a block to lines as lines":
+    let r = initRegisters()
+    r.storeYanked(some('k'), "x\n", true)
+    r.storeYanked(some('K'), blockRegister(@["ab", "cd"], 2))
+
+    check r.getNamedRegister('k').kind == rkLines
+    check r.getNamedRegister('k').getLines() == @["x", "ab", "cd"]
+
+  test "an uppercase name adds to what an empty yank left":
+    # Vim 9.2: `"ayl` on an empty line keeps "", and a block `"Ay` then
+    # continues it as characters.
+    let r = initRegisters()
+    r.storeYanked(some('l'), "", false)
+    r.storeYanked(some('L'), blockRegister(@["ab", "cd"], 2))
+
+    check r.getNamedRegister('l').kind == rkChars
+    check r.getNamedRegister('l').getContent() == "ab\ncd"
+
+  test "a delete of a block within a line goes to -, of one over lines to 1":
+    let r = initRegisters()
+    r.storeDeleted(none(char), blockRegister(@["ab"], 2))
+
+    check r.getSmallDeleteRegister().kind == rkBlock
+    check r.getNumberRegister(1).isEmpty
+
+    r.storeDeleted(none(char), blockRegister(@["ab", "cd"], 2))
+
+    check r.getNumberRegister(1).kind == rkBlock
+    check r.getSmallDeleteRegister().getLines() == @["ab"]
+
   test "isValidRegisterName":
     check isValidRegisterName('"')
     check isValidRegisterName('a')
@@ -333,10 +393,12 @@ suite "Registers":
     check not r.getNoNamedRegister().isEmpty
     check not r.getNumberRegister(0).isEmpty
 
-  test "isEmpty with empty string":
+  test "an empty yank leaves one empty line, not an empty register":
+    # As Vim's y_array: only a register never written is E353 to put.
     let r = initRegisters()
     r.storeYanked(none(char), "", false)
-    check r.getNoNamedRegister().isEmpty
+    check not r.getNoNamedRegister().isEmpty
+    check r.getNoNamedRegister().getLines() == @[""]
 
   test "getContent empty register":
     let r = initRegisters()
@@ -528,6 +590,28 @@ suite "Registers":
         let reg = r.getNoNamedRegister()
         check reg.getContent() == "first\nsecond"
         check reg.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "a block goes to the selections a line to a row and comes back a block":
+    # As Vim's clip_convert_selection: every row of a block ends in a line
+    # break.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        r.storeYanked(none(char), blockRegister(@["ab", "cd"], 3))
+
+        check readFile(clipboardFilePath(fakeDir)) == "ab\ncd\n"
+        check readFile(primaryFilePath(fakeDir)) == "ab\ncd\n"
+        let reg = r.getNoNamedRegister()
+        check reg.kind == rkBlock
+        check reg.width == 3
+        check reg.getLines() == @["ab", "cd"]
+        check r.getClipboardRegister('*').kind == rkBlock
       finally:
         removeFakeClipboardTool(fakeDir)
 

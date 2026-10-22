@@ -40,11 +40,11 @@ export registers_types, register_names
 proc initRegisters*(): Registers =
   ## Initialize a new register set
   result = Registers(
-    noNamed: Register(isLine: false, buffer: @[]),
-    smallDelete: Register(isLine: false, buffer: @[]),
+    noNamed: Register(),
+    smallDelete: Register(),
     named: initTable[char, Register](),
-    primarySelection: Register(isLine: false, buffer: @[]),
-    clipboardSelection: Register(isLine: false, buffer: @[]),
+    primarySelection: Register(),
+    clipboardSelection: Register(),
     clipboardReadOutcome: croNotAttempted,
     clipboardReadError: "",
     primaryReadOutcome: croNotAttempted,
@@ -54,11 +54,11 @@ proc initRegisters*(): Registers =
 
   # Initialize number registers
   for i in 0 .. 9:
-    result.number[i] = Register(isLine: false, buffer: @[])
+    result.number[i] = Register()
 
   # Initialize named registers
   for c in 'a' .. 'z':
-    result.named[c] = Register(isLine: false, buffer: @[])
+    result.named[c] = Register()
 
 proc setClipboardTool*(r: Registers, tool: ClipboardTool) =
   ## Set the clipboard tool for system clipboard integration
@@ -70,21 +70,41 @@ proc setClipboardTool*(r: Registers, tool: ClipboardTool) =
   r.primaryReadError = ""
   r.primaryReadValue = ""
 
+proc isLine*(r: Register): bool =
+  ## The register goes in as whole lines.
+  r.kind == rkLines
+
 proc isEmpty*(r: Register): bool =
-  ## Check if register is empty.
-  ## A linewise register holding a single empty line ([""]) is NOT empty —
-  ## it represents one empty line, which Vim's p/P inserts verbatim.
-  r.buffer.len == 0 or (r.buffer.len == 1 and r.buffer[0].len == 0 and not r.isLine)
+  ## The register was never written, as Vim's y_array is NULL: a put of it is
+  ## E353. What an empty yank leaves is one empty line, which puts nothing.
+  r.buffer.len == 0
+
+proc isWithinLine(r: Register): bool =
+  ## No line break, as a delete Vim's op_delete puts in "- (line_count 1).
+  r.kind != rkLines and r.buffer.len <= 1 and
+    (r.buffer.len == 0 or '\n' notin r.buffer[0])
+
+proc holdsNoText*(r: Register): bool =
+  ## Not even a line break, as what a delete within an empty line takes.
+  r.isWithinLine and (r.buffer.len == 0 or r.buffer[0].len == 0)
 
 proc getContent*(r: Register): string =
   ## The register's text. Linewise text ends every line with a line break,
-  ## as Vim's getreg() gives it.
+  ## a block every row but the last, as Vim's getreg() gives it.
   if r.buffer.len == 0:
     ""
-  elif r.isLine:
+  elif r.kind == rkLines:
     r.buffer.join("\n") & "\n"
   else:
-    r.buffer.join("")
+    r.buffer.join("\n")
+
+proc selectionContent*(r: Register): string =
+  ## The register's text as a system selection holds it: a block's rows each
+  ## end in a line break, as Vim's clip_convert_selection gives them.
+  if r.kind == rkBlock and r.buffer.len > 0:
+    r.getContent & "\n"
+  else:
+    r.getContent
 
 proc getLines*(r: Register): seq[string] =
   ## Get register content as lines
@@ -103,19 +123,19 @@ proc linewiseLines*(text: string): seq[string] =
   ## lines; a CR stays in the line it is in.
   text.withoutLastLineBreak.split('\n')
 
-proc toRegister(content: string, isLine: bool): Register =
+proc toRegister*(content: string, isLine: bool): Register =
   ## `content` as a register holds it.
   if isLine:
-    Register(isLine: true, buffer: content.linewiseLines)
+    Register(kind: rkLines, buffer: content.linewiseLines)
   else:
-    Register(isLine: false, buffer: @[content])
+    Register(kind: rkChars, buffer: @[content])
 
 proc asLines(r: Register): seq[string] =
   ## The register's text as lines, charwise text split at its line breaks.
-  if r.isLine:
-    r.buffer
-  else:
+  if r.kind == rkChars:
     r.getContent.split('\n')
+  else:
+    r.buffer
 
 proc selectionText(raw: string): string =
   ## Text read from a system selection, its CRLF line breaks made LF.
@@ -123,32 +143,42 @@ proc selectionText(raw: string): string =
 
 proc fromSelection(text: string): Register =
   ## `selectionText` as a register holds it: linewise when it ends in a line
-  ## break, as Vim takes the clipboard.
-  toRegister(text, text.endsWith('\n'))
+  ## break, as Vim takes the clipboard, and nothing when the selection is.
+  if text.len == 0:
+    Register()
+  else:
+    toRegister(text, text.endsWith('\n'))
 
 proc shows(reg: Register, raw: string): bool =
   ## `raw`, read from a system selection, is `reg`'s text: as it was written,
   ## or with its line breaks made CRLF by the selection. A raw buffer's CR
   ## stays in its lines, so the text is not made LF before comparing.
-  let own = reg.getContent
+  let own = reg.selectionContent
   raw == own or ('\r' in raw and raw.selectionText == own)
 
 proc appended(r: Register, text: Register): Register =
-  ## `r` with `text` added after it, as `"A` adds: linewise if either is, else
-  ## the text continues the last line.
+  ## `r` with `text` added after it, as `"A` adds in Vim's op_yank: linewise
+  ## if `text` is, else of `r`'s kind. Added to characters, the text continues
+  ## the last line; to lines or a block, it starts a line or row of its own,
+  ## and the block keeps its width. A register that kept even an empty yank
+  ## is added to.
   if r.isEmpty:
-    text
-  elif r.isLine or text.isLine:
-    Register(isLine: true, buffer: r.asLines & text.asLines)
-  else:
-    Register(isLine: false, buffer: @[r.getContent & text.getContent])
+    return text
+  let kind = if text.kind == rkLines: rkLines else: r.kind
+  case kind
+  of rkChars:
+    Register(kind: rkChars, buffer: @[r.getContent & text.getContent])
+  of rkLines:
+    Register(kind: rkLines, buffer: r.asLines & text.asLines)
+  of rkBlock:
+    blockRegister(r.buffer & text.asLines, r.width)
 
 # Clipboard integration (synchronous so that put-time reads see the writes)
 
 proc sendToClipboard(r: Registers, reg: Register) =
   ## Send to system CLIPBOARD and sync `+` cache.
   if r.clipboardTool.isSome:
-    let writeResult = writeToClipboardSync(r.clipboardTool.get, reg.getContent)
+    let writeResult = writeToClipboardSync(r.clipboardTool.get, reg.selectionContent)
     if writeResult.isErr:
       logError "registers", "Failed to write to CLIPBOARD: " & writeResult.error
     else:
@@ -156,12 +186,16 @@ proc sendToClipboard(r: Registers, reg: Register) =
       if not writeResult.get:
         r.lastClipboardWriteTime = getMonoTime()
 
-proc sendToPrimarySelection(r: Registers, content: string) =
-  ## Send content to X11 PRIMARY selection if available (synchronous)
+proc sendToPrimarySelection(r: Registers, reg: Register) =
+  ## Send to X11 PRIMARY selection if available (synchronous) and sync the `*`
+  ## cache, so that reading it back keeps the register's kind.
   if r.clipboardTool.isSome:
-    let writeResult = writeToPrimarySelectionSync(r.clipboardTool.get, content)
+    let writeResult =
+      writeToPrimarySelectionSync(r.clipboardTool.get, reg.selectionContent)
     if writeResult.isErr:
       logError "registers", "Failed to write to PRIMARY: " & writeResult.error
+    else:
+      r.primarySelection = reg
 
 proc getFromClipboard(r: Registers): Result[string, string] =
   ## Get CLIPBOARD content. Records outcome for fallback reuse.
@@ -197,12 +231,10 @@ proc getFromPrimarySelection(r: Registers): Result[string, string] =
     r.primaryReadError = result.error
     r.primaryReadValue = ""
 
-proc markClipboardWritten*(
-    r: Registers, content: string, isLine: bool, writeConfirmed: bool
-) =
-  ## Record CLIPBOARD write and sync registers.
-  r.noNamed = toRegister(content, isLine)
-  r.clipboardSelection = r.noNamed
+proc markClipboardWritten*(r: Registers, text: Register, writeConfirmed: bool) =
+  ## Record that CLIPBOARD was sent `text` and sync registers.
+  r.noNamed = text
+  r.clipboardSelection = text
   if not writeConfirmed:
     r.lastClipboardWriteTime = getMonoTime()
 
@@ -235,7 +267,7 @@ proc yankInto(r: Registers, name: char, text: Register): Register =
       text
   r.slot(name) = result
   if name.isPrimarySelectionRegisterName:
-    r.sendToPrimarySelection(result.getContent)
+    r.sendToPrimarySelection(result)
   elif name.isClipboardSelectionRegisterName:
     r.sendToClipboard(result)
 
@@ -248,20 +280,22 @@ proc setUnnamed(r: Registers, text: Register, wroteClipboard: bool) =
   r.noNamed = text
   if not wroteClipboard:
     r.sendToClipboard(text)
-    r.sendToPrimarySelection(text.getContent)
+    r.sendToPrimarySelection(text)
 
-proc storeYanked*(r: Registers, name: Option[char], content: string, isLine: bool) =
+proc storeYanked*(r: Registers, name: Option[char], text: Register) =
   ## Store yanked text in the register `"x` named, else in "0, and make the
   ## unnamed register hold it. The black hole register keeps nothing.
   let target = name.get('0')
   if target.isBlackHoleRegisterName:
     return
-  r.setUnnamed(
-    r.yankInto(target, toRegister(content, isLine)), target.isClipboardRegisterName
-  )
+  r.setUnnamed(r.yankInto(target, text), target.isClipboardRegisterName)
+
+proc storeYanked*(r: Registers, name: Option[char], content: string, isLine: bool) =
+  ## `storeYanked` of characters or lines.
+  r.storeYanked(name, toRegister(content, isLine))
 
 proc storeDeleted*(
-    r: Registers, name: Option[char], content: string, isLine: bool, useRegOne = false
+    r: Registers, name: Option[char], text: Register, useRegOne = false
 ) =
   ## Store deleted text as Vim's op_delete: in the register `"x` named; in "1,
   ## shifting "1-"8 down, when it is linewise, spans lines or `useRegOne` (the
@@ -271,9 +305,7 @@ proc storeDeleted*(
   ## The black hole register keeps nothing.
   if name.isSome and name.get.isBlackHoleRegisterName:
     return
-  let
-    text = toRegister(content, isLine)
-    withinLine = not isLine and '\n' notin content
+  let withinLine = text.isWithinLine
   var unnamed = text
   if name.isSome:
     unnamed = r.yankInto(name.get, text)
@@ -288,6 +320,12 @@ proc storeDeleted*(
   if withinLine and (name.isNone or name.get.isClipboardRegisterName):
     r.smallDelete = text
   r.setUnnamed(unnamed, name.isSome and name.get.isClipboardRegisterName)
+
+proc storeDeleted*(
+    r: Registers, name: Option[char], content: string, isLine: bool, useRegOne = false
+) =
+  ## `storeDeleted` of characters or lines.
+  r.storeDeleted(name, toRegister(content, isLine), useRegOne)
 
 proc setRegister*(
     r: Registers, name: char, content: string, isLine: bool
@@ -372,14 +410,14 @@ proc getNumberRegister*(r: Registers, num: int): Register =
   if num >= 0 and num <= 9:
     r.number[num]
   else:
-    Register(isLine: false, buffer: @[])
+    Register()
 
 proc getNumberRegister*(r: Registers, c: char): Register =
   ## Get a number register by character
   if c.isNumberRegisterName:
     r.number[ord(c) - ord('0')]
   else:
-    Register(isLine: false, buffer: @[])
+    Register()
 
 proc getNamedRegister*(r: Registers, name: char): Register =
   ## Get a named register (a-z)
@@ -387,7 +425,7 @@ proc getNamedRegister*(r: Registers, name: char): Register =
   if lowerName in r.named:
     r.named[lowerName]
   else:
-    Register(isLine: false, buffer: @[])
+    Register()
 
 proc getClipboardRegister*(r: Registers, name: char): Register =
   ## Get clipboard register by name, updating from the appropriate system selection
@@ -416,7 +454,7 @@ proc getRegister*(r: Registers, name: char): Register =
   elif name.isClipboardRegisterName:
     r.getClipboardRegister(name)
   else:
-    Register(isLine: false, buffer: @[])
+    Register()
 
 proc clipboardFallbackRead*(
     r: Registers, tool: ClipboardTool, registerName: char

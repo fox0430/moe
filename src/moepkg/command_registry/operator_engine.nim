@@ -198,11 +198,12 @@ proc executeOperatorOnRange*(
   # take no text (`yl` on an empty line).
   ctx.state.preferredColumn = -1
 
-  if range.isEmpty and operatorType notin {OpChange, OpIndent, OpOutdent}:
-    # Empty object (e.g. yit/dit on <a></a>, gUi" on ""): the range spans no
+  if range.isEmpty and operatorType notin {OpYank, OpChange, OpIndent, OpOutdent}:
+    # Empty object (e.g. dit on <a></a>, gUi" on ""): the range spans no
     # characters, so the operator is a no-op and the registers stay untouched.
-    # `c` still drops into Insert between the delimiters, and `>`/`<` still
-    # shift the line, as Vim's op_shift does (`>i(` on `()`).
+    # A yank still keeps the empty text, as Vim's op_yank does (`yl` on an
+    # empty line); `c` still drops into Insert between the delimiters, and
+    # `>`/`<` still shift the line, as Vim's op_shift does (`>i(` on `()`).
     return ok(())
 
   case operatorType

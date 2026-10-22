@@ -39,29 +39,45 @@ iterator cellsOf*(
     cell += width
     column.inc
 
+iterator glyphsOf*(
+    text: string, tabStop: int
+): tuple[column, next: int, rune: Rune, cell, width: int] =
+  ## Each character of `text` with the zero-width marks after it, which go
+  ## with it as Vim's composing characters do: its column and the one after
+  ## its marks, the cell it starts at and how many it takes. A mark that
+  ## starts the text stands as a character.
+  var
+    glyph: tuple[column, next: int, rune: Rune, cell, width: int]
+    started = false
+  for (column, rune, cell, width) in text.cellsOf(tabStop):
+    if width == 0 and started:
+      glyph.next = column + 1
+      continue
+    if started:
+      yield glyph
+    glyph = (column, column + 1, rune, cell, width)
+    started = true
+  if started:
+    yield glyph
+
 proc cellSpan*(text: string, column, tabStop: int): tuple[first, last: int] =
   ## The cells character `column` of `text` takes, as Vim's getvvcol: a
   ## combining mark's are those of the character it follows. Past the end, the
   ## one cell after the text.
-  var base = (first: 0, last: 0)
-  for (at, _, cell, width) in text.cellsOf(tabStop):
-    if width > 0 or at == 0:
-      base = (cell, cell + max(width, 1) - 1)
-    if at == column:
-      return base
-    result = (cell + width, cell + width)
+  for g in text.glyphsOf(tabStop):
+    if column < g.next:
+      return (g.cell, g.cell + max(g.width, 1) - 1)
+    result = (g.cell + g.width, g.cell + g.width)
 
 proc columnStartingAt*(text: string, cell, tabStop: int): int =
   ## The character of `text` that starts at `cell`, or its end when the text
   ## ends there, else -1, as Vim's getvpos succeeds or fails. A combining mark
   ## starts nowhere, as it goes with the character it follows.
   var width = 0
-  for (column, _, at, cells) in text.cellsOf(tabStop):
-    if cells == 0 and column > 0:
-      continue
-    if at >= cell:
-      return if at == cell: column else: -1
-    width = at + cells
+  for g in text.glyphsOf(tabStop):
+    if g.cell >= cell:
+      return if g.cell == cell: g.column else: -1
+    width = g.cell + g.width
   if width == cell: text.charLen else: -1
 
 proc cursorCell*(text: string, column, tabStop: int, onTabEnd: bool): int =

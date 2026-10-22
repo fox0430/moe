@@ -1663,10 +1663,10 @@ suite "Handler - Paste operations":
     check buffer[0] == "helloXXX"
 
   test "paste empty register returns error":
+    # A register never written is E353; what an empty yank left is not.
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.registers.storeYanked(none(char), "", false)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, custom("paste.after"))
@@ -2058,11 +2058,10 @@ suite "Handler - Paste operations":
     check ctx.cursor.line == 2
     check ctx.cursor.column == 0
 
-  test "gp with an empty characterwise register reports an error":
+  test "gp with an empty register reports an error":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 1)
-    ctx.state.registers.storeYanked(none(char), "", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after.end")).isErr
@@ -3671,14 +3670,14 @@ suite "Handler - Text Object operations":
     check buffer[0] == "<a></a>"
     check ctx.state.mode == EditorMode.Normal
 
-  test "textobject tag (yit) on empty tag leaves registers untouched":
+  test "textobject tag (yit) on empty tag yanks the empty text":
+    # Vim 9.2: `yit` on `<a></a>` sets "0 and the unnamed register to "".
     let buffer = newTextBuffer("<a></a>")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 1)
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    # Seed the unnamed register; an empty yank must not clobber it.
     ctx.state.registers.storeYanked(none(char), "PREV", false)
 
     ctx.state.pendingInput.pendingOperator = some(
@@ -3686,7 +3685,8 @@ suite "Handler - Text Object operations":
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isOk
-    check ctx.state.registers.getNoNamedRegister().getContent() == "PREV"
+    check ctx.state.registers.getNoNamedRegister().getLines() == @[""]
+    check ctx.state.registers.getNumberRegister(0).getLines() == @[""]
 
   test "textobject tag (dit) on empty tag leaves registers untouched":
     let buffer = newTextBuffer("<a></a>")

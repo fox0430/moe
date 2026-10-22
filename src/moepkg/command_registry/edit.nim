@@ -35,19 +35,15 @@ import ../command_handlers/put_text
 
 import core, operator_engine, operator_driver, insert_entry
 
-proc pasteSource(ctx: CommandContext): Result[PutSource, string] =
+proc pasteSource(ctx: CommandContext): Result[Register, string] =
   ## What `p`/`P` put: the register this command names, else the unnamed one.
   let name = ctx.register.get('"')
   if ctx.register.isSome:
     ctx.state.statusMessage = ""
   let source = ?ctx.buffer.putSource(ctx.state.registers, name, ctx.clipboardConfig)
-  if source.isNothing:
+  if source.isEmpty:
     return err(nothingInRegister(name))
-  logDebug(
-    "paste",
-    "Using register '" & $name & "', length: " & $source.text.len & ", isLine=" &
-      $source.isLine,
-  )
+  logDebug("paste", "Using register '" & $name & "', kind=" & $source.kind)
   ok(source)
 
 proc handlePut*(
@@ -67,7 +63,7 @@ proc handlePut*(
     else:
       {}
   template put() =
-    ctx.buffer.putText(ctx.state, source.text, source.isLine, forward, count, flags).isOkOr:
+    ctx.buffer.putText(ctx.state, source, forward, count, flags).isOkOr:
       return err(error)
 
   if ctx.buffer.inTransaction:

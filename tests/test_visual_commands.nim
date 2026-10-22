@@ -1454,11 +1454,10 @@ suite "Visual Commands - visualPaste":
     check state.cursor.column == 0
     check state.mode == EditorMode.Normal
 
-  test "gp charwise with an empty register deletes the selection and reports it":
+  test "gp with an empty register deletes the selection and reports it":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.registers.storeYanked(none(char), "", false)
     state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
