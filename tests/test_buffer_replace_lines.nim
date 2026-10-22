@@ -119,6 +119,13 @@ suite "Buffer - replaceLines":
     check buf.modifiedLines[0] == lmkUnmodified
     check buf.modifiedLines[3] == lmkUnmodified
 
+  test "A row given back its own text is not marked modified":
+    let buf = bufferOf("a", "b", "c", "d")
+    check buf.replaceLines(0, 3, ["1", "b", "3"]).isOk
+    check buf.modifiedLines[0] == lmkModified
+    check buf.modifiedLines[1] == lmkUnmodified
+    check buf.modifiedLines[2] == lmkModified
+
   test "keepRows leaves what is attached to the shared rows where it is":
     let buf = bufferOf("a", "b", "c", "d")
     buf.setLineMarker(1, LineMarkerKind.GitChanged)

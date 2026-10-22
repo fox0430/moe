@@ -43,7 +43,8 @@ import
   virtual_text,
   command_line,
   buffer,
-  visual_selection
+  visual_selection,
+  visual_block
 import command_handlers/visual_handler
 
 type
@@ -69,6 +70,7 @@ type
     isCursorLine*: bool
     lineConflict*: ConflictMarkerKind
     useTwoColor*: bool
+    blockShown*: BlockShown ## What a block selection shows over on this line
     searchRanges*: seq[ColumnRange]
     wordRanges*: seq[ColumnRange]
     colorCodeMatches*: seq[ColorCodeMatch]
@@ -146,6 +148,17 @@ proc effectiveSearchSpec(state: EditorState): SearchSpec =
   else:
     state.input.search.last
 
+proc blockShownOn(
+    e: Editor, ctx: RenderContext, lineIndex: int, text: string
+): BlockShown =
+  ## What the window's selection shows over on line `lineIndex` when it is a
+  ## block, else nothing.
+  if ctx.selection.active and ctx.selection.kind == vskBlock and
+      lineIndex in ctx.blockArea.firstLine .. ctx.blockArea.lastLine:
+    ctx.blockArea.shownOn(lineIndex, text, e.tabStop)
+  else:
+    BlockShown()
+
 proc newLineStyleContext*(
     e: Editor,
     textBuffer: TextBuffer,
@@ -203,6 +216,7 @@ proc newLineStyleContext*(
 
   LineStyleContext(
     lineIndex: lineIndex,
+    blockShown: e.blockShownOn(ctx, lineIndex, fullLine),
     bufferId:
       if textBuffer != nil:
         textBuffer.id
@@ -343,6 +357,30 @@ proc baseStyleWithOverlay(
     else:
       normalStyle()
 
+proc showsSelected(
+    lineCtx: LineStyleContext, selection: VisualSelection, pos: BufferPosition
+): bool =
+  ## Whether `selection` shows over character `pos` of the line. A block
+  ## covers screen cells, which `shownOn` worked out for the line.
+  if selection.kind == vskBlock:
+    selection.active and pos.column in lineCtx.blockShown.columns
+  else:
+    selection.isPositionInSelection(pos)
+
+proc showsLineEnd(
+    lineCtx: LineStyleContext, selection: VisualSelection, isEmpty: bool
+): bool =
+  ## Whether `selection` shows over the cell after the line's end: a block's
+  ## first or last line's when it starts there, as Vim draws it, and a
+  ## character or line selection's only on an empty line it covers.
+  if selection.kind == vskBlock:
+    lineCtx.blockShown.lineEnd
+  else:
+    isEmpty and
+      selection.isPositionInSelection(
+        BufferPosition(line: lineCtx.lineIndex, column: 0)
+      )
+
 proc getSelectionStyle*(
     e: Editor,
     buffer: TextBuffer,
@@ -373,7 +411,7 @@ proc getSelectionStyle*(
     else:
       normalStyle()
 
-  if selection.isPositionInSelection(pos):
+  if lineCtx.showsSelected(selection, pos):
     syntaxBaseStyle().merge(bgOnly(visualStyle().bg))
   elif e.matchesSnippetStop(lineCtx, pos):
     syntaxBaseStyle().merge(bgOnly(snippetTabStopStyle().bg))
@@ -470,29 +508,39 @@ proc fillLineBackground*(
     windowRightEdge: int,
     cursorDisplayCol: int = -1,
     textBuffer: TextBuffer = nil,
-    isEmptyLine: bool = false,
-    selection = VisualSelection(),
+    startsAtLineEnd: bool = false,
+    ctx = RenderContext(),
 ) =
   ## Fill the rest of the line to the window right edge.
   ## Uses cursor line highlight for the cursor line, normal style otherwise.
   ## When `textBuffer` is provided and the line is inside a git conflict block,
   ## the conflict background takes priority over cursor-line highlight.
-  ## When `isEmptyLine` and `selection` covers (lineIndex, 0), column 0 is
-  ## rendered with the visual selection background so that Visual mode is
-  ## visible on empty lines.
+  ## `startsAtLineEnd` is for a fill from the cell after the line's end, as on
+  ## an empty line or one scrolled to just its end: when the window's
+  ## selection (`ctx`) shows over that cell, it is rendered with the visual
+  ## selection background so that Visual mode is visible there.
+  let text =
+    if startsAtLineEnd and textBuffer != nil:
+      textBuffer.getLine(lineIndex)
+    else:
+      ""
   # Partial LineStyleContext: lineFillPatch only reads isCursorLine,
-  # lineConflict, useTwoColor, and lineBg. The seq/colorcode fields stay at
-  # their defaults — lineIndex is set so any future read of it stays correct.
+  # lineConflict, useTwoColor, and lineBg, and showsLineEnd lineIndex and
+  # blockShown. The seq/colorcode fields stay at their defaults.
   let lineCtx = LineStyleContext(
     lineIndex: lineIndex,
     isCursorLine: lineIndex == cursorLine,
     lineConflict: e.resolveLineConflict(textBuffer, lineIndex),
     useTwoColor: e.config.highlight.gitConflictTwoColor,
     lineBg: resolveLineBg(e, textBuffer, lineIndex),
+    blockShown:
+      if startsAtLineEnd:
+        e.blockShownOn(ctx, lineIndex, text)
+      else:
+        BlockShown(),
   )
   let selectionAtStart =
-    isEmptyLine and
-    selection.isPositionInSelection(BufferPosition(line: lineIndex, column: 0))
+    startsAtLineEnd and lineCtx.showsLineEnd(ctx.selection, isEmpty = text.len == 0)
   var displayX = 0
   while screenX + displayX < windowRightEdge:
     let inVisualSelection = displayX == 0 and selectionAtStart
@@ -558,15 +606,16 @@ proc renderLineSegmentWithSelection*(
     startColumn: int,
     ctx: RenderContext,
     useRunes: bool = true,
-    appendVirtualText: bool = true,
+    reachesLineEnd: bool = true,
     precomputed: Option[LinePrecomputed] = none(LinePrecomputed),
 ) =
   ## Render a line segment with selection highlighting and syntax highlighting
   ## useRunes: true for wrapped mode (character-based), false for byte-based rendering
   ## ctx: RenderContext containing cursor position and selection information
-  ## appendVirtualText: when true, end-of-line virtual text (inlay hints, etc.)
-  ##   is drawn after the real text and before the trailing fill. In wrapped mode
-  ##   the caller passes false for every segment except the last.
+  ## reachesLineEnd: the segment shows the line's end, so end-of-line virtual
+  ##   text (inlay hints, etc.) is drawn after the real text and before the
+  ##   trailing fill, and a selection over the line's end shows there. In
+  ##   wrapped mode the caller passes false for every segment except the last.
   ## precomputed: caller-supplied fullLine/indentInfo/lineCtx shared across wrap
   ##   segments of the same logical line. When set, the caller is responsible
   ##   for having already called `updateHighlight`.
@@ -597,19 +646,52 @@ proc renderLineSegmentWithSelection*(
   template renderTabCell(col: int, style: Style) =
     # Tab expands to N spaces up to the next tab stop. Each expanded cell
     # honors indentation-guide drawing; the spaces themselves use a style
-    # that may carry the trailingSpaces override.
-    let spacesToNextTab = tabAdvance(displayX, e.tabStop)
-    let tabStyle = style.merge(e.charOverridePatch(ctx, lineCtx, TAB_CHAR, col))
+    # that may carry the trailingSpaces override. A block's edge can cut the
+    # tab, and Vim draws the cells outside the block unselected. A tab drawn
+    # at another width than it takes on the line shows whole.
+    let
+      spacesToNextTab = tabAdvance(displayX, e.tabStop)
+      patch = e.charOverridePatch(ctx, lineCtx, TAB_CHAR, col)
+      shown = lineCtx.blockShown
+      outsideBefore =
+        if col == shown.columns.a and spacesToNextTab == shown.firstWidth:
+          shown.leadCells
+        else:
+          0
+      outsideAfter =
+        if col == shown.columns.b and spacesToNextTab == shown.lastWidth:
+          shown.trailCells
+        else:
+          0
+      outsideStyle =
+        if outsideBefore + outsideAfter > 0:
+          e.getSelectionStyle(
+            textBuffer,
+            VisualSelection(),
+            BufferPosition(line: lineIndex, column: col),
+            ctx.cursorCol,
+            ctx.windowMode,
+            displayCol = displayX,
+            cursorDisplayCol = ctx.cursorDisplayCol,
+            lineCtx = lineCtx,
+          )
+        else:
+          style
     for i in 0 ..< spacesToNextTab:
+      let cellStyle =
+        if i < outsideBefore or i >= spacesToNextTab - outsideAfter:
+          outsideStyle
+        else:
+          style
       if screenX + displayX < ctx.windowRightEdge:
         # No guides in the diff viewer: +/- markers and synthetic
         # side-by-side rows make the leading-whitespace analysis misfire.
         if ctx.windowMode != EditorMode.DiffViewer and
             e.shouldShowIndentationGuide(indentInfo, displayX, col):
-          let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))
+          let guideStyle = indentationLineStyle().merge(bgOnly(cellStyle.bg))
           buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
         else:
-          buffer.setCell(screenX + displayX, screenY, " ", 1, tabStyle)
+          buffer.setCell(screenX + displayX, screenY, " ", 1, cellStyle.merge(patch))
       displayX += 1
 
   template renderInvalidByteCell(rune: Rune, col: int, style: Style) =
@@ -692,21 +774,30 @@ proc renderLineSegmentWithSelection*(
       renderChar(rune, col, style)
       charIdx += 1
 
+  # The cell after the line's end, which virtual text drawn there hides, as on
+  # an empty line. Only a block shows over it on a non-empty line.
+  let selectedEndX =
+    if reachesLineEnd and lineCtx.showsLineEnd(ctx.selection, isEmpty = false):
+      displayX
+    else:
+      -1
+
   # Draw end-of-line virtual text (inlay hints, etc.) after the real text and
   # before the trailing fill, so the running displayX (and thus cursor-column /
   # cursor-line fill alignment) stays correct.
-  if appendVirtualText:
+  if reachesLineEnd:
     displayX =
       e.appendEndOfLineVirtualText(buffer, ctx, lineCtx, displayX, screenX, screenY)
 
   # Fill the rest of the line to the window right edge.
   # Always fill to clear stale content (e.g. old cursor line highlight).
-  # Visual selection past the line end is not tracked here (matches prior
-  # behavior); add inVisualSelection support to lineFillPatch if needed later.
   while screenX + displayX < ctx.windowRightEdge:
     let fillStyle = normalStyle().merge(
         e.lineFillPatch(
-          lineCtx, displayX, ctx.cursorDisplayCol, inVisualSelection = false
+          lineCtx,
+          displayX,
+          ctx.cursorDisplayCol,
+          inVisualSelection = displayX == selectedEndX,
         )
       )
     buffer.setCell(screenX + displayX, screenY, " ", 1, fillStyle)
@@ -772,8 +863,8 @@ proc renderWindowLineWrapped*(
       window.viewport.x + window.viewport.width,
       cursorDisplayCol = ctx.cursorDisplayCol,
       textBuffer = window.buffer,
-      isEmptyLine = true,
-      selection = ctx.selection,
+      startsAtLineEnd = true,
+      ctx = ctx,
     )
     # Empty lines bypass renderLineSegmentWithSelection, so draw any end-of-line
     # virtual text (inlay hints) here too, over the just-filled background.
@@ -867,7 +958,7 @@ proc renderWindowLineWrapped*(
           startCharCol,
           ctx,
           useRunes = true,
-          appendVirtualText = endCharCol >= lineCharLen,
+          reachesLineEnd = endCharCol >= lineCharLen,
           precomputed = precomputed,
         )
 
@@ -947,7 +1038,7 @@ proc renderWindowLineNoWrap*(
           window.viewport.leftColumn,
           ctx,
           useRunes = false,
-          appendVirtualText = lineEndVisible,
+          reachesLineEnd = lineEndVisible,
         )
   else:
     # Empty line or scrolled past line end - fill to clear stale content
@@ -960,8 +1051,8 @@ proc renderWindowLineNoWrap*(
       window.viewport.x + window.viewport.width,
       cursorDisplayCol = ctx.cursorDisplayCol,
       textBuffer = window.buffer,
-      isEmptyLine = (line.charLen == 0),
-      selection = ctx.selection,
+      startsAtLineEnd = line.charLen == window.viewport.leftColumn,
+      ctx = ctx,
     )
     # The text path skips end-of-line virtual text for empty/scrolled-past
     # lines. Draw it here when the line's end column is still on-screen
@@ -1176,6 +1267,13 @@ proc renderWindow*(
     cursorCol: window.cursor.column,
     cursorDisplayCol: cursorDisplayCol,
     selection: window.visualSelection,
+    blockArea:
+      if window.mode == EditorMode.VisualBlock:
+        window.buffer.blockArea(
+          window.visualSelection, e.tabStop, measureWidest = false
+        )
+      else:
+        BlockArea(),
     windowMode: window.mode,
     windowRightEdge: window.viewport.x + window.viewport.width,
     isActiveWindow: isActiveWindow,

@@ -25,7 +25,7 @@ import std/[options, strutils]
 
 import pkg/results
 
-import ../[config, cursor_util, registers, types, unicode_utils]
+import ../[config, cursor_util, registers, types, unicode_utils, wanted_column]
 import ../buffer/[core, edit, fold]
 
 type
@@ -72,6 +72,7 @@ proc putText*(
     count = 1,
     flags: set[PutFlag] = {},
     blockEnd = -1,
+    blockAnchor = BufferPosition(),
     byFolds = true,
 ): Result[PutArea, string] =
   ## Put `text` `count` times at the cursor, as Vim's do_put, and return what
@@ -80,8 +81,10 @@ proc putText*(
   ## `byFolds`, below or above the closed fold the cursor is on. Other text
   ## goes after the cursor's character when `forward`, else before it, and
   ## text within a line also into the lines below down to `blockEnd` (a
-  ## Visual block) at the same character index, passing over lines too short
-  ## for it (Vim takes the first line's screen column).
+  ## Visual block) at the first line's screen cell, passing over a line where
+  ## no character starts there, as Vim does. A tab gives its last cell when
+  ## the put comes after where the block started (`blockAnchor`), as Vim's
+  ## getvcol puts the cursor there.
   ##
   ## The cursor lands on the first non-blank of the first line put, the last
   ## character of text within a line, or the start of text across lines. With
@@ -154,11 +157,21 @@ proc putText*(
       putting = text.repeat(count)
     area = PutArea(first: start, last: start)
     if '\n' notin text:
-      for line in start.line .. max(start.line, blockEnd):
-        if start.column <= buffer.getLine(line).charLen:
-          tryEdit buffer.insertText(
-            BufferPosition(line: line, column: start.column), putting
+      let cell =
+        if blockEnd > start.line:
+          buffer.getLine(start.line).cursorCell(
+            start.column, state.tabStop, onTabEnd = start > blockAnchor
           )
+        else:
+          0
+      tryEdit buffer.insertText(start, putting)
+      if blockEnd > start.line:
+        for line in start.line + 1 .. blockEnd:
+          let column = buffer.getLine(line).columnStartingAt(cell, state.tabStop)
+          if column >= 0:
+            tryEdit buffer.insertText(
+              BufferPosition(line: line, column: column), putting
+            )
       cursor.column = start.column + text.charLen * count - 1
       area.last = cursor
       if pfCursorEnd in flags or state.resumesInsert:

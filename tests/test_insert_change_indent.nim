@@ -297,7 +297,7 @@ suite "Insert Ctrl-T and Ctrl-D - an auto-indent a boundary takes off":
       check e.handleKeyCombo(key)
     e.state.editState.visualBlockInsertContext = some(
       VisualBlockInsertContext(
-        startLine: 0, endLine: 0, insertColumn: 6, firstLineLen: 6
+        area: BlockArea(firstLine: 0, lastLine: 0), insertColumn: 6, firstLineLen: 6
       )
     )
 

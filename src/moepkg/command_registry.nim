@@ -28,7 +28,9 @@ from std/strutils import repeat
 
 import pkg/results
 
-import types, motion, key_bindings, modes, logger, visual_selection, wanted_column
+import
+  types, motion, key_bindings, modes, logger, visual_selection, wanted_column,
+  visual_block
 import buffer/[core, edit, undo]
 
 import command_handlers/visual_commands
@@ -366,7 +368,8 @@ proc executeCommand*(
 
       # Record the selection shape for `.` (Vim-compatible sizes). A charwise
       # `$` end keeps its raw column and repeat clamps it to the line; a block
-      # after `<C-v>$` repeats to each line's end, as Vim's MAXCOL.
+      # keeps its width in screen cells, and after `<C-v>$` repeats to each
+      # line's end, as Vim's MAXCOL.
       let
         sel = ctx.state.operandSelection(ctx.buffer)
         loLine = min(sel.start.line, sel.current.line)
@@ -409,7 +412,10 @@ proc executeCommand*(
             visualReplaceChar: cmd.targetChar,
             visualReplaceKind: vskBlock,
             visualReplaceRows: hiLine - loLine + 1,
-            visualReplaceCols: abs(sel.current.column - sel.start.column) + 1,
+            visualReplaceCols: block:
+              let area =
+                ctx.buffer.blockArea(sel, ctx.state.tabStop, measureWidest = false)
+              area.endCell - area.startCell + 1,
             visualReplaceToLineEnd: sel.extendsToLineEnd,
           )
 

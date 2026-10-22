@@ -33,8 +33,11 @@ type
   EditorSelection* = object
     ## Snapshot of the active buffer's selection. Positions use zero-based
     ## rune columns and inclusive endpoints, matching Moe's editing model.
-    ## Block selections describe a rectangle rather than one contiguous range,
-    ## unless `extendsToLineEnd` is set: the right edge then follows each
+    ## Block selections describe a rectangle of screen cells rather than one
+    ## contiguous range: the cells from the leftmost to the rightmost that the
+    ## characters at `first` and `last` take, on each line between, so a tab
+    ## or a wide character can put its edges at different rune columns from
+    ## line to line. With `extendsToLineEnd` the right edge follows each
     ## line's end, as after `<C-v>$`.
     ## `anchor`/`focus` are the ends the user placed; `kind`/`first`/`last` are
     ## what the selection covers, a closed fold at either end whole, which is
@@ -48,7 +51,7 @@ type
     extendsToLineEnd*: bool
       ## A Block selection whose right edge follows each line's end. As for
       ## any block, `first`/`last` are its ends in line order, not its
-      ## corners: it covers the smaller of their columns to each line's end.
+      ## corners: it covers from the smaller of their cells to each line's end.
 
 func toEditorSelectionKind(kind: VisualSelectionKind): EditorSelectionKind =
   case kind
@@ -88,5 +91,5 @@ proc selectedText*(e: Editor): string =
   if e.isNil or e.windowManager.windows.len == 0:
     return ""
   getVisualSelectionText(
-    e.activeBuffer, e.activeWindow.operandSelection(e.activeBuffer)
+    e.activeBuffer, e.activeWindow.operandSelection(e.activeBuffer), e.tabStop
   )

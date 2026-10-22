@@ -40,6 +40,7 @@ import
   ../[
     types, buffer, modes, key_bindings, keybind_config, filer, filetree, diff_viewer,
     recent_file_mode, command_line, visual_selection, insert_record, wanted_column,
+    visual_block,
   ]
 
 when not defined(moe.embedded):
@@ -63,53 +64,39 @@ proc commitInsertModeBoundary*(
 
   ok()
 
-func replicaColumn(ctx: types.VisualBlockInsertContext, lineLen: int): Option[int] =
-  ## Where a line `lineLen` long takes the copied text, as Vim's block_insert
-  ## and op_change: `I` and `c` leave a line that ends before the block alone,
-  ## `A` pads it out to the block, and `A` after `<C-v>$` appends at each
-  ## line's end.
-  case ctx.kind
-  of vbiInsert, vbiChange:
-    if lineLen < ctx.insertColumn:
-      none(int)
-    else:
-      some(ctx.insertColumn)
-  of vbiAppend:
-    some(if ctx.atLineEnd: lineLen else: ctx.insertColumn)
-
 proc replicateBlockInsert*(buffer: TextBuffer, state: EditorState): string =
-  ## End a Visual-block insert: copy what the first line gained, from the block
-  ## column, onto the other lines, as Vim does. Nothing is copied when the
-  ## cursor left the first line. Returns an error message, or "".
+  ## End a Visual-block insert: copy what the first line gained, from where
+  ## typing started, onto the block's other lines, as Vim does. Nothing is
+  ## copied when the cursor left the first line. Returns an error message, or
+  ## "".
   if state.editState.visualBlockInsertContext.isNone:
     return ""
   let ctx = state.editState.visualBlockInsertContext.get
   state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
-  if state.cursor.line != ctx.startLine or ctx.startLine >= buffer.len:
+  let area = ctx.area
+  if state.cursor.line != area.firstLine or area.firstLine >= buffer.len:
     return ""
   let
-    firstLine = buffer.getLine(ctx.startLine)
+    firstLine = buffer.getLine(area.firstLine)
     gained = firstLine.charLen - ctx.firstLineLen
-  if gained <= 0:
+    lastLine = min(area.lastLine, buffer.len - 1)
+  if gained <= 0 or lastLine <= area.firstLine:
     return ""
-  let text = firstLine.charSubStr(min(ctx.insertColumn, ctx.firstLineLen), gained)
-
-  for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
-    let lineCharLen = buffer.getLine(lineNum).charLen
-    let column = ctx.replicaColumn(lineCharLen)
-    if column.isNone:
-      continue
-    let col = column.get
-    if col > lineCharLen:
-      let padding = ' '.repeat(col - lineCharLen)
-      let padResult =
-        buffer.insertText(BufferPosition(line: lineNum, column: lineCharLen), padding)
-      if padResult.isErr:
-        return padResult.error
-    let replayResult =
-      buffer.insertText(BufferPosition(line: lineNum, column: col), text)
-    if replayResult.isErr:
-      return replayResult.error
+  let
+    typed = firstLine.charSubStr(min(ctx.insertColumn, ctx.firstLineLen), gained)
+    kind = ctx.kind
+  var below = area
+  below.firstLine.inc
+  below.lastLine = lastLine
+  let replicated = buffer.rewriteBlock(
+    below,
+    state.tabStop,
+    kind.copyUse,
+    proc(area: BlockArea, text: string, cut: BlockLine): string =
+      area.typedInto(cut, text, typed, kind),
+  )
+  if replicated.isErr:
+    return replicated.error
   ""
 
 proc finalizeInsertExit*(

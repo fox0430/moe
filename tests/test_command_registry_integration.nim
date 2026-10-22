@@ -4351,7 +4351,8 @@ suite "Handler - Clipboard operations":
         ctx.state.registers.setClipboardTool(cbtXclip)
         ctx.state.registers.storeYanked(none(char), "yanked content", false)
 
-        let selectedText = getVisualSelectionText(buffer, ctx.state.visualSelection)
+        let selectedText =
+          getVisualSelectionText(buffer, ctx.state.visualSelection, ctx.state.tabStop)
         check selectedText.len > 0
 
         check registry.execute(ctx, builtin(bcEditCopy)).isOk
@@ -4574,8 +4575,9 @@ suite "Handler - Clipboard operations":
         ctx.setupVisual(0, 5, 1, 2, kind = vskLine)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
 
-        check getVisualSelectionText(buffer, ctx.state.visualSelection) ==
-          "first\nsecond\n"
+        check getVisualSelectionText(
+          buffer, ctx.state.visualSelection, ctx.state.tabStop
+        ) == "first\nsecond\n"
 
         let registry = createTestRegistry()
         check registry.execute(ctx, builtin(bcEditCut)).isOk
@@ -4595,8 +4597,9 @@ suite "Handler - Clipboard operations":
         ctx.setupVisual(0, 1, 2, 3, kind = vskBlock)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
 
-        check getVisualSelectionText(buffer, ctx.state.visualSelection) ==
-          "bcd\nhij\nnop"
+        check getVisualSelectionText(
+          buffer, ctx.state.visualSelection, ctx.state.tabStop
+        ) == "bcd\nhij\nnop"
 
         let registry = createTestRegistry()
         check registry.execute(ctx, builtin(bcEditCut)).isOk
@@ -4622,7 +4625,9 @@ suite "Handler - Clipboard operations":
         ctx.setupVisual(0, 2, 0, 6)
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
 
-        check getVisualSelectionText(buffer, ctx.state.visualSelection) == "llo w"
+        check getVisualSelectionText(
+          buffer, ctx.state.visualSelection, ctx.state.tabStop
+        ) == "llo w"
 
         let registry = createTestRegistry()
         check registry.execute(ctx, builtin(bcEditCut)).isOk

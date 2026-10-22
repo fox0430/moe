@@ -5540,7 +5540,7 @@ suite "forced Insert mode":
     check e.activeBuffer.beginTransaction("visual block insert").isOk
     e.state.editState.visualBlockInsertContext = some(
       VisualBlockInsertContext(
-        kind: vbiInsert, startLine: 0, endLine: 2, insertColumn: 0
+        kind: vbiInsert, area: BlockArea(firstLine: 0, lastLine: 2), insertColumn: 0
       )
     )
 

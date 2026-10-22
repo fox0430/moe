@@ -177,7 +177,7 @@ suite "Visual Commands - getVisualSelectionText":
       active: true,
       kind: vskChar,
     )
-    check getVisualSelectionText(buf, selection) == "lo w"
+    check getVisualSelectionText(buf, selection, tabStop = 8) == "lo w"
 
   test "vskLine returns entire covered lines regardless of start/end columns":
     # Regression: clipboard-cut on V-mode used to fall back to a char range
@@ -192,7 +192,8 @@ suite "Visual Commands - getVisualSelectionText":
       active: true,
       kind: vskLine,
     )
-    check getVisualSelectionText(buf, selection) == "hello world\nfoo bar baz\n"
+    check getVisualSelectionText(buf, selection, tabStop = 8) ==
+      "hello world\nfoo bar baz\n"
 
   test "vskBlock returns rectangle joined by newlines":
     let buf = newTextBuffer()
@@ -205,7 +206,7 @@ suite "Visual Commands - getVisualSelectionText":
       active: true,
       kind: vskBlock,
     )
-    check getVisualSelectionText(buf, selection) == "bcd\nhij\nnop"
+    check getVisualSelectionText(buf, selection, tabStop = 8) == "bcd\nhij\nnop"
 
   test "vskBlock with extendsToLineEnd takes each line to its end":
     let buf = newTextBuffer("short\na very long line\nmid")
@@ -216,7 +217,8 @@ suite "Visual Commands - getVisualSelectionText":
       kind: vskBlock,
       extendsToLineEnd: true,
     )
-    check getVisualSelectionText(buf, selection) == "short\na very long line\nmid"
+    check getVisualSelectionText(buf, selection, tabStop = 8) ==
+      "short\na very long line\nmid"
 
   test "vskLine with reversed selection still returns full lines":
     let buf = newTextBuffer()
@@ -228,7 +230,7 @@ suite "Visual Commands - getVisualSelectionText":
       active: true,
       kind: vskLine,
     )
-    check getVisualSelectionText(buf, selection) == "aaa\nbbb\n"
+    check getVisualSelectionText(buf, selection, tabStop = 8) == "aaa\nbbb\n"
 
   test "Inactive selection returns empty string":
     let buf = newTextBuffer()
@@ -239,7 +241,7 @@ suite "Visual Commands - getVisualSelectionText":
       active: false,
       kind: vskChar,
     )
-    check getVisualSelectionText(buf, selection) == ""
+    check getVisualSelectionText(buf, selection, tabStop = 8) == ""
 
 suite "Visual Commands - visualYank":
   test "Yank character selection":
@@ -929,8 +931,8 @@ suite "Visual Commands - visualReplace":
 
     visualReplace(buf, state, "x")
 
-    # Should replace 3 characters, not 9 bytes worth
-    check buf.getLine(0) == "xxx world"
+    # One for each of the six cells the block covers, as Vim's op_replace.
+    check buf.getLine(0) == "xxxxxx world"
 
   test "Replace character selection with a multibyte replacement":
     let buf = newTextBuffer()
@@ -971,8 +973,9 @@ suite "Visual Commands - visualReplace":
 
     visualReplace(buf, state, "あ")
 
-    check buf.getLine(0) == "ああc"
-    check buf.getLine(1) == "ああf"
+    # A wide replacement goes in once for every two cells, as in Vim.
+    check buf.getLine(0) == "あc"
+    check buf.getLine(1) == "あf"
 
   test "Replace character selection counts multibyte source in characters":
     let buf = newTextBuffer()
@@ -1417,16 +1420,17 @@ suite "Visual Commands - visualPaste":
     state.mode = EditorMode.VisualBlock
     state.registers.storeYanked(none(char), "X\nYZ", false)
     state.selectVisual(
-      BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 5), vskBlock
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 1, column: 3), vskBlock
     )
 
     discard visualPaste(buf, state, cursorAfter = true)
 
-    # Line 0 is shorter than the block start, so the insert appends at EOL.
+    # The delete leaves the cursor before the block on the first line, so the
+    # text goes after it (Vim 9.2: `l<C-v>jllgp`).
     check buf.len == 3
-    check buf.getLine(0) == "abX"
+    check buf.getLine(0) == "aX"
     check buf.getLine(1) == "YZ"
-    check buf.getLine(2) == "cde"
+    check buf.getLine(2) == "cgh"
     check state.cursor.line == 1
     check state.cursor.column == 1
     check state.mode == EditorMode.Normal
@@ -2030,12 +2034,13 @@ suite "Visual Commands - Edge Cases":
 
     visualYank(buf, state)
 
-    # Second line "hi" is shorter than column 5, so it contributes empty string.
-    # Old bug: substr(5, 4) with first>last also produced "" for lines 0 and 2.
+    # Second line "hi" ends before the block, which blanks fill, as Vim's
+    # block_prep. Old bug: substr(5, 4) with first>last produced "" for lines 0
+    # and 2.
     let lines = state.registers.getNoNamedRegister().getContent().split('\n')
     check lines.len == 3
     check lines[0] == " wor"
-    check lines[1] == ""
+    check lines[1] == "    "
     check lines[2] == "line"
 
   test "Join lines with inactive selection (no-op)":
@@ -2396,7 +2401,7 @@ suite "Visual Commands - visualSurround":
     discard buf.insertText(BufferPosition(line: 0, column: 11), "\nhi")
     let state = createTestState()
     state.selectVisual(
-      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 4), vskBlock
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 0, column: 4), vskBlock
     )
 
     visualSurround(buf, state, "{")
