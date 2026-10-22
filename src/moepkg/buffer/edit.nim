@@ -125,6 +125,12 @@ proc preparePastedText*(b: TextBuffer, text: string): string =
   else:
     text
 
+proc preparePastedRow*(b: TextBuffer, row: string): string =
+  ## Make a block's row a put brings in fit for `b`, as `preparePastedText`
+  ## does, but a CR breaks no line in a row: it goes, as no line of a decoded
+  ## buffer holds one.
+  b.preparePastedText(row).replace("\n", "")
+
 # Editing operations
 proc insertTextEnd*(
     b: TextBuffer,

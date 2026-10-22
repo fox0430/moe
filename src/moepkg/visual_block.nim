@@ -108,27 +108,19 @@ proc blockLine*(area: BlockArea, text: string, tabStop: int, use: BlockUse): Blo
     beforeStart = 0 ## The last character left of it (prev_pstart)
     stop = -1 ## Just past the characters the block reaches (pend)
     beforeStop = -1 ## The last of them (prev_pend)
-  for (column, _, cell, cells) in text.cellsOf(tabStop):
-    if cells == 0 and column > 0:
-      # A combining mark goes with the character it follows, as Vim's
-      # composing characters do.
-      if stop == column:
-        stop.inc
-      elif start == column:
-        start.inc
-      continue
-    if cell < area.startCell:
-      leftEnd = cell + cells
-      leftWidth = cells
-      start = column + 1
-      beforeStart = column
-    elif cell <= area.endCell:
-      rightEnd = cell + cells
-      stop = column + 1
-      beforeStop = column
+  for g in text.glyphsOf(tabStop):
+    if g.cell < area.startCell:
+      leftEnd = g.cell + g.width
+      leftWidth = g.width
+      start = g.next
+      beforeStart = g.column
+    elif g.cell <= area.endCell:
+      rightEnd = g.cell + g.width
+      stop = g.next
+      beforeStop = g.column
     else:
       break
-    width = cells
+    width = g.width
   if stop < 0:
     rightEnd = leftEnd
     stop = start
@@ -185,13 +177,28 @@ proc swapTaken*(line: BlockLine, text, middle: string): string =
   text.charSubStr(0, line.textCol) & middle &
     text.charSubStr(line.textCol + line.textLen)
 
-proc blockText*(buffer: TextBuffer, area: BlockArea, tabStop: int): string =
-  ## What a yank of `area` takes, a line of the block to a line of text.
-  var lines = newSeqOfCap[string](area.lastLine - area.firstLine + 1)
+proc blockRows(buffer: TextBuffer, area: BlockArea, tabStop: int): seq[string] =
+  ## What a yank of `area` takes from each of its lines.
+  result = newSeqOfCap[string](area.lastLine - area.firstLine + 1)
   for line in area.firstLine .. area.lastLine:
     let text = buffer.getLine(line)
-    lines.add area.blockLine(text, tabStop, buTake).takenText(text)
-  lines.join("\n")
+    result.add area.blockLine(text, tabStop, buTake).takenText(text)
+
+proc blockText*(buffer: TextBuffer, area: BlockArea, tabStop: int): string =
+  ## What a yank of `area` takes, a line of the block to a line of text.
+  buffer.blockRows(area, tabStop).join("\n")
+
+func blockWidth(area: BlockArea): int =
+  ## The cells a put of what `area` took pads its rows to, as Vim's y_width
+  ## + 1: up to the widest line's end after `<C-v>$`.
+  if area.toLineEnd:
+    max(1, area.endCell - area.startCell)
+  else:
+    area.endCell - area.startCell + 1
+
+proc takenBlock*(buffer: TextBuffer, area: BlockArea, tabStop: int): Register =
+  ## What a yank of `area` keeps, as a block (Vim's MBLOCK).
+  blockRegister(buffer.blockRows(area, tabStop), area.blockWidth)
 
 proc shownOn*(area: BlockArea, line: int, text: string, tabStop: int): BlockShown =
   ## What a block of `area` shows over on line `line`, whose text is `text`.
@@ -200,23 +207,21 @@ proc shownOn*(area: BlockArea, line: int, text: string, tabStop: int): BlockShow
   ## past a shorter line's end, the cell after the end shows selected, as Vim
   ## draws it.
   var lineEnd = 0
-  for (column, rune, cell, width) in text.cellsOf(tabStop):
-    if width == 0 and column > 0:
-      continue
-    if cell > area.endCell and not area.toLineEnd:
+  for g in text.glyphsOf(tabStop):
+    if g.cell > area.endCell and not area.toLineEnd:
       return
-    lineEnd = cell + width
-    let last = cell + max(width, 1) - 1
+    lineEnd = g.cell + g.width
+    let last = g.cell + max(g.width, 1) - 1
     if last >= area.startCell:
       if result.count == 0:
-        result.first = column
-        result.firstWidth = width
-        if rune == TAB_CHAR:
-          result.leadCells = max(0, area.startCell - cell)
-      result.count = column - result.first + 1
-      result.lastWidth = width
+        result.first = g.column
+        result.firstWidth = g.width
+        if g.rune == TAB_CHAR:
+          result.leadCells = max(0, area.startCell - g.cell)
+      result.count = g.column - result.first + 1
+      result.lastWidth = g.width
       result.trailCells =
-        if rune == TAB_CHAR and not area.toLineEnd:
+        if g.rune == TAB_CHAR and not area.toLineEnd:
           max(0, last - area.endCell)
         else:
           0

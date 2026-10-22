@@ -31,9 +31,16 @@ type
     croSucceeded
     croFailed
 
+  RegisterKind* = enum ## How a register's text goes in, as Vim's y_type
+    rkChars ## Within and across lines (MCHAR)
+    rkLines ## As whole lines (MLINE)
+    rkBlock ## As a block, a row to a line (MBLOCK)
+
   Register* = object ## A single register containing text
-    isLine*: bool ## Whether the content is linewise (vs characterwise)
-    buffer*: seq[string] ## Content lines
+    kind*: RegisterKind
+    buffer*: seq[string]
+      ## The text for `rkChars`, its lines for `rkLines`, its rows for `rkBlock`
+    width*: int ## The cells a block put pads its rows to (Vim's y_width + 1)
 
   Registers* = ref object ## Container for all register types
     clipboardTool*: Option[ClipboardTool]
@@ -63,3 +70,7 @@ type
 
     primarySelection*: Register ## Primary selection register (*) - X11 PRIMARY
     clipboardSelection*: Register ## Clipboard selection register (+, ~) - CLIPBOARD
+
+proc blockRegister*(rows: seq[string], width: int): Register =
+  ## A block of `rows`, put padded to `width` cells (Vim's MBLOCK).
+  Register(kind: rkBlock, buffer: rows, width: width)

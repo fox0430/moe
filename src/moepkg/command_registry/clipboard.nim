@@ -32,18 +32,18 @@ proc copySelection(ctx: CommandContext, sel: VisualSelection): Result[(), string
   if not sel.active:
     return err("No text selected")
 
-  let selectedText = getVisualSelectionText(ctx.buffer, sel, ctx.state.tabStop)
-  if selectedText.len == 0 and sel.kind == vskChar:
+  let selected = ctx.buffer.selectedRegister(sel, ctx.state.tabStop)
+  if selected.kind == rkChars and selected.holdsNoText:
     return err("No text selected")
 
   # Write synchronously so a following put reads the copied content.
-  let writeResult = writeToClipboardSync(ctx.clipboardConfig.tool, selectedText)
+  let writeResult =
+    writeToClipboardSync(ctx.clipboardConfig.tool, selected.selectionContent)
   if writeResult.isErr:
     return err(writeResult.error)
 
-  # Sync the unnamed register so the put keeps the linewise/characterwise type.
-  let isLine = sel.kind == vskLine
-  ctx.state.registers.markClipboardWritten(selectedText, isLine, writeResult.get)
+  # Sync the unnamed register so the put keeps the selection's kind.
+  ctx.state.registers.markClipboardWritten(selected, writeResult.get)
 
   return Result[(), string].ok ()
 

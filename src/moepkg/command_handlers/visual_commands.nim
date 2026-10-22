@@ -100,16 +100,25 @@ proc getVisualSelectionText*(
     let (selStart, selEnd) = selection.getSelectionRange()
     buffer.getTextInRange(selStart, selEnd)
 
+proc selectedRegister*(
+    buffer: TextBuffer, selection: VisualSelection, tabStop: int
+): Register =
+  ## What a yank of the active `selection` keeps: its text, as a block when
+  ## it is one (Vim's MBLOCK).
+  case selection.kind
+  of vskBlock:
+    buffer.takenBlock(buffer.blockArea(selection, tabStop), tabStop)
+  of vskLine:
+    toRegister(getLineText(buffer, selection), true)
+  of vskChar:
+    toRegister(getVisualSelectionText(buffer, selection, tabStop), false)
+
 proc visualYank*(buffer: TextBuffer, state: EditorState, register = none(char)) =
   ## Yank (copy) visual selection to `register` (else the yank register) and
   ## return to previous mode
   let sel = state.operandSelection(buffer)
   if sel.active:
-    let isLine = sel.kind == vskLine
-
-    state.registers.storeYanked(
-      register, getVisualSelectionText(buffer, sel, state.tabStop), isLine
-    )
+    state.registers.storeYanked(register, buffer.selectedRegister(sel, state.tabStop))
     # Vim puts the cursor on the start of what it took: a block's top left.
     state.cursor =
       if sel.kind == vskBlock:
@@ -126,15 +135,22 @@ proc visualYank*(buffer: TextBuffer, state: EditorState, register = none(char)) 
     state.statusMessage = ""
     state.leaveVisual()
 
+proc keepsRegisters(taken: Register, change = false): bool =
+  ## A Visual delete or change that took `taken` leaves the registers as they
+  ## were, as Vim's op_delete does over an empty region (`v` on the empty last
+  ## line, oap->empty) and for a delete, not a change, within one empty line
+  ## (`<C-v>d`; `<C-v>c` writes them).
+  taken.holdsNoText and (not change or taken.kind == rkChars)
+
 proc deleteBlockSelection(
-    buffer: TextBuffer, state: EditorState, area: BlockArea, deletedText: var string
+    buffer: TextBuffer, state: EditorState, area: BlockArea, yanked: var Register
 ): Result[(), string] =
-  ## Delete the block `area`; caller stores deletedText after commit. As
+  ## Delete the block `area`; caller stores `yanked` after commit. As
   ## Vim's op_delete, a character the block's edge cuts through goes whole and
   ## leaves blanks for its cells outside the block, and the cursor goes where
   ## the block started on the first line.
   let tabStop = state.tabStop
-  deletedText = buffer.blockText(area, tabStop)
+  yanked = buffer.takenBlock(area, tabStop)
 
   let first = area.blockLine(buffer.getLine(area.firstLine), tabStop, buDelete)
   let deleted = buffer.rewriteTaken(
@@ -154,18 +170,15 @@ proc deleteBlockSelection(
   ok(())
 
 proc deleteLineSelection(
-    buffer: TextBuffer,
-    state: EditorState,
-    sel: VisualSelection,
-    deletedText: var string,
+    buffer: TextBuffer, state: EditorState, sel: VisualSelection, yanked: var Register
 ): Result[(), string] =
-  ## Delete line-wise selection; caller stores deletedText after commit.
+  ## Delete line-wise selection; caller stores `yanked` after commit.
   let
     startLine = min(sel.start.line, sel.current.line)
     endLine = max(sel.start.line, sel.current.line)
 
   # Get text to yank first
-  deletedText = getLineText(buffer, sel)
+  yanked = toRegister(getLineText(buffer, sel), true)
 
   if startLine == 0 and endLine >= buffer.len - 1:
     let delResult = buffer.deleteAllLines()
@@ -193,8 +206,7 @@ proc visualDelete*(
   ## Delete `sel` into `register` (else the delete registers) and return to
   ## previous mode
   if sel.active:
-    var deletedText = ""
-    var deletedIsLine = false
+    var deleted: Register
 
     let txr = withTransaction(buffer, "Visual delete"):
       case sel.kind
@@ -202,16 +214,15 @@ proc visualDelete*(
         checkVisualEdit(
           state,
           deleteBlockSelection(
-            buffer, state, buffer.blockArea(sel, state.tabStop), deletedText
+            buffer, state, buffer.blockArea(sel, state.tabStop), deleted
           ),
         )
       of vskLine:
-        checkVisualEdit(state, deleteLineSelection(buffer, state, sel, deletedText))
-        deletedIsLine = true
+        checkVisualEdit(state, deleteLineSelection(buffer, state, sel, deleted))
       of vskChar:
         let (selStart, selEnd) = sel.getSelectionRange()
 
-        deletedText = buffer.getTextInRange(selStart, selEnd)
+        deleted = toRegister(buffer.getTextInRange(selStart, selEnd), false)
 
         checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
         state.cursor = selStart
@@ -222,7 +233,8 @@ proc visualDelete*(
       return
 
     # Registers are outside the buffer transaction, so store after commit.
-    state.registers.storeDeleted(register, deletedText, deletedIsLine)
+    if not deleted.keepsRegisters:
+      state.registers.storeDeleted(register, deleted)
 
     # Clamp cursor to valid position after deletion
     if state.cursor.line >= buffer.len:
@@ -523,8 +535,7 @@ proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)
   ## types, so one undo takes back both.
   let sel = state.operandSelection(buffer)
   if sel.active:
-    var deletedText = ""
-    var deletedIsLine = false
+    var deleted: Register
 
     let
       startLine = min(sel.start.line, sel.current.line)
@@ -548,7 +559,7 @@ proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)
     let txr = withTransactionForInsert(buffer, "Visual change", undoCursor):
       case sel.kind
       of vskBlock:
-        checkVisualEdit(state, deleteBlockSelection(buffer, state, area, deletedText))
+        checkVisualEdit(state, deleteBlockSelection(buffer, state, area, deleted))
         # Typing starts where the block was, past the last character when the
         # block reached the line's end, as Vim's op_change.
         let lineLen = buffer.getLine(startLine).charLen
@@ -563,13 +574,12 @@ proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)
           )
         )
       of vskLine:
-        deletedText = getLineText(buffer, sel)
-        deletedIsLine = true
+        deleted = toRegister(getLineText(buffer, sel), true)
 
         checkVisualEdit(state, buffer.emptyLinesForChange(state, startLine, endLine))
       of vskChar:
         let selEnd = sel.getSelectionRange()[1]
-        deletedText = buffer.getTextInRange(undoCursor, selEnd)
+        deleted = toRegister(buffer.getTextInRange(undoCursor, selEnd), false)
 
         checkVisualEdit(state, buffer.deleteRange(undoCursor, selEnd))
 
@@ -581,7 +591,8 @@ proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)
       return
 
     # Registers are outside the buffer transaction, so store after the delete.
-    state.registers.storeDeleted(register, deletedText, deletedIsLine)
+    if not deleted.keepsRegisters(change = true):
+      state.registers.storeDeleted(register, deleted)
 
     state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
     state.mode = EditorMode.Insert
@@ -645,7 +656,7 @@ proc visualPaste*(
     # Like Vim, the selection goes even when there is nothing to put. The
     # black hole register puts an empty string, which over whole lines is a
     # blank line.
-    putsNothing = source.isNothing and not regName.isBlackHoleRegisterName
+    putsNothing = source.isEmpty and not regName.isBlackHoleRegisterName
     cursorBeforePaste = state.cursor
     wantedColumn = state.preferredColumn
     startLine = min(sel.start.line, sel.current.line)
@@ -659,7 +670,7 @@ proc visualPaste*(
     emptied = sel.kind == vskLine and startLine == 0 and endLine >= buffer.len - 1
 
   var
-    deletedText = ""
+    deleted: Register
     area = PutArea()
 
   template failPaste(error: string) =
@@ -699,21 +710,21 @@ proc visualPaste*(
     # where the selection started: at the end of the line, or of the buffer.
     case sel.kind
     of vskBlock:
-      checkPasteErr(deleteBlockSelection(buffer, state, cells, deletedText))
+      checkPasteErr(deleteBlockSelection(buffer, state, cells, deleted))
       forward = state.cursor.column < cells.topLeft.column
       blockEnd = endLine
-      if source.isLine and not before:
+      if source.kind == rkLines and not before:
         # Lines go below the line the cursor ended on (Vim's b_visual.vi_end),
         # which can be the top one.
         state.cursor = BufferPosition(line: sel.current.line, column: 0)
         forward = true
     of vskLine:
-      checkPasteErr(deleteLineSelection(buffer, state, sel, deletedText))
+      checkPasteErr(deleteLineSelection(buffer, state, sel, deleted))
       forward = state.cursor.line < startLine
       flags.incl pfLines
     of vskChar:
       let (selStart, selEnd) = sel.getSelectionRange()
-      deletedText = buffer.getTextInRange(selStart, selEnd)
+      deleted = toRegister(buffer.getTextInRange(selStart, selEnd), false)
       checkPasteErr(buffer.deleteRange(selStart, selEnd))
       state.cursor = selStart
       clampCursorToLastChar(state.cursor, buffer.getLine(selStart.line).charLen)
@@ -726,8 +737,7 @@ proc visualPaste*(
       # Vim leaves folding off for the put, as the delete may have opened one.
       area = buffer.putText(
         state,
-        source.text,
-        source.isLine,
+        source,
         forward,
         count,
         flags,
@@ -746,10 +756,9 @@ proc visualPaste*(
     failPaste(txr.error)
 
   # Registers are not covered by the buffer transaction, so write the
-  # replaced text only after the transaction committed. Like Vim, deleting
-  # nothing (an empty line, the only one) leaves them as they were.
-  if not keepRegisters and (deletedText.len > 0 or sel.kind == vskLine):
-    state.registers.storeDeleted(none(char), deletedText, sel.kind == vskLine)
+  # replaced text only after the transaction committed.
+  if not keepRegisters and not deleted.keepsRegisters:
+    state.registers.storeDeleted(none(char), deleted)
 
   state.statusMessage = ""
   # Ctrl-o `p` leaves the cursor past the text for Insert to resume there.
