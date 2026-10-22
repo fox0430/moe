@@ -517,11 +517,16 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
   # Switch to insert mode
   state.mode = EditorMode.Insert
 
-proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)) =
-  ## Delete visual selection into `register` (else the delete registers) and
-  ## enter insert mode (c command). The transaction stays open for what Insert
-  ## types, so one undo takes back both.
-  let sel = state.operandSelection(buffer)
+proc visualChange*(
+    buffer: TextBuffer,
+    state: EditorState,
+    sel: VisualSelection,
+    area: BlockArea,
+    register = none(char),
+) =
+  ## Delete `sel`, the cells of `area` when blockwise, into `register` (else
+  ## the delete registers) and enter insert mode (c command). The transaction
+  ## stays open for what Insert types, so one undo takes back both.
   if sel.active:
     var deletedText = ""
     var deletedIsLine = false
@@ -529,11 +534,6 @@ proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)
     let
       startLine = min(sel.start.line, sel.current.line)
       endLine = max(sel.start.line, sel.current.line)
-      area =
-        if sel.kind == vskBlock:
-          buffer.blockArea(sel, state.tabStop)
-        else:
-          BlockArea()
 
     # As Vim, undo returns to the top left of the selection, the first column
     # of a linewise one.
@@ -586,6 +586,19 @@ proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)
     state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
     state.mode = EditorMode.Insert
 
+proc changeArea*(
+    buffer: TextBuffer, state: EditorState
+): tuple[sel: VisualSelection, area: BlockArea] =
+  ## The selection `c` changes, and its block when blockwise.
+  result.sel = state.operandSelection(buffer)
+  if result.sel.kind == vskBlock:
+    result.area = buffer.blockArea(result.sel, state.tabStop)
+
+proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)) =
+  ## Change the Visual selection (c command).
+  let (sel, area) = buffer.changeArea(state)
+  visualChange(buffer, state, sel, area, register)
+
 proc visualSwapSelection*(buffer: TextBuffer, state: EditorState) =
   ## Swap the cursor between the start and end of the selection (o command).
   ## Vertical moves then aim for the cursor's new column, even when it did not
@@ -593,7 +606,6 @@ proc visualSwapSelection*(buffer: TextBuffer, state: EditorState) =
   let sel = state.activeWindow.visualSelection
   if sel.active:
     state.selectVisualRange(anchor = sel.current, focus = sel.start)
-    state.preferredColumn = -1
 
 proc reselectVisual*(
     buffer: TextBuffer, state: EditorState

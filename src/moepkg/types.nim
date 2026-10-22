@@ -640,11 +640,24 @@ type
     ieOpenAbove # O
     ieSubstitute # s
     ieChange # c{motion}, cc and S, and C as c$
+    ieVisualChange # Visual c
+
+  VisualShape* = object
+    ## The size of a Visual area an operator acted on, which `.` selects again
+    ## from the cursor, as Vim's redo_VIsual.
+    kind*: VisualSelectionKind
+    lines*: int
+    cells*: int
+      ## Charwise on one line and blockwise: the width in screen cells.
+      ## Charwise over lines: the cell the last line ends on.
+    toLineEnd*: bool ## Selected with `$`: to each line's end (Vim's MAXCOL)
 
   InsertEntry* = object
     case kind*: InsertEntryKind
     of ieChange:
       operand*: Operand
+    of ieVisualChange:
+      shape*: VisualShape
     else:
       discard
 
@@ -725,8 +738,8 @@ type
     active*: bool # False outside the Visual modes
     kind*: VisualSelectionKind # Follows the Visual mode
     extendsToLineEnd*: bool
-      ## A block whose end follows each line's end, as in Vim after `<C-v>$`
-      ## (curswant == MAXCOL).
+      ## The end follows the line's end, as in Vim after `$` (curswant ==
+      ## MAXCOL): each line's for a block.
 
   BlockArea* = object
     ## The screen cells a Visual block covers on each of its lines, inclusive,

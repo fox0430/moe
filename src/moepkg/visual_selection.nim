@@ -45,14 +45,16 @@ proc visualSelection*(win: EditorWindow): VisualSelection =
     current: win.cursor,
     active: true,
     kind: win.mode.visualKind,
-    extendsToLineEnd: win.mode.visualKind == vskBlock and win.preferredColumn == LineEnd,
+    extendsToLineEnd: win.preferredColumn == LineEnd,
   )
 
 proc selectVisualRange*(state: EditorState, anchor, focus: BufferPosition) =
   ## Select from `anchor` to `focus`, which the cursor moves to. The window must
-  ## already be in Visual: entering it would reset the anchor.
+  ## already be in Visual: entering it would reset the anchor. The selection no
+  ## longer follows the line end `$` took it to.
   state.activeWindow.visualAnchor = anchor
   state.cursor = focus
+  state.preferredColumn = -1
 
 proc enterVisual*(
     state: EditorState, kind: VisualSelectionKind, anchor, focus: BufferPosition
