@@ -21,9 +21,9 @@
 ## Handles collapsed folds (one marker row) and line wrap (multiple segments
 ## + `topWrapOffset`). All views derive row arithmetic from `visibleLines`.
 
-import std/options
+import std/[options, unicode]
 
-import types, buffer/[core, fold], render_utils
+import types, buffer/[core, fold], render_utils, unicode_utils, wanted_column
 
 type
   RowLayout* = object
@@ -179,18 +179,32 @@ proc totalRows*(rl: RowLayout, stopLine: int): int =
     result = vl.startRow + vl.rows
 
 proc textCell*(
-    text: string, column: int, lineWrap: bool, maxWidth, tabStop, leftCell: int
+    text: string,
+    column: int,
+    lineWrap: bool,
+    maxWidth, tabStop, leftCell: int,
+    onTabEnd = false,
 ): tuple[wrapSeg, cellX: int] =
   ## Display cell of `text[column]`: (wrapSeg, cellX). Wrap-aware; without wrap
   ## the cell from the line start less `leftCell`, negative when scrolled off
-  ## the left.
+  ## the left. With `onTabEnd`, a tab's last cell, cut at the row's right edge
+  ## when the tab starts inside the row.
   if lineWrap:
-    cursorWrapPosition(text, column, maxWidth, tabStop)
+    let (wrapSeg, cellX) = cursorWrapPosition(text, column, maxWidth, tabStop)
+    if onTabEnd and text.getCharAtPos(column)[0] == TAB_CHAR:
+      # A wrapped row measures its tabs from its own start.
+      (wrapSeg, min(cellX + tabAdvance(cellX, tabStop), maxWidth) - 1)
+    else:
+      (wrapSeg, cellX)
   else:
-    (0, text.cellsAt(column, tabStop).first - leftCell)
+    let cellX = text.cursorCell(column, tabStop, onTabEnd) - leftCell
+    if cellX >= maxWidth and text.cellsAt(column, tabStop).first - leftCell < maxWidth:
+      (0, maxWidth - 1)
+    else:
+      (0, cellX)
 
 proc cursorCell*(
-    rl: RowLayout, line, column: int, leftCell: int = 0
+    rl: RowLayout, line, column: int, leftCell: int = 0, onTabEnd = false
 ): tuple[wrapSeg, cellX: int] =
   ## `textCell` for buffer position. Hidden fold line returns marker origin.
   if rl.buffer.isNil or line < 0 or line >= rl.lineCount:
@@ -198,7 +212,13 @@ proc cursorCell*(
   if rl.buffer.foldState.getCollapsedFoldAt(line).isSome:
     return (0, 0)
   textCell(
-    rl.buffer.getLine(line), column, rl.lineWrap, rl.maxWidth, rl.tabStop, leftCell
+    rl.buffer.getLine(line),
+    column,
+    rl.lineWrap,
+    rl.maxWidth,
+    rl.tabStop,
+    leftCell,
+    onTabEnd,
   )
 
 proc segmentStartColumn*(rl: RowLayout, line, wrapSeg: int): int =

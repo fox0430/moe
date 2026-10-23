@@ -336,10 +336,6 @@ proc processResultEpilogue(
       if hostHandled:
         return true
     elif not focused:
-      # Until the cursor moves, Visual aims for the cell the cursor showed on
-      # before, a tab's last in Normal mode, as Vim keeps w_virtcol.
-      if newMode.isVisualAllMode and not oldMode.isVisualAllMode:
-        e.state.preferredColumn = e.state.aimedColumn
       e.setMode(newMode)
 
       # Adjust cursor when transitioning from Insert or Replace to Normal mode

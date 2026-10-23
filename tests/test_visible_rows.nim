@@ -184,6 +184,31 @@ suite "cursorCell / cellToColumn":
     let buf = newTextBuffer("x".repeat(25))
     check buf.wrapAt10.cursorCell(0, 12) == (1, 2)
 
+  test "onTabEnd puts a cursor on a tab on its last cell":
+    let buf = newTextBuffer("ab\tcd")
+    let rl = buf.noWrap
+    # The tab covers cells 2-3; 'c' is not a tab.
+    check rl.cursorCell(0, 2, onTabEnd = true) == (0, 3)
+    check rl.cursorCell(0, 3, onTabEnd = true) == (0, 4)
+    # The left edge cuts the tab, whose last cell shows first.
+    check rl.cursorCell(0, 2, leftCell = 3, onTabEnd = true) == (0, 0)
+
+  test "onTabEnd measures a wrapped tab from its segment's start":
+    # The tab does not fit after "abcdefgh", so it starts segment 1.
+    let buf = newTextBuffer("abcdefgh\tx")
+    check buf.wrapAt10.cursorCell(0, 8, onTabEnd = true) == (1, 3)
+
+  test "onTabEnd keeps the cursor on a tab wider than the row inside it":
+    let buf = newTextBuffer("\tx")
+    for lineWrap in [false, true]:
+      let rl = initRowLayout(buf, nil, lineWrap, 3, 8)
+      check rl.cursorCell(0, 0, onTabEnd = true) == (0, 2)
+
+  test "onTabEnd leaves a tab right of the row where it is":
+    # The tab covers cells 4-7, all past a row 3 cells wide.
+    let rl = initRowLayout(newTextBuffer("abcd\tx"), nil, false, 3, 8)
+    check rl.cursorCell(0, 4, onTabEnd = true) == (0, 7)
+
   test "a folded line reports the marker origin":
     let buf = linesBuffer(10, "hello")
     check buf.foldState.addFold(2, 5, collapsed = true)

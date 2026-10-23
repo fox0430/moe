@@ -274,6 +274,7 @@ proc settleCommandPart(e: Editor) =
     e.commandRanIn.settleWantedColumn(ranIn = true)
   if not endedIn.isNil and endedIn != e.commandRanIn:
     endedIn.settleWantedColumn(ranIn = false)
+    endedIn.noteEntered()
 
 proc beginCommand(e: Editor) =
   # A command run inside another, such as a macro's key, ends the part of the
