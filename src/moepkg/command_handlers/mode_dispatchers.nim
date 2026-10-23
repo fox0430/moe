@@ -64,11 +64,22 @@ proc commitInsertModeBoundary*(
 
   ok()
 
-proc replicateBlockInsert*(buffer: TextBuffer, state: EditorState): string =
+type BlockInsertEnd* = enum
+  ## How an Insert session ends, for where a Visual-block insert leaves the
+  ## cursor
+  bieTyping ## Insert goes on where the cursor is (an undo step)
+  bieResume ## Insert goes on after a Normal command or a command line (Ctrl-o)
+  bieLeave ## Insert ends, and leaving it steps back
+
+proc replicateBlockInsert*(
+    buffer: TextBuffer, state: EditorState, ending = bieLeave
+): string =
   ## End a Visual-block insert: copy what the first line gained, from where
   ## typing started, onto the block's other lines, as Vim does. Nothing is
-  ## copied when the cursor left the first line. Returns an error message, or
-  ## "".
+  ## copied when the cursor left the first line. An `I` or `A` that typed
+  ## something then puts the cursor on the block's top left, as Vim's
+  ## op_insert, unless Insert goes on where it is (`bieTyping`), and the step
+  ## back of leaving Insert leaves it there. Returns an error message, or "".
   if state.editState.visualBlockInsertContext.isNone:
     return ""
   let ctx = state.editState.visualBlockInsertContext.get
@@ -80,31 +91,39 @@ proc replicateBlockInsert*(buffer: TextBuffer, state: EditorState): string =
     firstLine = buffer.getLine(area.firstLine)
     gained = firstLine.charLen - ctx.firstLineLen
     lastLine = min(area.lastLine, buffer.len - 1)
-  if gained <= 0 or lastLine <= area.firstLine:
+  if gained <= 0:
     return ""
-  let
-    typed = firstLine.charSubStr(min(ctx.insertColumn, ctx.firstLineLen), gained)
-    kind = ctx.kind
-  var below = area
-  below.firstLine.inc
-  below.lastLine = lastLine
-  let replicated = buffer.rewriteBlock(
-    below,
-    state.tabStop,
-    kind.copyUse,
-    proc(area: BlockArea, text: string, cut: BlockLine): string =
-      area.typedInto(cut, text, typed, kind),
-  )
-  if replicated.isErr:
-    return replicated.error
-  ""
+  if lastLine > area.firstLine:
+    let
+      typed = firstLine.charSubStr(min(ctx.insertColumn, ctx.firstLineLen), gained)
+      kind = ctx.kind
+    var below = area
+    below.firstLine.inc
+    below.lastLine = lastLine
+    let replicated = buffer.rewriteBlock(
+      below,
+      state.tabStop,
+      kind.copyUse,
+      proc(area: BlockArea, text: string, cut: BlockLine): string =
+        area.typedInto(cut, text, typed, kind),
+    )
+    if replicated.isErr:
+      return replicated.error
+  if ctx.kind != vbiChange and ending != bieTyping:
+    let aimed = state.aimedColumn
+    state.cursor = area.topLeft
+    if ending == bieResume:
+      # Vim's op_insert leaves curswant where typing ended.
+      state.preferredColumn = aimed
+    else:
+      state.activeWindow.placeCursorOnInsertExit()
 
 proc finalizeInsertExit*(
-    buffer: TextBuffer, state: EditorState, staysInInsert = false
+    buffer: TextBuffer, state: EditorState, ending = bieLeave
 ): Result[string, string] =
   ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, the end of what
   ## `.` repeats, visual-block replication and transaction commit.
-  ## `staysInInsert` is for a boundary that goes on in Insert, where no Escape
+  ## `bieTyping` is for a boundary that goes on in Insert, where no Escape
   ## keeps the column after the auto-indent taken off.
   ##
   ## ok carries a non-fatal warning to surface (empty when clean), which must
@@ -112,10 +131,10 @@ proc finalizeInsertExit*(
   state.snippetSession.active = false
   state.endInsertRecord()
 
-  clearAutoIndentIfUnedited(buffer, state, keepColumn = not staysInInsert)
+  clearAutoIndentIfUnedited(buffer, state, keepColumn = ending != bieTyping)
 
   # Not typed, so `.` repeats what was typed, not the copies.
-  let replicationError = replicateBlockInsert(buffer, state)
+  let replicationError = replicateBlockInsert(buffer, state, ending)
 
   if buffer.inTransaction:
     let transactionResult = buffer.commitTransaction()
@@ -233,9 +252,9 @@ proc handleInsertMode*(
       # It ends a Visual-block insert, as in Vim.
       if state.config.standard.forceInsertMode and r.isCtrlOExit:
         state.closeInsertRecord()
+        let replicationError = replicateBlockInsert(buffer, state, bieResume)
         # Insert goes on after the command line, as Ctrl-o resumes it.
         state.resumeTyping(state.cursor)
-        let replicationError = replicateBlockInsert(buffer, state)
         return HandlerResult(
           kind: hrHandled,
           modeTransition: none(EditorMode),
@@ -254,7 +273,7 @@ proc handleInsertMode*(
       # transaction. The count is not typed again.
       if r.isCtrlOExit:
         let inChange = state.editState.typing.open
-        let finalizeResult = finalizeInsertExit(buffer, state)
+        let finalizeResult = finalizeInsertExit(buffer, state, bieResume)
         if finalizeResult.isOk:
           state.leaveInsertForCtrlO(buffer)
           state.insertResume = irWaiting

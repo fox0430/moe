@@ -57,6 +57,14 @@ proc visualJoinLines(buffer: TextBuffer, state: EditorState) =
   let (sel, area) = buffer.operandArea(state)
   discard visualJoinLines(buffer, state, sel, area)
 
+proc visualReplace(buffer: TextBuffer, state: EditorState, ch: string) =
+  let (sel, area) = buffer.operandArea(state)
+  discard visualReplace(buffer, state, sel, area, ch)
+
+proc visualToInsertMode(buffer: TextBuffer, state: EditorState) =
+  let (sel, area) = buffer.operandArea(state)
+  visualToInsertMode(buffer, state, sel, area)
+
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
   let window = EditorWindow(

@@ -988,9 +988,9 @@ suite "executeCommand - visual replace dot-repeat":
     check recorded.isSome
     check recorded.get.kind == lecVisualReplace
     check recorded.get.visualReplaceChar == "x"
-    check recorded.get.visualReplaceKind == vskChar
-    check recorded.get.visualReplaceRows == 1
-    check recorded.get.visualReplaceCols == 2
+    check recorded.get.visualReplaceShape.kind == vskChar
+    check recorded.get.visualReplaceShape.lines == 1
+    check recorded.get.visualReplaceShape.cells == 2
 
     ctx.setCursor(2, 0)
     check registry.executeCommand(
@@ -1076,8 +1076,8 @@ suite "executeCommand - visual replace dot-repeat":
 
     let recorded = ctx.state.editState.lastEditCommand
     check recorded.isSome
-    check recorded.get.visualReplaceRows == 2
-    check recorded.get.visualReplaceCols == 2
+    check recorded.get.visualReplaceShape.lines == 2
+    check recorded.get.visualReplaceShape.cells == 1
 
     ctx.setCursor(3, 0)
     check registry.executeCommand(
@@ -1248,193 +1248,93 @@ suite "executeCommand - visual replace dot-repeat":
     ).isErr
     check buffer[1] == "fghij"
 
-  test "dot after linewise visual r widens over a closed fold":
-    # cursorLineRange widens over the fold: the 2-line shape from line 2
-    # touches the fold at 3-4, so lines 2-4 are replaced and the fold stays
-    # closed instead of replaying into hidden text.
-    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
-    check buffer.foldState.addFold(3, 4, collapsed = true)
-    let ctx = createTestContext(buffer)
-    let registry = createTestRegistry()
+  # Measured in Vim 9.2 (`vim -u NONE`, `:fold` over the lines): `.` replaces
+  # an area as big at the cursor and leaves closed folds as they are.
+  for (name, lines, fold, sel, kind, ch, cursor, want) in [
+    (
+      "linewise",
+      @["aaa", "bbb", "ccc", "ddd", "eee"],
+      (3, 4),
+      (0, 0, 1, 0),
+      vskLine,
+      "x",
+      (2, 0),
+      @["xxx", "xxx", "xxx", "xxx", "eee"],
+    ),
+    (
+      "blockwise",
+      @["aaa", "bbb", "ccc", "ddd", "eee", "fff"],
+      (2, 4),
+      (0, 0, 1, 1),
+      vskBlock,
+      "x",
+      (1, 0),
+      @["xxa", "xxb", "xxc", "ddd", "eee", "fff"],
+    ),
+    (
+      "multi-line charwise",
+      @["aaa", "bbb", "ccc", "ddd", "eee", "fff"],
+      (2, 4),
+      (0, 0, 1, 1),
+      vskChar,
+      "X",
+      (1, 0),
+      @["XXX", "XXX", "XXc", "ddd", "eee", "fff"],
+    ),
+    (
+      "single-line charwise",
+      @["aaa", "bbb", "ccc", "ddd", "eee"],
+      (2, 3),
+      (0, 0, 0, 1),
+      vskChar,
+      "x",
+      (2, 0),
+      @["xxa", "bbb", "xxc", "ddd", "eee"],
+    ),
+    (
+      "blockwise from a fold",
+      @["aaa", "bbb", "ccc", "ddd", "eee", "fff"],
+      (3, 4),
+      (0, 0, 1, 1),
+      vskBlock,
+      "x",
+      (3, 0),
+      @["xxa", "xxb", "ccc", "xxd", "xxe", "fff"],
+    ),
+    (
+      "multi-line charwise from a fold",
+      @["aaa", "bbb", "ccc", "ddd", "eee", "fff"],
+      (3, 4),
+      (0, 0, 1, 1),
+      vskChar,
+      "X",
+      (3, 0),
+      @["XXX", "XXb", "ccc", "XXX", "XXe", "fff"],
+    ),
+  ]:
+    test "dot after " & name & " visual r leaves a closed fold as it is":
+      let buffer = newTextBuffer(lines.join("\n"))
+      check buffer.foldState.addFold(fold[0], fold[1], collapsed = true)
+      let ctx = createTestContext(buffer)
+      let registry = createTestRegistry()
 
-    ctx.setupVisual(0, 0, 1, 0, vskLine)
-    check registry.executeCommand(
-      ctx,
-      Command(
-        kind: ctOperatorPending,
-        operatorType: "visual-replace",
-        targetChar: "x",
-        count: 1,
-      ),
-    ).isOk
-    check buffer[0] == "xxx"
-    check buffer[1] == "xxx"
+      ctx.setupVisual(sel[0], sel[1], sel[2], sel[3], kind)
+      check registry.executeCommand(
+        ctx,
+        Command(
+          kind: ctOperatorPending,
+          operatorType: "visual-replace",
+          targetChar: ch,
+          count: 1,
+        ),
+      ).isOk
 
-    ctx.setCursor(2, 0)
-    check registry.executeCommand(
-      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
-    ).isOk
-    check buffer[2] == "xxx"
-    check buffer[3] == "xxx"
-    check buffer[4] == "xxx"
-    check buffer.foldState.folds[0].collapsed
-
-  test "dot after blockwise visual r covers a closed fold whole":
-    # The 2-row shape from line 1 touches the fold at 2-4, so snapRangeToFolds
-    # widens the range and the fold is replaced linewise as a unit.
-    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee\nfff")
-    check buffer.foldState.addFold(2, 4, collapsed = true)
-    let ctx = createTestContext(buffer)
-    let registry = createTestRegistry()
-
-    ctx.setupVisual(0, 0, 1, 1, vskBlock)
-    check registry.executeCommand(
-      ctx,
-      Command(
-        kind: ctOperatorPending,
-        operatorType: "visual-replace",
-        targetChar: "x",
-        count: 1,
-      ),
-    ).isOk
-    check buffer[0] == "xxa"
-    check buffer[1] == "xxb"
-
-    ctx.setCursor(1, 0)
-    check registry.executeCommand(
-      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
-    ).isOk
-    check buffer[0] == "xxa"
-    check buffer[1] == "xxx"
-    check buffer[2] == "xxx"
-    check buffer[3] == "xxx"
-    check buffer[4] == "xxx"
-    check buffer[5] == "fff"
-    check buffer.foldState.folds[0].collapsed
-
-  test "dot after multi-line charwise visual r covers a closed fold whole":
-    # Same snap branch as blockwise: the 2-row shape from line 1 touches the
-    # fold at 2-4, so the fold is replaced linewise instead of partially.
-    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee\nfff")
-    check buffer.foldState.addFold(2, 4, collapsed = true)
-    let ctx = createTestContext(buffer)
-    let registry = createTestRegistry()
-
-    ctx.setupVisual(0, 0, 1, 1)
-    check registry.executeCommand(
-      ctx,
-      Command(
-        kind: ctOperatorPending,
-        operatorType: "visual-replace",
-        targetChar: "X",
-        count: 1,
-      ),
-    ).isOk
-    check buffer[0] == "XXX"
-    check buffer[1] == "XXb"
-
-    ctx.setCursor(1, 0)
-    check registry.executeCommand(
-      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
-    ).isOk
-    check buffer[0] == "XXX"
-    check buffer[1] == "XXX"
-    check buffer[2] == "XXX"
-    check buffer[3] == "XXX"
-    check buffer[4] == "XXX"
-    check buffer[5] == "fff"
-    check buffer.foldState.folds[0].collapsed
-
-  test "dot after single-line charwise visual r covers a closed fold whole":
-    # The recorded shape is two characters on one line, but the cursor lands on
-    # a closed fold, which the live command replaces whole and linewise.
-    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
-    check buffer.foldState.addFold(2, 3, collapsed = true)
-    let ctx = createTestContext(buffer)
-    let registry = createTestRegistry()
-
-    ctx.setupVisual(0, 0, 0, 1)
-    check registry.executeCommand(
-      ctx,
-      Command(
-        kind: ctOperatorPending,
-        operatorType: "visual-replace",
-        targetChar: "x",
-        count: 1,
-      ),
-    ).isOk
-    check buffer[0] == "xxa"
-
-    ctx.setCursor(2, 0)
-    check registry.executeCommand(
-      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
-    ).isOk
-    check buffer[2] == "xxx"
-    check buffer[3] == "xxx"
-    check buffer[4] == "eee"
-    check buffer.foldState.folds[0].collapsed
-
-  test "dot after blockwise visual r covers a fold the range already contains":
-    # Snapping widens nothing when the repeat range covers the fold exactly, so
-    # the branch has to ask whether a fold is touched, not whether it widened.
-    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee\nfff")
-    check buffer.foldState.addFold(3, 4, collapsed = true)
-    let ctx = createTestContext(buffer)
-    let registry = createTestRegistry()
-
-    ctx.setupVisual(0, 0, 1, 1, vskBlock)
-    check registry.executeCommand(
-      ctx,
-      Command(
-        kind: ctOperatorPending,
-        operatorType: "visual-replace",
-        targetChar: "x",
-        count: 1,
-      ),
-    ).isOk
-    check buffer[0] == "xxa"
-    check buffer[1] == "xxb"
-
-    ctx.setCursor(3, 0)
-    check registry.executeCommand(
-      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
-    ).isOk
-    check buffer[2] == "ccc"
-    check buffer[3] == "xxx"
-    check buffer[4] == "xxx"
-    check buffer[5] == "fff"
-    check buffer.foldState.folds[0].collapsed
-
-  test "dot after multi-line charwise visual r covers a contained fold whole":
-    # Same exactly-aligned range as the blockwise case: without a touch test the
-    # last line would keep the partial `visualReplaceCols` replacement.
-    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee\nfff")
-    check buffer.foldState.addFold(3, 4, collapsed = true)
-    let ctx = createTestContext(buffer)
-    let registry = createTestRegistry()
-
-    ctx.setupVisual(0, 0, 1, 1)
-    check registry.executeCommand(
-      ctx,
-      Command(
-        kind: ctOperatorPending,
-        operatorType: "visual-replace",
-        targetChar: "X",
-        count: 1,
-      ),
-    ).isOk
-    check buffer[0] == "XXX"
-    check buffer[1] == "XXb"
-
-    ctx.setCursor(3, 0)
-    check registry.executeCommand(
-      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
-    ).isOk
-    check buffer[2] == "ccc"
-    check buffer[3] == "XXX"
-    check buffer[4] == "XXX"
-    check buffer[5] == "fff"
-    check buffer.foldState.folds[0].collapsed
+      ctx.setCursor(cursor[0], cursor[1])
+      check registry.executeCommand(
+        ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+      ).isOk
+      for i, line in want:
+        check buffer[i] == line
 
 suite "executeCommand - visual surround":
   test "visual surround writes a multibyte target whole":

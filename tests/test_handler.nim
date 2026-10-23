@@ -5402,10 +5402,26 @@ suite "Visual-block insert - what the other lines get":
     check run("<C-v>jjIab<BS><BS><BS><Esc>") == @["bcdef", "ghijkl", "mnopqr"]
     check run("<C-v>jjI<Del>Z<Esc>") == @["aZcdef", "ghijkl", "mnopqr"]
 
-  test "Ctrl-O ends the block insert":
-    # Vim also moves the cursor to the block start there, so its first line
-    # reads "aaZbbcdef"; only the copies are compared.
-    check run("<C-v>jjIab<C-o>lZ<Esc>")[1 .. 2] == @["gabhijkl", "mabnopqr"]
+  test "Ctrl-O ends the block insert from the block start, as in Vim":
+    check run("<C-v>jjIab<C-o>lZ<Esc>") == @["aaZbbcdef", "gabhijkl", "mabnopqr"]
+
+  test "Escape leaves the cursor on the block's top left, as in Vim":
+    check editorAfter("<C-v>jjIab<Esc>").cursor == BufferPosition(line: 0, column: 1)
+    check editorAfter("<C-v>jjAab<Esc>").cursor == BufferPosition(line: 0, column: 1)
+    check editorAfter("<C-v>jjIab<Down><Esc>").cursor ==
+      BufferPosition(line: 1, column: 2)
+
+  test "a block change leaves the cursor where typing ended, as in Vim":
+    check editorAfter("<C-v>jlcXY<Esc>").cursor == BufferPosition(line: 0, column: 2)
+    check run("<C-v>jlcXY<C-o>lZ<Esc>") == @["aXYdZef", "gXYjkl", "mnopqr"]
+
+  test "Escape in forced Insert mode types on from the block's top left":
+    let e = editorAfter("<C-v>jjIab")
+    e.config.standard.forceInsertMode = true
+    for key in keysOf("<Esc>Z"):
+      check e.handleKeyCombo(key)
+    check e.state.mode == EditorMode.Insert
+    check $e.activeBuffer.getLine(0) == "aZabbcdef"
 
   test "Ctrl-O to the command line in forced Insert mode ends it too":
     let e = editorAfter("<C-v>jjIab")
@@ -5419,7 +5435,7 @@ suite "Visual-block insert - what the other lines get":
   test "`.` repeats what was typed, not the copies":
     let e = editorAfter("<C-v>jjIab<Esc>")
     check e.state.editState.lastEditCommand.get.kind == lecInsert
-    check e.state.editState.insertRecord.entry.kind == ieInsert
+    check e.state.editState.insertRecord.entry.kind == ieVisualInsert
     check e.state.editState.insertRecord.typed.len == 2
 
 suite "forced Insert mode":

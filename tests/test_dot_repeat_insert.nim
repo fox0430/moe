@@ -939,6 +939,165 @@ suite "`.` changes a Visual area as big at the cursor, as in Vim":
     e.press("j0.")
     check e.lines == @["Xcdef", "Xcdef", "abcdef", "abcdef", "abcdef"]
 
+suite "`.` inserts over a Visual block as big at the cursor, as in Vim":
+  # Measured in Vim 9.2 (`vim -u NONE`).
+  const Four = @["abcdef", "abcdef", "abcdef", "abcdef"]
+  for (lines, cursor, keys, want, wantCursor) in [
+    (
+      Four,
+      (0, 0),
+      "<C-v>jIX<Escape>jj0.",
+      @["Xabcdef", "Xabcdef", "Xabcdef", "Xabcdef"],
+      (2, 0),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>jlAXY<Escape>",
+      @["abXYcdef", "abXYcdef", "abcdef", "abcdef"],
+      (0, 0),
+    ),
+    (
+      Four,
+      (0, 0),
+      "l<C-v>jlAX<Escape>",
+      @["abcXdef", "abcXdef", "abcdef", "abcdef"],
+      (0, 1),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>jlIXY<Escape>",
+      @["XYabcdef", "XYabcdef", "abcdef", "abcdef"],
+      (0, 0),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>j$AX<Escape>jj0.",
+      @["abcdefX", "abcdefX", "abcdefX", "abcdefX"],
+      (2, 0),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>jlIX<Escape>jj0l.",
+      @["Xabcdef", "Xabcdef", "aXbcdef", "aXbcdef"],
+      (2, 1),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>jlAX<Escape>jj0.",
+      @["abXcdef", "abXcdef", "abXcdef", "abXcdef"],
+      (2, 0),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>jlAXY<Escape>jjl.",
+      @["abXYcdef", "abXYcdef", "abcXYdef", "abcXYdef"],
+      (2, 1),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>jIX<Escape>jj03.",
+      @["Xabcdef", "Xabcdef", "Xabcdef", "Xabcdef"],
+      (2, 0),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>jIX<Escape>jjj0.",
+      @["Xabcdef", "Xabcdef", "abcdef", "Xabcdef"],
+      (3, 0),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>jIX<Escape>jj0.u",
+      @["Xabcdef", "Xabcdef", "abcdef", "abcdef"],
+      (2, 0),
+    ),
+    (
+      Four,
+      (0, 2),
+      "<C-v>j$AX<Escape>jj0l.u",
+      @["abcdefX", "abcdefX", "abcdef", "abcdef"],
+      (2, 5),
+    ),
+    (
+      Four,
+      (0, 2),
+      "<C-v>jAX<Escape>jj0l.u",
+      @["abcXdef", "abcXdef", "abcdef", "abcdef"],
+      (2, 2),
+    ),
+    (
+      Four,
+      (0, 0),
+      "<C-v>jlIX<Escape>jj0.gvd",
+      @["bcdef", "bcdef", "Xabcdef", "Xabcdef"],
+      (0, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef", "a", "abcdef"],
+      (0, 2),
+      "<C-v>jIX<Escape>jj0ll.",
+      @["abXcdef", "abXcdef", "abXcdef", "a", "abcdef"],
+      (2, 2),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef", "a", "abcdef"],
+      (0, 2),
+      "<C-v>jAX<Escape>jj0ll.",
+      @["abcXdef", "abcXdef", "abcXdef", "a  X", "abcdef"],
+      (2, 2),
+    ),
+    (
+      @["abcdef", "abcdef", "a\tbcdef", "a\tbcdef"],
+      (0, 2),
+      "<C-v>jIX<Escape>jj0l.",
+      @["abXcdef", "abXcdef", "aX\tbcdef", "aX\tbcdef"],
+      (2, 1),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef"],
+      (0, 0),
+      "<C-v>jIX<Escape>jj0.",
+      @["Xabcdef", "Xabcdef", "Xabcdef"],
+      (2, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef", "abcdef", "abcdef", "abcdef"],
+      (0, 0),
+      "<C-v>jIX<Escape>jj0.jj0.",
+      @["Xabcdef", "Xabcdef", "Xabcdef", "Xabcdef", "Xabcdef", "Xabcdef"],
+      (4, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef", "abcdef", "abcdef"],
+      (0, 2),
+      "<C-v>jjIfoo<C-o>jX<Escape>",
+      @["abfoocdef", "abfooXcdef", "abfoocdef", "abcdef", "abcdef"],
+      (1, 5),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef", "abcdef", "abcdef"],
+      (0, 2),
+      "<C-v>jjIfoo<C-o>lX<Escape>",
+      @["abfXoocdef", "abfoocdef", "abfoocdef", "abcdef", "abcdef"],
+      (0, 3),
+    ),
+  ]:
+    test keys & " from " & $cursor & " in " & $lines:
+      let e = newVimLikeEditor(lines, cursor[0], cursor[1])
+      e.press(keys)
+      check e.state.mode == EditorMode.Normal
+      check e.lines == want
+      check e.cursorAt == wantCursor
+
 suite "the text Enter carries down, as in Vim":
   # Measured in Vim 9.2 (`vim -u NONE`, typed through a terminal). With
   # autoindent the new line takes the indent of the text before the cursor and

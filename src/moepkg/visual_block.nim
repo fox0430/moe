@@ -355,7 +355,7 @@ proc replaceBlock*(
       area.replacedWith(cut, text, ch),
   )
 
-proc repeatedBlock*(
+proc repeatedBlock(
     buffer: TextBuffer,
     at: BufferPosition,
     lines, cells: int,

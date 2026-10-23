@@ -341,21 +341,6 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
   # The transaction stays open for what is typed in Insert mode.
   ctx.beginInsert(InsertEntry(kind: ieSubstitute), count)
 
-proc cursorLineRange(
-    ctx: CommandContext, count: int
-): tuple[startLine, endLine, lineCount: int] =
-  ## Inclusive line range for a count-prefixed linewise command at the cursor,
-  ## widened so every closed fold it touches is covered whole.
-  let first = ctx.cursor.line
-  if first < 0 or first >= ctx.buffer.len:
-    # A stale cursor names no line. `snapRangeToFolds` normalizes a reversed
-    # range, so it would turn the empty request into a valid-looking one.
-    return (first, first - 1, 0)
-  let
-    last = min(first + max(1, count) - 1, ctx.buffer.len - 1)
-    (lo, hi) = ctx.buffer.foldState.snapRangeToFolds(first, last)
-  (lo, hi, hi - lo + 1)
-
 proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Toggle case of character(s) at cursor position (~ command)
   ## Changes uppercase to lowercase and vice versa, then moves cursor right
@@ -587,6 +572,46 @@ proc handleDecrementNumber*(
 ): Result[(), string] =
   ## Subtract [count] from the number at or after cursor (Ctrl-X command)
   addToNumberAtCursor(ctx, -parseCount(args, default = 1))
+
+proc repeatedArea(
+    ctx: CommandContext, shape: VisualShape
+): Result[tuple[sel: VisualSelection, area: BlockArea], string] =
+  ## The area `.` acts on again, as big as `shape` at the cursor, as Vim's
+  ## redo_VIsual: closed folds or not, and the area `gv` selects stays.
+  if ctx.cursor.line notin 0 ..< ctx.buffer.len:
+    return err("Nothing to repeat")
+  ok(
+    ctx.buffer.repeatedSelection(
+      ctx.cursor, shape, ctx.state.tabStop, ctx.state.activeWindow.cursorOnTabEnd
+    )
+  )
+
+proc repeatVisualInsert(ctx: CommandContext, entry: InsertEntry): Result[(), string] =
+  ## `.` of a Visual c, or a Visual-block I or A.
+  if ctx.buffer.readOnly:
+    return err("Buffer is read-only")
+  let (sel, area) = ?ctx.repeatedArea(entry.shape)
+  ctx.state.statusMessage = ""
+  case entry.kind
+  of ieVisualInsert:
+    visualToInsertMode(ctx.buffer, ctx.state, sel, area)
+  of ieVisualAppend:
+    visualBlockAppend(ctx.buffer, ctx.state, sel, area)
+  of ieVisualChange:
+    visualChange(ctx.buffer, ctx.state, sel, area, ctx.register)
+  else:
+    return err("Not a Visual change: " & $entry.kind)
+  if ctx.state.mode != EditorMode.Insert:
+    return err(
+      if ctx.state.statusMessage.len > 0:
+        ctx.state.statusMessage
+      else:
+        "Nothing to repeat"
+    )
+  result = ctx.beginInsert(entry, 1)
+  if result.isErr:
+    ctx.state.editState.visualBlockInsertContext = none(VisualBlockInsertContext)
+    ctx.state.mode = EditorMode.Normal
 
 proc registerEditCommands*(registry: CommandRegistry) =
   ## Register all edit-category commands (delete/substitute/paste/yank/operator/text_object/increment).
@@ -982,176 +1007,23 @@ proc registerEditCommands*(registry: CommandRegistry) =
             operand.countGiven = true
           ctx.startOperator(OpChange)
           return registry.finishOperator(ctx, operand)
-        of ieVisualChange:
-          # Vim's redo_VIsual: an area as big at the cursor, closed folds or
-          # not, and the area `gv` selects stays.
-          let (sel, area) = ctx.buffer.repeatedSelection(
-            ctx.cursor, record.entry.shape, ctx.state.tabStop,
-            ctx.state.activeWindow.cursorOnTabEnd,
-          )
-          visualChange(ctx.buffer, ctx.state, sel, area, ctx.register)
-          if ctx.state.mode != EditorMode.Insert:
-            return err(ctx.state.statusMessage)
-          ctx.enterInsert(record.entry, 1)
-          return ok(())
+        of ieVisualChange, ieVisualInsert, ieVisualAppend:
+          return ctx.repeatVisualInsert(record.entry)
       of lecVisualOperator:
-        # Vim's redo_VIsual: an area as big at the cursor, closed folds or not,
-        # with the count the operator had.
-        let (sel, area) = ctx.buffer.repeatedSelection(
-          ctx.cursor, lastCmd.visualShape, ctx.state.tabStop,
-          ctx.state.activeWindow.cursorOnTabEnd,
-        )
+        # With the count the operator had.
+        let (sel, area) = ?ctx.repeatedArea(lastCmd.visualShape)
         return runVisualOperator(
           ctx.buffer, ctx.state, lastCmd.visualOperator, sel, area, lastCmd.visualCount,
           ctx.register,
         )
       of lecVisualReplace:
-        # Repeat Visual `r` from the cursor with the recorded shape.
-        # Ignores count. The cursor stays put, or goes to the line start when
-        # linewise. Fails on raw buffers.
-        let repChar = lastCmd.visualReplaceChar
-        let repFill = proc(text: string): string =
-          repChar.repeat(text.charLen)
-        case lastCmd.visualReplaceKind
-        of vskChar:
-          if lastCmd.visualReplaceRows <= 1:
-            # Single-line charwise: the same character count from the cursor,
-            # or the whole fold linewise when the cursor sits in a closed one.
-            let line = ctx.cursor.line
-            if line < 0 or line >= ctx.buffer.len:
-              return err("Nothing to replace")
-            if ctx.buffer.foldState.endsInCollapsedFold(line, line):
-              let (snapLo, snapHi) = ctx.buffer.foldState.snapRangeToFolds(line, line)
-              let txr = withTransaction(ctx.buffer, "repeat visual replace"):
-                let res = ctx.buffer.replaceWholeLines(
-                  snapLo, snapHi, "replace characters", repFill
-                )
-                if res.isErr:
-                  return err(res.error)
-              if txr.isErr:
-                return err(txr.error)
-              return ok(())
-            let lineContent = ctx.buffer.getLine(line)
-            if ctx.cursor.column >= lineContent.charLen:
-              return err("Nothing to replace")
-            let charsAvailable = lineContent.charLen - ctx.cursor.column
-            let charsToReplace = min(lastCmd.visualReplaceCols, charsAvailable)
-            let txr = withTransaction(ctx.buffer, "repeat visual replace"):
-              let res = ctx.buffer.transformRange(
-                ctx.cursor,
-                BufferPosition(
-                  line: ctx.cursor.line, column: ctx.cursor.column + charsToReplace - 1
-                ),
-                "replace characters",
-                repFill,
-              )
-              if res.isErr:
-                return err(res.error)
-            if txr.isErr:
-              return err(txr.error)
-            return ok(())
-          # Multi-line charwise: first line cursor to EOL, middle lines
-          # whole, last line `visualReplaceCols` chars from column 0.
-          let firstLine = ctx.cursor.line
-          if firstLine < 0 or firstLine >= ctx.buffer.len:
-            return err("Nothing to replace")
-          let lastLine =
-            min(firstLine + lastCmd.visualReplaceRows - 1, ctx.buffer.len - 1)
-          let (snapLo, snapHi) =
-            ctx.buffer.foldState.snapRangeToFolds(firstLine, lastLine)
-          let txr = withTransaction(ctx.buffer, "repeat visual replace"):
-            # A closed fold at either end repeats whole, linewise. One the range
-            # ends exactly on does not widen it, so test the ends, not a widening.
-            if ctx.buffer.foldState.endsInCollapsedFold(firstLine, lastLine):
-              let res = ctx.buffer.replaceWholeLines(
-                snapLo, snapHi, "replace characters", repFill
-              )
-              if res.isErr:
-                return err(res.error)
-            else:
-              let firstContent = ctx.buffer.getLine(firstLine)
-              if ctx.cursor.column < firstContent.charLen:
-                let res = ctx.buffer.transformRange(
-                  ctx.cursor,
-                  BufferPosition(line: firstLine, column: firstContent.charLen - 1),
-                  "replace characters",
-                  repFill,
-                )
-                if res.isErr:
-                  return err(res.error)
-              for lineNum in firstLine + 1 ..< lastLine:
-                let lineCharLen = ctx.buffer.getLine(lineNum).charLen
-                if lineCharLen > 0:
-                  let res = ctx.buffer.transformRange(
-                    BufferPosition(line: lineNum, column: 0),
-                    BufferPosition(line: lineNum, column: lineCharLen - 1),
-                    "replace characters",
-                    repFill,
-                  )
-                  if res.isErr:
-                    return err(res.error)
-              if lastLine > firstLine:
-                let lastContent = ctx.buffer.getLine(lastLine)
-                if lastContent.charLen > 0:
-                  let lastCount = min(lastCmd.visualReplaceCols, lastContent.charLen)
-                  let res = ctx.buffer.transformRange(
-                    BufferPosition(line: lastLine, column: 0),
-                    BufferPosition(line: lastLine, column: lastCount - 1),
-                    "replace characters",
-                    repFill,
-                  )
-                  if res.isErr:
-                    return err(res.error)
-          if txr.isErr:
-            return err(txr.error)
-          return ok(())
-        of vskLine:
-          # Linewise: same line count from the cursor, whole lines.
-          let (startLine, endLine, lineCount) =
-            ctx.cursorLineRange(lastCmd.visualReplaceRows)
-          if lineCount <= 0:
-            return err("Nothing to replace")
-          let txr = withTransaction(ctx.buffer, "repeat visual replace"):
-            let res = ctx.buffer.replaceWholeLines(
-              startLine, endLine, "replace characters", repFill
-            )
-            if res.isErr:
-              return err(res.error)
-          if txr.isErr:
-            return err(txr.error)
-          ctx.cursor = BufferPosition(line: startLine, column: 0)
-          return ok(())
-        of vskBlock:
-          # Blockwise: as many lines, and screen cells from where the cursor's
-          # character starts, or to each line's end after `<C-v>$` (Vim's
-          # redo_VIsual).
-          let firstLine = ctx.cursor.line
-          if firstLine < 0 or firstLine >= ctx.buffer.len:
-            return err("Nothing to replace")
-          let area = ctx.buffer.repeatedBlock(
-            ctx.cursor, lastCmd.visualReplaceRows, lastCmd.visualReplaceCols,
-            lastCmd.visualReplaceToLineEnd, ctx.state.tabStop,
-          )
-          let (snapLo, snapHi) =
-            ctx.buffer.foldState.snapRangeToFolds(area.firstLine, area.lastLine)
-          let txr = withTransaction(ctx.buffer, "repeat visual replace"):
-            # A closed fold at either end repeats whole, linewise. One the range
-            # ends exactly on does not widen it, so test the ends, not a widening.
-            if ctx.buffer.foldState.endsInCollapsedFold(area.firstLine, area.lastLine):
-              let res = ctx.buffer.replaceWholeLines(
-                snapLo, snapHi, "replace characters", repFill
-              )
-              if res.isErr:
-                return err(res.error)
-            else:
-              if not ctx.buffer.allowsTextTransforms:
-                return err(rawBytesRejection("replace characters"))
-              let res = ctx.buffer.replaceBlock(area, ctx.state.tabStop, repChar)
-              if res.isErr:
-                return err(res.error)
-          if txr.isErr:
-            return err(txr.error)
-          return ok(())
+        let (sel, area) = ctx.repeatedArea(lastCmd.visualReplaceShape).valueOr:
+          return err("Nothing to replace")
+        try:
+          return
+            visualReplace(ctx.buffer, ctx.state, sel, area, lastCmd.visualReplaceChar)
+        except TransactionRollbackError as exc:
+          return err(exc.msg & " (buffer state may be inconsistent)")
       of lecReplaceChar:
         # Repeat replace character (r command)
         let lineContent = ctx.buffer.getLine(ctx.cursor.line)
