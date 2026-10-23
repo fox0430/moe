@@ -771,6 +771,174 @@ suite "g; goes to where a change was typed, as in Vim":
       e.press(keys)
       check e.cursorAt == wantCursor
 
+suite "`.` changes a Visual area as big at the cursor, as in Vim":
+  # Measured in Vim 9.2 (`vim -u NONE`, `set ai`, typed through a terminal).
+  for (lines, cursor, keys, want, wantCursor) in [
+    (
+      @["    foo", "  bar", "baz", "qux"],
+      (0, 4),
+      "Vjcx<Escape>j.",
+      @["    x", "x"],
+      (1, 0),
+    ),
+    (
+      @["  ab", "  cd", "  ef", "  gh"],
+      (0, 0),
+      "VcX<Escape>jj.",
+      @["  X", "  cd", "  X", "  gh"],
+      (2, 2),
+    ),
+    (@["a", "b", "c", "d", "e"], (0, 0), "Vjcx<Escape>3.", @["x", "d", "e"], (0, 0)),
+    (@["abc", "def"], (0, 0), "VjcX<Escape>.", @["X"], (0, 0)),
+    (@["abcdef", "abcdef"], (0, 0), "vlcX<Escape>j0.", @["Xcdef", "Xcdef"], (1, 0)),
+    (
+      @["abcdef", "abcdef", "abcdef"],
+      (0, 3),
+      "vhcX<Escape>j0.",
+      @["abXef", "Xcdef", "abcdef"],
+      (1, 0),
+    ),
+    (@["a\tbc", "abcdefghij"], (0, 0), "vllcX<Escape>j0.", @["Xc", "Xj"], (1, 0)),
+    (@["abcdefghij", "a\tbc"], (0, 0), "vllcX<Escape>j0.", @["Xdefghij", "Xbc"], (1, 0)),
+    (@["abcdef", "ab", "x"], (0, 0), "vllllcX<Escape>j0.", @["Xf", "Xx"], (1, 0)),
+    (@["abcdef", "ab", "x"], (0, 0), "v$cX<Escape>j0.", @["Xab", "X"], (1, 0)),
+    (
+      @["abcdef", "ghijkl", "mnopqr"],
+      (0, 0),
+      "vjcX<Escape>j0.",
+      @["Xhijkl", "Xnopqr"],
+      (1, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef"],
+      (1, 3),
+      "vkcX<Escape>j0.",
+      @["abcXef", "Xef"],
+      (1, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "ab", "x"],
+      (0, 0),
+      "vjllllcX<Escape>j0.",
+      @["Xf", "X"],
+      (1, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef"],
+      (0, 0),
+      "vjcX<Escape>j.",
+      @["Xbcdef", "Xbcdef"],
+      (1, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef", "abcdef"],
+      (0, 0),
+      "vj$cX<Escape>j0.",
+      @["Xabcdef", "X"],
+      (1, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef", "abcdef"],
+      (0, 0),
+      "<C-v>jlcX<Escape>jj0.",
+      @["Xcdef", "Xcdef", "Xcdef", "Xcdef"],
+      (2, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef", "abcdef"],
+      (0, 0),
+      "<C-v>j$cX<Escape>jj0.",
+      @["X", "X", "X", "X"],
+      (2, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef"],
+      (0, 0),
+      "vlcX<Escape>j0.u",
+      @["Xcdef", "abcdef", "abcdef"],
+      (1, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef"],
+      (0, 0),
+      "vlcX<Escape>j0.j0.",
+      @["Xcdef", "Xcdef", "Xcdef"],
+      (2, 0),
+    ),
+    (
+      @["abcdef", "abcdef", "abcdef"],
+      (0, 0),
+      "vlcX<Escape>j0.gvd",
+      @["def", "Xcdef", "abcdef"],
+      (0, 0),
+    ),
+    (
+      @["abcdef", "ghijkl", "x"],
+      (0, 0),
+      "vl\"acX<Escape>j0.j\"ap",
+      @["Xcdef", "Xijkl", "xgh"],
+      (2, 2),
+    ),
+    (
+      @["abcdef", "\tabcdefghij"],
+      (0, 0),
+      "vlcX<Escape>j0.",
+      @["Xcdef", "Xbcdefghij"],
+      (1, 0),
+    ),
+    (
+      @["abcdef", "\tabcdefghij"],
+      (0, 0),
+      "vlcX<Escape>j0l.",
+      @["Xcdef", "\tXcdefghij"],
+      (1, 1),
+    ),
+    (
+      @["abcdef", "abcdef", "\tabcdefghij", "\tabcdefghij"],
+      (0, 0),
+      "<C-v>jlcX<Escape>jj0.",
+      @["Xcdef", "Xcdef", "X      abcdefghij", "X      abcdefghij"],
+      (2, 0),
+    ),
+    (@["abc", "abcdef", "x"], (0, 0), "$vcX<Escape>j0.", @["abX", "Xx"], (1, 0)),
+    (
+      @["foo bar", "abc def ghi"],
+      (0, 0),
+      "$viwcX<Escape>j0.",
+      @["foo X", "X def ghi"],
+      (1, 0),
+    ),
+    (
+      @["foo bar", "abc def ghi"],
+      (0, 0),
+      "$vawcX<Escape>j0.",
+      @["fooX", "Xdef ghi"],
+      (1, 0),
+    ),
+    (
+      @["foo bar", "abc def ghi"],
+      (0, 0),
+      "$<C-v>iwcX<Escape>j0.",
+      @["foo X", "X def ghi"],
+      (1, 0),
+    ),
+  ]:
+    test keys:
+      let e = newVimLikeEditor(lines, cursor[0], cursor[1])
+      e.state.autoIndent = true
+      e.state.smartIndent = false
+      e.press(keys)
+      check e.state.mode == EditorMode.Normal
+      check e.lines == want
+      check e.cursorAt == wantCursor
+
+  test "a closed fold is not covered whole":
+    let e = newVimLikeEditor(@["abcdef", "abcdef", "abcdef", "abcdef", "abcdef"], 0, 0)
+    e.press("vlcX<Escape>")
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.press("j0.")
+    check e.lines == @["Xcdef", "Xcdef", "abcdef", "abcdef", "abcdef"]
+
 suite "the text Enter carries down, as in Vim":
   # Measured in Vim 9.2 (`vim -u NONE`, typed through a terminal). With
   # autoindent the new line takes the indent of the text before the cursor and

@@ -374,3 +374,64 @@ proc repeatedBlock*(
     result.endCell = buffer.widestCell(result.firstLine, result.lastLine, tabStop)
   else:
     result.endCell = result.startCell + max(1, cells) - 1
+
+proc visualShape*(buffer: TextBuffer, sel: VisualSelection, tabStop: int): VisualShape =
+  ## The size of `sel` that `.` selects again, as Vim's resel_VIsual.
+  let
+    first = min(sel.start, sel.current)
+    last = max(sel.start, sel.current)
+  result = VisualShape(
+    kind: sel.kind,
+    lines: last.line - first.line + 1,
+    toLineEnd: sel.kind != vskLine and sel.extendsToLineEnd,
+  )
+  case sel.kind
+  of vskLine:
+    discard
+  of vskBlock:
+    let area = buffer.blockArea(sel, tabStop, measureWidest = false)
+    result.cells = area.endCell - area.startCell + 1
+  of vskChar:
+    let endCell = buffer.getLine(last.line).cellSpan(last.column, tabStop).last
+    result.cells =
+      if result.lines == 1:
+        endCell - buffer.getLine(first.line).cellSpan(first.column, tabStop).first + 1
+      else:
+        endCell
+
+proc repeatedSelection*(
+    buffer: TextBuffer, at: BufferPosition, shape: VisualShape, tabStop: int
+): tuple[sel: VisualSelection, area: BlockArea] =
+  ## The selection `.` makes at `at` for an area of `shape`, and its block when
+  ## blockwise, as Vim's redo_VIsual: as many lines as the buffer has left, and
+  ## as many cells, or over lines to the same cell. A shorter line is selected
+  ## to its end, line break and all.
+  let last = min(at.line + max(1, shape.lines) - 1, buffer.len - 1)
+  result.sel = VisualSelection(
+    start: at,
+    current: BufferPosition(line: last, column: 0),
+    active: true,
+    kind: shape.kind,
+    extendsToLineEnd: shape.kind == vskBlock and shape.toLineEnd,
+  )
+  case shape.kind
+  of vskLine:
+    discard
+  of vskBlock:
+    result.area =
+      buffer.repeatedBlock(at, shape.lines, shape.cells, shape.toLineEnd, tabStop)
+    result.sel.current.column = buffer.getLine(last).columnAtCell(
+        result.area.endCell, tabStop, EditorMode.VisualBlock
+      )
+  of vskChar:
+    let cell =
+      if shape.toLineEnd:
+        LineEnd
+      elif shape.lines <= 1:
+        # From the cell the cursor shows on, a tab's last in Normal mode.
+        buffer.getLine(at.line).cursorCell(at.column, tabStop, onTabEnd = true) +
+          shape.cells - 1
+      else:
+        shape.cells
+    result.sel.current.column =
+      buffer.getLine(last).columnAtCell(cell, tabStop, EditorMode.Visual)

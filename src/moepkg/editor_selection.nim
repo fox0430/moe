@@ -80,7 +80,7 @@ proc currentSelection*(e: Editor): Option[EditorSelection] =
       focus: selection.current,
       first: first,
       last: last,
-      extendsToLineEnd: operand.extendsToLineEnd,
+      extendsToLineEnd: operand.kind == vskBlock and operand.extendsToLineEnd,
     )
   )
 

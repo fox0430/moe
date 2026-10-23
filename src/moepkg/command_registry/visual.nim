@@ -21,10 +21,10 @@
 
 import pkg/results
 
-import ../types
+import ../[types, modes, visual_block]
 import ../command_handlers/visual_commands
 
-import core
+import core, insert_entry
 
 ## Visual mode command handlers (wrappers for visual_commands functions)
 
@@ -76,22 +76,36 @@ proc handleVisualJoinLines*(ctx: CommandContext): Result[(), string] =
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
+proc startInsertAtCursor(ctx: CommandContext) =
+  # `.` inserts what is typed at the cursor only, where Vim's goes over a block
+  # as big.
+  if ctx.state.mode == EditorMode.Insert:
+    ctx.enterInsert(InsertEntry(kind: ieInsert), 1)
+
 proc handleVisualToInsertMode*(ctx: CommandContext): Result[(), string] =
   ## Switch from visual mode to insert mode
   visualToInsertMode(ctx.buffer, ctx.state)
   ctx.cursor = ctx.state.cursor
+  ctx.startInsertAtCursor()
   Result[(), string].ok ()
 
 proc handleVisualBlockAppend*(ctx: CommandContext): Result[(), string] =
   ## Append after visual block selection (A command)
   visualBlockAppend(ctx.buffer, ctx.state)
   ctx.cursor = ctx.state.cursor
+  ctx.startInsertAtCursor()
   Result[(), string].ok ()
 
 proc handleVisualChange*(ctx: CommandContext): Result[(), string] =
-  ## Delete selection and enter insert mode
-  visualChange(ctx.buffer, ctx.state, ctx.register)
+  ## Delete selection and enter insert mode. `.` changes an area of the same
+  ## size at the cursor.
+  let
+    (sel, area) = ctx.buffer.changeArea(ctx.state)
+    shape = ctx.buffer.visualShape(sel, ctx.state.tabStop)
+  visualChange(ctx.buffer, ctx.state, sel, area, ctx.register)
   ctx.cursor = ctx.state.cursor
+  if ctx.state.mode == EditorMode.Insert:
+    ctx.enterInsert(InsertEntry(kind: ieVisualChange, shape: shape), 1)
   Result[(), string].ok ()
 
 proc handleVisualSwapSelection*(ctx: CommandContext): Result[(), string] =

@@ -31,7 +31,7 @@ import
   ]
 import ../buffer/[core, edit, fold, undo]
 
-import ../command_handlers/put_text
+import ../command_handlers/[put_text, visual_commands]
 
 import core, operator_engine, operator_driver, insert_entry
 
@@ -1059,6 +1059,17 @@ proc registerEditCommands*(registry: CommandRegistry) =
             operand.countGiven = true
           ctx.startOperator(OpChange)
           return registry.finishOperator(ctx, operand)
+        of ieVisualChange:
+          # Vim's redo_VIsual: an area as big at the cursor, closed folds or
+          # not, and the area `gv` selects stays.
+          let (sel, area) = ctx.buffer.repeatedSelection(
+            ctx.cursor, record.entry.shape, ctx.state.tabStop
+          )
+          visualChange(ctx.buffer, ctx.state, sel, area, ctx.register)
+          if ctx.state.mode != EditorMode.Insert:
+            return err(ctx.state.statusMessage)
+          ctx.enterInsert(record.entry, 1)
+          return ok(())
       of lecVisualReplace:
         # Repeat Visual `r` from the cursor with the recorded shape.
         # Ignores count; cursor stays put. Fails on raw buffers.

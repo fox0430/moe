@@ -438,8 +438,6 @@ proc handleVisualMode*(
             kind: hrError,
             errorMessage: "Failed to begin transaction: " & transactionResult.error,
           )
-      # `.` inserts what is typed at the cursor; it does not take a selection.
-      state.startInsertRecord(InsertEntry(kind: ieInsert), 1)
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
