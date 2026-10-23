@@ -1127,6 +1127,205 @@ suite "renderWindow - Visual selection on empty line":
     for x in 0 ..< 40:
       check buffer[x, 0].style.bg != visStyle.bg
 
+proc selectedCells(
+    text: string,
+    start, current: BufferPosition,
+    kind: VisualSelectionKind,
+    wrap: bool,
+    leftColumn = 0,
+    width = 40,
+    scrollbar = false,
+): seq[string] =
+  ## Each screen row as `S` for a selected cell and `.` otherwise, up to the
+  ## last selected one, and up to the last row with one.
+  let e = createTestEditor()
+  var buffer = createTestBuffer()
+  e.state.lineWrap = wrap
+  e.state.showSidebar = false
+  e.state.showLineNumbers = false
+  e.state.scrollbar = scrollbar
+  discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), text)
+  e.state.selectVisual(start, current, kind)
+
+  let window = e.windowManager.windows[0]
+  window.viewport.width = width
+  window.viewport.height = 24
+  window.viewport.x = 0
+  window.viewport.y = 0
+  window.viewport.leftColumn = leftColumn
+  window.active = true
+
+  e.renderWindow(buffer, window, 0, true, true, 0)
+
+  let visBg = visualStyle().bg
+  for y in 0 ..< window.viewport.height:
+    var row = ""
+    for x in 0 ..< width:
+      row.add(if buffer[x, y].style.bg == visBg: 'S' else: '.')
+    result.add(row.strip(leading = false, chars = {'.'}))
+  while result.len > 0 and result[^1].len == 0:
+    result.setLen(result.len - 1)
+
+suite "renderWindow - Visual selection over the line break":
+  # As Vim 9.2 draws it: the cell after the line's end shows selected when
+  # the selection takes the line break.
+  test "A character selection shows the line break of a line it leaves":
+    for wrap in [false, true]:
+      check selectedCells(
+        "abcdef\nab",
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 1, column: 0),
+        vskChar,
+        wrap,
+      ) == @["SSSSSSS", "S"]
+
+  test "A character selection over an empty line in the middle":
+    for wrap in [false, true]:
+      check selectedCells(
+        "abcdef\n\nab",
+        BufferPosition(line: 0, column: 4),
+        BufferPosition(line: 2, column: 1),
+        vskChar,
+        wrap,
+      ) == @["....SSS", "S", "SS"]
+
+  test "A character selection ending at the line's end takes its break":
+    # As `v$` leaves it.
+    for wrap in [false, true]:
+      check selectedCells(
+        "abcdef\nab",
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 0, column: 6),
+        vskChar,
+        wrap,
+      ) == @["SSSSSSS"]
+
+  test "A character selection starting at the line's end":
+    # As `j$vk` leaves it.
+    for wrap in [false, true]:
+      check selectedCells(
+        "abcdef\nab",
+        BufferPosition(line: 1, column: 1),
+        BufferPosition(line: 0, column: 6),
+        vskChar,
+        wrap,
+      ) == @["......S", "SS"]
+
+  test "A line selection shows every line's break":
+    for wrap in [false, true]:
+      check selectedCells(
+        "abcdef\nab\n\nabc",
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 2, column: 0),
+        vskLine,
+        wrap,
+      ) == @["SSSSSSS", "SSS", "S"]
+
+  test "The fill stops at a scrollbar that is not drawn":
+    # The buffer fits, so no scrollbar is drawn over its column, which is not
+    # the text's, as on a fold line.
+    for wrap in [false, true]:
+      let e = createTestEditor()
+      var buffer = createTestBuffer()
+      e.state.lineWrap = wrap
+      e.state.showSidebar = false
+      e.state.showLineNumbers = false
+      e.state.showCursorLine = true
+      e.state.scrollbar = true
+      discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "ab\n")
+
+      let window = e.windowManager.windows[0]
+      window.viewport.width = 10
+      window.viewport.height = 24
+      window.viewport.x = 0
+      window.viewport.y = 0
+      window.cursor = BufferPosition(line: 0, column: 0)
+      window.active = true
+
+      e.renderWindow(buffer, window, 0, true, true, 0)
+
+      let lineBg = cursorLineHighlightStyle().bg
+      check buffer[8, 0].style.bg == lineBg
+      check buffer[9, 0].style.bg != lineBg
+
+  test "A line filling the text area keeps its break off the scrollbar":
+    # The buffer fits, so no scrollbar is drawn over its column.
+    for wrap in [false, true]:
+      check selectedCells(
+        "abcd\nab",
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 1, column: 0),
+        vskLine,
+        wrap,
+        width = 5,
+        scrollbar = true,
+      ) == @["SSSS", "SSS"]
+
+  test "Wrapped, only the last row of a line shows its break":
+    check selectedCells(
+      "abcdefgh\nab",
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 0),
+      vskChar,
+      wrap = true,
+      width = 5,
+    ) == @["SSSSS", "SSSS", "S"]
+
+  test "Scrolled sideways, a line selection shows where the screen starts":
+    # `ab` is scrolled to just its end, `a` past it.
+    check selectedCells(
+      "abcdef\nab\na",
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 2, column: 0),
+      vskLine,
+      wrap = false,
+      leftColumn = 2,
+    ) == @["SSSSS", "S", "S"]
+
+  test "Scrolled past the end, a character selection shows if it goes on":
+    check selectedCells(
+      "ab\n\nabcdefgh",
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 2, column: 7),
+      vskChar,
+      wrap = false,
+      leftColumn = 3,
+    ) == @["S", "S", "SSSSS"]
+    # Not on the last line, which it ends on.
+    check selectedCells(
+      "abcdefgh\nab",
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 1),
+      vskChar,
+      wrap = false,
+      leftColumn = 3,
+    ) == @["SSSSSS"]
+
+  test "Scrolled past the end, a selection starting at it takes just its cell":
+    # As Vim's `tocol = fromcol + 1` for a start on the NUL, also of an empty
+    # line.
+    for (start, rows) in [
+      (BufferPosition(line: 0, column: 2), @["", "S", "SSSSS"]),
+      (BufferPosition(line: 1, column: 0), @["", "", "SSSSS"]),
+    ]:
+      check selectedCells(
+        "ab\n\nabcdefgh",
+        start,
+        BufferPosition(line: 2, column: 7),
+        vskChar,
+        wrap = false,
+        leftColumn = 3,
+      ) == rows
+    # An anchor an edit left past the end, which Vim puts on the NUL.
+    check selectedCells(
+      "ab\n\nabcdefgh",
+      BufferPosition(line: 0, column: 3),
+      BufferPosition(line: 2, column: 7),
+      vskChar,
+      wrap = false,
+      leftColumn = 4,
+    ) == @["", "S", "SSSS"]
+
 suite "renderWindow - Scrolling":
   test "Render window with vertical scroll":
     let e = createTestEditor()
@@ -1386,14 +1585,16 @@ suite "Cursor line highlight - Window boundary clipping":
     for x in 40 ..< 80:
       check buffer[x, 0].style.bg != hlStyle.bg
 
-  test "fillLineBackground clipped to window boundary":
+  test "An empty row's fill is clipped to window boundary":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.state.showCursorLine = true
 
-    # Call fillLineBackground directly with windowRightEdge=30
-    e.fillLineBackground(buffer, 0, 0, 0, 0, 30)
+    let ctx = RenderContext(
+      cursorLine: 0, cursorCol: 0, windowMode: EditorMode.Normal, windowRightEdge: 30
+    )
+    e.renderLineSegmentWithSelection(e.activeBuffer, buffer, "", 0, 0, 0, 0, ctx)
 
     let hlStyle = cursorLineHighlightStyle()
     # Should fill positions 0..29
@@ -1404,7 +1605,7 @@ suite "Cursor line highlight - Window boundary clipping":
     for x in 30 ..< 80:
       check buffer[x, 0].style.bg != hlStyle.bg
 
-  test "fillLineBackground fills normalStyle for non-cursor line":
+  test "An empty row of a non-cursor line fills normalStyle":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
@@ -1415,8 +1616,11 @@ suite "Cursor line highlight - Window boundary clipping":
     for x in 0 ..< 40:
       buffer.setString(x, 0, " ", hlStyle)
 
-    # Fill line 1 (non-cursor), cursor is on line 0
-    e.fillLineBackground(buffer, 0, 0, 1, 0, 40)
+    # Line 0 is not the cursor line
+    let ctx = RenderContext(
+      cursorLine: 99, cursorCol: 0, windowMode: EditorMode.Normal, windowRightEdge: 40
+    )
+    e.renderLineSegmentWithSelection(e.activeBuffer, buffer, "", 0, 0, 0, 0, ctx)
 
     # All positions should now have normalStyle (stale highlight cleared)
     let nStyle = normalStyle()
@@ -1436,9 +1640,7 @@ suite "Cursor line highlight - Window boundary clipping":
       cursorLine: 0, cursorCol: 0, windowMode: EditorMode.Normal, windowRightEdge: 30
     )
 
-    e.renderLineSegmentWithSelection(
-      e.activeBuffer, buffer, "AB", 0, 0, 0, 0, ctx, useRunes = false
-    )
+    e.renderLineSegmentWithSelection(e.activeBuffer, buffer, "AB", 0, 0, 0, 0, ctx)
 
     let hlStyle = cursorLineHighlightStyle()
     # Cursor line fill should stop before windowRightEdge
@@ -1469,9 +1671,7 @@ suite "Cursor line highlight - Window boundary clipping":
       cursorLine: 99, cursorCol: 0, windowMode: EditorMode.Normal, windowRightEdge: 40
     )
 
-    e.renderLineSegmentWithSelection(
-      e.activeBuffer, buffer, "AB", 0, 0, 0, 0, ctx, useRunes = false
-    )
+    e.renderLineSegmentWithSelection(e.activeBuffer, buffer, "AB", 0, 0, 0, 0, ctx)
 
     # Trailing area should be cleared to normalStyle, not cursor highlight
     let nStyle = normalStyle()
@@ -3451,6 +3651,43 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     # Cells after the virtual text are filled with spaces
     check buf[7, 0].symbol == " "
 
+  test "virtual text takes the cell of a selected line break":
+    # As Vim 9.2 draws a text property `after` the line under `V`.
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.state.showSyntax = false
+
+    let tb = newTextBuffer("abc")
+    var buf = newBuffer(80, 1)
+    let provider = stubProvider(
+      @[
+        VirtualText(
+          line: 0,
+          placement: vtpEndOfLine,
+          chunks:
+            @[VirtualTextChunk(text: ":int", color: EditorColorPairIndex.inlayHint)],
+        )
+      ]
+    )
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      selection: VisualSelection(active: true, kind: vskLine),
+      windowMode: EditorMode.VisualLine,
+      windowRightEdge: 80,
+      virtualTextProviders: @[provider],
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "abc", 0, 0, 0, 0, ctx)
+
+    let visBg = visualStyle().bg
+    check buf[2, 0].style.bg == visBg
+    check buf[3, 0].symbol == ":"
+    for x in 3 ..< 10:
+      check buf[x, 0].style.bg != visBg
+
   test "C0 controls in end-of-line virtual text are substituted with a space":
     let config = newEditorConfig()
     config.theme.kind = tkDefault
@@ -4113,6 +4350,20 @@ suite "newLineStyleContext - search highlight":
 
     check e.searchRangesFor("foobar foo") ==
       @[ColumnRange(startCol: 0, endCol: 3), ColumnRange(startCol: 7, endCol: 10)]
+
+  test "A row drawing none of the line's text leaves the overlays empty":
+    let e = createTestEditor()
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
+    e.state.input.search.last = SearchSpec(pattern: "foo")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "foo")
+    let ctx = RenderContext(windowMode: EditorMode.Normal)
+
+    check e.newLineStyleContext(e.activeBuffer, 0, "foo", ctx).searchRanges.len == 1
+    let lineCtx =
+      e.newLineStyleContext(e.activeBuffer, 0, "foo", ctx, drawsText = false)
+    check lineCtx.searchRanges.len == 0
+    check lineCtx.lineEnd == 3
 
   test "An empty prompt keeps the previous search highlighted":
     let e = createTestEditor()

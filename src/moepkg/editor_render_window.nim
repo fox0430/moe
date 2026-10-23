@@ -50,22 +50,15 @@ import command_handlers/visual_handler
 type
   LineStyleContext* = object
     ## Per-line state used while rendering one buffer line. Values are
-    ## computed once at the start of the line and then read by the per-character
-    ## style pipeline, replacing what used to be 7+ individually-threaded
-    ## parameters across getSelectionStyle / baseStyleWithOverlay / overlayPatchSyntax.
-    ##
-    ## Two construction paths exist:
-    ## - `newLineStyleContext`: full context built once per rendered line. Required
-    ##   for `getSelectionStyle` / `renderLineSegmentWithSelection`.
-    ## - Manual partial construction: `fillLineBackground` only calls
-    ##   `lineFillPatch`, which reads `isCursorLine`, `lineConflict`,
-    ##   `useTwoColor`, and `lineBg`; the remaining fields can be left at
-    ##   their defaults.
+    ## computed once at the start of the line (`newLineStyleContext`) and then
+    ## read by the per-character style pipeline, replacing what used to be 7+
+    ## individually-threaded parameters across getSelectionStyle /
+    ## baseStyleWithOverlay / overlayPatchSyntax.
     lineIndex*: int
     bufferId*: BufferId
       ## Buffer being rendered, checked by overlays cached for one buffer at a
-      ## time (document highlights). `BufferId(0)` on the partial construction
-      ## path, which reads none of them.
+      ## time (document highlights). `BufferId(0)` without a buffer.
+    lineEnd*: int ## Column just past the line's last character
     isActiveWindow*: bool
     isCursorLine*: bool
     lineConflict*: ConflictMarkerKind
@@ -83,10 +76,9 @@ type
       ## below cursor line / cursor column / git conflict / visual selection.
 
   LinePrecomputed* = object
-    ## Per-logical-line values reused across wrap segments. The wrap path builds
+    ## Per-logical-line values a row is rendered with. The wrap path builds
     ## this once and hands it to every segment call so the O(line) scans in
     ## `newLineStyleContext` / `analyzeIndentation` do not fire per segment.
-    fullLine*: string
     indentInfo*: IndentInfo
     lineCtx*: LineStyleContext
 
@@ -99,9 +91,7 @@ template hasSyntaxHighlight(
 proc resolveLineConflict(
     e: Editor, textBuffer: TextBuffer, lineIndex: int
 ): ConflictMarkerKind =
-  ## Single source of truth for the per-line git-conflict kind. Both
-  ## `newLineStyleContext` and `fillLineBackground` go through this so the
-  ## "is gitConflict enabled?" guard cannot drift between code paths.
+  ## The line's git-conflict kind, none when the highlight is off.
   if textBuffer != nil and e.config.highlight.gitConflict:
     textBuffer.lineConflictKind(lineIndex)
   else:
@@ -110,10 +100,7 @@ proc resolveLineConflict(
 proc resolveLineBg(
     e: Editor, textBuffer: TextBuffer, lineIndex: int
 ): Option[ColorValue] =
-  ## Single source of truth for the per-line background overlay (Markdown
-  ## fenced code block). Every LineStyleContext construction site funnels
-  ## through this so the "which lines get the block bg?" rule cannot drift
-  ## between the render/fill/virtual-text paths.
+  ## The per-line background overlay (Markdown fenced code block).
   ##
   ## Gated on `e.showSyntax`: without it, character cells fall through the
   ## `hasSyntaxHighlight` branch in `baseStyleWithOverlay` / `syntaxBaseStyle`
@@ -165,57 +152,15 @@ proc newLineStyleContext*(
     lineIndex: int,
     fullLine: string,
     ctx: RenderContext,
+    drawsText = true,
 ): LineStyleContext =
   ## Compute all per-line state needed by the style pipeline in one place.
-  # Trailing-space highlighting fires in file-edit mode when enabled (see
-  # styleOverrideAt). Skip the whole-line scan when it cannot fire. Don't clip
-  # to the cap: trailing whitespace lives at the line *end*, past the cap, so
-  # the input must stay the full line.
-  let trailingSpaceStart =
-    if e.config.highlight.trailingSpaces and ctx.windowMode.isFileEditMode:
-      findTrailingSpaceStart(fullLine)
-    else:
-      high(int) # disabled: `col >= trailingSpaceStart` never matches
-
-  # Bound the color-code scan to the cap: scanLineForColorCodes allocates an
-  # O(line) byte->rune map, and past the cap the line is plain text anyway.
-  # (Search/current-word ranges stay uncapped: they're functional, not
-  # decorative — a match past the cap must still be shown.)
-  let colorCodeMatches =
-    if e.config.highlight.colorCodeHighlight and ctx.windowMode.isFileEditMode:
-      let cap = if textBuffer != nil: textBuffer.maxHighlightLineLength else: 0
-      if cap > 0 and fullLine.len > cap:
-        scanLineForColorCodes(fullLine.charSubStr(0, cap))
-      else:
-        scanLineForColorCodes(fullLine)
-    else:
-      @[]
-
-  let searchRanges =
-    if textBuffer != nil and e.state.input.search.hlsearch and
-        not e.state.input.search.hlsearchTempDisabled:
-      let spec = e.state.effectiveSearchSpec()
-      if spec.pattern.len > 0:
-        let shouldIgnoreCase = shouldIgnoreCase(
-          spec.pattern, e.state.input.search.ignorecase, e.state.input.search.smartcase
-        )
-        textBuffer.findSearchMatchRanges(
-          lineIndex, spec.pattern, shouldIgnoreCase, spec.wholeWord
-        )
-      else:
-        @[]
-    else:
-      @[]
-
-  let wordRanges =
-    if textBuffer != nil and not e.state.isSearchOverlay and e.state.currentWord.len > 0:
-      let excludeCol = if lineIndex == ctx.cursorLine: ctx.cursorCol else: -1
-      textBuffer.findWordMatchRanges(lineIndex, e.state.currentWord, excludeCol)
-    else:
-      @[]
-
-  LineStyleContext(
+  ## For a row that draws none of the line's characters (`drawsText` false),
+  ## their overlays (trailing spaces, color codes, search, current word) are
+  ## left empty without scanning the line.
+  result = LineStyleContext(
     lineIndex: lineIndex,
+    lineEnd: fullLine.charLen,
     blockShown: e.blockShownOn(ctx, lineIndex, fullLine),
     bufferId:
       if textBuffer != nil:
@@ -226,11 +171,64 @@ proc newLineStyleContext*(
     isCursorLine: lineIndex == ctx.cursorLine,
     lineConflict: e.resolveLineConflict(textBuffer, lineIndex),
     useTwoColor: e.config.highlight.gitConflictTwoColor,
-    searchRanges: searchRanges,
-    wordRanges: wordRanges,
-    colorCodeMatches: colorCodeMatches,
-    trailingSpaceStart: trailingSpaceStart,
+    trailingSpaceStart: high(int), # disabled: `col >= trailingSpaceStart` never matches
     lineBg: resolveLineBg(e, textBuffer, lineIndex),
+  )
+  if not drawsText:
+    return
+
+  # Trailing-space highlighting fires in file-edit mode when enabled (see
+  # styleOverrideAt). Skip the whole-line scan when it cannot fire. Don't clip
+  # to the cap: trailing whitespace lives at the line *end*, past the cap, so
+  # the input must stay the full line.
+  if e.config.highlight.trailingSpaces and ctx.windowMode.isFileEditMode:
+    result.trailingSpaceStart = findTrailingSpaceStart(fullLine)
+
+  # Bound the color-code scan to the cap: scanLineForColorCodes allocates an
+  # O(line) byte->rune map, and past the cap the line is plain text anyway.
+  # (Search/current-word ranges stay uncapped: they're functional, not
+  # decorative — a match past the cap must still be shown.)
+  if e.config.highlight.colorCodeHighlight and ctx.windowMode.isFileEditMode:
+    let cap = if textBuffer != nil: textBuffer.maxHighlightLineLength else: 0
+    result.colorCodeMatches =
+      if cap > 0 and fullLine.len > cap:
+        scanLineForColorCodes(fullLine.charSubStr(0, cap))
+      else:
+        scanLineForColorCodes(fullLine)
+
+  if textBuffer != nil and e.state.input.search.hlsearch and
+      not e.state.input.search.hlsearchTempDisabled:
+    let spec = e.state.effectiveSearchSpec()
+    if spec.pattern.len > 0:
+      let shouldIgnoreCase = shouldIgnoreCase(
+        spec.pattern, e.state.input.search.ignorecase, e.state.input.search.smartcase
+      )
+      result.searchRanges = textBuffer.findSearchMatchRanges(
+        lineIndex, spec.pattern, shouldIgnoreCase, spec.wholeWord
+      )
+
+  if textBuffer != nil and not e.state.isSearchOverlay and e.state.currentWord.len > 0:
+    let excludeCol = if lineIndex == ctx.cursorLine: ctx.cursorCol else: -1
+    result.wordRanges =
+      textBuffer.findWordMatchRanges(lineIndex, e.state.currentWord, excludeCol)
+
+proc linePrecomputed(
+    e: Editor,
+    textBuffer: TextBuffer,
+    lineIndex: int,
+    line: string,
+    ctx: RenderContext,
+    drawsText = true,
+): LinePrecomputed =
+  ## The values for rendering `line`. A row that draws none of its characters
+  ## (`drawsText` false) skips the scans they need.
+  LinePrecomputed(
+    indentInfo:
+      if drawsText:
+        analyzeIndentation(line)
+      else:
+        IndentInfo(),
+    lineCtx: e.newLineStyleContext(textBuffer, lineIndex, line, ctx, drawsText),
   )
 
 # Layer predicates
@@ -367,19 +365,27 @@ proc showsSelected(
   else:
     selection.isPositionInSelection(pos)
 
-proc showsLineEnd(
-    lineCtx: LineStyleContext, selection: VisualSelection, isEmpty: bool
+proc showsPastText(
+    lineCtx: LineStyleContext, selection: VisualSelection, column: int
 ): bool =
-  ## Whether `selection` shows over the cell after the line's end: a block's
-  ## first or last line's when it starts there, as Vim draws it, and a
-  ## character or line selection's only on an empty line it covers.
+  ## Whether `selection` shows over the cell after a row's text, as Vim draws
+  ## it, the cell standing for `column` at or past the line's end: the line
+  ## break when the row shows the line's end, else (scrolled sideways past it)
+  ## where the row starts. A character or line selection shows when it covers
+  ## `column`, but one starting at or past the line's end takes just the line
+  ## break (Vim's `tocol = fromcol + 1` for a start on the NUL). A block shows
+  ## only over the line break on its first or last line when it starts there.
+  let
+    line = lineCtx.lineIndex
+    atLineEnd = column == lineCtx.lineEnd
   if selection.kind == vskBlock:
-    lineCtx.blockShown.lineEnd
+    atLineEnd and lineCtx.blockShown.lineEnd
   else:
-    isEmpty and
-      selection.isPositionInSelection(
-        BufferPosition(line: lineCtx.lineIndex, column: 0)
-      )
+    let first = selection.getSelectionRange().start
+    selection.isPositionInSelection(BufferPosition(line: line, column: column)) and (
+      atLineEnd or selection.kind == vskLine or first.line != line or
+      first.column < lineCtx.lineEnd
+    )
 
 proc getSelectionStyle*(
     e: Editor,
@@ -485,9 +491,10 @@ proc lineFillPatch(
     cursorDisplayCol: int,
     inVisualSelection: bool,
 ): StylePatch =
-  ## Shared priority chain used by both line-fill paths.
-  ## Priority: visualSelection > gitConflict > cursorLine > cursorColumn >
-  ## lineBg > none. Returns `noPatch` when the cell should keep `normalStyle()`.
+  ## Style of a cell past the line's text: the fill and the end-of-line
+  ## virtual text. Priority: visualSelection > gitConflict > cursorLine >
+  ## cursorColumn > lineBg > none. Returns `noPatch` when the cell should keep
+  ## `normalStyle()`.
   if inVisualSelection:
     return full(visualStyle())
   if lineCtx.gitConflictApplies:
@@ -499,56 +506,6 @@ proc lineFillPatch(
   if lineCtx.lineBg.isSome:
     return bgOnly(lineCtx.lineBg.get)
   noPatch
-
-proc fillLineBackground*(
-    e: Editor,
-    buffer: var Buffer,
-    screenX, screenY: int,
-    lineIndex, cursorLine: int,
-    windowRightEdge: int,
-    cursorDisplayCol: int = -1,
-    textBuffer: TextBuffer = nil,
-    startsAtLineEnd: bool = false,
-    ctx = RenderContext(),
-) =
-  ## Fill the rest of the line to the window right edge.
-  ## Uses cursor line highlight for the cursor line, normal style otherwise.
-  ## When `textBuffer` is provided and the line is inside a git conflict block,
-  ## the conflict background takes priority over cursor-line highlight.
-  ## `startsAtLineEnd` is for a fill from the cell after the line's end, as on
-  ## an empty line or one scrolled to just its end: when the window's
-  ## selection (`ctx`) shows over that cell, it is rendered with the visual
-  ## selection background so that Visual mode is visible there.
-  let text =
-    if startsAtLineEnd and textBuffer != nil:
-      textBuffer.getLine(lineIndex)
-    else:
-      ""
-  # Partial LineStyleContext: lineFillPatch only reads isCursorLine,
-  # lineConflict, useTwoColor, and lineBg, and showsLineEnd lineIndex and
-  # blockShown. The seq/colorcode fields stay at their defaults.
-  let lineCtx = LineStyleContext(
-    lineIndex: lineIndex,
-    isCursorLine: lineIndex == cursorLine,
-    lineConflict: e.resolveLineConflict(textBuffer, lineIndex),
-    useTwoColor: e.config.highlight.gitConflictTwoColor,
-    lineBg: resolveLineBg(e, textBuffer, lineIndex),
-    blockShown:
-      if startsAtLineEnd:
-        e.blockShownOn(ctx, lineIndex, text)
-      else:
-        BlockShown(),
-  )
-  let selectionAtStart =
-    startsAtLineEnd and lineCtx.showsLineEnd(ctx.selection, isEmpty = text.len == 0)
-  var displayX = 0
-  while screenX + displayX < windowRightEdge:
-    let inVisualSelection = displayX == 0 and selectionAtStart
-    let fillStyle = normalStyle().merge(
-        e.lineFillPatch(lineCtx, displayX, cursorDisplayCol, inVisualSelection)
-      )
-    buffer.setCell(screenX + displayX, screenY, " ", 1, fillStyle)
-    displayX += 1
 
 proc appendEndOfLineVirtualText(
     e: Editor,
@@ -605,34 +562,34 @@ proc renderLineSegmentWithSelection*(
     lineIndex: int,
     startColumn: int,
     ctx: RenderContext,
-    useRunes: bool = true,
-    reachesLineEnd: bool = true,
     precomputed: Option[LinePrecomputed] = none(LinePrecomputed),
 ) =
-  ## Render a line segment with selection highlighting and syntax highlighting
-  ## useRunes: true for wrapped mode (character-based), false for byte-based rendering
+  ## Render a screen row of a line: `displayLine`, the line's text from
+  ## column `startColumn`, and the cells after it to the window's right edge.
+  ## The row of an empty line, or one scrolled sideways past the text, has an
+  ## empty `displayLine`. When `displayLine` reaches the line's end, a
+  ## selection over the line break shows in the next cell, and end-of-line
+  ## virtual text (inlay hints, etc.) is drawn there before the trailing fill.
   ## ctx: RenderContext containing cursor position and selection information
-  ## reachesLineEnd: the segment shows the line's end, so end-of-line virtual
-  ##   text (inlay hints, etc.) is drawn after the real text and before the
-  ##   trailing fill, and a selection over the line's end shows there. In
-  ##   wrapped mode the caller passes false for every segment except the last.
-  ## precomputed: caller-supplied fullLine/indentInfo/lineCtx shared across wrap
-  ##   segments of the same logical line. When set, the caller is responsible
-  ##   for having already called `updateHighlight`.
+  ## precomputed: caller-supplied indentInfo/lineCtx, built from the
+  ##   line the caller holds and shared across wrap segments of the same
+  ##   logical line. When set, the caller is responsible for having already
+  ##   called `updateHighlight`.
 
-  let (_, indentInfo, lineCtx) =
+  let (indentInfo, lineCtx) =
     if precomputed.isSome:
-      let p = precomputed.get
-      (p.fullLine, p.indentInfo, p.lineCtx)
+      (precomputed.get.indentInfo, precomputed.get.lineCtx)
     else:
       # The highlight advancement budget is owned by `updateForFrame`; this
       # per-line path must not advance it further.
-      let fl = textBuffer.getLine(lineIndex)
-      (
-        fl,
-        analyzeIndentation(fl),
-        e.newLineStyleContext(textBuffer, lineIndex, fl, ctx),
+      let p = e.linePrecomputed(
+        textBuffer,
+        lineIndex,
+        textBuffer.getLine(lineIndex),
+        ctx,
+        drawsText = displayLine.len > 0,
       )
+      (p.indentInfo, p.lineCtx)
 
   # Always render character by character to apply syntax highlighting
   var displayX = 0
@@ -736,51 +693,31 @@ proc renderLineSegmentWithSelection*(
     else:
       renderNormalCell(rune, col, style)
 
-  if useRunes:
-    # Character-based rendering (for wrapped mode)
-    var charIdx = startColumn
-    for (rune, _) in displayLine.chars:
-      let
-        pos = BufferPosition(line: lineIndex, column: charIdx)
-        style = e.getSelectionStyle(
-          textBuffer,
-          ctx.selection,
-          pos,
-          ctx.cursorCol,
-          ctx.windowMode,
-          displayCol = displayX,
-          cursorDisplayCol = ctx.cursorDisplayCol,
-          lineCtx = lineCtx,
-        )
-      renderChar(rune, charIdx, style)
-      charIdx += 1
-  else:
-    # Byte-based rendering (for non-wrapped mode)
-    var charIdx = 0
-    for (rune, _) in displayLine.chars:
-      let
-        col = startColumn + charIdx
-        pos = BufferPosition(line: lineIndex, column: col)
-        style = e.getSelectionStyle(
-          textBuffer,
-          ctx.selection,
-          pos,
-          ctx.cursorCol,
-          ctx.windowMode,
-          displayCol = displayX,
-          cursorDisplayCol = ctx.cursorDisplayCol,
-          lineCtx = lineCtx,
-        )
-      renderChar(rune, col, style)
-      charIdx += 1
+  var col = startColumn
+  for (rune, _) in displayLine.chars:
+    let style = e.getSelectionStyle(
+      textBuffer,
+      ctx.selection,
+      BufferPosition(line: lineIndex, column: col),
+      ctx.cursorCol,
+      ctx.windowMode,
+      displayCol = displayX,
+      cursorDisplayCol = ctx.cursorDisplayCol,
+      lineCtx = lineCtx,
+    )
+    renderChar(rune, col, style)
+    col += 1
 
-  # The cell after the line's end, which virtual text drawn there hides, as on
-  # an empty line. Only a block shows over it on a non-empty line.
-  let selectedEndX =
-    if reachesLineEnd and lineCtx.showsLineEnd(ctx.selection, isEmpty = false):
-      displayX
-    else:
-      -1
+  # Whether the selection shows over the cell after the text, which virtual
+  # text drawn there hides, as in Vim. Past `lineEnd`, the row was scrolled
+  # sideways past the line's end and shows nothing of it.
+  let
+    reachesLineEnd = col == lineCtx.lineEnd
+    selectedEndX =
+      if col >= lineCtx.lineEnd and lineCtx.showsPastText(ctx.selection, col):
+        displayX
+      else:
+        -1
 
   # Draw end-of-line virtual text (inlay hints, etc.) after the real text and
   # before the trailing fill, so the running displayX (and thus cursor-column /
@@ -847,39 +784,26 @@ proc renderWindowLineWrapped*(
     # Don't render if already past visible area
     if screenY >= maxScreenY:
       return
-    # Empty line - just render line number (if enabled)
+    # Empty line: the line number (if enabled) and the cells after its end
     if lineNumOffset > 0:
       let lineNumStr = e.state.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
       if lineNumScreenX + lineNumStr.len <= buffer.area.width:
         buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
-    # Fill with cursor line/column highlight if on cursor line/column
     let textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
-    e.fillLineBackground(
-      buffer,
-      textScreenX,
-      actualScreenY,
-      lineIndex,
-      window.cursor.line,
-      window.viewport.x + window.viewport.width,
-      cursorDisplayCol = ctx.cursorDisplayCol,
-      textBuffer = window.buffer,
-      startsAtLineEnd = true,
-      ctx = ctx,
-    )
-    # Empty lines bypass renderLineSegmentWithSelection, so draw any end-of-line
-    # virtual text (inlay hints) here too, over the just-filled background.
-    # Partial lineCtx: appendEndOfLineVirtualText -> lineFillPatch only reads
-    # isCursorLine, lineConflict, useTwoColor, and lineBg.
-    let vtLineCtx = LineStyleContext(
-      lineIndex: lineIndex,
-      isCursorLine: lineIndex == window.cursor.line,
-      lineConflict: e.resolveLineConflict(window.buffer, lineIndex),
-      useTwoColor: e.config.highlight.gitConflictTwoColor,
-      lineBg: resolveLineBg(e, window.buffer, lineIndex),
-    )
-    discard e.appendEndOfLineVirtualText(
-      buffer, ctx, vtLineCtx, 0, textScreenX, actualScreenY
-    )
+    if textScreenX < buffer.area.width:
+      e.renderLineSegmentWithSelection(
+        window.buffer,
+        buffer,
+        "",
+        textScreenX,
+        actualScreenY,
+        lineIndex,
+        0,
+        ctx,
+        precomputed = some(
+          e.linePrecomputed(window.buffer, lineIndex, line, ctx, drawsText = false)
+        ),
+      )
     inc screenY
     inc lineIndex
     return
@@ -897,13 +821,7 @@ proc renderWindowLineWrapped*(
 
   # Build per-logical-line state once so each wrap segment can reuse it.
   # The highlight was already advanced by `updateForFrame` before the draw.
-  let precomputed = some(
-    LinePrecomputed(
-      fullLine: line,
-      indentInfo: analyzeIndentation(line),
-      lineCtx: e.newLineStyleContext(window.buffer, lineIndex, line, ctx),
-    )
-  )
+  let precomputed = some(e.linePrecomputed(window.buffer, lineIndex, line, ctx))
 
   # Skip leading wrap segments scrolled off the top (partial first line). Keep
   # wrapLineCount advancing so the resumed first visible row is treated as a
@@ -957,8 +875,6 @@ proc renderWindowLineWrapped*(
           lineIndex,
           startCharCol,
           ctx,
-          useRunes = true,
-          reachesLineEnd = endCharCol >= lineCharLen,
           precomputed = precomputed,
         )
 
@@ -1001,77 +917,37 @@ proc renderWindowLineNoWrap*(
     if lineNumScreenX + lineNumStr.len <= buffer.area.width:
       buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
 
-  # Render text content
-  # Use character-based slicing (not byte-based) for multibyte character support
+  let
+    textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
+    cellBudget = e.textAreaWidth(window, lineNumOffset)
+  if textScreenX >= buffer.area.width or cellBudget <= 0:
+    return
+
+  # Use character-based slicing (not byte-based) for multibyte character
+  # support. Clip by display width, not byte length: take as many runes as fit
+  # cellBudget cells (tabs expanded, CJK = 2 cells), like the wrapped path.
+  # Slicing by byte count would hide content on multibyte/CJK lines and
+  # overflow the edge on tab-heavy lines (the lint_string_len hazard).
   let
     displayLine =
       if window.viewport.leftColumn < line.charLen:
         line.charSubStr(window.viewport.leftColumn)
       else:
         ""
-    textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
-
-  if displayLine.len > 0 and textScreenX < buffer.area.width:
-    let cellBudget = e.textAreaWidth(window, lineNumOffset)
-    if cellBudget > 0:
-      # Clip by display width, not byte length: take as many runes as fit
-      # cellBudget cells (tabs expanded, CJK = 2 cells), like the wrapped path.
-      # Slicing by byte count would hide content on multibyte/CJK lines and
-      # overflow the edge on tab-heavy lines (the lint_string_len hazard).
-      let
-        (_, segmentWidth, endByte) =
-          displayWidthSubstrFromByte(displayLine, 0, cellBudget, e.tabStop)
-        visibleSlice = displayLine[0 ..< endByte]
-      if visibleSlice.len > 0:
-        # Append end-of-line virtual text only when the whole line is visible
-        # (every rune consumed and within budget); otherwise the hint anchor (the
-        # line end) is off-screen and would land mid-line. Window-edge clipping
-        # alone is not enough — the scrollbar gutter can leave room for a stray rune.
-        let lineEndVisible = endByte >= displayLine.len and segmentWidth <= cellBudget
-        e.renderLineSegmentWithSelection(
-          window.buffer,
-          buffer,
-          visibleSlice,
-          textScreenX,
-          actualScreenY,
-          lineIndex,
-          window.viewport.leftColumn,
-          ctx,
-          useRunes = false,
-          reachesLineEnd = lineEndVisible,
-        )
-  else:
-    # Empty line or scrolled past line end - fill to clear stale content
-    e.fillLineBackground(
-      buffer,
-      textScreenX,
-      actualScreenY,
-      lineIndex,
-      window.cursor.line,
-      window.viewport.x + window.viewport.width,
-      cursorDisplayCol = ctx.cursorDisplayCol,
-      textBuffer = window.buffer,
-      startsAtLineEnd = line.charLen == window.viewport.leftColumn,
-      ctx = ctx,
-    )
-    # The text path skips end-of-line virtual text for empty/scrolled-past
-    # lines. Draw it here when the line's end column is still on-screen
-    # (vtStartCol >= 0); when scrolled horizontally past the line end the
-    # anchor is off-screen, so skip it.
-    let vtStartCol = line.charLen - window.viewport.leftColumn
-    if vtStartCol >= 0:
-      # Partial lineCtx: appendEndOfLineVirtualText -> lineFillPatch only reads
-      # isCursorLine, lineConflict, useTwoColor, and lineBg.
-      let vtLineCtx = LineStyleContext(
-        lineIndex: lineIndex,
-        isCursorLine: lineIndex == window.cursor.line,
-        lineConflict: e.resolveLineConflict(window.buffer, lineIndex),
-        useTwoColor: e.config.highlight.gitConflictTwoColor,
-        lineBg: resolveLineBg(e, window.buffer, lineIndex),
-      )
-      discard e.appendEndOfLineVirtualText(
-        buffer, ctx, vtLineCtx, vtStartCol, textScreenX, actualScreenY
-      )
+    (_, _, endByte) = displayWidthSubstrFromByte(displayLine, 0, cellBudget, e.tabStop)
+  e.renderLineSegmentWithSelection(
+    window.buffer,
+    buffer,
+    displayLine[0 ..< endByte],
+    textScreenX,
+    actualScreenY,
+    lineIndex,
+    window.viewport.leftColumn,
+    ctx,
+    precomputed = some(
+      e.linePrecomputed(window.buffer, lineIndex, line, ctx, drawsText = endByte > 0)
+    ),
+  )
 
 proc renderWindowSidebar*(
     buffer: var Buffer,
@@ -1094,6 +970,11 @@ proc renderWindowSidebar*(
       if screenX < buffer.area.width and actualScreenY < buffer.area.height:
         buffer.setString(screenX, actualScreenY, item.text, item.style)
 
+proc textRightEdge(e: Editor, window: EditorWindow): int =
+  ## Absolute screen X of the right edge of the window's text, left of the
+  ## scrollbar.
+  window.viewport.x + window.viewport.width - e.calculateScrollbarWidth(window)
+
 proc renderFoldLine*(
     e: Editor,
     buffer: var Buffer,
@@ -1106,11 +987,10 @@ proc renderFoldLine*(
   let
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth(window)
-    scrollbarWidth = e.calculateScrollbarWidth(window)
     lineNumScreenX = window.viewport.x + sidebarWidth
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
     foldText = window.buffer.formatFoldText(fold)
-    windowRightEdge = window.viewport.x + window.viewport.width - scrollbarWidth
+    windowRightEdge = e.textRightEdge(window)
 
   # Render line number (if enabled)
   if lineNumOffset > 0:
@@ -1275,7 +1155,7 @@ proc renderWindow*(
       else:
         BlockArea(),
     windowMode: window.mode,
-    windowRightEdge: window.viewport.x + window.viewport.width,
+    windowRightEdge: e.textRightEdge(window),
     isActiveWindow: isActiveWindow,
     # Virtual text caches (inlay hints, ...) track the active buffer, so only
     # the active window draws them.
