@@ -37,13 +37,16 @@ import insert_commands, put_text
 template checkVisualEdit(state: EditorState, r: Result[(), string]) =
   ## For use inside a withTransaction body of a Visual command: on an edit
   ## failure surface the error, leave Visual mode and return from the enclosing
-  ## proc. The return makes withTransaction roll back, so no partially applied
-  ## edit is committed.
+  ## proc, with the error when it returns a Result. The return makes
+  ## withTransaction roll back, so no partially applied edit is committed.
   let checkVisualEditResult = r
   if checkVisualEditResult.isErr:
     state.statusMessage = checkVisualEditResult.error
     state.leaveVisual()
-    return
+    when declared(result):
+      return err(checkVisualEditResult.error)
+    else:
+      return
 
 template checkVisualEditAt(
     state: EditorState, cursorBefore: BufferPosition, r: Result[(), string]
@@ -135,6 +138,25 @@ proc visualYank*(buffer: TextBuffer, state: EditorState, register = none(char)) 
     state.statusMessage = ""
     state.leaveVisual()
 
+proc operandArea*(
+    buffer: TextBuffer, state: EditorState
+): tuple[sel: VisualSelection, area: BlockArea] =
+  ## The selection an operator acts on, and its block when blockwise.
+  result.sel = state.operandSelection(buffer)
+  if result.sel.kind == vskBlock:
+    result.area = buffer.blockArea(result.sel, state.tabStop)
+
+proc undoCursor(sel: VisualSelection, area: BlockArea): BufferPosition =
+  ## Where undo puts the cursor back after an operator over `sel`, as Vim's: the
+  ## top left of the selection, the first column of a linewise one.
+  case sel.kind
+  of vskBlock:
+    area.topLeft
+  of vskLine:
+    BufferPosition(line: min(sel.start.line, sel.current.line), column: 0)
+  of vskChar:
+    sel.getSelectionRange()[0]
+
 proc keepsRegisters(taken: Register, change = false): bool =
   ## A Visual delete or change that took `taken` leaves the registers as they
   ## were, as Vim's op_delete does over an empty region (`v` on the empty last
@@ -200,138 +222,139 @@ proc deleteLineSelection(
 
   return ok(())
 
+template failedVisualEdit(state: EditorState, txr: Result[(), string]) =
+  ## After a Visual operator's transaction: on a failure surface the error,
+  ## leave Visual mode and return it from the enclosing proc.
+  if txr.isErr:
+    if state.statusMessage.len == 0:
+      state.statusMessage = txr.error
+    state.leaveVisual()
+    return err(txr.error)
+
 proc visualDelete*(
-    buffer: TextBuffer, state: EditorState, sel: VisualSelection, register = none(char)
-) =
-  ## Delete `sel` into `register` (else the delete registers) and return to
-  ## previous mode
-  if sel.active:
-    var deleted: Register
+    buffer: TextBuffer,
+    state: EditorState,
+    sel: VisualSelection,
+    area: BlockArea,
+    register = none(char),
+): Result[(), string] =
+  ## Delete `sel`, the cells of `area` when blockwise, into `register` (else
+  ## the delete registers) and return to previous mode
+  if not sel.active:
+    return ok(())
+  var deleted: Register
 
-    let txr = withTransaction(buffer, "Visual delete"):
-      case sel.kind
-      of vskBlock:
-        checkVisualEdit(
-          state,
-          deleteBlockSelection(
-            buffer, state, buffer.blockArea(sel, state.tabStop), deleted
-          ),
-        )
-      of vskLine:
-        checkVisualEdit(state, deleteLineSelection(buffer, state, sel, deleted))
-      of vskChar:
-        let (selStart, selEnd) = sel.getSelectionRange()
+  let txr = withTransaction(buffer, "Visual delete", some(undoCursor(sel, area))):
+    case sel.kind
+    of vskBlock:
+      checkVisualEdit(state, deleteBlockSelection(buffer, state, area, deleted))
+    of vskLine:
+      checkVisualEdit(state, deleteLineSelection(buffer, state, sel, deleted))
+    of vskChar:
+      let (selStart, selEnd) = sel.getSelectionRange()
 
-        deleted = toRegister(buffer.getTextInRange(selStart, selEnd), false)
+      deleted = toRegister(buffer.getTextInRange(selStart, selEnd), false)
 
-        checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
-        state.cursor = selStart
-    if txr.isErr:
-      if state.statusMessage.len == 0:
-        state.statusMessage = txr.error
-      state.leaveVisual()
-      return
+      checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
+      state.cursor = selStart
+  failedVisualEdit(state, txr)
 
-    # Registers are outside the buffer transaction, so store after commit.
-    if not deleted.keepsRegisters:
-      state.registers.storeDeleted(register, deleted)
+  # Registers are outside the buffer transaction, so store after commit.
+  if not deleted.keepsRegisters:
+    state.registers.storeDeleted(register, deleted)
 
-    # Clamp cursor to valid position after deletion
-    if state.cursor.line >= buffer.len:
-      state.cursor.line = max(0, buffer.len - 1)
-    if buffer.len > 0:
-      let line = buffer.getLine(state.cursor.line)
-      if line.charLen > 0:
-        state.cursor.column = min(state.cursor.column, line.charLen - 1)
-      else:
-        state.cursor.column = 0
-
-    state.statusMessage = ""
-    state.leaveVisual()
-
-proc visualDelete*(buffer: TextBuffer, state: EditorState, register = none(char)) =
-  ## Delete visual selection and return to previous mode
-  visualDelete(buffer, state, state.operandSelection(buffer), register)
-
-proc visualIndent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
-  ## Indent all lines in visual selection and return to previous mode
-  let sel = state.operandSelection(buffer)
-  if sel.active:
-    let
-      startLine = min(sel.start.line, sel.current.line)
-      endLine = max(sel.start.line, sel.current.line)
-
-    # indentLine reads the line to act on from the cursor, so the loop walks it.
-    let cursorBefore = state.cursor
-
-    let txr = withTransaction(buffer, "Visual indent"):
-      for lineNum in startLine .. endLine:
-        state.cursor.line = lineNum
-        state.cursor.column = 0
-        checkVisualEditAt(state, cursorBefore, indentLine(buffer, state, count))
-
-      state.cursor.line = startLine
+  # Clamp cursor to valid position after deletion
+  if state.cursor.line >= buffer.len:
+    state.cursor.line = max(0, buffer.len - 1)
+  if buffer.len > 0:
+    let line = buffer.getLine(state.cursor.line)
+    if line.charLen > 0:
+      state.cursor.column = min(state.cursor.column, line.charLen - 1)
+    else:
       state.cursor.column = 0
-    if txr.isErr:
-      if state.statusMessage.len == 0:
-        state.statusMessage = txr.error
-      state.leaveVisual()
-      return
 
-    state.statusMessage = ""
-    state.leaveVisual()
+  state.statusMessage = ""
+  state.leaveVisual()
+  ok(())
 
-proc visualDedent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
-  ## Dedent all lines in visual selection and return to previous mode
-  let sel = state.operandSelection(buffer)
-  if sel.active:
-    let
-      startLine = min(sel.start.line, sel.current.line)
-      endLine = max(sel.start.line, sel.current.line)
+proc shiftLines(
+    buffer: TextBuffer,
+    state: EditorState,
+    sel: VisualSelection,
+    area: BlockArea,
+    label: string,
+    shift: proc(buffer: TextBuffer, state: EditorState, count: int): Result[(), string],
+    count: int,
+): Result[(), string] =
+  ## Shift the lines of `sel` by `count` with `shift`, which reads the line to
+  ## act on from the cursor, and return to previous mode. The cursor goes to
+  ## the first line's first non-blank, as Vim's op_shift.
+  if not sel.active:
+    return ok(())
+  let
+    startLine = min(sel.start.line, sel.current.line)
+    endLine = max(sel.start.line, sel.current.line)
+    cursorBefore = state.cursor
 
-    # dedentLine reads the line to act on from the cursor, so the loop walks it.
-    let cursorBefore = state.cursor
+  let txr = withTransaction(buffer, label, some(undoCursor(sel, area))):
+    for lineNum in startLine .. endLine:
+      state.cursor = BufferPosition(line: lineNum, column: 0)
+      checkVisualEditAt(state, cursorBefore, shift(buffer, state, count))
 
-    let txr = withTransaction(buffer, "Visual dedent"):
-      for lineNum in startLine .. endLine:
-        state.cursor.line = lineNum
-        state.cursor.column = 0
-        checkVisualEditAt(state, cursorBefore, dedentLine(buffer, state, count))
+    state.cursor = BufferPosition(
+      line: startLine, column: firstNonBlankColumn(buffer.getLine(startLine))
+    )
+  failedVisualEdit(state, txr)
 
-      state.cursor.line = startLine
-      state.cursor.column = 0
-    if txr.isErr:
-      if state.statusMessage.len == 0:
-        state.statusMessage = txr.error
-      state.leaveVisual()
-      return
+  state.statusMessage = ""
+  state.leaveVisual()
+  ok(())
 
-    state.statusMessage = ""
-    state.leaveVisual()
+proc visualIndent*(
+    buffer: TextBuffer,
+    state: EditorState,
+    sel: VisualSelection,
+    area: BlockArea,
+    count: int = 1,
+): Result[(), string] =
+  ## Indent the lines of `sel`, whose block is `area` when blockwise, and
+  ## return to previous mode
+  shiftLines(buffer, state, sel, area, "Visual indent", indentLine, count)
+
+proc visualDedent*(
+    buffer: TextBuffer,
+    state: EditorState,
+    sel: VisualSelection,
+    area: BlockArea,
+    count: int = 1,
+): Result[(), string] =
+  ## Dedent the lines of `sel`, whose block is `area` when blockwise, and
+  ## return to previous mode
+  shiftLines(buffer, state, sel, area, "Visual dedent", dedentLine, count)
 
 proc applyVisualTextTransform(
     buffer: TextBuffer,
     state: EditorState,
+    sel: VisualSelection,
+    area: BlockArea,
     label: string,
     action: string,
     transform: proc(text: string): string {.closure, gcsafe.},
     blockFill = "",
-) =
+): Result[(), string] =
   ## Apply transform to selection; refused for raw buffers. A block's lines
   ## get `transform` of the characters wholly inside it, or with `blockFill`
   ## their cells filled with it, as `r` does.
-  let sel = state.operandSelection(buffer)
   if not sel.active:
-    return
+    return ok(())
 
   let (selStart, selEnd) = sel.getSelectionRange()
 
-  let txr = withTransaction(buffer, label):
+  let txr = withTransaction(buffer, label, some(undoCursor(sel, area))):
     case sel.kind
     of vskBlock:
       if not buffer.allowsTextTransforms:
         checkVisualEdit(state, Result[(), string].err(rawBytesRejection(action)))
-      let area = buffer.blockArea(sel, state.tabStop)
       checkVisualEdit(
         state,
         if blockFill.len > 0:
@@ -361,27 +384,34 @@ proc applyVisualTextTransform(
 
     if sel.kind != vskBlock:
       state.cursor = selStart
-  if txr.isErr:
-    if state.statusMessage.len == 0:
-      state.statusMessage = txr.error
-    state.leaveVisual()
-    return
+  failedVisualEdit(state, txr)
 
   state.statusMessage = ""
   state.leaveVisual()
+  ok(())
 
-proc visualLowercase*(buffer: TextBuffer, state: EditorState) =
-  ## Convert visual selection to lowercase and return to previous mode
-  applyVisualTextTransform(buffer, state, "Visual lowercase", "lowercase", toLowerAscii)
-
-proc visualUppercase*(buffer: TextBuffer, state: EditorState) =
-  ## Convert visual selection to uppercase and return to previous mode
-  applyVisualTextTransform(buffer, state, "Visual uppercase", "uppercase", toUpperAscii)
-
-proc visualToggleCase*(buffer: TextBuffer, state: EditorState) =
-  ## Toggle case of visual selection and return to previous mode
+proc visualLowercase*(
+    buffer: TextBuffer, state: EditorState, sel: VisualSelection, area: BlockArea
+): Result[(), string] =
+  ## Convert `sel` to lowercase and return to previous mode
   applyVisualTextTransform(
-    buffer, state, "Visual toggle case", "toggle case", toggleAsciiCase
+    buffer, state, sel, area, "Visual lowercase", "lowercase", toLowerAscii
+  )
+
+proc visualUppercase*(
+    buffer: TextBuffer, state: EditorState, sel: VisualSelection, area: BlockArea
+): Result[(), string] =
+  ## Convert `sel` to uppercase and return to previous mode
+  applyVisualTextTransform(
+    buffer, state, sel, area, "Visual uppercase", "uppercase", toUpperAscii
+  )
+
+proc visualToggleCase*(
+    buffer: TextBuffer, state: EditorState, sel: VisualSelection, area: BlockArea
+): Result[(), string] =
+  ## Toggle the case of `sel` and return to previous mode
+  applyVisualTextTransform(
+    buffer, state, sel, area, "Visual toggle case", "toggle case", toggleAsciiCase
   )
 
 proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: string) =
@@ -399,41 +429,59 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: string) =
       first = false
       result.add(ch.repeat(segment.charLen))
 
-  applyVisualTextTransform(
-    buffer, state, "Visual replace", "replace", fill, blockFill = ch
+  let (sel, area) = buffer.operandArea(state)
+  discard applyVisualTextTransform(
+    buffer, state, sel, area, "Visual replace", "replace", fill, blockFill = ch
   )
 
-proc visualJoinLines*(buffer: TextBuffer, state: EditorState) =
-  ## Join all lines in visual selection into one line (J command)
-  let sel = state.operandSelection(buffer)
-  if sel.active:
-    # Get line range
-    let
-      startLine = min(sel.start.line, sel.current.line)
-      endLine = max(sel.start.line, sel.current.line)
+proc visualJoinLines*(
+    buffer: TextBuffer, state: EditorState, sel: VisualSelection, area: BlockArea
+): Result[(), string] =
+  ## Join the lines of `sel`, whose block is `area` when blockwise, into one
+  ## line (J command), and the next line with a single one, as Vim's.
+  if not sel.active:
+    return ok(())
+  let
+    startLine = min(sel.start.line, sel.current.line)
+    endLine = max(sel.start.line, sel.current.line)
+    joinCount = max(1, endLine - startLine)
 
-    # Need at least 2 lines to join
-    if startLine == endLine:
-      # Only one line selected, nothing to join
-      state.statusMessage = ""
-      state.leaveVisual()
-      return
+  # Use buffer's joinLines which handles the transaction
+  result = buffer.joinLines(startLine, joinCount, some(undoCursor(sel, area)))
+  if result.isErr:
+    state.statusMessage = result.error
+    state.cursor = undoCursor(sel, area)
+  else:
+    state.statusMessage = "Joined " & $(joinCount + 1) & " line(s)"
+    state.cursor = BufferPosition(line: startLine, column: 0)
 
-    # Calculate number of joins needed (lines - 1)
-    let joinCount = endLine - startLine
+  state.leaveVisual()
 
-    # Use buffer's joinLines which handles the transaction
-    let result = buffer.joinLines(startLine, joinCount)
-    if result.isErr:
-      state.statusMessage = result.error
-    else:
-      state.statusMessage = $joinCount & " lines joined"
-
-    # Move cursor to the start line
-    state.cursor.line = startLine
-    state.cursor.column = 0
-
-    state.leaveVisual()
+proc runVisualOperator*(
+    buffer: TextBuffer,
+    state: EditorState,
+    op: VisualOperator,
+    sel: VisualSelection,
+    area: BlockArea,
+    count = 1,
+    register = none(char),
+): Result[(), string] =
+  ## Act with `op` over `sel`, the cells of `area` when blockwise.
+  case op
+  of voDelete:
+    visualDelete(buffer, state, sel, area, register)
+  of voIndent:
+    visualIndent(buffer, state, sel, area, count)
+  of voDedent:
+    visualDedent(buffer, state, sel, area, count)
+  of voLowerCase:
+    visualLowercase(buffer, state, sel, area)
+  of voUpperCase:
+    visualUppercase(buffer, state, sel, area)
+  of voToggleCase:
+    visualToggleCase(buffer, state, sel, area)
+  of voJoin:
+    visualJoinLines(buffer, state, sel, area)
 
 proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
   ## Switch from visual mode to insert mode (I command)
@@ -546,17 +594,8 @@ proc visualChange*(
       startLine = min(sel.start.line, sel.current.line)
       endLine = max(sel.start.line, sel.current.line)
 
-    # As Vim, undo returns to the top left of the selection, the first column
-    # of a linewise one.
-    let undoCursor =
-      case sel.kind
-      of vskBlock:
-        area.topLeft
-      of vskLine:
-        BufferPosition(line: startLine, column: 0)
-      of vskChar:
-        sel.getSelectionRange()[0]
-    let txr = withTransactionForInsert(buffer, "Visual change", undoCursor):
+    let undoAt = undoCursor(sel, area)
+    let txr = withTransactionForInsert(buffer, "Visual change", undoAt):
       case sel.kind
       of vskBlock:
         checkVisualEdit(state, deleteBlockSelection(buffer, state, area, deleted))
@@ -579,11 +618,11 @@ proc visualChange*(
         checkVisualEdit(state, buffer.emptyLinesForChange(state, startLine, endLine))
       of vskChar:
         let selEnd = sel.getSelectionRange()[1]
-        deleted = toRegister(buffer.getTextInRange(undoCursor, selEnd), false)
+        deleted = toRegister(buffer.getTextInRange(undoAt, selEnd), false)
 
-        checkVisualEdit(state, buffer.deleteRange(undoCursor, selEnd))
+        checkVisualEdit(state, buffer.deleteRange(undoAt, selEnd))
 
-        state.cursor = undoCursor
+        state.cursor = undoAt
     if txr.isErr:
       if state.statusMessage.len == 0:
         state.statusMessage = txr.error
@@ -597,17 +636,9 @@ proc visualChange*(
     state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
     state.mode = EditorMode.Insert
 
-proc changeArea*(
-    buffer: TextBuffer, state: EditorState
-): tuple[sel: VisualSelection, area: BlockArea] =
-  ## The selection `c` changes, and its block when blockwise.
-  result.sel = state.operandSelection(buffer)
-  if result.sel.kind == vskBlock:
-    result.area = buffer.blockArea(result.sel, state.tabStop)
-
 proc visualChange*(buffer: TextBuffer, state: EditorState, register = none(char)) =
   ## Change the Visual selection (c command).
-  let (sel, area) = buffer.changeArea(state)
+  let (sel, area) = buffer.operandArea(state)
   visualChange(buffer, state, sel, area, register)
 
 proc visualSwapSelection*(buffer: TextBuffer, state: EditorState) =
@@ -700,7 +731,7 @@ proc visualPaste*(
   # Undo puts the cursor back where Vim's delete starts: over lines, at the
   # cursor when it is above where Visual started, else at the start of the
   # line it started on.
-  let undoCursor =
+  let undoAt =
     case sel.kind
     of vskChar:
       sel.getSelectionRange()[0]
@@ -711,7 +742,7 @@ proc visualPaste*(
         BufferPosition(line: sel.start.line, column: 0)
     of vskBlock:
       cells.topLeft
-  let txr = withTransaction(buffer, "Visual paste", some(undoCursor)):
+  let txr = withTransaction(buffer, "Visual paste", some(undoAt)):
     var
       flags: set[PutFlag]
       forward = false

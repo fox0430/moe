@@ -27,6 +27,36 @@ import ../src/moepkg/[buffer, types, modes, registers, config, clipboard]
 import ../src/moepkg/command_handlers/visual_commands
 import visual_test_helper
 
+# The operators over the window's own selection, as the Visual keys run them.
+
+proc visualDelete(buffer: TextBuffer, state: EditorState, register = none(char)) =
+  let (sel, area) = buffer.operandArea(state)
+  discard visualDelete(buffer, state, sel, area, register)
+
+proc visualIndent(buffer: TextBuffer, state: EditorState, count = 1) =
+  let (sel, area) = buffer.operandArea(state)
+  discard visualIndent(buffer, state, sel, area, count)
+
+proc visualDedent(buffer: TextBuffer, state: EditorState, count = 1) =
+  let (sel, area) = buffer.operandArea(state)
+  discard visualDedent(buffer, state, sel, area, count)
+
+proc visualLowercase(buffer: TextBuffer, state: EditorState) =
+  let (sel, area) = buffer.operandArea(state)
+  discard visualLowercase(buffer, state, sel, area)
+
+proc visualUppercase(buffer: TextBuffer, state: EditorState) =
+  let (sel, area) = buffer.operandArea(state)
+  discard visualUppercase(buffer, state, sel, area)
+
+proc visualToggleCase(buffer: TextBuffer, state: EditorState) =
+  let (sel, area) = buffer.operandArea(state)
+  discard visualToggleCase(buffer, state, sel, area)
+
+proc visualJoinLines(buffer: TextBuffer, state: EditorState) =
+  let (sel, area) = buffer.operandArea(state)
+  discard visualJoinLines(buffer, state, sel, area)
+
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
   let window = EditorWindow(
@@ -619,7 +649,9 @@ suite "Visual Commands - raw buffer gates":
     check "raw undecodable bytes" in state.statusMessage
 
   test "visual case transforms refuse a raw buffer":
-    for transform in [visualLowercase, visualUppercase, visualToggleCase]:
+    let transforms: array[3, proc(buffer: TextBuffer, state: EditorState) {.nimcall.}] =
+      [visualLowercase, visualUppercase, visualToggleCase]
+    for transform in transforms:
       let (buf, state) = rawSelection("Hello")
 
       transform(buf, state)
@@ -1044,9 +1076,9 @@ suite "Visual Commands - visualJoinLines":
 
     check buf.len == 1
     check state.visualSelection.active == false
-    check state.statusMessage == "1 lines joined"
+    check state.statusMessage == "Joined 2 line(s)"
 
-  test "Join single line selection (no-op)":
+  test "Join on the last line leaves it as it is":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
@@ -1073,7 +1105,7 @@ suite "Visual Commands - visualJoinLines":
     visualJoinLines(buf, state)
 
     check buf.len == 1
-    check state.statusMessage == "2 lines joined"
+    check state.statusMessage == "Joined 3 line(s)"
 
 suite "Visual Commands - visualToInsertMode":
   test "Switch from visual to insert mode":
