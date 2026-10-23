@@ -80,7 +80,7 @@ proc leaveSidebar*(e: Editor): Result[bool, string] =
 proc resetViewerViewport(win: EditorWindow) =
   win.cursor = BufferPosition(line: 0, column: 0)
   win.viewport.resetViewportTop()
-  win.viewport.leftColumn = 0
+  win.viewport.leftCell = 0
 
 proc restoreViewerPosition(e: Editor, win: EditorWindow, entry: ViewerEntry) =
   ## Clamped for the resumed mode since the buffer may have shrunk (external
@@ -88,7 +88,7 @@ proc restoreViewerPosition(e: Editor, win: EditorWindow, entry: ViewerEntry) =
   let origin = e.viewerOrigin(entry, win.buffer, e.state.mode)
   win.cursor = origin.cursor
   win.viewport.restoreViewportTop(origin.topLine, entry.originTopWrapOffset)
-  win.viewport.leftColumn = entry.originLeftColumn
+  win.viewport.leftCell = entry.originLeftCell
 
 proc resumeCoveredMode(
     e: Editor, win: EditorWindow, entry: ViewerEntry, textMode: Option[EditorMode]
@@ -195,7 +195,7 @@ proc enterViewerMode*(
         originCursor: win.cursor,
         originTopLine: win.viewport.topLine,
         originTopWrapOffset: win.viewport.topWrapOffset,
-        originLeftColumn: win.viewport.leftColumn,
+        originLeftCell: win.viewport.leftCell,
       )
     )
   # A split starts in its tab's mode; what the user left is the origin's.
@@ -269,14 +269,14 @@ proc splitViewer*(e: Editor, placement: ViewerPlacement): Result[void, string] =
     cursor = win.cursor
     topLine = win.viewport.topLine
     topWrapOffset = win.viewport.topWrapOffset
-    leftColumn = win.viewport.leftColumn
+    leftCell = win.viewport.leftCell
   ?e.enterViewerMode(entryMode, state, win.buffer, placement)
   let copy = e.activeWindow
   # A DiffViewer over its backup manager: the window is in the diff.
   e.setMode(mode)
   copy.cursor = cursor
   copy.viewport.restoreViewportTop(topLine, topWrapOffset)
-  copy.viewport.leftColumn = leftColumn
+  copy.viewport.leftCell = leftCell
   e.syncActiveWindow()
   ok()
 

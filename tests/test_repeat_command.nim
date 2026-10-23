@@ -49,7 +49,7 @@ suite "Repeat Command (.) - Delete Operations":
 
     let motionController = MotionController(
       viewportManager: ViewportManager(
-        viewport: ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+        viewport: ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
       )
     )
 
@@ -90,7 +90,7 @@ suite "Repeat Command (.) - Delete Operations":
 
     let motionController = MotionController(
       viewportManager: ViewportManager(
-        viewport: ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+        viewport: ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
       )
     )
 
@@ -129,7 +129,7 @@ suite "Repeat Command (.) - Replace Char":
 
     let motionController = MotionController(
       viewportManager: ViewportManager(
-        viewport: ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+        viewport: ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
       )
     )
 
@@ -164,7 +164,7 @@ suite "Repeat Command (.) - Edge Cases":
 
     let motionController = MotionController(
       viewportManager: ViewportManager(
-        viewport: ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+        viewport: ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
       )
     )
 

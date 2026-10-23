@@ -95,7 +95,7 @@ suite "calculateTerminalAreaDimensions":
     e.state.showTabLine = true
     let win = e.activeWindow
     # Set viewport height very small so rows would be <= 0
-    win.viewport = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 2, x: 0, y: 0)
+    win.viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 2, x: 0, y: 0)
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
     # height(2) - steadyBottomAreaHeight()(1) - TabLineHeight(1) = 0, clamped to 1
@@ -156,7 +156,7 @@ suite "minimumTerminalAreaDimensions":
     # one (20 rows, no reserve), the bottom one gets 12 - steady(1).
     discard e.addTerminalWindow(
       win.tabBufferId,
-      ViewPort(topLine: 0, leftColumn: 0, width: 60, height: 12, x: 0, y: 20),
+      ViewPort(topLine: 0, leftCell: 0, width: 60, height: 12, x: 0, y: 20),
     )
 
     let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
@@ -175,7 +175,7 @@ suite "minimumTerminalAreaDimensions":
     # below (8 - steady(1)).
     discard e.addTerminalWindow(
       win.tabBufferId,
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 8, x: 0, y: 20),
+      ViewPort(topLine: 0, leftCell: 0, width: 80, height: 8, x: 0, y: 20),
     )
 
     # 50x7 matches neither window: a whole-window pick would answer 50x20
@@ -194,7 +194,7 @@ suite "minimumTerminalAreaDimensions":
 
     let otherId = BufferId(999)
     discard e.addTerminalWindow(
-      otherId, ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 4, x: 0, y: 20)
+      otherId, ViewPort(topLine: 0, leftCell: 0, width: 10, height: 4, x: 0, y: 20)
     )
 
     let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
@@ -216,7 +216,7 @@ suite "minimumTerminalAreaDimensions":
     # Same tab, but a viewer holds the view: it no longer shows the grid.
     let covered = e.addTerminalWindow(
       win.tabBufferId,
-      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 4, x: 0, y: 20),
+      ViewPort(topLine: 0, leftCell: 0, width: 10, height: 4, x: 0, y: 20),
     )
     covered.mode = EditorMode.Normal
     covered.modeState = ModeState(kind: mskNone)
@@ -238,7 +238,7 @@ suite "minimumTerminalAreaDimensions":
     # The smaller window is the one in Terminal-Normal.
     let browsing = e.addTerminalWindow(
       win.tabBufferId,
-      ViewPort(topLine: 0, leftColumn: 0, width: 60, height: 12, x: 0, y: 20),
+      ViewPort(topLine: 0, leftCell: 0, width: 60, height: 12, x: 0, y: 20),
     )
     browsing.modeState.scrollbackSnapshot = newTextBuffer("")
 
@@ -472,8 +472,7 @@ suite "calculateWindowCursor":
     let e = createTestEditor()
     e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 0)
 
     let pos = e.calculateWindowCursor(
@@ -524,8 +523,7 @@ suite "calculateSidebarWidth - modeState gating":
     let e = createTestEditor()
     e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 5)
 
     let pos = e.calculateWindowCursor(
@@ -542,8 +540,7 @@ suite "calculateSidebarWidth - modeState gating":
     let e = createTestEditor()
     e.state.lineWrap = false
     let buffer = newTextBuffer("Line 1\nLine 2")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 1, column: 0)
 
     let pos = e.calculateWindowCursor(
@@ -562,8 +559,7 @@ suite "calculateSidebarWidth - modeState gating":
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
     # Collapse lines 1..5: interior lines 2..5 are hidden, line 1 shows a marker.
     check buffer.foldState.addFold(1, 5, collapsed = true)
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 7, column: 0)
 
     let pos = e.calculateWindowCursor(
@@ -583,8 +579,7 @@ suite "calculateSidebarWidth - modeState gating":
     e.state.lineWrap = true
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
     check buffer.foldState.addFold(1, 5, collapsed = true)
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 7, column: 0)
 
     let pos = e.calculateWindowCursor(
@@ -602,8 +597,7 @@ suite "calculateSidebarWidth - modeState gating":
     let e = createTestEditor()
     e.state.lineWrap = false
     let buffer = newTextBuffer("Line 1\nLine 2\nLine 3")
-    let viewport =
-      ViewPort(topLine: 2, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 2, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 0) # Above visible area
 
     let pos = e.calculateWindowCursor(
@@ -620,8 +614,7 @@ suite "calculateSidebarWidth - modeState gating":
     let e = createTestEditor()
     e.state.lineWrap = false
     let buffer = newTextBuffer("0123456789ABCDEFGHIJ")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 5, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 5, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 10)
 
     let pos = e.calculateWindowCursor(
@@ -639,8 +632,7 @@ suite "calculateSidebarWidth - modeState gating":
     e.state.lineWrap = false
     e.tabStop = 4
     let buffer = newTextBuffer("\tabc")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 1)
 
     let pos = e.calculateWindowCursor(
@@ -653,15 +645,13 @@ suite "calculateSidebarWidth - modeState gating":
     check pos.x == 8 # gutterWidth + tab expanded to 4 cells
     check pos.y == 0
 
-  test "cursor with horizontal scroll past a tab restarts tab stops":
-    # The renderer slices the line at leftColumn, so the tab is expanded from the
-    # slice start; subtracting two line-start widths would place the cursor at 6.
+  test "cursor with horizontal scroll keeps the tab's stop on the line":
+    # Every line scrolls by the same cells, as Vim's w_leftcol.
     let e = createTestEditor()
     e.state.lineWrap = false
     e.tabStop = 4
     let buffer = newTextBuffer("ab\tcd")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 2, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 2, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 3) # 'c'
 
     let pos = e.calculateWindowCursor(
@@ -671,7 +661,7 @@ suite "calculateSidebarWidth - modeState gating":
       gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
-    check pos.x == 8 # gutterWidth + tab expanded from the slice start = 4 + 4
+    check pos.x == 6 # gutterWidth + 'c' at cell 4 less 2 scrolled = 4 + 2
     check pos.y == 0
 
   test "cursor with horizontal scroll and full width characters":
@@ -679,8 +669,7 @@ suite "calculateSidebarWidth - modeState gating":
     e.state.lineWrap = false
     e.tabStop = 4
     let buffer = newTextBuffer("あいうえお")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 2, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 2, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 3) # え
 
     let pos = e.calculateWindowCursor(
@@ -690,16 +679,15 @@ suite "calculateSidebarWidth - modeState gating":
       gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
-    check pos.x == 6 # gutterWidth + う takes 2 cells
+    check pos.x == 8 # gutterWidth + え at cell 6 less 2 scrolled = 4 + 4
     check pos.y == 0
 
-  test "cursor left of leftColumn clamps to the text start":
+  test "cursor left of leftCell clamps to the text start":
     let e = createTestEditor()
     e.state.lineWrap = false
     e.tabStop = 4
     let buffer = newTextBuffer("0123456789")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 5, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 5, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 2)
 
     let pos = e.calculateWindowCursor(
@@ -716,8 +704,7 @@ suite "calculateSidebarWidth - modeState gating":
     let e = createTestEditor()
     e.state.lineWrap = false
     let buffer = newTextBuffer("Hello")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 10, column: 0) # Beyond buffer
 
     let pos = e.calculateWindowCursor(
@@ -734,8 +721,7 @@ suite "calculateSidebarWidth - modeState gating":
     let e = createTestEditor()
     e.state.lineWrap = true
     let buffer = newTextBuffer("Hello world")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 0)
 
     let pos = e.calculateWindowCursor(
@@ -753,8 +739,7 @@ suite "calculateSidebarWidth - modeState gating":
     e.state.lineWrap = true
     # 20 chars wrapping at maxWidth = 10 - 0 - 1 = 9
     let buffer = newTextBuffer("abcdefghijklmnopqrst")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 10, height: 24, x: 0, y: 0)
     # Cursor at char 10 => wrap segment 1 (9 chars per segment), col 1
     let cursor = BufferPosition(line: 0, column: 10)
 
@@ -775,8 +760,7 @@ suite "calculateSidebarWidth - modeState gating":
     let e = createTestEditor()
     e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 0, column: 5)
 
     # scrollbarWidth doesn't affect no-wrap cursor X position
@@ -797,8 +781,7 @@ suite "calculateSidebarWidth - modeState gating":
     e.state.lineWrap = true
     # 20 chars, maxWidth = 10 - 0 - 2 = 8
     let buffer = newTextBuffer("abcdefghijklmnopqrst")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 10, height: 24, x: 0, y: 0)
     # Cursor at char 9 => wrap segment 1 (8 chars per segment), col 1
     let cursor = BufferPosition(line: 0, column: 9)
 
@@ -820,8 +803,7 @@ suite "calculateSidebarWidth - modeState gating":
     e.state.lineWrap = true
     # 20 chars, maxWidth = 10 - 0 - 0 = 10
     let buffer = newTextBuffer("abcdefghijklmnopqrst")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 10, height: 24, x: 0, y: 0)
     # Cursor at char 10 => wrap segment 1 (10 chars per segment), col 0
     let cursor = BufferPosition(line: 0, column: 10)
 
@@ -841,8 +823,7 @@ suite "calculateSidebarWidth - modeState gating":
     e.state.lineWrap = true
     # maxWidth = 20 - 4 - 1 = 15
     let buffer = newTextBuffer("abcdefghijklmnopqrstuvwxyz0123456789")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 20, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 20, height: 24, x: 0, y: 0)
     # Cursor at char 16 => segment 1 (15 chars per segment), display col 1
     let cursor = BufferPosition(line: 0, column: 16)
 
@@ -865,8 +846,7 @@ suite "calculateSidebarWidth - modeState gating":
     # Line 0: "abcdefghij" (10 chars) => 2 screen rows (9+1)
     # Line 1: "klm" => 1 screen row
     let buffer = newTextBuffer("abcdefghij\nklm")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 10, height: 24, x: 0, y: 0)
     # Cursor at line 1, col 2 => screen row 2
     let cursor = BufferPosition(line: 1, column: 2)
 
@@ -888,7 +868,7 @@ suite "calculateSidebarWidth - modeState gating":
     let buffer = newTextBuffer("abcdefghijklmnopqrstuvwxyz0123")
     # Start the view one wrap segment down (segment 0 of the top line is hidden).
     let viewport = ViewPort(
-      topLine: 0, topWrapOffset: 1, leftColumn: 0, width: 10, height: 24, x: 0, y: 0
+      topLine: 0, topWrapOffset: 1, leftCell: 0, width: 10, height: 24, x: 0, y: 0
     )
     # Cursor at char 20 => wrap segment 2, display col 2 (chars 18,19,20).
     let cursor = BufferPosition(line: 0, column: 20)
@@ -910,7 +890,7 @@ suite "calculateSidebarWidth - modeState gating":
     let buffer = newTextBuffer("abcdefghijklmnopqrstuvwxyz0123")
     # Skip the first two segments of the top line.
     let viewport = ViewPort(
-      topLine: 0, topWrapOffset: 2, leftColumn: 0, width: 10, height: 24, x: 0, y: 0
+      topLine: 0, topWrapOffset: 2, leftCell: 0, width: 10, height: 24, x: 0, y: 0
     )
     # Cursor at char 5 => segment 0, which is scrolled off the top.
     let cursor = BufferPosition(line: 0, column: 5)
@@ -931,8 +911,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let e = createTestEditor()
     e.state.lineWrap = true
     let buffer = newTextBuffer("Line 1\n\nLine 3") # Middle line is empty
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 2, column: 0)
 
     let pos = e.calculateWindowCursor(
@@ -952,8 +931,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let longLine = "A".repeat(100)
     let buffer = newTextBuffer(longLine & "\nLine 2")
     # Viewport width 20, minus gutterWidth 4 = 16 chars per wrapped line
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 20, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 20, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 1, column: 0)
 
     let pos = e.calculateWindowCursor(
@@ -973,8 +951,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let longLine = "ABCDEFGHIJ" & "KLMNOPQRST" # 20 chars
     let buffer = newTextBuffer(longLine)
     # Viewport width 14, minus gutterWidth 4 = 10 chars per wrapped line
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 14, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 14, height: 24, x: 0, y: 0)
     # Cursor at column 15 (in the wrapped portion)
     let cursor = BufferPosition(line: 0, column: 15)
 
@@ -993,8 +970,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let e = createTestEditor()
     e.state.lineWrap = false
     let buffer = newTextBuffer("Hello")
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: -1, column: 0)
 
     let pos = e.calculateWindowCursor(
@@ -1012,7 +988,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     e.state.lineWrap = false
     let buffer = newTextBuffer("Line 1\nLine 2\nLine 3\nLine 4\nLine 5")
     # Small viewport height of 3, with reserved 2 = only 1 visible line
-    let viewport = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 3, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 3, x: 0, y: 0)
     let cursor = BufferPosition(line: 4, column: 0) # Beyond visible area
 
     let pos = e.calculateWindowCursor(
@@ -1037,41 +1013,41 @@ suite "renderedCellPos":
     let e = plainEditor()
     e.state.lineWrap = false
     let win = e.activeWindow
-    win.viewport.leftColumn = 0
+    win.viewport.leftCell = 0
 
     let pos = e.renderedCellPos(win, "ab\tcd", 3) # 'c'
     check pos.row == 0
     check pos.cellX == 4 # "ab" + tab filling the stop
 
-  test "no wrap, horizontal scroll restarts tab stops":
+  test "no wrap, horizontal scroll keeps the tab's stop on the line":
     let e = plainEditor()
     e.state.lineWrap = false
     let win = e.activeWindow
-    win.viewport.leftColumn = 2
+    win.viewport.leftCell = 2
 
     let pos = e.renderedCellPos(win, "ab\tcd", 3) # 'c'
     check pos.row == 0
-    check pos.cellX == 4 # the tab is expanded from the slice start
+    check pos.cellX == 2 # at cell 4 on the line
 
   test "no wrap, horizontal scroll with full width characters":
     let e = plainEditor()
     e.state.lineWrap = false
     let win = e.activeWindow
-    win.viewport.leftColumn = 2
+    win.viewport.leftCell = 2
 
     let pos = e.renderedCellPos(win, "あいうえお", 3) # え
     check pos.row == 0
-    check pos.cellX == 2 # う takes 2 cells
+    check pos.cellX == 4 # at cell 6 on the line
 
-  test "no wrap, column before leftColumn clamps to zero":
+  test "no wrap, a column scrolled off the left is negative":
     let e = plainEditor()
     e.state.lineWrap = false
     let win = e.activeWindow
-    win.viewport.leftColumn = 5
+    win.viewport.leftCell = 5
 
     let pos = e.renderedCellPos(win, "0123456789", 2)
     check pos.row == 0
-    check pos.cellX == 0
+    check pos.cellX == -3
 
   test "wrap mode reports the segment row and column":
     let e = plainEditor()
@@ -1083,12 +1059,12 @@ suite "renderedCellPos":
     check e.renderedCellPos(win, "ab\tcd", 1) == (row: 0, cellX: 1) # 'b'
     check e.renderedCellPos(win, "ab\tcd", 3) == (row: 1, cellX: 0) # 'c' wrapped
 
-  test "wrap mode ignores leftColumn":
+  test "wrap mode ignores leftCell":
     let e = plainEditor()
     e.state.lineWrap = true
     let win = e.activeWindow
     win.viewport.width = 4
-    win.viewport.leftColumn = 2
+    win.viewport.leftCell = 2
 
     check e.renderedCellPos(win, "ab\tcd", 1) == (row: 0, cellX: 1)
 

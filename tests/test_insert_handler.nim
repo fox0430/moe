@@ -76,7 +76,7 @@ proc createTestState(): EditorState =
 
 proc createTestViewport(): ViewPort =
   ## Create a minimal viewport for testing
-  ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+  ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
 
 proc createTestHandler(buf: TextBuffer): InsertModeHandler =
   ## Create an InsertModeHandler for testing

@@ -315,12 +315,12 @@ suite "saveActiveWindowState":
     let e = createTestEditor()
     # Set viewport in motion controller
     e.motionController.viewportManager.viewport.topLine = 10
-    e.motionController.viewportManager.viewport.leftColumn = 5
+    e.motionController.viewportManager.viewport.leftCell = 5
 
     e.saveActiveWindowState()
 
     check e.activeWindow.viewport.topLine == 10
-    check e.activeWindow.viewport.leftColumn == 5
+    check e.activeWindow.viewport.leftCell == 5
 
   test "preserves base mode during overlay":
     let e = createTestEditor()
@@ -348,12 +348,12 @@ suite "syncActiveWindow":
   test "syncs viewport to motion controller":
     let e = createTestEditor()
     e.activeWindow.viewport.topLine = 15
-    e.activeWindow.viewport.leftColumn = 8
+    e.activeWindow.viewport.leftCell = 8
 
     e.syncActiveWindow()
 
     check e.motionController.viewportManager.viewport.topLine == 15
-    check e.motionController.viewportManager.viewport.leftColumn == 8
+    check e.motionController.viewportManager.viewport.leftCell == 8
 
   test "binds wrapCountCache to active window's cache":
     let e = createTestEditor()
@@ -446,7 +446,7 @@ suite "setActiveWindowScreenCursor":
     e.activeWindow.setTab(buffer)
     e.activeWindow.cursor = BufferPosition(line: 0, column: 5)
     e.activeWindow.viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+      ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
 
     e.setActiveWindowScreenCursor(e.activeWindow)
 
@@ -463,7 +463,7 @@ suite "setActiveWindowScreenCursor":
     e.activeWindow.setTab(buffer)
     e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
     e.activeWindow.viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+      ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
 
     e.setActiveWindowScreenCursor(e.activeWindow)
 
@@ -480,7 +480,7 @@ suite "setActiveWindowScreenCursor":
     e.activeWindow.setTab(buffer)
     e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
     e.activeWindow.viewport =
-      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+      ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
 
     e.setActiveWindowScreenCursor(e.activeWindow)
 
@@ -515,12 +515,12 @@ suite "enew - additional cases":
   test "resets viewport position":
     let e = createTestEditor()
     e.activeWindow.viewport.topLine = 100
-    e.activeWindow.viewport.leftColumn = 50
+    e.activeWindow.viewport.leftCell = 50
 
     let result = e.enew()
     check result.isOk
     check e.activeWindow.viewport.topLine == 0
-    check e.activeWindow.viewport.leftColumn == 0
+    check e.activeWindow.viewport.leftCell == 0
 
   test "syncs with executor":
     let e = createTestEditor()

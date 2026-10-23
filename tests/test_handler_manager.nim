@@ -46,7 +46,7 @@ proc createTestState(): EditorState =
   result.registers = initRegisters()
 
 proc createTestViewport(): ViewPort =
-  ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80)
+  ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80)
 
 proc createTestManager(): HandlerManager =
   ## Create a HandlerManager for testing

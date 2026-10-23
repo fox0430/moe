@@ -213,7 +213,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     # Reset to the top so a stale off-screen viewport can't survive the swap.
     activeWin.cursor = BufferPosition(line: 0, column: 0)
     activeWin.viewport.resetViewportTop()
-    activeWin.viewport.leftColumn = 0
+    activeWin.viewport.leftCell = 0
     return true
   of hrDiffViewerToggleView, hrDiffViewerToggleWord:
     # The state was already toggled in handleDiffViewerModeKey; only repaint.

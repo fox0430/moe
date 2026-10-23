@@ -1661,7 +1661,7 @@ suite "ScrollAnimation":
   ## is deterministic and always terminates.
 
   proc testViewport(height = 24): ViewPort =
-    ViewPort(topLine: 0, leftColumn: 0, width: 80, height: height, x: 0, y: 0)
+    ViewPort(topLine: 0, leftCell: 0, width: 80, height: height, x: 0, y: 0)
 
   proc scrollConfig(enable = true): SmoothScrollConfig =
     SmoothScrollConfig(enable: enable, friction: 80.0, airDrag: 2.0)

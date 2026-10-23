@@ -33,7 +33,7 @@ proc createTestWindow(x, y, width, height: int, active = false): EditorWindow =
     tabBufferId: buf.id,
     bufferIds: @[buf.id],
     viewport:
-      ViewPort(topLine: 0, leftColumn: 0, width: width, height: height, x: x, y: y),
+      ViewPort(topLine: 0, leftCell: 0, width: width, height: height, x: x, y: y),
     cursor: BufferPosition(line: 0, column: 0),
     active: active,
   )
@@ -1784,7 +1784,7 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
     let wm = createSingleWindowManager(80, 24)
     wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
     wm.windows[0].viewport.topLine = 3
-    wm.windows[0].viewport.leftColumn = 2
+    wm.windows[0].viewport.leftCell = 2
 
     let result = wm.vsplit(
       wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 5, column: 10)
@@ -1794,13 +1794,13 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
     check wm.windows[0].cursor.line == 5
     check wm.windows[0].cursor.column == 10
     check wm.windows[0].viewport.topLine == 3
-    check wm.windows[0].viewport.leftColumn == 2
+    check wm.windows[0].viewport.leftCell == 2
 
   test "vsplit different file starts at position 0":
     let wm = createSingleWindowManager(80, 24)
     wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
     wm.windows[0].viewport.topLine = 3
-    wm.windows[0].viewport.leftColumn = 2
+    wm.windows[0].viewport.leftCell = 2
 
     let newBuf = newTextBuffer()
     discard newBuf.insertText(BufferPosition(line: 0, column: 0), "New content")
@@ -1816,13 +1816,13 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
     check wm.windows[0].cursor.line == 0
     check wm.windows[0].cursor.column == 0
     check wm.windows[0].viewport.topLine == 0
-    check wm.windows[0].viewport.leftColumn == 0
+    check wm.windows[0].viewport.leftCell == 0
 
   test "hsplit same buffer inherits cursor position":
     let wm = createSingleWindowManager(80, 24)
     wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
     wm.windows[0].viewport.topLine = 3
-    wm.windows[0].viewport.leftColumn = 2
+    wm.windows[0].viewport.leftCell = 2
 
     let result = wm.hsplit(
       wm.windows[0].buffer,
@@ -1835,13 +1835,13 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
     check wm.windows[0].cursor.line == 5
     check wm.windows[0].cursor.column == 10
     check wm.windows[0].viewport.topLine == 3
-    check wm.windows[0].viewport.leftColumn == 2
+    check wm.windows[0].viewport.leftCell == 2
 
   test "hsplit different file starts at position 0":
     let wm = createSingleWindowManager(80, 24)
     wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
     wm.windows[0].viewport.topLine = 3
-    wm.windows[0].viewport.leftColumn = 2
+    wm.windows[0].viewport.leftCell = 2
 
     let newBuf = newTextBuffer()
     discard newBuf.insertText(BufferPosition(line: 0, column: 0), "New content")
@@ -1858,14 +1858,14 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
     check wm.windows[0].cursor.line == 0
     check wm.windows[0].cursor.column == 0
     check wm.windows[0].viewport.topLine == 0
-    check wm.windows[0].viewport.leftColumn == 0
+    check wm.windows[0].viewport.leftCell == 0
 
   test "vsplitWithBuffer same buffer inherits cursor position":
     let wm = createSingleWindowManager(80, 24)
     let originalBuffer = wm.windows[0].buffer
     wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
     wm.windows[0].viewport.topLine = 3
-    wm.windows[0].viewport.leftColumn = 2
+    wm.windows[0].viewport.leftCell = 2
 
     let result = wm.vsplitWithBuffer(
       originalBuffer,
@@ -1878,14 +1878,14 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
     check wm.windows[0].cursor.line == 5
     check wm.windows[0].cursor.column == 10
     check wm.windows[0].viewport.topLine == 3
-    check wm.windows[0].viewport.leftColumn == 2
+    check wm.windows[0].viewport.leftCell == 2
 
   test "hsplitWithBuffer same buffer inherits cursor position":
     let wm = createSingleWindowManager(80, 24)
     let originalBuffer = wm.windows[0].buffer
     wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
     wm.windows[0].viewport.topLine = 3
-    wm.windows[0].viewport.leftColumn = 2
+    wm.windows[0].viewport.leftCell = 2
 
     let result = wm.hsplitWithBuffer(
       originalBuffer,
@@ -1899,7 +1899,7 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
     check wm.windows[0].cursor.line == 5
     check wm.windows[0].cursor.column == 10
     check wm.windows[0].viewport.topLine == 3
-    check wm.windows[0].viewport.leftColumn == 2
+    check wm.windows[0].viewport.leftCell == 2
 
 suite "EditorWindowManager - Window Resize":
   test "increaseWindowWidth with single window does nothing":
@@ -2189,7 +2189,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf0,
         tabBufferId: buf0.id,
-        viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 3),
         active: true,
       )
@@ -2198,8 +2198,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf1,
         tabBufferId: buf1.id,
-        viewport:
-          ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 5),
         active: false,
       )
@@ -2232,7 +2231,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf0,
         tabBufferId: buf0.id,
-        viewport: ViewPort(x: 0, y: 0, width: 80, height: 11, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 0, y: 0, width: 80, height: 11, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: true,
       )
@@ -2241,8 +2240,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf1,
         tabBufferId: buf1.id,
-        viewport:
-          ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: false,
       )
@@ -2272,7 +2270,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf0,
         tabBufferId: buf0.id,
-        viewport: ViewPort(x: 0, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 0, y: 0, width: 26, height: 24, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: false,
       )
@@ -2281,8 +2279,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf1,
         tabBufferId: buf1.id,
-        viewport:
-          ViewPort(x: 27, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 27, y: 0, width: 26, height: 24, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: false,
       )
@@ -2291,8 +2288,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf2,
         tabBufferId: buf2.id,
-        viewport:
-          ViewPort(x: 54, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 54, y: 0, width: 26, height: 24, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: true,
       )
@@ -2325,7 +2321,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf0,
         tabBufferId: buf0.id,
-        viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 2, leftColumn: 3),
+        viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 2, leftCell: 3),
         cursor: BufferPosition(line: 2, column: 4),
         active: true,
       )
@@ -2334,8 +2330,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf1,
         tabBufferId: buf1.id,
-        viewport:
-          ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 7),
         active: false,
       )
@@ -2349,7 +2344,7 @@ suite "EditorWindowManager - swapWindows":
     check wm.windows[1].cursor.line == 2
     check wm.windows[1].cursor.column == 4
     check wm.windows[1].viewport.topLine == 2
-    check wm.windows[1].viewport.leftColumn == 3
+    check wm.windows[1].viewport.leftCell == 3
 
     # buf1's cursor/scroll state should be preserved
     check wm.windows[0].buffer == buf1
@@ -2365,7 +2360,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf0,
         tabBufferId: buf0.id,
-        viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: true,
       )
@@ -2374,8 +2369,7 @@ suite "EditorWindowManager - swapWindows":
       EditorWindow(
         viewBuffer: buf1,
         tabBufferId: buf1.id,
-        viewport:
-          ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: false,
       )

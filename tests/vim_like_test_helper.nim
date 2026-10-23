@@ -48,7 +48,7 @@ proc newVimLikeEditor*(
   result.windowManager.windows[0].setTab(buffer)
   result.windowManager.windows[0].bufferIds = @[buffer.id]
   result.windowManager.windows[0].viewport =
-    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
   result.motionController.bindToWindow(result.activeWindow)
   result.state.mode = EditorMode.Normal
   result.activeWindow.cursor = BufferPosition(line: line, column: column)

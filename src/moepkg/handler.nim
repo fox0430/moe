@@ -428,7 +428,7 @@ proc screenToBufferPosition(
 
   some(
     BufferPosition(
-      line: line, column: rl.cellToColumn(line, wrapSeg, screenX, vp.leftColumn)
+      line: line, column: rl.cellToColumn(line, wrapSeg, screenX, vp.leftCell)
     )
   )
 

@@ -28,34 +28,37 @@ import buffer/core
 
 iterator cellsOf*(
     text: string, tabStop: int
-): tuple[column: int, rune: Rune, cell, width: int] =
-  ## Each character of `text` with the cell it starts at and how many it takes.
+): tuple[column: int, rune: Rune, cell, width, byte: int] =
+  ## Each character of `text` with the cell it starts at, how many it takes
+  ## and the byte it starts at.
   var
     column = 0
     cell = 0
-  for (rune, _) in text.chars:
+    byte = 0
+  for (rune, size) in text.chars:
     let width = rune.runeCells(cell, tabStop)
-    yield (column, rune, cell, width)
+    yield (column, rune, cell, width, byte)
     cell += width
     column.inc
+    byte += size
 
 iterator glyphsOf*(
     text: string, tabStop: int
-): tuple[column, next: int, rune: Rune, cell, width: int] =
+): tuple[column, next: int, rune: Rune, cell, width, byte: int] =
   ## Each character of `text` with the zero-width marks after it, which go
   ## with it as Vim's composing characters do: its column and the one after
-  ## its marks, the cell it starts at and how many it takes. A mark that
-  ## starts the text stands as a character.
+  ## its marks, the cell it starts at, how many it takes and the byte it
+  ## starts at. A mark that starts the text stands as a character.
   var
-    glyph: tuple[column, next: int, rune: Rune, cell, width: int]
+    glyph: tuple[column, next: int, rune: Rune, cell, width, byte: int]
     started = false
-  for (column, rune, cell, width) in text.cellsOf(tabStop):
+  for (column, rune, cell, width, byte) in text.cellsOf(tabStop):
     if width == 0 and started:
       glyph.next = column + 1
       continue
     if started:
       yield glyph
-    glyph = (column, column + 1, rune, cell, width)
+    glyph = (column, column + 1, rune, cell, width, byte)
     started = true
   if started:
     yield glyph
@@ -68,6 +71,28 @@ proc cellSpan*(text: string, column, tabStop: int): tuple[first, last: int] =
     if column < g.next:
       return (g.cell, g.cell + max(g.width, 1) - 1)
     result = (g.cell + g.width, g.cell + g.width)
+
+proc shownFrom*(
+    text: string, leftCell, width, tabStop: int
+): tuple[column, cell, startByte, endByte: int] =
+  ## The characters of `text`, with the marks after them, that a row `width`
+  ## cells wide shows from `leftCell` on: the first one's column and the cell
+  ## it starts at, and the bytes from it through the last one starting inside
+  ## the row. Past the text, a column per cell after its end, starting at
+  ## `leftCell`, and no bytes.
+  result = (-1, leftCell, text.len, text.len)
+  var columns, cells = 0
+  for g in text.glyphsOf(tabStop):
+    if result.column < 0:
+      if g.cell + max(g.width, 1) > leftCell:
+        result = (g.column, g.cell, g.byte, text.len)
+    elif g.cell >= leftCell + width:
+      result.endByte = g.byte
+      return
+    columns = g.next
+    cells = g.cell + g.width
+  if result.column < 0:
+    result.column = columns + max(0, leftCell - cells)
 
 proc columnStartingAt*(text: string, cell, tabStop: int): int =
   ## The character of `text` that starts at `cell`, or its end when the text
@@ -83,7 +108,7 @@ proc columnStartingAt*(text: string, cell, tabStop: int): int =
 proc cursorCell*(text: string, column, tabStop: int, onTabEnd: bool): int =
   ## The cell character `column` of `text` starts at, or with `onTabEnd` its
   ## last cell when it is a tab. Past the end, the width of `text`.
-  for (at, rune, cell, width) in text.cellsOf(tabStop):
+  for (at, rune, cell, width, _) in text.cellsOf(tabStop):
     if at == column:
       return
         if onTabEnd and rune == TAB_CHAR:

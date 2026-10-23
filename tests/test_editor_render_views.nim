@@ -883,7 +883,7 @@ suite "renderSplitView - Viewport adjustment":
 
     # Viewport should have scrolled horizontally
     let window2 = e.windowManager.windows[0]
-    check window2.viewport.leftColumn > 0
+    check window2.viewport.leftCell > 0
 
   test "Wrapped overlay input does not scroll the viewport (no ratchet)":
     let e = createTestEditor()
@@ -978,9 +978,9 @@ suite "renderSplitView - Viewport adjustment":
 
     e.renderSplitView(buffer, false)
 
-    # With line wrap, leftColumn should stay at 0
+    # With line wrap, leftCell should stay at 0
     let window = e.windowManager.windows[0]
-    check window.viewport.leftColumn == 0
+    check window.viewport.leftCell == 0
 
 suite "renderSplitView - Display options":
   test "Render with line numbers enabled":
@@ -1780,7 +1780,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
 
   test "Scrolls down from top so cursor is visible with minimal scroll":
     let buf = makeWrappingBuffer(30)
-    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
     let cursorLine = 20
 
     vp.adjustWrap(buf, cursorLine)
@@ -1794,7 +1794,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
 
   test "Big downward jump lands cursor in view (issue #10 scenario)":
     let buf = makeWrappingBuffer(500)
-    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
     let cursorLine = 499
 
     vp.adjustWrap(buf, cursorLine)
@@ -1809,7 +1809,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
 
   test "Does not scroll when cursor already visible at topLine":
     let buf = makeWrappingBuffer(30)
-    let vp = ViewPort(topLine: 5, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 5, leftCell: 0, width: 80, height: 24)
 
     vp.adjustWrap(buf, 5)
 
@@ -1817,7 +1817,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
 
   test "Scrolls up when cursor is above topLine":
     let buf = makeWrappingBuffer(30)
-    let vp = ViewPort(topLine: 20, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 20, leftCell: 0, width: 80, height: 24)
 
     vp.adjustWrap(buf, 5)
 
@@ -1829,11 +1829,11 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     let buf = makeWrappingBuffer(60)
     let cursorLine = 40
 
-    let fromTop = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    let fromTop = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
     fromTop.adjustWrap(buf, cursorLine)
 
     let fromNear =
-      ViewPort(topLine: fromTop.topLine, leftColumn: 0, width: 80, height: 24)
+      ViewPort(topLine: fromTop.topLine, leftCell: 0, width: 80, height: 24)
     fromNear.adjustWrap(buf, cursorLine)
 
     check fromNear.topLine == fromTop.topLine
@@ -1852,7 +1852,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     # lower than the fold-unaware computation (which would stop at 19).
     let buf = singleRowBuffer(30)
     check buf.foldState.addFold(18, 26, collapsed = true)
-    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
 
     vp.adjustWrap(buf, 28)
 
@@ -1864,7 +1864,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     # Without fold-aware counting this would force a downward scroll.
     let buf = singleRowBuffer(30)
     check buf.foldState.addFold(2, 20, collapsed = true)
-    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
 
     vp.adjustWrap(buf, 25)
 
@@ -1893,7 +1893,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     # Repro of the reported bug: with whole-line tops only, a cursor on a deep
     # segment was flung to (0,0); sub-line scroll keeps it on the last row.
     let buf = tallLineBuffer()
-    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
 
     # Cursor on segment 20 (column 200 / TextAreaWidth 10) of the tall line 1.
     vp.adjustWrapAt(buf, 1, 200)
@@ -1904,8 +1904,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
 
   test "Scrolling up within a tall line moves the top toward the cursor segment":
     let buf = tallLineBuffer()
-    let vp =
-      ViewPort(topLine: 1, topWrapOffset: 11, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 1, topWrapOffset: 11, leftCell: 0, width: 80, height: 24)
 
     # Cursor moves above the current top (segment 10 < offset 11): scroll up so
     # the cursor sits on the first visible row, still mid logical line.
@@ -1917,8 +1916,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
 
   test "Cursor already visible inside a tall line does not move the top":
     let buf = tallLineBuffer()
-    let vp =
-      ViewPort(topLine: 1, topWrapOffset: 11, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 1, topWrapOffset: 11, leftCell: 0, width: 80, height: 24)
 
     # Segment 15 is within rows 11..20 (visible): no scroll.
     vp.adjustWrapAt(buf, 1, 150)
@@ -1928,7 +1926,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
 
   test "Normal-height lines never set a wrap offset":
     let buf = singleRowBuffer(30)
-    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
 
     vp.adjustWrap(buf, 25)
     check vp.topWrapOffset == 0
@@ -1943,8 +1941,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     # without a re-clamp the offset stays out of range and calculateWindowCursor
     # would fling the cursor to (0, 0). topLine 3 wraps into 4 segments here.
     let buf = makeWrappingBuffer(30)
-    let vp =
-      ViewPort(topLine: 3, topWrapOffset: 20, leftColumn: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 3, topWrapOffset: 20, leftCell: 0, width: 80, height: 24)
 
     vp.adjustWrap(buf, 5)
 

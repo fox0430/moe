@@ -480,7 +480,7 @@ suite "CommandRegistry - Command execution with context":
 
     let motionController = MotionController(
       viewportManager: ViewportManager(
-        viewport: ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+        viewport: ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
       ),
       executor: MotionExecutor(buffer: buffer),
     )
@@ -639,8 +639,7 @@ suite "CommandRegistry - readOnly buffer guard":
     state.mode = EditorMode.Normal
     state.previousMode = EditorMode.LogViewer
 
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
     let motionController = newMotionController(buffer, state, viewport)
 
     result = CommandContext(
@@ -757,8 +756,7 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
     let motionController = newMotionController(buffer, state, viewport)
 
     result = CommandContext(
@@ -910,8 +908,7 @@ suite "; / , repeat last find":
     state.mode = EditorMode.Normal
     state.registers = initRegisters()
 
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
     let motionController = newMotionController(buffer, state, viewport)
 
     result = CommandContext(
@@ -1142,8 +1139,7 @@ suite "CommandRegistry - Git conflict navigation (]x / [x)":
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
-    let viewport =
-      ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+    let viewport = ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
     let motionController = newMotionController(buffer, state, viewport)
 
     result = CommandContext(

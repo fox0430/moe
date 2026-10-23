@@ -68,7 +68,7 @@ proc jumpToFirstSubstituteMatch*(
     e.activeWindow.viewport.resetViewportTop(
       e.state.ui.substitutePreview.originalTopLine
     )
-    e.activeWindow.viewport.leftColumn = e.state.ui.substitutePreview.originalLeftColumn
+    e.activeWindow.viewport.leftCell = e.state.ui.substitutePreview.originalLeftCell
 
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## Update or cancel the live substitute preview based on the current command

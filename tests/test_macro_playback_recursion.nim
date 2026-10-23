@@ -60,7 +60,7 @@ proc newTestState(mode = EditorMode.Normal): EditorState =
   )
 
 proc newTestViewport(): ViewPort =
-  ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80)
+  ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80)
 
 proc newTestManager(): HandlerManager =
   let keyBindingRegistry = newKeyBindingRegistry()

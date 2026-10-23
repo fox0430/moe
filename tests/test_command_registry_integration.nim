@@ -46,7 +46,7 @@ proc createTestContext(buffer: TextBuffer): CommandContext =
 
   let motionController = MotionController(
     viewportManager: ViewportManager(
-      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 24, width: 80, x: 0, y: 0)
     ),
     executor: MotionExecutor(buffer: buffer),
     cursorManager: newCursorManager(state),

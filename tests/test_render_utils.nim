@@ -353,41 +353,40 @@ suite "displayWidthUpToWithTabs":
     check displayWidthUpToWithTabs("\t", 1, 0) == 1
     check displayWidthUpToWithTabs("\t", 1, -1) == 1
 
-suite "displayWidthBetweenWithTabs":
-  test "empty string":
-    check displayWidthBetweenWithTabs("", 0, 0, 4) == 0
+  test "an undecodable byte takes the four cells it is drawn in":
+    # The renderer draws it as `<e3>`; a measurement that still counted it as
+    # one cell would put the cursor block and the selection edge four columns
+    # off the glyph for every character after it on the line.
+    check displayWidthUpToWithTabs("\xE3ab", 1, 4) == 4
+    check displayWidthUpToWithTabs("\xE3ab", 2, 4) == 5
+    check displayWidthUpToWithTabs("\xE3ab", 3, 4) == 6
 
-  test "ascii slice":
-    check displayWidthBetweenWithTabs("hello", 1, 4, 4) == 3 # "ell"
-    check displayWidthBetweenWithTabs("hello", 0, 5, 4) == 5
+  test "display columns accumulate exactly the widths the line is drawn with":
+    # Pins the invariant the whole model rests on: the column-to-cell walk and
+    # the per-character widths the renderer uses must never drift apart.
+    for text in ["hello", "日本語abc", "\xE3ab", "a\xF0\x9F\x98b", "\xFF\xFF"]:
+      var expected = 0
+      var col = 0
+      for (rune, _) in text.chars:
+        check displayWidthUpToWithTabs(text, col, 4) == expected
+        expected += rune.charWidth
+        col += 1
+      check displayWidthUpToWithTabs(text, col, 4) == expected
+      check expected == text.charDisplayWidth
 
-  test "tab stops restart at startChar":
-    # From the line start the tab would end at column 4, so subtracting widths
-    # gives 2; expanded from the slice start it fills a whole tab stop.
-    check displayWidthBetweenWithTabs("ab\tc", 2, 3, 4) == 4
-    check displayWidthUpToWithTabs("ab\tc", 3, 4) -
-      displayWidthUpToWithTabs("ab\tc", 2, 4) == 2
+suite "cellsAt":
+  test "a character's cells":
+    check "ab\tc".cellsAt(1, 4) == (first: 1, last: 1)
+    check "ab\tc".cellsAt(2, 4) == (first: 2, last: 3)
+    check "a日b".cellsAt(1, 4) == (first: 1, last: 2)
 
-  test "tab at the slice start":
-    check displayWidthBetweenWithTabs("\thello", 0, 1, 4) == 4
-    check displayWidthBetweenWithTabs("\thello", 0, 2, 4) == 5
+  test "a combining mark is drawn over the cell after its base":
+    check "e\u0301x".cellsAt(1, 4) == (first: 1, last: 1)
+    check "e\u0301x".cellsAt(2, 4) == (first: 1, last: 1)
 
-  test "unicode characters":
-    check displayWidthBetweenWithTabs("日本語", 1, 3, 4) == 4 # "本語"
-
-  test "endChar beyond string length":
-    check displayWidthBetweenWithTabs("abc", 1, 10, 4) == 2
-
-  test "endChar at or before startChar":
-    check displayWidthBetweenWithTabs("abc", 2, 2, 4) == 0
-    check displayWidthBetweenWithTabs("abc", 2, 1, 4) == 0
-
-  test "negative startChar":
-    check displayWidthBetweenWithTabs("abc", -1, 2, 4) == 0
-
-  test "tab stop edge cases":
-    check displayWidthBetweenWithTabs("\t", 0, 1, 0) == 1
-    check displayWidthBetweenWithTabs("\t", 0, 1, -1) == 1
+  test "past the end, the one cell after the text":
+    check "ab".cellsAt(2, 4) == (first: 2, last: 2)
+    check "".cellsAt(0, 4) == (first: 0, last: 0)
 
 suite "findTrailingSpaceStart":
   test "empty string":

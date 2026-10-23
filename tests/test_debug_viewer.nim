@@ -199,7 +199,7 @@ suite "debug_viewer - generateWindowInfo":
       viewportWidth = 80,
       viewportHeight = 24,
       viewportTopLine = 0,
-      viewportLeftColumn = 0,
+      viewportLeftCell = 0,
       cursorLine = 10,
       cursorColumn = 5,
     )
@@ -223,7 +223,7 @@ suite "debug_viewer - generateWindowInfo":
       viewportWidth = 80,
       viewportHeight = 24,
       viewportTopLine = 0,
-      viewportLeftColumn = 0,
+      viewportLeftCell = 0,
       cursorLine = 0,
       cursorColumn = 0,
     )
@@ -246,7 +246,7 @@ suite "debug_viewer - generateWindowInfo":
       viewportWidth = 80,
       viewportHeight = 24,
       viewportTopLine = 0,
-      viewportLeftColumn = 0,
+      viewportLeftCell = 0,
       cursorLine = 0,
       cursorColumn = 0,
       enabled = false,

@@ -234,7 +234,7 @@ proc splitOrigin(e: Editor): tuple[viewport: ViewPort, cursor: BufferPosition] =
     return (ViewPort(), BufferPosition(line: 0, column: 0))
   # A split starts in Normal.
   let origin = e.viewerOrigin(entry, e.tabBuffer(win), EditorMode.Normal)
-  (ViewPort(topLine: origin.topLine, leftColumn: entry.originLeftColumn), origin.cursor)
+  (ViewPort(topLine: origin.topLine, leftCell: entry.originLeftCell), origin.cursor)
 
 proc startSplitWindow(e: Editor, newWindow, origin: EditorWindow) =
   ## Bring up the window a split of `origin` made: in the mode its tab derives,

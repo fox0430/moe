@@ -131,16 +131,16 @@ suite "editor_substitute":
     setBufferContent(e, "foo bar foo")
     e.cursor = BufferPosition(line: 0, column: 4)
     e.viewport.topLine = 5
-    e.viewport.leftColumn = 6
+    e.viewport.leftCell = 6
     e.startSubstitutePreview()
     e.cursor = BufferPosition(line: 1, column: 9)
     e.viewport.topLine = 8
-    e.viewport.leftColumn = 7
+    e.viewport.leftCell = 7
     e.cancelSubstitutePreview()
     check e.cursor.line == 0
     check e.cursor.column == 4
     check e.viewport.topLine == 5
-    check e.viewport.leftColumn == 6
+    check e.viewport.leftCell == 6
     check e.state.ui.substitutePreview.isActive == false
 
   test "cancelSubstitutePreview without an active preview is a no-op":

@@ -1110,15 +1110,6 @@ proc updateViewport*(
         mgr.viewport, clampedCursorY, clampedCursorX, visibleHeight
       )
 
-  # Horizontal scrolling - keep cursor visible (disabled in wrap mode)
-  if not lineWrap:
-    # Account for the gutters when calculating visible text width
-    let visibleTextWidth = wrapWidthFor(mgr.viewport.width, viewportOffset)
-    if clampedCursorX < mgr.viewport.leftColumn:
-      mgr.viewport.leftColumn = clampedCursorX
-    elif clampedCursorX >= mgr.viewport.leftColumn + visibleTextWidth:
-      mgr.viewport.leftColumn = clampedCursorX - visibleTextWidth + 1
-
 # Smooth scrolling functions (physics-based, compatible with vim comfortable-motion)
 #
 # Physics model from comfortable-motion.vim:
@@ -1396,9 +1387,6 @@ proc executeMotion*(
       controller.cursorManager.state.showStatusLine, actualReservedLines, lineWrap,
       controller.executor.buffer, viewportOffset, controller.cursorManager.state.tabStop,
     )
-
-  if lineWrap:
-    controller.viewportManager.viewport.leftColumn = 0
 
 proc moveCursorByMotion*(
     controller: MotionController,

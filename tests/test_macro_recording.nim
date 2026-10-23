@@ -39,7 +39,7 @@ proc newTestEditor(content: string): Editor =
   result.windowManager.windows[0].setTab(buf)
   result.windowManager.windows[0].bufferIds = @[buf.id]
   result.windowManager.windows[0].viewport =
-    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
   result.syncActiveWindow()
   result.state.mode = EditorMode.Normal
 
