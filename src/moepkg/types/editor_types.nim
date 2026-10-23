@@ -120,7 +120,9 @@ type
     selection*: VisualSelection ## The rendered window's own selection
     blockArea*: BlockArea ## The cells `selection` covers when it is a block
     windowMode*: EditorMode ## Mode of the window being rendered
-    windowRightEdge*: int ## Absolute screen X of window's right edge
+    windowRightEdge*: int
+      ## Absolute screen X of the right edge of the window's text, left of the
+      ## scrollbar
     isActiveWindow*: bool ## Whether the window being rendered is the active one
     virtualTextProviders*: seq[VirtualTextProvider]
       ## Feature-agnostic suppliers of virtual text (inlay hints, etc.)
