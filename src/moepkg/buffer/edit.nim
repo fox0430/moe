@@ -558,10 +558,13 @@ proc joinWithNextLine*(b: TextBuffer, line: int): Result[BufferPosition, string]
     return err(deleteResult.error)
   ok(BufferPosition(line: line, column: b.getLine(line).byteToCharPos(prevLine.len)))
 
-proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), string] =
+proc joinLines*(
+    b: TextBuffer, startLine: int, count: int = 1, undoCursor = none(BufferPosition)
+): Result[(), string] =
   ## Join lines starting from startLine
   ## count: number of lines to join (default: 1, meaning join current line with next)
   ## Example: count=1 joins 2 lines, count=2 joins 3 lines, etc.
+  ## Undo puts the cursor at `undoCursor`, else at startLine's start.
   ## Returns error if there aren't enough lines to join
 
   if b.readOnly:
@@ -584,7 +587,7 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
   let txr = withTransaction(
     b,
     "join " & $linesToJoin & " lines",
-    some(BufferPosition(line: startLine, column: 0)),
+    some(undoCursor.get(BufferPosition(line: startLine, column: 0))),
   ):
     for i in 1 ..< linesToJoin:
       let currentLine = b.getLine(startLine)

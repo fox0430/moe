@@ -685,12 +685,22 @@ type
     moved*: bool # The cursor moved since the last change (Vim's arrow_used)
     changed*: bool # Insert changed the text (Vim's !ins_need_undo)
 
+  VisualOperator* = enum ## A Visual operator `.` acts with again
+    voDelete
+    voIndent
+    voDedent
+    voLowerCase
+    voUpperCase
+    voToggleCase
+    voJoin
+
   LastEditCommandKind* = enum
     ## Types of repeatable edit commands
     lecOperatorMotion # Operator + motion (e.g., dw, d2w, dd, >>)
     lecInsert # A change made in Insert mode, kept in EditState.insertRecord
     lecReplaceChar # Character replacement with r command
     lecVisualReplace # Visual-mode replace (r) with recorded selection shape
+    lecVisualOperator # A Visual operator other than c and r (d, >, ~, J)
     lecDeleteChar # Character deletion with x/X
     lecPaste # Paste operation (p/P/gp/gP)
     lecToggleCase # Toggle case with ~
@@ -719,6 +729,10 @@ type
       visualReplaceToLineEnd*: bool
         # Blockwise after `<C-v>$`: each line to its end, as Vim's
         # redo_VIsual_vcol == MAXCOL.
+    of lecVisualOperator:
+      visualOperator*: VisualOperator
+      visualShape*: VisualShape
+      visualCount*: int # Shiftwidths for > and <
     of lecDeleteChar:
       deleteCount*: int # Number of characters to delete
       deleteForward*: bool # true for x, false for X

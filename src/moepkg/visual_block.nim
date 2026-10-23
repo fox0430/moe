@@ -375,8 +375,11 @@ proc repeatedBlock*(
   else:
     result.endCell = result.startCell + max(1, cells) - 1
 
-proc visualShape*(buffer: TextBuffer, sel: VisualSelection, tabStop: int): VisualShape =
-  ## The size of `sel` that `.` selects again, as Vim's resel_VIsual.
+proc visualShape*(
+    buffer: TextBuffer, sel: VisualSelection, area: BlockArea, tabStop: int
+): VisualShape =
+  ## The size of `sel`, whose block is `area` when blockwise, that `.` selects
+  ## again, as Vim's resel_VIsual.
   let
     first = min(sel.start, sel.current)
     last = max(sel.start, sel.current)
@@ -389,7 +392,6 @@ proc visualShape*(buffer: TextBuffer, sel: VisualSelection, tabStop: int): Visua
   of vskLine:
     discard
   of vskBlock:
-    let area = buffer.blockArea(sel, tabStop, measureWidest = false)
     result.cells = area.endCell - area.startCell + 1
   of vskChar:
     let endCell = buffer.getLine(last.line).cellSpan(last.column, tabStop).last

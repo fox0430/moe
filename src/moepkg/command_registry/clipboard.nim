@@ -85,10 +85,10 @@ proc handleClipboardCut*(ctx: CommandContext): Result[(), string] =
     return err("Clipboard integration is disabled")
 
   # Both halves act on one operand, so a cut removes what it copied.
-  let sel = ctx.state.operandSelection(ctx.buffer)
+  let (sel, area) = ctx.buffer.operandArea(ctx.state)
   # Copy first; a copy failure must not cancel the delete half.
   let copyResult = copySelection(ctx, sel)
-  visualDelete(ctx.buffer, ctx.state, sel, ctx.register)
+  discard visualDelete(ctx.buffer, ctx.state, sel, area, ctx.register)
 
   if copyResult.isErr:
     return copyResult

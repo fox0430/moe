@@ -1013,7 +1013,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
           lastCmd.toggleCaseCount = count
         of lecJoinLines:
           lastCmd.joinLinesCount = count
-        of lecInsert, lecVisualReplace:
+        of lecInsert, lecVisualReplace, lecVisualOperator:
           discard
       ctx.state.editState.lastEditCommand = some(lastCmd)
 
@@ -1070,6 +1070,16 @@ proc registerEditCommands*(registry: CommandRegistry) =
             return err(ctx.state.statusMessage)
           ctx.enterInsert(record.entry, 1)
           return ok(())
+      of lecVisualOperator:
+        # Vim's redo_VIsual: an area as big at the cursor, closed folds or not,
+        # with the count the operator had.
+        let (sel, area) = ctx.buffer.repeatedSelection(
+          ctx.cursor, lastCmd.visualShape, ctx.state.tabStop
+        )
+        return runVisualOperator(
+          ctx.buffer, ctx.state, lastCmd.visualOperator, sel, area, lastCmd.visualCount,
+          ctx.register,
+        )
       of lecVisualReplace:
         # Repeat Visual `r` from the cursor with the recorded shape.
         # Ignores count; cursor stays put. Fails on raw buffers.

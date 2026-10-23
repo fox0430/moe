@@ -28,51 +28,31 @@ import core, insert_entry
 
 ## Visual mode command handlers (wrappers for visual_commands functions)
 
-proc handleVisualDelete*(ctx: CommandContext): Result[(), string] =
-  ## Delete visual selection
-  visualDelete(ctx.buffer, ctx.state, ctx.register)
-  ctx.cursor = ctx.state.cursor
+proc handleVisualOperator*(
+    ctx: CommandContext, op: VisualOperator, count = 1
+): Result[(), string] =
+  ## Act with `op` over the selection. `.` acts again over an area of the
+  ## same size at the cursor, with the same count; a refused operator leaves
+  ## what `.` repeats as it was.
+  let (sel, area) = ctx.buffer.operandArea(ctx.state)
+  if not sel.active:
+    return ok(())
+  let shape = ctx.buffer.visualShape(sel, area, ctx.state.tabStop)
+  # As `c`, a refused operator says so in the status line only.
+  if runVisualOperator(ctx.buffer, ctx.state, op, sel, area, count, ctx.register).isOk:
+    ctx.recordChange(
+      LastEditCommand(
+        kind: lecVisualOperator,
+        visualOperator: op,
+        visualShape: shape,
+        visualCount: count,
+      )
+    )
   Result[(), string].ok ()
 
 proc handleVisualYank*(ctx: CommandContext): Result[(), string] =
   ## Yank (copy) visual selection
   visualYank(ctx.buffer, ctx.state, ctx.register)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualIndent*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Indent visual selection
-  visualIndent(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualDedent*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Dedent visual selection
-  visualDedent(ctx.buffer, ctx.state, count)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualLowercase*(ctx: CommandContext): Result[(), string] =
-  ## Convert visual selection to lowercase
-  visualLowercase(ctx.buffer, ctx.state)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualUppercase*(ctx: CommandContext): Result[(), string] =
-  ## Convert visual selection to uppercase
-  visualUppercase(ctx.buffer, ctx.state)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualToggleCase*(ctx: CommandContext): Result[(), string] =
-  ## Toggle case of visual selection
-  visualToggleCase(ctx.buffer, ctx.state)
-  ctx.cursor = ctx.state.cursor
-  Result[(), string].ok ()
-
-proc handleVisualJoinLines*(ctx: CommandContext): Result[(), string] =
-  ## Join lines in visual selection
-  visualJoinLines(ctx.buffer, ctx.state)
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
@@ -100,8 +80,8 @@ proc handleVisualChange*(ctx: CommandContext): Result[(), string] =
   ## Delete selection and enter insert mode. `.` changes an area of the same
   ## size at the cursor.
   let
-    (sel, area) = ctx.buffer.changeArea(ctx.state)
-    shape = ctx.buffer.visualShape(sel, ctx.state.tabStop)
+    (sel, area) = ctx.buffer.operandArea(ctx.state)
+    shape = ctx.buffer.visualShape(sel, area, ctx.state.tabStop)
   visualChange(ctx.buffer, ctx.state, sel, area, ctx.register)
   ctx.cursor = ctx.state.cursor
   if ctx.state.mode == EditorMode.Insert:
@@ -147,7 +127,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Delete",
     "Delete visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualDelete(ctx),
+      handleVisualOperator(ctx, voDelete),
     0,
     0,
   )
@@ -168,7 +148,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Indent visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
-      handleVisualIndent(ctx, count),
+      handleVisualOperator(ctx, voIndent, count),
     0,
     1,
   )
@@ -179,7 +159,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Dedent visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
-      handleVisualDedent(ctx, count),
+      handleVisualOperator(ctx, voDedent, count),
     0,
     1,
   )
@@ -189,7 +169,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Lowercase",
     "Convert visual selection to lowercase",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualLowercase(ctx),
+      handleVisualOperator(ctx, voLowerCase),
     0,
     0,
   )
@@ -199,7 +179,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Uppercase",
     "Convert visual selection to uppercase",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualUppercase(ctx),
+      handleVisualOperator(ctx, voUpperCase),
     0,
     0,
   )
@@ -209,7 +189,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Toggle Case",
     "Toggle case of visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualToggleCase(ctx),
+      handleVisualOperator(ctx, voToggleCase),
     0,
     0,
   )
@@ -219,7 +199,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Join Lines",
     "Join lines in visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualJoinLines(ctx),
+      handleVisualOperator(ctx, voJoin),
     0,
     0,
   )
