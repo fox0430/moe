@@ -88,7 +88,9 @@ type
     detachedFromCursor*: bool
       ## True while pointer scrolling controls the viewport independently of
       ## the logical cursor. Cursor or programmatic viewport movement clears it.
-    leftColumn*: int
+    leftCell*: int
+      ## Cells of every line scrolled off the left, counted from the line
+      ## start (Vim's w_leftcol). 0 with line wrap.
     width*: int
     height*: int
     x*: int # Screen position X
@@ -204,7 +206,7 @@ type
     originCursor*: BufferPosition
     originTopLine*: int
     originTopWrapOffset*: int
-    originLeftColumn*: int
+    originLeftCell*: int
 
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport
@@ -897,7 +899,7 @@ type
     lastLines*: Slice[int] # Lines the last preview covered
     originalCursor*: BufferPosition # Cursor position when preview started
     originalTopLine*: int # Viewport top line when preview started
-    originalLeftColumn*: int # Viewport left column when preview started
+    originalLeftCell*: int # Viewport left cell when preview started
 
   BuildInfo* =
     tuple
@@ -1448,7 +1450,7 @@ proc `==`*(a, b: ViewPort): bool =
   if a.isNil or b.isNil:
     return false
   a.topLine == b.topLine and a.topWrapOffset == b.topWrapOffset and
-    a.detachedFromCursor == b.detachedFromCursor and a.leftColumn == b.leftColumn and
+    a.detachedFromCursor == b.detachedFromCursor and a.leftCell == b.leftCell and
     a.width == b.width and a.height == b.height and a.x == b.x and a.y == b.y
 
 proc resetViewportTop*(v: ViewPort, line = 0) =

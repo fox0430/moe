@@ -37,27 +37,6 @@ proc isColumnInRanges*(ranges: seq[ColumnRange], col: int): bool {.inline.} =
       return true
   return false
 
-proc bufferColToDisplayCol*(
-    text: string, bufferCol: int, tabStop: int, startCol: int = 0
-): int =
-  ## Convert a buffer column (character index) to a display column (screen position).
-  ## Accounts for tab expansion and wide characters.
-  ## startCol: first visible column (e.g. leftColumn for horizontal scroll).
-  ## The result is relative to startCol, matching the rendering loop's behavior.
-  ## Returns -1 if bufferCol is before startCol (cursor scrolled off-screen).
-  if bufferCol < startCol:
-    return -1
-  var currentChar = 0
-  for (rune, _) in text.chars:
-    if currentChar >= bufferCol:
-      break
-    if currentChar >= startCol:
-      if rune == TAB_CHAR:
-        result += tabAdvance(result, tabStop)
-      else:
-        result += charWidth(rune)
-    currentChar.inc
-
 proc analyzeIndentation*(lineText: string): IndentInfo =
   ## Analyze a line once to determine indentation properties
   ## Returns cached information to avoid repeated line scanning (O(n) instead of O(n²))

@@ -58,13 +58,13 @@ proc editorOnFile(name: string): tuple[e: Editor, path: string] =
   discard e.editFile(path)
   (e, path)
 
-proc placeOrigin(e: Editor, line, column, topLine, leftColumn: int) =
+proc placeOrigin(e: Editor, line, column, topLine, leftCell: int) =
   ## The pre-viewer editing position that every exit path must bring back.
   let win = e.activeWindow
   win.cursor.line = line
   win.cursor.column = column
   win.viewport.topLine = topLine
-  win.viewport.leftColumn = leftColumn
+  win.viewport.leftCell = leftCell
 
 proc makeLocation(path: string, line: int): lspTypes.Location =
   lspTypes.Location(
@@ -150,7 +150,7 @@ suite "Viewer round-trip - Filer":
       removeFile(path)
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
 
     discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
     check win.mode == EditorMode.Filer
@@ -159,7 +159,7 @@ suite "Viewer round-trip - Filer":
     check win.cursor.line == 0
     check win.cursor.column == 0
     check win.viewport.topLine == 0
-    check win.viewport.leftColumn == 0
+    check win.viewport.leftCell == 0
 
     # Operate inside the filer.
     win.cursor.line = 2
@@ -172,7 +172,7 @@ suite "Viewer round-trip - Filer":
     check win.cursor.line == 5
     check win.cursor.column == 2
     check win.viewport.topLine == 4
-    check win.viewport.leftColumn == 3
+    check win.viewport.leftCell == 3
 
   test "a bare modeTransition enters the viewer through its real entry":
     # `mode_switch` keybindings (`:nmap <key> mode_switch filer`) reach the
@@ -184,7 +184,7 @@ suite "Viewer round-trip - Filer":
       removeFile(path)
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
 
     for (mode, stateKind, quitResult) in [
       (EditorMode.Filer, mskFiler, hrFilerQuit),
@@ -205,7 +205,7 @@ suite "Viewer round-trip - Filer":
       check win.buffer == origBuf
       check win.viewerEntry.isNone
       check win.cursor.line == 5
-      check win.viewport.leftColumn == 3
+      check win.viewport.leftCell == 3
 
   test "returning to a live viewer through previousMode does not re-enter it":
     # `v` inside a viewer sets previousMode to it, and Escape transitions back.
@@ -297,7 +297,7 @@ suite "Viewer round-trip - Filer":
       removeFile(path)
       removeFile(target)
     let win = e.activeWindow
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
 
     discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
     let filerBuf = win.buffer
@@ -322,7 +322,7 @@ suite "Viewer round-trip - BufferManager":
       removeFile(other)
     discard e.editFile(other)
     let win = e.activeWindow
-    e.placeOrigin(line = 0, column = 0, topLine = 0, leftColumn = 0)
+    e.placeOrigin(line = 0, column = 0, topLine = 0, leftCell = 0)
 
     var targetId = BufferId(0)
     for buf in e.buffers:
@@ -345,8 +345,8 @@ suite "Viewer round-trip - BufferManager":
     check win.buffer.filePath.get == path
 
 suite "Viewer round-trip - BookmarkManager":
-  test "hrEnterBookmarkManager resets leftColumn on entry":
-    # The dead second entry copy omitted `viewport.leftColumn = 0`, so a
+  test "hrEnterBookmarkManager resets leftCell on entry":
+    # The dead second entry copy omitted `viewport.leftCell = 0`, so a
     # horizontally scrolled window kept its offset while showing the listing.
     # The single entry point resets it and restores it on quit.
     let (e, path) = editorOnFile("moe_rt_bkm_transition.txt")
@@ -354,7 +354,7 @@ suite "Viewer round-trip - BookmarkManager":
       removeFile(path)
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 7, column = 3, topLine = 6, leftColumn = 1)
+    e.placeOrigin(line = 7, column = 3, topLine = 6, leftCell = 1)
 
     discard
       e.processResult(HandlerResult(kind: hrEnterBookmarkManager), e.activeBuffer())
@@ -364,7 +364,7 @@ suite "Viewer round-trip - BookmarkManager":
     check win.cursor.line == 0
     check win.cursor.column == 0
     check win.viewport.topLine == 0
-    check win.viewport.leftColumn == 0
+    check win.viewport.leftCell == 0
 
     discard
       e.processResult(HandlerResult(kind: hrBookmarkManagerQuit), e.activeBuffer())
@@ -374,7 +374,7 @@ suite "Viewer round-trip - BookmarkManager":
     check win.cursor.line == 7
     check win.cursor.column == 3
     check win.viewport.topLine == 6
-    check win.viewport.leftColumn == 1
+    check win.viewport.leftCell == 1
 
   test "hrBookmarkManagerJump leaves the listing buffer behind":
     let (e, path) = editorOnFile("moe_rt_bkm_jump.txt")
@@ -383,7 +383,7 @@ suite "Viewer round-trip - BookmarkManager":
     let win = e.activeWindow
     let origBuf = win.buffer
     origBuf.toggleBookmark(8)
-    e.placeOrigin(line = 0, column = 0, topLine = 0, leftColumn = 0)
+    e.placeOrigin(line = 0, column = 0, topLine = 0, leftCell = 0)
 
     discard
       e.processResult(HandlerResult(kind: hrEnterBookmarkManager), e.activeBuffer())
@@ -412,7 +412,7 @@ suite "Viewer round-trip - References":
       removeFile(path)
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 6, column = 1, topLine = 5, leftColumn = 2)
+    e.placeOrigin(line = 6, column = 1, topLine = 5, leftCell = 2)
 
     check e.handleLspLocations(
       @[makeLocation(path, 1), makeLocation(path, 3)], "References", "Reference"
@@ -423,7 +423,7 @@ suite "Viewer round-trip - References":
     check win.cursor.line == 0
     check win.cursor.column == 0
     check win.viewport.topLine == 0
-    check win.viewport.leftColumn == 0
+    check win.viewport.leftCell == 0
 
     # Operate inside the viewer.
     win.cursor.line = 1
@@ -436,7 +436,7 @@ suite "Viewer round-trip - References":
     check win.cursor.line == 6
     check win.cursor.column == 1
     check win.viewport.topLine == 5
-    check win.viewport.leftColumn == 2
+    check win.viewport.leftCell == 2
 
   test "hrReferencesJumpTo anchors the jump list at the origin cursor":
     # Recorded from the pre-viewer position, not the listing selection, so
@@ -446,7 +446,7 @@ suite "Viewer round-trip - References":
       removeFile(path)
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 6, column = 1, topLine = 5, leftColumn = 2)
+    e.placeOrigin(line = 6, column = 1, topLine = 5, leftCell = 2)
 
     check e.handleLspLocations(
       @[makeLocation(path, 1), makeLocation(path, 3)], "References", "Reference"
@@ -495,7 +495,7 @@ suite "Viewer round-trip - DocumentSymbol":
     e.lsp.enabled = true
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 4, column = 2, topLine = 3, leftColumn = 1)
+    e.placeOrigin(line = 4, column = 2, topLine = 3, leftCell = 1)
 
     let reqId = 7001
     e.injectPending(lrfDocumentSymbol, reqId)
@@ -507,7 +507,7 @@ suite "Viewer round-trip - DocumentSymbol":
     check win.buffer != origBuf
     check win.cursor.line == 0
     check win.viewport.topLine == 0
-    check win.viewport.leftColumn == 0
+    check win.viewport.leftCell == 0
 
     # Operate inside the viewer.
     win.cursor.line = 1
@@ -520,7 +520,7 @@ suite "Viewer round-trip - DocumentSymbol":
     check win.cursor.line == 4
     check win.cursor.column == 2
     check win.viewport.topLine == 3
-    check win.viewport.leftColumn == 1
+    check win.viewport.leftCell == 1
 
   test "hrDocumentSymbolJumpTo anchors the jump list at the origin cursor":
     let (e, path) = editorOnFile("moe_rt_symbols_jump.nim")
@@ -529,7 +529,7 @@ suite "Viewer round-trip - DocumentSymbol":
     e.lsp.enabled = true
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 4, column = 2, topLine = 3, leftColumn = 1)
+    e.placeOrigin(line = 4, column = 2, topLine = 3, leftCell = 1)
 
     let reqId = 7002
     e.injectPending(lrfDocumentSymbol, reqId)
@@ -558,7 +558,7 @@ suite "Viewer round-trip - CallHierarchy":
     e.lsp.enabled = true
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 5, column = 3, topLine = 4, leftColumn = 2)
+    e.placeOrigin(line = 5, column = 3, topLine = 4, leftCell = 2)
 
     let reqId = 7101
     e.injectPending(lrfCallHierarchyIncoming, reqId)
@@ -573,7 +573,7 @@ suite "Viewer round-trip - CallHierarchy":
     check win.buffer != origBuf
     check win.cursor.line == 0
     check win.viewport.topLine == 0
-    check win.viewport.leftColumn == 0
+    check win.viewport.leftCell == 0
 
     discard e.processResult(HandlerResult(kind: hrCallHierarchyQuit), e.activeBuffer())
     check win.mode == EditorMode.Normal
@@ -582,7 +582,7 @@ suite "Viewer round-trip - CallHierarchy":
     check win.cursor.line == 5
     check win.cursor.column == 3
     check win.viewport.topLine == 4
-    check win.viewport.leftColumn == 2
+    check win.viewport.leftCell == 2
 
   test "incoming -> outgoing re-entry keeps the first origin for the quit":
     # Switching the view kind re-enters the mode: the second entry must carry
@@ -593,7 +593,7 @@ suite "Viewer round-trip - CallHierarchy":
     e.lsp.enabled = true
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 5, column = 3, topLine = 4, leftColumn = 2)
+    e.placeOrigin(line = 5, column = 3, topLine = 4, leftCell = 2)
 
     let incomingId = 7102
     e.injectPending(lrfCallHierarchyIncoming, incomingId)
@@ -623,7 +623,7 @@ suite "Viewer round-trip - CallHierarchy":
     check win.cursor.line == 5
     check win.cursor.column == 3
     check win.viewport.topLine == 4
-    check win.viewport.leftColumn == 2
+    check win.viewport.leftCell == 2
 
   test "hrCallHierarchyJumpTo opens the target file URI":
     # The item's URI drives the jump target: a well-formed file:// URI opens
@@ -638,7 +638,7 @@ suite "Viewer round-trip - CallHierarchy":
     e.lsp.enabled = true
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 5, column = 3, topLine = 4, leftColumn = 2)
+    e.placeOrigin(line = 5, column = 3, topLine = 4, leftCell = 2)
 
     let reqId = 7104
     e.injectPending(lrfCallHierarchyIncoming, reqId)
@@ -678,7 +678,7 @@ suite "Viewer round-trip - CallHierarchy":
       removeFile(path)
     e.lsp.enabled = true
     let win = e.activeWindow
-    e.placeOrigin(line = 5, column = 3, topLine = 4, leftColumn = 2)
+    e.placeOrigin(line = 5, column = 3, topLine = 4, leftCell = 2)
 
     let reqId = 7105
     e.injectPending(lrfCallHierarchyIncoming, reqId)
@@ -725,7 +725,7 @@ suite "Viewer round-trip - split-window viewers":
     let origWin = e.activeWindow
     let origBuf = origWin.buffer
     let windowsBefore = e.windowManager.windows.len
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
 
     discard e.processResult(HandlerResult(kind: hrEnterLogViewer), e.activeBuffer())
     check e.windowManager.windows.len == windowsBefore + 1
@@ -747,7 +747,7 @@ suite "Viewer round-trip - split-window viewers":
     let origWin = e.activeWindow
     let origBuf = origWin.buffer
     let windowsBefore = e.windowManager.windows.len
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
 
     discard e.processResult(HandlerResult(kind: hrLspLog), e.activeBuffer())
     check e.activeWindow.modeState.kind == mskLogViewer
@@ -763,7 +763,7 @@ suite "Viewer round-trip - split-window viewers":
     let origWin = e.activeWindow
     let origBuf = origWin.buffer
     let windowsBefore = e.windowManager.windows.len
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
 
     discard e.processResult(HandlerResult(kind: hrEnterBackupManager), e.activeBuffer())
     check e.windowManager.windows.len == windowsBefore + 1
@@ -788,7 +788,7 @@ suite "Viewer round-trip - split-window viewers":
     let origWin = e.activeWindow
     let origBuf = origWin.buffer
     let windowsBefore = e.windowManager.windows.len
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
     e.setMode(EditorMode.Insert)
 
     discard e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
@@ -915,7 +915,7 @@ suite "Viewer round-trip - nested entry":
       removeFile(path)
     let win = e.activeWindow
     let origBuf = win.buffer
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
 
     discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
     let filerBuf = win.buffer
@@ -933,7 +933,7 @@ suite "Viewer round-trip - nested entry":
     check win.cursor.line == 5
     check win.cursor.column == 2
     check win.viewport.topLine == 4
-    check win.viewport.leftColumn == 3
+    check win.viewport.leftCell == 3
 
   test "a split viewer opened from inside one leaves the origin window usable":
     # A split takes a *new* window, so the viewer live in the origin window is
@@ -964,7 +964,7 @@ suite "Viewer round-trip - nested entry":
     defer:
       removeFile(path)
     let win = e.activeWindow
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
     win.viewport.topWrapOffset = 2
 
     discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
@@ -1044,7 +1044,7 @@ suite "Viewer round-trip - teardown records":
     let origBuf = origWin.buffer
     let windowsBefore = e.windowManager.windows.len
     let buffersBefore = e.buffers.len
-    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftCell = 3)
 
     discard e.processResult(HandlerResult(kind: hrEnterBackupManager), e.activeBuffer())
     let viewerWin = e.activeWindow

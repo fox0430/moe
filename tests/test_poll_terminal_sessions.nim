@@ -71,7 +71,7 @@ proc addSecondWindow(e: Editor): EditorWindow =
     viewBuffer: first.buffer,
     tabBufferId: first.buffer.id,
     bufferIds: @[first.buffer.id],
-    viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 12, x: 0, y: 12),
+    viewport: ViewPort(topLine: 0, leftCell: 0, width: 80, height: 12, x: 0, y: 12),
     cursor: BufferPosition(line: 0, column: 0),
     mode: EditorMode.Normal,
     previousMode: EditorMode.Normal,

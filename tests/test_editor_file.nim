@@ -280,12 +280,12 @@ suite "Editor - loadFile":
 
     # Set viewport to non-zero position
     e.viewport.topLine = 100
-    e.viewport.leftColumn = 50
+    e.viewport.leftCell = 50
 
     let result = e.loadFile(testFile)
     check result.isOk
     check e.viewport.topLine == 0
-    check e.viewport.leftColumn == 0
+    check e.viewport.leftCell == 0
 
   test "Load nonexistent file returns error":
     let e = createTestEditor()

@@ -509,33 +509,18 @@ proc displayWidthUpToWithTabs*(text: string, charPos: int, tabStop: int): int =
 
     currentChar += 1
 
-proc displayWidthBetweenWithTabs*(
-    text: string, startChar, endChar: int, tabStop: int
-): int =
-  ## Calculate the display width from startChar to endChar, with tabs expanded
-  ## relative to startChar. Use this instead of subtracting two
-  ## `displayWidthUpToWithTabs` results whenever the text is rendered as a slice
-  ## starting at startChar: a tab lands on a different stop when counted from the
-  ## slice start than when counted from the line start. Inverse of
-  ## `screenXToCharIndex`.
-  if endChar <= startChar or startChar < 0:
-    return 0
-
-  var currentChar = 0
-
+proc cellsAt*(text: string, column, tabStop: int): tuple[first, last: int] =
+  ## The cells the cursor on character `column` of `text` is drawn over: a
+  ## zero-width mark's is the cell after the character before it. Past the
+  ## end, the one cell after the text.
+  var cell, at = 0
   for (rune, _) in text.chars:
-    if currentChar < startChar:
-      currentChar += 1
-      continue
-    if currentChar >= endChar:
-      break
-
-    if rune == TAB_CHAR:
-      result += tabAdvance(result, tabStop)
-    else:
-      result += charWidth(rune)
-
-    currentChar += 1
+    let width = rune.runeCells(cell, tabStop)
+    if at == column:
+      return (cell, cell + max(width, 1) - 1)
+    cell += width
+    at += 1
+  (cell, cell)
 
 proc displayWidthWithTabs*(text: string, tabStop: int): int =
   ## Calculate the display width of a string, accounting for tab characters

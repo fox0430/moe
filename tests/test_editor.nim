@@ -804,14 +804,14 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
     e.cursor = BufferPosition(line: 0, column: 3)
     e.activeWindow.viewport.topLine = 2
-    e.activeWindow.viewport.leftColumn = 5
+    e.activeWindow.viewport.leftCell = 5
 
     e.startSubstitutePreview()
 
     check e.state.ui.substitutePreview.originalCursor ==
       BufferPosition(line: 0, column: 3)
     check e.state.ui.substitutePreview.originalTopLine == 2
-    check e.state.ui.substitutePreview.originalLeftColumn == 5
+    check e.state.ui.substitutePreview.originalLeftCell == 5
 
   test "Cancel substitute preview restores cursor and viewport":
     let e = createTestEditor()
@@ -820,20 +820,20 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
     e.cursor = BufferPosition(line: 0, column: 2)
     e.activeWindow.viewport.topLine = 0
-    e.activeWindow.viewport.leftColumn = 0
+    e.activeWindow.viewport.leftCell = 0
 
     e.startSubstitutePreview()
 
     # Simulate viewport/cursor moving during preview jump
     e.cursor = BufferPosition(line: 0, column: 0)
     e.activeWindow.viewport.topLine = 10
-    e.activeWindow.viewport.leftColumn = 7
+    e.activeWindow.viewport.leftCell = 7
 
     e.cancelSubstitutePreview()
 
     check e.cursor == BufferPosition(line: 0, column: 2)
     check e.activeWindow.viewport.topLine == 0
-    check e.activeWindow.viewport.leftColumn == 0
+    check e.activeWindow.viewport.leftCell == 0
 
   test "findFirstSubstituteMatch finds first occurrence across lines":
     let lines = @["aaa", "bbb foo", "ccc foo ddd"]
@@ -894,20 +894,20 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
     e.cursor = BufferPosition(line: 0, column: 4)
     e.activeWindow.viewport.topLine = 3
-    e.activeWindow.viewport.leftColumn = 2
+    e.activeWindow.viewport.leftCell = 2
 
     e.startSubstitutePreview()
 
     # Simulate cursor moved elsewhere
     e.cursor = BufferPosition(line: 0, column: 0)
     e.activeWindow.viewport.topLine = 0
-    e.activeWindow.viewport.leftColumn = 0
+    e.activeWindow.viewport.leftCell = 0
 
     e.jumpToFirstSubstituteMatch("zzz")
 
     check e.cursor == BufferPosition(line: 0, column: 4)
     check e.activeWindow.viewport.topLine == 3
-    check e.activeWindow.viewport.leftColumn == 2
+    check e.activeWindow.viewport.leftCell == 2
 
 suite "Editor - newEditor":
   test "Create editor with default config":
@@ -2957,7 +2957,7 @@ suite "Editor - BackupManager <-> DiffViewer round-trip":
     win.cursor.line = 50
     win.cursor.column = 3
     win.viewport.topLine = 40
-    win.viewport.leftColumn = 5
+    win.viewport.leftCell = 5
     let diffView = win.buffer
 
     # Quit the diff: must land back on the *same* backup manager state. The
@@ -2972,7 +2972,7 @@ suite "Editor - BackupManager <-> DiffViewer round-trip":
     check win.modeState.backupManager == bkState
     check win.buffer != diffView
     check win.viewport.topLine == 0
-    check win.viewport.leftColumn == 0
+    check win.viewport.leftCell == 0
 
 suite "Editor - BackupManager restore failure":
   test "refuses a clean restore when the current file cannot be snapshotted":
@@ -3334,7 +3334,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     win.cursor.line = 5
     win.cursor.column = 2
     win.viewport.topLine = 4
-    win.viewport.leftColumn = 3
+    win.viewport.leftCell = 3
 
     discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
     check win.mode == EditorMode.Filer
@@ -3353,7 +3353,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     check win.cursor.line == 5
     check win.cursor.column == 2
     check win.viewport.topLine == 4
-    check win.viewport.leftColumn == 3
+    check win.viewport.leftCell == 3
 
   test "processResult(hrBufferManagerQuit) restores the pre-manager cursor/viewport":
     let e = createTestEditor()
@@ -3368,7 +3368,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     win.cursor.line = 6
     win.cursor.column = 1
     win.viewport.topLine = 5
-    win.viewport.leftColumn = 2
+    win.viewport.leftCell = 2
 
     discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
     check win.mode == EditorMode.BufferManager
@@ -3387,7 +3387,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     check win.cursor.line == 6
     check win.cursor.column == 1
     check win.viewport.topLine == 5
-    check win.viewport.leftColumn == 2
+    check win.viewport.leftCell == 2
 
   test "processResult(hrEnterBufferManager) swaps buffer and preserves origin for quit":
     let e = createTestEditor()
@@ -3402,7 +3402,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     win.cursor.line = 5
     win.cursor.column = 2
     win.viewport.topLine = 4
-    win.viewport.leftColumn = 3
+    win.viewport.leftCell = 3
 
     discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
     check win.mode == EditorMode.BufferManager
@@ -3411,7 +3411,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     check win.cursor.line == 0
     check win.cursor.column == 0
     check win.viewport.topLine == 0
-    check win.viewport.leftColumn == 0
+    check win.viewport.leftCell == 0
 
     discard e.processResult(HandlerResult(kind: hrBufferManagerQuit), e.activeBuffer())
     check win.mode == EditorMode.Normal
@@ -3420,7 +3420,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     check win.cursor.line == 5
     check win.cursor.column == 2
     check win.viewport.topLine == 4
-    check win.viewport.leftColumn == 3
+    check win.viewport.leftCell == 3
 
   test "processResult(hrBookmarkManagerQuit) restores the pre-manager cursor/viewport":
     let e = createTestEditor()
@@ -3435,7 +3435,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     win.cursor.line = 7
     win.cursor.column = 3
     win.viewport.topLine = 6
-    win.viewport.leftColumn = 1
+    win.viewport.leftCell = 1
 
     discard
       e.processResult(HandlerResult(kind: hrEnterBookmarkManager), e.activeBuffer())
@@ -3456,7 +3456,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     check win.cursor.line == 7
     check win.cursor.column == 3
     check win.viewport.topLine == 6
-    check win.viewport.leftColumn == 1
+    check win.viewport.leftCell == 1
 
 suite "Editor - a command line from Visual":
   test "a mapping that runs a command line leaves Visual first, as `:` does":

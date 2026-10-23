@@ -19,7 +19,7 @@
 
 import std/[unittest, options, strutils]
 
-import ../src/moepkg/[visible_rows, buffer]
+import ../src/moepkg/[visible_rows, buffer, types]
 
 proc linesBuffer(count: int, text: string = "x"): TextBuffer =
   var lines: seq[string]
@@ -171,14 +171,14 @@ suite "totalRows":
     check buf.noWrap.totalRows(30) == 20
 
 suite "cursorCell / cellToColumn":
-  test "no wrap measures tabs from leftColumn":
+  test "no wrap counts cells from the line start less leftCell":
     let buf = newTextBuffer("ab\tcd")
     let rl = buf.noWrap
     # Tab at char 2 advances to the next stop (col 4), so 'c' is drawn at 4.
     check rl.cursorCell(0, 3) == (0, 4)
-    # Sliced at leftColumn 2 the tab starts the row and fills a whole tab stop.
-    check rl.cursorCell(0, 3, leftColumn = 2) == (0, 4)
-    check rl.cursorCell(0, 4, leftColumn = 3) == (0, 1)
+    # Scrolled sideways, the tab keeps the stop it has on the line.
+    check rl.cursorCell(0, 3, leftCell = 2) == (0, 2)
+    check rl.cursorCell(0, 4, leftCell = 3) == (0, 2)
 
   test "wrap reports the segment and the column inside it":
     let buf = newTextBuffer("x".repeat(25))
@@ -207,7 +207,57 @@ suite "cursorCell / cellToColumn":
     let buf = newTextBuffer("abc")
     check buf.noWrap.cellToColumn(0, 0, 99) == 2
 
-  test "cellToColumn expands tabs from the sliced origin":
+  test "cellToColumn counts cells from the line start":
     let buf = newTextBuffer("\tabc")
-    # Sliced at leftColumn 1 the row starts with 'a', so cell 1 is 'b'.
-    check buf.noWrap.cellToColumn(0, 0, 1, leftColumn = 1) == 2
+    # Scrolled 1 cell, the row starts inside the tab, which covers cell 2.
+    check buf.noWrap.cellToColumn(0, 0, 1, leftCell = 1) == 0
+    # Scrolled past the tab, the row starts with 'a', so cell 1 is 'b'.
+    check buf.noWrap.cellToColumn(0, 0, 1, leftCell = 4) == 2
+
+suite "scrollViewportToCursor - sideways":
+  proc noWrapAt10(buf: TextBuffer): RowLayout =
+    initRowLayout(buf, nil, false, 10, 8)
+
+  proc scrolledTo(rl: RowLayout, line, column: int, leftCell = 0): int =
+    ## `leftCell` after keeping (`line`, `column`) in view from `leftCell`.
+    let viewport = ViewPort(width: 10, height: 20, leftCell: leftCell)
+    rl.scrollViewportToCursor(viewport, line, column, 20)
+    viewport.leftCell
+
+  test "a cursor past tabs scrolls by the cells it is drawn at":
+    # Each "x\t" takes 8 cells, so column 4 is drawn at cell 16.
+    check newTextBuffer("x\tx\tx\tx").noWrapAt10.scrolledTo(0, 4) == 7
+
+  test "all cells of a wide character come into view":
+    # か (column 5) takes cells 10-11.
+    check newTextBuffer("あいうえおかき").noWrapAt10.scrolledTo(0, 5) == 2
+
+  test "all cells of a tab come into view":
+    # The second tab (column 3) takes cells 9-15.
+    check newTextBuffer("x\tx\tx").noWrapAt10.scrolledTo(0, 3) == 6
+
+  test "scrolling back stops at the character's first cell":
+    check newTextBuffer("x\tx\tx").noWrapAt10.scrolledTo(0, 1, leftCell = 12) == 1
+
+  test "a character wider than the window keeps its first cell in view":
+    let rl = initRowLayout(newTextBuffer("x\tx"), nil, false, 4, 8)
+    check rl.scrolledTo(0, 1) == 1
+
+  test "a cursor in view does not scroll":
+    check newTextBuffer("x".repeat(30)).noWrapAt10.scrolledTo(0, 12, leftCell = 5) == 5
+
+  test "past the line's end, the cell after it comes into view":
+    check newTextBuffer("x".repeat(30)).noWrapAt10.scrolledTo(0, 30) == 21
+
+  test "with wrap, nothing is scrolled off the left":
+    let rl = initRowLayout(newTextBuffer("x".repeat(30)), nil, true, 10, 8)
+    check rl.scrolledTo(0, 25, leftCell = 7) == 0
+
+  test "a cursor on a combining mark scrolls by the cell it is drawn at":
+    # The mark folds into 'e' at cell 9, but the cursor on it shows at 10.
+    check newTextBuffer("a".repeat(9) & "e\u0301").noWrapAt10.scrolledTo(0, 10) == 1
+
+  test "a cursor in a closed fold does not scroll":
+    let buf = linesBuffer(10, "x".repeat(30))
+    check buf.foldState.addFold(2, 5, collapsed = true)
+    check buf.noWrapAt10.scrolledTo(3, 25, leftCell = 4) == 4

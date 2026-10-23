@@ -47,7 +47,7 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
         window.viewport.width,
         window.viewport.height,
         window.viewport.topLine,
-        window.viewport.leftColumn,
+        window.viewport.leftCell,
         window.cursor.line,
         window.cursor.column,
         debugConfig.windowNode.enable,

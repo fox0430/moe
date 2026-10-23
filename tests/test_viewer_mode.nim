@@ -105,7 +105,7 @@ suite "viewer_mode - leaveViewerMode":
     let originalBuffer = e.activeBuffer
     e.activeWindow.cursor = BufferPosition(line: 1, column: 2)
     e.activeWindow.viewport.topLine = 1
-    e.activeWindow.viewport.leftColumn = 3
+    e.activeWindow.viewport.leftCell = 3
     let helpBuffer = newTextBuffer("help line 1")
     discard
       e.enterViewerMode(EditorMode.Help, makeHelpModeState(), helpBuffer, vpInPlace)
@@ -115,7 +115,7 @@ suite "viewer_mode - leaveViewerMode":
     check e.activeWindow.cursor.line == 1
     check e.activeWindow.cursor.column == 2
     check e.activeWindow.viewport.topLine == 1
-    check e.activeWindow.viewport.leftColumn == 3
+    check e.activeWindow.viewport.leftCell == 3
     check e.activeWindow.mode == EditorMode.Normal
 
   test "resumes Normal on the last character of a line that shrank":

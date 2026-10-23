@@ -175,16 +175,17 @@ proc renderedCellPos*(
     e: Editor, window: EditorWindow, lineText: string, column: int
 ): tuple[row, cellX: int] =
   ## Row and display column where `column` of `lineText` is drawn, relative to
-  ## the text area start. `row` is the wrap segment index (always 0 without
-  ## `lineWrap`). Tabs are expanded from the origin the renderer sliced at, so
-  ## two columns' `cellX` are only comparable when their `row` matches.
+  ## the text area start, negative when scrolled off the left. `row` is the wrap
+  ## segment index (always 0 without `lineWrap`). With wrap, tabs are expanded
+  ## from the row's start, so two columns' `cellX` are only comparable when
+  ## their `row` matches.
   let (wrapSeg, cellX) = textCell(
     lineText,
     column,
     e.lineWrap,
     e.wrapWidth(window),
     e.tabStop,
-    window.viewport.leftColumn,
+    window.viewport.leftCell,
   )
   (row: wrapSeg, cellX: cellX)
 
@@ -229,7 +230,7 @@ proc calculateWindowCursor*(
   let
     rl = e.rowLayoutFor(buffer, viewport.width, gutterWidth + scrollbarWidth, wrapCache)
     visibleRows = viewport.height - reservedLines
-    (wrapSeg, cellX) = rl.cursorCell(cursor.line, cursor.column, viewport.leftColumn)
+    (wrapSeg, cellX) = rl.cursorCell(cursor.line, cursor.column, viewport.leftCell)
     # `rowOfLine` stops once the walk passes the last visible row, so a cursor
     # far below the viewport costs O(visibleRows), not O(lines).
     screenY =
@@ -241,4 +242,5 @@ proc calculateWindowCursor*(
   if screenY < 0 or screenY >= visibleRows:
     return CursorPosition(x: 0, y: 0)
 
-  CursorPosition(x: viewport.x + gutterWidth + cellX, y: viewport.y + screenY)
+  # A viewport not yet scrolled to the cursor shows it at the text start.
+  CursorPosition(x: viewport.x + gutterWidth + max(0, cellX), y: viewport.y + screenY)

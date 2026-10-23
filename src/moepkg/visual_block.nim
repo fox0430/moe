@@ -59,7 +59,7 @@ type
       ## unselected as Vim draws by cell. A wide character shows whole.
     firstWidth*, lastWidth*: int
       ## The cells the characters at either end take on the line, which a
-      ## tab drawn after a wrap or a horizontal scroll may not
+      ## tab drawn after a wrap may not
     lineEnd*: bool ## The cell after the line's end shows selected
 
 func columns*(shown: BlockShown): Slice[int] =

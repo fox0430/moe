@@ -427,7 +427,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
@@ -444,7 +444,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
@@ -461,7 +461,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
@@ -479,7 +479,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 50 # Scroll right
+    window.viewport.leftCell = 50 # Scroll right
 
     let ctx = RenderContext(cursorLine: 0, cursorCol: 50, windowRightEdge: 80)
 
@@ -496,7 +496,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 100 # Scroll past line end
+    window.viewport.leftCell = 100 # Scroll past line end
 
     let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
 
@@ -514,7 +514,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0 # Cursor on this line
 
     let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
@@ -975,7 +975,7 @@ suite "renderWindow - Visual selection over indentation guides":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 5
     window.mode = EditorMode.Visual
@@ -1015,7 +1015,7 @@ suite "renderWindow - Visual selection over indentation guides":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 0
     window.mode = EditorMode.Normal
@@ -1050,7 +1050,7 @@ suite "renderWindow - Visual selection on empty line":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 0
     window.mode = EditorMode.Visual
@@ -1115,7 +1115,7 @@ suite "renderWindow - Visual selection on empty line":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 0
     window.mode = EditorMode.Normal
@@ -1132,7 +1132,7 @@ proc selectedCells(
     start, current: BufferPosition,
     kind: VisualSelectionKind,
     wrap: bool,
-    leftColumn = 0,
+    leftCell = 0,
     width = 40,
     scrollbar = false,
 ): seq[string] =
@@ -1152,7 +1152,7 @@ proc selectedCells(
   window.viewport.height = 24
   window.viewport.x = 0
   window.viewport.y = 0
-  window.viewport.leftColumn = leftColumn
+  window.viewport.leftCell = leftCell
   window.active = true
 
   e.renderWindow(buffer, window, 0, true, true, 0)
@@ -1279,7 +1279,7 @@ suite "renderWindow - Visual selection over the line break":
       BufferPosition(line: 2, column: 0),
       vskLine,
       wrap = false,
-      leftColumn = 2,
+      leftCell = 2,
     ) == @["SSSSS", "S", "S"]
 
   test "Scrolled past the end, a character selection shows if it goes on":
@@ -1289,7 +1289,7 @@ suite "renderWindow - Visual selection over the line break":
       BufferPosition(line: 2, column: 7),
       vskChar,
       wrap = false,
-      leftColumn = 3,
+      leftCell = 3,
     ) == @["S", "S", "SSSSS"]
     # Not on the last line, which it ends on.
     check selectedCells(
@@ -1298,7 +1298,7 @@ suite "renderWindow - Visual selection over the line break":
       BufferPosition(line: 1, column: 1),
       vskChar,
       wrap = false,
-      leftColumn = 3,
+      leftCell = 3,
     ) == @["SSSSSS"]
 
   test "Scrolled past the end, a selection starting at it takes just its cell":
@@ -1314,7 +1314,7 @@ suite "renderWindow - Visual selection over the line break":
         BufferPosition(line: 2, column: 7),
         vskChar,
         wrap = false,
-        leftColumn = 3,
+        leftCell = 3,
       ) == rows
     # An anchor an edit left past the end, which Vim puts on the NUL.
     check selectedCells(
@@ -1323,7 +1323,7 @@ suite "renderWindow - Visual selection over the line break":
       BufferPosition(line: 2, column: 7),
       vskChar,
       wrap = false,
-      leftColumn = 4,
+      leftCell = 4,
     ) == @["", "S", "SSSS"]
 
 suite "renderWindow - Scrolling":
@@ -1365,7 +1365,7 @@ suite "renderWindow - Scrolling":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 100 # Scroll right
+    window.viewport.leftCell = 100 # Scroll right
 
     e.renderWindow(buffer, window, 0, true, true, 0)
 
@@ -1477,7 +1477,7 @@ suite "Cursor line highlight - Window boundary clipping":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 0
 
@@ -1539,7 +1539,7 @@ suite "Cursor line highlight - Window boundary clipping":
     window.viewport.height = 24
     window.viewport.x = 40
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 0
 
@@ -1570,7 +1570,7 @@ suite "Cursor line highlight - Window boundary clipping":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 0
 
@@ -1695,7 +1695,7 @@ suite "Cursor line highlight - Window boundary clipping":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 0
 
@@ -1738,7 +1738,7 @@ suite "Cursor line highlight - Window boundary clipping":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 0
 
@@ -1783,7 +1783,7 @@ suite "Markdown code block - line background":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 3 # not on the code block
     window.cursor.column = 0
 
@@ -1819,7 +1819,7 @@ suite "Markdown code block - line background":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 0
     window.cursor.column = 0
 
@@ -1854,7 +1854,7 @@ suite "Markdown code block - line background":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 1 # the interior "let x = 1" row
     window.cursor.column = 0
 
@@ -1896,7 +1896,7 @@ suite "Markdown code block - line background":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.active = true
     window.cursor.line = 1
     window.cursor.column = 5
@@ -1940,7 +1940,7 @@ suite "Markdown code block - line background":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 3
     window.cursor.column = 0
 
@@ -1979,7 +1979,7 @@ suite "Markdown code block - line background":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.cursor.line = 3
     window.cursor.column = 0
 
@@ -2024,6 +2024,100 @@ suite "Cursor column highlight - wrap segments":
       check buffer[5, row].style.bg == hlStyle.bg
       check buffer[4, row].style.bg != hlStyle.bg
       check buffer[6, row].style.bg != hlStyle.bg
+
+  test "cursorColumn does not show while the cursor is scrolled off the left":
+    # A cursor in a closed fold keeps the window's sideways scroll, so it can
+    # sit left of `leftCell`; the column used to show at the left edge.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.showCursorColumn = true
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.showSyntax = false
+    e.state.lineWrap = false
+
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "x".repeat(100) & "\n" & "x".repeat(100)
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftCell = 20
+    window.cursor.line = 0
+    window.cursor.column = 5
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let hlStyle = cursorColumnHighlightStyle()
+    for x in 0 ..< 40:
+      check buffer[x, 1].style.bg != hlStyle.bg
+
+  test "cursorColumn shows on the cell left of a character the left edge cuts":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.showCursorColumn = true
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.showSyntax = false
+    e.state.lineWrap = false
+
+    # あ takes cells 1-2, so scrolled by 2 its second cell shows as `<`.
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "x".repeat(40) & "\naあい"
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftCell = 2
+    window.cursor.line = 0
+    window.cursor.column = 2
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    check buffer[0, 1].symbol == "<"
+    check buffer[0, 1].style.bg == cursorColumnHighlightStyle().bg
+
+  test "cursorColumn of a cursor in a closed fold is the text start, as Vim":
+    # Vim's curs_columns puts a cursor in a closed fold in the first column,
+    # and the screen cursor shows there too.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.showCursorColumn = true
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.showSyntax = false
+    e.state.lineWrap = false
+
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "abcdefghijklmnopqrstuvwxyz\n".repeat(4)
+    )
+    check e.activeBuffer.foldState.addFold(1, 2, collapsed = true)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.cursor.line = 2
+    window.cursor.column = 12
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let hlBg = cursorColumnHighlightStyle().bg
+    check buffer[0, 0].style.bg == hlBg
+    check buffer[12, 0].style.bg != hlBg
 
 suite "renderWindow - selection of the rendered window":
   proc selectionCells(buffer: Buffer, row: int): seq[int] =
@@ -3812,7 +3906,7 @@ suite "Empty-line end-of-line virtual text":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     let ctx = RenderContext(
       cursorLine: -1,
@@ -3836,7 +3930,7 @@ suite "Empty-line end-of-line virtual text":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 10 # scrolled past the 3-rune line
+    window.viewport.leftCell = 10 # scrolled past the 3-rune line
 
     let ctx = RenderContext(
       cursorLine: -1,
@@ -3860,7 +3954,7 @@ suite "Empty-line end-of-line virtual text":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     let ctx = RenderContext(
       cursorLine: -1,
@@ -3891,7 +3985,7 @@ suite "Empty-line end-of-line virtual text":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     let ctx = RenderContext(
       cursorLine: -1,
@@ -3921,7 +4015,7 @@ suite "Empty-line end-of-line virtual text":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     let ctx = RenderContext(
       cursorLine: -1,
@@ -3943,7 +4037,7 @@ suite "Empty-line end-of-line virtual text":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     let ctx = RenderContext(
       cursorLine: -1,
@@ -4107,7 +4201,8 @@ suite "renderWindowLineNoWrap - display-width clipping":
     result.state.scrollbar = false
 
   proc noWrapCtx(): RenderContext =
-    RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 80)
+    # The right edge of the 25-cell windows below, as `renderWindow` sets it.
+    RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 25)
 
   test "CJK line fills the budget instead of being byte-truncated":
     # 10 wide runes = 20 display cells but 30 bytes. With cellBudget 25 the old
@@ -4123,7 +4218,7 @@ suite "renderWindowLineNoWrap - display-width clipping":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     e.renderWindowLineNoWrap(buffer, window, 0, noWrapCtx(), 0, 0)
 
@@ -4148,7 +4243,7 @@ suite "renderWindowLineNoWrap - display-width clipping":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
 
     e.renderWindowLineNoWrap(buffer, window, 0, noWrapCtx(), 0, 0)
 
@@ -4156,6 +4251,84 @@ suite "renderWindowLineNoWrap - display-width clipping":
     # the 25-cell budget is col 24 and must hold an 'X'; col 25 must not.
     check buffer[24, 0].symbol == "X"
     check buffer[25, 0].symbol != "X"
+
+  proc scrolledWindow(e: Editor, leftCell: int): EditorWindow =
+    result = e.windowManager.windows[0]
+    result.viewport.width = 25
+    result.viewport.height = 24
+    result.viewport.x = 0
+    result.viewport.y = 0
+    result.viewport.leftCell = leftCell
+
+  proc fillRow(buffer: var Buffer, y: int) =
+    ## Mark the row so a cell the render leaves alone shows.
+    for x in 0 ..< buffer.area.width:
+      buffer.setString(x, y, "#", normalStyle())
+
+  test "every row scrolls by the same cells, measuring tabs from the line start":
+    let e = plainNoWrapEditor()
+    e.state.tabStop = 8
+    var buffer = createTestBuffer()
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "x\tx\tx\n0123456789abcdef"
+    )
+    let window = e.scrolledWindow(3)
+    buffer.fillRow(0)
+
+    e.renderWindowLineNoWrap(buffer, window, 0, noWrapCtx(), 0, 0)
+    e.renderWindowLineNoWrap(buffer, window, 0, noWrapCtx(), 1, 1)
+
+    # The tab takes cells 1-7: the left edge cuts it and its last 5 show
+    # blank, then the 'x' at cell 8 and the one at cell 16.
+    for x in 0 ..< 5:
+      check buffer[x, 0].symbol == " "
+    check buffer[5, 0].symbol == "x"
+    check buffer[13, 0].symbol == "x"
+    check buffer[0, 1].symbol == "3"
+
+  test "a wide character cut by the left edge shows `<`, by the right `>`":
+    let e = plainNoWrapEditor()
+    e.state.lineWrap = false
+    e.state.showLineNumbers = false
+    var buffer = createTestBuffer()
+    # あ takes cells 1-2 and す 26-27, so scrolled by 2 the window's 25
+    # cells cut both.
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0),
+      "aあいうえおかきくけこさしbすせそ",
+    )
+    # The cursor on お (cells 9-10) stays in view, so the window keeps its scroll.
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5), vskLine
+    )
+    let window = e.scrolledWindow(2)
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visBg = visualStyle().bg
+    check buffer[0, 0].symbol == "<"
+    check buffer[0, 0].style.bg == visBg
+    check buffer[1, 0].symbol == "い"
+    check buffer[23, 0].symbol == "b"
+    # As in Vim, `>` takes no background, not even the selection's.
+    check buffer[24, 0].symbol == ">"
+    check buffer[24, 0].style.bg != visBg
+
+  test "an indentation guide stands on a tab stop of the line":
+    let e = plainNoWrapEditor()
+    e.state.showIndentationLines = true
+    e.state.tabStop = 4
+    var buffer = createTestBuffer()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "\t\tfoo")
+    let window = e.scrolledWindow(2)
+
+    e.renderWindowLineNoWrap(buffer, window, 0, noWrapCtx(), 0, 0)
+
+    # The second tab starts at cell 4, drawn at 2, and 'f' at cell 8.
+    check buffer[0, 0].symbol == " "
+    check buffer[2, 0].symbol == "│"
+    check buffer[6, 0].symbol == "f"
 
 suite "renderScrollbar - fold/wrap-aware display rows":
   proc bufOfLines(count: int, text: string = "x"): TextBuffer =
@@ -4396,7 +4569,7 @@ suite "renderWindow - Visual block over screen cells":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.active = true
 
     e.renderWindow(buffer, window, 0, true, true, 0)
@@ -4423,7 +4596,7 @@ suite "renderWindow - Visual block over screen cells":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 0
+    window.viewport.leftCell = 0
     window.active = true
 
     e.renderWindow(buffer, window, 0, true, true, 0)
@@ -4452,7 +4625,7 @@ suite "renderWindow - Visual block over screen cells":
       window.viewport.height = 24
       window.viewport.x = 0
       window.viewport.y = 0
-      window.viewport.leftColumn = 0
+      window.viewport.leftCell = 0
       window.active = true
 
       e.renderWindow(buffer, window, 0, true, true, 0)
@@ -4482,7 +4655,7 @@ suite "renderWindow - Visual block over screen cells":
       window.viewport.height = 24
       window.viewport.x = 0
       window.viewport.y = 0
-      window.viewport.leftColumn = 0
+      window.viewport.leftCell = 0
       window.active = true
 
       e.renderWindow(buffer, window, 0, true, true, 0)
@@ -4510,7 +4683,7 @@ suite "renderWindow - Visual block over screen cells":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 2
+    window.viewport.leftCell = 2
     window.active = true
 
     e.renderWindow(buffer, window, 0, true, true, 0)
@@ -4536,14 +4709,14 @@ suite "renderWindow - Visual block over screen cells":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 2
+    window.viewport.leftCell = 2
     window.active = true
 
     e.renderWindow(buffer, window, 0, true, true, 0)
 
     check buffer[0, 0].style.bg != visualStyle().bg
 
-  test "A cut tab drawn at another width shows whole":
+  test "Scrolled sideways, a block shows over the cells of a tab it cuts":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     e.state.lineWrap = false
@@ -4552,8 +4725,8 @@ suite "renderWindow - Visual block over screen cells":
     e.state.tabStop = 4
     discard
       e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abcdefgh\nab\tc")
-    # Cells 3-4: on line 1 the tab takes cells 2-3, but scrolled by a column
-    # it is drawn from the second cell, three wide.
+    # Cells 3-4: on line 1 the tab takes cells 2-3, and scrolled by a column
+    # it is still drawn there, so the block takes its second cell only.
     e.state.selectVisual(
       BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 3), vskBlock
     )
@@ -4563,13 +4736,15 @@ suite "renderWindow - Visual block over screen cells":
     window.viewport.height = 24
     window.viewport.x = 0
     window.viewport.y = 0
-    window.viewport.leftColumn = 1
+    window.viewport.leftCell = 1
     window.active = true
 
     e.renderWindow(buffer, window, 0, true, true, 0)
 
     let visBg = visualStyle().bg
-    # `b` at x 0, the tab at x 1-3, `c` at x 4.
+    # `b` at x 0, the tab at x 1-2, `c` at x 3.
     check buffer[0, 1].style.bg != visBg
-    for x in 1 .. 4:
-      check buffer[x, 1].style.bg == visBg
+    check buffer[1, 1].style.bg != visBg
+    check buffer[2, 1].style.bg == visBg
+    check buffer[3, 1].style.bg == visBg
+    check buffer[4, 1].style.bg != visBg

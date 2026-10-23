@@ -27,7 +27,7 @@ import types, buffer/[core, fold], render_utils
 
 type
   RowLayout* = object
-    ## Row-walk context for a window frame. `maxWidth` is used only with `lineWrap`.
+    ## Row-walk context for a window frame. `maxWidth` is the text area's width.
     buffer*: TextBuffer
     wrapCache*: WrapCountCache
     lineWrap*: bool
@@ -179,16 +179,18 @@ proc totalRows*(rl: RowLayout, stopLine: int): int =
     result = vl.startRow + vl.rows
 
 proc textCell*(
-    text: string, column: int, lineWrap: bool, maxWidth, tabStop, leftColumn: int
+    text: string, column: int, lineWrap: bool, maxWidth, tabStop, leftCell: int
 ): tuple[wrapSeg, cellX: int] =
-  ## Display cell of `text[column]`: (wrapSeg, cellX). Wrap-aware; no-wrap uses `leftColumn` origin.
+  ## Display cell of `text[column]`: (wrapSeg, cellX). Wrap-aware; without wrap
+  ## the cell from the line start less `leftCell`, negative when scrolled off
+  ## the left.
   if lineWrap:
     cursorWrapPosition(text, column, maxWidth, tabStop)
   else:
-    (0, displayWidthBetweenWithTabs(text, leftColumn, column, tabStop))
+    (0, text.cellsAt(column, tabStop).first - leftCell)
 
 proc cursorCell*(
-    rl: RowLayout, line, column: int, leftColumn: int = 0
+    rl: RowLayout, line, column: int, leftCell: int = 0
 ): tuple[wrapSeg, cellX: int] =
   ## `textCell` for buffer position. Hidden fold line returns marker origin.
   if rl.buffer.isNil or line < 0 or line >= rl.lineCount:
@@ -196,7 +198,7 @@ proc cursorCell*(
   if rl.buffer.foldState.getCollapsedFoldAt(line).isSome:
     return (0, 0)
   textCell(
-    rl.buffer.getLine(line), column, rl.lineWrap, rl.maxWidth, rl.tabStop, leftColumn
+    rl.buffer.getLine(line), column, rl.lineWrap, rl.maxWidth, rl.tabStop, leftCell
   )
 
 proc segmentStartColumn*(rl: RowLayout, line, wrapSeg: int): int =
@@ -209,19 +211,19 @@ proc segmentStartColumn*(rl: RowLayout, line, wrapSeg: int): int =
       displayWidthSubstrWithTabs(text, result, rl.maxWidth, rl.tabStop)
     result += max(1, charCount)
 
-proc cellToColumn*(rl: RowLayout, line, wrapSeg, cellX: int, leftColumn: int = 0): int =
+proc cellToColumn*(rl: RowLayout, line, wrapSeg, cellX: int, leftCell: int = 0): int =
   ## Char index at (`wrapSeg`, `cellX`). Inverse of `cursorCell`.
   if rl.buffer.isNil or line < 0 or line >= rl.lineCount:
     return 0
   let
     text = rl.buffer.getLine(line)
-    start =
+    (start, cell) =
       if rl.lineWrap:
-        rl.segmentStartColumn(line, wrapSeg)
+        (rl.segmentStartColumn(line, wrapSeg), cellX)
       else:
-        leftColumn
+        (0, leftCell + cellX)
   clamp(
-    start + screenXToCharIndex(text, start, cellX, rl.tabStop),
+    start + screenXToCharIndex(text, start, cell, rl.tabStop),
     0,
     max(0, text.charLen - 1),
   )
@@ -230,6 +232,23 @@ func wrapPosAbove*(aLine, aSeg, bLine, bSeg: int): bool {.inline.} =
   ## True if (aLine, aSeg) is above (bLine, bSeg) in wrapped order.
   aLine < bLine or (aLine == bLine and aSeg < bSeg)
 
+proc scrollLeftCellToCursor(rl: RowLayout, viewport: ViewPort, line, column: int) =
+  ## Keep all cells the cursor is drawn over in view, scrolling sideways as
+  ## little as possible (Vim's curs_columns does too with 'sidescroll' 1, but
+  ## centers a cursor half a window or more away). Its first cell wins when
+  ## the character is wider than the window. A cursor in a closed fold does
+  ## not scroll.
+  if rl.lineWrap:
+    viewport.leftCell = 0
+    return
+  if rl.buffer.foldState.getCollapsedFoldAt(line).isSome:
+    return
+  let (first, last) = rl.buffer.getLine(line).cellsAt(column, rl.tabStop)
+  if last >= viewport.leftCell + rl.maxWidth:
+    viewport.leftCell = last - rl.maxWidth + 1
+  if first < viewport.leftCell:
+    viewport.leftCell = first
+
 proc scrollViewportToCursor*(
     rl: RowLayout, viewport: ViewPort, cursorLine, cursorColumn, visibleHeight: int
 ) =
@@ -237,6 +256,7 @@ proc scrollViewportToCursor*(
   if rl.buffer.isNil or rl.lineCount == 0:
     viewport.topLine = 0
     viewport.topWrapOffset = 0
+    viewport.leftCell = 0
     return
 
   if not rl.lineWrap:
@@ -257,3 +277,4 @@ proc scrollViewportToCursor*(
     let (latLine, latOff) = rl.walkBackRows(line, seg, rows - 1)
     if wrapPosAbove(viewport.topLine, viewport.topWrapOffset, latLine, latOff):
       viewport.restoreViewportTop(latLine, latOff)
+  rl.scrollLeftCellToCursor(viewport, line, max(0, cursorColumn))

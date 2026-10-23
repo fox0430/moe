@@ -166,7 +166,7 @@ proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
   win.setTab(buf)
   win.cursor = BufferPosition(line: 0, column: 0)
   win.viewport.resetViewportTop()
-  win.viewport.leftColumn = 0
+  win.viewport.leftCell = 0
 
   e.applyTabMode(win, buf.id)
   if wasSpecialMode and win.mode != EditorMode.Terminal:

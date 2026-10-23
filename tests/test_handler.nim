@@ -46,9 +46,9 @@ import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/command_handlers/result_processor
 import ../src/moepkg/command_handlers/[handler_result, misc_ops]
 
-proc createTestViewport(x, y, width, height, topLine, leftColumn: int): ViewPort =
+proc createTestViewport(x, y, width, height, topLine, leftCell: int): ViewPort =
   ViewPort(
-    x: x, y: y, width: width, height: height, topLine: topLine, leftColumn: leftColumn
+    x: x, y: y, width: width, height: height, topLine: topLine, leftCell: leftCell
   )
 
 proc createTestState(): EditorState =
@@ -198,9 +198,9 @@ suite "screenToBufferPosition - Scrolled Viewport":
     check result.get.line == 10 # topLine + screenY
     check result.get.column == 3
 
-  test "Click with leftColumn offset (horizontal scroll)":
+  test "Click with leftCell offset (horizontal scroll)":
     let
-      vp = createTestViewport(0, 0, 80, 24, 0, 5) # leftColumn = 5
+      vp = createTestViewport(0, 0, 80, 24, 0, 5) # leftCell = 5
       buffer = newTextBuffer("Hello World this is a long line")
       lineNumOffset = 0
       reservedLines = steadyBottomAreaHeight()
@@ -211,11 +211,11 @@ suite "screenToBufferPosition - Scrolled Viewport":
 
     check result.isSome
     check result.get.line == 0
-    check result.get.column == 8 # leftColumn + screenX = 5 + 3
+    check result.get.column == 8 # leftCell + screenX = 5 + 3
 
   test "Click with both offsets":
     let
-      vp = createTestViewport(0, 0, 80, 24, 5, 10) # topLine=5, leftColumn=10
+      vp = createTestViewport(0, 0, 80, 24, 5, 10) # topLine=5, leftCell=10
       buffer = newTextBuffer(
         "line0\nline1\nline2\nline3\nline4\n" &
           "This is line 5 with some long content for horizontal scroll"
@@ -229,7 +229,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
 
     check result.isSome
     check result.get.line == 5
-    check result.get.column == 15 # leftColumn + screenX = 10 + 5
+    check result.get.column == 15 # leftCell + screenX = 10 + 5
 
 suite "screenToBufferPosition - No Wrap Display Width":
   # screenX is a display-column offset while the column is a character index, so
@@ -295,29 +295,29 @@ suite "screenToBufferPosition - No Wrap Display Width":
 
   test "Click with horizontal scroll and full width characters":
     let
-      vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftColumn = 2
+      vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftCell = 2
       buffer = newTextBuffer("あいうえお")
       lineNumOffset = 0
       reservedLines = steadyBottomAreaHeight()
 
-    # The renderer slices from character 2, so う takes cells 0..1 and え cell 2
+    # Scrolled by 2 cells, い takes cells 0..1 and う cell 2
     let result = screenToBufferPosition(
       vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
     )
 
     check result.isSome
-    check result.get.column == 3
+    check result.get.column == 2
 
   test "Click with horizontal scroll onto a tab boundary":
     let
-      vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftColumn = 2
+      vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftCell = 2
       buffer = newTextBuffer("ab\tcd")
       lineNumOffset = 0
       reservedLines = steadyBottomAreaHeight()
 
-    # Slicing at character 2 restarts tab expansion, so 'c' is drawn at column 4
+    # The tab keeps cells 2..3 of the line, so 'c' at cell 4 is drawn at 2
     let result = screenToBufferPosition(
-      vp, buffer, 4, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+      vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
     )
 
     check result.isSome
@@ -437,12 +437,12 @@ suite "screenToBufferPosition - Viewport Position":
 suite "screenToBufferPosition - Line Wrap Mode":
   test "Click with lineWrap enabled uses screen position directly":
     let
-      vp = createTestViewport(0, 0, 80, 24, 0, 5) # leftColumn is set but ignored
+      vp = createTestViewport(0, 0, 80, 24, 0, 5) # leftCell is set but ignored
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
       reservedLines = steadyBottomAreaHeight()
 
-    # With lineWrap=true, leftColumn should be ignored
+    # With lineWrap=true, leftCell should be ignored
     let result = screenToBufferPosition(
       vp,
       buffer,
@@ -456,7 +456,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     check result.isSome
     check result.get.line == 0
-    check result.get.column == 3 # screenX directly (not leftColumn + screenX)
+    check result.get.column == 3 # screenX directly (not leftCell + screenX)
 
   test "Click on second wrap segment":
     # Line "abcdefghij" (10 chars), viewport width=5, so wraps at col 5
@@ -1568,7 +1568,7 @@ proc createTestEditorWithBuffer(content: string): Editor =
   result.windowManager.windows[0].setTab(buf)
   result.windowManager.windows[0].bufferIds = @[buf.id]
   result.windowManager.windows[0].viewport =
-    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
   result.motionController.viewportManager.viewport = result.viewport
   result.motionController.bindToWindow(result.activeWindow)
   result.state.mode = EditorMode.Normal
@@ -1610,7 +1610,7 @@ suite "frontend-neutral pointer and scroll input":
     let e =
       createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5\nline6")
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 40, height: 5, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 40, height: 5, topLine: 0, leftCell: 0)
     e.windowManager.windows[0].cursor = BufferPosition(line: 3, column: 0)
 
     let down = e.handleScrollInput(initScrollInput(2, 10, 2))
@@ -1632,7 +1632,7 @@ suite "frontend-neutral pointer and scroll input":
   test "scroll preserves the cursor after its row leaves the viewport":
     let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5")
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 40, height: 3, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 40, height: 3, topLine: 0, leftCell: 0)
     e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 2)
 
     let outcome = e.handleScrollInput(initScrollInput(1, 10, 3))
@@ -1652,7 +1652,7 @@ suite "frontend-neutral pointer and scroll input":
     e.state.showStatusLine = true
     e.screenSize.width = 40
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 2, y: 3, width: 40, height: 8, topLine: 0, leftColumn: 0)
+      ViewPort(x: 2, y: 3, width: 40, height: 8, topLine: 0, leftCell: 0)
     e.windowManager.windows[0].cursor = BufferPosition(line: 6, column: 0)
 
     let outcome = e.handleScrollInput(initScrollInput(5, 10, 4))
@@ -1712,7 +1712,7 @@ suite "frontend-neutral pointer and scroll input":
     let e = createTestEditorWithBuffer("abcdefghij\nnext")
     e.state.lineWrap = true
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 5, height: 2, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 5, height: 2, topLine: 0, leftCell: 0)
 
     let outcome = e.handleScrollInput(initScrollInput(0, 0, 1))
 
@@ -1745,13 +1745,13 @@ suite "frontend-neutral pointer and scroll input":
     e.state.showStatusLine = true
     e.screenSize.width = 80
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 40, height: 24, topLine: 0, leftCell: 0)
     let rightBuffer = newTextBuffer("right0\nright1\nright2\nright3\nright4")
     let rightWindow = EditorWindow(
       viewBuffer: rightBuffer,
       tabBufferId: rightBuffer.id,
       bufferIds: @[rightBuffer.id],
-      viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+      viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftCell: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
       mode: EditorMode.Normal,
@@ -1783,13 +1783,13 @@ suite "frontend-neutral pointer and scroll input":
     e.state.showLineNumbers = false
     e.state.showSidebar = false
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftCell: 0)
     let rightBuffer = newTextBuffer("right window text")
     let rightWindow = EditorWindow(
       viewBuffer: rightBuffer,
       tabBufferId: rightBuffer.id,
       bufferIds: @[rightBuffer.id],
-      viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0),
+      viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftCell: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
       mode: EditorMode.Normal,
@@ -1812,13 +1812,13 @@ suite "frontend-neutral pointer and scroll input":
     e.state.showLineNumbers = false
     e.state.showSidebar = false
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftCell: 0)
     let rightBuffer = newTextBuffer("right window text")
     let rightWindow = EditorWindow(
       viewBuffer: rightBuffer,
       tabBufferId: rightBuffer.id,
       bufferIds: @[rightBuffer.id],
-      viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0),
+      viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftCell: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
       mode: EditorMode.Normal,
@@ -2031,13 +2031,13 @@ suite "frontend-neutral pointer and scroll input":
     e.state.showLineNumbers = false
     e.state.showSidebar = false
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftCell: 0)
     let rightBuffer = newTextBuffer("right side")
     let rightWindow = EditorWindow(
       viewBuffer: rightBuffer,
       tabBufferId: rightBuffer.id,
       bufferIds: @[rightBuffer.id],
-      viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0),
+      viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftCell: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
       mode: EditorMode.Normal,
@@ -2149,7 +2149,7 @@ suite "handleMouseEvent - Wheel Scroll":
       lines.add "line" & $i
     let e = createTestEditorWithBuffer(lines)
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 5, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 5, topLine: 0, leftCell: 0)
     e.windowManager.windows[0].cursor = BufferPosition(line: 3, column: 0)
 
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 2)
@@ -2168,7 +2168,7 @@ suite "handleMouseEvent - Wheel Scroll":
     let e = createTestEditorWithBuffer(lines)
     # Viewport starts at line 10 with height 5 (visible lines 10..14)
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 5, topLine: 10, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 5, topLine: 10, leftCell: 0)
     e.windowManager.windows[0].cursor = BufferPosition(line: 11, column: 0)
 
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelUp, 10, 2)
@@ -2186,7 +2186,7 @@ suite "handleMouseEvent - Wheel Scroll":
       lines.add "line" & $i
     let e = createTestEditorWithBuffer(lines)
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 10, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 10, topLine: 0, leftCell: 0)
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
 
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 2)
@@ -2230,14 +2230,14 @@ suite "handleMouseEvent - Wheel Scroll Multi-Window":
     )
     # Shrink first window to left half
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 40, height: 24, topLine: 0, leftCell: 0)
     # Create a second window for the right half
     let buf2 = newTextBuffer("a0\na1\na2\na3\na4\na5\na6\na7\na8\na9")
     let win2 = EditorWindow(
       viewBuffer: buf2,
       tabBufferId: buf2.id,
       bufferIds: @[buf2.id],
-      viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+      viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftCell: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
       mode: EditorMode.Normal,
@@ -2428,7 +2428,7 @@ proc createSplitEditor(multiStatusLine: bool = true): Editor =
   result.state.showTabLine = false
   result.state.multiStatusLine = multiStatusLine
   result.windowManager.windows[0].viewport =
-    ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+    ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftCell: 0)
 
   var content = ""
   for i in 0 ..< 30:
@@ -2441,7 +2441,7 @@ proc createSplitEditor(multiStatusLine: bool = true): Editor =
       viewBuffer: buf2,
       tabBufferId: buf2.id,
       bufferIds: @[buf2.id],
-      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftCell: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
       mode: EditorMode.Normal,
@@ -2791,7 +2791,7 @@ suite "enterFilerInActiveWindow":
     check e.activeWindow.modeState.kind == mskFiler
     check e.activeWindow.cursor == BufferPosition(line: 0, column: 0)
     check e.activeWindow.viewport.topLine == 0
-    check e.activeWindow.viewport.leftColumn == 0
+    check e.activeWindow.viewport.leftCell == 0
 
   test "Records the covered tab in the viewer entry":
     let e = createTestEditorWithBuffer("hello")
@@ -3738,7 +3738,7 @@ proc createTestEditorForMiddleClick(content: string): Editor =
   result.windowManager.windows[0].setTab(buf)
   result.windowManager.windows[0].bufferIds = @[buf.id]
   result.windowManager.windows[0].viewport =
-    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
   result.motionController.viewportManager.viewport = result.viewport
   result.state.mode = EditorMode.Normal
 
@@ -4199,7 +4199,7 @@ suite "handlePasteEvent":
     let buf = newTextBuffer(content)
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.viewportManager.viewport = result.viewport
 
   proc makePasteEvent(text: string): Event =
@@ -4359,7 +4359,7 @@ suite "handleKeyCombo - Insert resumes after the Ctrl-o command":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
 
@@ -5027,7 +5027,7 @@ suite "handleKeyCombo - Ctrl-o ends the Insert session":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
 
@@ -5605,7 +5605,7 @@ suite "Macro recording - Command / Search overlay keys":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.viewportManager.viewport = result.viewport
     result.state.mode = EditorMode.Normal
 
@@ -5670,7 +5670,7 @@ suite "Macro playback - overlay-aware routing":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.viewportManager.viewport = result.viewport
     result.state.mode = EditorMode.Normal
 
@@ -5721,13 +5721,13 @@ suite "updateViewportReservedLines - steady reserve":
 proc addSecondWindow(e: Editor, buf2: TextBuffer, vpx: int = 40) =
   ## Split the 80-wide viewport at `vpx` and add a right-half window.
   e.windowManager.windows[0].viewport =
-    ViewPort(x: 0, y: 0, width: vpx, height: 24, topLine: 0, leftColumn: 0)
+    ViewPort(x: 0, y: 0, width: vpx, height: 24, topLine: 0, leftCell: 0)
   let win2 = EditorWindow(
     viewBuffer: buf2,
     tabBufferId: buf2.id,
     bufferIds: @[buf2.id],
     viewport:
-      ViewPort(x: vpx, y: 0, width: 80 - vpx, height: 24, topLine: 0, leftColumn: 0),
+      ViewPort(x: vpx, y: 0, width: 80 - vpx, height: 24, topLine: 0, leftCell: 0),
     cursor: BufferPosition(line: 0, column: 0),
     active: false,
     mode: EditorMode.Normal,
@@ -6563,8 +6563,7 @@ suite "middleClickPaste - the click picks the target":
     ## shows an ordinary buffer.
     let e = createTestEditorForMiddleClick("")
     let top = e.windowManager.windows[0]
-    top.viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+    top.viewport = ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftCell: 0)
 
     let term = fakeTerminalState()
     e.terminalStates[top.buffer.id] = term
@@ -6578,7 +6577,7 @@ suite "middleClickPaste - the click picks the target":
       viewBuffer: otherBuf,
       tabBufferId: otherBuf.id,
       bufferIds: @[otherBuf.id],
-      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftCell: 0),
       cursor: BufferPosition(line: 0, column: 0),
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
@@ -6594,8 +6593,7 @@ suite "middleClickPaste - the click picks the target":
     ## status/command row is the last row of its viewport.
     let e = createTestEditorForMiddleClick("")
     let win = e.windowManager.windows[0]
-    win.viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    win.viewport = ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
 
     let term = fakeTerminalState()
     e.terminalStates[win.buffer.id] = term
@@ -6608,7 +6606,7 @@ suite "middleClickPaste - the click picks the target":
     ## Two ordinary buffer windows, the top one active.
     let e = createTestEditorForMiddleClick("top")
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftCell: 0)
 
     let bottomBuffer = newTextBuffer("bottom")
     e.addBuffer(bottomBuffer)
@@ -6617,8 +6615,7 @@ suite "middleClickPaste - the click picks the target":
         viewBuffer: bottomBuffer,
         tabBufferId: bottomBuffer.id,
         bufferIds: @[bottomBuffer.id],
-        viewport:
-          ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         mode: EditorMode.Normal,
         previousMode: EditorMode.Normal,
@@ -6788,7 +6785,7 @@ suite "middleClickPaste - the click picks the target":
       let e = createTestEditorForMiddleClick("")
       let win = e.windowManager.windows[0]
       win.viewport =
-        ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+        ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
 
       let term = TerminalState(
         pty: PtyHandle(masterFd: fds[1], childPid: Pid(999999), closed: false),
@@ -6819,13 +6816,13 @@ suite "pointerPositionInWindow":
     let e = createTestEditorForMiddleClick("aaa\nbbb\nccc")
     e.state.showTabLine = showTabLine
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     e
 
   proc splitWindowEditor(): Editor =
     let e = singleWindowEditor(showTabLine = true)
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftCell: 0)
 
     let bottomBuffer = newTextBuffer("ddd\neee")
     e.addBuffer(bottomBuffer)
@@ -6834,8 +6831,7 @@ suite "pointerPositionInWindow":
         viewBuffer: bottomBuffer,
         tabBufferId: bottomBuffer.id,
         bufferIds: @[bottomBuffer.id],
-        viewport:
-          ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         mode: EditorMode.Normal,
         active: false,
@@ -6883,13 +6879,13 @@ suite "windowIndexAtCell":
     let e = createTestEditorForMiddleClick("")
     e.state.showTabLine = showTabLine
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     e
 
   proc splitWindowEditor(): Editor =
     let e = singleWindowEditor(showTabLine = true)
     e.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftCell: 0)
 
     let bottomBuffer = newTextBuffer("")
     e.addBuffer(bottomBuffer)
@@ -6898,8 +6894,7 @@ suite "windowIndexAtCell":
         viewBuffer: bottomBuffer,
         tabBufferId: bottomBuffer.id,
         bufferIds: @[bottomBuffer.id],
-        viewport:
-          ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+        viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftCell: 0),
         cursor: BufferPosition(line: 0, column: 0),
         mode: EditorMode.Normal,
         active: false,
@@ -6950,7 +6945,7 @@ suite "handleKeyCombo - the column vertical moves want":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
 
@@ -7550,7 +7545,7 @@ suite "handleKeyCombo - which keys a mapping takes, as in Vim":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
 
@@ -7927,7 +7922,7 @@ suite "handleKeyCombo - temporary messages, as at Vim's hit-enter prompt":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
     result.state.ui.tempMessages = @["message"]
@@ -8014,7 +8009,7 @@ suite "handleKeyCombo - the mappings come before the layers that run a key":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
 
@@ -8206,7 +8201,7 @@ suite "handleKeyCombo - the register named for a command, as Vim's regname":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
 
@@ -8619,7 +8614,7 @@ suite "handleKeyCombo - a command an operator cannot act over cancels it, as Vim
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
 
@@ -8869,7 +8864,7 @@ suite "handleKeyCombo - an operator acts over what a motion finds, as Vim's do_p
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
     result.activeWindow.cursor = BufferPosition(line: line, column: column)
@@ -9283,7 +9278,7 @@ suite "handleKeyCombo - the registers a yank or delete fills, as Vim's op_yank a
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
     for (name, text) in [('1', "R1"), ('2', "R2"), ('3', "R3")]:
@@ -9584,7 +9579,7 @@ suite "handleKeyCombo - a count and the shape of a motion, as in Vim":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
     result.activeWindow.cursor = BufferPosition(line: line, column: column)
@@ -9750,7 +9745,7 @@ suite "handleKeyCombo - Visual mode moves by Normal's motions, as in Vim":
     result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
-      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
     result.motionController.bindToWindow(result.activeWindow)
     result.state.mode = EditorMode.Normal
     result.activeWindow.cursor = BufferPosition(line: line, column: column)

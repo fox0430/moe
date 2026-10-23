@@ -123,8 +123,8 @@ proc adjustViewportForCursor(
     tabStop: int,
     wrapCache: WrapCountCache,
 ) =
-  ## Adjust viewport to keep cursor visible (scroll if cursor is off-screen)
-  # Vertical adjustment: the shared rule in `visible_rows`.
+  ## Adjust viewport to keep cursor visible (scroll if cursor is off-screen),
+  ## by the shared rule in `visible_rows`.
   if textBuffer.isNil:
     # No buffer to consult for folds: fall back to raw line arithmetic.
     viewport.topWrapOffset = 0
@@ -135,13 +135,6 @@ proc adjustViewportForCursor(
   else:
     initRowLayout(textBuffer, wrapCache, lineWrap, textAreaWidth, tabStop)
       .scrollViewportToCursor(viewport, cursor.line, cursor.column, visibleHeight)
-
-  # Horizontal adjustment (only when line wrap is disabled)
-  if not lineWrap:
-    if cursor.column >= viewport.leftColumn + textAreaWidth:
-      viewport.leftColumn = max(0, cursor.column - textAreaWidth + 1)
-    elif cursor.column < viewport.leftColumn:
-      viewport.leftColumn = cursor.column
 
 proc syncSelectionCursor(window: EditorWindow) =
   ## Mirror a selection-list mode's selected index onto the window cursor so

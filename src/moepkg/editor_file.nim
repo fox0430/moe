@@ -128,7 +128,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Reset viewport to start (will be adjusted by motion controller)
   e.viewport.resetViewportTop()
-  e.viewport.leftColumn = 0
+  e.viewport.leftCell = 0
 
   if e.showGitDiff:
     e.state.git.requestGitRefresh(e.activeBuffer)

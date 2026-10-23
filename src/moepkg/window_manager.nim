@@ -958,7 +958,7 @@ proc vsplit*(
     else:
       BufferPosition(line: 0, column: 0)
   let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
-  let newLeftColumn = if isSameBuffer: currentViewport.leftColumn else: 0
+  let newLeftCell = if isSameBuffer: currentViewport.leftCell else: 0
 
   # Create new window for left half
   let newWindow = EditorWindow(
@@ -967,7 +967,7 @@ proc vsplit*(
     bufferIds: @[newBuffer.id], # Per-window tabs start with the split buffer only
     viewport: ViewPort(
       topLine: newTopLine,
-      leftColumn: newLeftColumn,
+      leftCell: newLeftCell,
       width: splitWidth,
       height: origHeight,
       x: origX,
@@ -1037,7 +1037,7 @@ proc vsplitWithBuffer*(
     else:
       BufferPosition(line: 0, column: 0)
   let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
-  let newLeftColumn = if isSameBuffer: currentViewport.leftColumn else: 0
+  let newLeftCell = if isSameBuffer: currentViewport.leftCell else: 0
 
   # Create new window for left half with the provided buffer
   let newWindow = EditorWindow(
@@ -1046,7 +1046,7 @@ proc vsplitWithBuffer*(
     bufferIds: @[newBuffer.id], # Per-window tabs start with the provided buffer only
     viewport: ViewPort(
       topLine: newTopLine,
-      leftColumn: newLeftColumn,
+      leftCell: newLeftCell,
       width: splitWidth,
       height: origHeight,
       x: origX,
@@ -1136,7 +1136,7 @@ proc hsplit*(
     else:
       BufferPosition(line: 0, column: 0)
   let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
-  let newLeftColumn = if isSameBuffer: currentViewport.leftColumn else: 0
+  let newLeftCell = if isSameBuffer: currentViewport.leftCell else: 0
 
   # Create new window for top half
   # In multi status line mode, top window gets its own status line
@@ -1147,7 +1147,7 @@ proc hsplit*(
     bufferIds: @[newBuffer.id], # Per-window tabs start with the split buffer only
     viewport: ViewPort(
       topLine: newTopLine,
-      leftColumn: newLeftColumn,
+      leftCell: newLeftCell,
       width: origWidth,
       height: topContentHeight + (if multiStatusLine: StatusLineHeight else: 0),
       x: origX,
@@ -1230,7 +1230,7 @@ proc hsplitWithBuffer*(
     else:
       BufferPosition(line: 0, column: 0)
   let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
-  let newLeftColumn = if isSameBuffer: currentViewport.leftColumn else: 0
+  let newLeftCell = if isSameBuffer: currentViewport.leftCell else: 0
 
   # Create new window for top half with the provided buffer
   let newWindow = EditorWindow(
@@ -1239,7 +1239,7 @@ proc hsplitWithBuffer*(
     bufferIds: @[newBuffer.id], # Per-window tabs start with the provided buffer only
     viewport: ViewPort(
       topLine: newTopLine,
-      leftColumn: newLeftColumn,
+      leftCell: newLeftCell,
       width: origWidth,
       height: topContentHeight + (if multiStatusLine: StatusLineHeight else: 0),
       x: origX,
@@ -1642,7 +1642,7 @@ proc swapWindows*(wm: EditorWindowManager) =
     width: wm.windows[activeIdx].viewport.width,
     height: wm.windows[activeIdx].viewport.height,
     topLine: wm.windows[activeIdx].viewport.topLine,
-    leftColumn: wm.windows[activeIdx].viewport.leftColumn,
+    leftCell: wm.windows[activeIdx].viewport.leftCell,
   )
 
   wm.windows[activeIdx].viewport.x = wm.windows[nextIdx].viewport.x

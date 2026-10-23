@@ -227,7 +227,7 @@ proc generateWindowInfo*(
     bufferNumber: BufferId,
     viewportX, viewportY: int,
     viewportWidth, viewportHeight: int,
-    viewportTopLine, viewportLeftColumn: int,
+    viewportTopLine, viewportLeftCell: int,
     cursorLine, cursorColumn: int,
     enabled: bool = true,
 ) =
@@ -243,7 +243,7 @@ proc generateWindowInfo*(
   lines.addField("viewport.width", $viewportWidth)
   lines.addField("viewport.height", $viewportHeight)
   lines.addField("viewport.topLine", $viewportTopLine)
-  lines.addField("viewport.leftColumn", $viewportLeftColumn)
+  lines.addField("viewport.leftCell", $viewportLeftCell)
   lines.addField("cursor.line", $cursorLine)
   lines.addField("cursor.column", $cursorColumn)
 

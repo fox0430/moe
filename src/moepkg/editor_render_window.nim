@@ -44,7 +44,8 @@ import
   command_line,
   buffer,
   visual_selection,
-  visual_block
+  visual_block,
+  wanted_column
 import command_handlers/visual_handler
 
 type
@@ -563,6 +564,7 @@ proc renderLineSegmentWithSelection*(
     startColumn: int,
     ctx: RenderContext,
     precomputed: Option[LinePrecomputed] = none(LinePrecomputed),
+    startCell, leftCell = 0,
 ) =
   ## Render a screen row of a line: `displayLine`, the line's text from
   ## column `startColumn`, and the cells after it to the window's right edge.
@@ -570,6 +572,11 @@ proc renderLineSegmentWithSelection*(
   ## empty `displayLine`. When `displayLine` reaches the line's end, a
   ## selection over the line break shows in the next cell, and end-of-line
   ## virtual text (inlay hints, etc.) is drawn there before the trailing fill.
+  ## `startCell` is the cell `displayLine` starts at, counted from where tabs
+  ## are measured, and the row shows the cells from `leftCell` on. As Vim
+  ## draws them, a character the left edge cuts shows its remaining cells, a
+  ## tab's as blanks and a wide character's as `<`, and a wide character the
+  ## right edge cuts shows as `>`. Cells past the right edge are not drawn.
   ## ctx: RenderContext containing cursor position and selection information
   ## precomputed: caller-supplied indentInfo/lineCtx, built from the
   ##   line the caller holds and shared across wrap segments of the same
@@ -591,8 +598,12 @@ proc renderLineSegmentWithSelection*(
       )
       (p.indentInfo, p.lineCtx)
 
-  # Always render character by character to apply syntax highlighting
-  var displayX = 0
+  # Always render character by character to apply syntax highlighting.
+  # `displayX` is the cell's column on the row, negative over the cells of a
+  # character the left edge cuts; tabs are measured from `leftCell + displayX`.
+  var
+    displayX = startCell - leftCell
+    afterFiller = false
 
   # Templates capture displayX / screenX / screenY / e / ctx / lineCtx /
   # indentInfo / buffer from the enclosing scope. They are templates rather
@@ -607,7 +618,7 @@ proc renderLineSegmentWithSelection*(
     # tab, and Vim draws the cells outside the block unselected. A tab drawn
     # at another width than it takes on the line shows whole.
     let
-      spacesToNextTab = tabAdvance(displayX, e.tabStop)
+      spacesToNextTab = tabAdvance(leftCell + displayX, e.tabStop)
       patch = e.charOverridePatch(ctx, lineCtx, TAB_CHAR, col)
       shown = lineCtx.blockShown
       outsideBefore =
@@ -640,11 +651,11 @@ proc renderLineSegmentWithSelection*(
           outsideStyle
         else:
           style
-      if screenX + displayX < ctx.windowRightEdge:
+      if displayX >= 0 and screenX + displayX < ctx.windowRightEdge:
         # No guides in the diff viewer: +/- markers and synthetic
         # side-by-side rows make the leading-whitespace analysis misfire.
         if ctx.windowMode != EditorMode.DiffViewer and
-            e.shouldShowIndentationGuide(indentInfo, displayX, col):
+            e.shouldShowIndentationGuide(indentInfo, leftCell + displayX, col):
           let guideStyle = indentationLineStyle().merge(bgOnly(cellStyle.bg))
           buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
         else:
@@ -659,7 +670,7 @@ proc renderLineSegmentWithSelection*(
     # indentation guide is drawn, so selection and cursor-line stay visible.
     let byteStyle = invalidByteStyle().merge(bgOnly(style.bg))
     for ch in invalidByteText(rune):
-      if screenX + displayX < ctx.windowRightEdge:
+      if displayX >= 0 and screenX + displayX < ctx.windowRightEdge:
         buffer.setCell(screenX + displayX, screenY, $ch, 1, byteStyle)
       displayX += 1
 
@@ -670,38 +681,57 @@ proc renderLineSegmentWithSelection*(
       # Zero-width rune (combining mark / ZWJ / variation selector): fold it
       # into the preceding base cell rather than writing a standalone cell the
       # next glyph would overwrite. displayX does not advance. Skip when this
-      # cell starts the segment — its base, if any, is on the previous row.
-      if displayX > 0:
+      # cell starts the segment — its base, if any, is on the previous row —
+      # or follows a filler standing for a cut base.
+      if displayX > 0 and not afterFiller:
         foldZeroWidthRune(buffer, screenX + displayX, screenY, cellRune)
+    elif displayX < 0 or screenX + displayX + width > ctx.windowRightEdge:
+      # A wide character cut by an edge, drawn dim like the indentation guide.
+      # As in Vim, `<` keeps the cell's background and `>` takes none.
+      let (filler, fillerStyle) =
+        if displayX < 0:
+          ("<", indentationLineStyle().merge(bgOnly(style.bg)))
+        else:
+          (">", indentationLineStyle())
+      for x in max(0, displayX) ..< displayX + width:
+        if screenX + x < ctx.windowRightEdge:
+          buffer.setCell(screenX + x, screenY, filler, 1, fillerStyle)
+      displayX += width
+      afterFiller = true
     elif cellRune == ' '.Rune and ctx.windowMode != EditorMode.DiffViewer and
-        e.shouldShowIndentationGuide(indentInfo, displayX, col):
+        e.shouldShowIndentationGuide(indentInfo, leftCell + displayX, col):
       if screenX + displayX < ctx.windowRightEdge:
         let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))
         buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
       displayX += 1
+      afterFiller = false
     else:
       let renderStyle = style.merge(e.charOverridePatch(ctx, lineCtx, cellRune, col))
       if screenX + displayX < ctx.windowRightEdge:
         buffer.setCell(screenX + displayX, screenY, cellRune, width, renderStyle)
       displayX += width
+      afterFiller = false
 
   template renderChar(rune: Rune, col: int, style: Style) =
     if rune == TAB_CHAR:
       renderTabCell(col, style)
+      afterFiller = false
     elif rune.isInvalidByteRune:
       renderInvalidByteCell(rune, col, style)
+      afterFiller = false
     else:
       renderNormalCell(rune, col, style)
 
   var col = startColumn
   for (rune, _) in displayLine.chars:
+    # A character the left edge cuts takes the style of its first drawn cell.
     let style = e.getSelectionStyle(
       textBuffer,
       ctx.selection,
       BufferPosition(line: lineIndex, column: col),
       ctx.cursorCol,
       ctx.windowMode,
-      displayCol = displayX,
+      displayCol = max(0, displayX),
       cursorDisplayCol = ctx.cursorDisplayCol,
       lineCtx = lineCtx,
     )
@@ -923,30 +953,27 @@ proc renderWindowLineNoWrap*(
   if textScreenX >= buffer.area.width or cellBudget <= 0:
     return
 
-  # Use character-based slicing (not byte-based) for multibyte character
-  # support. Clip by display width, not byte length: take as many runes as fit
-  # cellBudget cells (tabs expanded, CJK = 2 cells), like the wrapped path.
-  # Slicing by byte count would hide content on multibyte/CJK lines and
-  # overflow the edge on tab-heavy lines (the lint_string_len hazard).
+  # The row shows the line's cells from `leftCell` on, with tabs measured from
+  # the line start.
   let
-    displayLine =
-      if window.viewport.leftColumn < line.charLen:
-        line.charSubStr(window.viewport.leftColumn)
-      else:
-        ""
-    (_, _, endByte) = displayWidthSubstrFromByte(displayLine, 0, cellBudget, e.tabStop)
+    leftCell = window.viewport.leftCell
+    shown = line.shownFrom(leftCell, cellBudget, e.tabStop)
   e.renderLineSegmentWithSelection(
     window.buffer,
     buffer,
-    displayLine[0 ..< endByte],
+    line[shown.startByte ..< shown.endByte],
     textScreenX,
     actualScreenY,
     lineIndex,
-    window.viewport.leftColumn,
+    shown.column,
     ctx,
     precomputed = some(
-      e.linePrecomputed(window.buffer, lineIndex, line, ctx, drawsText = endByte > 0)
+      e.linePrecomputed(
+        window.buffer, lineIndex, line, ctx, drawsText = shown.startByte < line.len
+      )
     ),
+    startCell = shown.cell,
+    leftCell = leftCell,
   )
 
 proc renderWindowSidebar*(
@@ -1126,18 +1153,19 @@ proc renderWindow*(
     else:
       none(Sidebar)
 
-  # Wrap mode: displayX restarts at 0 on every segment, so use the cursor's
-  # segment-relative column — an absolute one only matches segment 1.
+  # Fold skipping and wrap-segment counting come from the shared row walk, so
+  # the painted rows, the screen cursor and the mouse hit-test agree by
+  # construction.
+  let rl = e.rowLayoutOf(window, lineNumOffset)
+
+  # The cursor's column on its row, where the screen cursor is placed, or -1,
+  # which no cell's column matches, when it is scrolled off the left.
   let cursorDisplayCol =
     if window.cursor.line < lineCount:
-      let cursorLineText = window.buffer.getLine(window.cursor.line)
-      if e.lineWrap:
-        let maxWidth = e.wrapWidth(window, lineNumOffset)
-        cursorWrapPosition(cursorLineText, window.cursor.column, maxWidth, e.tabStop)[1]
-      else:
-        bufferColToDisplayCol(
-          cursorLineText, window.cursor.column, e.tabStop, window.viewport.leftColumn
-        )
+      let cellX = rl.cursorCell(
+        window.cursor.line, window.cursor.column, window.viewport.leftCell
+      ).cellX
+      if cellX < 0: -1 else: cellX
     else:
       window.cursor.column
 
@@ -1170,10 +1198,6 @@ proc renderWindow*(
   # `updateForFrame`; the draw pass must not advance re-parses, or the
   # per-window charges (N windows x 1000 lines) would bypass the budget.
 
-  # Fold skipping and wrap-segment counting come from the shared row walk, so
-  # the painted rows, the screen cursor and the mouse hit-test agree by
-  # construction.
-  let rl = e.rowLayoutOf(window, lineNumOffset)
   for row in rl.visibleLines(
     window.viewport.topLine, window.viewport.topWrapOffset, visibleHeight
   ):

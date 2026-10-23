@@ -91,7 +91,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
       window.viewport.width,
       window.viewport.height,
       window.viewport.topLine,
-      window.viewport.leftColumn,
+      window.viewport.leftCell,
       window.cursor.line,
       window.cursor.column,
       debugConfig.windowNode.enable,
@@ -179,7 +179,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
 
     # Preserve scroll position
     let savedTopLine = window.viewport.topLine
-    let savedLeftColumn = window.viewport.leftColumn
+    let savedLeftCell = window.viewport.leftCell
 
     # Replace buffer in the window.
     # Debug windows hold no Insert session, so no finalization is needed.
@@ -187,7 +187,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
 
     # Restore scroll position (clamped to valid range)
     window.viewport.resetViewportTop(min(savedTopLine, max(0, newDebugBuffer.len - 1)))
-    window.viewport.leftColumn = savedLeftColumn
+    window.viewport.leftCell = savedLeftCell
   e.state.timing.lastDebugUpdate = now
 
 proc maybeCleanupTimedOutLspRequests(e: Editor) =
@@ -574,8 +574,8 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
         window = e.activeWindow
         cursor = window.cursor
         lineText = e.activeBuffer.getLine(cursor.line)
-        # Measure both columns against the origin the renderer sliced at, so the
-        # gap between them survives tabs and horizontal scrolling.
+        # Measure both columns where the renderer draws them, so the gap
+        # between them survives tabs and horizontal scrolling.
         trigger = e.renderedCellPos(window, lineText, sigHelpMgr.triggerCol)
         caret = e.renderedCellPos(window, lineText, cursor.column)
       let anchorX =
@@ -584,9 +584,15 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
           # where the trigger is drawn, so pin to the caret.
           e.state.screenCursor.x
         else:
+          # A trigger scrolled off the left pins the popup to the text start.
           calculateSignatureHelpAnchorX(
-            e.state.screenCursor.x, sigHelpMgr.triggerLine, sigHelpMgr.triggerCol,
-            cursor.line, cursor.column, trigger.cellX, caret.cellX,
+            e.state.screenCursor.x,
+            sigHelpMgr.triggerLine,
+            sigHelpMgr.triggerCol,
+            cursor.line,
+            cursor.column,
+            max(0, trigger.cellX),
+            caret.cellX,
           )
       let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
       let popupPos = calculateSignatureHelpPosition(

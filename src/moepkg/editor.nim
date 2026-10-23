@@ -161,7 +161,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # handles for the setup wiring.
   let initialBuffer = newTextBuffer()
   let initialViewport =
-    ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0)
+    ViewPort(topLine: 0, leftCell: 0, width: 80, height: 20, x: 0, y: 0)
 
   result = Editor(
     lsp: lspIntegration,

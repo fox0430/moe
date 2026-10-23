@@ -399,7 +399,7 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
     tabBufferId: ftBuffer.id,
     bufferIds: @[ftBuffer.id], # FileTree pane has its own single-tab list
     viewport: ViewPort(
-      topLine: 0, leftColumn: 0, width: ftWidth, height: fullHeight, x: startX, y: minY
+      topLine: 0, leftCell: 0, width: ftWidth, height: fullHeight, x: startX, y: minY
     ),
     cursor: BufferPosition(line: 0, column: 0),
     active: false,

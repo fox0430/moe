@@ -301,7 +301,7 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
         activeWin.setView(dvState.refreshDiffTextBuffer(textWidth))
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.resetViewportTop()
-        activeWin.viewport.leftColumn = 0
+        activeWin.viewport.leftCell = 0
         activeWin.modeState =
           ModeState(kind: mskDiffViewer, diffViewer: dvState, diffReturn: bkState)
         e.state.previousMode = e.state.mode

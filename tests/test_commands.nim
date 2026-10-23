@@ -35,7 +35,7 @@ suite "ViewportManager - Goto Line Scrolling":
   test "viewport scrolls when jumping to line far below":
     let buffer = createTestBuffer(100)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     # Jump to line 100 (0-based index: 99)
@@ -60,7 +60,7 @@ suite "ViewportManager - Goto Line Scrolling":
   test "viewport scrolls when jumping to line far above":
     let buffer = createTestBuffer(100)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 80, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 80, leftCell: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     # Jump to line 10 (0-based index: 9)
@@ -82,7 +82,7 @@ suite "ViewportManager - Goto Line Scrolling":
     let initialTopLine = 40
     let viewportManager = ViewportManager(
       viewport: ViewPort(
-        topLine: initialTopLine, leftColumn: 0, height: 20, width: 80, x: 0, y: 0
+        topLine: initialTopLine, leftCell: 0, height: 20, width: 80, x: 0, y: 0
       )
     )
 
@@ -103,7 +103,7 @@ suite "ViewportManager - Goto Line Scrolling":
   test "viewport scrolls to first line":
     let buffer = createTestBuffer(100)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 80, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 80, leftCell: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     let cursorPos = CursorPosition(x: 0, y: 0)
@@ -120,7 +120,7 @@ suite "ViewportManager - Goto Line Scrolling":
   test "viewport scrolls to last line":
     let buffer = createTestBuffer(100)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     let lastLine = buffer.len - 1
@@ -151,7 +151,7 @@ suite "ViewportManager - Line Wrap Scrolling":
   test "lineWrap: viewport scrolls to last line":
     let buffer = createTestBuffer(100)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     let lastLine = buffer.len - 1
@@ -175,7 +175,7 @@ suite "ViewportManager - Line Wrap Scrolling":
   test "lineWrap: viewport scrolls to line far below":
     let buffer = createTestBuffer(1000)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 30, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 30, width: 80, x: 0, y: 0)
     )
 
     let targetLine = 999
@@ -198,7 +198,7 @@ suite "ViewportManager - Line Wrap Scrolling":
   test "lineWrap: viewport stays when cursor is visible":
     let buffer = createTestBuffer(100)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 10, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 10, leftCell: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     let targetLine = 15
@@ -225,7 +225,7 @@ suite "ViewportManager - Line Wrap Scrolling":
     let buffer = newTextBuffer("a".repeat(40) & "\n" & "b".repeat(40))
     let viewportManager = ViewportManager(
       viewport: ViewPort(
-        topLine: 0, topWrapOffset: 2, leftColumn: 0, height: 5, width: 10, x: 0, y: 0
+        topLine: 0, topWrapOffset: 2, leftCell: 0, height: 5, width: 10, x: 0, y: 0
       )
     )
 
@@ -246,7 +246,7 @@ suite "ViewportManager - Line Wrap Scrolling":
   test "lineWrap: viewport scrolls up":
     let buffer = createTestBuffer(100)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 50, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 50, leftCell: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     let cursorPos = CursorPosition(x: 0, y: 5)
@@ -280,7 +280,7 @@ suite "ViewportManager - Line Wrap Scrolling":
     # 9 lines × 2 = 18 < 19, 10 lines × 2 = 20 (not < 19) → topLine = lastLine - 9.
     let buffer = createLongLineBuffer(50, 40)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 20, x: 0, y: 0)
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 20, x: 0, y: 0)
     )
 
     let lastLine = buffer.len - 1
@@ -308,7 +308,7 @@ suite "ViewportManager - Line Wrap Scrolling":
     # (`adjustViewportForCursor`) computes for this state.
     let buffer = createLongLineBuffer(50, 40)
     let viewportManager = ViewportManager(
-      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 20, x: 0, y: 0)
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 20, x: 0, y: 0)
     )
 
     let lastLine = buffer.len - 1
@@ -344,7 +344,7 @@ suite "ViewportManager - Default reservedLines":
 
     # Explicit reservedLines = steadyBottomAreaHeight()
     let vmExplicit = ViewportManager(
-      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 80, x: 0, y: 0)
     )
     let lastLine = buffer.len - 1
     let cursorPos = CursorPosition(x: 0, y: lastLine)
@@ -358,9 +358,29 @@ suite "ViewportManager - Default reservedLines":
 
     # Default reservedLines (omitted → auto-calculated)
     let vmDefault = ViewportManager(
-      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     vmDefault.updateViewport(cursorPos, buffer.len, showStatusLine = true)
 
     check vmExplicit.viewport.topLine == vmDefault.viewport.topLine
+
+suite "ViewportManager - sideways scrolling":
+  test "a cursor past tabs scrolls by the cells it is drawn at":
+    # Each "x\t" takes 8 cells, so column 10 is drawn at cell 40, past the
+    # 36 cells the window leaves for text.
+    let buffer = newTextBuffer("x\t".repeat(8) & "END")
+    let viewportManager = ViewportManager(
+      viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 40, x: 0, y: 0)
+    )
+
+    viewportManager.updateViewport(
+      CursorPosition(x: 10, y: 0),
+      buffer.len,
+      reservedLines = steadyBottomAreaHeight(),
+      buffer = buffer,
+      viewportOffset = 4,
+      tabStop = 8,
+    )
+
+    check viewportManager.viewport.leftCell == 5

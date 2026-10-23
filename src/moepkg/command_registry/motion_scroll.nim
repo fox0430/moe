@@ -149,7 +149,7 @@ proc cursorRow(ctx: CommandContext, layout: RowLayout, visibleHeight: int): int 
   let
     viewport = ctx.motionController.viewportManager.viewport
     (cursorOffset, _) =
-      layout.cursorCell(ctx.cursor.line, ctx.cursor.column, viewport.leftColumn)
+      layout.cursorCell(ctx.cursor.line, ctx.cursor.column, viewport.leftCell)
   if scrollPositionAbove(
     (line: ctx.cursor.line, offset: cursorOffset),
     (line: viewport.topLine, offset: viewport.topWrapOffset),
@@ -164,13 +164,12 @@ proc moveCursorToRow(
 ) =
   let
     state = ctx.state
-    leftColumn = ctx.motionController.viewportManager.viewport.leftColumn
+    leftCell = ctx.motionController.viewportManager.viewport.leftCell
   template sameScreenColumn(): BufferPosition =
-    let (_, cellX) =
-      layout.cursorCell(state.cursor.line, state.cursor.column, leftColumn)
+    let (_, cellX) = layout.cursorCell(state.cursor.line, state.cursor.column, leftCell)
     BufferPosition(
       line: row.line,
-      column: layout.cellToColumn(row.line, row.wrapSeg, cellX, leftColumn),
+      column: layout.cellToColumn(row.line, row.wrapSeg, cellX, leftCell),
     )
 
   if row.fold.isSome:
