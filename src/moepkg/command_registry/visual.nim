@@ -275,6 +275,46 @@ proc registerVisualCommands*(registry: CommandRegistry) =
   )
 
   registry.register(
+    builtin(bcVisualIncrementNumber),
+    "Visual Increment Number",
+    "Add [count] to the first number on each selected line (Ctrl-A)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualOperator(ctx, voIncrement, parseCount(args, default = 1)),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualDecrementNumber),
+    "Visual Decrement Number",
+    "Subtract [count] from the first number on each selected line (Ctrl-X)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualOperator(ctx, voDecrement, parseCount(args, default = 1)),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualIncrementProgressive),
+    "Visual Increment Progressive",
+    "Add [count], 2*[count], ... to the numbers on the selected lines (g Ctrl-A)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualOperator(ctx, voIncrementProgressive, parseCount(args, default = 1)),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualDecrementProgressive),
+    "Visual Decrement Progressive",
+    "Subtract [count], 2*[count], ... from the numbers on the selected lines (g Ctrl-X)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualOperator(ctx, voDecrementProgressive, parseCount(args, default = 1)),
+    0,
+    1,
+  )
+
+  registry.register(
     custom("visual.paste.end"),
     "Visual Paste End",
     "Paste over selection and leave cursor after pasted text (gp)",

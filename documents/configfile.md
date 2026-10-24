@@ -733,8 +733,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | autoindent-line | Auto indent current line |
 | repeat-last-change | Repeat last change |
 | join-lines | Join current line with next line |
-| increment-number | Increment number at or after cursor |
-| decrement-number | Decrement number at or after cursor |
+| increment-number | Increment the number at or after cursor by count |
+| decrement-number | Decrement the number at or after cursor by count |
 
 ##### Operators (require a motion or text object)
 
@@ -844,6 +844,10 @@ Commands are grouped by category below. Any command name listed here can be used
 | visual-surround-char | Surround visual selection with character |
 | visual-swap-selection | Swap cursor to other end of selection |
 | visual-reselect | Reselect the previous visual area |
+| visual-increment-number | Increment the first number on each selected line |
+| visual-decrement-number | Decrement the first number on each selected line |
+| visual-increment-progressive | Increment the numbers on the selected lines by count, 2*count, ... |
+| visual-decrement-progressive | Decrement the numbers on the selected lines by count, 2*count, ... |
 | visual-to-insert | Enter insert mode from visual selection |
 | visual-block-append | Append after visual block selection |
 

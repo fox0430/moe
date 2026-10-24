@@ -590,7 +590,11 @@ suite "gv":
 
   test "an edit that stays in Visual records the previous area for undo":
     let e = newTestEditor("1\n2\n3")
-    e.press("V", "j", "Esc", "G", "v", "C-a")
+    # The Normal-mode increment edits without leaving Visual.
+    check e.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Visual, "Q", "increment-number"
+    ) == ""
+    e.press("V", "j", "Esc", "G", "v", "Q")
     check e.state.mode == EditorMode.Visual
     check e.activeBuffer.getLine(2) == "4"
 

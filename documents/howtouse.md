@@ -119,8 +119,8 @@
 | <kbd>**:**</kbd> | Start command mode |
 | <kbd>**u**</kbd> | Undo |
 | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> | Redo |
-| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> | Increase number under cursor |
-| <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> | Decrease number under cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> | Increase the number at or after the cursor by count |
+| <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> | Decrease the number at or after the cursor by count |
 | <kbd>**>**</kbd> | Indent |
 | <kbd>**<**</kbd> | Unindent |
 | <kbd>**=**</kbd> <kbd>**=**</kbd> | Auto indent |
@@ -303,8 +303,10 @@
 | <kbd>**>**</kbd> | Indent |
 | <kbd>**<**</kbd> | Unindent |
 | <kbd>**~**</kbd> | Toggle case of character under cursor |
-| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> | Increase number under cursor |
-| <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> | Decrease number under cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> | Increase the first number on each selected line |
+| <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> | Decrease the first number on each selected line |
+| <kbd>**g**</kbd> <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> | Increase the numbers on the selected lines by count, 2*count, ... |
+| <kbd>**g**</kbd> <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> | Decrease the numbers on the selected lines by count, 2*count, ... |
 | <kbd>**I**</kbd> | Insert character, multiple lines |
 | <kbd>**z**</kbd> <kbd>**f**</kbd> | Fold selected lines |
 | <kbd>**g**</kbd> <kbd>**v**</kbd> | Exchange the selection with the previous Visual area |

@@ -5287,6 +5287,60 @@ suite "Insert mode Ctrl-A / Ctrl-@":
     check e.activeBuffer.len == 3
     check $e.activeBuffer.getLine(2) == "xyz"
 
+  # Vim reads the `.` register, which only Insert mode writes, so later
+  # non-insert changes leave the text to re-insert alone.
+  test "Ctrl-A re-inserts the last inserted text after a Normal Ctrl-A":
+    let e = createTestEditorWithBuffer("7")
+    discard e.handleKeyCombo(charKey("i"))
+    e.typeText("ab")
+    discard e.handleKeyCombo(escapeKey)
+    check e.handleKeyCombo(ctrlAKey)
+    check $e.activeBuffer.getLine(0) == "ab8"
+    discard e.handleKeyCombo(charKey("A"))
+
+    check e.handleKeyCombo(ctrlAKey)
+
+    check $e.activeBuffer.getLine(0) == "ab8ab"
+
+  test "Ctrl-A re-inserts the last inserted text after a Visual Ctrl-A":
+    let e = createTestEditorWithBuffer("7")
+    discard e.handleKeyCombo(charKey("i"))
+    e.typeText("ab")
+    discard e.handleKeyCombo(escapeKey)
+    discard e.handleKeyCombo(charKey("V"))
+    check e.handleKeyCombo(ctrlAKey)
+    check $e.activeBuffer.getLine(0) == "ab8"
+    discard e.handleKeyCombo(charKey("A"))
+
+    check e.handleKeyCombo(ctrlAKey)
+
+    check $e.activeBuffer.getLine(0) == "ab8ab"
+
+  test "Ctrl-A re-inserts the last inserted text after `x`":
+    let e = createTestEditorWithBuffer("")
+    discard e.handleKeyCombo(charKey("i"))
+    e.typeText("abc")
+    discard e.handleKeyCombo(escapeKey)
+    discard e.handleKeyCombo(charKey("x"))
+    check $e.activeBuffer.getLine(0) == "ab"
+    discard e.handleKeyCombo(charKey("A"))
+
+    check e.handleKeyCombo(ctrlAKey)
+
+    check $e.activeBuffer.getLine(0) == "ababc"
+
+  test "Ctrl-A re-inserts the text typed after `s`":
+    let e = createTestEditorWithBuffer("x")
+    discard e.handleKeyCombo(charKey("s"))
+    e.typeText("yz")
+    discard e.handleKeyCombo(escapeKey)
+    check $e.activeBuffer.getLine(0) == "yz"
+    discard e.handleKeyCombo(charKey("A"))
+
+    check e.handleKeyCombo(ctrlAKey)
+
+    check $e.activeBuffer.getLine(0) == "yzyz"
+
 suite "Visual-block insert - what the other lines get":
   # Vim copies what the first line gained, from the block column, when the
   # insert ends on the first line. Expected lines are measured in Vim.

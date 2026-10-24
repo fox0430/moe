@@ -695,6 +695,10 @@ type
     voUpperCase
     voToggleCase
     voJoin
+    voIncrement # Ctrl-A
+    voDecrement # Ctrl-X
+    voIncrementProgressive # g Ctrl-A
+    voDecrementProgressive # g Ctrl-X
 
   LastEditCommandKind* = enum
     ## Types of repeatable edit commands
@@ -707,6 +711,7 @@ type
     lecPaste # Paste operation (p/P/gp/gP)
     lecToggleCase # Toggle case with ~
     lecJoinLines # Join lines with J
+    lecAddToNumber # Ctrl-A / Ctrl-X at the cursor
 
   LastEditCommand* = object
     ## Represents the last change command that can be repeated with "."
@@ -734,7 +739,7 @@ type
     of lecVisualOperator:
       visualOperator*: VisualOperator
       visualShape*: VisualShape
-      visualCount*: int # Shiftwidths for > and <
+      visualCount*: int # Shiftwidths for > and <, the amount for Ctrl-A and Ctrl-X
     of lecDeleteChar:
       deleteCount*: int # Number of characters to delete
       deleteForward*: bool # true for x, false for X
@@ -746,6 +751,8 @@ type
       toggleCaseCount*: int # Number of characters to toggle
     of lecJoinLines:
       joinLinesCount*: int # Number of lines to join
+    of lecAddToNumber:
+      addDelta*: int # Added to the number, the count with its sign
 
   VisualSelection* = object
     ## A window's Visual selection, derived from its anchor, cursor and mode.

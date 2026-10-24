@@ -95,6 +95,10 @@ type
     bcVisualSwapSelection = "visual.swap.selection"
     bcVisualPaste = "visual.paste"
     bcVisualReselect = "visual.reselect"
+    bcVisualIncrementNumber = "visual.increment"
+    bcVisualDecrementNumber = "visual.decrement"
+    bcVisualIncrementProgressive = "visual.increment.progressive"
+    bcVisualDecrementProgressive = "visual.decrement.progressive"
     # Fold operations
     bcFoldOpen = "fold.open" # zo - open fold at cursor
     bcFoldClose = "fold.close" # zc - close fold at cursor

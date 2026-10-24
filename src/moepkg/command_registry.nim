@@ -75,7 +75,8 @@ const VisualEditCommandIds = [
   "visual.delete", "visual.indent", "visual.dedent", "visual.lowercase",
   "visual.uppercase", "visual.togglecase", "visual.joinlines", "visual.to.insert",
   "visual.change", "visual.block.append", "visual.paste", "visual.paste.before",
-  "visual.paste.end", "visual.paste.before.end", "edit.cut",
+  "visual.paste.end", "visual.paste.before.end", "visual.increment", "visual.decrement",
+  "visual.increment.progressive", "visual.decrement.progressive", "edit.cut",
 ]
   ## Visual-mode command ids that modify the selection, gated on read-only
   ## buffers.
@@ -471,9 +472,10 @@ proc executeCommand*(
     # handler as count=1 instead of falling back to the "no count" default.
     # Only prepend for handlers that accept an argument (maxArgs >= 1);
     # maxArgs=0 handlers (e.g. visual.yank, scroll.cursor.*) reject the
-    # prefixed count with "Too many arguments".
+    # prefixed count with "Too many arguments". A mapping that carries its own
+    # args already fixed them, so a count would only shift them.
     var finalArgs = cmd.args
-    if cmdResult.isSome and cmdResult.get.maxArgs >= 1 and
+    if cmd.args.len == 0 and cmdResult.isSome and cmdResult.get.maxArgs >= 1 and
         (count > 1 or (cmd.hasCount and count > 0)):
       finalArgs = @[$count] & cmd.args
     logDebug("command", "finalArgs (count=" & $count & "): " & $finalArgs)

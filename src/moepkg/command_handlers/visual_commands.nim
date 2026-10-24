@@ -32,7 +32,7 @@ import
     visual_block,
   ]
 import ../buffer/[core, edit, undo]
-import insert_commands, put_text
+import insert_commands, number_increment, put_text
 
 template checkVisualEdit(state: EditorState, r: Result[(), string]) =
   ## For use inside a withTransaction body of a Visual command: on an edit
@@ -457,6 +457,63 @@ proc visualJoinLines*(
 
   state.leaveVisual()
 
+proc visualAddToNumbers*(
+    buffer: TextBuffer,
+    state: EditorState,
+    sel: VisualSelection,
+    area: BlockArea,
+    delta: int,
+    progressive = false,
+): Result[(), string] =
+  ## Add `delta` to the first number on each line of `sel`, among the
+  ## characters wholly inside `area` when blockwise, and leave Visual with the
+  ## cursor at the start of `sel`, as Vim's v_CTRL-A. `progressive` adds
+  ## `delta` more on each further line with a number (v_g_CTRL-A).
+  if not sel.active:
+    return ok(())
+  let (selStart, selEnd) = sel.getSelectionRange()
+  var amount = delta
+
+  let txr = withTransaction(buffer, "Visual increment", some(undoCursor(sel, area))):
+    for lineNum in selStart.line .. selEnd.line:
+      let
+        line = buffer.getLine(lineNum)
+        (first, stop) =
+          case sel.kind
+          of vskLine:
+            (0, line.len)
+          of vskBlock:
+            let cut = area.blockLine(line, state.tabStop, buTake)
+            (
+              charToBytePos(line, cut.textCol),
+              charToBytePos(line, cut.textCol + cut.textLen),
+            )
+          of vskChar:
+            (
+              (
+                if lineNum == selStart.line: charToBytePos(line, selStart.column)
+                else: 0
+              ),
+              (
+                if lineNum == selEnd.line: charToBytePos(line, selEnd.column + 1)
+                else: line.len
+              ),
+            )
+        change = addToNumber(line, first, stop, amount)
+      if change.isSome:
+        if change.get.line != line:
+          checkVisualEdit(state, buffer.replaceLine(lineNum, change.get.line))
+        if progressive:
+          amount += delta
+
+    state.cursor = undoCursor(sel, area)
+    clampCursorToLastChar(state.cursor, buffer.getLine(state.cursor.line).charLen)
+  failedVisualEdit(state, txr)
+
+  state.statusMessage = ""
+  state.leaveVisual()
+  ok(())
+
 proc runVisualOperator*(
     buffer: TextBuffer,
     state: EditorState,
@@ -482,6 +539,14 @@ proc runVisualOperator*(
     visualToggleCase(buffer, state, sel, area)
   of voJoin:
     visualJoinLines(buffer, state, sel, area)
+  of voIncrement:
+    visualAddToNumbers(buffer, state, sel, area, count)
+  of voDecrement:
+    visualAddToNumbers(buffer, state, sel, area, -count)
+  of voIncrementProgressive:
+    visualAddToNumbers(buffer, state, sel, area, count, progressive = true)
+  of voDecrementProgressive:
+    visualAddToNumbers(buffer, state, sel, area, -count, progressive = true)
 
 proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
   ## Switch from visual mode to insert mode (I command)
