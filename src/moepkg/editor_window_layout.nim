@@ -172,13 +172,13 @@ proc wrapWidth*(e: Editor, window: EditorWindow): int =
   wrapWidthFor(window.viewport.width, e.viewportOffsetFor(window))
 
 proc renderedCellPos*(
-    e: Editor, window: EditorWindow, lineText: string, column: int
+    e: Editor, window: EditorWindow, lineText: string, column: int, onTabEnd = false
 ): tuple[row, cellX: int] =
   ## Row and display column where `column` of `lineText` is drawn, relative to
   ## the text area start, negative when scrolled off the left. `row` is the wrap
   ## segment index (always 0 without `lineWrap`). With wrap, tabs are expanded
   ## from the row's start, so two columns' `cellX` are only comparable when
-  ## their `row` matches.
+  ## their `row` matches. With `onTabEnd`, a tab's last cell.
   let (wrapSeg, cellX) = textCell(
     lineText,
     column,
@@ -186,6 +186,7 @@ proc renderedCellPos*(
     e.wrapWidth(window),
     e.tabStop,
     window.viewport.leftCell,
+    onTabEnd,
   )
   (row: wrapSeg, cellX: cellX)
 
@@ -214,10 +215,12 @@ proc calculateWindowCursor*(
     reservedLines: int,
     scrollbarWidth: int = 0,
     wrapCache: WrapCountCache = nil,
+    onTabEnd = false,
 ): CursorPosition =
   ## Calculate screen cursor position for a window
   ## Returns the absolute screen coordinates
   ## `gutterWidth` is the sidebar + line-number width the text starts after.
+  ## With `onTabEnd`, a cursor on a tab shows on its last cell.
 
   # Validate cursor is within buffer bounds
   if cursor.line < 0 or cursor.line >= buffer.len:
@@ -230,7 +233,8 @@ proc calculateWindowCursor*(
   let
     rl = e.rowLayoutFor(buffer, viewport.width, gutterWidth + scrollbarWidth, wrapCache)
     visibleRows = viewport.height - reservedLines
-    (wrapSeg, cellX) = rl.cursorCell(cursor.line, cursor.column, viewport.leftCell)
+    (wrapSeg, cellX) =
+      rl.cursorCell(cursor.line, cursor.column, viewport.leftCell, onTabEnd)
     # `rowOfLine` stops once the walk passes the last visible row, so a cursor
     # far below the viewport costs O(visibleRows), not O(lines).
     screenY =

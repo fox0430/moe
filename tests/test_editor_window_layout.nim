@@ -536,6 +536,25 @@ suite "calculateSidebarWidth - modeState gating":
     check pos.x == 9 # gutterWidth + 5
     check pos.y == 0
 
+  test "a cursor on a tab shows on its last cell with onTabEnd":
+    let e = createTestEditor()
+    e.state.lineWrap = false
+    e.tabStop = 8
+    let buffer = newTextBuffer("ab\tcd")
+    let viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 2)
+
+    for (onTabEnd, x) in [(false, 6), (true, 11)]:
+      let pos = e.calculateWindowCursor(
+        buffer,
+        viewport,
+        cursor,
+        gutterWidth = 4,
+        reservedLines = steadyBottomAreaHeight(),
+        onTabEnd = onTabEnd,
+      )
+      check pos.x == x
+
   test "cursor on second line, no wrap":
     let e = createTestEditor()
     e.state.lineWrap = false
@@ -1018,6 +1037,15 @@ suite "renderedCellPos":
     let pos = e.renderedCellPos(win, "ab\tcd", 3) # 'c'
     check pos.row == 0
     check pos.cellX == 4 # "ab" + tab filling the stop
+
+  test "onTabEnd puts a tab on its last cell":
+    let e = plainEditor()
+    e.state.lineWrap = false
+    let win = e.activeWindow
+    win.viewport.leftCell = 0
+
+    check e.renderedCellPos(win, "ab\tcd", 2) == (row: 0, cellX: 2)
+    check e.renderedCellPos(win, "ab\tcd", 2, onTabEnd = true) == (row: 0, cellX: 3)
 
   test "no wrap, horizontal scroll keeps the tab's stop on the line":
     let e = plainEditor()

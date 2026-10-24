@@ -402,12 +402,17 @@ proc visualShape*(
         endCell
 
 proc repeatedSelection*(
-    buffer: TextBuffer, at: BufferPosition, shape: VisualShape, tabStop: int
+    buffer: TextBuffer,
+    at: BufferPosition,
+    shape: VisualShape,
+    tabStop: int,
+    onTabEnd: bool,
 ): tuple[sel: VisualSelection, area: BlockArea] =
   ## The selection `.` makes at `at` for an area of `shape`, and its block when
   ## blockwise, as Vim's redo_VIsual: as many lines as the buffer has left, and
   ## as many cells, or over lines to the same cell. A shorter line is selected
-  ## to its end, line break and all.
+  ## to its end, line break and all. A one-line character area counts its
+  ## cells from the one the cursor shows on, a tab's last with `onTabEnd`.
   let last = min(at.line + max(1, shape.lines) - 1, buffer.len - 1)
   result.sel = VisualSelection(
     start: at,
@@ -430,9 +435,8 @@ proc repeatedSelection*(
       if shape.toLineEnd:
         LineEnd
       elif shape.lines <= 1:
-        # From the cell the cursor shows on, a tab's last in Normal mode.
-        buffer.getLine(at.line).cursorCell(at.column, tabStop, onTabEnd = true) +
-          shape.cells - 1
+        buffer.getLine(at.line).cursorCell(at.column, tabStop, onTabEnd) + shape.cells -
+          1
       else:
         shape.cells
     result.sel.current.column =

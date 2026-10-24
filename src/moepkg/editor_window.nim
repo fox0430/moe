@@ -104,6 +104,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
     reservedLines + tabLineOffset,
     scrollbarWidth,
     window.wrapCountCache,
+    window.cursorOnTabEnd,
   )
   # Adjust cursor Y for tab line offset
   cursorPos.y += tabLineOffset

@@ -239,6 +239,11 @@ type
     keptAfterIndent: Option[WindowSpot]
       # Where leaving Insert took the auto-indent off under the cursor and kept
       # the column after it, for parking the cursor to leave alone.
+    shownOnTab: Option[ShownOnTab]
+      # The cell a cursor on a tab showed on as a command began.
+    aimedOnTab: Option[AimedOnTab]
+      # The cell a cursor on a tab showed on as the first command since the
+      # column vertical moves want was dropped began. Read through `aimsAtTabEnd`.
     screenCursor*: CursorPosition # Screen cursor position (x/y)
     modeState*: ModeState # Per-window mode-specific state (variant)
     viewerEntry*: Option[ViewerEntry]
@@ -250,6 +255,22 @@ type
     cursor: BufferPosition
     buffer: TextBuffer
     version: int
+
+  ShownOnTab = object
+    spot: WindowSpot
+    view: WindowView
+    tabEnd: bool # On the tab's last cell, else its first
+
+  AimedOnTab = object
+    cursor: BufferPosition
+    buffer: TextBuffer
+    tabEnd: bool # On the tab's last cell, else its first
+
+  WindowView = object
+    ## What a window shows and how: Vim works out again the cell a cursor on a
+    ## tab shows on when any of it changes.
+    topLine, topWrapOffset, leftCell, width, height: int
+    typing: bool # In Insert or Replace
 
   SearchDirection* = enum
     Forward # Search forward (/)
@@ -1337,6 +1358,7 @@ proc `preferredColumn=`*(win: EditorWindow, column: int) =
   ## Keep `column` for vertical moves; -1 drops it.
   if column < 0:
     win.wantedColumn = none(int)
+    win.aimedOnTab = none(AimedOnTab)
   else:
     win.wantedColumn = some(column)
     win.wantedColumnSince = win.spot
@@ -1346,6 +1368,7 @@ proc takeWantedColumn*(win, src: EditorWindow) =
   ## a new window, and from where `src` stood when its command began.
   win.wantedColumn = src.wantedColumn
   win.wantedColumnSince = src.wantedColumnSince
+  win.aimedOnTab = src.aimedOnTab
 
 proc keepColumnAfterIndent*(win: EditorWindow, column: int) =
   ## Leaving Insert took the auto-indent off under the cursor: vertical moves
@@ -1365,9 +1388,54 @@ proc adjustCursorAfterInsertExit*(win: EditorWindow) =
   if not kept:
     win.preferredColumn = -1
 
+proc view(win: EditorWindow): WindowView =
+  result.typing = win.mode in {EditorMode.Insert, EditorMode.Replace}
+  if not win.viewport.isNil:
+    result.topLine = win.viewport.topLine
+    result.topWrapOffset = win.viewport.topWrapOffset
+    result.leftCell = win.viewport.leftCell
+    result.width = win.viewport.width
+    result.height = win.viewport.height
+
+proc cursorOnTabEnd*(win: EditorWindow): bool =
+  ## Whether the cursor of `win` shows on a tab's last cell, as Vim's getvcol:
+  ## in Normal mode, and in Visual when the cursor is after the anchor. As Vim
+  ## keeps w_virtcol, it holds from the command's start until the cursor moves,
+  ## the text changes, the window scrolls, is resized or entered
+  ## (`noteEntered`), or Insert begins or ends. Other mode changes keep it.
+  let shown = win.shownOnTab
+  if shown.isSome and shown.get.spot == win.spot and shown.get.view == win.view:
+    shown.get.tabEnd
+  elif win.mode.isVisualAllMode:
+    win.cursor > win.visualAnchor
+  else:
+    win.mode notin {EditorMode.Insert, EditorMode.Replace}
+
+proc aimedHere(win: EditorWindow): bool =
+  win.aimedOnTab.isSome and win.aimedOnTab.get.cursor == win.cursor and
+    win.aimedOnTab.get.buffer == win.buffer
+
+proc aimsAtTabEnd*(win: EditorWindow): bool =
+  ## Whether vertical moves from the cursor of `win` aim for a tab's last cell:
+  ## the cell it showed on as the first command since the column they want was
+  ## dropped began, while it stays there, as Vim's update_curswant takes
+  ## w_virtcol once then. As Vim keeps curswant, an edit from another window,
+  ## a scroll, a resize or entering the window since keeps it.
+  if win.aimedHere: win.aimedOnTab.get.tabEnd else: win.cursorOnTabEnd
+
 proc noteCommandStart*(win: EditorWindow) =
   ## Note where `win` stands as a command, or the rest of one, begins.
   win.wantedColumnSince = win.spot
+  let tabEnd = win.cursorOnTabEnd
+  win.shownOnTab = some(ShownOnTab(spot: win.spot, view: win.view, tabEnd: tabEnd))
+  if not win.aimedHere:
+    win.aimedOnTab =
+      some(AimedOnTab(cursor: win.cursor, buffer: win.buffer, tabEnd: tabEnd))
+
+proc noteEntered*(win: EditorWindow) =
+  ## A command that ran in another window ended in `win`. As Vim's win_enter,
+  ## the cell a cursor on a tab shows on is worked out again.
+  win.shownOnTab = none(ShownOnTab)
 
 proc settleWantedColumn*(win: EditorWindow, ranIn: bool) =
   ## End a command for `win`. As Vim's commands drop curswant, one that moved

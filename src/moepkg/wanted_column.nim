@@ -126,17 +126,14 @@ proc columnAtCell*(text: string, cell, tabStop: int, mode: EditorMode): int =
   min(screenXToCharIndex(text, 0, cell, tabStop), last)
 
 proc cursorCell*(s: EditorState): int =
-  ## The cell the cursor shows on, as Vim's getvvcol: on a tab its last cell in
-  ## Normal mode, and in Visual when the cursor is after the anchor.
+  ## The cell vertical moves take from the cursor (`aimsAtTabEnd` on a tab), as
+  ## Vim's getvvcol.
   let win = s.activeWindow
   if win.buffer.isNil or win.cursor.line notin 0 ..< win.buffer.len:
     return win.cursor.column
-  let onTabEnd =
-    if win.mode.isVisualAllMode:
-      win.cursor > win.visualAnchor
-    else:
-      win.mode notin {EditorMode.Insert, EditorMode.Replace}
-  win.buffer.getLine(win.cursor.line).cursorCell(win.cursor.column, s.tabStop, onTabEnd)
+  win.buffer.getLine(win.cursor.line).cursorCell(
+    win.cursor.column, s.tabStop, win.aimsAtTabEnd
+  )
 
 proc aimedColumn*(s: EditorState): int =
   ## The cell vertical moves and scrolls aim for: the one kept, else the

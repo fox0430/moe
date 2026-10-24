@@ -577,7 +577,8 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
         # Measure both columns where the renderer draws them, so the gap
         # between them survives tabs and horizontal scrolling.
         trigger = e.renderedCellPos(window, lineText, sigHelpMgr.triggerCol)
-        caret = e.renderedCellPos(window, lineText, cursor.column)
+        caret =
+          e.renderedCellPos(window, lineText, cursor.column, window.cursorOnTabEnd)
       let anchorX =
         if trigger.row != caret.row:
           # Wrapped onto different rows: the horizontal gap says nothing about

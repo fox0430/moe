@@ -611,12 +611,28 @@ proc renderLineSegmentWithSelection*(
   # in place. Modifier union (vs. full replacement) is intentional: syntax
   # modifiers like Bold/Italic are preserved through char overrides.
 
+  template styleAt(selection: VisualSelection, col, cell: int): Style =
+    # The style of character `col` drawn on row column `cell`, or -1 to leave
+    # the cursor column out.
+    e.getSelectionStyle(
+      textBuffer,
+      selection,
+      BufferPosition(line: lineIndex, column: col),
+      ctx.cursorCol,
+      ctx.windowMode,
+      displayCol = cell,
+      cursorDisplayCol = ctx.cursorDisplayCol,
+      lineCtx = lineCtx,
+    )
+
   template renderTabCell(col: int, style: Style) =
     # Tab expands to N spaces up to the next tab stop. Each expanded cell
     # honors indentation-guide drawing; the spaces themselves use a style
     # that may carry the trailingSpaces override. A block's edge can cut the
     # tab, and Vim draws the cells outside the block unselected. A tab drawn
-    # at another width than it takes on the line shows whole.
+    # at another width than it takes on the line shows whole. The cursor
+    # column shows over the one cell under it, as in Vim, so `style` and
+    # `outsideStyle` leave it out.
     let
       spacesToNextTab = tabAdvance(leftCell + displayX, e.tabStop)
       patch = e.charOverridePatch(ctx, lineCtx, TAB_CHAR, col)
@@ -633,24 +649,24 @@ proc renderLineSegmentWithSelection*(
           0
       outsideStyle =
         if outsideBefore + outsideAfter > 0:
-          e.getSelectionStyle(
-            textBuffer,
-            VisualSelection(),
-            BufferPosition(line: lineIndex, column: col),
-            ctx.cursorCol,
-            ctx.windowMode,
-            displayCol = displayX,
-            cursorDisplayCol = ctx.cursorDisplayCol,
-            lineCtx = lineCtx,
-          )
+          styleAt(VisualSelection(), col, -1)
         else:
           style
     for i in 0 ..< spacesToNextTab:
-      let cellStyle =
-        if i < outsideBefore or i >= spacesToNextTab - outsideAfter:
-          outsideStyle
-        else:
-          style
+      let
+        outside = i < outsideBefore or i >= spacesToNextTab - outsideAfter
+        cellStyle =
+          if e.cursorColumnApplies(displayX, ctx.cursorDisplayCol):
+            let selection =
+              if outside:
+                VisualSelection()
+              else:
+                ctx.selection
+            styleAt(selection, col, displayX)
+          elif outside:
+            outsideStyle
+          else:
+            style
       if displayX >= 0 and screenX + displayX < ctx.windowRightEdge:
         # No guides in the diff viewer: +/- markers and synthetic
         # side-by-side rows make the leading-whitespace analysis misfire.
@@ -724,17 +740,15 @@ proc renderLineSegmentWithSelection*(
 
   var col = startColumn
   for (rune, _) in displayLine.chars:
-    # A character the left edge cuts takes the style of its first drawn cell.
-    let style = e.getSelectionStyle(
-      textBuffer,
-      ctx.selection,
-      BufferPosition(line: lineIndex, column: col),
-      ctx.cursorCol,
-      ctx.windowMode,
-      displayCol = max(0, displayX),
-      cursorDisplayCol = ctx.cursorDisplayCol,
-      lineCtx = lineCtx,
-    )
+    # A character the left edge cuts takes the style of its first drawn cell,
+    # but a tab's cells take the cursor column one by one.
+    let
+      cell =
+        if rune == TAB_CHAR:
+          -1
+        else:
+          max(0, displayX)
+      style = styleAt(ctx.selection, col, cell)
     renderChar(rune, col, style)
     col += 1
 
@@ -1163,7 +1177,8 @@ proc renderWindow*(
   let cursorDisplayCol =
     if window.cursor.line < lineCount:
       let cellX = rl.cursorCell(
-        window.cursor.line, window.cursor.column, window.viewport.leftCell
+        window.cursor.line, window.cursor.column, window.viewport.leftCell,
+        window.cursorOnTabEnd,
       ).cellX
       if cellX < 0: -1 else: cellX
     else:

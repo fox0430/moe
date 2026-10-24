@@ -2119,6 +2119,59 @@ suite "Cursor column highlight - wrap segments":
     check buffer[0, 0].style.bg == hlBg
     check buffer[12, 0].style.bg != hlBg
 
+suite "Cursor column highlight - tabs":
+  # Vim 9.2 shows the cursor column on the cell the cursor shows on, a tab's
+  # last in Normal mode and its first in Insert, and over a tab on another
+  # line only on the cell in that column.
+  proc renderOverTabs(mode: EditorMode, cursor: BufferPosition): Buffer =
+    let e = createTestEditor()
+    result = createTestBuffer()
+
+    e.state.showCursorColumn = true
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.showSyntax = false
+    e.state.lineWrap = false
+    e.tabStop = 8
+
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "\tab\nabcdefghijkl\n\t\tx\nab\tcd"
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.mode = mode
+    window.cursor = cursor
+
+    e.renderWindow(result, window, 0, true, true, 0)
+
+  proc highlighted(buffer: Buffer, row: int): seq[int] =
+    for x in 0 ..< 20:
+      if buffer[x, row].style.bg == cursorColumnHighlightStyle().bg:
+        result.add x
+
+  test "Normal mode takes a tab's last cell":
+    let buffer = renderOverTabs(EditorMode.Normal, BufferPosition(line: 0, column: 0))
+    check buffer.highlighted(1) == @[7]
+    check buffer.highlighted(2) == @[7]
+    check buffer.highlighted(3) == @[7]
+
+  test "Insert mode takes a tab's first cell":
+    let buffer = renderOverTabs(EditorMode.Insert, BufferPosition(line: 2, column: 1))
+    check buffer.highlighted(0) == @[8]
+    check buffer.highlighted(1) == @[8]
+    check buffer.highlighted(3) == @[8]
+
+  test "a column inside a tab on another line takes one of its cells":
+    # 'f' is at cell 5, inside the tab covering cells 2-7 on the last line.
+    let buffer = renderOverTabs(EditorMode.Normal, BufferPosition(line: 1, column: 5))
+    check buffer.highlighted(2) == @[5]
+    check buffer.highlighted(3) == @[5]
+
 suite "renderWindow - selection of the rendered window":
   proc selectionCells(buffer: Buffer, row: int): seq[int] =
     for x in 0 ..< 40:

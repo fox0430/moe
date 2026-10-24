@@ -3231,6 +3231,24 @@ suite "Handler - Scroll operations":
     # On the row scrolled off, the same screen column of the top row.
     check pushedCursor(5) == BufferPosition(line: 1, column: 15)
 
+  test "a cursor pushed onto a tab off view keeps the cell it shows on (Ctrl-E)":
+    # Line 1's tab takes cells 0-3 of its first row, which shows "x" from
+    # column 1; its second row, columns 7-16, comes on top after two presses.
+    let buffer = newTextBuffer("ab\n\t" & "x".repeat(29) & "\n" & "x\n".repeat(8))
+    let ctx = createTestContext(buffer)
+    ctx.state.activeWindow.setTab(buffer)
+    ctx.state.config.standard.lineWrap = true
+    ctx.state.config.standard.tabStop = 4
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.preferredColumn = 2
+    let viewport = ctx.motionController.viewportManager.viewport
+    viewport.width = 10 + viewportOffsetFor(buffer, ctx.state)
+    viewport.height = 8
+    ctx.state.windowDisplay.viewportReservedLines = 2
+    check createTestRegistry().execute(ctx, builtin(bcScrollLineDown), @["2"]).isOk
+    # Landing on the tab, the cursor shows on its last cell, 3.
+    check ctx.cursor == BufferPosition(line: 1, column: 10)
+
 suite "Handler - Visual mode operations":
   test "visual delete":
     let buffer = newTextBuffer("hello world")

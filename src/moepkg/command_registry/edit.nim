@@ -1063,7 +1063,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
           # Vim's redo_VIsual: an area as big at the cursor, closed folds or
           # not, and the area `gv` selects stays.
           let (sel, area) = ctx.buffer.repeatedSelection(
-            ctx.cursor, record.entry.shape, ctx.state.tabStop
+            ctx.cursor, record.entry.shape, ctx.state.tabStop,
+            ctx.state.activeWindow.cursorOnTabEnd,
           )
           visualChange(ctx.buffer, ctx.state, sel, area, ctx.register)
           if ctx.state.mode != EditorMode.Insert:
@@ -1074,7 +1075,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
         # Vim's redo_VIsual: an area as big at the cursor, closed folds or not,
         # with the count the operator had.
         let (sel, area) = ctx.buffer.repeatedSelection(
-          ctx.cursor, lastCmd.visualShape, ctx.state.tabStop
+          ctx.cursor, lastCmd.visualShape, ctx.state.tabStop,
+          ctx.state.activeWindow.cursorOnTabEnd,
         )
         return runVisualOperator(
           ctx.buffer, ctx.state, lastCmd.visualOperator, sel, area, lastCmd.visualCount,

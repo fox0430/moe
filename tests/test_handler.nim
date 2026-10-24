@@ -7537,6 +7537,137 @@ suite "handleKeyCombo - the column vertical moves want":
       check e.cursor.line == target + 4
       check e.activeBuffer.getLine(target + 4) == "abcdefgZh"
 
+suite "handleKeyCombo - the cell a cursor on a tab shows on":
+  # Vim 9.2's getvcol puts it on a tab's last cell in Normal mode, and in
+  # Visual when the cursor is after the anchor. Until the cursor moves, a mode
+  # change keeps the cell it showed on before (w_virtcol), but entering or
+  # leaving Insert, a scroll, a resize and entering the window work it out
+  # again. Vertical moves still aim for the cell taken once after the column
+  # they want was dropped (curswant).
+  proc pressOn(content: string, keys: openArray[string]): Editor =
+    var config = newEditorConfig()
+    config.standard.tabStop = 8
+    result = newEditor(config)
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    for key in keys:
+      check result.handleKeyCombo(parseKeyCombo(key).get)
+
+  for (name, content, keys, onTabEnd) in [
+    ("Normal mode", "\tab", @["l", "h"], true),
+    ("Insert mode", "\tab", @["i"], false),
+    ("Replace mode", "\tab", @["R"], false),
+    ("Visual after the anchor", "a\t\tb", @["l", "v", "l"], true),
+    ("Visual before the anchor", "\t\tb", @["l", "v", "h"], false),
+    ("Visual just entered", "\tab", @["v"], true),
+    ("Visual line just entered", "\tab", @["V"], true),
+    ("Visual block just entered", "\tab", @["C-v"], true),
+    ("Visual swapping ends that are one", "\tab", @["v", "o"], true),
+    ("Visual moved back to the anchor", "\t\tb", @["v", "l", "h"], false),
+    ("Visual moved back by lines", "\tab\n\tcd", @["v", "j", "k"], false),
+    ("Visual entered after leaving Insert", "\tab", @["i", "Escape", "v"], true),
+    ("Visual turned linewise", "\t\tb", @["l", "v", "V"], true),
+    (
+      "Normal after Visual before the anchor",
+      "\t\tb",
+      @["l", "v", "h", "Escape"],
+      false,
+    ),
+    ("Normal after yanking that Visual", "\t\tb", @["l", "v", "h", "y"], false),
+    ("Visual entered again from there", "\t\tb", @["l", "v", "h", "Escape", "v"], false),
+    (
+      "Normal after Insert from there",
+      "\t\tb",
+      @["l", "v", "h", "Escape", "i", "Escape"],
+      true,
+    ),
+  ]:
+    test name:
+      check pressOn(content, keys).activeWindow.cursorOnTabEnd == onTabEnd
+
+  test "a vertical move aims for the cell the cursor shows on":
+    let e = pressOn("\t\tb\nabcdefghijklmnopq", ["l", "v", "h", "Escape", "j"])
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "a Visual repeat counts its cells from the one the cursor shows on":
+    # The cursor shows on the first tab's first cell, so the 3 cells of `vlld`
+    # take that tab only, as Vim's redo_VIsual.
+    let e = pressOn(
+      "\t\tb\nabcdefghijklmnopq\n\t\tb",
+      ["j", "v", "l", "l", "d", "j", "l", "v", "h", "Escape", "."],
+    )
+    check e.activeBuffer.getLine(2) == "\tb"
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  test "entering the window again works the cell out again":
+    # Vim's win_enter: after `l v h <Esc>`, `<C-w>w <C-w>w` shows the last cell.
+    let e = pressOn("\t\tb", [])
+    check e.hsplit().isOk
+    e.press("l", "v", "h", "Escape")
+    check not e.activeWindow.cursorOnTabEnd
+
+    e.press("C-w", "w", "C-w", "w")
+
+    check e.activeWindow.cursorOnTabEnd
+
+  test "a window switch that stays in the window keeps the cell":
+    let e = pressOn("\t\tb", ["l", "v", "h", "Escape", "C-w", "w"])
+    check not e.activeWindow.cursorOnTabEnd
+
+  test "resizing the window works the cell out again":
+    let e = pressOn("\t\tb", [])
+    check e.hsplit().isOk
+    e.press("l", "v", "h", "Escape", "C-w", "-")
+    check e.activeWindow.cursorOnTabEnd
+
+  test "scrolling the window works the cell out again":
+    let e = pressOn("a\nb\nc\nd\n\t\tb", ["4", "j", "l", "v", "h", "Escape", "z", "t"])
+    check e.activeWindow.viewport.topLine == 4
+    check e.activeWindow.cursorOnTabEnd
+
+  test "a vertical move after entering the window again aims for the earlier cell":
+    # Vim's curswant is taken once, after `h`: entering the window keeps it.
+    let e = pressOn("\t\tb\nabcdefghijklmnopq", [])
+    check e.hsplit().isOk
+    e.press("l", "v", "h", "Escape", "C-w", "w", "C-w", "w", "j")
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "a vertical move after an edit from another window aims for the earlier cell":
+    # Vim keeps curswant over edits made in other windows.
+    let e = pressOn("\t\tb\nabcdefghijklmnopq\nxxx", [])
+    check e.hsplit().isOk
+    e.press("l", "v", "h", "Escape", "C-w", "w", "G", "d", "d", "C-w", "w", "j")
+    check e.activeBuffer.len == 2
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "a window split off aims for the same cell":
+    let e = pressOn("\t\tb\nabcdefghijklmnopq", ["l", "v", "h", "Escape"])
+    check e.hsplit().isOk
+    check e.activeWindow.cursorOnTabEnd
+    e.press("j")
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "Ctrl-e pushes the cursor onto the cell it showed on as it began":
+    var content = "\t\tb"
+    for i in 1 .. 40:
+      content.add "\nabcdefghijklmnopq"
+    let e = pressOn(content, ["l", "v", "h", "Escape", "C-e"])
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "a window put in Insert without setMode shows on the first cell":
+    let e = pressOn("\tab", ["l", "h"])
+    e.activeWindow.mode = EditorMode.Insert
+    check not e.activeWindow.cursorOnTabEnd
+
 suite "handleKeyCombo - which keys a mapping takes, as in Vim":
   proc createEditorForMappings(content: string): Editor =
     result = newEditor(newEditorConfig())
