@@ -20,7 +20,7 @@
 ## What `.` does again after a Visual operator: the same operator over an area
 ## as big at the cursor, as Vim's redo_VIsual.
 
-import std/unittest
+import std/[unittest, options, deques]
 
 import pkg/results
 
@@ -160,3 +160,112 @@ suite "`.` acts again over a Visual area as big at the cursor, as in Vim":
     check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
     e.press("j0.")
     check e.lines == @["cdef", "cdef", "abcdef", "abcdef", "abcdef"]
+
+suite "`.` replaces a Visual area as big at the cursor, as in Vim":
+  # Measured in Vim 9.2 (`vim -u NONE`).
+  const
+    Two = @["abcdef", "abcdef"]
+    Four = @["abcdef", "abcdef", "abcdef", "abcdef"]
+  for (lines, cursor, keys, want, wantCursor) in [
+    (@["a\tbc", "abcdefghij"], (0, 0), "vllrXj0.", @["XXXc", "XXXXXXXXXj"], (1, 0)),
+    (@["abcdefghij", "a\tbc"], (0, 0), "vllrXj0.", @["XXXdefghij", "XXbc"], (1, 0)),
+    (Two, (0, 0), "vlrXj0ll.", @["XXcdef", "abXXef"], (1, 2)),
+    (Four, (0, 2), "vjrXjj0l.", @["abXXXX", "XXXdef", "aXXXXX", "XXXdef"], (2, 1)),
+    (@["abcdef", "ab", "x"], (0, 0), "vllllrXj0.", @["XXXXXf", "XX", "x"], (1, 0)),
+    (
+      @["abcdef", "abcdefgh", "x"],
+      (0, 2),
+      "v$rXj0.",
+      @["abXXXX", "XXXXXXXX", "x"],
+      (1, 0),
+    ),
+    (
+      @["abc", "def", "ghi", "jkl"],
+      (0, 1),
+      "VjrXjjl.",
+      @["XXX", "XXX", "XXX", "XXX"],
+      (2, 0),
+    ),
+    (Four, (0, 0), "<C-v>jlrXjjl.", @["XXcdef", "XXcdef", "aXXdef", "aXXdef"], (2, 1)),
+    (
+      @["abcdef", "abcdef", "abcdef", "abcdefgh"],
+      (0, 0),
+      "<C-v>j$rXjjl.",
+      @["XXXXXX", "XXXXXX", "aXXXXX", "aXXXXXXX"],
+      (2, 1),
+    ),
+    (
+      @["abcdef", "abcdef", "a\tbcdef", "a\tbcdef"],
+      (0, 0),
+      "<C-v>jlrXjj0.",
+      @["XXcdef", "XXcdef", "XX      bcdef", "XX      bcdef"],
+      (2, 0),
+    ),
+    (Two, (0, 0), "vlrXj0l.u", @["XXcdef", "abcdef"], (1, 1)),
+    (Two, (0, 0), "vlrXj03.", @["XXcdef", "XXcdef"], (1, 0)),
+    (@["abc", "def", "ghi"], (1, 1), "VkrX", @["XXX", "XXX", "ghi"], (0, 0)),
+    (@["abc", ""], (1, 0), "vrXk0.", @["Xbc", ""], (0, 0)),
+  ]:
+    test keys:
+      let e = newVimLikeEditor(lines, cursor[0], cursor[1])
+      e.press(keys)
+      check e.state.mode == EditorMode.Normal
+      check e.lines == want
+      check e.cursorAt == wantCursor
+
+  for (lines, before, keys) in [
+    (@["abc", ""], "j", "vrX"),
+    (@["abcdef", ""], "vllrXj", "."),
+    (@["abcdef", ""], "vllrXj$", "."),
+  ]:
+    test before & keys & " leaves the empty last line alone":
+      let e = newVimLikeEditor(lines, 0, 0)
+      e.press(before)
+      e.activeBuffer.markSaved()
+      let undoSteps = e.activeBuffer.undoStack.len
+      e.press(keys)
+      check e.state.mode == EditorMode.Normal
+      check e.activeBuffer.undoStack.len == undoSteps
+      check not e.activeBuffer.isModified
+      check e.cursorAt == (1, 0)
+
+  test "a raw buffer records no Visual r":
+    let e = newVimLikeEditor(@["", "", "abc"], 0, 0)
+    e.activeBuffer.keepRaw = true
+    e.press("VjrX")
+    check e.state.mode == EditorMode.Normal
+    check e.state.editState.lastEditCommand.isNone
+
+  test "a closed fold is not covered whole":
+    let e = newVimLikeEditor(@["abcdef", "abcdef", "abcdef", "abcdef", "abcdef"], 0, 0)
+    e.press("vlrX")
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.press("j0.")
+    check e.lines == @["XXcdef", "XXcdef", "abcdef", "abcdef", "abcdef"]
+
+  for keys in ["vlrX", "<C-v>jlrX", "vld", "<C-v>jIX<Escape>"]:
+    test "`.` after " & keys & " from a line past the end fails":
+      let e = newVimLikeEditor(@["abcdef", "abcdef"], 0, 0)
+      e.press(keys)
+      let before = e.lines
+      e.activeWindow.cursor = BufferPosition(line: 5, column: 0)
+      let ctx = CommandContext(
+        buffer: e.activeBuffer, state: e.state, motionController: MotionController()
+      )
+      check e.commandRegistry.execute(ctx, custom("edit.repeat"), @[]).isErr
+      check e.lines == before
+
+  for keys in ["<C-v>j$AX<Escape>", "<C-v>jIX<Escape>"]:
+    test "`.` after " & keys & " in a read-only buffer fails":
+      let e = newVimLikeEditor(@["abcdef", "abcdef", "abcdef"], 0, 0)
+      e.press(keys & "j")
+      let (before, cursor) = (e.lines, e.cursorAt)
+      e.activeBuffer.readOnly = true
+      let ctx = CommandContext(
+        buffer: e.activeBuffer, state: e.state, motionController: MotionController()
+      )
+      check e.commandRegistry.execute(ctx, custom("edit.repeat"), @[]) ==
+        Result[(), string].err("Buffer is read-only")
+      check e.state.mode == EditorMode.Normal
+      check e.lines == before
+      check e.cursorAt == cursor

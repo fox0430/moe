@@ -28,9 +28,7 @@ from std/strutils import repeat
 
 import pkg/results
 
-import
-  types, motion, key_bindings, modes, logger, visual_selection, wanted_column,
-  visual_block
+import types, motion, key_bindings, modes, logger, wanted_column, visual_block
 import buffer/[core, edit, undo]
 
 import command_handlers/visual_commands
@@ -367,69 +365,23 @@ proc executeCommand*(
       if not ctx.state.mode.isVisualAllMode:
         return err("No visual selection active")
 
-      # Record the selection shape for `.` (Vim-compatible sizes). A charwise
-      # `$` end keeps its raw column and repeat clamps it to the line; a block
-      # keeps its width in screen cells, and after `<C-v>$` repeats to each
-      # line's end, as Vim's MAXCOL.
+      # `.` replaces an area as big at the cursor, as Vim's redo_VIsual.
       let
-        sel = ctx.state.operandSelection(ctx.buffer)
-        loLine = min(sel.start.line, sel.current.line)
-        hiLine = max(sel.start.line, sel.current.line)
-      let visualRepeatCmd =
-        case sel.kind
-        of vskChar:
-          if loLine == hiLine:
-            LastEditCommand(
-              kind: lecVisualReplace,
-              visualReplaceChar: cmd.targetChar,
-              visualReplaceKind: vskChar,
-              visualReplaceRows: 1,
-              visualReplaceCols: abs(sel.current.column - sel.start.column) + 1,
-            )
-          else:
-            let lastCol =
-              if sel.start.line <= sel.current.line:
-                sel.current.column
-              else:
-                sel.start.column
-            LastEditCommand(
-              kind: lecVisualReplace,
-              visualReplaceChar: cmd.targetChar,
-              visualReplaceKind: vskChar,
-              visualReplaceRows: hiLine - loLine + 1,
-              visualReplaceCols: lastCol + 1,
-            )
-        of vskLine:
-          LastEditCommand(
-            kind: lecVisualReplace,
-            visualReplaceChar: cmd.targetChar,
-            visualReplaceKind: vskLine,
-            visualReplaceRows: hiLine - loLine + 1,
-            visualReplaceCols: 0,
-          )
-        of vskBlock:
-          LastEditCommand(
-            kind: lecVisualReplace,
-            visualReplaceChar: cmd.targetChar,
-            visualReplaceKind: vskBlock,
-            visualReplaceRows: hiLine - loLine + 1,
-            visualReplaceCols: block:
-              let area =
-                ctx.buffer.blockArea(sel, ctx.state.tabStop, measureWidest = false)
-              area.endCell - area.startCell + 1,
-            visualReplaceToLineEnd: sel.extendsToLineEnd,
-          )
+        (sel, area) = ctx.buffer.operandArea(ctx.state)
+        visualRepeatCmd = LastEditCommand(
+          kind: lecVisualReplace,
+          visualReplaceChar: cmd.targetChar,
+          visualReplaceShape: ctx.buffer.visualShape(sel, area, ctx.state.tabStop),
+        )
 
       # Surface a failed rollback (untrustworthy buffer) as a status message
-      # instead of letting it escape to the crash handler.
+      # instead of letting it escape to the crash handler. A refused replace
+      # leaves what `.` repeats.
       try:
-        visualReplace(ctx.buffer, ctx.state, cmd.targetChar)
+        if visualReplace(ctx.buffer, ctx.state, sel, area, cmd.targetChar).isOk:
+          ctx.recordChange(visualRepeatCmd)
       except TransactionRollbackError as exc:
         return err(exc.msg & " (buffer state may be inconsistent)")
-
-      # Don't record refused replaces on raw buffers; nothing changed.
-      if ctx.buffer.allowsTextTransforms:
-        ctx.recordChange(visualRepeatCmd)
 
       return ok(())
     of "visual-surround":

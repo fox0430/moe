@@ -120,8 +120,7 @@ proc commitForcedInsertBoundary*(
   e.state.closeInsertRecord()
   let commitResult =
     if e.state.editState.visualBlockInsertContext.isSome:
-      let finalizeResult =
-        finalizeInsertExit(e.activeBuffer, e.state, staysInInsert = true)
+      let finalizeResult = finalizeInsertExit(e.activeBuffer, e.state, bieTyping)
       if finalizeResult.isErr:
         err(finalizeResult.error)
       else:

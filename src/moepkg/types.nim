@@ -244,6 +244,9 @@ type
     aimedOnTab: Option[AimedOnTab]
       # The cell a cursor on a tab showed on as the first command since the
       # column vertical moves want was dropped began. Read through `aimsAtTabEnd`.
+    placedOnInsertExit: Option[WindowSpot]
+      # Where leaving Insert put the cursor itself, for the step back to leave
+      # alone.
     screenCursor*: CursorPosition # Screen cursor position (x/y)
     modeState*: ModeState # Per-window mode-specific state (variant)
     viewerEntry*: Option[ViewerEntry]
@@ -664,6 +667,8 @@ type
     ieSubstitute # s
     ieChange # c{motion}, cc and S, and C as c$
     ieVisualChange # Visual c
+    ieVisualInsert # Visual-block I
+    ieVisualAppend # Visual-block A
 
   VisualShape* = object
     ## The size of a Visual area an operator acted on, which `.` selects again
@@ -679,7 +684,7 @@ type
     case kind*: InsertEntryKind
     of ieChange:
       operand*: Operand
-    of ieVisualChange:
+    of ieVisualChange, ieVisualInsert, ieVisualAppend:
       shape*: VisualShape
     else:
       discard
@@ -748,15 +753,7 @@ type
       replaceCount*: int # Number of characters to replace
     of lecVisualReplace:
       visualReplaceChar*: string # Replacement character
-      visualReplaceKind*: VisualSelectionKind # Recorded selection shape
-      visualReplaceRows*: int # Line/row span (1 for single-line charwise)
-      visualReplaceCols*: int
-        # Single-line charwise: width from cursor in characters;
-        # multi-line charwise: last-line width from col 0 in characters;
-        # linewise: unused; blockwise: block width in screen cells.
-      visualReplaceToLineEnd*: bool
-        # Blockwise after `<C-v>$`: each line to its end, as Vim's
-        # redo_VIsual_vcol == MAXCOL.
+      visualReplaceShape*: VisualShape
     of lecVisualOperator:
       visualOperator*: VisualOperator
       visualShape*: VisualShape
@@ -1383,15 +1380,26 @@ proc keepColumnAfterIndent*(win: EditorWindow, column: int) =
   win.preferredColumn = column
   win.keptAfterIndent = some(win.spot)
 
+proc placeCursorOnInsertExit*(win: EditorWindow) =
+  ## Leaving Insert put the cursor where it is now, as Vim's op_insert does
+  ## after Escape stepped back, so the step back leaves it there.
+  win.placedOnInsertExit = some(win.spot)
+
 proc adjustCursorAfterInsertExit*(win: EditorWindow) =
   ## Put the cursor where leaving Insert leaves it, and take the column
   ## vertical moves want from it again, as Vim's ins_esc, unless leaving kept
   ## the column after the auto-indent it took off (`keepColumnAfterIndent`).
-  let kept = win.keptAfterIndent == some(win.spot)
+  let
+    kept = win.keptAfterIndent == some(win.spot)
+    placed = win.placedOnInsertExit == some(win.spot)
   win.keptAfterIndent = none(WindowSpot)
+  win.placedOnInsertExit = none(WindowSpot)
   if win.buffer.isNil or win.cursor.line >= win.buffer.len:
     return
-  win.cursor.adjustCursorAfterInsertExit(win.buffer.getLineLen(win.cursor.line))
+  if placed:
+    win.cursor.clampCursorToLastChar(win.buffer.getLineLen(win.cursor.line))
+  else:
+    win.cursor.adjustCursorAfterInsertExit(win.buffer.getLineLen(win.cursor.line))
   if not kept:
     win.preferredColumn = -1
 
@@ -1484,6 +1492,7 @@ proc setMode*(win: EditorWindow, m: EditorMode) =
     win.insertStart = InsertStart(at: win.cursor, stop: win.cursor)
   if m in {EditorMode.Insert, EditorMode.Replace}:
     win.keptAfterIndent = none(WindowSpot)
+    win.placedOnInsertExit = none(WindowSpot)
   if leavingVisual and not win.holdLastVisual:
     win.saveLastVisual()
   if leavingVisual or entersInsert:

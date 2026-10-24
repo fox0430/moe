@@ -347,14 +347,14 @@ proc applyVisualTextTransform(
   ## their cells filled with it, as `r` does.
   if not sel.active:
     return ok(())
+  if not buffer.allowsTextTransforms:
+    checkVisualEdit(state, Result[(), string].err(rawBytesRejection(action)))
 
   let (selStart, selEnd) = sel.getSelectionRange()
 
   let txr = withTransaction(buffer, label, some(undoCursor(sel, area))):
     case sel.kind
     of vskBlock:
-      if not buffer.allowsTextTransforms:
-        checkVisualEdit(state, Result[(), string].err(rawBytesRejection(action)))
       checkVisualEdit(
         state,
         if blockFill.len > 0:
@@ -414,11 +414,18 @@ proc visualToggleCase*(
     buffer, state, sel, area, "Visual toggle case", "toggle case", toggleAsciiCase
   )
 
-proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: string) =
-  ## Replace selection with `ch` (one char). Refused for raw buffers.
+proc visualReplace*(
+    buffer: TextBuffer,
+    state: EditorState,
+    sel: VisualSelection,
+    area: BlockArea,
+    ch: string,
+): Result[(), string] =
+  ## Replace `sel`, whose block is `area` when blockwise, with `ch` (one char).
+  ## Refused for raw buffers.
   # Registry validates `ch`; this guard is for direct callers.
   if ch.charLen != 1:
-    return
+    return err("No character specified for replace")
 
   # One `ch` per character; preserve newlines for multi-line selections.
   let fill = proc(text: string): string =
@@ -429,10 +436,20 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: string) =
       first = false
       result.add(ch.repeat(segment.charLen))
 
-  let (sel, area) = buffer.operandArea(state)
-  discard applyVisualTextTransform(
+  let first = sel.getSelectionRange().start
+  if sel.active and sel.kind == vskChar and buffer.allowsTextTransforms and
+      first.line == buffer.len - 1 and first.column >= buffer.getLine(first.line).charLen:
+    # Only the end of the last line, where Vim's op_replace finds nothing.
+    state.cursor = first
+    state.leaveVisual()
+    return ok(())
+
+  result = applyVisualTextTransform(
     buffer, state, sel, area, "Visual replace", "replace", fill, blockFill = ch
   )
+  if result.isOk and sel.active and sel.kind == vskLine:
+    # Vim's op_replace leaves a linewise area at its first line's start.
+    state.cursor = undoCursor(sel, area)
 
 proc visualJoinLines*(
     buffer: TextBuffer, state: EditorState, sel: VisualSelection, area: BlockArea
@@ -548,16 +565,15 @@ proc runVisualOperator*(
   of voDecrementProgressive:
     visualAddToNumbers(buffer, state, sel, area, -count, progressive = true)
 
-proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
+proc visualToInsertMode*(
+    buffer: TextBuffer, state: EditorState, sel: VisualSelection, area: BlockArea
+) =
   ## Switch from visual mode to insert mode (I command)
-  ## For block mode: moves cursor to (startLine, startCol) and sets up
+  ## For block mode: moves cursor to the top left of `area` and sets up
   ## VisualBlockInsertContext for text replication across all selected lines.
   ## For other modes: moves cursor to (startLine, 0).
-  let sel = state.operandSelection(buffer)
-
   if sel.active:
     if sel.kind == vskBlock:
-      let area = buffer.blockArea(sel, state.tabStop)
       state.cursor = area.topLeft
       state.editState.visualBlockInsertContext = some(
         VisualBlockInsertContext(
@@ -577,7 +593,9 @@ proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
   # Switch to insert mode
   state.mode = EditorMode.Insert
 
-proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
+proc visualBlockAppend*(
+    buffer: TextBuffer, state: EditorState, sel: VisualSelection, area: BlockArea
+) =
   ## Switch from visual block mode to insert mode right of the block (A
   ## command), or at the first line's end after `<C-v>$`, and set up
   ## VisualBlockInsertContext for text replication across all selected lines.
@@ -585,7 +603,6 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
   ## padded out to it first.
   ## A selection a closed fold turned line-shaped has no block columns to
   ## replicate into, so it appends at the end of the last selected line.
-  let sel = state.operandSelection(buffer)
   if not sel.active:
     return
 
@@ -598,7 +615,6 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
     return
 
   let
-    area = buffer.blockArea(sel, state.tabStop)
     first = buffer.getLine(area.firstLine)
     cut = area.blockLine(first, state.tabStop, buAppend)
   let appendAt = BufferPosition(

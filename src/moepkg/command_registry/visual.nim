@@ -56,24 +56,34 @@ proc handleVisualYank*(ctx: CommandContext): Result[(), string] =
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
-proc startInsertAtCursor(ctx: CommandContext) =
-  # `.` inserts what is typed at the cursor only, where Vim's goes over a block
-  # as big.
-  if ctx.state.mode == EditorMode.Insert:
+proc startVisualInsert(
+    ctx: CommandContext, kind: InsertEntryKind, sel: VisualSelection, area: BlockArea
+) =
+  # `.` inserts over a block as big at the cursor, as Vim's redo_VIsual, and
+  # at the cursor only after a Visual that was not blockwise.
+  if ctx.state.mode != EditorMode.Insert:
+    return
+  if sel.active and sel.kind == vskBlock:
+    var entry = InsertEntry(kind: kind)
+    entry.shape = ctx.buffer.visualShape(sel, area, ctx.state.tabStop)
+    ctx.enterInsert(entry, 1)
+  else:
     ctx.enterInsert(InsertEntry(kind: ieInsert), 1)
 
 proc handleVisualToInsertMode*(ctx: CommandContext): Result[(), string] =
   ## Switch from visual mode to insert mode
-  visualToInsertMode(ctx.buffer, ctx.state)
+  let (sel, area) = ctx.buffer.operandArea(ctx.state)
+  visualToInsertMode(ctx.buffer, ctx.state, sel, area)
   ctx.cursor = ctx.state.cursor
-  ctx.startInsertAtCursor()
+  ctx.startVisualInsert(ieVisualInsert, sel, area)
   Result[(), string].ok ()
 
 proc handleVisualBlockAppend*(ctx: CommandContext): Result[(), string] =
   ## Append after visual block selection (A command)
-  visualBlockAppend(ctx.buffer, ctx.state)
+  let (sel, area) = ctx.buffer.operandArea(ctx.state)
+  visualBlockAppend(ctx.buffer, ctx.state, sel, area)
   ctx.cursor = ctx.state.cursor
-  ctx.startInsertAtCursor()
+  ctx.startVisualInsert(ieVisualAppend, sel, area)
   Result[(), string].ok ()
 
 proc handleVisualChange*(ctx: CommandContext): Result[(), string] =
