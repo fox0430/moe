@@ -129,8 +129,14 @@ func withWindowCommands(
 const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("undo", "Undo last change", "edit.undo"),
   ("redo", "Redo last undone change", "edit.redo"),
-  ("increment-number", "Increment number at or after cursor", "edit.increment"),
-  ("decrement-number", "Decrement number at or after cursor", "edit.decrement"),
+  (
+    "increment-number", "Increment the number at or after cursor by count",
+    "edit.increment",
+  ),
+  (
+    "decrement-number", "Decrement the number at or after cursor by count",
+    "edit.decrement",
+  ),
   ("jump-back", "Jump to previous position in jump list", "jump.back"),
   ("jump-forward", "Jump to next position in jump list", "jump.forward"),
   ("changelist-prev", "Jump to previous change position", "changelist.prev"),
@@ -202,6 +208,24 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
     "visual.paste.before.end",
   ),
   ("visual-reselect", "Reselect the previous visual area", "visual.reselect"),
+  (
+    "visual-increment-number", "Increment the first number on each selected line",
+    "visual.increment",
+  ),
+  (
+    "visual-decrement-number", "Decrement the first number on each selected line",
+    "visual.decrement",
+  ),
+  (
+    "visual-increment-progressive",
+    "Increment the numbers on the selected lines by count, 2*count, ...",
+    "visual.increment.progressive",
+  ),
+  (
+    "visual-decrement-progressive",
+    "Decrement the numbers on the selected lines by count, 2*count, ...",
+    "visual.decrement.progressive",
+  ),
 ].withWindowCommands()
 
 const SearchCommands: seq[tuple[name, desc, commandId: string]] = @[

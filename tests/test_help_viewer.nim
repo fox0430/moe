@@ -612,7 +612,9 @@ suite "HelpViewer - Mode sections (snapshot)":
     check state.items.contains("# Visual mode")
     # natural max is 8 ("gp or gP"); minWidth pads to 9
     check state.items.contains("d or x    - Delete text")
-    check state.items.contains("Ctrl-a    - Increase number under cursor")
+    check state.items.contains(
+      "Ctrl-a    - Increase the first number on each selected line"
+    )
     check state.items.contains("Esc       - Go to Normal mode")
     check state.items.contains(
       "gp or gP  - Paste over the selection and leave the cursor after the pasted text (replacing the whole buffer parks on the last pasted character)"

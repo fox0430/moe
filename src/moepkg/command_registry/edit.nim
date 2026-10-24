@@ -30,8 +30,7 @@ import
     visual_block,
   ]
 import ../buffer/[core, edit, fold, undo]
-
-import ../command_handlers/[put_text, visual_commands]
+import ../command_handlers/[number_increment, put_text, visual_commands]
 
 import core, operator_engine, operator_driver, insert_entry
 
@@ -550,126 +549,44 @@ proc handleTextObjectAround*(
     # No pending operator - append after the cursor
     return ctx.handleInsertAt(ieAppend, count)
 
-proc findNumberAtOrAfterColumn*(
-    line: string, startCol: int
-): tuple[found: bool, startPos: int, endPos: int, value: int] =
-  ## Find a number at or after the given column in the line
-  ## Returns (found, startPos, endPos, value) where positions are byte indices
-  var col = startCol
-  let lineLen = line.len
+proc addToNumberAtCursor(ctx: CommandContext, delta: int): Result[(), string] =
+  if ctx.cursor.line >= ctx.buffer.len:
+    return err("Cursor out of bounds")
 
-  # Skip to start column
-  if col >= lineLen:
-    return (false, 0, 0, 0)
+  let
+    line = ctx.buffer.getLine(ctx.cursor.line)
+    startByte = numberStartAt(line, charToBytePos(line, ctx.cursor.column))
+    change = addToNumber(line, startByte, line.len, delta)
+  if change.isNone:
+    # Vim's nv_addsub prepares the redo before looking for a number.
+    ctx.recordChange(LastEditCommand(kind: lecAddToNumber, addDelta: delta))
+    return err("No number found")
 
-  # Skip non-digit characters (but stop at digit or minus sign before digit)
-  while col < lineLen:
-    if line[col] >= '0' and line[col] <= '9':
-      break
-    elif line[col] == '-' and col + 1 < lineLen and line[col + 1] >= '0' and
-        line[col + 1] <= '9':
-      break
-    col += 1
+  if change.get.line != line:
+    # Undo puts the cursor back where Ctrl-A was typed, as Vim's.
+    let txr = withTransaction(ctx.buffer, "add to number", some(ctx.cursor)):
+      let replaceResult = ctx.buffer.replaceLine(ctx.cursor.line, change.get.line)
+      if replaceResult.isErr:
+        return err(replaceResult.error)
+    if txr.isErr:
+      return err(txr.error)
+  ctx.recordChange(LastEditCommand(kind: lecAddToNumber, addDelta: delta))
 
-  if col >= lineLen:
-    return (false, 0, 0, 0)
-
-  # Found start of number
-  let startPos = col
-  var numStr = ""
-
-  # Handle optional minus sign
-  if line[col] == '-':
-    numStr.add('-')
-    col += 1
-
-  # Collect digits
-  while col < lineLen and line[col] >= '0' and line[col] <= '9':
-    numStr.add(line[col])
-    col += 1
-
-  # Parse the number
-  try:
-    let value = parseInt(numStr)
-    return (true, startPos, col - 1, value)
-  except ValueError:
-    return (false, 0, 0, 0)
+  # On the last digit, as Vim leaves it.
+  ctx.cursor.column = byteToCharPos(change.get.line, change.get.numberEnd - 1)
+  return ok(())
 
 proc handleIncrementNumber*(
     ctx: CommandContext, args: seq[string]
 ): Result[(), string] =
-  ## Increment the number at or after cursor (Ctrl-A command)
-  if ctx.cursor.line >= ctx.buffer.len:
-    return err("Cursor out of bounds")
-
-  let line = ctx.buffer.getLine(ctx.cursor.line)
-  let byteCol = charToBytePos(line, ctx.cursor.column)
-
-  # Find number at or after cursor position (byte space)
-  let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, byteCol)
-
-  if not found:
-    return err("No number found")
-
-  # Increment the number (saturate at high(int) to avoid overflow)
-  let newValue =
-    if value == high(int):
-      value
-    else:
-      value + 1
-  let newNumStr = $newValue
-
-  # Replace the number in the line
-  let newLine =
-    line[0 ..< startPos] & newNumStr &
-    (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
-
-  let replaceResult = ctx.buffer.replaceLine(ctx.cursor.line, newLine)
-  if replaceResult.isErr:
-    return err(replaceResult.error)
-
-  # Move cursor to start of the number (convert byte pos to char pos)
-  ctx.cursor.column = byteToCharPos(newLine, startPos)
-
-  return ok(())
+  ## Add [count] to the number at or after cursor (Ctrl-A command)
+  addToNumberAtCursor(ctx, parseCount(args, default = 1))
 
 proc handleDecrementNumber*(
     ctx: CommandContext, args: seq[string]
 ): Result[(), string] =
-  ## Decrement the number at or after cursor (Ctrl-X command)
-  if ctx.cursor.line >= ctx.buffer.len:
-    return err("Cursor out of bounds")
-
-  let line = ctx.buffer.getLine(ctx.cursor.line)
-  let byteCol = charToBytePos(line, ctx.cursor.column)
-
-  # Find number at or after cursor position (byte space)
-  let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, byteCol)
-
-  if not found:
-    return err("No number found")
-
-  # Decrement the number (saturate at low(int) to avoid overflow)
-  let newValue =
-    if value == low(int):
-      value
-    else:
-      value - 1
-  let newNumStr = $newValue
-
-  # Replace the number in the line
-  let newLine =
-    line[0 ..< startPos] & newNumStr &
-    (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
-
-  let replaceResult = ctx.buffer.replaceLine(ctx.cursor.line, newLine)
-  if replaceResult.isErr:
-    return err(replaceResult.error)
-
-  # Move cursor to start of the number (convert byte pos to char pos)
-  ctx.cursor.column = byteToCharPos(newLine, startPos)
-
-  return ok(())
+  ## Subtract [count] from the number at or after cursor (Ctrl-X command)
+  addToNumberAtCursor(ctx, -parseCount(args, default = 1))
 
 proc registerEditCommands*(registry: CommandRegistry) =
   ## Register all edit-category commands (delete/substitute/paste/yank/operator/text_object/increment).
@@ -960,19 +877,19 @@ proc registerEditCommands*(registry: CommandRegistry) =
   registry.register(
     builtin(bcEditIncrementNumber),
     "Increment Number",
-    "Increment the number at or after cursor (Ctrl-A)",
+    "Add [count] to the number at or after cursor (Ctrl-A)",
     handleIncrementNumber,
     0,
-    0,
+    1, # Accept optional count argument
   )
 
   registry.register(
     builtin(bcEditDecrementNumber),
     "Decrement Number",
-    "Decrement the number at or after cursor (Ctrl-X)",
+    "Subtract [count] from the number at or after cursor (Ctrl-X)",
     handleDecrementNumber,
     0,
-    0,
+    1, # Accept optional count argument
   )
 
   # Repeat last change command (.)
@@ -1013,6 +930,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
           lastCmd.toggleCaseCount = count
         of lecJoinLines:
           lastCmd.joinLinesCount = count
+        of lecAddToNumber:
+          lastCmd.addDelta =
+            if lastCmd.addDelta < 0:
+              -count
+            else:
+              count
         of lecInsert, lecVisualReplace, lecVisualOperator:
           discard
       ctx.state.editState.lastEditCommand = some(lastCmd)
@@ -1084,7 +1007,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
         )
       of lecVisualReplace:
         # Repeat Visual `r` from the cursor with the recorded shape.
-        # Ignores count; cursor stays put. Fails on raw buffers.
+        # Ignores count. The cursor stays put, or goes to the line start when
+        # linewise. Fails on raw buffers.
         let repChar = lastCmd.visualReplaceChar
         let repFill = proc(text: string): string =
           repChar.repeat(text.charLen)
@@ -1195,6 +1119,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
               return err(res.error)
           if txr.isErr:
             return err(txr.error)
+          ctx.cursor = BufferPosition(line: startLine, column: 0)
           return ok(())
         of vskBlock:
           # Blockwise: as many lines, and screen cells from where the cursor's
@@ -1258,7 +1183,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
         return ok(())
       of lecJoinLines:
         # Repeat join lines (J command)
-        return handleJoinLines(ctx, lastCmd.joinLinesCount),
+        return handleJoinLines(ctx, lastCmd.joinLinesCount)
+      of lecAddToNumber:
+        return addToNumberAtCursor(ctx, lastCmd.addDelta),
     0,
     1,
   )

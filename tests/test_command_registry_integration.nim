@@ -1113,6 +1113,55 @@ suite "executeCommand - visual replace dot-repeat":
     check buffer[3] == "xxx"
     check buffer[4] == "xxx"
 
+  test "dot after linewise visual r leaves the cursor at the line start":
+    let buffer = newTextBuffer("aaa\nbbb\nccc")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 0, 0, vskLine)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+
+    ctx.setCursor(2, 2)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[2] == "xxx"
+    check ctx.cursor == BufferPosition(line: 2, column: 0)
+
+  test "dot after visual r past the end of the line is not an edit":
+    let buffer = newTextBuffer("abc\n")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 0, 1)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    let undoBefore = buffer.undoStack.len
+
+    ctx.setCursor(1, 0)
+    let r = registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    )
+    check r.isErr
+    check "Nothing to replace" in r.error
+    check buffer[1] == ""
+    check buffer.undoStack.len == undoBefore
+
   test "dot after blockwise visual r repeats rows x columns":
     # Vim-measured: a 2x2 block repeat replaces the same rectangle, clamped
     # per line.
@@ -3389,7 +3438,7 @@ suite "Handler - Increment/Decrement":
 
     check registry.execute(ctx, builtin(bcEditIncrementNumber)).isOk
     check buffer[0] == "あいう43"
-    check ctx.cursor.column == 3 # Character index of '4' in the new line
+    check ctx.cursor.column == 4 # On the last digit, as Vim leaves it
 
   test "decrement number after multibyte prefix":
     let buffer = newTextBuffer("あいう42")
@@ -3399,27 +3448,129 @@ suite "Handler - Increment/Decrement":
 
     check registry.execute(ctx, builtin(bcEditDecrementNumber)).isOk
     check buffer[0] == "あいう41"
-    check ctx.cursor.column == 3 # Character index of '4' in the new line
+    check ctx.cursor.column == 4 # On the last digit, as Vim leaves it
 
-  test "Ctrl-A on high(int) does not crash":
-    let h = $high(int)
+  test "count is added to the number ([count]Ctrl-A / [count]Ctrl-X)":
+    let buffer = newTextBuffer("count: 42")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcEditIncrementNumber), @["10"]).isOk
+    check buffer[0] == "count: 52"
+    check registry.execute(ctx, builtin(bcEditDecrementNumber), @["60"]).isOk
+    check buffer[0] == "count: -8"
+
+  test "changes the whole number when the cursor is inside it":
+    for (line, column, delta, expected) in [
+      ("199", 2, 1, "200"),
+      ("10", 1, -1, "9"),
+      ("-15", 2, 1, "-14"),
+      ("129", 2, 5, "134"),
+      ("foo-1", 4, 1, "foo0"),
+    ]:
+      let buffer = newTextBuffer(line)
+      let ctx = createTestContext(buffer)
+      ctx.cursor = BufferPosition(line: 0, column: column)
+      let registry = createTestRegistry()
+
+      let id =
+        if delta > 0:
+          builtin(bcEditIncrementNumber)
+        else:
+          builtin(bcEditDecrementNumber)
+      check registry.execute(ctx, id, @[$abs(delta)]).isOk
+      check buffer[0] == expected
+
+  test "a refused Ctrl-A leaves the change to repeat alone":
+    let buffer = newTextBuffer("1")
+    buffer.readOnly = true
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+    ctx.state.editState.lastEditCommand =
+      some(LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true))
+
+    check registry.execute(ctx, builtin(bcEditIncrementNumber)).isErr
+    check ctx.state.editState.lastEditCommand.get.kind == lecDeleteChar
+
+  test "Visual Ctrl-A outside Visual leaves the change to repeat alone":
+    let buffer = newTextBuffer("1")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+    ctx.state.editState.lastEditCommand =
+      some(LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true))
+
+    check registry.execute(ctx, builtin(bcVisualIncrementNumber)).isOk
+    check buffer[0] == "1"
+    check ctx.state.editState.lastEditCommand.get.kind == lecDeleteChar
+
+  test "a refused Visual Ctrl-A leaves the change to repeat alone":
+    let buffer = newTextBuffer("1")
+    buffer.readOnly = true
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 0)
+    let registry = createTestRegistry()
+    ctx.state.editState.lastEditCommand =
+      some(LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true))
+
+    discard registry.execute(ctx, builtin(bcVisualIncrementNumber))
+    check ctx.state.editState.lastEditCommand.get.kind == lecDeleteChar
+
+  test "a refused repeat of a Visual Ctrl-A is an error":
+    let buffer = newTextBuffer("1")
+    buffer.readOnly = true
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+    ctx.state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecVisualOperator,
+        visualOperator: voIncrement,
+        visualShape: VisualShape(kind: vskLine, lines: 1),
+        visualCount: 1,
+      )
+    )
+
+    check registry.execute(ctx, custom("edit.repeat")).isErr
+    check buffer[0] == "1"
+
+  test "a failed repeat of a Visual Ctrl-A reports its own error":
+    let buffer = newTextBuffer("1")
+    buffer.readOnly = true
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+    ctx.state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecVisualOperator,
+        visualOperator: voIncrement,
+        visualShape: VisualShape(kind: vskLine, lines: 1),
+        visualCount: 1,
+      )
+    )
+    ctx.state.statusMessage = "an earlier message"
+
+    let r = registry.execute(ctx, custom("edit.repeat"))
+    check r.isErr
+    check r.error != "an earlier message"
+
+  test "Ctrl-A past the largest magnitude wraps around to negative, as Vim":
+    let h = $high(uint64)
     let buffer = newTextBuffer(h)
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcEditIncrementNumber)).isOk
-    check buffer[0] == h
+    check buffer[0] == "-" & h
 
-  test "Ctrl-X on low(int) does not crash":
-    let l = $low(int)
-    let buffer = newTextBuffer(l)
+  test "Ctrl-X past the largest negative magnitude wraps around to positive":
+    let h = $high(uint64)
+    let buffer = newTextBuffer("-" & h)
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcEditDecrementNumber)).isOk
-    check buffer[0] == l
+    check buffer[0] == h
 
 suite "Handler - Indent/Dedent":
   test "indent line (>>)":

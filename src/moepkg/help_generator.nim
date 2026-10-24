@@ -158,8 +158,14 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: ":", description: "Start command mode"),
     HelpEntry(syntax: "u", description: "Undo"),
     HelpEntry(syntax: "Ctrl-r", description: "Redo"),
-    HelpEntry(syntax: "Ctrl-a", description: "Increase number under cursor"),
-    HelpEntry(syntax: "Ctrl-x", description: "Decrease number under cursor"),
+    HelpEntry(
+      syntax: "Ctrl-a",
+      description: "Increase the number at or after the cursor by count",
+    ),
+    HelpEntry(
+      syntax: "Ctrl-x",
+      description: "Decrease the number at or after the cursor by count",
+    ),
     HelpEntry(syntax: ">", description: "Indent"),
     HelpEntry(syntax: "<", description: "Unindent"),
     HelpEntry(syntax: "==", description: "Auto indent"),
@@ -513,8 +519,20 @@ const VisualModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: ">", description: "Indent"),
     HelpEntry(syntax: "<", description: "Unindent"),
     HelpEntry(syntax: "~", description: "Toggle case of character under cursor"),
-    HelpEntry(syntax: "Ctrl-a", description: "Increase number under cursor"),
-    HelpEntry(syntax: "Ctrl-x", description: "Decrease number under cursor"),
+    HelpEntry(
+      syntax: "Ctrl-a", description: "Increase the first number on each selected line"
+    ),
+    HelpEntry(
+      syntax: "Ctrl-x", description: "Decrease the first number on each selected line"
+    ),
+    HelpEntry(
+      syntax: "g Ctrl-a",
+      description: "Increase the numbers on the selected lines by count, 2*count, ...",
+    ),
+    HelpEntry(
+      syntax: "g Ctrl-x",
+      description: "Decrease the numbers on the selected lines by count, 2*count, ...",
+    ),
     HelpEntry(syntax: "I", description: "Insert character, multiple lines"),
     HelpEntry(syntax: "zf", description: "Fold selected lines"),
     HelpEntry(

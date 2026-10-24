@@ -104,8 +104,10 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   ("q", "macro-record"),
   ("\"", "register-select"),
   # Adjust + LSP
-  ("C-a", "increment-number"),
-  ("C-x", "decrement-number"),
+  ("C-a", "visual-increment-number"),
+  ("C-x", "visual-decrement-number"),
+  ("g C-a", "visual-increment-progressive"),
+  ("g C-x", "visual-decrement-progressive"),
   ("C-s", "lsp-selection-range"),
   # Arrow keys and other navigation aliases
   ("Left", "move-left"),
