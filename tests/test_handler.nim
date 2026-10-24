@@ -7722,6 +7722,45 @@ suite "handleKeyCombo - the cell a cursor on a tab shows on":
     e.activeWindow.mode = EditorMode.Insert
     check not e.activeWindow.cursorOnTabEnd
 
+suite "handleKeyCombo - scrolling sideways to the cursor":
+  # As Vim 9.2's curs_columns with 'sidescroll' 1: a cursor half the window or
+  # more off comes to the middle, on the cell it shows on.
+  proc pressOn(content: string, keys: openArray[string]): Editor =
+    var config = newEditorConfig()
+    config.standard.tabStop = 8
+    config.standard.lineWrap = false
+    result = newEditor(config)
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 40, height: 24, topLine: 0, leftCell: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    for key in keys:
+      check result.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc middle(e: Editor): int =
+    wrapWidthFor(40, viewportOffsetFor(e.activeBuffer, e.state)) div 2
+
+  # The tab (column 56) takes cells 56-63, the last 'y' cell 123.
+  let line = "x".repeat(56) & "\t" & "y".repeat(60)
+
+  test "a jump to the line's end centers the cursor":
+    let e = pressOn(line, ["$"])
+    check e.activeWindow.viewport.leftCell == 123 - e.middle
+
+  test "Normal centers a tab on its last cell":
+    let e = pressOn(line, ["$", "5", "7", "|"])
+    check e.cursor.column == 56
+    check e.activeWindow.viewport.leftCell == 63 - e.middle
+
+  test "Visual before the anchor centers a tab on its first cell":
+    let e = pressOn(line, ["$", "v", "5", "7", "|"])
+    check e.cursor.column == 56
+    check e.activeWindow.viewport.leftCell == 56 - e.middle
+
 suite "handleKeyCombo - which keys a mapping takes, as in Vim":
   proc createEditorForMappings(content: string): Editor =
     result = newEditor(newEditorConfig())

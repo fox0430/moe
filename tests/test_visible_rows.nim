@@ -198,11 +198,9 @@ suite "cursorCell / cellToColumn":
     let buf = newTextBuffer("abcdefgh\tx")
     check buf.wrapAt10.cursorCell(0, 8, onTabEnd = true) == (1, 3)
 
-  test "onTabEnd keeps the cursor on a tab wider than the row inside it":
-    let buf = newTextBuffer("\tx")
-    for lineWrap in [false, true]:
-      let rl = initRowLayout(buf, nil, lineWrap, 3, 8)
-      check rl.cursorCell(0, 0, onTabEnd = true) == (0, 2)
+  test "onTabEnd cuts a wrapped tab wider than the row at its edge":
+    let rl = initRowLayout(newTextBuffer("\tx"), nil, true, 3, 8)
+    check rl.cursorCell(0, 0, onTabEnd = true) == (0, 2)
 
   test "onTabEnd leaves a tab right of the row where it is":
     # The tab covers cells 4-7, all past a row 3 cells wide.
@@ -243,15 +241,32 @@ suite "scrollViewportToCursor - sideways":
   proc noWrapAt10(buf: TextBuffer): RowLayout =
     initRowLayout(buf, nil, false, 10, 8)
 
-  proc scrolledTo(rl: RowLayout, line, column: int, leftCell = 0): int =
+  proc scrolledTo(
+      rl: RowLayout, line, column: int, leftCell = 0, onTabEnd = false
+  ): int =
     ## `leftCell` after keeping (`line`, `column`) in view from `leftCell`.
     let viewport = ViewPort(width: 10, height: 20, leftCell: leftCell)
-    rl.scrollViewportToCursor(viewport, line, column, 20)
+    rl.scrollViewportToCursor(viewport, line, column, 20, onTabEnd)
     viewport.leftCell
+
+  test "a cursor less than half the window off scrolls by as many cells":
+    let rl = newTextBuffer("x".repeat(40)).noWrapAt10
+    # Column 13 sticks out of cells 0-9 by 4, column 16 out of 20-29 by 4.
+    check rl.scrolledTo(0, 13) == 4
+    check rl.scrolledTo(0, 16, leftCell = 20) == 16
+
+  test "a cursor half the window or more off comes to the middle":
+    let rl = newTextBuffer("x".repeat(40)).noWrapAt10
+    check rl.scrolledTo(0, 14) == 9
+    check rl.scrolledTo(0, 30) == 25
+    check rl.scrolledTo(0, 15, leftCell = 20) == 10
+
+  test "the middle stops at the line's start":
+    check newTextBuffer("x".repeat(40)).noWrapAt10.scrolledTo(0, 2, leftCell = 20) == 0
 
   test "a cursor past tabs scrolls by the cells it is drawn at":
     # Each "x\t" takes 8 cells, so column 4 is drawn at cell 16.
-    check newTextBuffer("x\tx\tx\tx").noWrapAt10.scrolledTo(0, 4) == 7
+    check newTextBuffer("x\tx\tx\tx").noWrapAt10.scrolledTo(0, 4, leftCell = 4) == 7
 
   test "all cells of a wide character come into view":
     # か (column 5) takes cells 10-11.
@@ -259,20 +274,35 @@ suite "scrollViewportToCursor - sideways":
 
   test "all cells of a tab come into view":
     # The second tab (column 3) takes cells 9-15.
-    check newTextBuffer("x\tx\tx").noWrapAt10.scrolledTo(0, 3) == 6
+    check newTextBuffer("x\tx\tx").noWrapAt10.scrolledTo(0, 3, leftCell = 3) == 6
 
   test "scrolling back stops at the character's first cell":
-    check newTextBuffer("x\tx\tx").noWrapAt10.scrolledTo(0, 1, leftCell = 12) == 1
+    check newTextBuffer("x\tx\tx").noWrapAt10.scrolledTo(0, 1, leftCell = 4) == 1
 
-  test "a character wider than the window keeps its first cell in view":
-    let rl = initRowLayout(newTextBuffer("x\tx"), nil, false, 4, 8)
-    check rl.scrolledTo(0, 1) == 1
+  test "a tab comes to the middle on the cell the cursor shows on":
+    # The second tab (column 3) takes cells 9-15.
+    let rl = newTextBuffer("x\tx\tx\tx").noWrapAt10
+    check rl.scrolledTo(0, 3) == 4
+    check rl.scrolledTo(0, 3, onTabEnd = true) == 10
+
+  test "a character as wide as the window comes to the middle":
+    # The tab takes cells 2-7, as many as the window has, and sticks out by
+    # 2, less than half of it.
+    let rl = initRowLayout(newTextBuffer("ab\tx"), nil, false, 6, 8)
+    check rl.scrolledTo(0, 2) == 0
+    check rl.scrolledTo(0, 2, onTabEnd = true) == 4
+
+  test "a tab wider than the window shows the cell the cursor is on":
+    let rl = initRowLayout(newTextBuffer("\tx"), nil, false, 3, 8)
+    let leftCell = rl.scrolledTo(0, 0, onTabEnd = true)
+    check leftCell == 6
+    check rl.cursorCell(0, 0, leftCell, onTabEnd = true) == (0, 1)
 
   test "a cursor in view does not scroll":
     check newTextBuffer("x".repeat(30)).noWrapAt10.scrolledTo(0, 12, leftCell = 5) == 5
 
   test "past the line's end, the cell after it comes into view":
-    check newTextBuffer("x".repeat(30)).noWrapAt10.scrolledTo(0, 30) == 21
+    check newTextBuffer("x".repeat(30)).noWrapAt10.scrolledTo(0, 30, leftCell = 18) == 21
 
   test "with wrap, nothing is scrolled off the left":
     let rl = initRowLayout(newTextBuffer("x".repeat(30)), nil, true, 10, 8)

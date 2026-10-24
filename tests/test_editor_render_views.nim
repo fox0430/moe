@@ -805,6 +805,47 @@ suite "renderSplitView - Viewport adjustment":
     check e.cursor == BufferPosition(line: 2, column: 0)
     check not e.state.cursorVisible
 
+  test "Detached viewport does not draw a cursor off its side":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.lineWrap = false
+    e.tabStop = 8
+    e.viewport.width = 80
+    e.viewport.height = 24
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "\t".repeat(12))
+    # The tab at cells 72-79 starts inside the text area the gutter leaves of
+    # the 80 cells and ends past it.
+    e.cursor = BufferPosition(line: 0, column: 9)
+    e.viewport.detachedFromCursor = true
+
+    # Normal shows the cursor on the tab's last cell, Insert on its first.
+    e.renderSplitView(buffer, false)
+    check e.viewport.leftCell == 0
+    check not e.state.cursorVisible
+
+    e.activeWindow.mode = EditorMode.Insert
+    e.renderSplitView(buffer, false)
+    check e.state.cursorVisible
+
+  test "Detached viewport draws a cursor past a wrapped row it fills":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.lineWrap = true
+    e.viewport.width = 80
+    e.viewport.height = 24
+    let textWidth = e.wrapWidth(e.activeWindow)
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "x".repeat(textWidth)
+    )
+    e.activeWindow.mode = EditorMode.Insert
+    e.cursor = BufferPosition(line: 0, column: textWidth)
+    e.viewport.detachedFromCursor = true
+
+    e.renderSplitView(buffer, false)
+
+    check e.state.cursorVisible
+
   test "Detached background viewport is clamped after its buffer shrinks":
     let e = createTestEditor()
     var buffer = createTestBuffer()
@@ -1776,6 +1817,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
       buf,
       TabStop,
       WrapCountCache(),
+      onTabEnd = false,
     )
 
   test "Scrolls down from top so cursor is visible with minimal scroll":
@@ -1882,6 +1924,7 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
       buf,
       TabStop,
       WrapCountCache(),
+      onTabEnd = false,
     )
 
   proc tallLineBuffer(): TextBuffer =

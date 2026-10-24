@@ -1064,7 +1064,7 @@ proc clampPosition*(
 proc newViewportManager*(viewport: ViewPort): ViewportManager =
   ViewportManager(viewport: viewport)
 
-proc updateViewport*(
+proc updateViewport(
     mgr: ViewportManager,
     cursorPos: CursorPosition,
     lineCount: int,
@@ -1074,6 +1074,7 @@ proc updateViewport*(
     buffer: core.TextBuffer = nil,
     viewportOffset: int = 0,
     tabStop: int = 4,
+    onTabEnd = false,
 ) =
   ## Keep cursor visible; scrolls viewport as needed.
 
@@ -1107,8 +1108,28 @@ proc updateViewport*(
     let maxWidth = wrapWidthFor(mgr.viewport.width, viewportOffset)
     initRowLayout(buffer, mgr.wrapCountCache, lineWrap, maxWidth, tabStop)
       .scrollViewportToCursor(
-        mgr.viewport, clampedCursorY, clampedCursorX, visibleHeight
+        mgr.viewport, clampedCursorY, clampedCursorX, visibleHeight, onTabEnd
       )
+
+proc updateViewport*(
+    mgr: ViewportManager,
+    state: EditorState,
+    buffer: core.TextBuffer,
+    pos: BufferPosition,
+) =
+  ## Keep `pos` of `buffer`, where the cursor of the active window goes, in
+  ## view, with the window's settings from `state`.
+  mgr.updateViewport(
+    CursorPosition(x: pos.column, y: pos.line),
+    buffer.len,
+    state.showStatusLine,
+    state.motionReservedLines(),
+    state.effectiveLineWrap(),
+    buffer,
+    viewportOffsetFor(buffer, state),
+    state.tabStop,
+    not state.activeWindow.isNil and state.activeWindow.cursorOnTabEnd(pos),
+  )
 
 # Smooth scrolling functions (physics-based, compatible with vim comfortable-motion)
 #
@@ -1374,18 +1395,9 @@ proc executeMotion*(
   ## the cursor as far as it went. A vertical motion aims for the screen cell
   ## `aimedColumn`, or for the cell `currentCursorPos` begins at when it is -1.
   result = controller.landMotion(cmd, currentCursorPos, aimedColumn = aimedColumn)
-  let newPos = CursorPosition(x: result.pos.column, y: result.pos.line)
-
-  let
-    actualReservedLines = controller.cursorManager.state.motionReservedLines()
-    lineWrap = controller.cursorManager.state.effectiveLineWrap()
   if updateViewport:
-    let viewportOffset =
-      viewportOffsetFor(controller.executor.buffer, controller.cursorManager.state)
     controller.viewportManager.updateViewport(
-      newPos, controller.executor.buffer.len,
-      controller.cursorManager.state.showStatusLine, actualReservedLines, lineWrap,
-      controller.executor.buffer, viewportOffset, controller.cursorManager.state.tabStop,
+      controller.cursorManager.state, controller.executor.buffer, result.pos
     )
 
 proc moveCursorByMotion*(

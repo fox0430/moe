@@ -20,7 +20,8 @@
 ## Tests for commands.nim
 
 import std/[strutils, unittest]
-import ../src/moepkg/[buffer, motion, render_utils, types]
+import ../src/moepkg/[buffer, render_utils, types]
+import ../src/moepkg/motion {.all.}
 
 suite "ViewportManager - Goto Line Scrolling":
   proc createTestBuffer(lineCount: int): TextBuffer =

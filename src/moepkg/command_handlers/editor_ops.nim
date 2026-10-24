@@ -30,8 +30,8 @@ import pkg/results
 import
   ../[
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
-    config_loader, window_manager, log_viewer, syntax_checker, render_utils, motion,
-    viewer_mode, editor_build_jobs, buffer_manager,
+    config_loader, window_manager, log_viewer, syntax_checker, motion, viewer_mode,
+    editor_build_jobs, buffer_manager,
   ]
 
 when not defined(moe.embedded):
@@ -64,21 +64,8 @@ proc getBufferInfos*(e: Editor): seq[BufferInfo] =
 proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
   ## Update viewport to follow cursor position
   ## Common helper to avoid code duplication in search operations
-  let
-    activeBuffer = e.activeBuffer()
-    lineCount = activeBuffer.len
-    cursorPos = CursorPosition(x: pos.column, y: pos.line)
-    viewportOffset = viewportOffsetFor(activeBuffer, e.state)
-
   e.handlerManager.motionController.viewportManager.updateViewport(
-    cursorPos,
-    lineCount,
-    e.showStatusLine,
-    e.state.motionReservedLines(),
-    e.state.effectiveLineWrap(),
-    activeBuffer,
-    viewportOffset,
-    e.tabStop,
+    e.state, e.activeBuffer(), pos
   )
 
 proc modifiedBufferCountExcept*(e: Editor, exclude: TextBuffer): int =

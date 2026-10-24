@@ -23,11 +23,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import
-  ../[
-    types, buffer, motion, modes, search_utils, git_conflict, render_utils,
-    unicode_utils,
-  ]
+import ../[types, buffer, motion, modes, search_utils, git_conflict, unicode_utils]
 import ../command_handlers/[insert_commands, normal_commands]
 
 import core, insert_entry
@@ -78,17 +74,7 @@ proc jumpCursorToLine*(ctx: CommandContext, line: int) =
   ## hunks, conflict blocks).
   recordJump(ctx.state)
   ctx.cursor = BufferPosition(line: line, column: 0)
-  let viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
-  ctx.motionController.viewportManager.updateViewport(
-    CursorPosition(x: 0, y: line),
-    ctx.buffer.len,
-    ctx.state.showStatusLine,
-    ctx.state.motionReservedLines(),
-    ctx.state.effectiveLineWrap(),
-    ctx.buffer,
-    viewportOffset,
-    ctx.state.tabStop,
-  )
+  ctx.motionController.viewportManager.updateViewport(ctx.state, ctx.buffer, ctx.cursor)
 
 proc findMatchContainingCursor*(
     buffer: TextBuffer,
@@ -336,14 +322,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       return err(match.error)
     ctx.cursor = match.get
     ctx.motionController.viewportManager.updateViewport(
-      CursorPosition(x: match.get.column, y: match.get.line),
-      ctx.buffer.len,
-      ctx.state.showStatusLine,
-      ctx.state.motionReservedLines(),
-      ctx.state.effectiveLineWrap(),
-      ctx.buffer,
-      viewportOffsetFor(ctx.buffer, ctx.state),
-      ctx.state.tabStop,
+      ctx.state, ctx.buffer, match.get
     )
     ok(())
 

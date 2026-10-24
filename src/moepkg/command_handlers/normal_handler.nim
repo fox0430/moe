@@ -27,8 +27,8 @@ import pkg/results
 
 import
   ../[
-    types, buffer, modes, motion, key_bindings, command_registry, render_utils,
-    uri_utils, key_router, unicode_utils, visual_selection, pending_input, insert_record,
+    types, buffer, modes, motion, key_bindings, command_registry, uri_utils, key_router,
+    unicode_utils, visual_selection, pending_input, insert_record,
   ]
 import handler_types, visual_handler, command_passthrough
 from insert_commands import stepToAppend
@@ -101,19 +101,7 @@ proc updateCursorToJumpPosition(
     else:
       min(pos.column, max(0, lineCharLen - 1))
 
-  let
-    cursorPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-    viewportOffset = viewportOffsetFor(buffer, state)
-  handler.motionController.viewportManager.updateViewport(
-    cursorPos,
-    buffer.len,
-    state.showStatusLine,
-    state.motionReservedLines(),
-    state.effectiveLineWrap(),
-    buffer,
-    viewportOffset,
-    state.tabStop,
-  )
+  handler.motionController.viewportManager.updateViewport(state, buffer, state.cursor)
   return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
 proc newNormalModeHandler*(
