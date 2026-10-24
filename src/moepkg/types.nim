@@ -1404,6 +1404,12 @@ proc view(win: EditorWindow): WindowView =
     result.width = win.viewport.width
     result.height = win.viewport.height
 
+proc tabEndRule(win: EditorWindow, at: BufferPosition): bool =
+  if win.mode.isVisualAllMode:
+    at > win.visualAnchor
+  else:
+    win.mode notin {EditorMode.Insert, EditorMode.Replace}
+
 proc cursorOnTabEnd*(win: EditorWindow): bool =
   ## Whether the cursor of `win` shows on a tab's last cell, as Vim's getvcol:
   ## in Normal mode, and in Visual when the cursor is after the anchor. As Vim
@@ -1413,10 +1419,15 @@ proc cursorOnTabEnd*(win: EditorWindow): bool =
   let shown = win.shownOnTab
   if shown.isSome and shown.get.spot == win.spot and shown.get.view == win.view:
     shown.get.tabEnd
-  elif win.mode.isVisualAllMode:
-    win.cursor > win.visualAnchor
   else:
-    win.mode notin {EditorMode.Insert, EditorMode.Replace}
+    win.tabEndRule(win.cursor)
+
+proc cursorOnTabEnd*(win: EditorWindow, at: BufferPosition): bool =
+  ## `cursorOnTabEnd` for the cursor of `win` once it moves to `at`.
+  if at == win.cursor:
+    win.cursorOnTabEnd
+  else:
+    win.tabEndRule(at)
 
 proc aimedHere(win: EditorWindow): bool =
   win.aimedOnTab.isSome and win.aimedOnTab.get.cursor == win.cursor and

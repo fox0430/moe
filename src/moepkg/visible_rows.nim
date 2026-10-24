@@ -187,8 +187,8 @@ proc textCell*(
 ): tuple[wrapSeg, cellX: int] =
   ## Display cell of `text[column]`: (wrapSeg, cellX). Wrap-aware; without wrap
   ## the cell from the line start less `leftCell`, negative when scrolled off
-  ## the left. With `onTabEnd`, a tab's last cell, cut at the row's right edge
-  ## when the tab starts inside the row.
+  ## the left. With `onTabEnd`, a tab's last cell, in a wrapped row cut at its
+  ## right edge.
   if lineWrap:
     let (wrapSeg, cellX) = cursorWrapPosition(text, column, maxWidth, tabStop)
     if onTabEnd and text.getCharAtPos(column)[0] == TAB_CHAR:
@@ -197,11 +197,7 @@ proc textCell*(
     else:
       (wrapSeg, cellX)
   else:
-    let cellX = text.cursorCell(column, tabStop, onTabEnd) - leftCell
-    if cellX >= maxWidth and text.cellsAt(column, tabStop).first - leftCell < maxWidth:
-      (0, maxWidth - 1)
-    else:
-      (0, cellX)
+    (0, text.cursorCell(column, tabStop, onTabEnd) - leftCell)
 
 proc cursorCell*(
     rl: RowLayout, line, column: int, leftCell: int = 0, onTabEnd = false
@@ -252,27 +248,49 @@ func wrapPosAbove*(aLine, aSeg, bLine, bSeg: int): bool {.inline.} =
   ## True if (aLine, aSeg) is above (bLine, bSeg) in wrapped order.
   aLine < bLine or (aLine == bLine and aSeg < bSeg)
 
-proc scrollLeftCellToCursor(rl: RowLayout, viewport: ViewPort, line, column: int) =
-  ## Keep all cells the cursor is drawn over in view, scrolling sideways as
-  ## little as possible (Vim's curs_columns does too with 'sidescroll' 1, but
-  ## centers a cursor half a window or more away). Its first cell wins when
-  ## the character is wider than the window. A cursor in a closed fold does
-  ## not scroll.
+proc scrollLeftCellToCursor(
+    rl: RowLayout, viewport: ViewPort, line, column: int, onTabEnd: bool
+) =
+  ## Bring the cells the cursor is drawn over into view, as Vim's curs_columns
+  ## does with 'sidescroll' 1 and 'sidescrolloff' 0: by as many cells as they
+  ## stick out, or, when that is half the window or more or the character is
+  ## as wide as the window, so that the cell the cursor shows on (`onTabEnd`)
+  ## is in the middle. A cursor in a closed fold does not scroll.
   if rl.lineWrap:
     viewport.leftCell = 0
     return
   if rl.buffer.foldState.getCollapsedFoldAt(line).isSome:
     return
-  let (first, last) = rl.buffer.getLine(line).cellsAt(column, rl.tabStop)
-  if last >= viewport.leftCell + rl.maxWidth:
-    viewport.leftCell = last - rl.maxWidth + 1
-  if first < viewport.leftCell:
-    viewport.leftCell = first
+  let
+    text = rl.buffer.getLine(line)
+    (first, last) = text.cellsAt(column, rl.tabStop)
+    offLeft = first - viewport.leftCell
+    offRight = last - (viewport.leftCell + rl.maxWidth) + 1
+  if offLeft >= 0 and offRight <= 0:
+    return
+  let
+    diff =
+      if offLeft < 0:
+        -offLeft
+      else:
+        offRight
+    half = rl.maxWidth div 2
+  viewport.leftCell =
+    if diff >= half or offRight >= offLeft:
+      max(0, text.cursorCell(column, rl.tabStop, onTabEnd) - half)
+    elif offLeft < 0:
+      first
+    else:
+      viewport.leftCell + diff
 
 proc scrollViewportToCursor*(
-    rl: RowLayout, viewport: ViewPort, cursorLine, cursorColumn, visibleHeight: int
+    rl: RowLayout,
+    viewport: ViewPort,
+    cursorLine, cursorColumn, visibleHeight: int,
+    onTabEnd = false,
 ) =
-  ## Keep cursor visible with minimal scroll. Shared by input and render paths.
+  ## Keep cursor visible: down and up with minimal scroll, sideways as
+  ## `scrollLeftCellToCursor`. Shared by input and render paths.
   if rl.buffer.isNil or rl.lineCount == 0:
     viewport.topLine = 0
     viewport.topWrapOffset = 0
@@ -297,4 +315,4 @@ proc scrollViewportToCursor*(
     let (latLine, latOff) = rl.walkBackRows(line, seg, rows - 1)
     if wrapPosAbove(viewport.topLine, viewport.topWrapOffset, latLine, latOff):
       viewport.restoreViewportTop(latLine, latOff)
-  rl.scrollLeftCellToCursor(viewport, line, max(0, cursorColumn))
+  rl.scrollLeftCellToCursor(viewport, line, max(0, cursorColumn), onTabEnd)

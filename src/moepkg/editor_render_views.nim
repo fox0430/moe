@@ -82,7 +82,13 @@ proc cursorIsInViewport(e: Editor, window: EditorWindow, layout: WindowLayout): 
       window.wrapCountCache,
     )
     cursorLine = max(0, min(window.cursor.line, window.buffer.len - 1))
-    cursorSegment = rowLayout.cursorCell(cursorLine, window.cursor.column).wrapSeg
+    (cursorSegment, cursorX) = rowLayout.cursorCell(
+      cursorLine, window.cursor.column, window.viewport.leftCell, window.cursorOnTabEnd
+    )
+  # A wrapped row does not scroll sideways, and puts the cursor past a row it
+  # fills just after it.
+  if not rowLayout.lineWrap and cursorX notin 0 ..< rowLayout.maxWidth:
+    return
   if wrapPosAbove(
     cursorLine, cursorSegment, window.viewport.topLine, window.viewport.topWrapOffset
   ):
@@ -122,6 +128,7 @@ proc adjustViewportForCursor(
     textBuffer: TextBuffer,
     tabStop: int,
     wrapCache: WrapCountCache,
+    onTabEnd: bool,
 ) =
   ## Adjust viewport to keep cursor visible (scroll if cursor is off-screen),
   ## by the shared rule in `visible_rows`.
@@ -134,7 +141,9 @@ proc adjustViewportForCursor(
       viewport.topLine = cursor.line
   else:
     initRowLayout(textBuffer, wrapCache, lineWrap, textAreaWidth, tabStop)
-      .scrollViewportToCursor(viewport, cursor.line, cursor.column, visibleHeight)
+      .scrollViewportToCursor(
+        viewport, cursor.line, cursor.column, visibleHeight, onTabEnd
+      )
 
 proc syncSelectionCursor(window: EditorWindow) =
   ## Mirror a selection-list mode's selected index onto the window cursor so
@@ -277,6 +286,7 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
       adjustViewportForCursor(
         window.viewport, window.cursor, layout.adjustHeight, layout.textAreaWidth,
         layout.effectiveLineWrap, window.buffer, e.tabStop, window.wrapCountCache,
+        window.cursorOnTabEnd,
       )
 
   # Set screen cursor to active window position.
