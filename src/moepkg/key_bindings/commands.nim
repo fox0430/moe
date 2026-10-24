@@ -112,12 +112,14 @@ const VisualMotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ),
 ] ## Names Visual mode had for these motions, which existing configs bind
 
-const ScrollCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
-  ("page-up", "Scroll page up", Motion.PageUp),
-  ("page-down", "Scroll page down", Motion.PageDown),
-  ("half-page-up", "Scroll half page up", Motion.HalfPageUp),
-  ("half-page-down", "Scroll half page down", Motion.HalfPageDown),
-] ## Moves by scrolling, which no operator acts over (`d<C-d>` cancels the `d`)
+const ScrollCommands: seq[tuple[name, desc, commandId: string]] = @[
+  ("page-up", "Scroll page up", "scroll.page.up"),
+  ("page-down", "Scroll page down", "scroll.page.down"),
+  ("half-page-up", "Scroll half page up", "scroll.halfpage.up"),
+  ("half-page-down", "Scroll half page down", "scroll.halfpage.down"),
+]
+  ## Scrolls that take the cursor along, which no operator acts over (`d<C-d>`
+  ## cancels the `d`)
 
 func withWindowCommands(
     commands: seq[tuple[name, desc, commandId: string]]
@@ -379,14 +381,14 @@ const OperatorPendingCommands: seq[tuple[name, desc, opType: string, reverse: bo
 ]
 
 proc registerMotionCommands(reg: KeyBindingRegistry) =
-  for commands in [MotionCommands, VisualMotionCommands, ScrollCommands]:
+  for commands in [MotionCommands, VisualMotionCommands]:
     for (name, desc, motion) in commands:
       reg.registerCommand(
         Command(name: name, description: desc, kind: ctMotion, motion: motion)
       )
 
 proc registerActionCommands(reg: KeyBindingRegistry) =
-  for commands in [ActionCommands, SearchCommands]:
+  for commands in [ActionCommands, SearchCommands, ScrollCommands]:
     for (name, desc, commandId) in commands:
       reg.registerCommand(
         Command(

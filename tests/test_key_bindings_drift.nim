@@ -47,9 +47,9 @@ import ../src/moepkg/command_handlers/command_passthrough {.all.}
 
 proc registeredCommands(): Table[string, string] =
   ## Every name `[KeyBindings]` can bind, mapped to its description.
-  for entry in MotionCommands & VisualMotionCommands & ScrollCommands:
+  for entry in MotionCommands & VisualMotionCommands:
     result[entry.name] = entry.desc
-  for entry in ActionCommands & SearchCommands:
+  for entry in ActionCommands & SearchCommands & ScrollCommands:
     result[entry.name] = entry.desc
   for entry in CustomCommands & OperatorCommands & TextObjectCommands:
     result[entry.name] = entry.desc

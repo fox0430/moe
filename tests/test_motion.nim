@@ -19,12 +19,11 @@
 
 ## Tests for motion.nim
 
-import std/[unittest, strutils, monotimes, options]
+import std/[unittest, strutils, options]
 
 import pkg/results
 
 import ../src/moepkg/[unicode_utils, types, modes]
-import ../src/moepkg/types/config_types
 import ../src/moepkg/buffer/[core, fold]
 import ../src/moepkg/motion {.all.}
 import ../src/moepkg/visible_rows
@@ -1531,35 +1530,6 @@ suite "deleteRange":
     check buffer.getLine(0) == "line1"
     check buffer.getLine(1) == "line3"
 
-suite "Page Motion":
-  test "movePageDown":
-    let buffer = newTextBuffer("l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
-    let executor = newMotionExecutor(buffer)
-    let currentPos = CursorPosition(x: 0, y: 0)
-    let result = executor.movePageDown(currentPos, 1, 5)
-    check result.y == 4 # Moved down by viewport height - 1
-
-  test "movePageUp":
-    let buffer = newTextBuffer("l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
-    let executor = newMotionExecutor(buffer)
-    let currentPos = CursorPosition(x: 0, y: 8)
-    let result = executor.movePageUp(currentPos, 1, 5)
-    check result.y == 4 # Moved up by viewport height - 1
-
-  test "moveHalfPageDown":
-    let buffer = newTextBuffer("l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
-    let executor = newMotionExecutor(buffer)
-    let currentPos = CursorPosition(x: 0, y: 0)
-    let result = executor.moveHalfPageDown(currentPos, 1, 10)
-    check result.y == 4 # Moved down by half of (viewport height - 1)
-
-  test "moveHalfPageUp":
-    let buffer = newTextBuffer("l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
-    let executor = newMotionExecutor(buffer)
-    let currentPos = CursorPosition(x: 0, y: 8)
-    let result = executor.moveHalfPageUp(currentPos, 1, 10)
-    check result.y == 4
-
 suite "Next/Previous Line FirstNonBlank":
   test "moveNextLineFirstNonBlank":
     let buffer = newTextBuffer("hello\n  world")
@@ -1653,142 +1623,6 @@ suite "snapOperatorRange - a closed fold is a unit":
       isLinewise: false,
     )
     check buffer.snapOperatorRange(range) == range
-
-suite "ScrollAnimation":
-  ## Direct tests for the smooth-scroll physics layer (NT-09).
-  ## Each `updateScrollAnimation` call advances at least one fixed physics
-  ## step (`max(elapsedMs, ScrollPhysicsInterval)`), so driving it in a loop
-  ## is deterministic and always terminates.
-
-  proc testViewport(height = 24): ViewPort =
-    ViewPort(topLine: 0, leftCell: 0, width: 80, height: height, x: 0, y: 0)
-
-  proc scrollConfig(enable = true): SmoothScrollConfig =
-    SmoothScrollConfig(enable: enable, friction: 80.0, airDrag: 2.0)
-
-  proc runToCompletion(
-      mgr: ViewportManager,
-      anim: var ScrollAnimation,
-      config: SmoothScrollConfig,
-      bufferLen: int,
-      reservedLines = 2,
-  ): tuple[active: bool, cursorLine: int] =
-    result = (active: true, cursorLine: 0)
-    var iterations = 0
-    while result.active:
-      result = mgr.updateScrollAnimation(anim, config, reservedLines, bufferLen)
-      inc iterations
-      if iterations > 100_000:
-        break
-    check iterations <= 100_000
-    check not anim.active
-
-  test "inactive animation returns the target without touching the viewport":
-    let viewport = testViewport()
-    let mgr = newViewportManager(viewport)
-    var anim = ScrollAnimation(
-      active: false,
-      velocity: 0.0,
-      currentCursorLine: 3.0,
-      targetCursorLine: 20,
-      lastUpdateTime: getMonoTime(),
-    )
-
-    let res = mgr.updateScrollAnimation(anim, scrollConfig(), 2, 100)
-
-    check res == (false, 20)
-    check viewport.topLine == 0
-
-  test "disabled smooth scroll jumps to the target immediately":
-    let viewport = testViewport()
-    let mgr = newViewportManager(viewport)
-    var anim = ScrollAnimation(
-      active: true,
-      velocity: 140.0,
-      currentCursorLine: 0.0,
-      targetCursorLine: 20,
-      lastUpdateTime: getMonoTime(),
-    )
-
-    let res = mgr.updateScrollAnimation(anim, scrollConfig(false), 2, 100)
-
-    check res == (false, 20)
-    check not anim.active
-
-  test "starting with zero distance stays inactive":
-    var anim = ScrollAnimation()
-    anim.startScrollAnimation(10, 10, scrollConfig())
-
-    check not anim.active
-
-  test "starting with nonzero distance activates with nonzero velocity":
-    var anim = ScrollAnimation()
-    anim.startScrollAnimation(0, 20, scrollConfig())
-
-    check anim.active
-    check anim.velocity != 0.0
-    check anim.targetCursorLine == 20
-
-  test "a downward animation terminates inside the buffer":
-    let viewport = testViewport()
-    let mgr = newViewportManager(viewport)
-    let config = scrollConfig()
-    var anim = ScrollAnimation()
-    anim.startScrollAnimation(0, 50, config)
-
-    let res = mgr.runToCompletion(anim, config, 100)
-
-    check res.cursorLine >= 0
-    check res.cursorLine < 100
-
-  test "a target past the buffer end clamps to the last line":
-    let viewport = testViewport()
-    let mgr = newViewportManager(viewport)
-    let config = scrollConfig()
-    var anim = ScrollAnimation()
-    anim.startScrollAnimation(0, 100, config)
-
-    let res = mgr.runToCompletion(anim, config, 30)
-
-    check res.cursorLine == 29
-
-  test "a huge upward velocity stops at line zero":
-    let viewport = testViewport()
-    let mgr = newViewportManager(viewport)
-    var anim = ScrollAnimation(
-      active: true,
-      velocity: -100_000.0,
-      currentCursorLine: 5.0,
-      targetCursorLine: 0,
-      lastUpdateTime: getMonoTime(),
-    )
-
-    let res = mgr.updateScrollAnimation(anim, scrollConfig(), 2, 100)
-
-    check res == (false, 0)
-    check anim.velocity == 0.0
-
-  test "cancelled animation reports inactive":
-    var anim = ScrollAnimation()
-    anim.startScrollAnimation(0, 20, scrollConfig())
-    anim.cancelScrollAnimation()
-
-    check not anim.active
-    check anim.velocity == 0.0
-
-  test "the viewport keeps the animated cursor visible":
-    let viewport = testViewport(10)
-    let mgr = newViewportManager(viewport)
-    let config = scrollConfig()
-    var anim = ScrollAnimation()
-    anim.startScrollAnimation(0, 50, config)
-
-    let res = mgr.runToCompletion(anim, config, 100, reservedLines = 2)
-
-    # visibleHeight = 10 - 2 = 8; cursor must be on screen at the end.
-    check res.cursorLine >= viewport.topLine
-    check res.cursorLine <= viewport.topLine + 7
-    check viewport.topLine > 0
 
 suite "ScreenColumn Motion":
   test "moves to the screen column":

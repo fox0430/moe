@@ -730,7 +730,10 @@ suite "KeyBindingRegistry - bindKey string overload":
   test "Bind with Ctrl modifier string":
     let registry = newKeyBindingRegistry()
     let cmd = Command(
-      name: "page-up", description: "Page up", kind: ctMotion, motion: Motion.PageUp
+      name: "page-up",
+      description: "Page up",
+      kind: ctAction,
+      commandId: "scroll.page.up",
     )
     registry.registerCommand(cmd)
     registry.bindKey(EditorMode.Normal, "C-b", "page-up")

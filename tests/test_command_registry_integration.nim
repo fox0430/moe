@@ -5590,14 +5590,19 @@ suite "Handler - Basic Motion Commands":
     check registry.execute(ctx, builtin(bcMotionMatchBracket)).isOk
     check ctx.cursor.column == 12
 
-  test "motion page down (Ctrl+f)":
+  test "scroll page down (Ctrl+f)":
+    # The window shows the whole buffer, so a page scrolls the last line to
+    # the top, as Vim's.
     let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
+    ctx.state.config.smoothScroll.enable = false
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcMotionPageDown)).isOk
+    check registry.execute(ctx, builtin(bcScrollPageDown)).isOk
+    check ctx.cursor.line == 4
+    check ctx.motionController.viewportManager.viewport.topLine == 4
 
   test "page and viewport motions count screen rows under lineWrap":
     # 40 lines wide enough to wrap at viewport width 20. A page is
@@ -5612,6 +5617,7 @@ suite "Handler - Basic Motion Commands":
     proc pagedCtx(command: BuiltinCommandId, fromLine: int): CommandContext =
       result = createTestContext(buffer)
       result.state.config.standard.lineWrap = true
+      result.state.config.smoothScroll.enable = false
       result.state.mode = EditorMode.Normal
       result.setCursor(fromLine, 0)
       result.cursor = BufferPosition(line: fromLine, column: 0)
@@ -5640,14 +5646,13 @@ suite "Handler - Basic Motion Commands":
     # visibleRows = height(8) - reserved(2) = 6, so a page is 5 screen rows.
     let pageSize = 5
 
-    # Ctrl-F: 5 screen rows down from (0, 0), not 5 lines. Pin the exact
-    # `(line, seg)` page target so a page-size regression is caught.
-    let down = pagedCtx(bcMotionPageDown, 0)
-    check down.cursor.line == pageSize div rowsPerLine
-    let downTarget = layout.rowAt(0, 0, pageSize)
-    check downTarget.isSome
-    check (downTarget.get.line, downTarget.get.wrapSeg) ==
-      (pageSize div rowsPerLine, pageSize mod rowsPerLine)
+    # Ctrl-F: the lines at the bottom are too tall to keep in view, so a
+    # page is all 6 rows, and it ends on a line's start (Vim's
+    # get_scroll_overlap and scroll_with_sms).
+    let down = pagedCtx(bcScrollPageDown, 0)
+    check down.cursor.line == 6 div rowsPerLine
+    let downTop = down.motionController.viewportManager.viewport
+    check (downTop.topLine, downTop.topWrapOffset) == (6 div rowsPerLine, 0)
 
     # L with the top at line 10: the last of 6 visible rows (row 5).
     let low = pagedCtx(bcMotionViewportLow, 10)
@@ -5665,14 +5670,17 @@ suite "Handler - Basic Motion Commands":
     check (middleTarget.get.line, middleTarget.get.wrapSeg) ==
       (10 + (3 div rowsPerLine), 3 mod rowsPerLine)
 
-  test "motion page up (Ctrl+b)":
+  test "scroll page up (Ctrl+b)":
+    # The window is at the top already: neither it nor the cursor moves.
     let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
     ctx.setCursor(4, 0)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcMotionPageUp)).isOk
+    check registry.execute(ctx, builtin(bcScrollPageUp)).isOk
+    check ctx.cursor.line == 4
+    check ctx.motionController.viewportManager.viewport.topLine == 0
 
   test "motion viewport high (H)":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
@@ -8568,7 +8576,8 @@ suite "executeCommand - read-only gate allowlists stay in sync":
     # other direction: a new visual binding fails until it is gated or listed.
     const VisualNonEditCommandIds = [
       # Selection-only or non-buffer commands: safe on a read-only buffer.
-      "fold.create", "lsp.selection.range", "macro.record", "search.next",
+      "fold.create", "lsp.selection.range", "macro.record", "scroll.halfpage.down",
+      "scroll.halfpage.up", "scroll.page.down", "scroll.page.up", "search.next",
       "search.prev", "search.word.backward", "search.word.forward", "textobject.around",
       "textobject.inner", "visual.reselect", "visual.swap.selection", "visual.yank",
     ]

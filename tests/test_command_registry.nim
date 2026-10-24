@@ -313,8 +313,6 @@ suite "CommandRegistry - BuiltinCommandId":
     check $bcMotionRight == "motion.right"
     check $bcMotionUp == "motion.up"
     check $bcMotionDown == "motion.down"
-    check $bcMotionPageUp == "motion.pageup"
-    check $bcMotionPageDown == "motion.pagedown"
 
   test "edit commands have correct string values":
     check $bcEditUndo == "edit.undo"
@@ -350,6 +348,10 @@ suite "CommandRegistry - BuiltinCommandId":
     check $bcScrollCursorBottom == "scroll.cursor.bottom"
     check $bcScrollLineDown == "scroll.line.down"
     check $bcScrollLineUp == "scroll.line.up"
+    check $bcScrollPageDown == "scroll.page.down"
+    check $bcScrollPageUp == "scroll.page.up"
+    check $bcScrollHalfPageDown == "scroll.halfpage.down"
+    check $bcScrollHalfPageUp == "scroll.halfpage.up"
 
   test "fold commands have correct string values":
     check $bcFoldOpen == "fold.open"
@@ -371,8 +373,6 @@ suite "CommandRegistry - registerBuiltinCommands":
     check registry.findCommand(builtin(bcMotionRight)).isSome
     check registry.findCommand(builtin(bcMotionUp)).isSome
     check registry.findCommand(builtin(bcMotionDown)).isSome
-    check registry.findCommand(builtin(bcMotionPageUp)).isSome
-    check registry.findCommand(builtin(bcMotionPageDown)).isSome
     check registry.findCommand(builtin(bcMotionHome)).isSome
     check registry.findCommand(builtin(bcMotionEnd)).isSome
     check registry.findCommand(builtin(bcMotionFirstLine)).isSome
@@ -429,6 +429,10 @@ suite "CommandRegistry - registerBuiltinCommands":
     check registry.findCommand(builtin(bcScrollCursorBottom)).isSome
     check registry.findCommand(builtin(bcScrollLineDown)).isSome
     check registry.findCommand(builtin(bcScrollLineUp)).isSome
+    check registry.findCommand(builtin(bcScrollPageDown)).isSome
+    check registry.findCommand(builtin(bcScrollPageUp)).isSome
+    check registry.findCommand(builtin(bcScrollHalfPageDown)).isSome
+    check registry.findCommand(builtin(bcScrollHalfPageUp)).isSome
 
   test "registers all fold commands":
     let registry = newCommandRegistry()

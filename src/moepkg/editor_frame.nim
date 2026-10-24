@@ -50,7 +50,7 @@ from command_handlers/insert_handler import runAutoTrigger
 import
   config, git_cache, render_utils, logger, message_log, debug_viewer, completion,
   signature_help, hover_popup, notification_popup, unicode_utils, motion, buffer,
-  lsp_integration, editor_window_layout, editor_notify, macro_recording, wanted_column
+  lsp_integration, editor_window_layout, editor_notify, macro_recording, page_scroll
 
 export editor_notify
 
@@ -379,15 +379,14 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
   ## No drawing — the draw pass (`draw`) is a read-only projection of the state
   ## this produces. Returns true if the viewport was resized.
 
-  # Update smooth scroll animation
-  if e.state.windowDisplay.scrollAnimation.active:
-    let reservedLines = steadyBottomAreaHeight()
-    let bufferLen = e.activeBuffer().len
-    let (_, cursorLine) = e.motionController.viewportManager.updateScrollAnimation(
-      e.state.windowDisplay.scrollAnimation, e.config.smoothScroll, reservedLines,
-      bufferLen,
+  # Walk a smooth page scroll on. A resize puts the top where the cursor
+  # shows, so the scroll ends first, as one in Vim would have.
+  if buffer.area.width != e.screenSize.width or buffer.area.height != e.screenSize.height:
+    e.state.windowDisplay.scrollAnimation.finishPageScroll()
+  elif e.state.windowDisplay.scrollAnimation.active:
+    e.state.windowDisplay.scrollAnimation.advancePageScroll(
+      e.motionController.rowLayout()
     )
-    e.state.scrollCursor(cursorLine)
 
   # Keep the active cursor off lines hidden inside a collapsed fold. Many cursor
   # moves (search, :N, LSP jumps, mouse clicks, cursor restore on open) bypass
@@ -523,6 +522,8 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
 
   result = e.updateViewportSize(buffer)
   e.advanceLayoutForFrame(buffer, result)
+  for window in e.windowManager.windows:
+    window.viewport.noteHeight()
 
 proc renderMainContent(e: Editor, buffer: var Buffer) =
   ## Paint the main editor view (always uses split view since we always have at

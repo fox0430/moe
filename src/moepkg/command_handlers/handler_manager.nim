@@ -38,7 +38,7 @@ import
   ../[
     types, buffer, modes, motion, key_bindings, command_line, command_config,
     command_registry, lsp_integration, logger, key_router, pending_input, insert_record,
-    wanted_column,
+    page_scroll,
   ]
 import ../types/editor_types
 # The shared handler-module list lives in handler_modules (single source of
@@ -302,13 +302,9 @@ proc keepCursorLineUnfolded(e: Editor, res: HandlerResult) =
     )
 
 proc completeScrollAnimation*(e: Editor) =
-  ## Jump an active scroll animation to its target, so a replayed key runs
-  ## where the scroll ends. A typed key stops it instead (`prepareForInput`).
-  if e.state.windowDisplay.scrollAnimation.active:
-    let (completed, cursorLine) =
-      completeScrollAnimation(e.state.windowDisplay.scrollAnimation)
-    if completed:
-      e.state.scrollCursor(cursorLine)
+  ## Put the window where a smooth page scroll ends, so a replayed key runs
+  ## there as a typed one does (`prepareForInput`).
+  e.state.windowDisplay.scrollAnimation.finishPageScroll()
 
 proc handleKeyCombo*(
     manager: HandlerManager, e: Editor, keyCombo: KeyCombo

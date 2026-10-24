@@ -35,6 +35,7 @@ import
   logger,
   types,
   motion,
+  page_scroll,
   quick_run_utils,
   command_completion,
   build,
@@ -1043,8 +1044,8 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
   return none(bool)
 
 proc prepareForInput(e: Editor, isKeyInput: bool) =
-  ## Per-input setup: clear stale status, refresh input timestamp, cancel
-  ## any in-flight scroll animation for key input.
+  ## Per-input setup: clear stale status, refresh input timestamp, end any
+  ## smooth page scroll on its way.
 
   # Clear status message from previous event cycle:
   # messages persist for one render frame, then clear on next input)
@@ -1054,13 +1055,15 @@ proc prepareForInput(e: Editor, isKeyInput: bool) =
   # Update last input time for auto backup idle detection
   e.updateInputTime()
 
-  # Resume cursor-following and cancel smooth scroll animation on any key press.
+  # A key runs where a smooth page scroll ends and resumes cursor-following;
+  # other input acts on what the window shows.
   if isKeyInput:
+    e.state.windowDisplay.scrollAnimation.finishPageScroll()
     e.state.pointerSelection.active = false
     if e.windowManager.windows.len > 0:
       e.activeWindow.viewport.detachedFromCursor = false
-    if e.state.windowDisplay.scrollAnimation.active:
-      cancelScrollAnimation(e.state.windowDisplay.scrollAnimation)
+  else:
+    e.state.windowDisplay.scrollAnimation.stopPageScroll()
 
 proc prepareForKeyCombo(e: Editor) =
   ## Per-input setup for frontend-neutral key handling.
