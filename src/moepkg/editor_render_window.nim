@@ -564,7 +564,8 @@ proc renderLineSegmentWithSelection*(
     startColumn: int,
     ctx: RenderContext,
     precomputed: Option[LinePrecomputed] = none(LinePrecomputed),
-    startCell, leftCell = 0,
+    startCell = 0,
+    leftCell = 0,
 ) =
   ## Render a screen row of a line: `displayLine`, the line's text from
   ## column `startColumn`, and the cells after it to the window's right edge.
