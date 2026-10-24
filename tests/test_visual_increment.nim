@@ -19,7 +19,7 @@
 
 ## Tests for Ctrl-A / Ctrl-X in the Visual modes.
 
-import std/[unittest, options, deques, tables]
+import std/[unittest, options, tables]
 
 import ../src/moepkg/[buffer, types, modes, editor, config, key_bindings, handler]
 import visual_test_helper
