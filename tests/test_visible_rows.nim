@@ -170,6 +170,39 @@ suite "totalRows":
     check buf.noWrap.totalRows(10) == 6
     check buf.noWrap.totalRows(30) == 20
 
+suite "botline / lastWholeRow":
+  test "without wrap, the line below the window":
+    check linesBuffer(50).noWrap.botline(10, 0, 17) == (27, 17)
+    check linesBuffer(50).noWrap.lastWholeRow(10, 0, 17).line == 26
+
+  test "a line sticking out at the bottom is not shown whole":
+    var lines = newSeq[string](20)
+    for i in 0 ..< lines.len:
+      lines[i] = "x"
+    lines[16] = "x".repeat(25)
+    let buf = newTextBuffer(lines.join("\n"))
+    check buf.wrapAt10.botline(0, 0, 17) == (16, 16)
+    let row = buf.wrapAt10.lastWholeRow(0, 0, 17)
+    check (row.line, row.wrapSeg) == (15, 0)
+
+  test "a top line taller than the window counts as shown whole":
+    let buf = newTextBuffer(@["a", "x".repeat(250), "c"].join("\n"))
+    check buf.wrapAt10.botline(1, 0, 5) == (2, 5)
+    let row = buf.wrapAt10.lastWholeRow(1, 3, 5)
+    check (row.line, row.wrapSeg) == (1, 7)
+
+  test "the buffer's end leaves rows unused":
+    check linesBuffer(5).noWrap.botline(0, 0, 17) == (5, 5)
+    check linesBuffer(5).noWrap.lastWholeRow(0, 0, 17).line == 4
+
+  test "a closed fold is one row, and the line after it is below":
+    let buf = linesBuffer(50)
+    check buf.foldState.addFold(5, 30, collapsed = true)
+    check buf.noWrap.botline(0, 0, 10) == (35, 10)
+    let row = buf.noWrap.lastWholeRow(0, 0, 6)
+    check row.line == 5
+    check row.fold.isSome
+
 suite "cursorCell / cellToColumn":
   test "no wrap counts cells from the line start less leftCell":
     let buf = newTextBuffer("ab\tcd")
@@ -316,3 +349,127 @@ suite "scrollViewportToCursor - sideways":
     let buf = linesBuffer(10, "x".repeat(30))
     check buf.foldState.addFold(2, 5, collapsed = true)
     check buf.noWrapAt10.scrolledTo(3, 25, leftCell = 4) == 4
+
+suite "scrollViewportToCursor - up and down":
+  # The expected tops are Vim 9.2's in a window 17 rows high.
+  proc scrolledTo(
+      rl: RowLayout, line: int, column = 0, top = 0, skip = 0, height = 17
+  ): tuple[top, skip: int] =
+    ## The window's top after keeping (`line`, `column`) in view from `top`.
+    let viewport = ViewPort(width: rl.maxWidth, height: height, topLine: top)
+    viewport.topWrapOffset = skip
+    rl.scrollViewportToCursor(viewport, line, column, height)
+    (viewport.topLine, viewport.topWrapOffset)
+
+  test "a cursor in view does not scroll":
+    check linesBuffer(200).noWrap.scrolledTo(30, top = 20) == (20, 0)
+
+  test "a cursor just below the window comes to the bottom":
+    check linesBuffer(200).noWrap.scrolledTo(17) == (1, 0)
+
+  test "a cursor near below the window comes to the bottom":
+    check linesBuffer(200).noWrap.scrolledTo(25) == (9, 0)
+
+  test "a cursor far below the window comes to the middle":
+    check linesBuffer(200).noWrap.scrolledTo(26) == (18, 0)
+    check linesBuffer(200).noWrap.scrolledTo(49) == (41, 0)
+
+  test "the last line comes to the bottom":
+    check linesBuffer(200).noWrap.scrolledTo(199) == (183, 0)
+    check linesBuffer(200).noWrap.scrolledTo(194) == (183, 0)
+
+  test "a cursor near above the window comes to the top":
+    check linesBuffer(200).noWrap.scrolledTo(35, top = 41) == (35, 0)
+
+  test "a cursor far above the window comes to the middle":
+    check linesBuffer(200).noWrap.scrolledTo(34, top = 41) == (26, 0)
+
+  test "a closed fold counts as one line":
+    let buf = linesBuffer(200)
+    check buf.foldState.addFold(29, 49, collapsed = true)
+    # Eight lines above 54 are 53-50, the fold and 28-26.
+    check buf.noWrap.scrolledTo(54) == (26, 0)
+    check buf.noWrap.scrolledTo(56) == (28, 0)
+
+  test "a top inside a closed fold goes to the fold's start":
+    let buf = linesBuffer(200)
+    check buf.foldState.addFold(29, 49, collapsed = true)
+    check buf.noWrap.scrolledTo(52, top = 40) == (29, 0)
+
+  test "a wrapped line sticking out at the bottom comes into view whole":
+    var lines = newSeq[string](20)
+    for i in 0 ..< lines.len:
+      lines[i] = "x"
+    lines[16] = "x".repeat(25)
+    let buf = newTextBuffer(lines.join("\n"))
+    check buf.wrapAt10.scrolledTo(16) == (2, 0)
+
+  test "a top line taller than the window scrolls to the cursor":
+    let buf = newTextBuffer(@["a", "b", "x".repeat(250), "c"].join("\n"))
+    check buf.wrapAt10.scrolledTo(2, height = 5) == (2, 0)
+    check buf.wrapAt10.scrolledTo(2, 120, top = 2, height = 5) == (2, 8)
+    # Back up the line, the cursor comes to the top row.
+    check buf.wrapAt10.scrolledTo(2, 30, top = 2, skip = 8, height = 5) == (2, 3)
+
+  test "scrolling off a top line with rows scrolled off frees only the rest":
+    # The top line shows its last 2 of 10 rows, then "a", then 2 rows of "b";
+    # the cursor is on the last row of "c", 3 rows high.
+    let buf =
+      newTextBuffer(@["x".repeat(100), "a", "x".repeat(15), "x".repeat(25)].join("\n"))
+    check buf.wrapAt10.scrolledTo(3, 20, skip = 8, height = 5) == (2, 0)
+
+  test "a top moved to a closed fold's start drops the rows scrolled off":
+    var lines = newSeq[string](200)
+    for i in 0 ..< lines.len:
+      lines[i] = "x"
+    lines[29] = "x".repeat(25)
+    lines[40] = "x".repeat(25)
+    let buf = newTextBuffer(lines.join("\n"))
+    check buf.foldState.addFold(29, 49, collapsed = true)
+    check buf.wrapAt10.scrolledTo(52, top = 40, skip = 2) == (29, 0)
+    check buf.wrapAt10.scrolledTo(52, top = 29, skip = 2) == (29, 0)
+
+  test "rows scrolled off a top line that fits stay above the cursor":
+    let buf = newTextBuffer(@["x".repeat(50), "a", "b"].join("\n"))
+    check buf.wrapAt10.scrolledTo(0, 35, skip = 2, height = 5) == (0, 2)
+    check buf.wrapAt10.scrolledTo(0, 5, skip = 2, height = 5) == (0, 0)
+
+suite "scrollCursorLineTo - zt, zz and zb":
+  # The expected tops are Vim 9.2's: with 'smoothscroll' for rows scrolled off
+  # a line that fits, as moe's <C-e> scrolls by rows, and without it for a
+  # line taller than the window.
+  proc placed(
+      rl: RowLayout, spot: CursorLineSpot, line, column: int, top = 0, skip = 0
+  ): tuple[top, skip: int] =
+    ## The window's top after `spot` and the redraw after it, 5 rows high.
+    let viewport = ViewPort(width: rl.maxWidth, height: 5, topLine: top)
+    viewport.topWrapOffset = skip
+    rl.scrollCursorLineTo(viewport, line, column, 5, spot)
+    rl.scrollViewportToCursor(viewport, line, column, 5)
+    (viewport.topLine, viewport.topWrapOffset)
+
+  let
+    fits = newTextBuffer(@["x".repeat(30), "a", "b", "c", "d", "e"].join("\n"))
+    tall = newTextBuffer(@["a", "b", "x".repeat(250), "c"].join("\n"))
+
+  test "zz and zb show a top line that fits from its head":
+    check fits.wrapAt10.placed(clsMiddle, 0, 15, skip = 1) == (0, 0)
+    check fits.wrapAt10.placed(clsBottom, 0, 15, skip = 1) == (0, 0)
+
+  test "zt keeps the rows scrolled off while the cursor is past them":
+    check fits.wrapAt10.placed(clsTop, 0, 15, skip = 1) == (0, 1)
+    # On the first cell after them, as Vim's w_skipcol >= w_virtcol.
+    check fits.wrapAt10.placed(clsTop, 0, 10, skip = 1) == (0, 0)
+
+  test "zt and zz keep the rows scrolled off a line taller than the window":
+    check tall.wrapAt10.placed(clsTop, 2, 85, top = 2, skip = 8) == (2, 8)
+    check tall.wrapAt10.placed(clsTop, 2, 80, top = 2, skip = 8) == (2, 8)
+    check tall.wrapAt10.placed(clsMiddle, 2, 85, top = 2, skip = 8) == (2, 8)
+
+  test "zb in a line taller than the window brings the cursor's row to the bottom":
+    check tall.wrapAt10.placed(clsBottom, 2, 85, top = 2, skip = 8) == (2, 4)
+
+  test "zt in a closed fold puts the fold's start at the top":
+    let buf = linesBuffer(200)
+    check buf.foldState.addFold(10, 20, collapsed = true)
+    check buf.noWrap.placed(clsTop, 15, 0) == (10, 0)

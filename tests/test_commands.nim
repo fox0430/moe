@@ -220,10 +220,10 @@ suite "ViewportManager - Line Wrap Scrolling":
     check viewportManager.viewport.topLine == 10
 
   test "lineWrap: viewport keeps a mid-wrap top when the cursor stays visible":
-    # Two 40 cell lines wrapped at width 10 give 4 segments each. The viewport
-    # starts two segments into line 0, so line 1 begins on screen row 2 and the
-    # cursor is still inside the 4 row text area.
-    let buffer = newTextBuffer("a".repeat(40) & "\n" & "b".repeat(40))
+    # A 40 cell line wrapped at width 10 gives 4 segments. The viewport starts
+    # two segments into line 0, so line 1 is drawn whole on screen row 2 of the
+    # 4 row text area.
+    let buffer = newTextBuffer("a".repeat(40) & "\n" & "b".repeat(10))
     let viewportManager = ViewportManager(
       viewport: ViewPort(
         topLine: 0, topWrapOffset: 2, leftCell: 0, height: 5, width: 10, x: 0, y: 0
@@ -244,6 +244,28 @@ suite "ViewportManager - Line Wrap Scrolling":
     check viewportManager.viewport.topLine == 0
     check viewportManager.viewport.topWrapOffset == 2
 
+  test "lineWrap: a line sticking out below a mid-wrap top comes into view whole":
+    let buffer = newTextBuffer("a".repeat(40) & "\n" & "b".repeat(40))
+    let viewportManager = ViewportManager(
+      viewport: ViewPort(
+        topLine: 0, topWrapOffset: 2, leftCell: 0, height: 5, width: 10, x: 0, y: 0
+      )
+    )
+
+    viewportManager.updateViewport(
+      CursorPosition(x: 0, y: 1),
+      buffer.len,
+      showStatusLine = true,
+      reservedLines = 1,
+      lineWrap = true,
+      buffer = buffer,
+      viewportOffset = 0,
+      tabStop = 4,
+    )
+
+    check viewportManager.viewport.topLine == 1
+    check viewportManager.viewport.topWrapOffset == 0
+
   test "lineWrap: viewport scrolls up":
     let buffer = createTestBuffer(100)
     let viewportManager = ViewportManager(
@@ -263,7 +285,8 @@ suite "ViewportManager - Line Wrap Scrolling":
       tabStop = 4,
     )
 
-    check viewportManager.viewport.topLine == 5
+    # Far above, the cursor comes to the middle, which the buffer's start cuts.
+    check viewportManager.viewport.topLine == 0
 
   proc createLongLineBuffer(lineCount: int, lineWidth: int): TextBuffer =
     ## Create a buffer where each line has `lineWidth` characters (all 'a').
@@ -277,8 +300,8 @@ suite "ViewportManager - Line Wrap Scrolling":
 
   test "lineWrap: viewport scrolls to last line with wrapped lines":
     # Each line: 40 chars, viewport width 20 → 2 screen lines per logical line.
-    # visibleHeight = 20 - 1 = 19. budget = 19 (cursorWrapOffset=0).
-    # 9 lines × 2 = 18 < 19, 10 lines × 2 = 20 (not < 19) → topLine = lastLine - 9.
+    # visibleHeight = 20 - 1 = 19: 9 whole lines fit, the last at the bottom
+    # and a row left under it, as Vim's scroll_cursor_halfway puts them.
     let buffer = createLongLineBuffer(50, 40)
     let viewportManager = ViewportManager(
       viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 20, x: 0, y: 0)
@@ -298,15 +321,12 @@ suite "ViewportManager - Line Wrap Scrolling":
       tabStop = 4,
     )
 
-    check viewportManager.viewport.topLine == lastLine - 9
+    check viewportManager.viewport.topLine == lastLine - 8
 
   test "lineWrap: viewport scrolls with cursor at non-zero wrap offset":
     # Each line: 40 chars, viewport width 20 → 2 screen lines per logical line.
-    # Cursor at column 25 → cursor wrap segment 1.
-    # visibleHeight = 19, budget = 19 - 1 = 18. Walking 18 rows back from
-    # (lastLine, 1) lands mid-line, on segment 1 of lastLine - 9: the minimal
-    # scroll that still shows the cursor, and the same top the render authority
-    # (`adjustViewportForCursor`) computes for this state.
+    # Cursor at column 25 → cursor wrap segment 1. The window starts at a
+    # line's start as with the cursor on segment 0.
     let buffer = createLongLineBuffer(50, 40)
     let viewportManager = ViewportManager(
       viewport: ViewPort(topLine: 0, leftCell: 0, height: 20, width: 20, x: 0, y: 0)
@@ -326,8 +346,8 @@ suite "ViewportManager - Line Wrap Scrolling":
       tabStop = 4,
     )
 
-    check viewportManager.viewport.topLine == lastLine - 9
-    check viewportManager.viewport.topWrapOffset == 1
+    check viewportManager.viewport.topLine == lastLine - 8
+    check viewportManager.viewport.topWrapOffset == 0
 
 suite "ViewportManager - Default reservedLines":
   proc createTestBuffer(lineCount: int): TextBuffer =

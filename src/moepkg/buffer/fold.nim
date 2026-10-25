@@ -159,6 +159,16 @@ proc getCollapsedFoldAt*(state: FoldState, line: int): Option[Fold] =
     if fold.collapsed and line >= fold.startLine and line <= fold.endLine:
       return some(fold)
 
+proc foldStart*(buffer: TextBuffer, line: int): int =
+  ## The first line of the closed fold `line` is in, or `line`.
+  let fold = buffer.foldState.getCollapsedFoldAt(line)
+  if fold.isSome: fold.get.startLine else: line
+
+proc foldEnd*(buffer: TextBuffer, line: int): int =
+  ## The last line of the closed fold `line` is in, or `line`.
+  let fold = buffer.foldState.getCollapsedFoldAt(line)
+  if fold.isSome: fold.get.endLine else: line
+
 proc endsInCollapsedFold*(state: FoldState, startLine, endLine: int): bool =
   ## True when either end line of the range lies in a collapsed fold. A fold the
   ## range only contains does not count: its lines are whole lines of the range

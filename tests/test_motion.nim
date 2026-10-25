@@ -19,7 +19,7 @@
 
 ## Tests for motion.nim
 
-import std/[unittest, strutils, options]
+import std/[unittest, strutils, options, sequtils]
 
 import pkg/results
 
@@ -1728,3 +1728,86 @@ suite "ScreenColumn Motion":
       none(OperatorType),
     )
     check visual.pos.column == 2
+
+suite "Viewport Motion - H, M and L as Vim's nv_scroll":
+  # Where Vim 9.2 puts the cursor in a window 17 rows high and 40 cells wide.
+  proc everyThirdLong(): TextBuffer =
+    ## Every third line takes three rows, the others one.
+    var lines: seq[string]
+    for i in 1 .. 60:
+      lines.add(
+        if i mod 3 == 0:
+          "x".repeat(95)
+        else:
+          "  line " & $i
+      )
+    newTextBuffer(lines.join("\n"))
+
+  proc plainLines(count: int): TextBuffer =
+    newTextBuffer(newSeq[string](count).join("\n"))
+
+  proc land(
+      buffer: TextBuffer,
+      motion: Motion,
+      count = 1,
+      top = 0,
+      wrap = true,
+      operator = none(OperatorType),
+  ): BufferPosition =
+    newMotionExecutor(buffer)
+      .landMotion(
+        CursorPosition(x: 0, y: top),
+        MotionCommand(motion: motion, count: count),
+        viewportHeight = 17,
+        viewportTopLine = top,
+        reservedLines = 0,
+        rowLayout = initRowLayout(buffer, nil, wrap, 40, 8),
+        operator = operator,
+      ).pos
+
+  test "L goes to the last line shown whole, at its first non-blank":
+    let buffer = everyThirdLong()
+    check buffer.land(Motion.ViewportLow) == BufferPosition(line: 10, column: 2)
+    check buffer.land(Motion.ViewportLow, top = 10) ==
+      BufferPosition(line: 19, column: 2)
+
+  test "a count for L and H counts lines, not rows":
+    let buffer = everyThirdLong()
+    check buffer.land(Motion.ViewportLow, 3).line == 8
+    check buffer.land(Motion.ViewportLow, 2, top = 10).line == 18
+    check buffer.land(Motion.ViewportHigh) == BufferPosition(line: 0, column: 2)
+    check buffer.land(Motion.ViewportHigh, 3).line == 2
+
+  test "M goes half the rows of the lines shown whole down":
+    let buffer = everyThirdLong()
+    check buffer.land(Motion.ViewportMiddle).line == 5
+    check buffer.land(Motion.ViewportMiddle, top = 10).line == 14
+    check plainLines(200).land(Motion.ViewportMiddle, wrap = false).line == 8
+
+  test "a count past the window stays in it, but not for an operator":
+    let buffer = everyThirdLong()
+    check buffer.land(Motion.ViewportHigh, 20).line == 10
+    check buffer.land(Motion.ViewportHigh, 20, operator = some(OpDelete)).line == 19
+    check plainLines(200).land(Motion.ViewportHigh, 20, wrap = false).line == 16
+    check plainLines(200).land(Motion.ViewportLow, 20, wrap = false).line == 0
+
+  test "a closed fold counts as one line":
+    let buffer = plainLines(200)
+    check buffer.foldState.addFold(4, 19, collapsed = true)
+    check buffer.land(Motion.ViewportLow, wrap = false).line == 31
+    check buffer.land(Motion.ViewportLow, 5, wrap = false).line == 27
+    check buffer.land(Motion.ViewportHigh, 3, wrap = false).line == 2
+    check buffer.land(Motion.ViewportHigh, 20, wrap = false).line == 31
+    check buffer.land(Motion.ViewportMiddle, wrap = false).line == 23
+
+  test "L onto a closed fold lands on its last line, at its first non-blank":
+    # Vim's nv_scroll keeps the line w_botline - 1 names. The cursor manager
+    # then puts the cursor on the fold's first line.
+    let buffer = newTextBuffer(
+      (0 ..< 200).mapIt(" ".repeat((it + 1) mod 4 * 2) & "line").join("\n")
+    )
+    check buffer.foldState.addFold(16, 21, collapsed = true)
+    check buffer.land(Motion.ViewportLow, wrap = false) ==
+      BufferPosition(line: 21, column: 4)
+    check buffer.land(Motion.ViewportHigh, 17, wrap = false) ==
+      BufferPosition(line: 16, column: 2)

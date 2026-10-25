@@ -1820,34 +1820,27 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
       onTabEnd = false,
     )
 
-  test "Scrolls down from top so cursor is visible with minimal scroll":
+  test "A cursor below the window comes into view whole, from a line's start":
     let buf = makeWrappingBuffer(30)
     let vp = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
     let cursorLine = 20
 
     vp.adjustWrap(buf, cursorLine)
 
-    # Cursor must be at or below topLine and fit within the visible height.
     check vp.topLine in 0 .. cursorLine
+    check vp.topWrapOffset == 0
     check buf.screenLines(vp.topLine, cursorLine) <= VisibleHeight
-    # Minimal scroll: moving topLine up one more line would overflow.
-    if vp.topLine > 0:
-      check buf.screenLines(vp.topLine - 1, cursorLine) > VisibleHeight
 
-  test "Big downward jump lands cursor in view (issue #10 scenario)":
+  test "A jump to the last line puts it at the bottom, from a line's start":
     let buf = makeWrappingBuffer(500)
     let vp = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
     let cursorLine = 499
 
     vp.adjustWrap(buf, cursorLine)
 
-    # Segment-precision scroll: the cursor segment (here segment 0) lands on the
-    # last visible row with minimal downward scroll, possibly starting mid
-    # logical line (topWrapOffset > 0).
-    check vp.topLine in 0 .. cursorLine
-    check vp.topWrapOffset >= 0
-    check vp.topWrapOffset < buf.wrapAt(vp.topLine)
-    check buf.cursorVisualRow(vp, cursorLine, 0) == VisibleHeight - 1
+    check vp.topWrapOffset == 0
+    check buf.screenLines(vp.topLine, cursorLine) <= VisibleHeight
+    check buf.screenLines(vp.topLine - 1, cursorLine) > VisibleHeight
 
   test "Does not scroll when cursor already visible at topLine":
     let buf = makeWrappingBuffer(30)
@@ -1857,15 +1850,24 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
 
     check vp.topLine == 5
 
-  test "Scrolls up when cursor is above topLine":
+  test "A cursor near above the window comes to the top":
     let buf = makeWrappingBuffer(30)
-    let vp = ViewPort(topLine: 20, leftCell: 0, width: 80, height: 24)
+    let vp = ViewPort(topLine: 8, leftCell: 0, width: 80, height: 24)
 
     vp.adjustWrap(buf, 5)
 
     check vp.topLine == 5
 
-  test "Converging from any starting topLine yields the same minimal topLine":
+  test "A cursor far above the window comes to the middle":
+    let buf = makeWrappingBuffer(30)
+    let vp = ViewPort(topLine: 20, leftCell: 0, width: 80, height: 24)
+
+    vp.adjustWrap(buf, 10)
+
+    check vp.topLine in 1 ..< 10
+    check buf.screenLines(vp.topLine, 10) <= VisibleHeight
+
+  test "Converging from any starting topLine yields the same topLine":
     # Starting far above (0) and starting just below the answer must converge to
     # the identical topLine — the result depends only on cursor + visibleHeight.
     let buf = makeWrappingBuffer(60)
@@ -1889,16 +1891,16 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     newTextBuffer(lines.join("\n"))
 
   test "Collapsed fold above the cursor counts as a single marker row":
-    # Fold lines 18..26 (9 lines) collapse to one marker row. Walking back from
-    # the cursor, that whole region costs 1 row, not 9, so topLine lands 8 lines
-    # lower than the fold-unaware computation (which would stop at 19).
+    # Fold lines 18..26 (9 lines) collapse to one marker row. Far below the
+    # window, the cursor comes to the middle, counting the rows under the last
+    # line as below it, as Vim puts it (topLine 20 without the fold).
     let buf = singleRowBuffer(30)
     check buf.foldState.addFold(18, 26, collapsed = true)
     let vp = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 24)
 
     vp.adjustWrap(buf, 28)
 
-    check vp.topLine == 11
+    check vp.topLine == 12
 
   test "Collapsed fold lets the viewport keep the top visible (no needless scroll)":
     # Lines 2..20 collapse to one marker row, so the cursor at line 25 fits

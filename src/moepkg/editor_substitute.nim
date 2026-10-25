@@ -46,8 +46,7 @@ proc startSubstitutePreview*(e: Editor) =
   e.state.ui.substitutePreview.lastGlobal = false
   e.state.ui.substitutePreview.lastLines = 0 .. -1
   e.state.ui.substitutePreview.originalCursor = e.cursor
-  e.state.ui.substitutePreview.originalTopLine = e.activeWindow.viewport.topLine
-  e.state.ui.substitutePreview.originalLeftCell = e.activeWindow.viewport.leftCell
+  e.state.ui.substitutePreview.originalView = e.activeWindow.viewport.viewState
 
 proc restoreFromPreview*(e: Editor) =
   ## Restore buffer content from preview snapshot without cancelling the preview.
@@ -84,8 +83,7 @@ proc cancelSubstitutePreview*(e: Editor) =
 
   e.restoreFromPreview()
   e.cursor = e.state.ui.substitutePreview.originalCursor
-  e.activeWindow.viewport.resetViewportTop(e.state.ui.substitutePreview.originalTopLine)
-  e.activeWindow.viewport.leftCell = e.state.ui.substitutePreview.originalLeftCell
+  e.activeWindow.viewport.restoreViewState(e.state.ui.substitutePreview.originalView)
   e.state.ui.substitutePreview.isActive = false
   e.state.ui.substitutePreview.originalLines = @[]
 

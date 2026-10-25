@@ -100,6 +100,15 @@ proc executeSearchFromCurrentPosition(e: Editor, pattern: string): bool =
     e.state.statusMessage = "Pattern not found: " & pattern
     return false
 
+proc showFromSearchStart(e: Editor, pos: BufferPosition) =
+  ## Scroll to `pos` from what the window showed as the search began, as
+  ## Vim's incsearch restores the view before it moves to a match.
+  let view = e.state.input.search.startView
+  if view.isSome:
+    e.showFromView(view.get, pos)
+  else:
+    e.updateViewportForCursor(pos)
+
 proc addSearchHistory(e: Editor, pattern: string) =
   ## Push `pattern` onto the search history, most recent first, dropping an
   ## older duplicate and trimming to the configured limit.
@@ -162,7 +171,7 @@ proc finalizeSearch(e: Editor) =
     else:
       if e.state.input.search.incsearch and not isRepeat:
         # Incremental search already left the cursor on the match
-        e.updateViewportForCursor(e.cursor)
+        e.showFromSearchStart(e.cursor)
       else:
         # A repeat never ran the incremental search, so it searches now.
         if isRepeat:
@@ -186,10 +195,10 @@ proc finalizeSearch(e: Editor) =
   e.state.exitOverlay()
   e.setMode(e.state.mode) # Sync window mode
 
-proc cancelSearch(e: Editor) =
+proc cancelSearch*(e: Editor) =
   ## Cancel search and return to base mode
   ##
-  ## Called when: Escape is pressed in Search mode
+  ## Called when: Escape or Ctrl-C is pressed in Search mode
   ##
   ## Behavior:
   ## - If incsearch enabled: Restore cursor to original position (searchStartPos)
@@ -204,7 +213,7 @@ proc cancelSearch(e: Editor) =
       cfg.selectedIndex = cfg.searchStartIndex
   elif e.state.input.search.incsearch:
     e.cursor = e.state.input.search.startPos
-    e.updateViewportForCursor(e.state.input.search.startPos)
+    e.showFromSearchStart(e.state.input.search.startPos)
     e.syncHelpViewerIndex(e.state.input.search.startPos.line)
   # Exit overlay and restore base mode
   e.state.exitOverlay()
@@ -242,7 +251,7 @@ proc performIncrementalSearch(e: Editor) =
   if e.state.input.search.text.len == 0:
     # Erasing the pattern restores the anchor, as the Config branch does.
     e.cursor = e.state.input.search.startPos
-    e.updateViewportForCursor(e.state.input.search.startPos)
+    e.showFromSearchStart(e.state.input.search.startPos)
     e.syncHelpViewerIndex(e.state.input.search.startPos.line)
     return
 
@@ -274,14 +283,13 @@ proc performIncrementalSearch(e: Editor) =
     e.cursor = pos
     e.syncHelpViewerIndex(pos.line)
 
-    # Update viewport to follow cursor
-    e.updateViewportForCursor(pos)
+    e.showFromSearchStart(pos)
 
     e.state.statusMessage = "Found: " & e.state.input.search.text
   else:
     # No match found, restore to start position
     e.cursor = e.state.input.search.startPos
-    e.updateViewportForCursor(e.state.input.search.startPos)
+    e.showFromSearchStart(e.state.input.search.startPos)
     e.syncHelpViewerIndex(e.state.input.search.startPos.line)
 
     e.state.statusMessage = "Pattern not found: " & e.state.input.search.text

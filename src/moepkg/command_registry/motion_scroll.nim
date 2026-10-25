@@ -84,25 +84,27 @@ proc scrollVisibleHeight(ctx: CommandContext): int =
 proc scrollRowLayout(ctx: CommandContext): RowLayout =
   ctx.motionController.rowLayout()
 
-proc scrollCursorToRow(ctx: CommandContext, rowFromTop: int) =
-  ## Place cursor `rowFromTop` rows below viewport top. Walks rows to handle wrap/folds.
-  let viewport = ctx.motionController.viewportManager.viewport
+proc scrollCursorLineTo(ctx: CommandContext, spot: CursorLineSpot) =
+  ## Put the cursor line at the top of the window, in its middle or at its
+  ## bottom.
   if ctx.buffer.isNil or ctx.buffer.len == 0:
-    viewport.resetViewportTop(max(0, ctx.cursor.line - max(0, rowFromTop)))
     return
-  let
-    layout = ctx.scrollRowLayout()
-    line = clamp(ctx.cursor.line, 0, ctx.buffer.len - 1)
-    cursorSeg = layout.cursorCell(line, ctx.cursor.column).wrapSeg
-    (topLine, topOffset) = layout.walkBackRows(line, cursorSeg, max(0, rowFromTop))
-  viewport.restoreViewportTop(topLine, topOffset)
+  ctx.scrollRowLayout().scrollCursorLineTo(
+    ctx.motionController.viewportManager.viewport,
+    ctx.cursor.line,
+    ctx.cursor.column,
+    ctx.scrollVisibleHeight(),
+    spot,
+    not ctx.state.activeWindow.isNil and
+      ctx.state.activeWindow.cursorOnTabEnd(ctx.cursor),
+  )
 
 proc handleScrollCursorTop*(
     ctx: CommandContext, args: seq[string]
 ): Result[(), string] =
   ## Place cursor at viewport top (zt).
 
-  ctx.motionController.viewportManager.viewport.resetViewportTop(ctx.cursor.line)
+  ctx.scrollCursorLineTo(clsTop)
   return ok(())
 
 proc handleScrollCursorCenter*(
@@ -110,7 +112,7 @@ proc handleScrollCursorCenter*(
 ): Result[(), string] =
   ## Center cursor in viewport (zz / z.).
 
-  ctx.scrollCursorToRow(ctx.scrollVisibleHeight() div 2)
+  ctx.scrollCursorLineTo(clsMiddle)
   return ok(())
 
 proc handleScrollCursorBottom*(
@@ -118,7 +120,7 @@ proc handleScrollCursorBottom*(
 ): Result[(), string] =
   ## Place cursor at viewport bottom (zb).
 
-  ctx.scrollCursorToRow(ctx.scrollVisibleHeight() - 1)
+  ctx.scrollCursorLineTo(clsBottom)
   return ok(())
 
 proc maxScrollTop(
@@ -176,21 +178,27 @@ proc moveCursorToRow(
 proc keepCursorInScrolledViewport(
     ctx: CommandContext, layout: RowLayout, visibleHeight: int
 ) =
-  let cursorRow = ctx.cursorRow(layout, visibleHeight)
-  if cursorRow in 0 ..< visibleHeight:
-    return
+  ## Bring the cursor back into the scrolled window, as Vim's scrollup and
+  ## scrolldown do: to the top row when it went off the top, to the last row
+  ## of the last line shown whole when it went past that. In a top line
+  ## taller than the window, that is the window's last row.
   let
     viewport = ctx.motionController.viewportManager.viewport
-    row = layout.rowAt(
-      viewport.topLine,
-      viewport.topWrapOffset,
-      if cursorRow < 0:
-        0
-      else:
-        visibleHeight - 1,
-    )
-  if row.isSome:
-    ctx.moveCursorToRow(layout, row.get, visibleHeight)
+    row = ctx.cursorRow(layout, visibleHeight)
+    lastRow =
+      layout.botline(viewport.topLine, viewport.topWrapOffset, visibleHeight).rows - 1
+  if row in 0 .. lastRow:
+    return
+  let spot = layout.rowAt(
+    viewport.topLine,
+    viewport.topWrapOffset,
+    if row < 0:
+      0
+    else:
+      max(0, lastRow),
+  )
+  if spot.isSome:
+    ctx.moveCursorToRow(layout, spot.get, visibleHeight)
 
 proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Scroll viewport down by screen rows (Ctrl-E). Keeps cursor visible.

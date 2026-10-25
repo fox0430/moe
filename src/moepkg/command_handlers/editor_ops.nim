@@ -68,6 +68,12 @@ proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
     e.state, e.activeBuffer(), pos
   )
 
+proc showFromView*(e: Editor, view: ViewState, pos: BufferPosition) =
+  ## Scroll to `pos` from what the window showed in `view`, as Vim's
+  ## incsearch restores the view before it moves to a match.
+  e.activeWindow.viewport.restoreViewState(view)
+  e.updateViewportForCursor(pos)
+
 proc modifiedBufferCountExcept*(e: Editor, exclude: TextBuffer): int =
   ## Number of modified buffers other than `exclude`.
   for buf in e.buffers:

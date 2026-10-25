@@ -192,7 +192,7 @@ proc handleModeSwitchToOverlay*(
     state.input.search.text = ""
     state.input.search.cursor = 0
     # Save current cursor position for incsearch cancellation
-    state.input.search.startPos = state.cursor
+    state.noteSearchStart()
     # Set search direction based on command name
     if commandName == "switch-to-search-backward":
       state.input.search.direction = Backward
