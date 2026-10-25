@@ -23,7 +23,11 @@ import std/options
 
 import pkg/results
 
-import ../[types, motion, render_utils, visible_rows, visual_selection, wanted_column]
+import
+  ../[
+    types, motion, cursor_util, page_scroll, render_utils, visible_rows,
+    visual_selection, wanted_column,
+  ]
 import ../buffer/[core, fold]
 
 import core
@@ -78,16 +82,7 @@ proc scrollVisibleHeight(ctx: CommandContext): int =
   )
 
 proc scrollRowLayout(ctx: CommandContext): RowLayout =
-  let
-    viewport = ctx.motionController.viewportManager.viewport
-    viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
-  initRowLayout(
-    ctx.buffer,
-    ctx.motionController.viewportManager.wrapCountCache,
-    ctx.state.effectiveLineWrap(),
-    wrapWidthFor(viewport.width, viewportOffset),
-    ctx.state.tabStop,
-  )
+  ctx.motionController.rowLayout()
 
 proc scrollCursorToRow(ctx: CommandContext, rowFromTop: int) =
   ## Place cursor `rowFromTop` rows below viewport top. Walks rows to handle wrap/folds.
@@ -126,9 +121,6 @@ proc handleScrollCursorBottom*(
   ctx.scrollCursorToRow(ctx.scrollVisibleHeight() - 1)
   return ok(())
 
-func scrollPositionAbove(a, b: tuple[line, offset: int]): bool {.inline.} =
-  wrapPosAbove(a.line, a.offset, b.line, b.offset)
-
 proc maxScrollTop(
     ctx: CommandContext, layout: RowLayout, visibleHeight: int
 ): tuple[line, offset: int] =
@@ -149,10 +141,8 @@ proc cursorRow(ctx: CommandContext, layout: RowLayout, visibleHeight: int): int 
   let
     viewport = ctx.motionController.viewportManager.viewport
     (cursorOffset, _) = layout.cursorCell(ctx.cursor.line, ctx.cursor.column)
-  if scrollPositionAbove(
-    (line: ctx.cursor.line, offset: cursorOffset),
-    (line: viewport.topLine, offset: viewport.topWrapOffset),
-  ):
+  if (line: ctx.cursor.line, offset: cursorOffset) <
+      (line: viewport.topLine, offset: viewport.topWrapOffset):
     return -1
   layout.rowOfLine(
     viewport.topLine, viewport.topWrapOffset, ctx.cursor.line, visibleHeight
@@ -210,20 +200,14 @@ proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), s
     layout = ctx.scrollRowLayout()
     viewport = ctx.motionController.viewportManager.viewport
     maxTop = ctx.maxScrollTop(layout, visibleHeight)
-    currentTop =
-      if scrollPositionAbove(
-        maxTop, (line: viewport.topLine, offset: viewport.topWrapOffset)
-      ):
-        maxTop
-      else:
-        (line: viewport.topLine, offset: viewport.topWrapOffset)
+    currentTop = min(maxTop, (line: viewport.topLine, offset: viewport.topWrapOffset))
     row = layout.rowAt(currentTop.line, currentTop.offset, count)
     candidate =
       if row.isSome:
         (line: row.get.line, offset: row.get.wrapSeg)
       else:
         maxTop
-    targetTop = if scrollPositionAbove(maxTop, candidate): maxTop else: candidate
+    targetTop = min(maxTop, candidate)
 
   viewport.restoreViewportTop(targetTop.line, targetTop.offset)
   ctx.keepCursorInScrolledViewport(layout, visibleHeight)
@@ -238,19 +222,106 @@ proc handleScrollLineUp*(ctx: CommandContext, args: seq[string]): Result[(), str
     layout = ctx.scrollRowLayout()
     viewport = ctx.motionController.viewportManager.viewport
     maxTop = ctx.maxScrollTop(layout, visibleHeight)
-    currentTop =
-      if scrollPositionAbove(
-        maxTop, (line: viewport.topLine, offset: viewport.topWrapOffset)
-      ):
-        maxTop
-      else:
-        (line: viewport.topLine, offset: viewport.topWrapOffset)
+    currentTop = min(maxTop, (line: viewport.topLine, offset: viewport.topWrapOffset))
     targetTop = layout.walkBackRows(currentTop.line, currentTop.offset, count)
 
   viewport.restoreViewportTop(targetTop.line, targetTop.offset)
   ctx.keepCursorInScrolledViewport(layout, visibleHeight)
 
   return ok(())
+
+proc scrollPage(
+    ctx: CommandContext, args: seq[string], forward, half: bool
+): Result[(), string] =
+  ## Scroll the window as Vim's pagescroll and take the cursor to the indent
+  ## of the line it lands on, as 'startofline' does. A smooth scroll that
+  ## moves the window leaves the cursor on the window's edge instead, stops
+  ## once the last line reaches the bottom row, and shows the way there over
+  ## frames.
+  if ctx.buffer.isNil or ctx.buffer.len == 0:
+    return ok(())
+  let
+    state = ctx.state
+    viewport = ctx.motionController.viewportManager.viewport
+    visibleHeight = ctx.scrollVisibleHeight()
+    layout = ctx.scrollRowLayout()
+    start: RowSpot = (viewport.topLine, viewport.topWrapOffset)
+    startCursor = ctx.cursor
+    scroll =
+      if half:
+        let count = parseCount(args, default = 0)
+        if count > 0:
+          viewport.keepHalfPageRows(min(visibleHeight, count))
+        layout.halfPage(
+          start,
+          ctx.cursor,
+          visibleHeight,
+          viewport.halfPageRows(visibleHeight),
+          forward,
+        )
+      else:
+        layout.page(start, ctx.cursor, visibleHeight, parseCount(args), forward)
+  if not scroll.moved:
+    return ok(())
+
+  let
+    smooth = ctx.smoothScrollConfig.animates
+    down = start < scroll.top
+    top =
+      if smooth and down:
+        # A smooth scroll stops once the last line reaches the bottom row.
+        max(start, min(scroll.top, layout.lastPageTop(visibleHeight)))
+      else:
+        scroll.top
+  viewport.restoreViewportTop(top.line, top.offset)
+  let
+    landing =
+      if smooth and top != start:
+        # A smooth scroll takes the cursor to the edge it scrolls to and keeps
+        # it there.
+        layout.edgeCursor(top, visibleHeight, down)
+      else:
+        BufferPosition(
+          line: scroll.cursorLine,
+          column: firstNonBlankColumn(ctx.buffer.getLine(scroll.cursorLine)),
+        )
+    cursor = ctx.motionController.cursorManager.clampPosition(
+      CursorPosition(x: landing.column, y: landing.line), ctx.buffer
+    )
+  state.cursor = BufferPosition(line: cursor.y, column: cursor.x)
+  state.preferredColumn = -1
+  # Sideways too, as the cursor goes.
+  ctx.motionController.viewportManager.updateViewport(state, ctx.buffer, state.cursor)
+  if smooth:
+    state.windowDisplay.scrollAnimation.startPageScroll(
+      layout,
+      state.activeWindow,
+      viewport,
+      (start, startCursor),
+      visibleHeight,
+      ctx.smoothScrollConfig,
+    )
+  ok(())
+
+proc handleScrollPageDown*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Scroll [count] pages down (Ctrl-F).
+  ctx.scrollPage(args, forward = true, half = false)
+
+proc handleScrollPageUp*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Scroll [count] pages up (Ctrl-B).
+  ctx.scrollPage(args, forward = false, half = false)
+
+proc handleScrollHalfPageDown*(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## Scroll half a window down, or [count] rows from now on (Ctrl-D).
+  ctx.scrollPage(args, forward = true, half = true)
+
+proc handleScrollHalfPageUp*(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## Scroll half a window up, or [count] rows from now on (Ctrl-U).
+  ctx.scrollPage(args, forward = false, half = true)
 
 ## Fold commands
 
@@ -366,16 +437,6 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     bcMotionDown, "Move Down", "Move cursor down", Motion.Down
   )
   registry.registerMotionCommand(
-    bcMotionPageUp, "Page Up", "Scroll page up", Motion.PageUp, shouldRecordJump = true
-  )
-  registry.registerMotionCommand(
-    bcMotionPageDown,
-    "Page Down",
-    "Scroll page down",
-    Motion.PageDown,
-    shouldRecordJump = true,
-  )
-  registry.registerMotionCommand(
     bcMotionHome, "Home", "Move to beginning of line", Motion.Home, false
   )
   registry.registerMotionCommand(
@@ -489,6 +550,42 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     "Scroll Line Up",
     "Scroll viewport one line up (Ctrl-Y)",
     handleScrollLineUp,
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcScrollPageDown),
+    "Scroll Page Down",
+    "Scroll [count] pages down (Ctrl-F)",
+    handleScrollPageDown,
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcScrollPageUp),
+    "Scroll Page Up",
+    "Scroll [count] pages up (Ctrl-B)",
+    handleScrollPageUp,
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcScrollHalfPageDown),
+    "Scroll Half Page Down",
+    "Scroll half a window down, or [count] rows from now on (Ctrl-D)",
+    handleScrollHalfPageDown,
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcScrollHalfPageUp),
+    "Scroll Half Page Up",
+    "Scroll half a window up, or [count] rows from now on (Ctrl-U)",
+    handleScrollHalfPageUp,
     0,
     1,
   )

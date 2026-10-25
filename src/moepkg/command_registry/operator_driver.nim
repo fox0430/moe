@@ -29,14 +29,8 @@ import ../buffer/core
 
 import core, operator_engine, insert_entry
 
-const
-  ScrollMotions* =
-    {Motion.PageUp, Motion.PageDown, Motion.HalfPageUp, Motion.HalfPageDown}
-    ## Move by scrolling: smooth scrolling animates them, and no operator acts
-    ## over them (`d<C-d>` cancels the `d`)
-
-  MotionOperandTypes = ["find", "till", "mark-line", "mark-exact"]
-    ## Operand-taking commands an operator acts over (`dfx`, `d'a`)
+const MotionOperandTypes = ["find", "till", "mark-line", "mark-exact"]
+  ## Operand-taking commands an operator acts over (`dfx`, `d'a`)
 
 proc inIndent(buffer: TextBuffer, pos: BufferPosition): bool =
   ## Only blanks before `pos` on its line (Vim's inindent).
@@ -269,7 +263,7 @@ proc isMotion*(registry: CommandRegistry, cmd: Command): bool =
   ## A waiting operator acts over `cmd` (`dw`, `dfx`, `dn`).
   case cmd.kind
   of ctMotion:
-    cmd.motion notin ScrollMotions
+    true
   of ctOperatorPending:
     cmd.operatorType in MotionOperandTypes
   of ctAction, ctCustom, ctTextObject, ctOperator:

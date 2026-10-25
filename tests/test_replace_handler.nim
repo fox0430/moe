@@ -559,13 +559,18 @@ suite "ReplaceModeHandler - Key Handling":
       discard buf.insertText(BufferPosition(line: i - 1, column: 5), "\nline" & $i)
     let handler = createTestHandler(buf)
     let state = createTestState()
+    state.config.smoothScroll.enable = false
+    let viewport = handler.motionController.viewportManager.viewport
+    viewport.topLine = 9
     state.cursor = BufferPosition(line: 20, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0, modifiers: {})
     let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
+    # A page up, onto the last line it shows, as Vim's ins_pageup.
     check r.kind == rmrHandled
-    check state.cursor.line < 20
+    check viewport.topLine == 0
+    check state.cursor.line == 21
 
   test "Handle PageDown key":
     let buf = newTextBuffer()
@@ -574,14 +579,17 @@ suite "ReplaceModeHandler - Key Handling":
       discard buf.insertText(BufferPosition(line: i - 1, column: 5), "\nline" & $i)
     let handler = createTestHandler(buf)
     let state = createTestState()
+    state.config.smoothScroll.enable = false
     state.cursor = BufferPosition(line: 5, column: 0)
 
     let keyCombo =
       KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0, modifiers: {})
     let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
+    # A page down, onto its top line, as Vim's ins_pagedown.
     check r.kind == rmrHandled
-    check state.cursor.line > 5
+    check handler.motionController.viewportManager.viewport.topLine == 20
+    check state.cursor.line == 20
 
 suite "ReplaceModeHandler - Unhandled Keys":
   test "Unknown special key returns unhandled":

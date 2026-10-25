@@ -7371,43 +7371,31 @@ suite "handleKeyCombo - the column vertical moves want":
         got.add e.activeBuffer.getLine(i)
       check got == lines
 
-  test "a smooth half-page scroll keeps it as the plain one does":
-    let e = createEditorForColumn("ab\n" & "abcdefgh\n".repeat(60))
-    check e.config.smoothScroll.enable
-    for key in ["j", "$", "k", "C-d"]:
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
       check e.handleKeyCombo(parseKeyCombo(key).get)
 
+  proc settle(e: Editor) =
+    ## Let a smooth scroll run to its end.
     let frame = newBuffer(80, 24)
     var frames = 0
     while e.state.windowDisplay.scrollAnimation.active and frames < 10_000:
       discard e.updateForFrame(frame)
       inc frames
     check not e.state.windowDisplay.scrollAnimation.active
-    check e.cursor.line > 1
 
-    for key in ["j", "i", "Z"]:
-      check e.handleKeyCombo(parseKeyCombo(key).get)
-    check e.activeBuffer.getLine(e.cursor.line) == "abcdefgZh"
+  for smooth in [false, true]:
+    test "a page scroll drops it and goes to the indent (smooth: " & $smooth & ")":
+      # Vim's 'startofline'.
+      let e = createEditorForColumn("ab\n" & "  abcdefgh\n".repeat(60))
+      e.config.smoothScroll.enable = smooth
+      e.press("j", "$", "k", "C-d")
+      e.settle()
+      check e.cursor.line > 1
+      check e.cursor.column == 2
+      e.press("j", "i", "Z")
 
-  proc press(e: Editor, keys: varargs[string]) =
-    for key in keys:
-      check e.handleKeyCombo(parseKeyCombo(key).get)
-
-  test "a smooth half-page scroll moves the cursor onto the column it aims for":
-    let e = createEditorForColumn("abcdefgh\n" & "ab\n".repeat(60))
-    e.press("$", "C-d")
-    check e.state.windowDisplay.scrollAnimation.active
-
-    let frame = newBuffer(80, 24)
-    var frames = 0
-    while e.state.windowDisplay.scrollAnimation.active and frames < 10_000:
-      discard e.updateForFrame(frame)
-      inc frames
-      check e.cursor.column <= max(0, e.activeBuffer.getLineLen(e.cursor.line) - 1)
-    check e.cursor.line > 1
-    e.press("i", "Z")
-
-    check e.activeBuffer.getLine(e.cursor.line) == "aZb"
+      check e.activeBuffer.getLine(e.cursor.line) == "  Zabcdefgh"
 
   test "a new split window takes it from the cursor when the window split has none":
     let e = createEditorForColumn("abcdefgh\nabcdefgh")
@@ -7580,32 +7568,276 @@ suite "handleKeyCombo - the column vertical moves want":
     check win.preferredColumn == -1
 
   for smooth in [false, true]:
-    test "a half-page scroll onto a closed fold keeps it (smooth: " & $smooth & ")":
+    test "a half-page scroll onto a closed fold lands on its start and drops it (smooth: " &
+      $smooth & ")":
       let e = createEditorForColumn("ab\n" & "abcdefgh\n".repeat(60))
       e.config.smoothScroll.enable = smooth
       e.press("j", "$", "k")
       # Where the scroll lands without folds, so a fold there takes its start.
       let target = block:
         let probe = createEditorForColumn("ab\n" & "abcdefgh\n".repeat(60))
-        probe.config.smoothScroll.enable = false
+        probe.config.smoothScroll.enable = smooth
         probe.press("C-d")
         probe.cursor.line
       require target > 1
       check e.activeBuffer.foldState.addFold(target, target + 3)
       e.press("C-d")
+      e.settle()
 
-      let frame = newBuffer(80, 24)
-      var frames = 0
-      while frames < 10_000:
-        discard e.updateForFrame(frame)
-        inc frames
-        if not e.state.windowDisplay.scrollAnimation.active:
-          break
       check e.cursor == BufferPosition(line: target, column: 0)
       e.press("j", "i", "Z")
 
       check e.cursor.line == target + 4
-      check e.activeBuffer.getLine(target + 4) == "abcdefgZh"
+      check e.activeBuffer.getLine(target + 4) == "Zabcdefgh"
+
+suite "handleKeyCombo - page scrolls":
+  # Vim's pagescroll: the window scrolls and the cursor goes along, to the
+  # indent of the line it lands on. A smooth scroll ends in the same place,
+  # and a key during it runs there.
+  proc createEditorForPages(smooth = false): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    var lines: seq[string]
+    for i in 1 .. 200:
+      lines.add "  line " & $i
+    let buf = newTextBuffer(lines.join("\n"))
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.config.smoothScroll.enable = smooth
+    # The first frame lays the window out on the screen.
+    discard result.updateForFrame(newBuffer(80, 24))
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc settle(e: Editor) =
+    let frame = newBuffer(80, 24)
+    var frames = 0
+    while e.state.windowDisplay.scrollAnimation.active and frames < 10_000:
+      discard e.updateForFrame(frame)
+      inc frames
+    check not e.state.windowDisplay.scrollAnimation.active
+
+  proc top(e: Editor): int =
+    e.activeWindow.viewport.topLine
+
+  proc halfWindow(): int =
+    let e = createEditorForPages()
+    e.press("C-d")
+    e.top
+
+  test "Ctrl-D scrolls the window and takes the cursor as many lines":
+    let half = halfWindow()
+    check half > 1
+    let e = createEditorForPages()
+    e.press("3", "j", "C-d")
+
+    check e.top == half
+    check e.cursor == BufferPosition(line: half + 3, column: 2)
+
+  test "a count to Ctrl-D is how far Ctrl-D and Ctrl-U scroll from then on":
+    let e = createEditorForPages()
+    e.press("3", "C-d")
+    check e.top == 3
+    e.press("C-d")
+    check e.top == 6
+    e.press("C-u")
+    check e.top == 3
+
+  test "until the window's height changes, even back again":
+    let
+      e = createEditorForPages()
+      plain = createEditorForPages()
+    proc resize(height: int) =
+      for x in [e, plain]:
+        discard x.updateForFrame(newBuffer(80, height))
+
+    proc bothDown(): tuple[e, plain: int] =
+      ## How far a Ctrl-D in each scrolls.
+      let before = (e.top, plain.top)
+      e.press("C-d")
+      plain.press("C-d")
+      (e.top - before[0], plain.top - before[1])
+
+    let height = e.activeWindow.viewport.height
+    e.press("3", "C-d")
+    check e.top == 3
+    resize(20)
+    let shorter = bothDown()
+    check shorter.e == shorter.plain
+    check shorter.plain > 3
+    e.press("3", "C-d")
+    resize(24)
+    resize(20)
+    check e.activeWindow.viewport.height < height
+    let back = bothDown()
+    check back.e == back.plain
+
+  test "Ctrl-F and Ctrl-B scroll a page":
+    let e = createEditorForPages()
+    e.press("C-f")
+    let page = e.top
+    check page > 1
+    check e.cursor == BufferPosition(line: page, column: 2)
+    e.press("C-b")
+    check e.top == 0
+    check e.cursor.line > page
+
+  test "a page scroll is no jump":
+    let e = createEditorForPages()
+    e.press("G", "g", "g")
+    let jumps = e.state.jumpList.list.len
+    e.press("C-d", "C-f", "C-u", "C-b")
+
+    check e.state.jumpList.list.len == jumps
+
+  test "Visual takes the selection along":
+    let half = halfWindow()
+    let e = createEditorForPages()
+    e.press("v", "C-d")
+
+    check e.state.mode == EditorMode.Visual
+    check e.top == half
+    check e.cursor.line == half
+
+  test "PageDown in Insert scrolls a page and stays in Insert":
+    let e = createEditorForPages()
+    e.press("C-f")
+    let page = e.top
+    let plain = e.cursor
+    let i = createEditorForPages()
+    i.press("i", "PageDown")
+
+    check i.state.mode == EditorMode.Insert
+    check i.top == page
+    check i.cursor == plain
+
+  proc rows(e: Editor): int =
+    ## Rows of text the window shows.
+    e.activeWindow.viewport.height - e.state.motionReservedLines()
+
+  for (keys, down) in [
+    (@["C-d"], true),
+    (@["C-f"], true),
+    (@["2", "C-f"], true),
+    (@["C-f", "C-b"], false),
+    (@["G", "C-u"], false),
+  ]:
+    test "a smooth scroll leaves the window where the plain one does and the cursor on its edge: " &
+      keys.join(" "):
+      let plain = createEditorForPages()
+      plain.press(keys)
+      let e = createEditorForPages(smooth = true)
+      e.press(keys)
+      check e.state.windowDisplay.scrollAnimation.active
+      e.settle()
+
+      check e.top == plain.top
+      check e.cursor ==
+        BufferPosition(
+          line:
+            if down:
+              e.top + e.rows - 1
+            else:
+              e.top,
+          column: 2,
+        )
+      check not e.activeWindow.viewport.detachedFromCursor
+
+  test "a smooth scroll stops once the last line reaches the bottom row":
+    let plain = createEditorForPages()
+    plain.press("1", "0", "0", "C-f")
+    check plain.top == 199
+    let e = createEditorForPages(smooth = true)
+    e.press("1", "0", "0", "C-f")
+    e.settle()
+
+    check e.top == 200 - e.rows
+    check e.cursor == BufferPosition(line: 199, column: 2)
+
+  test "a smooth Ctrl-D moves the cursor to the bottom row, then scrolls with it there":
+    let plain = createEditorForPages()
+    plain.press("3", "j", "C-d")
+    let e = createEditorForPages(smooth = true)
+    e.press("3", "j", "C-d")
+    let bottom = e.rows - 1
+    # The command puts it where the scroll ends, for what comes after it.
+    check e.cursor.line == plain.top + bottom
+
+    var
+      moved = false
+      scrolled = false
+      frames = 0
+    while e.state.windowDisplay.scrollAnimation.active and frames < 1000:
+      discard e.updateForFrame(newBuffer(80, 24))
+      inc frames
+      if e.top == 0 and e.cursor.line in 4 ..< bottom:
+        moved = true
+      elif e.top in 1 ..< plain.top:
+        check e.cursor.line - e.top == bottom
+        scrolled = true
+    check moved
+    check scrolled
+    check e.top == plain.top
+    check e.cursor.line == plain.top + bottom
+
+  test "a key during a smooth scroll runs where it ends":
+    let settled = createEditorForPages(smooth = true)
+    settled.press("C-f")
+    settled.settle()
+    settled.press("j")
+    let e = createEditorForPages(smooth = true)
+    e.press("C-f")
+    check e.state.windowDisplay.scrollAnimation.active
+    e.press("j")
+
+    check not e.state.windowDisplay.scrollAnimation.active
+    check e.top == settled.top
+    check e.cursor == settled.cursor
+
+  test "a key replayed during a smooth scroll runs where it ends":
+    let typed = createEditorForPages(smooth = true)
+    typed.press("C-d", "C-d", "j")
+    typed.settle()
+    let e = createEditorForPages(smooth = true)
+    e.press("q", "a", "C-d", "C-d", "j", "q", "g", "g")
+    e.settle()
+    e.press("@", "a")
+    e.settle()
+
+    check e.top == typed.top
+    check e.cursor == typed.cursor
+
+  test "a cursor something else moves during a smooth scroll takes the window":
+    let e = createEditorForPages(smooth = true)
+    e.press("C-f")
+    discard e.updateForFrame(newBuffer(80, 24))
+    # As a jump an LSP reply makes between frames.
+    e.activeWindow.cursor = BufferPosition(line: 120, column: 0)
+    e.settle()
+    discard e.updateForFrame(newBuffer(80, 24))
+
+    check not e.activeWindow.viewport.detachedFromCursor
+    check e.cursor == BufferPosition(line: 120, column: 0)
+    check e.top in 120 - e.rows + 1 .. 120
+
+  for keys in [@["C-d"], @["C-f"], @["1", "0", "0", "C-f"]]:
+    test "a smooth scroll nothing slows down is the plain one: " & keys.join(" "):
+      let plain = createEditorForPages()
+      plain.press(keys)
+      let e = createEditorForPages(smooth = true)
+      e.config.smoothScroll.friction = 0
+      e.config.smoothScroll.airDrag = 0
+      e.press(keys)
+
+      check not e.state.windowDisplay.scrollAnimation.active
+      check e.top == plain.top
+      check e.cursor == plain.cursor
 
 suite "handleKeyCombo - the cell a cursor on a tab shows on":
   # Vim 9.2's getvcol puts it on a tab's last cell in Normal mode, and in

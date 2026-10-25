@@ -95,14 +95,40 @@ type
     height*: int
     x*: int # Screen position X
     y*: int # Screen position Y
+    halfPage: tuple[rows, height: int]
+      ## The rows a count gave Ctrl-D/Ctrl-U (Vim's 'scroll') and the height
+      ## then. Read through `halfPageRows`.
 
   ScrollAnimation* = object
-    # Physics-based smooth scrolling (comfortable-motion compatible)
+    ## A page scroll shown on its way: the cursor goes to the window's edge
+    ## the scroll goes to, then stays on it while the window scrolls to where
+    ## the scroll put its top. When the top stays, the cursor goes to where the
+    ## scroll put it. Launched so that friction and air drag stop it there.
+    ## Holds the window and the buffer only while active, so they can go once
+    ## closed.
     active*: bool
-    velocity*: float # Current scroll velocity (lines per second)
-    currentCursorLine*: float # Current cursor line (fractional for smooth animation)
-    targetCursorLine*: int # Target cursor line
-    lastUpdateTime*: MonoTime # Last physics update time
+    window*: EditorWindow # Whose cursor goes along
+    viewport*: ViewPort
+    buffer*: TextBuffer
+    version*: int # The buffer's content version as the scroll began
+    forward*: bool # The top goes down
+    target*: tuple[line, offset: int] # Where the top ends
+    shown*: tuple[line, offset: int] # Where the top is now
+    topRows*: int # Rows from where the top began to `target`
+    topWalked*: int # Rows the top has gone
+    cursor*: BufferPosition # Where the cursor ends
+    cursorStart*: BufferPosition # Where the cursor was
+    edge*: tuple[line, offset: int] # Where the cursor goes before the top moves
+    cursorRows*: int # Rows the cursor goes to `edge`
+    cursorForward*: bool # The cursor goes down
+    cursorSpot*: tuple[line, offset: int] # The row the cursor is on now
+    cursorWalked*: int # Rows the cursor has gone
+    shownCursor*: BufferPosition # Where the cursor is now
+    height*: int # Rows of text the window shows
+    speed*, friction*, airDrag*: float # Rows a second, and how they slow
+    duration*: float # Seconds until it stops
+    elapsed*: float # Seconds of the way shown
+    lastFrame*: MonoTime
 
   WindowDisplayState* = object
     ## Editor-wide window/buffer display & redraw bookkeeping.
@@ -511,10 +537,6 @@ type
       # <BS> in Normal/Visual, like Left but wraps to the previous line (Vim 'whichwrap' b)
     Up
     Down
-    PageUp
-    PageDown
-    HalfPageUp # Ctrl-u - scroll half page up
-    HalfPageDown # Ctrl-d - scroll half page down
     Home
     FirstNonBlank # ^ - move to first non-whitespace character
     LinewiseFirstNonBlank # _ - count-1 lines down, to the first non-blank (linewise)
@@ -1580,6 +1602,25 @@ proc resetViewportTop*(v: ViewPort, line = 0) =
   v.topLine = line
   v.topWrapOffset = 0
   v.detachedFromCursor = false
+
+proc halfPageRows*(v: ViewPort, visibleHeight: int): int =
+  ## The rows Ctrl-D/Ctrl-U scroll `v`, which shows `visibleHeight` rows of
+  ## text: what a count gave them since its height last changed, else half of
+  ## it, as Vim's 'scroll'.
+  if v.halfPage.rows > 0 and v.halfPage.height == v.height:
+    min(v.halfPage.rows, visibleHeight)
+  else:
+    max(1, visibleHeight div 2)
+
+proc keepHalfPageRows*(v: ViewPort, rows: int) =
+  ## A count to Ctrl-D/Ctrl-U: they scroll `rows` rows from now on.
+  v.halfPage = (rows, v.height)
+
+proc noteHeight*(v: ViewPort) =
+  ## Once `v`'s height changes, Ctrl-D/Ctrl-U scroll half of it again, even
+  ## when it changes back, as Vim's win_new_height resets 'scroll'.
+  if v.halfPage.rows > 0 and v.halfPage.height != v.height:
+    v.halfPage = (0, 0)
 
 proc restoreViewportTop*(v: ViewPort, line, wrapOffset: int) =
   ## Restore viewport top with wrap offset.

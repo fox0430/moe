@@ -28,7 +28,7 @@ from std/strutils import repeat
 
 import pkg/results
 
-import types, motion, key_bindings, modes, logger, wanted_column, visual_block
+import types, motion, key_bindings, modes, logger, visual_block
 import buffer/[core, edit, undo]
 
 import command_handlers/visual_commands
@@ -200,44 +200,20 @@ proc executeCommand*(
         ")",
     )
 
-    # Record jump before big movements (like gg, G, Ctrl-d, Ctrl-u, etc.)
-    let shouldRecordJump =
-      cmd.motion in {
-        Motion.FirstLine, Motion.LastLine, Motion.PageUp, Motion.PageDown,
-        Motion.HalfPageUp, Motion.HalfPageDown, Motion.ViewportHigh,
-        Motion.ViewportMiddle, Motion.ViewportLow,
-      }
-    if shouldRecordJump:
+    # Record jump before big movements (like gg, G, H, M, L)
+    if cmd.motion in {
+      Motion.FirstLine, Motion.LastLine, Motion.ViewportHigh, Motion.ViewportMiddle,
+      Motion.ViewportLow,
+    }:
       recordJump(ctx.state)
 
-    # Check if this is a scroll motion for smooth scrolling
-    let isScrollMotion = cmd.motion in ScrollMotions
-    let prevCursorLine = ctx.cursor.line
-
-    # For smooth scroll motions, don't update viewport in executeMotion
-    # The animation will handle viewport updates
-    let skipViewportUpdate = isScrollMotion and ctx.smoothScrollConfig.enable
-    let r = ctx.motionController.moveCursorByMotion(
-      ctx.state, motionCmd, updateViewport = not skipViewportUpdate
-    )
+    let r = ctx.motionController.moveCursorByMotion(ctx.state, motionCmd)
     if r.isErr:
       return err(r.error)
     logDebug(
       "command",
       "Motion returned cursor=(" & $r.value.line & "," & $r.value.column & ")",
     )
-
-    let targetCursorLine = r.value.line
-
-    # Start smooth scroll animation if this was a scroll motion
-    if skipViewportUpdate and targetCursorLine != prevCursorLine:
-      # Scroll the cursor back to where the animation starts, keeping the
-      # column the move aimed for.
-      ctx.state.scrollCursor(prevCursorLine)
-      startScrollAnimation(
-        ctx.state.windowDisplay.scrollAnimation, prevCursorLine, targetCursorLine,
-        ctx.smoothScrollConfig,
-      )
 
     logDebug(
       "command",

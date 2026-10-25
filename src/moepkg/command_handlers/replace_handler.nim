@@ -284,10 +284,25 @@ proc handleReplaceModeKey*(
       return handler.handleMotion(buffer, state, Motion.Home)
     of skEnd:
       return handler.handleMotion(buffer, state, Motion.End)
-    of skPageUp:
-      return handler.handleMotion(buffer, state, Motion.PageUp)
-    of skPageDown:
-      return handler.handleMotion(buffer, state, Motion.PageDown)
+    of skPageUp, skPageDown:
+      # A page as Ctrl-B/Ctrl-F, as Vim's ins_pageup/ins_pagedown.
+      let ctx = CommandContext(
+        buffer: buffer,
+        state: state,
+        viewport: handler.motionController.viewportManager.viewport,
+        motionController: handler.motionController,
+        keyBindingRegistry: handler.keyBindingRegistry,
+      )
+      let r = handler.commandRegistry.execute(
+        ctx,
+        if keyCombo.special == skPageUp:
+          $bcScrollPageUp
+        else:
+          $bcScrollPageDown,
+      )
+      if r.isErr:
+        return ReplaceModeResult(kind: rmrError, errorMessage: r.error)
+      return ReplaceModeResult(kind: rmrHandled, modeTransition: none(EditorMode))
     else:
       return ReplaceModeResult(kind: rmrUnhandled)
 

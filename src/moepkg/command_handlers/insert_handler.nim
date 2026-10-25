@@ -1488,12 +1488,18 @@ proc handleInsertModeKey*(
     of skEnd:
       handler.completionManager.cancelCompletion()
       return handler.handleMotion(buffer, state, Motion.End)
-    of skPageUp:
+    of skPageUp, skPageDown:
       handler.completionManager.cancelCompletion()
-      return handler.handleMotion(buffer, state, Motion.PageUp)
-    of skPageDown:
-      handler.completionManager.cancelCompletion()
-      return handler.handleMotion(buffer, state, Motion.PageDown)
+      # A page as Ctrl-B/Ctrl-F, as Vim's ins_pageup/ins_pagedown.
+      return handler.executeCommand(
+        buffer,
+        state,
+        handler.motionController.viewportManager.viewport,
+        if keyCombo.special == skPageUp:
+          $bcScrollPageUp
+        else:
+          $bcScrollPageDown,
+      )
     else:
       return InsertModeResult(kind: imrUnhandled)
 

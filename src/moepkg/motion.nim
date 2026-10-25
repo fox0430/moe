@@ -22,12 +22,11 @@
 ## This module extends the command executor to handle text objects
 ## like iw, aw, i", a", i(, a(, etc.
 
-import std/[options, unicode, monotimes, times]
+import std/[options, unicode]
 
 import pkg/results
 
-import
-  cursor_util, types, unicode_utils, logger, render_utils, config, modes, wanted_column
+import cursor_util, types, unicode_utils, logger, render_utils, modes, wanted_column
 import buffer/[core, edit, fold, undo]
 import visible_rows
 
@@ -238,64 +237,6 @@ proc moveBackspace(
       result.y = prev
       result.x = maxCursorColumn(e.buffer.lineRunesNoNl(prev).len, mode)
       dec remaining
-
-proc pageTarget(
-    e: MotionExecutor, rl: RowLayout, currentPos: CursorPosition, rows: int
-): int =
-  ## Line `rows` screen rows from cursor. Handles wrap/folds; falls back to arithmetic.
-  if e.buffer.isNil or e.buffer.len == 0:
-    return 0
-  let last = e.buffer.len - 1
-  if rl.buffer.isNil:
-    return clamp(currentPos.y + rows, 0, last)
-  let
-    line = clamp(currentPos.y, 0, last)
-    seg = rl.cursorCell(line, max(0, currentPos.x)).wrapSeg
-  if rows >= 0:
-    let row = rl.rowAt(line, seg, rows)
-    if row.isSome: row.get.line else: last
-  else:
-    rl.walkBackRows(line, seg, -rows).line
-
-proc movePageUp(
-    e: MotionExecutor,
-    currentPos: CursorPosition,
-    count: int,
-    visibleRows: int,
-    rl: RowLayout = RowLayout(),
-): CursorPosition =
-  result = currentPos
-  result.y = e.pageTarget(rl, currentPos, -(max(1, visibleRows - 1) * count))
-
-proc movePageDown(
-    e: MotionExecutor,
-    currentPos: CursorPosition,
-    count: int,
-    visibleRows: int,
-    rl: RowLayout = RowLayout(),
-): CursorPosition =
-  result = currentPos
-  result.y = e.pageTarget(rl, currentPos, max(1, visibleRows - 1) * count)
-
-proc moveHalfPageUp(
-    e: MotionExecutor,
-    currentPos: CursorPosition,
-    count: int,
-    visibleRows: int,
-    rl: RowLayout = RowLayout(),
-): CursorPosition =
-  result = currentPos
-  result.y = e.pageTarget(rl, currentPos, -(max(1, (visibleRows - 1) div 2) * count))
-
-proc moveHalfPageDown(
-    e: MotionExecutor,
-    currentPos: CursorPosition,
-    count: int,
-    visibleRows: int,
-    rl: RowLayout = RowLayout(),
-): CursorPosition =
-  result = currentPos
-  result.y = e.pageTarget(rl, currentPos, max(1, (visibleRows - 1) div 2) * count)
 
 proc moveHome(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result = currentPos
@@ -903,14 +844,6 @@ proc landMotion*(
     offLine(e.moveUp(currentPos, cmd.count))
   of Motion.Down:
     offLine(e.moveDown(currentPos, cmd.count))
-  of Motion.PageUp:
-    at(e.movePageUp(currentPos, cmd.count, visibleRows, rowLayout), mtLinewise)
-  of Motion.PageDown:
-    at(e.movePageDown(currentPos, cmd.count, visibleRows, rowLayout), mtLinewise)
-  of Motion.HalfPageUp:
-    at(e.moveHalfPageUp(currentPos, cmd.count, visibleRows, rowLayout), mtLinewise)
-  of Motion.HalfPageDown:
-    at(e.moveHalfPageDown(currentPos, cmd.count, visibleRows, rowLayout), mtLinewise)
   of Motion.Home:
     at(e.moveHome(currentPos), mtExclusive)
   of Motion.FirstNonBlank:
@@ -1131,179 +1064,6 @@ proc updateViewport*(
     not state.activeWindow.isNil and state.activeWindow.cursorOnTabEnd(pos),
   )
 
-# Smooth scrolling functions (physics-based, compatible with vim comfortable-motion)
-#
-# Physics model from comfortable-motion.vim:
-# - velocity += impulse (initial kick)
-# - Each frame:
-#   - velocity -= friction * dt (constant deceleration)
-#   - velocity *= (1 - air_drag * dt) (velocity-proportional resistance)
-#   - position += velocity * dt
-#
-# Default values (same as comfortable-motion):
-# - friction: 80.0
-# - air_drag: 2.0
-# - interval: ~16.67ms (60 FPS)
-
-const
-  ScrollPhysicsInterval = 1000.0 / 60.0 # ~16.67ms per physics step (60 FPS)
-  VelocityThreshold = 0.5 # Stop when velocity drops below this
-  DefaultFriction = 80.0 # comfortable-motion default friction
-  # Impulse multiplier calibrated to match comfortable-motion feel.
-  # comfortable-motion uses flick(100) for ~15 lines (half page),
-  # so impulse = distance * 7.0 gives similar behavior.
-  ImpulseMultiplier = 7.0
-
-proc cancelScrollAnimation*(anim: var ScrollAnimation) =
-  ## Cancel any active scroll animation
-  anim.active = false
-  anim.velocity = 0.0
-
-proc completeScrollAnimation*(
-    anim: var ScrollAnimation
-): tuple[completed: bool, cursorLine: int] =
-  ## Complete a scroll animation immediately, returning the target position
-  ## Returns (completed=false, 0) if no animation was active
-  if not anim.active:
-    return (false, 0)
-  result = (true, anim.targetCursorLine)
-  anim.active = false
-  anim.velocity = 0.0
-
-proc startScrollAnimation*(
-    anim: var ScrollAnimation,
-    currentCursorLine: int,
-    targetCursorLine: int,
-    config: SmoothScrollConfig,
-) =
-  ## Start a physics-based smooth scroll animation
-  ## Compatible with vim comfortable-motion plugin
-  ##
-  ## The impulse is calculated to reach the target distance with the given
-  ## friction and air_drag values.
-
-  let distance = targetCursorLine - currentCursorLine
-  if distance == 0:
-    anim.active = false
-    return
-
-  # Calculate initial impulse to reach target.
-  # Unlike comfortable-motion where flick and friction are independent,
-  # we scale impulse by friction ratio to maintain consistent scroll distance
-  # when friction is adjusted (higher friction = higher impulse needed).
-  let frictionRatio = config.friction / DefaultFriction
-  let impulse = distance.float * ImpulseMultiplier * frictionRatio
-
-  anim.active = true
-  anim.velocity = impulse
-  anim.currentCursorLine = currentCursorLine.float
-  anim.targetCursorLine = targetCursorLine
-  anim.lastUpdateTime = getMonoTime()
-
-proc updateScrollAnimation*(
-    mgr: ViewportManager,
-    anim: var ScrollAnimation,
-    config: SmoothScrollConfig,
-    reservedLines: int = steadyBottomAreaHeight(),
-    bufferLen: int = int.high,
-): tuple[active: bool, cursorLine: int] =
-  ## Update physics-based scroll animation each frame.
-  ## Returns (active, currentCursorLine).
-  ## Uses friction and air_drag for comfortable-motion compatible physics.
-  ## bufferLen is used to clamp cursor position within valid buffer bounds.
-  if not anim.active:
-    return (false, anim.targetCursorLine)
-
-  if not config.enable:
-    # Smooth scroll disabled, jump to target immediately
-    anim.active = false
-    return (false, anim.targetCursorLine)
-
-  let now = getMonoTime()
-  let elapsedMs = (now - anim.lastUpdateTime).inMicroseconds.float / 1000.0
-  anim.lastUpdateTime = now
-
-  # Physics simulation with fixed timestep for consistency
-  # Always run at least one physics step per frame
-  var remainingMs = max(elapsedMs, ScrollPhysicsInterval)
-  let dt = ScrollPhysicsInterval / 1000.0 # Convert to seconds
-
-  while remainingMs >= ScrollPhysicsInterval:
-    # Apply friction (constant deceleration)
-    if anim.velocity > 0:
-      anim.velocity -= config.friction * dt
-      if anim.velocity < 0:
-        anim.velocity = 0
-    elif anim.velocity < 0:
-      anim.velocity += config.friction * dt
-      if anim.velocity > 0:
-        anim.velocity = 0
-
-    # Apply air drag (velocity-proportional resistance)
-    anim.velocity *= (1.0 - config.airDrag * dt)
-
-    # Update position
-    anim.currentCursorLine += anim.velocity * dt
-
-    remainingMs -= ScrollPhysicsInterval
-
-  # Clamp cursor position to valid buffer bounds
-  let maxLine = max(0, bufferLen - 1).float
-  if anim.currentCursorLine < 0:
-    anim.currentCursorLine = 0
-    anim.velocity = 0 # Stop at boundary
-  elif anim.currentCursorLine > maxLine:
-    anim.currentCursorLine = maxLine
-    anim.velocity = 0 # Stop at boundary
-
-  # Check if animation should end
-  # Use distance to target instead of velocity direction
-  let distanceToTarget = abs(anim.targetCursorLine.float - anim.currentCursorLine)
-  let velocityStopped = abs(anim.velocity) < VelocityThreshold
-  let closeEnough = distanceToTarget < 1.0
-
-  if velocityStopped or closeEnough:
-    # Animation complete - use current position, don't jump
-    anim.active = false
-    anim.velocity = 0.0
-    # Use target if close enough, otherwise use current rounded position
-    var finalCursorLine =
-      if closeEnough: anim.targetCursorLine else: anim.currentCursorLine.int
-
-    # Clamp final position to valid bounds
-    finalCursorLine = clamp(finalCursorLine, 0, max(0, bufferLen - 1))
-
-    # Update viewport to ensure cursor is visible
-    let visibleHeight = max(1, mgr.viewport.height - reservedLines)
-    if finalCursorLine > mgr.viewport.topLine + visibleHeight - 1:
-      mgr.viewport.resetViewportTop(finalCursorLine - visibleHeight + 1)
-    elif finalCursorLine < mgr.viewport.topLine:
-      mgr.viewport.resetViewportTop(finalCursorLine)
-
-    return (false, finalCursorLine)
-
-  # Calculate current cursor line (rounded and clamped)
-  let newCursorLine = clamp(anim.currentCursorLine.int, 0, max(0, bufferLen - 1))
-
-  # Calculate viewport bounds
-  let visibleHeight = max(1, mgr.viewport.height - reservedLines)
-
-  # Viewport scrolls when cursor goes beyond screen edges
-  var newTopLine = mgr.viewport.topLine
-  let bottomEdge = newTopLine + visibleHeight - 1
-
-  # Keep cursor visible - scroll viewport if cursor is outside visible area
-  if newCursorLine > bottomEdge:
-    # Cursor below viewport bottom - scroll down
-    newTopLine = newCursorLine - visibleHeight + 1
-  elif newCursorLine < newTopLine:
-    # Cursor above viewport top - scroll up
-    newTopLine = newCursorLine
-
-  mgr.viewport.resetViewportTop(max(0, newTopLine))
-
-  return (true, newCursorLine)
-
 proc newMotionController*(
     buf: core.TextBuffer, state: EditorState, viewport: ViewPort
 ): MotionController =
@@ -1313,11 +1073,23 @@ proc newMotionController*(
     cursorManager: newCursorManager(state),
   )
 
+proc rowLayout*(controller: MotionController): RowLayout =
+  ## The rows of the active window, as motions and scrolls count them.
+  let state = controller.cursorManager.state
+  initRowLayout(
+    controller.executor.buffer,
+    controller.viewportManager.wrapCountCache,
+    state.effectiveLineWrap(),
+    wrapWidthFor(
+      controller.viewportManager.viewport.width,
+      viewportOffsetFor(controller.executor.buffer, state),
+    ),
+    state.tabStop,
+  )
+
 const
-  VerticalMotions = {
-    Motion.Up, Motion.Down, Motion.PageUp, Motion.PageDown, Motion.HalfPageUp,
-    Motion.HalfPageDown,
-  } ## Motions that aim for the wanted column (Vim's curswant).
+  VerticalMotions = {Motion.Up, Motion.Down}
+    ## Motions that aim for the wanted column (Vim's curswant).
   LineEdgeMotions = {
     Motion.Home, Motion.FirstNonBlank, Motion.LinewiseFirstNonBlank,
     Motion.LastNonBlank, Motion.FirstLine, Motion.LastLine, Motion.ViewportHigh,
@@ -1338,27 +1110,14 @@ proc landMotion*(
   ## `start` begins at when it is -1. Leaves the viewport alone. Only a cursor
   ## move is kept on the line and out of closed folds; an operator widens over
   ## folds itself.
-  let
-    actualReservedLines = controller.cursorManager.state.motionReservedLines()
-    lineWrap = controller.cursorManager.state.effectiveLineWrap()
-    viewportOffset =
-      viewportOffsetFor(controller.executor.buffer, controller.cursorManager.state)
-    rowLayout = initRowLayout(
-      controller.executor.buffer,
-      controller.viewportManager.wrapCountCache,
-      lineWrap,
-      wrapWidthFor(controller.viewportManager.viewport.width, viewportOffset),
-      controller.cursorManager.state.tabStop,
-    )
-
   result = controller.executor.landMotion(
     CursorPosition(x: start.column, y: start.line),
     cmd,
     controller.viewportManager.viewport.height,
     controller.viewportManager.viewport.topLine,
-    actualReservedLines,
+    controller.cursorManager.state.motionReservedLines(),
     controller.cursorManager.state.mode,
-    rowLayout,
+    controller.rowLayout(),
     controller.viewportManager.viewport.topWrapOffset,
     operator,
   )
