@@ -70,6 +70,10 @@
 | <kbd>**e**</kbd> | Go forwards to the end of a word |
 | <kbd>**g**</kbd> <kbd>**e**</kbd> | Go backwards to the end of a word |
 | <kbd>**b**</kbd> | Go backwards to the start of a word |
+| <kbd>**W**</kbd> | Go forwards to the start of a WORD |
+| <kbd>**E**</kbd> | Go forwards to the end of a WORD |
+| <kbd>**g**</kbd> <kbd>**E**</kbd> | Go backwards to the end of a WORD |
+| <kbd>**B**</kbd> | Go backwards to the start of a WORD |
 | <kbd>**r**</kbd> | Replace a character at the cursor |
 | <kbd>**Page Up**</kbd> | Page Up |
 | <kbd>**Page Down**</kbd> | Page Down |

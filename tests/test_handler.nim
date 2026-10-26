@@ -9509,6 +9509,89 @@ suite "handleKeyCombo - an operator acts over what a motion finds, as Vim's do_p
       checkpoint($keys)
       check e.lines == lines
 
+  const Words = "foo.bar baz-qux\n  x,y\n\nend"
+
+  test "W, B, E and gE step over blank-separated WORDs":
+    for (line, column, keys, cursor) in [
+      (0, 0, @["W"], (0, 8)),
+      (0, 0, @["w"], (0, 3)),
+      (0, 0, @["2", "W"], (1, 2)),
+      # An empty line is a WORD of its own
+      (0, 0, @["3", "W"], (2, 0)),
+      (0, 0, @["E"], (0, 6)),
+      (0, 6, @["E"], (0, 14)),
+      (0, 8, @["B"], (0, 0)),
+      (1, 2, @["B"], (0, 8)),
+      (0, 14, @["g", "E"], (0, 6)),
+      (1, 2, @["g", "E"], (0, 14)),
+      (3, 0, @["B"], (2, 0)),
+      (3, 0, @["g", "E"], (2, 0)),
+      # At the end of the buffer they fail in place
+      (3, 2, @["W"], (3, 2)),
+      (3, 2, @["E"], (3, 2)),
+      # Vim's aliases: Ctrl-Right/Left for W/B, Shift-Right/Left for w/b
+      (0, 0, @["C-Right"], (0, 8)),
+      (0, 0, @["2", "C-Right"], (1, 2)),
+      (0, 0, @["S-Right"], (0, 3)),
+      (0, 8, @["C-Left"], (0, 0)),
+      (0, 8, @["S-Left"], (0, 4)),
+    ]:
+      let e = createEditorForOperators(Words, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
+  test "an operator or a Visual selection over a WORD motion":
+    for (line, column, keys, first, register, cursor) in [
+      (0, 0, @["d", "W"], "baz-qux", "foo.bar ", (0, 0)),
+      # cW on a WORD changes up to its end, as cE; on a blank only the blanks
+      (0, 0, @["c", "W", "X", "Escape"], "X baz-qux", "foo.bar", (0, 0)),
+      (0, 7, @["c", "W", "X", "Escape"], "foo.barXbaz-qux", " ", (0, 7)),
+      # The last WORD stops at the end of its line
+      (0, 8, @["d", "W"], "foo.bar ", "baz-qux", (0, 7)),
+      (0, 0, @["d", "2", "W"], "", "foo.bar baz-qux", (0, 0)),
+      (0, 0, @["d", "W", "."], "", "baz-qux", (0, 0)),
+      (0, 0, @["y", "E"], "foo.bar baz-qux", "foo.bar", (0, 0)),
+      (0, 8, @["d", "B"], "baz-qux", "foo.bar ", (0, 0)),
+      (0, 14, @["d", "g", "E"], "foo.ba", "r baz-qux", (0, 5)),
+      # A B that fails leaves the operator nothing
+      (0, 0, @["d", "B"], "foo.bar baz-qux", "", (0, 0)),
+      (0, 0, @["v", "E", "d"], " baz-qux", "foo.bar", (0, 0)),
+      (0, 8, @["v", "B", "d"], "az-qux", "foo.bar b", (0, 0)),
+      (0, 4, @["v", "W", "d"], "foo.az-qux", "bar b", (0, 4)),
+      (0, 0, @["d", "C-Right"], "baz-qux", "foo.bar ", (0, 0)),
+      (0, 0, @["c", "S-Right", "X", "Escape"], "X.bar baz-qux", "foo", (0, 0)),
+      (0, 0, @["v", "C-Right", "d"], "az-qux", "foo.bar b", (0, 0)),
+      (0, 8, @["v", "S-Left", "d"], "foo.az-qux", "bar b", (0, 4)),
+    ]:
+      let e = createEditorForOperators(Words, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines[0] == first
+      check e.lines[1 .. ^1] == @["  x,y", "", "end"]
+      check e.state.registers.getRegisterContent('"') == register
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
+  test "an ideographic space is a blank to W, but cW on it changes as cE":
+    for (column, keys, line, register) in [
+      (0, @["d", "W"], "b c", "a　　"),
+      (3, @["d", "B"], "b c", "a　　"),
+      # Vim's nv_wordcmd asks VIM_ISWHITE, which a space or a tab only meets
+      (1, @["c", "W", "X", "Escape"], "aX c", "　　b"),
+      (1, @["c", "w", "X", "Escape"], "aX c", "　　b"),
+    ]:
+      let e = createEditorForOperators("a　　b c", line = 0, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == @[line]
+      check e.state.registers.getRegisterContent('"') == register
+
   test "} in the last paragraph goes to its last character, which an operator takes":
     for (content, line, column, keys, lines, cursor) in [
       ("a\nb\nc", 0, 0, @["}"], @["a", "b", "c"], (2, 0)),

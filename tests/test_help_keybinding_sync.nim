@@ -186,6 +186,10 @@ suite "help / keybinding consistency":
         "+",
         "-",
         "_",
+        "S-Right",
+        "S-Left",
+        "C-Right",
+        "C-Left",
         # Tab == Ctrl-i (jump-forward), which is documented as "Ctrl-i".
         "Tab",
         # Text-object trigger chars: documented only via composed forms

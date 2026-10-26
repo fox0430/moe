@@ -372,18 +372,38 @@ type WordWalker = object
   buffer: TextBuffer
   pos: BufferPosition
   runes: seq[Rune]
+  bigword: bool ## Vim's cls_bigword: steps over WORDs (`W`, `B`, `E`, `gE`)
 
-proc initWordWalker(buffer: TextBuffer, pos: BufferPosition): WordWalker =
-  WordWalker(buffer: buffer, pos: pos, runes: buffer.lineRunesNoNl(pos.line))
+proc initWordWalker(
+    buffer: TextBuffer, pos: BufferPosition, bigword = false
+): WordWalker =
+  WordWalker(
+    buffer: buffer, pos: pos, runes: buffer.lineRunesNoNl(pos.line), bigword: bigword
+  )
+
+proc isBlankClass(r: Rune): bool =
+  ## Vim's utf_class() 0: a space, a tab or one of Unicode's other spaces
+  ## (no-break, ideographic...).
+  case r.int32
+  of 0x20, 0x09, 0xa0, 0x1680, 0x2000 .. 0x200b, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000:
+    true
+  else:
+    false
+
+proc isVimWhite(r: Rune): bool =
+  ## Vim's VIM_ISWHITE: a space or a tab only.
+  r == Rune(' ') or r == Rune('\t')
 
 proc class(w: WordWalker): int =
   ## Vim's cls(): 0 for a blank or the end of a line, 2 for a word character,
-  ## 1 for any other
+  ## 1 for any other. With `bigword` every non-blank is 1.
   if w.pos.column >= w.runes.len:
     return 0
   let r = w.runes[w.pos.column]
-  if r == Rune(' ') or r == Rune('\t'):
+  if r.isBlankClass:
     0
+  elif w.bigword:
+    1
   elif r.isWordChar:
     2
   else:
@@ -391,6 +411,10 @@ proc class(w: WordWalker): int =
 
 proc onEmptyLine(w: WordWalker): bool =
   w.runes.len == 0
+
+proc onNonWhite(w: WordWalker): bool =
+  ## On a character other than a space or a tab, so on an ideographic space too.
+  w.pos.column < w.runes.len and not w.runes[w.pos.column].isVimWhite
 
 proc inc(w: var WordWalker): int =
   ## One step forward: 0 within the line, 2 onto its end, 1 onto the next line,
@@ -527,39 +551,48 @@ proc wordForward(
     count: int,
     operator: Option[OperatorType],
     mode: EditorMode,
+    bigword: bool,
 ): MotionLanding =
-  ## `w`, as Vim's nv_wordcmd: `cw` on a word changes up to its end as `ce`
-  ## does, and with an operator the last word stops at the end of its line
-  ## (`dw` keeps the line break).
-  var w = initWordWalker(buffer, start)
-  if operator == some(OpChange) and w.class != 0:
+  ## `w` and `W`, as Vim's nv_wordcmd: `cw` on anything but a space or a tab
+  ## changes up to the end of a word as `ce` does, and with an operator the
+  ## last word stops at the end of its line (`dw` keeps the line break).
+  ## Without an operator it fails from the last character of the buffer.
+  var w = initWordWalker(buffer, start, bigword)
+  if operator == some(OpChange) and w.onNonWhite:
     discard w.endWord(count, stop = true)
     return w.landWord(start, mtInclusive, mode)
-  discard w.fwdWord(count, eol = operator.isSome)
-  w.landWord(start, mtExclusive, mode)
+  let ok = w.fwdWord(count, eol = operator.isSome)
+  result = w.landWord(start, mtExclusive, mode)
+  result.failed = not ok and operator.isNone
 
 proc wordEnd(
-    buffer: TextBuffer, start: BufferPosition, count: int, mode: EditorMode
+    buffer: TextBuffer,
+    start: BufferPosition,
+    count: int,
+    operator: Option[OperatorType],
+    mode: EditorMode,
+    bigword: bool,
 ): MotionLanding =
-  ## `e`, as Vim's nv_wordcmd. It never fails with an operator: at the end of
-  ## the buffer it takes the last character.
-  var w = initWordWalker(buffer, start)
-  discard w.endWord(count, stop = false)
-  w.landWord(start, mtInclusive, mode)
+  ## `e` and `E`, as Vim's nv_wordcmd: they fail when the buffer ends first,
+  ## but not with an operator, which then takes up to the last character.
+  var w = initWordWalker(buffer, start, bigword)
+  let ok = w.endWord(count, stop = false)
+  result = w.landWord(start, mtInclusive, mode)
+  result.failed = not ok and operator.isNone
 
 proc wordBackward(
-    buffer: TextBuffer, start: BufferPosition, count: int
+    buffer: TextBuffer, start: BufferPosition, count: int, bigword: bool
 ): MotionLanding =
-  ## `b`: fails at the start of the buffer.
-  var w = initWordWalker(buffer, start)
+  ## `b` and `B`: fail at the start of the buffer.
+  var w = initWordWalker(buffer, start, bigword)
   let ok = w.bckWord(count)
   MotionLanding(pos: w.pos, motionType: mtExclusive, failed: not ok)
 
 proc wordEndBackward(
-    buffer: TextBuffer, start: BufferPosition, count: int
+    buffer: TextBuffer, start: BufferPosition, count: int, bigword: bool
 ): MotionLanding =
-  ## `ge`: fails at the start of the buffer.
-  var w = initWordWalker(buffer, start)
+  ## `ge` and `gE`: fail at the start of the buffer.
+  var w = initWordWalker(buffer, start, bigword)
   let ok = w.bckendWord(count)
   MotionLanding(pos: w.pos, motionType: mtInclusive, failed: not ok)
 
@@ -794,6 +827,11 @@ proc rightForOperator(
       motionType: mtExclusive,
     )
 
+const WideWordMotions = {
+  Motion.WideWordForward, Motion.WideWordBackward, Motion.WideWordEnd,
+  Motion.WideWordEndBackward,
+} ## `W`, `B`, `E` and `gE`, which step over WORDs (Vim's cls_bigword).
+
 proc landMotion*(
     e: MotionExecutor,
     currentPos: CursorPosition,
@@ -813,6 +851,7 @@ proc landMotion*(
     visibleRows = max(1, viewportHeight - max(0, reservedLines))
     viewportTop = (line: viewportTopLine, offset: viewportTopWrapOffset)
     start = BufferPosition(line: currentPos.y, column: currentPos.x)
+    bigword = cmd.motion in WideWordMotions
 
   proc at(pos: CursorPosition, motionType: MotionType): MotionLanding =
     MotionLanding(
@@ -902,14 +941,14 @@ proc landMotion*(
       stuck(motionType)
     else:
       at(found.get, motionType)
-  of Motion.WordForward:
-    e.buffer.wordForward(start, cmd.count, operator, mode)
-  of Motion.WordBackward:
-    e.buffer.wordBackward(start, cmd.count)
-  of Motion.WordEnd:
-    e.buffer.wordEnd(start, cmd.count, mode)
-  of Motion.WordEndBackward:
-    e.buffer.wordEndBackward(start, cmd.count)
+  of Motion.WordForward, Motion.WideWordForward:
+    e.buffer.wordForward(start, cmd.count, operator, mode, bigword)
+  of Motion.WordBackward, Motion.WideWordBackward:
+    e.buffer.wordBackward(start, cmd.count, bigword)
+  of Motion.WordEnd, Motion.WideWordEnd:
+    e.buffer.wordEnd(start, cmd.count, operator, mode, bigword)
+  of Motion.WordEndBackward, Motion.WideWordEndBackward:
+    e.buffer.wordEndBackward(start, cmd.count, bigword)
   of Motion.ParagraphForward:
     e.buffer.findParagraph(start, cmd.count, forward = true).usingRegOne
   of Motion.ParagraphBackward:
@@ -1820,7 +1859,7 @@ proc decl(w: var WordWalker): int =
 proc inIndent(w: WordWalker): bool =
   ## Vim's inindent(1): on a blank before the line's first non-blank.
   var blanks = 0
-  while blanks < w.runes.len and w.runes[blanks] in [Rune(' '), Rune('\t')]:
+  while blanks < w.runes.len and w.runes[blanks].isVimWhite:
     blanks += 1
   blanks >= w.pos.column + 1
 
