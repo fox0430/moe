@@ -54,21 +54,19 @@ proc jumpToFirstSubstituteMatch*(
     e: Editor, pattern: string, firstLine: int = 0, lastLine: int = high(int)
 ) =
   ## Move cursor/viewport to the first pattern match in lines
-  ## `firstLine .. lastLine` (incsearch-like behavior).
-  ## If no match is found, restore cursor to the position captured at preview start.
+  ## `firstLine .. lastLine` (incsearch-like behavior), scrolling from what the
+  ## window showed as the preview began. If no match is found, restore cursor
+  ## and view to those at preview start.
   let match = findFirstSubstituteMatch(
     e.state.ui.substitutePreview.originalLines, pattern, firstLine, lastLine
   )
   if match.isSome:
     let pos = match.get
     e.cursor = pos
-    e.updateViewportForCursor(pos)
+    e.showFromView(e.state.ui.substitutePreview.originalView, pos)
   else:
     e.cursor = e.state.ui.substitutePreview.originalCursor
-    e.activeWindow.viewport.resetViewportTop(
-      e.state.ui.substitutePreview.originalTopLine
-    )
-    e.activeWindow.viewport.leftCell = e.state.ui.substitutePreview.originalLeftCell
+    e.activeWindow.viewport.restoreViewState(e.state.ui.substitutePreview.originalView)
 
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## Update or cancel the live substitute preview based on the current command

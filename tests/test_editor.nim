@@ -804,14 +804,14 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
     e.cursor = BufferPosition(line: 0, column: 3)
     e.activeWindow.viewport.topLine = 2
+    e.activeWindow.viewport.topWrapOffset = 1
     e.activeWindow.viewport.leftCell = 5
 
     e.startSubstitutePreview()
 
     check e.state.ui.substitutePreview.originalCursor ==
       BufferPosition(line: 0, column: 3)
-    check e.state.ui.substitutePreview.originalTopLine == 2
-    check e.state.ui.substitutePreview.originalLeftCell == 5
+    check e.state.ui.substitutePreview.originalView == (2, 1, 5)
 
   test "Cancel substitute preview restores cursor and viewport":
     let e = createTestEditor()
@@ -820,6 +820,7 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
     e.cursor = BufferPosition(line: 0, column: 2)
     e.activeWindow.viewport.topLine = 0
+    e.activeWindow.viewport.topWrapOffset = 1
     e.activeWindow.viewport.leftCell = 0
 
     e.startSubstitutePreview()
@@ -827,12 +828,14 @@ suite "Editor - Substitute preview":
     # Simulate viewport/cursor moving during preview jump
     e.cursor = BufferPosition(line: 0, column: 0)
     e.activeWindow.viewport.topLine = 10
+    e.activeWindow.viewport.topWrapOffset = 0
     e.activeWindow.viewport.leftCell = 7
 
     e.cancelSubstitutePreview()
 
     check e.cursor == BufferPosition(line: 0, column: 2)
     check e.activeWindow.viewport.topLine == 0
+    check e.activeWindow.viewport.topWrapOffset == 1
     check e.activeWindow.viewport.leftCell == 0
 
   test "findFirstSubstituteMatch finds first occurrence across lines":
@@ -867,6 +870,28 @@ suite "Editor - Substitute preview":
 
     check e.cursor == BufferPosition(line: 2, column: 7)
 
+  test "Each substitute match scrolls from what the window showed as the preview began":
+    proc topAfter(content: string, patterns: varargs[string]): int =
+      let e = createTestEditor()
+      discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), content)
+      e.motionController.bindToWindow(e.activeWindow)
+      e.startSubstitutePreview()
+      for pattern in patterns:
+        e.jumpToFirstSubstituteMatch(pattern)
+      check e.cursor.line == 112
+      e.activeWindow.viewport.topLine
+
+    var content = ""
+    for i in 0 ..< 200:
+      content.add(
+        case i
+        of 100: "f\n"
+        of 112: "foo\n"
+        else: "zzzz\n"
+      )
+    # Typed a key at a time or pasted, the pattern leaves the same view.
+    check topAfter(content, "f", "foo") == topAfter(content, "foo")
+
   test "restoreFromPreview clears last applied state and undoes preview":
     let e = createTestEditor()
     let buffer = e.activeBuffer()
@@ -894,6 +919,7 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
     e.cursor = BufferPosition(line: 0, column: 4)
     e.activeWindow.viewport.topLine = 3
+    e.activeWindow.viewport.topWrapOffset = 1
     e.activeWindow.viewport.leftCell = 2
 
     e.startSubstitutePreview()
@@ -901,12 +927,14 @@ suite "Editor - Substitute preview":
     # Simulate cursor moved elsewhere
     e.cursor = BufferPosition(line: 0, column: 0)
     e.activeWindow.viewport.topLine = 0
+    e.activeWindow.viewport.topWrapOffset = 0
     e.activeWindow.viewport.leftCell = 0
 
     e.jumpToFirstSubstituteMatch("zzz")
 
     check e.cursor == BufferPosition(line: 0, column: 4)
     check e.activeWindow.viewport.topLine == 3
+    check e.activeWindow.viewport.topWrapOffset == 1
     check e.activeWindow.viewport.leftCell == 2
 
 suite "Editor - newEditor":

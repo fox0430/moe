@@ -2891,6 +2891,20 @@ suite "Handler - Scroll operations":
     check registry.execute(ctx, builtin(bcScrollCursorTop)).isOk
     check ctx.motionController.viewportManager.viewport.topLine == 5
 
+  test "zt in a closed fold puts the fold's start at the top":
+    var lines = newSeq[string]()
+    for i in 1 .. 40:
+      lines.add("line" & $i)
+    let buffer = newTextBuffer(lines.join("\n"))
+    check buffer.foldState.addFold(10, 20, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 15, column: 0)
+    ctx.motionController.viewportManager.viewport.height = 12
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollCursorTop)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 10
+
   test "scroll cursor to center (zz)":
     let buffer = newTextBuffer(
       "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25"
@@ -2973,9 +2987,9 @@ suite "Handler - Scroll operations":
     check ctx.motionController.viewportManager.viewport.topLine == 30 - 22 + 1
 
   test "zz and zb count screen rows, not lines, under lineWrap":
-    # 20 lines of 30 columns at width 10 wrap to several rows each. Subtracting
-    # a row count from the line number would put both zz and zb well above the
-    # cursor's line and make them indistinguishable.
+    # 20 lines of 30 columns at width 10 wrap to three rows each. As in Vim,
+    # zz and zb show whole lines: zz puts the line a little above the middle,
+    # zb the most lines that fit above it.
     var lines: seq[string] = @[]
     for i in 0 ..< 20:
       lines.add("x".repeat(30))
@@ -3001,17 +3015,23 @@ suite "Handler - Scroll operations":
       result = createTestContext(buffer)
       result.state.config.standard.lineWrap = true
       result.cursor = BufferPosition(line: 10, column: 0)
-      result.motionController.viewportManager.viewport.width = 10
-      result.motionController.viewportManager.viewport.height = 8
-      # visibleHeight 6.
+      # 10 cells of text.
+      result.motionController.viewportManager.viewport.width =
+        10 + viewportOffsetFor(result.buffer, result.state)
+      result.motionController.viewportManager.viewport.height = 14
+      # visibleHeight 12.
       result.state.windowDisplay.viewportReservedLines = 2
+      require result.motionController.rowLayout().lineRows(0) == 3
       check registry.execute(result, builtin(command)).isOk
 
+    # Vim 9.2 in a window 10 cells wide and 12 rows high.
     let centerCtx = scrolledCtx(bcScrollCursorCenter)
+    check centerCtx.motionController.viewportManager.viewport.topLine == 9
     check centerCtx.cursorRow() == 3
 
     let bottomCtx = scrolledCtx(bcScrollCursorBottom)
-    check bottomCtx.cursorRow() == 5
+    check bottomCtx.motionController.viewportManager.viewport.topLine == 7
+    check bottomCtx.cursorRow() == 9
 
     # The two must not collapse onto the same top, which is what raw line
     # arithmetic does once a logical line spans more than one row.
@@ -3072,6 +3092,47 @@ suite "Handler - Scroll operations":
     check registry.execute(ctx, builtin(bcScrollLineUp)).isOk
     check ctx.motionController.viewportManager.viewport.topLine == 3
     check ctx.cursor.line == 7
+
+  test "scroll line up leaves the cursor on a line shown whole (Ctrl-Y)":
+    # Vim's scrolldown takes the cursor up off a wrapped line the scroll
+    # pushed partly below the window, which would scroll the window back.
+    let buffer = newTextBuffer(@["0", "1", "2", "3", "x".repeat(200)].join("\n"))
+    let ctx = createTestContext(buffer)
+    ctx.state.config.standard.lineWrap = true
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let viewport = ctx.motionController.viewportManager.viewport
+    viewport.width = 20
+    viewport.height = 2 + ctx.motionController.rowLayout().lineRows(4)
+    viewport.topLine = 2
+    ctx.cursor = BufferPosition(line: 4, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineUp)).isOk
+    check viewport.topLine == 1
+    check ctx.cursor.line == 3
+    ctx.motionController.viewportManager.updateViewport(ctx.state, buffer, ctx.cursor)
+    check viewport.topLine == 1
+
+  test "scroll line up inside a line taller than the window (Ctrl-Y)":
+    # The cursor on the window's last row goes up with it, as Vim's
+    # scrolldown does with 'smoothscroll', or the window would scroll back.
+    let buffer = newTextBuffer("x".repeat(500) & "\n1")
+    let ctx = createTestContext(buffer)
+    ctx.state.config.standard.lineWrap = true
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let viewport = ctx.motionController.viewportManager.viewport
+    viewport.width = 20
+    viewport.height = 5
+    viewport.topWrapOffset = 13
+    let layout = ctx.motionController.rowLayout()
+    ctx.cursor = BufferPosition(line: 0, column: layout.cellToColumn(0, 17, 0))
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineUp)).isOk
+    check viewport.topWrapOffset == 12
+    check layout.cursorCell(0, ctx.cursor.column) == (wrapSeg: 16, cellX: 0)
+    ctx.motionController.viewportManager.updateViewport(ctx.state, buffer, ctx.cursor)
+    check viewport.topWrapOffset == 12
 
   test "scroll line commands accept a count and clamp at buffer edges":
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
@@ -5605,9 +5666,8 @@ suite "Handler - Basic Motion Commands":
     check ctx.motionController.viewportManager.viewport.topLine == 4
 
   test "page and viewport motions count screen rows under lineWrap":
-    # 40 lines wide enough to wrap at viewport width 20. A page is
-    # `visibleRows - 1` screen rows, which is fewer logical lines whenever a
-    # line occupies more than one row.
+    # 40 lines wide enough to wrap at viewport width 20, so a line takes more
+    # than one row.
     var lines: seq[string] = @[]
     for i in 0 ..< 40:
       lines.add("x".repeat(60))
@@ -5643,8 +5703,7 @@ suite "Handler - Basic Motion Commands":
     let rowsPerLine = layout.lineRows(0)
     # Guard: the whole point is that a line is more than one row here.
     check rowsPerLine >= 2
-    # visibleRows = height(8) - reserved(2) = 6, so a page is 5 screen rows.
-    let pageSize = 5
+    # visibleRows = height(8) - reserved(2) = 6.
 
     # Ctrl-F: the lines at the bottom are too tall to keep in view, so a
     # page is all 6 rows, and it ends on a line's start (Vim's
@@ -5654,21 +5713,17 @@ suite "Handler - Basic Motion Commands":
     let downTop = down.motionController.viewportManager.viewport
     check (downTop.topLine, downTop.topWrapOffset) == (6 div rowsPerLine, 0)
 
-    # L with the top at line 10: the last of 6 visible rows (row 5).
+    # L with the top at line 10: the last line the 6 rows show whole, as
+    # Vim's nv_scroll goes to w_botline - 1.
+    let wholeLines = 6 div rowsPerLine
     let low = pagedCtx(bcMotionViewportLow, 10)
-    check low.cursor.line == 10 + (pageSize div rowsPerLine)
-    let lowTarget = layout.rowAt(10, 0, pageSize)
-    check lowTarget.isSome
-    check (lowTarget.get.line, lowTarget.get.wrapSeg) ==
-      (10 + (pageSize div rowsPerLine), pageSize mod rowsPerLine)
+    check low.cursor.line == 10 + wholeLines - 1
+    check low.motionController.viewportManager.viewport.topLine == 10
 
-    # M with the top at line 10: visibleRows div 2 = 3 rows down.
+    # M with the top at line 10: the line half the rows of the whole lines
+    # down, which the top line already reaches.
     let middle = pagedCtx(bcMotionViewportMiddle, 10)
-    check middle.cursor.line == 10 + (3 div rowsPerLine)
-    let middleTarget = layout.rowAt(10, 0, 3)
-    check middleTarget.isSome
-    check (middleTarget.get.line, middleTarget.get.wrapSeg) ==
-      (10 + (3 div rowsPerLine), 3 mod rowsPerLine)
+    check middle.cursor.line == 10
 
   test "scroll page up (Ctrl+b)":
     # The window is at the top already: neither it nor the cursor moves.

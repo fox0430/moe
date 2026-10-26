@@ -150,16 +150,6 @@ proc moveRight(
   else:
     logDebug("motion", "moveRight: buffer bounds check failed")
 
-proc foldStart(buffer: TextBuffer, line: int): int =
-  ## The first line of the closed fold `line` is in, or `line`.
-  let fold = buffer.foldState.getCollapsedFoldAt(line)
-  if fold.isSome: fold.get.startLine else: line
-
-proc foldEnd*(buffer: TextBuffer, line: int): int =
-  ## The last line of the closed fold `line` is in, or `line`.
-  let fold = buffer.foldState.getCollapsedFoldAt(line)
-  if fold.isSome: fold.get.endLine else: line
-
 proc linesDown*(buffer: TextBuffer, line, count: int): int =
   ## The line `count` lines below `line`, a closed fold counting as one line,
   ## as Vim's cursor_down_inner: the last line when there are fewer, and the
@@ -709,54 +699,81 @@ proc moveToMatchingBracket(
 
       lineIdx -= 1
 
-proc viewportRowLine(
-    e: MotionExecutor, rl: RowLayout, viewportTop: tuple[line, offset: int], row: int
-): int =
-  ## Line `row` screen rows below viewport top. Handles wrap/folds.
-  if e.buffer.isNil or e.buffer.len == 0:
-    return 0
-  let last = e.buffer.len - 1
+proc viewportLayout(e: MotionExecutor, rl: RowLayout): RowLayout =
+  ## `rl`, or one row a line when there is none.
   if rl.buffer.isNil:
-    return clamp(viewportTop.line + row, 0, last)
-  let target = rl.rowAt(viewportTop.line, viewportTop.offset, max(0, row))
-  if target.isSome: target.get.line else: last
+    initRowLayout(e.buffer, nil, false, 1, 8)
+  else:
+    rl
 
-proc moveViewportHigh(
-    e: MotionExecutor,
-    currentPos: CursorPosition,
-    viewportTop: tuple[line, offset: int],
-    count: int = 1,
-    rl: RowLayout = RowLayout(),
+proc onViewportLine(
+    e: MotionExecutor, currentPos: CursorPosition, line: int
 ): CursorPosition =
-  ## Move to top of viewport (H). `count` is offset from top.
+  ## `line` at its first non-blank, as Vim's H, M and L go on with
+  ## beginline(BL_SOL | BL_FIX), also on a line in a closed fold.
   result = currentPos
-  result.y = e.viewportRowLine(rl, viewportTop, count - 1)
-  result.x = 0
+  result.y = clamp(line, 0, e.buffer.len - 1)
+  result.x = firstNonBlankColumn(e.buffer.getLine(result.y))
 
-proc moveViewportMiddle(
-    e: MotionExecutor,
-    currentPos: CursorPosition,
-    viewportTop: tuple[line, offset: int],
-    visibleRows: int,
-    rl: RowLayout = RowLayout(),
-): CursorPosition =
-  ## Move to middle of viewport (M).
-  result = currentPos
-  result.y = e.viewportRowLine(rl, viewportTop, visibleRows div 2)
-  result.x = 0
+proc viewportHighLine(e: MotionExecutor, top, botline, count: int): int =
+  ## H: the [count]th line from the window's `top`, as Vim's nv_scroll. With
+  ## folds, a closed one counts as one line and the count stops at the last
+  ## line shown whole, above `botline`.
+  if e.buffer.foldState.folds.len == 0:
+    return top + count - 1
+  result = top
+  for _ in 1 ..< count:
+    if result >= botline - 1:
+      break
+    result = e.buffer.foldEnd(result) + 1
 
-proc moveViewportLow(
-    e: MotionExecutor,
-    currentPos: CursorPosition,
-    viewportTop: tuple[line, offset: int],
-    visibleRows: int,
-    count: int = 1,
-    rl: RowLayout = RowLayout(),
-): CursorPosition =
-  ## Move to bottom of viewport (L). `count` is offset from bottom.
-  result = currentPos
-  result.y = e.viewportRowLine(rl, viewportTop, visibleRows - count)
-  result.x = 0
+proc viewportMiddleLine(
+    e: MotionExecutor, rl: RowLayout, top, wholeRows, height: int
+): int =
+  ## M: the line half the `wholeRows` the lines shown whole take down, as
+  ## Vim's nv_scroll. A line counts its rows up to the window's `height`, a
+  ## closed fold one.
+  let half = (wholeRows + 1) div 2
+  var
+    used = 0
+    n = 0
+  while top + n < e.buffer.len - 1:
+    used += min(rl.rowsOf(top + n), height)
+    if used >= half:
+      break
+    n = e.buffer.foldEnd(top + n) - top + 1
+  if n > 0 and used > height:
+    dec n
+  top + n
+
+proc viewportLowLine(e: MotionExecutor, top, botline, count: int): int =
+  ## L: the [count]th line up from the last one shown whole, above
+  ## `botline`, as Vim's nv_scroll. With folds, a closed one counts as one
+  ## line and the count stops at the window's `top`.
+  result = botline - 1
+  if count - 1 >= botline:
+    return 0
+  if e.buffer.foldState.folds.len == 0:
+    return result - (count - 1)
+  for _ in 1 ..< count:
+    if result <= top:
+      break
+    result = e.buffer.foldStart(result)
+    if result > top:
+      dec result
+
+func intoWindow(line, top, botline, lineCount: int): int =
+  ## `line` brought onto the lines from the window's `top` to the last one
+  ## shown whole, as Vim's cursor_correct does with 'scrolloff' 0.
+  let last = botline - 1
+  if last <= top:
+    top
+  elif line < top and top > 0:
+    top
+  elif line > last and botline < lineCount:
+    last
+  else:
+    line
 
 proc rightForOperator(
     buffer: TextBuffer, start: BufferPosition, count: int
@@ -897,17 +914,25 @@ proc landMotion*(
     e.buffer.findParagraph(start, cmd.count, forward = true).usingRegOne
   of Motion.ParagraphBackward:
     e.buffer.findParagraph(start, cmd.count, forward = false).usingRegOne
-  of Motion.ViewportHigh:
-    at(e.moveViewportHigh(currentPos, viewportTop, cmd.count, rowLayout), mtLinewise)
-  of Motion.ViewportMiddle:
-    at(
-      e.moveViewportMiddle(currentPos, viewportTop, visibleRows, rowLayout), mtLinewise
-    )
-  of Motion.ViewportLow:
-    at(
-      e.moveViewportLow(currentPos, viewportTop, visibleRows, cmd.count, rowLayout),
-      mtLinewise,
-    )
+  of Motion.ViewportHigh, Motion.ViewportMiddle, Motion.ViewportLow:
+    if e.buffer.len == 0:
+      return at(currentPos, mtLinewise)
+    let
+      rl = e.viewportLayout(rowLayout)
+      (botline, wholeRows) =
+        rl.botline(viewportTop.line, viewportTop.offset, visibleRows)
+    var line =
+      case cmd.motion
+      of Motion.ViewportHigh:
+        e.viewportHighLine(viewportTop.line, botline, cmd.count)
+      of Motion.ViewportMiddle:
+        e.viewportMiddleLine(rl, viewportTop.line, wholeRows, visibleRows)
+      else:
+        e.viewportLowLine(viewportTop.line, botline, cmd.count)
+    # Vim keeps the cursor in the window, but not where an operator goes.
+    if operator.isNone:
+      line = intoWindow(line, viewportTop.line, botline, e.buffer.len)
+    at(e.onViewportLine(currentPos, line), mtLinewise)
   of Motion.NextLineFirstNonBlank:
     offLine(e.moveNextLineFirstNonBlank(currentPos, cmd.count))
   of Motion.PreviousLineFirstNonBlank:

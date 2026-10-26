@@ -99,6 +99,9 @@ type
       ## The rows a count gave Ctrl-D/Ctrl-U (Vim's 'scroll') and the height
       ## then. Read through `halfPageRows`.
 
+  ViewState* = tuple[topLine, topWrapOffset, leftCell: int]
+    ## What a viewport shows, saved to put back later (Vim's viewstate_T).
+
   ScrollAnimation* = object
     ## A page scroll shown on its way: the cursor goes to the window's edge
     ## the scroll goes to, then stays on it while the window scrolls to where
@@ -320,6 +323,8 @@ type
     history*: seq[string] # Search history (most recent first)
     historyIndex*: int # Current position in search history (-1 when not navigating)
     startPos*: BufferPosition # Cursor position when search mode started (for incsearch)
+    startView*: Option[ViewState]
+      # What the window showed then, put back before each incsearch match
     # Search behavior settings
     ignorecase*: bool # Ignore case in search patterns
     smartcase*: bool # Override ignorecase if pattern contains uppercase
@@ -972,8 +977,7 @@ type
     lastGlobal*: bool # Whether the last preview replaced every match in a line
     lastLines*: Slice[int] # Lines the last preview covered
     originalCursor*: BufferPosition # Cursor position when preview started
-    originalTopLine*: int # Viewport top line when preview started
-    originalLeftCell*: int # Viewport left cell when preview started
+    originalView*: ViewState # What the window showed when preview started
 
   BuildInfo* =
     tuple
@@ -1628,6 +1632,13 @@ proc restoreViewportTop*(v: ViewPort, line, wrapOffset: int) =
   v.topWrapOffset = wrapOffset
   v.detachedFromCursor = false
 
+proc viewState*(v: ViewPort): ViewState =
+  (v.topLine, v.topWrapOffset, v.leftCell)
+
+proc restoreViewState*(v: ViewPort, view: ViewState) =
+  v.restoreViewportTop(view.topLine, view.topWrapOffset)
+  v.leftCell = view.leftCell
+
 proc statusMessage*(state: EditorState): string =
   ## Get the current status message
   state.statusMessageStr
@@ -1690,6 +1701,16 @@ proc enterCommandOverlay*(state: EditorState) =
   state.input.commandState.historyIndex = -1
   state.input.commandState.historyPrefix = ""
 
+proc noteSearchStart*(state: EditorState) =
+  ## Remember where the cursor is and what the window shows as a search
+  ## begins, which incsearch goes back to.
+  state.input.search.startPos = state.cursor
+  state.input.search.startView =
+    if state.activeWindow.isNil or state.activeWindow.viewport.isNil:
+      none(ViewState)
+    else:
+      some(state.activeWindow.viewport.viewState)
+
 proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   ## Enter search mode overlay
   ## The base mode (Normal, LogViewer, etc.) is preserved
@@ -1697,7 +1718,7 @@ proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   state.input.search.direction = direction
   state.input.search.text = ""
   state.input.search.cursor = 0
-  state.input.search.startPos = state.cursor
+  state.noteSearchStart()
   state.input.search.historyIndex = -1
   # Re-enable search highlight so incremental search results are visible
   state.input.search.hlsearchTempDisabled = false

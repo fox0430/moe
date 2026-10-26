@@ -42,27 +42,13 @@ type
 const FrameSeconds = 1.0 / 60.0
   ## The least time a frame shows of a scroll, so each frame moves it on
 
-proc foldStart(rl: RowLayout, line: int): int =
-  let fold = rl.buffer.foldState.getCollapsedFoldAt(line)
-  if fold.isSome: fold.get.startLine else: line
-
 proc spot(rl: RowLayout, pos: BufferPosition): RowSpot =
   ## The row the cursor at `pos` is on.
-  (rl.foldStart(pos.line), rl.cursorCell(pos.line, pos.column).wrapSeg)
-
-proc rowsOf(rl: RowLayout, line: int): int =
-  ## The rows `line` takes on the screen, one when it is in a closed fold.
-  if rl.buffer.foldState.getCollapsedFoldAt(line).isSome:
-    1
-  else:
-    rl.lineRows(line)
+  (rl.buffer.foldStart(pos.line), rl.cursorCell(pos.line, pos.column).wrapSeg)
 
 proc lastRow(rl: RowLayout): RowSpot =
   let last = rl.lineCount - 1
-  if rl.buffer.foldState.getCollapsedFoldAt(last).isSome:
-    (rl.foldStart(last), 0)
-  else:
-    (last, rl.lineRows(last) - 1)
+  (rl.buffer.foldStart(last), rl.rowsOf(last) - 1)
 
 proc down(rl: RowLayout, spot: RowSpot, rows: int): RowSpot =
   ## The row `rows` rows below `spot`, or the last one.
@@ -90,16 +76,6 @@ proc rowsToEnd(rl: RowLayout, top: RowSpot, limit: int): int =
   ## Rows from `top` to the end of the buffer, counted as far as `limit`.
   for vl in rl.visibleLines(top.line, top.offset, limit):
     result = vl.startRow + vl.rows
-
-proc botline(rl: RowLayout, top: RowSpot, height: int): int =
-  ## The first line below `top` the window does not show whole, or the line
-  ## count when it shows the rest of the buffer (Vim's w_botline). The top
-  ## line counts as whole even when it is taller than the window.
-  result = top.line
-  for vl in rl.visibleLines(top.line, top.offset, height):
-    if vl.startRow > 0 and vl.startRow + vl.rows > height:
-      return vl.line
-    result = (if vl.fold.isSome: vl.fold.get.endLine else: vl.line) + 1
 
 proc onLineStart(
     rl: RowLayout, before, after: RowSpot, forward: bool
@@ -167,7 +143,7 @@ proc pageRows(rl: RowLayout, top: RowSpot, height: int, forward: bool): int =
   ## view, two when they are short enough (Vim's get_scroll_overlap).
   let
     least = height - 2
-    bot = rl.botline(top, height)
+    bot = rl.botline(top.line, top.offset, height).line
   if (not forward and top.line == 0) or (forward and bot >= rl.lineCount):
     return height
 
@@ -180,14 +156,13 @@ proc pageRows(rl: RowLayout, top: RowSpot, height: int, forward: bool): int =
     ## The rows of the line one further from the edge, or high(int) past the
     ## buffer (Vim's topline_back and botline_forw).
     if forward:
-      line = rl.foldStart(line - 1)
+      line = rl.buffer.foldStart(line - 1)
       if line < 0:
         high(int)
       else:
         rl.rowsOf(line)
     else:
-      let fold = rl.buffer.foldState.getCollapsedFoldAt(line)
-      line = (if fold.isSome: fold.get.endLine else: line) + 1
+      line = rl.buffer.foldEnd(line) + 1
       if line >= rl.lineCount:
         high(int)
       else:
@@ -228,7 +203,7 @@ proc page*(
     elif forward:
       fixed.top.line
     else:
-      rl.foldStart(max(0, rl.botline(fixed.top, height) - 1))
+      rl.lastWholeRow(fixed.top.line, fixed.top.offset, height).line
 
 proc stopDistance(speed, friction, airDrag: float): float =
   ## Rows a scroll launched at `speed` rows a second goes until it stops.
@@ -297,9 +272,12 @@ proc indentOn(rl: RowLayout, row: RowSpot): int =
     rl.segmentStartColumn(row.line, row.offset)
 
 proc edgeRow(rl: RowLayout, top: RowSpot, height: int, forward: bool): RowSpot =
-  ## The window's last row when it scrolls down, else its first.
+  ## The window's last row when it scrolls down, else its first. Going down,
+  ## it is the last row of the last line the window shows whole, as a cursor
+  ## on a line sticking out would scroll the window on.
   if forward:
-    rl.down(top, height - 1)
+    let row = rl.lastWholeRow(top.line, top.offset, height)
+    (row.line, row.wrapSeg)
   else:
     top
 

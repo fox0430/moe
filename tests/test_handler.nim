@@ -5106,6 +5106,24 @@ suite "handleInterrupt - Normal":
     e.press("w")
     check e.activeBuffer.getLine(0) == "hello world"
 
+  test "Ctrl-C in a search puts back what the window showed, as Esc does":
+    var content = ""
+    for i in 0 ..< 200:
+      content.add(if i == 150: "needle\n" else: "aaaa\n")
+    let e = createTestEditorWithBuffer(content)
+    e.viewport.topLine = 40
+    e.cursor = BufferPosition(line: 45, column: 0)
+    e.press("/")
+    e.state.input.search.incsearch = true
+    e.press("n", "e", "e", "d")
+    check e.viewport.topLine > 100
+
+    discard e.handleEvent(quitEvent)
+
+    check not e.state.isSearchOverlay
+    check e.cursor.line == 45
+    check e.viewport.topLine == 40
+
 suite "handleKeyCombo - Escape in Normal mode":
   proc createEditorForEscape(content: string): Editor =
     result = createTestEditorWithBuffer(content)

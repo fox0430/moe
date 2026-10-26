@@ -25,7 +25,7 @@ import std/[options, tables, unicode]
 import pkg/results
 
 import ../[types, motion, key_bindings, unicode_utils, modes]
-import ../buffer/core
+import ../buffer/[core, fold]
 
 import core, operator_engine, insert_entry
 

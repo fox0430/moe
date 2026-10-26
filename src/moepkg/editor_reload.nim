@@ -96,7 +96,20 @@ proc invalidatePositionStateForBuffer*(e: Editor, buf: TextBuffer) =
   if isActive:
     e.state.snippetSession.active = false
     e.state.matchingParenPos = none(BufferPosition)
-    e.state.input.search.startPos = e.cursor
+    # A search under way still goes back on Esc to where it began, kept in the
+    # new text as the windows are above.
+    let start = e.motionController.cursorManager.clampPosition(
+      CursorPosition(
+        x: e.state.input.search.startPos.column, y: e.state.input.search.startPos.line
+      ),
+      buf,
+      some(EditorMode.Normal),
+    )
+    e.state.input.search.startPos = BufferPosition(line: start.y, column: start.x)
+    if e.state.input.search.startView.isSome and
+        e.state.input.search.startView.get.topLine >= buf.len:
+      e.state.input.search.startView =
+        some((start.y, 0, e.state.input.search.startView.get.leftCell))
     # An operator waiting for its motion anchors at the position it was typed
     # on, and would build a range from text that is gone.
     e.state.pendingInput.cancelOperatorPending()

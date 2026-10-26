@@ -1179,12 +1179,9 @@ proc handleInterruptCore(e: Editor): bool =
           termState.cancelQueuedPastes()
         return true
 
-  # Search overlay: cancel search and exit overlay
+  # Search overlay: cancel the search as Esc does
   if e.state.isSearchOverlay:
-    if e.state.input.search.incsearch:
-      e.cursor = e.state.input.search.startPos
-    e.state.exitOverlay()
-    e.setMode(e.state.mode)
+    e.cancelSearch()
     return true
 
   # Command overlay: clear command line and exit overlay

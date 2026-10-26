@@ -774,8 +774,51 @@ suite "editor_reload - every position naming the buffer survives a shrink":
         check window.viewport.topLine < buf.len
     check e.state.matchingParenPos.isNone
     check e.state.input.search.startPos.line < buf.len
+    if e.state.input.search.startView.isSome:
+      check e.state.input.search.startView.get.topLine < buf.len
     for jump in e.state.jumpList.list:
       check jump.line < buf.len
+
+  test "a search under way still goes back to where it began":
+    # The cursor of an incsearch is at a match; Esc goes back to the start,
+    # not to that match.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_reload_search_start.txt"
+    writeFile(path, "aaaa\nbbbb\ncccc\ndddd\neeee\nffff")
+    defer:
+      removeFile(path)
+    discard e.loadFile(path)
+
+    e.state.input.search.startPos = BufferPosition(line: 1, column: 2)
+    e.state.input.search.startView = some((1, 0, 0))
+    e.cursor = BufferPosition(line: 5, column: 0)
+
+    sleep(50)
+    writeFile(path, "a\nbb\nc\nd\ne\nf")
+    check e.reloadCurrentFile().isOk
+
+    check e.state.input.search.startPos == BufferPosition(line: 1, column: 1)
+    check e.state.input.search.startView == some((1, 0, 0))
+
+  test "a search start past the new end is brought into it":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_reload_search_start_past.txt"
+    writeFile(path, "aaaa\nbbbb\ncccc\ndddd\neeee\nffff")
+    defer:
+      removeFile(path)
+    discard e.loadFile(path)
+    let buf = e.activeBuffer
+
+    e.state.input.search.startPos = BufferPosition(line: 5, column: 2)
+    e.state.input.search.startView = some((4, 1, 3))
+
+    sleep(50)
+    writeFile(path, "aa\nb")
+    check e.reloadCurrentFile().isOk
+
+    check buf.len == 2
+    check e.state.input.search.startPos == BufferPosition(line: 1, column: 0)
+    check e.state.input.search.startView == some((1, 0, 3))
 
 suite "editor_reload - a failed load leaves no half-registered buffer":
   test "the buffer is unregistered again when the load fails":

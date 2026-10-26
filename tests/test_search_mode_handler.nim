@@ -19,7 +19,7 @@
 
 ## Tests for command_handlers/search_mode_handler.nim
 
-import std/unittest
+import std/[options, unittest]
 
 import pkg/celina
 
@@ -955,6 +955,59 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     check e.state.input.search.text == ""
     check e.cursor.line == 0
     check e.viewport.topLine == 0
+
+  test "A cancelled search puts back what the window showed":
+    var content = ""
+    for i in 0 ..< 200:
+      content.add(if i == 150: "needle\n" else: "aaaa\n")
+    let e = createTestEditorWithBuffer(content)
+    e.viewport.topLine = 40
+    e.cursor = BufferPosition(line: 45, column: 0)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+
+    for ch in "needle":
+      handleSearchCharacterInput(e, $ch)
+    check e.viewport.topLine > 100
+    cancelSearch(e)
+
+    check e.cursor.line == 45
+    check e.viewport.topLine == 40
+
+  test "Each match scrolls from what the window showed as the search began":
+    var content = ""
+    for i in 0 ..< 200:
+      content.add(
+        case i
+        of 38: "a\n"
+        of 33: "ab\n"
+        of 28: "abc\n"
+        else: "zzzz\n"
+      )
+    let e = createTestEditorWithBuffer(content)
+    e.viewport.topLine = 41
+    e.cursor = BufferPosition(line: 49, column: 0)
+    e.state.enterSearchOverlay(Backward)
+    e.state.input.search.incsearch = true
+
+    handleSearchCharacterInput(e, "a")
+    check e.viewport.topLine == 38
+    handleSearchCharacterInput(e, "b")
+    check e.viewport.topLine == 33
+    # Far above the window as the search began, the match comes to the middle.
+    handleSearchCharacterInput(e, "c")
+    check e.cursor.line == 28
+    check e.viewport.topLine < 28
+
+  test "A search begun with no window to show keeps no earlier view":
+    let e = createTestEditorWithBuffer("a\nb\n")
+    e.state.noteSearchStart()
+    check e.state.input.search.startView.isSome
+    let viewport = e.state.activeWindow.viewport
+    e.state.activeWindow.viewport = nil
+    e.state.noteSearchStart()
+    e.state.activeWindow.viewport = viewport
+    check e.state.input.search.startView.isNone
 
   test "A repeat of a * search keeps the word boundaries":
     let e = createTestEditorWithBuffer("target\ntargeted\ntarget\n")

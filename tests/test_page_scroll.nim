@@ -231,6 +231,12 @@ suite "ScrollAnimation":
     check rl.edgeCursor((32, 0), 17, false) == at(32)
     check rl.edgeCursor((199, 0), 17, true) == at(199)
 
+  test "going down, it leaves the cursor on the last line shown whole":
+    let wl = longEvery(120, 3, 95).wrapped
+    # Line 14 takes rows 15-17, so row 16 shows only part of it.
+    check wl.edgeCursor((5, 0), 17, true) == at(13)
+    check wl.edgeCursor((6, 0), 17, true) == at(16)
+
   test "Ctrl-D: the cursor goes to the bottom row, then stays on it as the top walks":
     var a: ScrollAnimation
     let (window, view) = a.scrolled(0, 3, 8, 24)
