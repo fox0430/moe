@@ -169,20 +169,17 @@ proc report(ctx: CommandContext, operatorType: OperatorType, msg: string) =
 proc executeOperatorOnRange*(
     ctx: CommandContext,
     operatorType: OperatorType,
-    rawRange: OperatorRange,
+    range: OperatorRange,
     operatorCount: int,
     topLine = none(int),
 ): Result[(), string] =
-  ## Execute an operator on the given range
+  ## Execute an operator on the given range, as `operator_driver` takes it in
+  ## (closed folds included)
   ## operatorCount: count before operator (e.g., "2" in "2d3w")
   ## topLine: viewport top line when the operator started, put back after the
   ## change; the current one when no motion ran since
 
   let topLine = topLine.get(ctx.motionController.viewportManager.viewport.topLine)
-
-  # The one place a closed fold widens an operator range, so every operator path
-  # (motion spans, text objects, visual selections) consumes folds whole.
-  let range = ctx.buffer.snapOperatorRange(rawRange)
 
   logDebug(
     "operator",

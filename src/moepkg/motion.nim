@@ -55,6 +55,10 @@ type
     useRegOne*: bool
       ## A delete over it goes to register 1 even within a line (Vim's
       ## use_reg_one)
+    screenCell*: Option[int]
+      ## After gj and gk with lines wrapped, the screen cell they aim for
+      ## (`screenCellOf`), or LineEnd after `$`, as Vim's nv_screengo leaves
+      ## curswant
 
   # Motion executor - handles only motion logic
   MotionExecutor* = ref object
@@ -832,6 +836,79 @@ const WideWordMotions = {
   Motion.WideWordEndBackward,
 } ## `W`, `B`, `E` and `gE`, which step over WORDs (Vim's cls_bigword).
 
+const ScreenLineMotions = {Motion.ScreenLineDown, Motion.ScreenLineUp}
+  ## gj and gk, which move over the rows of wrapped lines.
+
+proc screenLineLanding(
+    rl: RowLayout,
+    start: BufferPosition,
+    aim: int,
+    forward: bool,
+    count: int,
+    win: EditorWindow,
+): MotionLanding =
+  ## gj and gk with lines wrapped, as Vim's nv_screengo: `count` rows down or
+  ## up from `start`, the cursor of `win`, aiming for the screen cell `aim`
+  ## (`screenCellOf`), or with LineEnd for the last cell of each row. A closed
+  ## fold is one row. At the first or last row it fails as far as it went,
+  ## still onto the cell it aims for.
+  let
+    buffer = rl.buffer
+    width = rl.maxWidth
+    last = buffer.len - 1
+    atEnd = aim == LineEnd
+  var
+    line = start.line
+    want = aim
+  if atEnd:
+    let cell = rl.screenCellOf(line, start.column, win.cursorOnTabEnd(start))
+    want = cell div width * width + width - 1
+  else:
+    want = min(want, rl.lineRows(line) * width - 1)
+  for _ in 1 .. count:
+    let folded = buffer.foldState.getCollapsedFoldAt(line).isSome
+    if forward:
+      if want + width < rl.lineRows(line) * width and not folded:
+        want += width
+        continue
+      if line >= last:
+        result.failed = true
+        break
+      # As Vim's cursor_down_inner: to the last line even inside a fold.
+      line =
+        if line + 1 >= last:
+          last
+        elif folded:
+          min(buffer.foldEnd(line) + 1, last)
+        else:
+          line + 1
+      want = want mod width
+    else:
+      if want >= width and not folded:
+        want -= width
+        continue
+      if line <= 0:
+        result.failed = true
+        break
+      line = buffer.linesUp(line, 1)
+      want += (rl.lineRows(line) - 1) * width
+  var column = rl.columnAtScreenCell(line, want, win.mode)
+  if column > 0:
+    # A character shown past the cell, as a tab or one too wide for the row
+    # it would start on, gives way to the one before it when the cell is in
+    # the right half of the row.
+    let shown = rl.screenCellOf(
+      line, column, win.cursorOnTabEnd(BufferPosition(line: line, column: column))
+    )
+    if shown > want and want mod width > width div 2:
+      for g in buffer.getLine(line).glyphsOf(rl.tabStop):
+        if column - 1 < g.next:
+          column = g.column
+          break
+  result.pos = BufferPosition(line: line, column: column)
+  result.motionType = if atEnd: mtInclusive else: mtExclusive
+  result.screenCell = some(if atEnd: LineEnd else: want)
+
 proc landMotion*(
     e: MotionExecutor,
     currentPos: CursorPosition,
@@ -846,7 +923,8 @@ proc landMotion*(
 ): MotionLanding =
   ## Where `cmd` takes the cursor from `currentPos`, how `operator`, when one
   ## waits, takes the text up to there, and whether the motion fails.
-  ## `visibleRows` is used for viewport-relative motions.
+  ## `visibleRows` is used for viewport-relative motions. gj and gk are `j`
+  ## and `k`: the controller lands them over wrapped rows (`screenLineLanding`).
   let
     visibleRows = max(1, viewportHeight - max(0, reservedLines))
     viewportTop = (line: viewportTopLine, offset: viewportTopWrapOffset)
@@ -896,9 +974,9 @@ proc landMotion*(
       e.buffer.rightForOperator(start, cmd.count)
     else:
       at(e.moveRight(currentPos, cmd.count, mode), mtExclusive)
-  of Motion.Up:
+  of Motion.Up, Motion.ScreenLineUp:
     offLine(e.moveUp(currentPos, cmd.count))
-  of Motion.Down:
+  of Motion.Down, Motion.ScreenLineDown:
     offLine(e.moveDown(currentPos, cmd.count))
   of Motion.Home:
     at(e.moveHome(currentPos), mtExclusive)
@@ -1161,6 +1239,39 @@ const
     Motion.PreviousLineFirstNonBlank,
   } ## Motions onto a line's start or end, other than `$`.
 
+proc unwrapped(controller: MotionController, cmd: MotionCommand): MotionCommand =
+  ## `cmd`, with gj and gk as `j` and `k` when lines do not wrap, as Vim's
+  ## nv_g_cmd.
+  result = cmd
+  if cmd.motion in ScreenLineMotions and
+      not controller.cursorManager.state.effectiveLineWrap():
+    result.motion = if cmd.motion == Motion.ScreenLineDown: Motion.Down else: Motion.Up
+
+proc screenAim(
+    controller: MotionController, rl: RowLayout, start: BufferPosition
+): int =
+  ## The screen cell gj and gk aim for from `start`, the cursor, on the rows
+  ## of `rl`, as Vim's curswant with 'wrap': the one kept, LineEnd after `$`,
+  ## the one the column vertical moves want stands for on its line, else the
+  ## cell it shows on (`aimInFold` in a closed fold).
+  let
+    win = controller.cursorManager.state.activeWindow
+    wanted = win.wanted
+  if start == win.cursor and wanted.screenCell >= 0:
+    wanted.screenCell
+  elif wanted.cell == LineEnd:
+    LineEnd
+  elif wanted.cell >= 0:
+    rl.screenCellOfLineCell(start.line, wanted.cell)
+  elif start == win.cursor:
+    let inFold = win.aimInFold
+    if inFold.isSome:
+      inFold.get
+    else:
+      rl.screenCellOf(start.line, start.column, win.aimsAtTabEnd)
+  else:
+    rl.screenCellOf(start.line, start.column, win.cursorOnTabEnd(start))
+
 proc landMotion*(
     controller: MotionController,
     cmd: MotionCommand,
@@ -1171,20 +1282,32 @@ proc landMotion*(
   ## Where `cmd` takes the cursor from `start`, how `operator`, when one
   ## waits, takes the text up to there, and whether the motion fails. A
   ## vertical motion aims for the screen cell `aimedColumn`, or for the cell
-  ## `start` begins at when it is -1. Leaves the viewport alone. Only a cursor
-  ## move is kept on the line and out of closed folds; an operator widens over
-  ## folds itself.
-  result = controller.executor.landMotion(
-    CursorPosition(x: start.column, y: start.line),
-    cmd,
-    controller.viewportManager.viewport.height,
-    controller.viewportManager.viewport.topLine,
-    controller.cursorManager.state.motionReservedLines(),
-    controller.cursorManager.state.mode,
-    controller.rowLayout(),
-    controller.viewportManager.viewport.topWrapOffset,
-    operator,
-  )
+  ## `start` begins at when it is -1; gj and gk aim as `screenAim`. Leaves the
+  ## viewport alone. Only a cursor move is kept on the line and out of closed
+  ## folds; an operator widens over folds itself.
+  let
+    cmd = controller.unwrapped(cmd)
+    rl = controller.rowLayout()
+  if cmd.motion in ScreenLineMotions and rl.lineCount > 0:
+    result = rl.screenLineLanding(
+      start,
+      controller.screenAim(rl, start),
+      cmd.motion == Motion.ScreenLineDown,
+      cmd.count,
+      controller.cursorManager.state.activeWindow,
+    )
+  else:
+    result = controller.executor.landMotion(
+      CursorPosition(x: start.column, y: start.line),
+      cmd,
+      controller.viewportManager.viewport.height,
+      controller.viewportManager.viewport.topLine,
+      controller.cursorManager.state.motionReservedLines(),
+      controller.cursorManager.state.mode,
+      rl,
+      controller.viewportManager.viewport.topWrapOffset,
+      operator,
+    )
   # A vertical motion that failed stays where it started, off the aimed column.
   let buffer = controller.executor.buffer
   if cmd.motion in VerticalMotions and not result.failed and
@@ -1223,6 +1346,23 @@ proc executeMotion*(
       controller.cursorManager.state, controller.executor.buffer, result.pos
     )
 
+proc keepScreenAim*(
+    controller: MotionController, state: EditorState, landing: MotionLanding
+) =
+  ## Keep the screen cell gj or gk landing at `landing` aims for, with the
+  ## column it stands for on the cursor's line, as Vim's nv_screengo leaves
+  ## curswant even when it fails. Nothing for another motion.
+  if landing.screenCell.isNone:
+    return
+  let cell = landing.screenCell.get
+  if cell == LineEnd:
+    state.preferredColumn = LineEnd
+  else:
+    state.wanted = WantedColumn(
+      cell: controller.rowLayout.lineCellOfScreenCell(state.cursor.line, cell),
+      screenCell: cell,
+    )
+
 proc moveCursorByMotion*(
     controller: MotionController,
     state: EditorState,
@@ -1235,14 +1375,18 @@ proc moveCursorByMotion*(
   ## `g_` does too only then. `|` aims for its screen column, as Vim's nv_pipe
   ## does. Another motion drops the column when it moves the cursor, or even in
   ## place onto a line's start or end, as Vim's beginline does; one that fails
-  ## in place keeps it (`2_` on the last line).
+  ## in place keeps it (`2_` on the last line). gj and gk keep the screen cell
+  ## they aim for, even when they fail, as Vim's nv_screengo.
   let
+    cmd = controller.unwrapped(cmd)
     start = state.cursor
-    aimed = state.aimedColumn
-    landing = controller.executeMotion(cmd, start, updateViewport, aimed)
+    aimed = state.aim
+    landing = controller.executeMotion(cmd, start, updateViewport, aimed.cell)
   state.cursor = landing.pos
   if cmd.motion in VerticalMotions:
-    state.preferredColumn = aimed
+    state.wanted = aimed
+  elif landing.screenCell.isSome:
+    controller.keepScreenAim(state, landing)
   elif cmd.motion == Motion.End or (
     cmd.motion == Motion.LastNonBlank and landing.failed
   ):
@@ -1252,26 +1396,6 @@ proc moveCursorByMotion*(
   elif landing.pos != start or (cmd.motion in LineEdgeMotions and not landing.failed):
     state.preferredColumn = -1
   ok(landing.pos)
-
-proc snapOperatorRange*(buffer: TextBuffer, range: OperatorRange): OperatorRange =
-  ## Widen an operator range so a closed fold either end lies in is covered
-  ## whole: "dl" on a closed fold deletes the fold, not one hidden line. A whole
-  ## fold is whole lines, so such a charwise range becomes linewise. Idempotent,
-  ## and a no-op when neither end is in a closed fold.
-  result = range
-  if range.isEmpty:
-    return
-  if not buffer.foldState.endsInCollapsedFold(range.start.line, range.endPos.line):
-    return
-  let snapped = buffer.foldState.snapRangeToFolds(range.start.line, range.endPos.line)
-  result.isLinewise = true
-  result.start = BufferPosition(line: snapped.startLine, column: 0)
-  let endCol =
-    if snapped.endLine < buffer.len:
-      buffer.getLine(snapped.endLine).charLen
-    else:
-      0
-  result.endPos = BufferPosition(line: snapped.endLine, column: endCol)
 
 proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
   ## Extract text from the given range

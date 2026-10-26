@@ -209,7 +209,8 @@ proc runeCells*(rune: Rune, cell, tabStop: int): int =
 
 func startsNewWrapSegment*(segmentWidth, runeWidth, maxWidth: int): bool {.inline.} =
   ## Canonical wrap-boundary rule shared by every wrap walker
-  ## (calculateWrapCount, cursorWrapPosition, displayWidthSubstrFromByte):
+  ## (calculateWrapCount, cursorWrapPosition, displayWidthSubstrFromByte,
+  ## wrappedCells):
   ## a rune starts a new segment when the current segment is non-empty and
   ## the rune does not fit. Keeping a single definition guarantees the
   ## reserved height, the cursor cell and the drawn segments stay on the
@@ -339,6 +340,26 @@ proc calculateWrapCount*(text: string, maxWidth: int, tabStop: int): int =
           w
     else:
       segmentWidth += w
+
+iterator wrappedCells*(
+    text: string, maxWidth, tabStop: int
+): tuple[column, row, cell, width, lineCell, lineWidth: int] =
+  ## Each character of `text` as rows `maxWidth` cells wide hold it, by the
+  ## rule of `calculateWrapCount`: its column, its row, the cell of the row it
+  ## starts at and how many it takes there, and the same two counted from the
+  ## line start (a tab's width can differ).
+  var column, row, cell, lineCell = 0
+  for (rune, _) in text.chars:
+    let lineWidth = rune.runeCells(lineCell, tabStop)
+    var width = rune.runeCells(cell, tabStop)
+    if startsNewWrapSegment(cell, width, maxWidth):
+      row.inc
+      cell = 0
+      width = rune.runeCells(0, tabStop)
+    yield (column, row, cell, width, lineCell, lineWidth)
+    cell += width
+    lineCell += lineWidth
+    column.inc
 
 proc ensureFresh*(
     cache: WrapCountCache, buffer: TextBuffer, maxWidth: int, tabStop: int

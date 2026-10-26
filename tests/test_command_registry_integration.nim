@@ -7985,7 +7985,7 @@ suite "executeCommand - closed folds are edited as a whole":
   # closed fold), rather than opening the fold and editing the line it was
   # hiding. Ranges are widened; the fold itself is left as the user set it.
   test "x on a closed fold deletes every line of the fold":
-    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    let buffer = newTextBuffer("zero\n1\n2\n3\n4")
     check buffer.foldState.addFold(0, 3, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0) # on the fold start line
@@ -8025,10 +8025,47 @@ suite "executeCommand - closed folds are edited as a whole":
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
     check registry.executeCommand(ctx, cmd).isOk
     # Yank widens like any other operator, but changes no text and opens nothing.
+    # A charwise motion stays charwise, to the end of the fold's last line.
     check buffer.len == 4
     check buffer.foldState.folds[0].collapsed
-    let yanked = ctx.state.registers.getNoNamedRegister().getContent()
-    check yanked == "hello world\n1\n2\n"
+    let reg = ctx.state.registers.getNoNamedRegister()
+    check reg.getContent() == "hello world\n1\n2"
+    check reg.kind == rkChars
+
+  test "a yank into a fold stays charwise, from the fold's start to its end":
+    # As Vim's do_pending_operator: `y$` on the fold takes from its first line's
+    # start to its last line's end, without the line break.
+    let buffer = newTextBuffer("one two\nfold1 a\nfold2 b\nlast line")
+    check buffer.foldState.addFold(1, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 2)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.End, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    let reg = ctx.state.registers.getNoNamedRegister()
+    check reg.getContent() == "fold1 a\nfold2 b"
+    check reg.kind == rkChars
+
+  test "a charwise motion back takes in no fold":
+    # `d0` on the fold deletes up to the cursor only, as in Vim.
+    let buffer = newTextBuffer("one two\nfold1 a\nfold2 b\nlast line")
+    check buffer.foldState.addFold(1, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 3)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.Home, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 4
+    check buffer[1] == "d1 a"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "fol"
 
   test "an operator range widens to cover a fold it reaches into":
     # The motion ends inside a fold that does not start at the cursor line.
@@ -8146,14 +8183,29 @@ suite "executeCommand - closed folds are edited as a whole":
 
     let cmd = Command(kind: ctCustom, commandId: "substitute.char", count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    # A linewise change leaves a line to type on, keeping the indent, instead of
-    # deleting the lines and dropping the cursor onto the line that followed.
+    # As `cl`, a charwise change: the fold's text goes without its last line
+    # break or the indent, as in Vim.
     check buffer.len == 2
-    check buffer[0] == "  "
+    check buffer[0] == ""
     check buffer[1] == "tail"
-    check ctx.cursor == BufferPosition(line: 0, column: 2)
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
     check ctx.state.mode == EditorMode.Insert
-    check ctx.state.editState.insertRecord.entry.kind == ieSubstitute
+    check ctx.state.registers.getNoNamedRegister().getContent() == "  head\n1\n2"
+
+  test "x on the last character of a fold's first line deletes only it":
+    # As `dl`: `l` cannot move there, so the operator takes in no fold.
+    let buffer = newTextBuffer("head\n1\n2\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 3)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "delete.char", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 4
+    check buffer[0] == "hea"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "d"
+    check buffer.foldState.folds[0].collapsed
 
   test "x on a closed fold is what . repeats afterwards":
     let buffer = newTextBuffer("head\n1\n2\ntail")
@@ -8259,7 +8311,7 @@ suite "executeCommand - closed folds are edited as a whole":
   test "x on a fold covering the whole buffer leaves no fold behind":
     # The last line is cleared rather than deleted, so the fold shift never sees
     # it go; without an explicit sweep a fold marker survives over empty text.
-    let buffer = newTextBuffer("a\nb\nc")
+    let buffer = newTextBuffer("ab\nb\nc")
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
@@ -8304,11 +8356,10 @@ suite "executeCommand - . on a closed fold":
     check buffer[1] == "bbb"
     check buffer[2] == "ccc"
 
-  test "s on a fold records a substitute, so `.` repeats a substitute":
-    # The fold branch routes through the operator engine and never touches the
-    # per-character substitute path, so it has to start the record itself:
-    # without it typing would record a plain insert and `.` would stop
-    # substituting.
+  test "s on a fold records cl, so `.` repeats what Vim's s does":
+    # The fold branch runs `cl` and never touches the per-character substitute
+    # path: without the change's record typing would record a plain insert and
+    # `.` would stop substituting.
     let buffer = newTextBuffer("aaa\nbbb\nccc\ntail")
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
@@ -8317,7 +8368,10 @@ suite "executeCommand - . on a closed fold":
 
     let cmd = Command(kind: ctCustom, commandId: "substitute.char", count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    check ctx.state.editState.insertRecord.entry.kind == ieSubstitute
+    let entry = ctx.state.editState.insertRecord.entry
+    check entry.kind == ieChange
+    check entry.operand.kind == odMotion
+    check entry.operand.motion == Motion.Right
 
 suite "Change operator over a linewise range":
   # The change operator holds its transaction open for the insert that follows,

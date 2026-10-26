@@ -10309,6 +10309,292 @@ suite "handleKeyCombo - a count and the shape of a motion, as in Vim":
       checkpoint($keys)
       check e.activeWindow.cursor.column == 10
 
+suite "handleKeyCombo - gj and gk go over the rows of wrapped lines, as Vim's nv_screengo":
+  # Expectations are Vim 9.2's, in a window `width` cells wide.
+  proc createEditorForRows(
+      content: string, width: int, line = 0, column = 0, wrap = true
+  ): Editor =
+    var config = newEditorConfig()
+    config.standard.lineWrap = wrap
+    config.standard.tabStop = 8
+    result = newEditor(config)
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.windowManager.windows[0].viewport.width =
+      width + viewportOffsetFor(buf, result.state)
+    result.activeWindow.cursor = BufferPosition(line: line, column: column)
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  proc at(line, column: int): BufferPosition =
+    BufferPosition(line: line, column: column)
+
+  # Rows of 10: the first line takes three, the third two whole ones.
+  const
+    First = "abcdefghijklmnopqrstuvwxy"
+    Rows = First & "\nshort\n0123456789ABCDEFGHIJ\n\n"
+
+  test "gj and gk move a row, onto the next line's rows, keeping the cell":
+    for (line, column, keys, cursor) in [
+      (0, 3, @["g", "j"], at(0, 13)),
+      (0, 3, @["g", "j", "g", "j"], at(0, 23)),
+      (0, 3, @["3", "g", "j"], at(1, 3)),
+      (0, 3, @["5", "g", "j"], at(2, 13)),
+      (1, 3, @["g", "k"], at(0, 23)),
+      (2, 13, @["g", "k", "g", "k"], at(1, 3)),
+      # A row too short ends on its last character, and the cell is kept
+      (0, 8, @["g", "j", "g", "j"], at(0, 24)),
+      (0, 8, @["g", "j", "g", "j", "g", "j"], at(1, 4)),
+      (0, 8, @["g", "j", "g", "j", "g", "j", "g", "j"], at(2, 8)),
+      # At the first or last row they fail, as far as they went
+      (0, 3, @["g", "k"], at(0, 3)),
+      (3, 0, @["g", "j"], at(3, 0)),
+      (0, 3, @["7", "g", "j"], at(3, 0)),
+      # After `$`, the last cell of each row
+      (0, 0, @["$", "g", "k"], at(0, 19)),
+      (0, 0, @["$", "g", "k", "g", "k"], at(0, 9)),
+      (0, 0, @["$", "g", "j", "g", "j"], at(2, 9)),
+      # j and k aim for the cell gj and gk leave, as Vim's curswant
+      (0, 3, @["g", "j", "j"], at(1, 4)),
+      (0, 3, @["g", "j", "j", "j"], at(2, 13)),
+      (0, 3, @["g", "Down"], at(0, 13)),
+      (0, 13, @["g", "Up"], at(0, 3)),
+    ]:
+      let e = createEditorForRows(Rows, 10, line, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.cursor == cursor
+
+  test "an operator takes the text up to where gj or gk land, short of it":
+    for (column, keys, first, register, cursor) in [
+      (3, @["d", "g", "j"], "abcnopqrstuvwxy", "defghijklm", at(0, 3)),
+      (13, @["d", "g", "k"], "abcnopqrstuvwxy", "defghijklm", at(0, 3)),
+      (3, @["d", "2", "g", "j"], "abcxy", "defghijklmnopqrstuvw", at(0, 3)),
+      (3, @["d", "g", "j", "."], "abcxy", "nopqrstuvw", at(0, 3)),
+      (3, @["c", "g", "j", "X", "Escape"], "abcXnopqrstuvwxy", "defghijklm", at(0, 3)),
+      (13, @["y", "g", "k"], First, "defghijklm", at(0, 3)),
+      # After `$` it takes the last character too
+      (0, @["$", "d", "g", "k"], "abcdefghijklmnopqrs", "tuvwxy", at(0, 18)),
+      (3, @["v", "g", "j", "d"], "abcopqrstuvwxy", "defghijklmn", at(0, 3)),
+      (3, @["v", "$", "g", "k", "y"], First, "defghijklmnopqrst", at(0, 3)),
+      # A count past the last row leaves the operator nothing, and the cursor
+      # as far as gj went, aiming for its cell
+      (3, @["d", "9", "g", "j"], First, "", at(3, 0)),
+      (3, @["d", "9", "g", "j", "g", "k"], First, "", at(2, 13)),
+    ]:
+      let e = createEditorForRows(Rows, 10, 0, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines[0] == first
+      check e.state.registers.getRegisterContent('"') == register
+      check e.cursor == cursor
+
+  test "a row a wide character leaves short ends on its last character":
+    # Rows of 9: あいうえ take 8 cells, and お goes on to the next row.
+    for (content, line, column, keys, cursor) in [
+      (
+        "あいうえおかきくけこ\nabcdefghijklmnopqrstuvwxyz",
+        1,
+        8,
+        @["g", "k"],
+        at(0, 9),
+      ),
+      (
+        "あいうえおかきくけこ\nabcdefghijklmnopqrstuvwxyz",
+        1,
+        8,
+        @["g", "k", "g", "k"],
+        at(0, 7),
+      ),
+      (
+        "あいうえおかきくけこ\nabcdefghijklmnopqrstuvwxyz",
+        0,
+        3,
+        @["g", "j"],
+        at(0, 7),
+      ),
+      (
+        "あいうえおかきくけこ\nabcdefghijklmnopqrstuvwxyz",
+        1,
+        0,
+        @["$", "g", "k"],
+        at(1, 17),
+      ),
+      # The cell past the short row is kept for the rows after it
+      ("xxxxxxxxx\nあいうえお\nyyyyyyyyy", 0, 8, @["g", "j"], at(1, 3)),
+      ("xxxxxxxxx\nあいうえお\nyyyyyyyyy", 0, 8, @["g", "j", "g", "j"], at(1, 4)),
+      (
+        "xxxxxxxxx\nあいうえお\nyyyyyyyyy",
+        0,
+        8,
+        @["g", "j", "g", "j", "g", "j"],
+        at(2, 8),
+      ),
+      ("xxxxxxxxx\nあいうえお\nyyyyyyyyy", 0, 8, @["g", "j", "j"], at(2, 8)),
+    ]:
+      let e = createEditorForRows(content, 9, line, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.cursor == cursor
+
+  test "the screen cell is kept with the column, as Vim keeps curswant":
+    # お and あ go on to the next row past a cell left empty, which gj from the
+    # end of the first line aims for. j and k, gv and Insert's Ctrl-o keep it.
+    const
+      Wide =
+        "xxxxxxxxx\nあいうえお\naaaaaaaaあいうえおかきくけこ\n" &
+        "z".repeat(27)
+      Last = "1234567890\nabcdefghiあx\n" & "q".repeat(20)
+    for (content, width, column, keys, cursor) in [
+      (Wide, 9, 8, @["g", "j", "j", "g", "j"], at(2, 11)),
+      (Wide, 9, 8, @["g", "j", "j", "k", "g", "j"], at(1, 4)),
+      (Wide, 9, 8, @["i", "C-o", "g", "j", "C-o", "g", "j", "Escape"], at(1, 4)),
+      (
+        Wide,
+        9,
+        8,
+        @["i", "C-o", "g", "j", "C-o", "j", "C-o", "g", "j", "Escape"],
+        at(2, 10),
+      ),
+      (Last, 10, 9, @["v", "g", "j", "Escape", "g", "v", "g", "j", "Escape"], at(1, 10)),
+    ]:
+      let e = createEditorForRows(content, width, 0, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.cursor == cursor
+
+  test "a tab in the right half of the row gives way to the character before it":
+    let content = "y".repeat(39) & "\n" & "x".repeat(25) & "\tzzz"
+    for (keys, cursor) in [(@["g", "j"], at(1, 24)), (@["j"], at(1, 25))]:
+      let e = createEditorForRows(content, 40, 0, 28)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.cursor == cursor
+
+  test "a closed fold is one row":
+    for (line, column, keys, cursor) in [
+      (0, 23, @["g", "j"], at(1, 0)),
+      (0, 23, @["2", "g", "j"], at(3, 3)),
+      (3, 3, @["g", "k"], at(1, 0)),
+      (3, 3, @["g", "k", "g", "k"], at(0, 23)),
+    ]:
+      let e = createEditorForRows(
+        "abcdefghijklmnopqrstuvwxy\nfold1\nfold2\n0123456789ABCDEFGHIJ", 10, line,
+        column,
+      )
+      check e.activeBuffer.foldState.addFold(1, 2)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.cursor == cursor
+
+  test "from a closed fold they aim for where the cursor showed, as j and k":
+    # Vim takes curswant from w_virtcol once a command has dropped it, and in a
+    # closed fold w_virtcol is the window's left. A fold closed over the
+    # cursor after that leaves the cell of its text.
+    for (line, column, keys, cursor) in [
+      (1, 12, @["z", "o", "l", "z", "c", "g", "j"], at(3, 13)),
+      (1, 12, @["z", "o", "l", "z", "c", "j"], at(3, 13)),
+      (1, 12, @["z", "o", "l", "z", "c", "g", "k"], at(0, 13)),
+      (0, 3, @["/", "t", "w", "o", "Enter", "g", "j"], at(3, 0)),
+      (0, 3, @["/", "t", "w", "o", "Enter", "j"], at(3, 0)),
+      (0, 18, @["w", "k"], at(0, 0)),
+    ]:
+      let e = createEditorForRows(
+        "0123456789abcdefghij\n    fold line one that is long\nfold line two\n" &
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        40,
+        line,
+        column,
+      )
+      check e.activeBuffer.foldState.addFold(1, 2)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.cursor == cursor
+
+  test "an operator onto a closed fold takes it to its last line's end, charwise":
+    # Going down the fold is taken in, and only so far; going up it is not, as
+    # Vim's do_pending_operator.
+    for (line, column, keys, lines, register, cursor) in [
+      (
+        0,
+        23,
+        @["d", "g", "j"],
+        @["abcdefghijklmnopqrstuvw", "0123456789ABCDEFGHIJ"],
+        "xy\nfold1\nfold2",
+        at(0, 22),
+      ),
+      (
+        0,
+        23,
+        @["y", "g", "j"],
+        @["abcdefghijklmnopqrstuvwxy", "fold1", "fold2", "0123456789ABCDEFGHIJ"],
+        "xy\nfold1\nfold2",
+        at(0, 23),
+      ),
+      (
+        3,
+        3,
+        @["d", "g", "k"],
+        @["abcdefghijklmnopqrstuvwxy", "fol3456789ABCDEFGHIJ"],
+        "d1\nfold2\n012",
+        at(1, 3),
+      ),
+    ]:
+      let e = createEditorForRows(
+        "abcdefghijklmnopqrstuvwxy\nfold1\nfold2\n0123456789ABCDEFGHIJ", 10, line,
+        column,
+      )
+      check e.activeBuffer.foldState.addFold(1, 2)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.state.registers.getRegisterContent('"') == register
+      check e.state.registers.getRegister('"').kind == rkChars
+      check e.cursor == cursor
+
+  test "without wrap they are j and k":
+    for (line, column, keys, first, cursor) in [
+      (0, 3, @["g", "j"], First, at(1, 3)),
+      (0, 23, @["g", "j", "g", "j"], First, at(2, 19)),
+      (0, 3, @["d", "g", "j"], "0123456789ABCDEFGHIJ", at(0, 0)),
+      (1, 3, @["d", "g", "k"], "0123456789ABCDEFGHIJ", at(0, 0)),
+    ]:
+      let e = createEditorForRows(Rows, 10, line, column, wrap = false)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines[0] == first
+      check e.cursor == cursor
+
 suite "handleKeyCombo - Visual mode moves by Normal's motions, as in Vim":
   # Expectations are Vim 9.2's.
   proc createEditorForVisual(content: string, line = 0, column = 0): Editor =

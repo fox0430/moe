@@ -110,11 +110,11 @@ proc replicateBlockInsert*(
     if replicated.isErr:
       return replicated.error
   if ctx.kind != vbiChange and ending != bieTyping:
-    let aimed = state.aimedColumn
+    let aimed = state.aim
     state.cursor = area.topLeft
     if ending == bieResume:
       # Vim's op_insert leaves curswant where typing ended.
-      state.preferredColumn = aimed
+      state.wanted = aimed
     else:
       state.activeWindow.placeCursorOnInsertExit()
 
@@ -168,14 +168,14 @@ proc leaveInsertForCtrlO(state: EditorState, buffer: TextBuffer) =
   ## past the end if it resumes there (ins_at_eol). Elsewhere the cursor stays
   ## where it is.
   let
-    wanted = state.aimedColumn
+    wanted = state.aim
     lineLen = buffer.getLine(state.cursor.line).charLen
   if state.cursor.column < lineLen:
     state.insertResumeLineEnd = none(int)
   else:
     state.insertResumeLineEnd = some(state.cursor.line)
     state.cursor.column = max(0, lineLen - 1)
-  state.preferredColumn = wanted
+  state.wanted = wanted
 
 proc leaveInsert*(
     manager: HandlerManager, editor: Editor, target = EditorMode.Normal, thenExec = ""

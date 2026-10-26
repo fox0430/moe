@@ -40,6 +40,14 @@ const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("move-right", "Move cursor right", Motion.Right),
   ("move-up", "Move cursor up", Motion.Up),
   ("move-down", "Move cursor down", Motion.Down),
+  (
+    "move-up-screen-line", "Move cursor up a screen line (a row of a wrapped line)",
+    Motion.ScreenLineUp,
+  ),
+  (
+    "move-down-screen-line", "Move cursor down a screen line (a row of a wrapped line)",
+    Motion.ScreenLineDown,
+  ),
   ("line-home", "Move to beginning of line", Motion.Home),
   (
     "line-first-non-blank", "Move to first non-whitespace character",

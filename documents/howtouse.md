@@ -66,6 +66,8 @@
 | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd> | Go down |
 | <kbd>**k**</kbd> | Go up |
 | <kbd>**l**</kbd> | Go right |
+| <kbd>**g**</kbd> <kbd>**j**</kbd> | Go down a screen line |
+| <kbd>**g**</kbd> <kbd>**k**</kbd> | Go up a screen line |
 | <kbd>**w**</kbd> | Go forwards to the start of a word |
 | <kbd>**e**</kbd> | Go forwards to the end of a word |
 | <kbd>**g**</kbd> <kbd>**e**</kbd> | Go backwards to the end of a word |

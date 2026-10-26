@@ -85,29 +85,39 @@ proc handlePut*(
 proc isOnCollapsedFold(ctx: CommandContext): bool =
   ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line).isSome
 
-proc editWholeFoldAtCursor(
-    ctx: CommandContext, operatorType: OperatorType
+proc operateOverChar(
+    registry: CommandRegistry,
+    ctx: CommandContext,
+    operatorType: OperatorType,
+    count: int,
 ): Result[(), string] =
-  ## x and s are dl and cl, and an operator takes a closed fold as a whole, so
-  ## route them through the operator engine and let its range snapping widen.
-  executeOperatorOnRange(
-    ctx, operatorType, OperatorRange(start: ctx.cursor, endPos: ctx.cursor), 1
+  ## x and s on a closed fold, as `dl` and `cl`: the operator takes in the fold
+  ## as Vim's do_pending_operator does.
+  ctx.startOperator(operatorType)
+  registry.finishOperator(
+    ctx,
+    Operand(
+      kind: odMotion, motion: Motion.Right, count: max(1, count), countGiven: true
+    ),
   )
 
-proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleDeleteChar*(
+    registry: CommandRegistry, ctx: CommandContext, count: int = 1
+): Result[(), string] =
   ## Delete character(s) at cursor position (x command)
   ## count: number of characters to delete (default: 1)
   ## With autoDeleteParen enabled, deleting an opening paren also deletes matching closing paren
 
   logDebug("delete", "handleDeleteChar called with count=" & $count)
   if ctx.isOnCollapsedFold:
-    let foldResult = ctx.editWholeFoldAtCursor(OpDelete)
-    if foldResult.isOk:
-      # `.` still repeats an `x`, not whatever edit came before it.
-      ctx.recordChange(
-        LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true)
+    discard ?registry.operateOverChar(ctx, OpDelete, count)
+    # `.` still repeats an `x`, not a `dl`.
+    ctx.recordChange(
+      LastEditCommand(
+        kind: lecDeleteChar, deleteCount: max(1, count), deleteForward: true
       )
-    return foldResult
+    )
+    return ok(())
   let actualCount = max(1, count)
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
@@ -295,18 +305,16 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
 
   return Result[(), string].ok ()
 
-proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), string] =
+proc handleSubstituteChar*(
+    registry: CommandRegistry, ctx: CommandContext, count: int = 1
+): Result[(), string] =
   ## Substitute character(s) at cursor position (s command)
   ## Deletes character(s) and enters Insert mode
   ## count: number of characters to substitute (default: 1)
 
   logDebug("substitute", "handleSubstituteChar called with count=" & $count)
   if ctx.isOnCollapsedFold:
-    let foldResult = ctx.editWholeFoldAtCursor(OpChange)
-    if foldResult.isErr:
-      return foldResult
-    # Recorded as `s`, so a repeat on a closed fold widens again.
-    return ctx.beginInsert(InsertEntry(kind: ieSubstitute), count)
+    return registry.operateOverChar(ctx, OpChange, count)
   let actualCount = max(1, count)
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
@@ -635,7 +643,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete character(s) at cursor (x command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
-      handleDeleteChar(ctx, count),
+      handleDeleteChar(registry, ctx, count),
     0,
     1, # Accept optional count argument
   )
@@ -657,7 +665,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Substitute character(s) at cursor (s command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
-      handleSubstituteChar(ctx, count),
+      handleSubstituteChar(registry, ctx, count),
     0,
     1, # Accept optional count argument
   )
@@ -975,7 +983,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         # Repeat character deletion (x or X)
         if lastCmd.deleteForward:
           # x command - delete forward
-          return handleDeleteChar(ctx, lastCmd.deleteCount)
+          return handleDeleteChar(registry, ctx, lastCmd.deleteCount)
         else:
           # X command - delete backward
           return handleDeleteCharBefore(ctx, lastCmd.deleteCount)
@@ -999,7 +1007,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         of ieInsert, ieAppend, ieAppendEnd, ieInsertNonBlank, ieOpenBelow, ieOpenAbove:
           return ctx.handleInsertAt(record.entry.kind, count)
         of ieSubstitute:
-          return handleSubstituteChar(ctx, count)
+          return handleSubstituteChar(registry, ctx, count)
         of ieChange:
           var operand = record.entry.operand
           if args.len > 0:

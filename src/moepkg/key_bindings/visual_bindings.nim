@@ -41,6 +41,10 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   ("j", "move-down"),
   ("k", "move-up"),
   ("C-j", "move-down"), # CTRL-J / <NL> = down (Vim built-in)
+  ("g j", "move-down-screen-line"),
+  ("g k", "move-up-screen-line"),
+  ("g Down", "move-down-screen-line"),
+  ("g Up", "move-up-screen-line"),
   ("0", "line-home"),
   ("^", "line-first-non-blank"),
   ("_", "linewise-first-non-blank"),

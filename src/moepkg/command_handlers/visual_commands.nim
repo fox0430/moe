@@ -749,7 +749,7 @@ proc reselectVisual*(
     BufferPosition(line: line, column: min(pos.column, buffer.getLine(line).charLen))
 
   state.enterVisual(area.kind, clamped(area.start), clamped(area.cursor))
-  state.preferredColumn = area.wantedColumn
+  state.wanted = area.wanted
   Result[EditorMode, string].ok area.kind.visualMode
 
 proc visualPaste*(
@@ -782,7 +782,7 @@ proc visualPaste*(
     # blank line.
     putsNothing = source.isEmpty and not regName.isBlackHoleRegisterName
     cursorBeforePaste = state.cursor
-    wantedColumn = state.preferredColumn
+    wanted = state.wanted
     startLine = min(sel.start.line, sel.current.line)
     endLine = max(sel.start.line, sel.current.line)
     cells =
@@ -890,9 +890,7 @@ proc visualPaste*(
   state.leaveVisual()
   state.cursor = cursor
   buffer.lastVisual = some(
-    VisualArea(
-      start: area.first, cursor: area.last, kind: sel.kind, wantedColumn: wantedColumn
-    )
+    VisualArea(start: area.first, cursor: area.last, kind: sel.kind, wanted: wanted)
   )
   if putsNothing:
     result = Result[(), string].err(nothingInRegister(regName))

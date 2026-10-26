@@ -668,6 +668,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | move-right | Move cursor right |
 | move-up | Move cursor up |
 | move-down | Move cursor down |
+| move-up-screen-line | Move cursor up a screen line (a row of a wrapped line) |
+| move-down-screen-line | Move cursor down a screen line (a row of a wrapped line) |
 | page-up | Scroll page up |
 | page-down | Scroll page down |
 | half-page-up | Scroll half page up |
