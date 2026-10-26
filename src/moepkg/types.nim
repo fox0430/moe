@@ -559,6 +559,10 @@ type
     WordBackward # b - move to start of previous word
     WordEnd # e - move to end of next word
     WordEndBackward # ge - move to end of previous word
+    WideWordForward # W - move to start of next WORD (blank-separated)
+    WideWordBackward # B - move to start of previous WORD
+    WideWordEnd # E - move to end of next WORD
+    WideWordEndBackward # gE - move to end of previous WORD
     ParagraphForward # } - move to next paragraph (next blank line)
     ParagraphBackward # { - move to previous paragraph (previous blank line)
     ViewportHigh # H - move to top of viewport

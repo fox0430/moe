@@ -369,6 +369,65 @@ suite "Word Motion":
     check result.y == 0
     check result.x == 0 # Start of "foo"
 
+  test "W, B, E and gE take every non-blank as one class":
+    let buffer = newTextBuffer("foo.bar(x) baz\n  ,q")
+    let executor = newMotionExecutor(buffer)
+    for (motion, x, y, expected) in [
+      (Motion.WideWordForward, 0, 0, (11, 0)),
+      (Motion.WordForward, 0, 0, (3, 0)),
+      (Motion.WideWordForward, 11, 0, (2, 1)),
+      (Motion.WideWordEnd, 0, 0, (9, 0)),
+      (Motion.WordEnd, 0, 0, (2, 0)),
+      (Motion.WideWordBackward, 3, 1, (2, 1)),
+      (Motion.WideWordBackward, 2, 1, (11, 0)),
+      (Motion.WideWordEndBackward, 3, 1, (13, 0)),
+      (Motion.WideWordEndBackward, 13, 0, (9, 0)),
+    ]:
+      let result = executor.move(CursorPosition(x: x, y: y), motion, 1)
+      checkpoint($motion & " from " & $(x, y))
+      check (result.x, result.y) == expected
+
+  test "the ideographic and no-break spaces are blanks, as in Vim's utf_class":
+    let buffer = newTextBuffer("foo　bar baz qux")
+    let executor = newMotionExecutor(buffer)
+    for (motion, x, expected) in [
+      (Motion.WideWordForward, 0, 4),
+      (Motion.WordForward, 0, 4),
+      (Motion.WideWordEnd, 0, 2),
+      (Motion.WordEnd, 2, 6),
+      (Motion.WideWordBackward, 8, 4),
+      (Motion.WordBackward, 4, 0),
+      (Motion.WideWordEndBackward, 8, 6),
+      (Motion.WordEndBackward, 4, 2),
+    ]:
+      let result = executor.move(CursorPosition(x: x, y: 0), motion, 1)
+      checkpoint($motion & " from " & $x)
+      check (result.x, result.y) == (expected, 0)
+
+  test "w, W, e and E fail when the buffer ends first, but not with an operator":
+    # As Vim 9.2, measured by whether a macro stops (moe does not stop one on a
+    # failed motion yet); `dW`/`dE` take the last character
+    let buffer = newTextBuffer("foo bar")
+    let executor = newMotionExecutor(buffer)
+    for (motion, x, count, failed) in [
+      (Motion.WordForward, 6, 1, true),
+      (Motion.WideWordForward, 6, 1, true),
+      (Motion.WordEnd, 6, 1, true),
+      (Motion.WideWordEnd, 6, 1, true),
+      (Motion.WideWordForward, 4, 1, false),
+      (Motion.WideWordForward, 0, 3, false),
+      (Motion.WideWordEnd, 0, 3, true),
+    ]:
+      let
+        start = CursorPosition(x: x, y: 0)
+        cmd = MotionCommand(motion: motion, count: count)
+        bare = executor.landMotion(start, cmd)
+        operated = executor.landMotion(start, cmd, operator = some(OpDelete))
+      checkpoint($motion & " from " & $x & " count " & $count)
+      check bare.pos == BufferPosition(line: 0, column: 6)
+      check bare.failed == failed
+      check not operated.failed
+
   test "b crosses whitespace-only line":
     let buffer = newTextBuffer("foo\n  \nbar")
     let executor = newMotionExecutor(buffer)

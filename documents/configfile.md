@@ -688,6 +688,10 @@ Commands are grouped by category below. Any command name listed here can be used
 | word-backward | Move to start of previous word |
 | word-end | Move to end of next word |
 | word-end-backward | Move to end of previous word |
+| wide-word-forward | Move to start of next WORD |
+| wide-word-backward | Move to start of previous WORD |
+| wide-word-end | Move to end of next WORD |
+| wide-word-end-backward | Move to end of previous WORD |
 | paragraph-forward | Move to next paragraph |
 | paragraph-backward | Move to previous paragraph |
 | match-bracket | Jump to matching bracket (%) |
