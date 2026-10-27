@@ -82,6 +82,11 @@ proc setupVisual(
     kind,
   )
 
+proc coverClosedFolds(ctx: CommandContext) =
+  ## What each input ends with, on the context's buffer.
+  ctx.state.activeWindow.setTab(ctx.buffer)
+  ctx.state.coverClosedFolds()
+
 suite "executeCommand - Motion commands":
   test "execute basic motion (Right)":
     let buffer = newTextBuffer("hello world")
@@ -4766,8 +4771,8 @@ suite "Handler - Clipboard operations":
         removeFakeClipboardTool(fakeDir)
 
   test "clipboard cut copies a closed fold it deletes":
-    # visualDelete takes a closed fold the selection reaches into whole, so
-    # the copy has to as well or the hidden lines are lost.
+    # The selection covers a closed fold it reaches into whole, so the copy
+    # takes the hidden lines the delete takes.
     let fakeDir = installFakeClipboardTool(fakeClipboardContent)
     if fakeDir.len == 0:
       skip()
@@ -4777,14 +4782,15 @@ suite "Handler - Clipboard operations":
         check buffer.foldState.addFold(2, 3, collapsed = true)
         let ctx = createTestContext(buffer)
         ctx.setupVisual(0, 1, 2, 0)
+        ctx.coverClosedFolds()
         ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
         let registry = createTestRegistry()
 
         check registry.execute(ctx, builtin(bcEditCut)).isOk
 
         check buffer.len == 1
-        check buffer[0] == "tail"
-        waitForClipboardWrite(fakeDir, "a0\na1\na2\na3\n")
+        check buffer[0] == "atail"
+        waitForClipboardWrite(fakeDir, "0\na1\na2\na3\n")
       finally:
         removeFakeClipboardTool(fakeDir)
 
@@ -5342,6 +5348,7 @@ suite "Handler - Fold Operations":
     check buffer.foldState.addFold(2, 4, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 2, 0)
+    ctx.coverClosedFolds()
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcFoldCreate)).isOk
@@ -5357,6 +5364,7 @@ suite "Handler - Fold Operations":
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.setupVisual(1, 0, 1, 0, vskLine)
+    ctx.coverClosedFolds()
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcFoldCreate)).isOk
@@ -8356,27 +8364,27 @@ suite "Change operator over a linewise range":
     check buffer[0] == "\t"
     check ctx.cursor == BufferPosition(line: 0, column: 1)
 
-suite "executeCommand - visual selections snapped by a closed fold":
-  test "A in visual block enters Insert instead of doing nothing":
-    # Snapping the selection to the fold makes it line-shaped, which has no
-    # block columns to append into, so `A` appends after its last line.
+suite "executeCommand - visual selections covering a closed fold":
+  test "A in visual block appends past the fold's last line end":
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 1, 0, kind = vskBlock)
+    ctx.coverClosedFolds()
     let registry = createTestRegistry()
 
     let cmd = Command(kind: ctCustom, commandId: "visual.block.append", count: 1)
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.mode == EditorMode.Insert
     check not ctx.state.visualSelection.active
-    check ctx.state.cursor == BufferPosition(line: 3, column: 3)
+    check ctx.state.cursor == BufferPosition(line: 0, column: 4)
 
-  test "I in visual block enters Insert at the start of the snapped range":
+  test "I in visual block enters Insert at the start of the covered range":
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 1, 0, kind = vskBlock)
+    ctx.coverClosedFolds()
     let registry = createTestRegistry()
 
     let cmd = Command(kind: ctCustom, commandId: "visual.to.insert", count: 1)
@@ -8394,6 +8402,7 @@ suite "executeCommand - visual selections snapped by a closed fold":
       check buffer.foldState.addFold(1, 3, collapsed = true)
       let ctx = createTestContext(buffer)
       ctx.setupVisual(0, 0, 1, 0)
+      ctx.coverClosedFolds()
       let registry = createTestRegistry()
 
       let cmd = Command(kind: ctCustom, commandId: "visual.yank", count: 1)
@@ -8407,6 +8416,7 @@ suite "executeCommand - visual selections snapped by a closed fold":
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 1, 0)
+    ctx.coverClosedFolds()
     let registry = createTestRegistry()
 
     let cmd = Command(kind: ctCustom, commandId: "visual.delete", count: 1)
@@ -8415,27 +8425,29 @@ suite "executeCommand - visual selections snapped by a closed fold":
     check buffer[0] == "tail"
     check yanked == ctx.state.registers.getNoNamedRegister().getContent()
 
-  test "putting nothing still deletes the snapped selection":
+  test "putting nothing still deletes the covered selection":
     # As in Vim, `p` with an empty register deletes the selection and then
     # reports that there was nothing to put.
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 1, 1, 0)
+    ctx.coverClosedFolds()
     let registry = createTestRegistry()
 
     let cmd = Command(kind: ctCustom, commandId: "visual.paste", count: 1)
     check registry.executeCommand(ctx, cmd).isErr
     check buffer.len == 1
-    check buffer[0] == "eee"
+    check buffer[0] == "aeee"
     check ctx.state.mode == EditorMode.Normal
-    check ctx.state.cursor == BufferPosition(line: 0, column: 0)
+    check ctx.state.cursor == BufferPosition(line: 0, column: 1)
 
   test "a refused replace leaves the selection as it was":
     let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 1, 1, 0)
+    ctx.coverClosedFolds()
     let registry = createTestRegistry()
 
     let cmd = Command(
@@ -8447,7 +8459,7 @@ suite "executeCommand - visual selections snapped by a closed fold":
     check registry.executeCommand(ctx, cmd).isErr
     check ctx.state.mode == EditorMode.Visual
     check ctx.state.visualSelection.start == BufferPosition(line: 0, column: 1)
-    check ctx.state.cursor == BufferPosition(line: 1, column: 0)
+    check ctx.state.cursor == BufferPosition(line: 3, column: 3)
 
 suite "executeCommand - cursor pinned on collapsed folds":
   test "horizontal motion is pinned on a collapsed fold start line":
@@ -8485,6 +8497,7 @@ suite "executeCommand - a visual selection covers closed folds whole":
       BufferPosition(line: 1, column: 0), BufferPosition(line: 3, column: 0)
     )
     ctx.state.mode = EditorMode.Visual
+    ctx.coverClosedFolds()
     let registry = createTestRegistry()
 
     let cmd = Command(kind: ctCustom, commandId: "visual.indent", count: 1)

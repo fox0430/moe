@@ -390,7 +390,7 @@ proc handleFoldCloseAll*(ctx: CommandContext, args: seq[string]): Result[(), str
 proc handleFoldCreate*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Create fold from visual selection (zf command)
   ## This is called from visual mode with the selection range
-  let sel = ctx.state.operandSelection(ctx.buffer)
+  let sel = ctx.state.operandSelection
   if not sel.active:
     ctx.state.statusMessage = "No selection"
     return ok(())

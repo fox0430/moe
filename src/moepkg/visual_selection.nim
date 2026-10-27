@@ -28,10 +28,12 @@
 ## is not remapped through edits, so an edit the user did not make there (a
 ## server's `workspace/applyEdit`) can shift the text under it.
 ##
-## What the window shows is `visualSelection(win)`; what a command acts on is
-## `operandSelection`, which covers closed folds whole.
+## A closed fold either end is in is covered whole as each command ends
+## (`coverClosedFolds`), so what the window shows is what a command acts on.
 
-import types, modes
+import std/options
+
+import types, modes, wanted_column
 import buffer/[core, fold]
 
 export visualKind, visualMode
@@ -65,23 +67,52 @@ proc enterVisual*(
   state.mode = kind.visualMode
   state.selectVisualRange(anchor, focus)
 
-proc operandSelection*(win: EditorWindow, buffer: TextBuffer): VisualSelection =
-  ## The selection an operator acts on. A closed fold either end lies in is
-  ## covered whole, and a whole fold is whole lines, so the selection becomes
-  ## linewise. The window's own selection is left alone.
+proc coveredEnds*(
+    buffer: TextBuffer, first, last: BufferPosition
+): tuple[first, last: BufferPosition] =
+  ## `first`..`last` with a closed fold either end is in covered whole: the
+  ## start to its first line's start, the end past its last line's end, as
+  ## Vim's foldAdjustVisual.
+  result = (first, last)
+  if buffer.isNil or buffer.len == 0:
+    return
+  let firstFold = buffer.foldState.getCollapsedFoldAt(first.line)
+  if firstFold.isSome:
+    result.first = BufferPosition(line: firstFold.get.startLine, column: 0)
+  let lastFold = buffer.foldState.getCollapsedFoldAt(last.line)
+  if lastFold.isSome:
+    let line = min(lastFold.get.endLine, buffer.len - 1)
+    result.last = BufferPosition(line: line, column: buffer.getLineLen(line))
+
+proc coveredSelection*(win: EditorWindow): VisualSelection =
+  ## The window's selection with a closed fold either end is in covered whole.
   result = win.visualSelection
   if not result.active:
     return
-  let
-    lo = min(result.start.line, result.current.line)
-    hi = max(result.start.line, result.current.line)
-  if not buffer.foldState.endsInCollapsedFold(lo, hi):
-    return
-  let snapped = buffer.foldState.snapRangeToFolds(lo, hi)
-  result.kind = vskLine
-  result.extendsToLineEnd = false
-  result.start = BufferPosition(line: snapped.startLine, column: 0)
-  result.current = BufferPosition(line: snapped.endLine, column: 0)
+  let anchorFirst = result.start <= result.current
+  let (first, last) =
+    if anchorFirst:
+      win.buffer.coveredEnds(result.start, result.current)
+    else:
+      win.buffer.coveredEnds(result.current, result.start)
+  if anchorFirst:
+    (result.start, result.current) = (first, last)
+  else:
+    (result.start, result.current) = (last, first)
 
-proc operandSelection*(state: EditorState, buffer: TextBuffer): VisualSelection =
-  state.activeWindow.operandSelection(buffer)
+proc coverClosedFolds*(state: EditorState) =
+  ## Move the selection's ends to cover a closed fold either end is in, as
+  ## Vim's foldAdjustVisual does after each command. The column vertical moves
+  ## want stays.
+  let win = state.activeWindow
+  let covered = win.coveredSelection
+  if not covered.active:
+    return
+  if covered.start != win.clampedAnchor:
+    win.visualAnchor = covered.start
+  state.scrollCursor(covered.current)
+
+proc operandSelection*(state: EditorState): VisualSelection =
+  ## The selection an operator acts on: covered, as a fold may have closed
+  ## since the last command ended.
+  state.activeWindow.coveredSelection

@@ -120,7 +120,11 @@ proc selectionChainPosition(e: Editor): int =
   if c.selectionRangeIndex < 0 or c.selectionRangeIndex >= c.selectionRangeChain.len:
     return -1
   let cur = normalizedSelection(e.activeWindow.visualSelection)
-  let lvl = c.selectionRangeChain[c.selectionRangeIndex]
+  # As the command that applied it ended, the level covered a closed fold.
+  let lvl = e.activeBuffer.coveredEnds(
+    c.selectionRangeChain[c.selectionRangeIndex].first,
+    c.selectionRangeChain[c.selectionRangeIndex].last,
+  )
   if cur.first == lvl.first and cur.last == lvl.last:
     return c.selectionRangeIndex
   return -1

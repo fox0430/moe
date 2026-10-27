@@ -326,6 +326,35 @@ suite "editor_selectionrange - chain expansion":
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
 
+  test "A level that ends in a closed fold expands to its parent":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo(\nab\ncd\n)")
+    check buf.foldState.addFold(1, 2, collapsed = true)
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 1, "character": 1}},
+        "parent": {
+          "range":
+            {"start": {"line": 0, "character": 0}, "end": {"line": 3, "character": 1}}
+        },
+      }
+    ]
+    e.seedResponse(1, responseJson)
+    e.asCommand:
+      e.pollLspSelectionRange()
+    check e.state.visualSelection.current == BufferPosition(line: 2, column: 2)
+
+    e.asCommand:
+      check e.requestLspSelectionRange()
+    check e.state.lspCache.selectionRangeIndex == 1
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
+    check e.state.visualSelection.current == BufferPosition(line: 3, column: 0)
+
   test "Selection moved off the chain triggers a fresh request":
     let e = createTestEditor()
     e.lsp.enabled = true

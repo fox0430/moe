@@ -22,7 +22,11 @@
 
 import std/[options, tables]
 
-import ../[types, motion, commands, command_registry, modes, quick_run_utils, job_lanes]
+import
+  ../[
+    types, motion, commands, command_registry, modes, quick_run_utils, job_lanes,
+    visual_selection,
+  ]
 import ../key_bindings except Command
 import ../command_handlers/handler_types
 import ../command_handlers/handler_result as handler_result_types
@@ -284,9 +288,11 @@ proc beginCommand(e: Editor) =
   inc e.commandDepth
   e.startCommandPart()
 
-proc endCommand(e: Editor) =
+proc endCommand(e: Editor, covers: bool) =
   e.settleCommandPart()
   dec e.commandDepth
+  if covers and not e.state.quitDecided and not e.commandWindow.isNil:
+    e.state.coverClosedFolds()
   if e.commandDepth > 0:
     e.startCommandPart()
 
@@ -294,12 +300,17 @@ template asCommand*(e: Editor, body: untyped) =
   ## Run `body` as one command for the column vertical moves want: see
   ## `settleWantedColumn`. Commands run inside it judge their own moves, and it
   ## judges only the rest. Each public input entry point runs its input as one.
-  ## `body` must not await.
+  ## As each ends, a Visual selection covers a closed fold either end is in,
+  ## unless `body` raised. `body` must not await.
   e.beginCommand()
+  var covers = true
   try:
     body
+  except Exception:
+    covers = false
+    raise
   finally:
-    e.endCommand()
+    e.endCommand(covers)
 
 # Editor-based config pull-type accessors. State-based ones live in types.nim.
 
