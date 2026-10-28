@@ -189,15 +189,25 @@ type
     name*: char
     before*, after*: Option[BufferPosition]
 
+  WantedColumn* = object
+    ## The column vertical moves aim for, as Vim's curswant: `cell` counted
+    ## from the line start (`LineEnd` after `$`), or -1 for the cursor's; and
+    ## after gj and gk with lines wrapped, the screen cell they aim for, which
+    ## `cell` stands for on the line it was kept on, or -1. A cell past a
+    ## row's end, where a character too wide for it went to the next row, has
+    ## no `cell` of its own. Keep and restore the two together.
+    cell*: int = -1
+    screenCell*: int = -1
+
   VisualArea* = object
     ## The last Visual selection, for `gv`. Like Vim's it follows lines
     ## inserted and deleted around it but keeps its columns.
     start*: BufferPosition ## The anchor
     cursor*: BufferPosition ## The end the cursor was on
     kind*: VisualSelectionKind
-    wantedColumn*: int = -1
-      ## The column vertical moves aimed for, as Vim's vi_curswant, or -1 for
-      ## the cursor's. `LineEnd` keeps a block following each line's end.
+    wanted*: WantedColumn
+      ## The column vertical moves aimed for, as Vim's vi_curswant. `LineEnd`
+      ## keeps a block following each line's end.
 
   OpenLine* = enum
     ## How a multi-line insert meets its line; decides rows saved for undo, as

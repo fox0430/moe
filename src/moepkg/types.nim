@@ -262,7 +262,7 @@ type
       # Current mode for this window. Enter a Visual mode through `setMode`,
       # which puts the anchor on the cursor.
     previousMode*: EditorMode # Previous mode for ESC handling
-    wantedColumn: Option[int] # Read through `preferredColumn`
+    curswant: WantedColumn # Read through `wanted` and `preferredColumn`
     wantedColumnSince: WindowSpot
       # Where the window stood when its command began or it last kept a column.
     keptAfterIndent: Option[WindowSpot]
@@ -270,9 +270,10 @@ type
       # the column after it, for parking the cursor to leave alone.
     shownOnTab: Option[ShownOnTab]
       # The cell a cursor on a tab showed on as a command began.
-    aimedOnTab: Option[AimedOnTab]
-      # The cell a cursor on a tab showed on as the first command since the
-      # column vertical moves want was dropped began. Read through `aimsAtTabEnd`.
+    aimedShown: Option[AimedShown]
+      # How the cursor showed as the first command since the column vertical
+      # moves want was dropped began. Read through `aimsAtTabEnd` and
+      # `aimInFold`.
     placedOnInsertExit: Option[WindowSpot]
       # Where leaving Insert put the cursor itself, for the step back to leave
       # alone.
@@ -293,10 +294,11 @@ type
     view: WindowView
     tabEnd: bool # On the tab's last cell, else its first
 
-  AimedOnTab = object
+  AimedShown = object
     cursor: BufferPosition
     buffer: TextBuffer
-    tabEnd: bool # On the tab's last cell, else its first
+    tabEnd: bool # On a tab's last cell, else its first
+    foldCell: Option[int] # In a closed fold, the window's left cell
 
   WindowView = object
     ## What a window shows and how: Vim works out again the cell a cursor on a
@@ -563,6 +565,8 @@ type
     WideWordBackward # B - move to start of previous WORD
     WideWordEnd # E - move to end of next WORD
     WideWordEndBackward # gE - move to end of previous WORD
+    ScreenLineDown # gj - move down a screen line (a row of a wrapped line)
+    ScreenLineUp # gk - move up a screen line
     ParagraphForward # } - move to next paragraph (next blank line)
     ParagraphBackward # { - move to previous paragraph (previous blank line)
     ViewportHigh # H - move to top of viewport
@@ -1342,7 +1346,7 @@ const LineEnd* = high(int)
 proc preferredColumn*(win: EditorWindow): int =
   ## The screen cell vertical moves aim for (Vim's curswant), or -1 to take
   ## the cursor's.
-  win.wantedColumn.get(-1)
+  win.curswant.cell
 
 proc clampedAnchor*(win: EditorWindow): BufferPosition =
   ## The anchor, pulled back onto the last line when lines under it went away.
@@ -1361,7 +1365,7 @@ proc saveLastVisual*(win: EditorWindow) =
         start: win.clampedAnchor,
         cursor: win.cursor,
         kind: win.mode.visualKind,
-        wantedColumn: win.preferredColumn,
+        wanted: win.curswant,
       )
     )
 
@@ -1388,21 +1392,31 @@ proc spot(win: EditorWindow): WindowSpot =
     version: if win.buffer.isNil: 0 else: win.buffer.contentVersion,
   )
 
-proc `preferredColumn=`*(win: EditorWindow, column: int) =
-  ## Keep `column` for vertical moves; -1 drops it.
-  if column < 0:
-    win.wantedColumn = none(int)
-    win.aimedOnTab = none(AimedOnTab)
+proc wanted*(win: EditorWindow): WantedColumn =
+  ## The column vertical moves aim for with the screen cell gj and gk aim for,
+  ## to keep and restore as one.
+  win.curswant
+
+proc `wanted=`*(win: EditorWindow, wanted: WantedColumn) =
+  ## Keep `wanted` for vertical moves; a cell of -1 drops it.
+  if wanted.cell < 0:
+    win.curswant = WantedColumn()
+    win.aimedShown = none(AimedShown)
   else:
-    win.wantedColumn = some(column)
+    win.curswant = wanted
     win.wantedColumnSince = win.spot
+
+proc `preferredColumn=`*(win: EditorWindow, column: int) =
+  ## Keep `column` for vertical moves, aiming gj and gk at the screen cell it
+  ## stands for; -1 drops it.
+  win.wanted = WantedColumn(cell: column)
 
 proc takeWantedColumn*(win, src: EditorWindow) =
   ## Start with the column `src` wants, as Vim's win_init copies curswant into
   ## a new window, and from where `src` stood when its command began.
-  win.wantedColumn = src.wantedColumn
+  win.curswant = src.curswant
   win.wantedColumnSince = src.wantedColumnSince
-  win.aimedOnTab = src.aimedOnTab
+  win.aimedShown = src.aimedShown
 
 proc keepColumnAfterIndent*(win: EditorWindow, column: int) =
   ## Leaving Insert took the auto-indent off under the cursor: vertical moves
@@ -1468,8 +1482,8 @@ proc cursorOnTabEnd*(win: EditorWindow, at: BufferPosition): bool =
     win.tabEndRule(at)
 
 proc aimedHere(win: EditorWindow): bool =
-  win.aimedOnTab.isSome and win.aimedOnTab.get.cursor == win.cursor and
-    win.aimedOnTab.get.buffer == win.buffer
+  win.aimedShown.isSome and win.aimedShown.get.cursor == win.cursor and
+    win.aimedShown.get.buffer == win.buffer
 
 proc aimsAtTabEnd*(win: EditorWindow): bool =
   ## Whether vertical moves from the cursor of `win` aim for a tab's last cell:
@@ -1477,7 +1491,23 @@ proc aimsAtTabEnd*(win: EditorWindow): bool =
   ## dropped began, while it stays there, as Vim's update_curswant takes
   ## w_virtcol once then. As Vim keeps curswant, an edit from another window,
   ## a scroll, a resize or entering the window since keeps it.
-  if win.aimedHere: win.aimedOnTab.get.tabEnd else: win.cursorOnTabEnd
+  if win.aimedHere: win.aimedShown.get.tabEnd else: win.cursorOnTabEnd
+
+proc foldShownAt(win: EditorWindow): Option[int] =
+  ## The window's left cell, where a cursor in a closed fold shows.
+  if not win.buffer.isNil and win.cursor.line in 0 ..< win.buffer.len and
+      win.buffer.foldState.getCollapsedFoldAt(win.cursor.line).isSome:
+    some(win.view.leftCell)
+  else:
+    none(int)
+
+proc aimInFold*(win: EditorWindow): Option[int] =
+  ## The cell vertical moves from the cursor of `win` aim for when it showed in
+  ## a closed fold as the first command since the column they want was dropped
+  ## began: the window's left cell then, where Vim's curs_columns puts
+  ## w_virtcol for update_curswant to take. A fold closed over the cursor
+  ## after that leaves it aiming for the cell of its text.
+  if win.aimedHere: win.aimedShown.get.foldCell else: win.foldShownAt
 
 proc noteCommandStart*(win: EditorWindow) =
   ## Note where `win` stands as a command, or the rest of one, begins.
@@ -1485,8 +1515,14 @@ proc noteCommandStart*(win: EditorWindow) =
   let tabEnd = win.cursorOnTabEnd
   win.shownOnTab = some(ShownOnTab(spot: win.spot, view: win.view, tabEnd: tabEnd))
   if not win.aimedHere:
-    win.aimedOnTab =
-      some(AimedOnTab(cursor: win.cursor, buffer: win.buffer, tabEnd: tabEnd))
+    win.aimedShown = some(
+      AimedShown(
+        cursor: win.cursor,
+        buffer: win.buffer,
+        tabEnd: tabEnd,
+        foldCell: win.foldShownAt,
+      )
+    )
 
 proc noteEntered*(win: EditorWindow) =
   ## A command that ran in another window ended in `win`. As Vim's win_enter,
@@ -1569,6 +1605,12 @@ proc preferredColumn*(s: EditorState): int =
 proc `preferredColumn=`*(s: EditorState, v: int) =
   ## Set preferred column on the active window
   s.activeWindow.preferredColumn = v
+
+proc wanted*(s: EditorState): WantedColumn =
+  s.activeWindow.wanted
+
+proc `wanted=`*(s: EditorState, wanted: WantedColumn) =
+  s.activeWindow.wanted = wanted
 
 proc screenCursor*(s: EditorState): var CursorPosition =
   ## Get screen cursor from the active window (returns var for in-place mutation)

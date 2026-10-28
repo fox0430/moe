@@ -21,7 +21,7 @@
 ## counted from the line start, so a tab or a wide character on the way does
 ## not shift where `j` and `k` land.
 
-import std/unicode
+import std/[options, unicode]
 
 import types, modes, render_utils, unicode_utils
 import buffer/core
@@ -126,20 +126,29 @@ proc columnAtCell*(text: string, cell, tabStop: int, mode: EditorMode): int =
   min(screenXToCharIndex(text, 0, cell, tabStop), last)
 
 proc cursorCell*(s: EditorState): int =
-  ## The cell vertical moves take from the cursor (`aimsAtTabEnd` on a tab), as
-  ## Vim's getvvcol.
+  ## The cell vertical moves take from the cursor (`aimsAtTabEnd` on a tab,
+  ## `aimInFold` in a closed fold), as Vim's w_virtcol.
   let win = s.activeWindow
   if win.buffer.isNil or win.cursor.line notin 0 ..< win.buffer.len:
     return win.cursor.column
+  let inFold = win.aimInFold
+  if inFold.isSome:
+    return inFold.get
   win.buffer.getLine(win.cursor.line).cursorCell(
     win.cursor.column, s.tabStop, win.aimsAtTabEnd
   )
 
+proc aim*(s: EditorState): WantedColumn =
+  ## The column vertical moves and scrolls aim for, with the screen cell gj
+  ## and gk aim for: the one kept, else the cursor's cell, as Vim's
+  ## update_curswant. Keep it again after moving the cursor.
+  result = s.wanted
+  if result.cell < 0:
+    result.cell = s.cursorCell
+
 proc aimedColumn*(s: EditorState): int =
-  ## The cell vertical moves and scrolls aim for: the one kept, else the
-  ## cursor's, as Vim's update_curswant.
-  let wanted = s.preferredColumn
-  if wanted < 0: s.cursorCell else: wanted
+  ## The cell vertical moves and scrolls aim for (`aim`).
+  s.aim.cell
 
 proc columnAtCell*(s: EditorState, line, cell: int): int =
   ## The column on `line` of the active buffer a vertical move aiming for
@@ -154,9 +163,9 @@ proc scrollCursor*(s: EditorState, to: BufferPosition) =
   ## the one vertical moves want, as Vim keeps curswant.
   if to == s.cursor:
     return
-  let aimed = s.aimedColumn
+  let aimed = s.aim
   s.cursor = to
-  s.preferredColumn = aimed
+  s.wanted = aimed
 
 proc scrollCursor*(s: EditorState, line: int) =
   ## Move the cursor to `line` as a scroll does: onto the column it aims for,

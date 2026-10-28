@@ -19,7 +19,7 @@
 
 import std/[unittest, options, strutils]
 
-import ../src/moepkg/[visible_rows, buffer, types]
+import ../src/moepkg/[visible_rows, buffer, types, modes]
 
 proc linesBuffer(count: int, text: string = "x"): TextBuffer =
   var lines: seq[string]
@@ -269,6 +269,48 @@ suite "cursorCell / cellToColumn":
     check buf.noWrap.cellToColumn(0, 0, 1, leftCell = 1) == 0
     # Scrolled past the tab, the row starts with 'a', so cell 1 is 'b'.
     check buf.noWrap.cellToColumn(0, 0, 1, leftCell = 4) == 2
+
+suite "screen cells - counted along a line's rows, as gj and gk aim":
+  # Rows of 10: "abcdefghi" takes 9 cells, so あ goes on to the next row.
+  let pushed = newTextBuffer("abcdefghiあx").wrapAt10
+
+  test "screenCellOf counts each row before the cursor's as maxWidth":
+    check newTextBuffer("x".repeat(25)).wrapAt10.screenCellOf(0, 12, false) == 12
+    check pushed.screenCellOf(0, 9, false) == 10
+    check pushed.screenCellOf(0, 10, false) == 12
+
+  test "a cell from the line start stands for the same character's":
+    check pushed.screenCellOfLineCell(0, 8) == 8
+    check pushed.screenCellOfLineCell(0, 9) == 10
+    check pushed.screenCellOfLineCell(0, 10) == 11
+    check pushed.screenCellOfLineCell(0, 11) == 12
+    # Past the end, as far past it
+    check pushed.screenCellOfLineCell(0, 15) == 16
+
+  test "the cell past a short row stands for the character that went on":
+    check pushed.lineCellOfScreenCell(0, 9) == 9
+    check pushed.lineCellOfScreenCell(0, 10) == 9
+    check pushed.lineCellOfScreenCell(0, 11) == 10
+    check pushed.lineCellOfScreenCell(0, 12) == 11
+    check pushed.lineCellOfScreenCell(0, 16) == 15
+
+  test "a wrapped tab measures from its row's start, the line cell from the line's":
+    # The tab does not fit after "abcdefgh", so it takes cells 0-3 of row 1;
+    # from the line start it takes 8-11.
+    let rl = newTextBuffer("abcdefgh\tx").wrapAt10
+    check rl.screenCellOfLineCell(0, 9) == 11
+    check rl.lineCellOfScreenCell(0, 11) == 9
+    check rl.lineCellOfScreenCell(0, 8) == 8
+    check rl.screenCellOfLineCell(0, 12) == 14
+
+  test "columnAtScreenCell lands on the character covering the cell":
+    check pushed.columnAtScreenCell(0, 3, EditorMode.Normal) == 3
+    check pushed.columnAtScreenCell(0, 9, EditorMode.Normal) == 9
+    check pushed.columnAtScreenCell(0, 11, EditorMode.Normal) == 9
+    check pushed.columnAtScreenCell(0, 12, EditorMode.Normal) == 10
+    # Past the end, the last character, or past it in Visual
+    check pushed.columnAtScreenCell(0, 25, EditorMode.Normal) == 10
+    check pushed.columnAtScreenCell(0, 25, EditorMode.Visual) == 11
 
 suite "scrollViewportToCursor - sideways":
   proc noWrapAt10(buf: TextBuffer): RowLayout =

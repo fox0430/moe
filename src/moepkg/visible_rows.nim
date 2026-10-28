@@ -23,7 +23,7 @@
 
 import std/[options, unicode]
 
-import types, buffer/[core, fold], render_utils, unicode_utils, wanted_column
+import types, modes, buffer/[core, fold], render_utils, unicode_utils, wanted_column
 
 type
   RowLayout* = object
@@ -250,6 +250,63 @@ proc cursorCell*(
     leftCell,
     onTabEnd,
   )
+
+proc screenCellOf*(rl: RowLayout, line, column: int, onTabEnd: bool): int =
+  ## The cell the cursor on `column` of `line` shows on, counted along the
+  ## line's rows `maxWidth` cells each, as Vim's getvvcol with 'wrap': on its
+  ## text, even in a closed fold.
+  if line notin 0 ..< rl.lineCount:
+    return 0
+  let (row, cell) = textCell(
+    rl.buffer.getLine(line), column, rl.lineWrap, rl.maxWidth, rl.tabStop, 0, onTabEnd
+  )
+  row * rl.maxWidth + min(cell, rl.maxWidth - 1)
+
+proc screenCellOfLineCell*(rl: RowLayout, line, cell: int): int =
+  ## The screen cell (as `screenCellOf` counts) that `cell`, counted from the
+  ## start of `line`, stands for: on the same character, and past the end as
+  ## far past it.
+  if line notin 0 ..< rl.lineCount:
+    return cell
+  var endScreen, endLine = 0
+  for c in rl.buffer.getLine(line).wrappedCells(rl.maxWidth, rl.tabStop):
+    if cell < c.lineCell + c.lineWidth:
+      let inRow = c.cell + min(cell - c.lineCell, c.width - 1)
+      return c.row * rl.maxWidth + min(inRow, rl.maxWidth - 1)
+    endScreen = c.row * rl.maxWidth + c.cell + c.width
+    endLine = c.lineCell + c.lineWidth
+  endScreen + cell - endLine
+
+proc lineCellOfScreenCell*(rl: RowLayout, line, cell: int): int =
+  ## The cell from the start of `line` that the screen cell `cell` stands for,
+  ## as `screenCellOfLineCell` goes back. Past a row's end, where a character
+  ## too wide for it went to the next row, it stands for that character, as
+  ## Vim's filler cell does.
+  if line notin 0 ..< rl.lineCount:
+    return cell
+  let (row, inRow) = (cell div rl.maxWidth, cell mod rl.maxWidth)
+  var endScreen, endLine = 0
+  for c in rl.buffer.getLine(line).wrappedCells(rl.maxWidth, rl.tabStop):
+    if c.row > row:
+      return c.lineCell
+    if c.row == row and c.cell + c.width > inRow:
+      return c.lineCell + min(inRow - c.cell, max(c.lineWidth, 1) - 1)
+    endScreen = c.row * rl.maxWidth + c.cell + c.width
+    endLine = c.lineCell + c.lineWidth
+  endLine + max(0, cell - endScreen)
+
+proc columnAtScreenCell*(rl: RowLayout, line, cell: int, mode: EditorMode): int =
+  ## The character of `line` that covers the screen cell `cell`, as Vim's
+  ## coladvance with 'wrap': past a row's end, where a character too wide for
+  ## it went to the next row, that character, and past the line's end the
+  ## last character, or past it when the mode rests past it.
+  let
+    text = rl.buffer.getLine(line)
+    (row, inRow) = (cell div rl.maxWidth, cell mod rl.maxWidth)
+  for c in text.wrappedCells(rl.maxWidth, rl.tabStop):
+    if c.row > row or (c.row == row and c.cell + c.width > inRow):
+      return c.column
+  maxCursorColumn(text.charLen, mode)
 
 proc segmentStartColumn*(rl: RowLayout, line, wrapSeg: int): int =
   ## Char index of `line`'s `wrapSeg` start.

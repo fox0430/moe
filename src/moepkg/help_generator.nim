@@ -90,6 +90,8 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "Ctrl-j", description: "Go down"),
     HelpEntry(syntax: "k", description: "Go up"),
     HelpEntry(syntax: "l", description: "Go right"),
+    HelpEntry(syntax: "gj", description: "Go down a screen line"),
+    HelpEntry(syntax: "gk", description: "Go up a screen line"),
     HelpEntry(syntax: "w", description: "Go forwards to the start of a word"),
     HelpEntry(syntax: "e", description: "Go forwards to the end of a word"),
     HelpEntry(syntax: "ge", description: "Go backwards to the end of a word"),

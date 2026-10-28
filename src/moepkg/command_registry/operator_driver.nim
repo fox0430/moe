@@ -56,11 +56,12 @@ proc lineBreakAfter(buffer: TextBuffer, line: int): BufferPosition =
 proc rangeUpTo(
     buffer: TextBuffer, target: MotionTarget, operator: OperatorType
 ): OperatorRange =
-  ## The text `operator` takes up to `target`, by Vim's rules: an exclusive
-  ## span that ends at a line start stops at the end of the line before, and
-  ## takes whole lines when it starts in the indent (`:h exclusive`); a delete
-  ## over lines that leaves only blanks around takes them whole (`:h d`); and
-  ## a motion's end on an empty line stands on no character there.
+  ## The text `operator` takes up to `target`, by Vim's rules: a closed fold
+  ## at an end is taken whole, keeping the motion's kind; an exclusive span
+  ## that ends at a line start stops at the end of the line before, and takes
+  ## whole lines when it starts in the indent (`:h exclusive`); a delete over
+  ## lines that leaves only blanks around takes them whole (`:h d`); and a
+  ## motion's end on an empty line stands on no character there.
   var (first, last) =
     if target.finish < target.start:
       (target.finish, target.start)
@@ -69,7 +70,20 @@ proc rangeUpTo(
   if target.empty:
     return OperatorRange(start: first, endPos: last, isEmpty: true)
 
-  var kind = target.motionType
+  var
+    kind = target.motionType
+    area = target.area
+  # As Vim's do_pending_operator: only a forward or linewise span takes in a
+  # fold, from its first line's start and, unless an exclusive end is at a
+  # line start, to its last line's end (without the line break).
+  if target.start < target.finish or kind == mtLinewise:
+    if buffer.foldState.getCollapsedFoldAt(first.line).isSome:
+      first = BufferPosition(line: buffer.foldStart(first.line), column: 0)
+    if (last.column > 0 or kind != mtExclusive) and
+        buffer.foldState.getCollapsedFoldAt(last.line).isSome:
+      last = buffer.lineBreakAfter(min(buffer.foldEnd(last.line), buffer.len - 1))
+      area = false
+
   if kind == mtExclusive:
     if first == last:
       return OperatorRange(start: first, endPos: first, isEmpty: true)
@@ -99,7 +113,7 @@ proc rangeUpTo(
     )
   of mtInclusive:
     let lastLen = buffer.getLine(last.line).charLen
-    if last.column < lastLen or (target.area and last.line < buffer.len - 1):
+    if last.column < lastLen or (area and last.line < buffer.len - 1):
       OperatorRange(start: first, endPos: last)
     else:
       # Nothing to take at the end: no character on an empty line, and no
@@ -183,6 +197,7 @@ proc motionTarget(
   if landing.failed:
     # The operator does nothing, and the cursor stays as far as the motion went.
     ctx.cursor = ctx.settle(landing.pos)
+    ctx.motionController.keepScreenAim(ctx.state, landing)
     return ok(none(MotionTarget))
   ok(
     some(

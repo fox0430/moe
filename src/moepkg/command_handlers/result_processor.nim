@@ -436,13 +436,14 @@ proc settleInsertResume*(e: Editor) =
   # moves want is right of it, as Insert shows it: a tab on its first cell. It
   # keeps that column (arrow_used).
   let
-    wanted = state.preferredColumn
+    wanted = state.wanted
     line = e.activeBuffer.getLine(state.cursor.line)
     lastColumn = line.charLen - 1
     append =
       state.cursor.column == lastColumn and (
         state.insertResumeLineEnd == some(state.cursor.line) or
-        wanted > line.cursorCell(state.cursor.column, state.tabStop, onTabEnd = false)
+        wanted.cell >
+        line.cursorCell(state.cursor.column, state.tabStop, onTabEnd = false)
       )
     message = state.statusMessage
     resumedAt = state.cursor
@@ -451,7 +452,7 @@ proc settleInsertResume*(e: Editor) =
   # takes the resume for a cursor move (arrow_used).
   if state.mode == EditorMode.Insert:
     state.resumeTyping(resumedAt)
-  state.preferredColumn = wanted
+  state.wanted = wanted
   # The command's message stays, as in Vim, over the syntax check's.
   if message.len > 0:
     state.statusMessage = message
