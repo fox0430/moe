@@ -1003,7 +1003,7 @@ suite "; / , repeat last find":
     check registry.executeCommand(ctx, repeatFind).isOk
     check buffer.getLine(0) == "ada"
 
-  test "; with no previous find is a no-op with feedback":
+  test "; with no previous find beeps without a message, as Vim's searchc":
     let buffer = newTextBuffer("abacada")
     let ctx = createFindTestContext(buffer)
     let registry = newCommandRegistry()
@@ -1011,7 +1011,8 @@ suite "; / , repeat last find":
 
     check registry.executeCommand(ctx, repeatFind).isOk
     check ctx.cursor.column == 0
-    check ctx.state.statusMessage == "No previous find"
+    check ctx.state.beepCount == 1
+    check ctx.state.statusMessage == ""
 
   test "; after t advances past the adjacent match":
     let buffer = newTextBuffer("abzcz") # 'z' at cols 2 and 4

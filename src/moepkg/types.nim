@@ -1105,6 +1105,8 @@ type
     # Full register system (vim-style)
     registers*: Registers # All registers (", 0-9, a-z, -, *, +)
     pendingInput*: PendingInputState # See pending_input.nim for isActive/cancelAll.
+    beepCount*: int
+      ## Times a command has beeped (`beep`); a replay compares it around a key
     # QuickRun request flag
     requestQuickRun*: bool # Set by keybinding to request QuickRun execution
     # Command mode completion
@@ -1684,6 +1686,11 @@ proc viewState*(v: ViewPort): ViewState =
 proc restoreViewState*(v: ViewPort, view: ViewState) =
   v.restoreViewportTop(view.topLine, view.topWrapOffset)
   v.leftCell = view.leftCell
+
+proc beep*(state: EditorState) =
+  ## The command fails as Vim's beep_flush has it: the keys a register or
+  ## mapping queued after it are dropped, and the typed ones still run.
+  inc state.beepCount
 
 proc statusMessage*(state: EditorState): string =
   ## Get the current status message

@@ -238,9 +238,8 @@ proc handleMotion*(
   ## Handle motion commands in insert mode
   let motionCmd = MotionCommand(motion: motion, count: 1)
 
-  let r = handler.motionController.moveCursorByMotion(state, motionCmd)
-  if r.isErr:
-    return InsertModeResult(kind: imrError, errorMessage: r.error)
+  # At an edge Vim beeps, but the keys after it still run (ins_left).
+  discard handler.motionController.moveCursorByMotion(state, motionCmd)
   return InsertModeResult(
     kind: imrHandled,
     modeTransition: none(EditorMode),

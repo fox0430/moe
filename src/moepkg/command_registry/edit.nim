@@ -101,6 +101,44 @@ proc operateOverChar(
     ),
   )
 
+proc replaceChars*(
+    ctx: CommandContext, replaceChar: string, count: int
+): Result[(), string] =
+  ## `r`: replace `count` characters from the cursor with `replaceChar` and
+  ## leave the cursor on the last. Short of characters it changes nothing and
+  ## beeps, as Vim's nv_replace.
+  let count = max(1, count)
+  if ctx.buffer.getLine(ctx.cursor.line).charLen - ctx.cursor.column < count:
+    ctx.state.beep()
+    return ok(())
+
+  # transformRange refuses raw buffers.
+  let repeatTarget = proc(text: string): string =
+    replaceChar.repeat(text.charLen)
+  let
+    startPos = ctx.cursor
+    endPos =
+      BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + count - 1)
+  let txr =
+    try:
+      withTransaction(ctx.buffer, "replace " & $count & " char(s)"):
+        let res = ctx.buffer.transformRange(
+          startPos, endPos, "replace characters", repeatTarget
+        )
+        if res.isErr:
+          return err(res.error)
+    except TransactionRollbackError as exc:
+      # Surface a failed rollback (untrustworthy buffer) as a status message.
+      return err(exc.msg & " (buffer state may be inconsistent)")
+  if txr.isErr:
+    return err(txr.error)
+
+  ctx.recordChange(
+    LastEditCommand(kind: lecReplaceChar, replaceChar: replaceChar, replaceCount: count)
+  )
+  ctx.cursor.column += count - 1
+  ok(())
+
 proc handleDeleteChar*(
     registry: CommandRegistry, ctx: CommandContext, count: int = 1
 ): Result[(), string] =
@@ -109,23 +147,24 @@ proc handleDeleteChar*(
   ## With autoDeleteParen enabled, deleting an opening paren also deletes matching closing paren
 
   logDebug("delete", "handleDeleteChar called with count=" & $count)
+  let actualCount = max(1, count)
+  # What `.` repeats after every path that succeeds, with the typed count:
+  # Vim repeats `5x` as `5dl`.
+  let change =
+    LastEditCommand(kind: lecDeleteChar, deleteCount: actualCount, deleteForward: true)
   if ctx.isOnCollapsedFold:
     discard ?registry.operateOverChar(ctx, OpDelete, count)
     # `.` still repeats an `x`, not a `dl`.
-    ctx.recordChange(
-      LastEditCommand(
-        kind: lecDeleteChar, deleteCount: max(1, count), deleteForward: true
-      )
-    )
+    ctx.recordChange(change)
     return ok(())
-  let actualCount = max(1, count)
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
-  # Check if we're at or past the end of the line. Vim's `dl` still drops
-  # curswant there.
+  # At or past the end of the line, Vim's `dl` deletes nothing, without a
+  # beep, but still drops curswant and is the change `.` repeats.
   if ctx.cursor.column >= lineContent.charLen:
     ctx.state.preferredColumn = -1
-    return err("Nothing to delete")
+    ctx.recordChange(change)
+    return ok(())
 
   # Auto-delete adjacent paren pairs only (e.g., [] () {} "" '')
   if ctx.state.autoDeleteParen and actualCount == 1:
@@ -161,6 +200,7 @@ proc handleDeleteChar*(
 
       # Both chars were deleted, so both go in the register
       storeDeletedText(ctx, lineContent.charSubStr(cursorCol, 2), false)
+      ctx.recordChange(change)
 
       let updatedLineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
       if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
@@ -194,11 +234,7 @@ proc handleDeleteChar*(
   # covered by the buffer transaction, so a rollback would not undo them)
   storeDeletedText(ctx, deletedText, false)
 
-  ctx.recordChange(
-    LastEditCommand(
-      kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: true
-    )
-  )
+  ctx.recordChange(change)
 
   # Adjust cursor if it's now past the end of the line (Vim behavior)
   let newLineContent = ctx.buffer.getLine(ctx.cursor.line)
@@ -215,12 +251,15 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
 
   logDebug("delete", "handleDeleteCharBefore called with count=" & $count)
   let actualCount = max(1, count)
+  # What `.` repeats, as for `x`.
+  let change =
+    LastEditCommand(kind: lecDeleteChar, deleteCount: actualCount, deleteForward: false)
 
-  # Check if we're at the beginning of the line. Vim's `dh` still drops
-  # curswant there.
+  # At the beginning of the line, as `x` at the end (Vim's `dh`).
   if ctx.cursor.column == 0:
     ctx.state.preferredColumn = -1
-    return err("Nothing to delete")
+    ctx.recordChange(change)
+    return ok(())
 
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
@@ -259,6 +298,7 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
 
       # Both chars were deleted, so both go in the register
       storeDeletedText(ctx, lineContent.charSubStr(cursorCol - 1, 2), false)
+      ctx.recordChange(change)
       ctx.cursor.column = cursorCol - 1
 
       return Result[(), string].ok ()
@@ -296,12 +336,7 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
   # Move cursor to the position where deletion started
   ctx.cursor.column = startColumn
 
-  # Record this command for repeat (.)
-  ctx.recordChange(
-    LastEditCommand(
-      kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: false
-    )
-  )
+  ctx.recordChange(change)
 
   return Result[(), string].ok ()
 
@@ -1033,34 +1068,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         except TransactionRollbackError as exc:
           return err(exc.msg & " (buffer state may be inconsistent)")
       of lecReplaceChar:
-        # Repeat replace character (r command)
-        let lineContent = ctx.buffer.getLine(ctx.cursor.line)
-
-        # Check if we're at or past the end of the line
-        if ctx.cursor.column >= lineContent.charLen:
-          return err("Nothing to replace")
-
-        # Calculate how many characters we can actually replace
-        let charsAvailable = lineContent.charLen - ctx.cursor.column
-        let charsToReplace = min(lastCmd.replaceCount, charsAvailable)
-
-        let txr = withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
-          for i in 0 ..< charsToReplace:
-            let pos =
-              BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
-            let delResult = ctx.buffer.deleteRange(pos, pos)
-            if delResult.isErr:
-              return err(delResult.error)
-
-            let insResult = ctx.buffer.insertText(pos, lastCmd.replaceChar)
-            if insResult.isErr:
-              return err(insResult.error)
-        if txr.isErr:
-          return err(txr.error)
-
-        # Move cursor to the last replaced character
-        ctx.cursor.column += charsToReplace - 1
-        return ok(())
+        return ctx.replaceChars(lastCmd.replaceChar, lastCmd.replaceCount)
       of lecJoinLines:
         # Repeat join lines (J command)
         return handleJoinLines(ctx, lastCmd.joinLinesCount)

@@ -405,8 +405,8 @@ suite "Word Motion":
       check (result.x, result.y) == (expected, 0)
 
   test "w, W, e and E fail when the buffer ends first, but not with an operator":
-    # As Vim 9.2, measured by whether a macro stops (moe does not stop one on a
-    # failed motion yet); `dW`/`dE` take the last character
+    # As Vim 9.2, measured by whether a macro stops; `dW`/`dE` take the last
+    # character
     let buffer = newTextBuffer("foo bar")
     let executor = newMotionExecutor(buffer)
     for (motion, x, count, failed) in [
@@ -427,6 +427,26 @@ suite "Word Motion":
       check bare.pos == BufferPosition(line: 0, column: 6)
       check bare.failed == failed
       check not operated.failed
+
+  test "h, l and BS fail only where they cannot move at all, and not with an operator":
+    # As Vim 9.2's nv_left and nv_right, measured by whether a macro stops
+    let buffer = newTextBuffer("abc\n\nde")
+    let executor = newMotionExecutor(buffer)
+    for (motion, y, x, count, failed) in [
+      (Motion.Left, 0, 0, 1, true),
+      (Motion.Left, 0, 1, 3, false),
+      (Motion.Right, 0, 2, 1, true),
+      (Motion.Right, 0, 1, 3, false),
+      (Motion.Right, 1, 0, 1, true),
+      (Motion.Backspace, 0, 0, 1, true),
+      (Motion.Backspace, 2, 0, 1, false),
+    ]:
+      let
+        start = CursorPosition(x: x, y: y)
+        cmd = MotionCommand(motion: motion, count: count)
+      checkpoint($motion & " from " & $y & "," & $x & " count " & $count)
+      check executor.landMotion(start, cmd).failed == failed
+      check not executor.landMotion(start, cmd, operator = some(OpDelete)).failed
 
   test "b crosses whitespace-only line":
     let buffer = newTextBuffer("foo\n  \nbar")

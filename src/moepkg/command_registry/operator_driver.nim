@@ -173,7 +173,6 @@ proc motionTarget(
   case operand.motion
   of Motion.RepeatFind, Motion.RepeatFindReverse:
     if ctx.state.editState.lastFindChar.isNone:
-      ctx.state.statusMessage = "No previous find"
       return ok(none(MotionTarget))
     let last = ctx.state.editState.lastFindChar.get
     cmd.motion =
@@ -364,6 +363,8 @@ proc finishOperator*(
     of odLines:
       ctx.linesTarget(op, operand)
   if target.isNone:
+    # Nothing to act over (`dj` on the last line): Vim's clearopbeep.
+    ctx.state.beep()
     return ok(())
 
   let range = ctx.buffer.toOperatorRange(target.get, op.operatorType)

@@ -147,20 +147,6 @@ proc executeCommand*(
   else:
     return NormalModeResult(kind: nmrError, errorMessage: r.error)
 
-proc handleMotionCommand*(
-    handler: NormalModeHandler,
-    buffer: TextBuffer,
-    state: EditorState,
-    motion: Motion,
-    count: int = 1,
-): Result[(), string] =
-  ## Handle motion commands (h, j, k, l, w, b, etc.)
-  let motionCmd = MotionCommand(motion: motion, count: count)
-  let r = handler.motionController.moveCursorByMotion(state, motionCmd)
-  if r.isErr:
-    return err(r.error)
-  return Result[(), string].ok ()
-
 proc searchMatchAndSelect(
     buffer: TextBuffer, state: EditorState, forward: bool, count: int
 ): NormalModeResult =
@@ -412,9 +398,17 @@ proc handleNormalModeKey*(
   let route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Normal, keyCombo)
   if route.kind == rrUnhandled:
     # A key that runs nothing ends the command being built, as Vim's
-    # clearopbeep does: the count, the register and the operator go.
+    # clearopbeep does: the count, the register and the operator go. Escape
+    # and Ctrl-C end it without the beep (nv_esc).
     handler.keyBindingRegistry.clearSequence()
     state.pendingInput.cancelOperatorPending()
+    let escapes =
+      if keyCombo.isSpecial:
+        keyCombo.special == skEscape
+      else:
+        keyCombo.modifiers == {kmCtrl} and keyCombo.char.toLowerAscii == "c"
+    if not escapes:
+      state.beep()
   elif state.pendingInput.pendingOperator.isSome:
     let operand = handler.keyBindingRegistry.operandCommand
     let cancels =
@@ -432,6 +426,7 @@ proc handleNormalModeKey*(
       handler.keyBindingRegistry.clearSequence()
       state.pendingInput.cancelOperatorPending()
       if route.kind != rrCommand or route.command.kind != ctOverlaySwitch:
+        state.beep()
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   if route.kind != rrCommand:
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

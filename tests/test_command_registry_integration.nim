@@ -2049,15 +2049,15 @@ suite "Handler - Delete char operations":
     check buffer[0] == "h"
     check ctx.cursor.column == 0 # Adjusted to stay in bounds
 
-  test "delete char on empty position returns error":
+  test "delete char past the end deletes nothing, without an error, as Vim's dl":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 5) # Past end
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.char"))
-    check result.isErr
-    check "Nothing to delete" in result.error
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == "hello"
+    check ctx.state.editState.lastEditCommand.get.kind == lecDeleteChar
 
   test "delete char before cursor (X)":
     let buffer = newTextBuffer("hello")
@@ -2069,15 +2069,15 @@ suite "Handler - Delete char operations":
     check buffer[0] == "hllo"
     check ctx.cursor.column == 1
 
-  test "delete char before at column 0 returns error":
+  test "delete char before at column 0 deletes nothing, without an error, as Vim's dh":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.char.before"))
-    check result.isErr
-    check "Nothing to delete" in result.error
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check buffer[0] == "hello"
+    check ctx.state.editState.lastEditCommand.get.kind == lecDeleteChar
 
 suite "Handler - Delete char auto-delete paren (x)":
   test "x on opening bracket of adjacent pair deletes both":
@@ -2188,6 +2188,26 @@ suite "Handler - Delete char auto-delete paren (x)":
 
     check registry.execute(ctx, custom("delete.char")).isOk
     check buffer[0] == ""
+
+  test "x and X over a pair are what . repeats":
+    for (id, column, forward) in [
+      ("delete.char", 0, true), ("delete.char.before", 1, false)
+    ]:
+      let buffer = newTextBuffer("()")
+      let ctx = createTestContext(buffer)
+      ctx.state.autoDeleteParen = true
+      ctx.state.editState.lastEditCommand =
+        some(LastEditCommand(kind: lecJoinLines, joinLinesCount: 1))
+      ctx.cursor = BufferPosition(line: 0, column: column)
+      let registry = createTestRegistry()
+
+      check registry.execute(ctx, custom(id)).isOk
+      check buffer[0] == ""
+      checkpoint(id)
+      let last = ctx.state.editState.lastEditCommand.get
+      check last.kind == lecDeleteChar
+      check last.deleteCount == 1
+      check last.deleteForward == forward
 
 suite "Handler - Delete char before auto-delete paren (X)":
   test "X between adjacent pair deletes both":
@@ -2838,19 +2858,22 @@ suite "Handler - Replace char (r)":
     check "raw undecodable bytes" in result.error
     check buffer[0] == "hello"
 
-  test "replace at end of line returns error":
-    let buffer = newTextBuffer("hi")
-    let ctx = createTestContext(buffer)
-    ctx.cursor = BufferPosition(line: 0, column: 2) # Past end
-    let registry = createTestRegistry()
+  test "r past the end or short of characters beeps and changes nothing, as Vim's nv_replace":
+    for (column, count) in [(2, 1), (0, 3)]:
+      let buffer = newTextBuffer("hi")
+      let ctx = createTestContext(buffer)
+      ctx.cursor = BufferPosition(line: 0, column: column)
+      let registry = createTestRegistry()
 
-    let cmd = Command(
-      kind: ctOperatorPending, operatorType: "replace", targetChar: "X", count: 1
-    )
+      let cmd = Command(
+        kind: ctOperatorPending, operatorType: "replace", targetChar: "X", count: count
+      )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isErr
-    check "Nothing to replace" in result.error
+      check registry.executeCommand(ctx, cmd).isOk
+      checkpoint($column & " " & $count)
+      check buffer[0] == "hi"
+      check ctx.state.beepCount == 1
+      check ctx.state.editState.lastEditCommand.isNone
 
 suite "Handler - Insert operations":
   test "insert line below (o)":

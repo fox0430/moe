@@ -729,9 +729,9 @@ suite "NormalModeHandler - Motion Commands":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 5)
 
-    let result = handler.handleMotionCommand(buf, state, Motion.Left, 1)
+    let result = handler.executeCommand(buf, state, createTestViewport(), "motion.left")
 
-    check result.isOk
+    check result.kind == nmrHandled
     check state.cursor.column == 4
 
   test "Execute right motion":
@@ -741,9 +741,10 @@ suite "NormalModeHandler - Motion Commands":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    let result = handler.handleMotionCommand(buf, state, Motion.Right, 1)
+    let result =
+      handler.executeCommand(buf, state, createTestViewport(), "motion.right")
 
-    check result.isOk
+    check result.kind == nmrHandled
     check state.cursor.column == 1
 
   test "Execute motion with count":
@@ -753,9 +754,10 @@ suite "NormalModeHandler - Motion Commands":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 5)
 
-    let result = handler.handleMotionCommand(buf, state, Motion.Left, 3)
+    let result =
+      handler.executeCommand(buf, state, createTestViewport(), "motion.left", @["3"])
 
-    check result.isOk
+    check result.kind == nmrHandled
     check state.cursor.column == 2
 
   test "Execute down motion":
@@ -767,9 +769,9 @@ suite "NormalModeHandler - Motion Commands":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    let result = handler.handleMotionCommand(buf, state, Motion.Down, 1)
+    let result = handler.executeCommand(buf, state, createTestViewport(), "motion.down")
 
-    check result.isOk
+    check result.kind == nmrHandled
     check state.cursor.line == 1
 
   test "Execute up motion":
@@ -780,9 +782,9 @@ suite "NormalModeHandler - Motion Commands":
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 0)
 
-    let result = handler.handleMotionCommand(buf, state, Motion.Up, 1)
+    let result = handler.executeCommand(buf, state, createTestViewport(), "motion.up")
 
-    check result.isOk
+    check result.kind == nmrHandled
     check state.cursor.line == 0
 
 suite "NormalModeHandler - Command Execution":
@@ -1539,17 +1541,18 @@ suite "NormalModeHandler - Command Types":
 
     check r.kind == nmrHandled
 
-  test "Motion.Up at first line clamps and succeeds":
+  test "Motion.Up at first line stays and beeps":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    let result = handler.handleMotionCommand(buf, state, Motion.Up, 1)
+    let result = handler.executeCommand(buf, state, createTestViewport(), "motion.up")
 
-    check result.isOk
+    check result.kind == nmrHandled
     check state.cursor.line == 0
+    check state.beepCount == 1
 
 suite "NormalModeHandler - File operation commands":
   test "file-new returns ptNewFile":
