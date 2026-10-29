@@ -39,8 +39,9 @@ type
     ## or a wide character can put its edges at different rune columns from
     ## line to line. With `extendsToLineEnd` the right edge follows each
     ## line's end, as after `<C-v>$`.
-    ## `anchor`/`focus` are the ends the user placed; `kind`/`first`/`last` are
-    ## what the selection covers, a closed fold at either end whole, which is
+    ## `anchor`/`focus` are its ends as placed, and `first`/`last` the ends in
+    ## buffer order with a closed fold either end is in covered whole, even one
+    ## closed since the last command; `kind` stays the mode's. The selection is
     ## what a yank takes and `selectedText` returns.
     bufferId*: BufferId
     kind*: EditorSelectionKind
@@ -69,18 +70,16 @@ proc currentSelection*(e: Editor): Option[EditorSelection] =
   if not selection.active:
     return none(EditorSelection)
 
-  let
-    operand = e.activeWindow.operandSelection(e.activeBuffer)
-    (first, last) = operand.getSelectionRange()
+  let (first, last) = e.activeWindow.coveredSelection.getSelectionRange()
   some(
     EditorSelection(
       bufferId: e.activeBuffer.id,
-      kind: operand.kind.toEditorSelectionKind,
+      kind: selection.kind.toEditorSelectionKind,
       anchor: selection.start,
       focus: selection.current,
       first: first,
       last: last,
-      extendsToLineEnd: operand.kind == vskBlock and operand.extendsToLineEnd,
+      extendsToLineEnd: selection.kind == vskBlock and selection.extendsToLineEnd,
     )
   )
 
@@ -90,6 +89,4 @@ proc selectedText*(e: Editor): string =
   ## no active selection.
   if e.isNil or e.windowManager.windows.len == 0:
     return ""
-  getVisualSelectionText(
-    e.activeBuffer, e.activeWindow.operandSelection(e.activeBuffer), e.tabStop
-  )
+  getVisualSelectionText(e.activeBuffer, e.activeWindow.coveredSelection, e.tabStop)

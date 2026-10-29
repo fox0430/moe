@@ -23,7 +23,7 @@ import std/unittest
 
 import pkg/results
 
-import ../src/moepkg/[buffer, types, modes, visual_selection]
+import ../src/moepkg/[buffer, types, modes, config, visual_selection]
 import visual_test_helper
 
 proc windowOn(
@@ -33,7 +33,7 @@ proc windowOn(
   result.setTab(buf)
 
 proc stateOn(win: EditorWindow): EditorState =
-  EditorState(activeWindow: win)
+  EditorState(activeWindow: win, config: newEditorConfig())
 
 suite "visual_selection - derived selection":
   test "runs from the anchor to the cursor":
@@ -143,64 +143,88 @@ suite "visual_selection - enterVisual":
     check state.previousMode == EditorMode.LogViewer
     check state.visualSelection.start == BufferPosition(line: 0, column: 1)
 
-suite "visual_selection - operandSelection":
-  test "covers a closed fold it reaches into, linewise":
+suite "visual_selection - coverClosedFolds":
+  test "takes the end past the last line of the closed fold it is in":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
     check buf.foldState.addFold(2, 4, collapsed = true)
     let state = windowOn(buf, EditorMode.Visual).stateOn
     state.visualAnchor = BufferPosition(line: 0, column: 0)
     state.cursor = BufferPosition(line: 2, column: 0)
 
-    let sel = state.operandSelection(buf)
+    state.coverClosedFolds()
 
-    check sel.kind == vskLine
-    check sel.start == BufferPosition(line: 0, column: 0)
-    check sel.current == BufferPosition(line: 4, column: 0)
-    # The window's own selection, cursor and mode stay as they were.
-    check state.visualSelection.kind == vskChar
-    check state.cursor == BufferPosition(line: 2, column: 0)
+    check state.visualAnchor == BufferPosition(line: 0, column: 0)
+    check state.cursor == BufferPosition(line: 4, column: 1)
     check state.mode == EditorMode.Visual
 
-  test "keeps its shape across a closed fold it only contains":
-    # As in Vim: only an end in a closed fold widens the selection.
+  test "takes the start to the first line of the closed fold it is in":
+    let buf = newTextBuffer("0ab\n1ab\n2ab\n3ab\n4ab\n5ab")
+    check buf.foldState.addFold(2, 4, collapsed = true)
+    let state = windowOn(buf, EditorMode.VisualBlock).stateOn
+    state.visualAnchor = BufferPosition(line: 5, column: 1)
+    state.cursor = BufferPosition(line: 3, column: 2)
+
+    state.coverClosedFolds()
+
+    check state.visualAnchor == BufferPosition(line: 5, column: 1)
+    check state.cursor == BufferPosition(line: 2, column: 0)
+
+  test "moves the anchor when it is the end in the fold":
+    let buf = newTextBuffer("0ab\n1ab\n2ab\n3ab")
+    check buf.foldState.addFold(1, 2, collapsed = true)
+    let state = windowOn(buf, EditorMode.Visual).stateOn
+    state.visualAnchor = BufferPosition(line: 1, column: 1)
+    state.cursor = BufferPosition(line: 0, column: 1)
+
+    state.coverClosedFolds()
+
+    check state.visualAnchor == BufferPosition(line: 2, column: 3)
+    check state.cursor == BufferPosition(line: 0, column: 1)
+
+  test "leaves a selection that only contains a closed fold alone":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
     check buf.foldState.addFold(2, 3, collapsed = true)
     let state = windowOn(buf, EditorMode.Visual).stateOn
     state.visualAnchor = BufferPosition(line: 0, column: 0)
     state.cursor = BufferPosition(line: 5, column: 0)
 
-    let sel = state.operandSelection(buf)
+    state.coverClosedFolds()
 
-    check sel.kind == vskChar
-    check sel.start == BufferPosition(line: 0, column: 0)
-    check sel.current == BufferPosition(line: 5, column: 0)
+    check state.visualAnchor == BufferPosition(line: 0, column: 0)
+    check state.cursor == BufferPosition(line: 5, column: 0)
 
-  test "a block keeps its columns across a closed fold it only contains":
-    # Vim's blockwise `d` cuts the same columns from the hidden lines too.
-    let buf = newTextBuffer("0abc\n1abc\n2abc\n3abc\n4abc\n5abc")
-    check buf.foldState.addFold(2, 3, collapsed = true)
-    let state = windowOn(buf, EditorMode.VisualBlock).stateOn
-    state.visualAnchor = BufferPosition(line: 0, column: 1)
-    state.cursor = BufferPosition(line: 5, column: 2)
-
-    let sel = state.operandSelection(buf)
-
-    check sel.kind == vskBlock
-    check sel.start == BufferPosition(line: 0, column: 1)
-    check sel.current == BufferPosition(line: 5, column: 2)
-
-  test "is the window's selection when it touches no closed fold":
+  test "leaves an open fold alone":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
     check buf.foldState.addFold(2, 4, collapsed = false)
     let state = windowOn(buf, EditorMode.Visual).stateOn
     state.visualAnchor = BufferPosition(line: 0, column: 0)
     state.cursor = BufferPosition(line: 2, column: 0)
 
-    let sel = state.operandSelection(buf)
+    state.coverClosedFolds()
 
-    check sel.kind == vskChar
-    check sel.start == BufferPosition(line: 0, column: 0)
-    check sel.current == BufferPosition(line: 2, column: 0)
+    check state.cursor == BufferPosition(line: 2, column: 0)
+
+  test "does nothing outside Visual":
+    let buf = newTextBuffer("0\n1\n2")
+    check buf.foldState.addFold(1, 2, collapsed = true)
+    let state = windowOn(buf, EditorMode.Normal).stateOn
+    state.cursor = BufferPosition(line: 1, column: 0)
+
+    state.coverClosedFolds()
+
+    check state.cursor == BufferPosition(line: 1, column: 0)
+
+  test "stops at the last line when the fold runs past it":
+    let buf = newTextBuffer("0\n1\n2")
+    check buf.foldState.addFold(1, 2, collapsed = true)
+    let state = windowOn(buf, EditorMode.Visual).stateOn
+    state.visualAnchor = BufferPosition(line: 0, column: 0)
+    state.cursor = BufferPosition(line: 1, column: 0)
+    buf.foldState.folds[0].endLine = 7
+
+    state.coverClosedFolds()
+
+    check state.cursor == BufferPosition(line: 2, column: 1)
 
 suite "visual_selection - selectVisualRange":
   test "anchors the range and moves the cursor to its focus":

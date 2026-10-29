@@ -119,7 +119,7 @@ proc selectedRegister*(
 proc visualYank*(buffer: TextBuffer, state: EditorState, register = none(char)) =
   ## Yank (copy) visual selection to `register` (else the yank register) and
   ## return to previous mode
-  let sel = state.operandSelection(buffer)
+  let sel = state.operandSelection
   if sel.active:
     state.registers.storeYanked(register, buffer.selectedRegister(sel, state.tabStop))
     # Vim puts the cursor on the start of what it took: a block's top left.
@@ -142,7 +142,7 @@ proc operandArea*(
     buffer: TextBuffer, state: EditorState
 ): tuple[sel: VisualSelection, area: BlockArea] =
   ## The selection an operator acts on, and its block when blockwise.
-  result.sel = state.operandSelection(buffer)
+  result.sel = state.operandSelection
   if result.sel.kind == vskBlock:
     result.area = buffer.blockArea(result.sel, state.tabStop)
 
@@ -601,8 +601,9 @@ proc visualBlockAppend*(
   ## VisualBlockInsertContext for text replication across all selected lines.
   ## As Vim's op_insert, a first line too short to reach the block's end is
   ## padded out to it first.
-  ## A selection a closed fold turned line-shaped has no block columns to
-  ## replicate into, so it appends at the end of the last selected line.
+  ## Run from charwise or linewise Visual (a mapping or the palette), there
+  ## are no block columns to replicate into, so it appends at the end of the
+  ## last selected line.
   if not sel.active:
     return
 
@@ -768,7 +769,7 @@ proc visualPaste*(
   ## `keepRegisters` (`P`). `cursorAfter` is `gp`/`gP`, and `before` (`P`,
   ## `gP`) puts lines above a block rather than below it. The next `gv`
   ## selects the put text, or where it would have gone.
-  let sel = state.operandSelection(buffer)
+  let sel = state.operandSelection
   result = Result[(), string].ok ()
   if not sel.active:
     return
@@ -923,7 +924,7 @@ proc getSurroundPair(ch: string): tuple[open, close: string] =
 
 proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: string) =
   ## Surround selection with `ch`'s pair; multi-byte brackets stay intact.
-  let sel = state.operandSelection(buffer)
+  let sel = state.operandSelection
   # Registry validates `ch`; this guard is for direct callers (see visualReplace).
   if ch.charLen != 1:
     return

@@ -52,7 +52,7 @@ proc handleClipboardCopy*(ctx: CommandContext): Result[(), string] =
   if not ctx.clipboardConfig.enable:
     return err("Clipboard integration is disabled")
 
-  copySelection(ctx, ctx.state.operandSelection(ctx.buffer))
+  copySelection(ctx, ctx.state.operandSelection)
 
 proc handleClipboardPaste*(ctx: CommandContext): Result[(), string] =
   ## Paste text from system clipboard at cursor position

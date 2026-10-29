@@ -19,7 +19,7 @@
 
 import std/[options, unittest]
 
-import ../src/moepkg/[buffer, config, editor, modes, types]
+import ../src/moepkg/[buffer, config, editor, modes, types, handler, key_bindings]
 import visual_test_helper
 
 proc createSelectionEditor(text: string): Editor =
@@ -79,21 +79,30 @@ suite "editor selection API":
     check selection.extendsToLineEnd
     check e.selectedText() == "bXX\nDEFGH\nJ"
 
-  test "a selection ending in a closed fold reports the text a yank would take":
+  test "a selection a key leaves in a closed fold covers the fold":
     let e = createSelectionEditor("alpha\nbeta\ngamma\ndelta")
     check e.activeBuffer.foldState.addFold(1, 2, collapsed = true)
-    e.state.selectVisual(
-      BufferPosition(line: 0, column: 2), BufferPosition(line: 1, column: 0)
-    )
+    e.activeWindow.cursor = BufferPosition(line: 0, column: 2)
+    for key in ["v", "j"]:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
 
     let selection = e.currentSelection().get
-    check selection.kind == EditorSelectionKind.Line
-    check selection.first.line == 0
-    check selection.last.line == 2
-    # The ends stay where the user put them.
+    check selection.kind == EditorSelectionKind.Character
     check selection.anchor == BufferPosition(line: 0, column: 2)
-    check selection.focus == BufferPosition(line: 1, column: 0)
-    check e.selectedText() == "alpha\nbeta\ngamma\n"
+    check selection.focus == BufferPosition(line: 2, column: 5)
+    check e.selectedText() == "pha\nbeta\ngamma\n"
+
+  test "a selection covers a fold closed since the last command":
+    let e = createSelectionEditor("aaa\nbbb\nccc\nddd\neee\nfff")
+    for key in ["v", "j", "j"]:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+    check e.activeBuffer.foldState.addFold(2, 4, collapsed = true)
+
+    let selection = e.currentSelection().get
+    check selection.focus == BufferPosition(line: 2, column: 0)
+    check selection.first == BufferPosition(line: 0, column: 0)
+    check selection.last == BufferPosition(line: 4, column: 3)
+    check e.selectedText() == "aaa\nbbb\nccc\nddd\neee\n"
 
   test "takes every field from the window the editor reports as active":
     # Between the window manager switching windows and the editor syncing, the

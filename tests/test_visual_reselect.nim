@@ -586,7 +586,8 @@ suite "gv":
     e.press("V", "j", "z", "f", "G", "g", "v")
 
     check e.state.mode == EditorMode.VisualLine
-    check e.selection == (pos(0, 0), pos(1, 0))
+    # The made fold is closed, so the area takes the end past its last line.
+    check e.selection == (pos(0, 0), pos(1, 1))
 
   test "an edit that stays in Visual records the previous area for undo":
     let e = newTestEditor("1\n2\n3")

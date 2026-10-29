@@ -445,6 +445,30 @@ proc dec(w: var WordWalker): int =
     return 1
   -1
 
+proc toFoldEnd(w: var WordWalker, mode: EditorMode) =
+  ## In a closed fold, on to the last character of its last line, as Vim's
+  ## fwd_word and end_word do before each word.
+  let fold = w.buffer.foldState.getCollapsedFoldAt(w.pos.line)
+  if fold.isNone:
+    return
+  let line = min(fold.get.endLine, w.buffer.len - 1)
+  w.runes = w.buffer.lineRunesNoNl(line)
+  let column =
+    if mode.restsPastLineEnd:
+      w.runes.len
+    else:
+      max(w.runes.len - 1, 0)
+  w.pos = BufferPosition(line: line, column: column)
+
+proc toFoldStart(w: var WordWalker) =
+  ## In a closed fold, back to the start of its first line, as Vim's bck_word
+  ## does before each word.
+  let fold = w.buffer.foldState.getCollapsedFoldAt(w.pos.line)
+  if fold.isNone:
+    return
+  w.pos = BufferPosition(line: fold.get.startLine, column: 0)
+  w.runes = w.buffer.lineRunesNoNl(w.pos.line)
+
 proc skipClass(w: var WordWalker, class: int, forward: bool): bool =
   ## Vim's skip_chars: step over characters of `class`; true when the buffer
   ## ends first.
@@ -453,12 +477,13 @@ proc skipClass(w: var WordWalker, class: int, forward: bool): bool =
       return true
   false
 
-proc fwdWord(w: var WordWalker, count: int, eol: bool): bool =
+proc fwdWord(w: var WordWalker, count: int, eol: bool, mode: EditorMode): bool =
   ## Vim's fwd_word: on to the start of the `count`-th word, stopping at an
   ## empty line. With `eol` (an operator waits) the last word stops at the end
   ## of its line instead of going on to the next. False when it started at the
   ## last character of the buffer.
   for n in countdown(count - 1, 0):
+    w.toFoldEnd(mode)
     let
       startClass = w.class
       lastLine = w.pos.line == w.buffer.len - 1
@@ -484,6 +509,7 @@ proc bckWord(w: var WordWalker, count: int): bool =
   ## Vim's bck_word: back to the start of the `count`-th word, stopping at an
   ## empty line. False when it started at the start of the buffer.
   for _ in 1 .. count:
+    w.toFoldStart()
     if w.dec == -1:
       return false
     block finished:
@@ -497,12 +523,13 @@ proc bckWord(w: var WordWalker, count: int): bool =
       discard w.inc # overshot
   true
 
-proc endWord(w: var WordWalker, count: int, stop: bool): bool =
+proc endWord(w: var WordWalker, count: int, stop: bool, mode: EditorMode): bool =
   ## Vim's end_word: on to the end of the `count`-th word. With `stop` (`cw`)
   ## the first stays on the word it stands at the end of. False when the
   ## buffer ends first.
   var stop = stop
   for _ in 1 .. count:
+    w.toFoldEnd(mode)
     let startClass = w.class
     if w.inc == -1:
       return false
@@ -563,9 +590,9 @@ proc wordForward(
   ## Without an operator it fails from the last character of the buffer.
   var w = initWordWalker(buffer, start, bigword)
   if operator == some(OpChange) and w.onNonWhite:
-    discard w.endWord(count, stop = true)
+    discard w.endWord(count, stop = true, mode)
     return w.landWord(start, mtInclusive, mode)
-  let ok = w.fwdWord(count, eol = operator.isSome)
+  let ok = w.fwdWord(count, eol = operator.isSome, mode)
   result = w.landWord(start, mtExclusive, mode)
   result.failed = not ok and operator.isNone
 
@@ -580,7 +607,7 @@ proc wordEnd(
   ## `e` and `E`, as Vim's nv_wordcmd: they fail when the buffer ends first,
   ## but not with an operator, which then takes up to the last character.
   var w = initWordWalker(buffer, start, bigword)
-  let ok = w.endWord(count, stop = false)
+  let ok = w.endWord(count, stop = false, mode)
   result = w.landWord(start, mtInclusive, mode)
   result.failed = not ok and operator.isNone
 

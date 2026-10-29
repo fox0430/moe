@@ -49,7 +49,7 @@ from command_handlers/insert_handler import runAutoTrigger
 
 import
   config, git_cache, render_utils, logger, message_log, debug_viewer, completion,
-  signature_help, hover_popup, notification_popup, unicode_utils, motion, buffer,
+  signature_help, hover_popup, modes, notification_popup, unicode_utils, motion, buffer,
   lsp_integration, editor_window_layout, editor_notify, macro_recording, page_scroll
 
 export editor_notify
@@ -392,7 +392,8 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
   # moves (search, :N, LSP jumps, mouse clicks, cursor restore on open) bypass
   # the motion clamp; normalize here so the cursor always sits on a visible line.
   # Non-file buffers have no folds, so this is a no-op for them.
-  if not e.state.windowDisplay.scrollAnimation.active:
+  if not e.state.windowDisplay.scrollAnimation.active and
+      not e.currentMode.isVisualAllMode:
     let buf = e.activeBuffer()
     let collapsedFold = buf.foldState.getCollapsedFoldAt(e.activeWindow.cursor.line)
     if collapsedFold.isSome:
