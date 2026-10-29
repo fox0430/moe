@@ -53,7 +53,8 @@ jobs:
           - 'ubuntu-latest'
           - 'macOS-latest'
         nim-version:
-          - '2.2.14'
+          # 2.0.10 is the minimum supported.
+          - '2.0.10'
           - 'stable'
           - 'devel'
 
