@@ -152,7 +152,7 @@ jobs:
 
     - uses: jiro4989/setup-nim-action@v2
       with:
-        nim-version: 'stale'
+        nim-version: 'stable'
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Install dependencies
@@ -188,7 +188,7 @@ jobs:
     - uses: actions/checkout@v7
     - uses: jiro4989/setup-nim-action@v2
       with:
-        nim-version: 'stale'
+        nim-version: 'stable'
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Update Nimble for revision-pinned dependencies
       run: nimble install 'nimble@0.24.1' -y
