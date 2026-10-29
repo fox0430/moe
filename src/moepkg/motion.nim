@@ -939,6 +939,14 @@ proc landMotion*(
   proc stuck(motionType: MotionType): MotionLanding =
     MotionLanding(pos: start, motionType: motionType, failed: true)
 
+  proc sideways(pos: CursorPosition): MotionLanding =
+    ## `h` and `l` fail when they cannot move at all, as Vim's nv_left and
+    ## nv_right beep, but not with an operator (`dh` at a line's start).
+    if pos == currentPos and operator.isNone:
+      stuck(mtExclusive)
+    else:
+      at(pos, mtExclusive)
+
   proc usingRegOne(landing: MotionLanding): MotionLanding =
     ## `landing` marked so a delete over it goes to register 1, as Vim's
     ## nv_percent and nv_findpar set use_reg_one.
@@ -966,14 +974,14 @@ proc landMotion*(
 
   case cmd.motion
   of Motion.Left:
-    at(e.moveLeft(currentPos, cmd.count), mtExclusive)
+    sideways(e.moveLeft(currentPos, cmd.count))
   of Motion.Backspace:
-    at(e.moveBackspace(currentPos, cmd.count, mode), mtExclusive)
+    sideways(e.moveBackspace(currentPos, cmd.count, mode))
   of Motion.Right:
     if operator.isSome:
       e.buffer.rightForOperator(start, cmd.count)
     else:
-      at(e.moveRight(currentPos, cmd.count, mode), mtExclusive)
+      sideways(e.moveRight(currentPos, cmd.count, mode))
   of Motion.Up, Motion.ScreenLineUp:
     offLine(e.moveUp(currentPos, cmd.count))
   of Motion.Down, Motion.ScreenLineDown:
@@ -1368,15 +1376,16 @@ proc moveCursorByMotion*(
     state: EditorState,
     cmd: MotionCommand,
     updateViewport: bool = true,
-): Result[BufferPosition, string] =
-  ## Move the cursor of `state` by `cmd`. A vertical motion keeps the column it
-  ## aimed for, as Vim keeps curswant. `$` makes vertical moves stick to line
-  ## ends, even when its count goes past the last line, as Vim's nv_dollar;
-  ## `g_` does too only then. `|` aims for its screen column, as Vim's nv_pipe
-  ## does. Another motion drops the column when it moves the cursor, or even in
-  ## place onto a line's start or end, as Vim's beginline does; one that fails
-  ## in place keeps it (`2_` on the last line). gj and gk keep the screen cell
-  ## they aim for, even when they fail, as Vim's nv_screengo.
+): MotionLanding =
+  ## Move the cursor of `state` by `cmd`; the landing says whether it failed.
+  ## A vertical motion keeps the column it aimed for, as Vim keeps curswant.
+  ## `$` makes vertical moves stick to line ends, even when its count goes past
+  ## the last line, as Vim's nv_dollar; `g_` does too only then. `|` aims for
+  ## its screen column, as Vim's nv_pipe does. Another motion drops the column
+  ## when it moves the cursor, or even in place onto a line's start or end, as
+  ## Vim's beginline does; one that fails in place keeps it (`2_` on the last
+  ## line). gj and gk keep the screen cell they aim for, even when they fail,
+  ## as Vim's nv_screengo.
   let
     cmd = controller.unwrapped(cmd)
     start = state.cursor
@@ -1395,7 +1404,7 @@ proc moveCursorByMotion*(
     state.preferredColumn = cmd.count.screenColumnCell
   elif landing.pos != start or (cmd.motion in LineEdgeMotions and not landing.failed):
     state.preferredColumn = -1
-  ok(landing.pos)
+  landing
 
 proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
   ## Extract text from the given range

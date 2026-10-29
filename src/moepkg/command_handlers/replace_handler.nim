@@ -220,9 +220,8 @@ proc handleMotion*(
   ## Handle motion commands in replace mode
   let motionCmd = MotionCommand(motion: motion, count: 1)
 
-  let r = handler.motionController.moveCursorByMotion(state, motionCmd)
-  if r.isErr:
-    return ReplaceModeResult(kind: rmrError, errorMessage: r.error)
+  # At an edge Vim beeps, but the keys after it still run (ins_left).
+  discard handler.motionController.moveCursorByMotion(state, motionCmd)
   return ReplaceModeResult(kind: rmrHandled, modeTransition: none(EditorMode))
 
 proc handleModeSwitch*(

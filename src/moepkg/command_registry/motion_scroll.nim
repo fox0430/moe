@@ -64,9 +64,7 @@ proc registerMotionCommand*(
         else:
           1
       let cmd = MotionCommand(motion: motion, count: count)
-      let r = ctx.motionController.moveCursorByMotion(ctx.state, cmd)
-      if r.isErr:
-        return err(r.error)
+      ctx.moveByMotion(cmd)
       return Result[(), string].ok (),
     0,
     maxArgs,
@@ -269,9 +267,6 @@ proc scrollPage(
         )
       else:
         layout.page(start, ctx.cursor, visibleHeight, parseCount(args), forward)
-  if not scroll.moved:
-    return ok(())
-
   let
     smooth = ctx.smoothScrollConfig.animates
     down = start < scroll.top
@@ -281,6 +276,12 @@ proc scrollPage(
         max(start, min(scroll.top, layout.lastPageTop(visibleHeight)))
       else:
         scroll.top
+  if not scroll.moved or
+      (smooth and down and top == start and scroll.cursorLine == startCursor.line):
+    # Neither the window nor the cursor moves: Vim's pagescroll beeps. So
+    # does a smooth scroll that the last line already stops.
+    state.beep()
+    return ok(())
   viewport.restoreViewportTop(top.line, top.offset)
   let
     landing =

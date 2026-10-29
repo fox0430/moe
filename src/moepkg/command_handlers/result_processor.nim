@@ -42,7 +42,7 @@ type
     ## Outcome from a single replayed key, after full processResult side effects.
     roContinue
     roQuit ## hrQuit / hrCquit — main loop terminates
-    roAbort ## Error or queued host result — loop stops, app continues
+    roAbort ## Error, beep or queued host result — loop stops, app continues
 
   LayerHook* = proc(e: Editor, keyCombo: KeyCombo): Option[ReplayOutcome] {.closure.}
     ## A layer a key meets on its way to the mode handlers. `none` = it does
@@ -921,12 +921,15 @@ proc runNestedKeyCombo*(
   ## every kind's side effect fires exactly once. Each key may finish the
   ## command Ctrl-o waits for, so Insert may resume after it, in the middle of
   ## a mapping too, as in Vim. `key.remap` covers this key alone, not the keys
-  ## of a register it runs.
+  ## of a register it runs. A key that beeps aborts like one that errs.
   # Before the command starts, so the jump is not counted as its move.
   e.completeScrollAnimation()
   e.state.armInsertResume()
+  let beeps = e.state.beepCount
   e.asCommand:
     result = manager.dispatchNestedKeyCombo(e, key)
+  if result == roContinue and e.state.beepCount > beeps:
+    result = roAbort
   # Once the command has dropped the column vertical moves want, if it does,
   # so Insert resumes past the end only as Vim's would.
   if result != roQuit:

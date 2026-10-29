@@ -10768,3 +10768,336 @@ suite "handleKeyCombo - the :s preview covers the lines :s runs on, as Vim's inc
     check e.handleKeyCombo(parseKeyCombo("Enter").get)
 
     check e.lines == previewed
+
+suite "handleKeyCombo - a key that beeps stops the register or mapping it came from, as Vim's beep_flush":
+  # Expectations are Vim 9.2's, with the keys typed.
+  proc createEditorForBeep(
+      content: string, line = 0, column = 0, smooth = true
+  ): Editor =
+    var config = newEditorConfig()
+    config.standard.autoIndent = false
+    config.standard.autoDeleteParen = false
+    config.smoothScroll.enable = smooth
+    result = newEditor(config)
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.activeWindow.cursor = BufferPosition(line: line, column: column)
+
+  proc keys(s: string): seq[string] =
+    for c in s:
+      result.add $c
+
+  proc setRegister(e: Editor, name: char, keys: openArray[string]) =
+    var stored: seq[string]
+    for key in keys:
+      stored.add keyComboToString(parseKeyCombo(key).get)
+    e.state.pendingInput.macroState.registers[name] = stored
+
+  proc press(e: Editor, keys: openArray[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  proc at(line, column: int): BufferPosition =
+    BufferPosition(line: line, column: column)
+
+  const
+    Abc = "a\nb\nc"
+    Commas = "a,b\nc\nd,e"
+
+  test "a motion that fails drops the rest of the register and its count":
+    let mark = keys("A!") & "Escape"
+    for (content, start, register, typed, expected, cursor) in [
+      (Abc, at(0, 0), mark & "j", keys("10@a"), @["a!", "b!", "c!"], at(2, 1)),
+      (Abc, at(2, 0), mark & "k", keys("10@a"), @["a!", "b!", "c!"], at(0, 1)),
+      # The keys typed after it still run.
+      (Abc, at(0, 0), mark & "j", keys("10@ax"), @["a!", "b!", "c"], at(2, 0)),
+      (Abc, at(0, 0), keys("3jx"), keys("@a"), @["a", "b", ""], at(2, 0)),
+      (Abc, at(0, 0), keys("xgj"), keys("5@a"), @["", "", ""], at(2, 0)),
+      (Abc, at(2, 0), keys("2$x"), keys("@a"), @["a", "b", "c"], at(2, 0)),
+      (Abc, at(0, 0), @["x", "Down"], keys("5@a"), @["", "", ""], at(2, 0)),
+      (Commas, at(0, 0), keys("0f,r;j"), keys("5@a"), @["a;b", "c", "d,e"], at(1, 0)),
+      (Commas, at(0, 0), keys("$T,r;j"), keys("5@a"), @["a,;", "c", "d,e"], at(1, 0)),
+      ("a,b,c", at(0, 0), keys("3f,x"), keys("@a"), @["a,b,c"], at(0, 0)),
+      ("abc", at(0, 0), keys(";x"), keys("@a"), @["abc"], at(0, 0)),
+      ("foo bar", at(0, 0), keys("rXw"), keys("5@a"), @["Xoo XaX"], at(0, 6)),
+      ("foo bar", at(0, 0), keys("3Ex"), keys("@a"), @["foo bar"], at(0, 6)),
+      ("foo bar", at(0, 0), keys("3Wx"), keys("@a"), @["foo ba"], at(0, 5)),
+      ("a\n\nb", at(0, 0), keys("}x"), keys("5@a"), @["a", "", ""], at(2, 0)),
+      ("abc", at(0, 0), keys("%x"), keys("@a"), @["abc"], at(0, 0)),
+      # h and l fail only where they cannot move at all.
+      ("abc", at(0, 0), keys("lx"), keys("5@a"), @["ac"], at(0, 1)),
+      ("abc", at(0, 2), keys("hx"), keys("5@a"), @["c"], at(0, 0)),
+      ("abc", at(0, 1), keys("3lx"), keys("@a"), @["ab"], at(0, 1)),
+      ("abc", at(0, 0), @["Left", "x"], keys("@a"), @["abc"], at(0, 0)),
+      ("\na", at(0, 0), keys("lj"), keys("@a"), @["", "a"], at(0, 0)),
+    ]:
+      let e = createEditorForBeep(content, start.line, start.column)
+      e.setRegister('a', register)
+
+      e.press(typed)
+
+      checkpoint(content & " " & $register & " " & $typed)
+      check e.lines == expected
+      check e.activeWindow.cursor == cursor
+
+  test "an operator whose motion fails stops it, one that acts over nothing does not":
+    for (content, start, register, expected, cursor) in [
+      (Abc, at(2, 0), keys("djx"), @["a", "b", "c"], at(2, 0)),
+      (Abc, at(0, 0), keys("dkx"), @["a", "b", "c"], at(0, 0)),
+      (Abc, at(2, 0), keys("2ddx"), @["a", "b", "c"], at(2, 0)),
+      (Abc, at(2, 0), keys("dgjx"), @["a", "b", "c"], at(2, 0)),
+      (Abc, at(2, 0), keys("yjx"), @["a", "b", "c"], at(2, 0)),
+      ("abc", at(0, 0), keys("dfzx"), @["abc"], at(0, 0)),
+      ("abc", at(0, 0), keys("d;x"), @["abc"], at(0, 0)),
+      # As Vim's nv_left and nv_wordcmd, these do not fail with an operator.
+      ("abc", at(0, 0), keys("dhx"), @["bc"], at(0, 0)),
+      ("abc", at(0, 0), keys("chX") & "Escape", @["Xabc"], at(0, 0)),
+      ("foo bar", at(0, 0), keys("d3Ex"), @[""], at(0, 0)),
+      ("foo bar", at(0, 6), keys("dwiX") & "Escape", @["foo bXa"], at(0, 5)),
+    ]:
+      let e = createEditorForBeep(content, start.line, start.column)
+      e.setRegister('a', register)
+
+      e.press(keys("@a"))
+
+      checkpoint(content & " " & $register)
+      check e.lines == expected
+      check e.activeWindow.cursor == cursor
+
+  test "the registers it runs in stop with it, a recursive one included":
+    let recursive = createEditorForBeep("ab\ncd\nef")
+    recursive.setRegister('a', keys("xj@a"))
+    recursive.press(keys("@a"))
+    check recursive.lines == @["b", "d", "f"]
+    check recursive.activeWindow.cursor == at(2, 0)
+
+    let nested = createEditorForBeep(Abc)
+    nested.setRegister('a', keys("j"))
+    nested.setRegister('b', keys("x@ax"))
+    nested.press(keys("3@b"))
+    check nested.lines == @["", "", ""]
+    check nested.activeWindow.cursor == at(2, 0)
+
+  test "Visual mode stays, without the operator after the motion":
+    for (start, register, mode) in [
+      (at(2, 0), keys("vjd"), EditorMode.Visual),
+      (at(0, 0), keys("Vkd"), EditorMode.VisualLine),
+    ]:
+      let e = createEditorForBeep(Abc, start.line, start.column)
+      e.setRegister('a', register)
+
+      e.press(keys("@a"))
+
+      checkpoint($register)
+      check e.lines == @["a", "b", "c"]
+      check e.state.mode == mode
+
+  test "Insert resumes after a Ctrl-o command that beeps, the rest dropped":
+    let e = createEditorForBeep(Abc, 2, 0)
+    e.setRegister('a', @["i", "C-o", "j", "X", "Escape", "x"])
+
+    e.press(keys("@a"))
+
+    check e.lines == @["a", "b", "c"]
+    check e.state.mode == EditorMode.Insert
+
+  test "a key that cannot move in Insert mode does not stop it":
+    let e = createEditorForBeep(Abc)
+    e.setRegister('a', @["i", "Up", "X", "Escape", "x"])
+
+    e.press(keys("@a"))
+
+    check e.lines == @["a", "b", "c"]
+    check e.state.mode == EditorMode.Normal
+
+  test "a mapping's right-hand side stops, the typed keys after it do not":
+    let stops = createEditorForBeep(Abc, 2, 0)
+    check stops.executeCommandOverlay(":nnoremap Q jxx") == roContinue
+    stops.press(keys("Q"))
+    check stops.lines == @["a", "b", "c"]
+
+    let typed = createEditorForBeep(Abc)
+    check typed.executeCommandOverlay(":nnoremap Q jx") == roContinue
+    typed.press(keys("QQQQ"))
+    check typed.lines == @["a", "", ""]
+    check typed.activeWindow.cursor == at(2, 0)
+
+  test "x with nothing to delete does not stop it, and . repeats it":
+    for (content, start, typed, expected, cursor) in [
+      ("\na", at(0, 0), keys("@a"), @["", "a"], at(1, 0)),
+      ("abc\n\nabc", at(0, 0), keys("rXjxj."), @["Xbc", "", "bc"], at(2, 0)),
+      ("abc\nabc", at(0, 0), keys("rZXj$."), @["Zbc", "ac"], at(1, 1)),
+      ("\nabcdef", at(0, 0), keys("3xj."), @["", "def"], at(1, 0)),
+      # The register keeps what was deleted before.
+      ("ab\n\n", at(0, 0), keys("xjxP"), @["b", "a"], at(1, 0)),
+    ]:
+      let e = createEditorForBeep(content, start.line, start.column)
+      e.setRegister('a', keys("xj"))
+
+      e.press(typed)
+
+      checkpoint(content & " " & $typed)
+      check e.lines == expected
+      check e.activeWindow.cursor == cursor
+
+  test "x and X short of characters: . repeats the typed count, as Vim's `5dl`":
+    for (content, start, typed, expected, cursor) in [
+      ("abc\nabcdefgh", at(0, 0), keys("5xj0."), @["", "fgh"], at(1, 0)),
+      ("abc\nabcdefgh", at(0, 0), keys("$5Xj$."), @["c", "abh"], at(1, 2)),
+    ]:
+      let e = createEditorForBeep(content, start.line, start.column)
+
+      e.press(typed)
+
+      checkpoint(content & " " & $typed)
+      check e.lines == expected
+      check e.activeWindow.cursor == cursor
+
+  test "l onto the line break in Visual mode, as Vim's past_line, does not stop it":
+    for (content, expected) in [("abc\ndef", @["abdef"]), ("abc", @["ab"])]:
+      let e = createEditorForBeep(content, 0, 2)
+      e.setRegister('a', keys("vld"))
+
+      e.press(keys("@a"))
+
+      checkpoint(content)
+      check e.lines == expected
+      check e.state.mode == EditorMode.Normal
+
+  test "l after Ctrl-o at the line end stops it, Insert resuming at the end":
+    let e = createEditorForBeep("abc")
+    e.setRegister('a', @["A", "C-o", "l", "X", "Escape"])
+
+    e.press(keys("@aY"))
+
+    check e.lines == @["abcY"]
+    check e.state.mode == EditorMode.Insert
+
+  test "r short of characters stops it, changing nothing, as Vim's nv_replace":
+    for (content, register, typed, expected, cursor) in [
+      (
+        "abc\nabcdef\nabcdef",
+        keys("5rxj"),
+        keys("3@a"),
+        @["abc", "abcdef", "abcdef"],
+        at(0, 0),
+      ),
+      ("\nabc", keys("rxjx"), keys("@a"), @["", "abc"], at(0, 0)),
+      # `.` repeats `3rx`, which stops on a shorter line; `2.` fits it.
+      ("abcd\nab\nabc", keys(".jx"), keys("3rxj0@a"), @["xxxd", "ab", "abc"], at(1, 0)),
+      ("abcd\nab", keys(""), keys("3rxj02."), @["xxxd", "xx"], at(1, 1)),
+    ]:
+      let e = createEditorForBeep(content)
+      e.setRegister('a', register)
+
+      e.press(typed)
+
+      checkpoint(content & " " & $register & " " & $typed)
+      check e.lines == expected
+      check e.activeWindow.cursor == cursor
+
+  test "a page scroll that moves neither the window nor the cursor stops it, as Vim's pagescroll":
+    let mark = keys("A!") & "Escape"
+    for smooth in [true, false]:
+      for (start, register, typed, expected, cursor) in [
+        (at(1, 0), @["C-b", "x"], keys("@a"), @["a", "b", "c"], at(1, 0)),
+        (at(1, 0), @["PageUp", "x"], keys("@a"), @["a", "b", "c"], at(1, 0)),
+        (at(0, 0), @["C-u", "x"], keys("@a"), @["a", "b", "c"], at(0, 0)),
+        (at(2, 0), @["C-d", "x"], keys("@a"), @["a", "b", "c"], at(2, 0)),
+        # The first one moves; a smooth one stops with the last line at the
+        # bottom, and the next moves nothing either.
+        (at(0, 0), @["C-f"] & mark, keys("5@a"), @["a", "b", "c!"], at(2, 1)),
+        (at(0, 0), @["C-d"] & mark, keys("5@a"), @["a", "b", "c!"], at(2, 1)),
+        (at(0, 0), @["C-f", "x"], keys("@a"), @["a", "b", ""], at(2, 0)),
+        (at(0, 0), @["C-u", "x"], keys("@ax"), @["", "b", "c"], at(0, 0)),
+        # From Insert and Replace mode too: Vim's pagescroll beeps for them.
+        (
+          at(1, 0),
+          @["i", "PageUp", "X", "Escape", "x"],
+          keys("@a"),
+          @["a", "b", "c"],
+          at(1, 0),
+        ),
+        (
+          at(1, 0),
+          @["R", "PageUp", "X", "Escape", "x"],
+          keys("@a"),
+          @["a", "b", "c"],
+          at(1, 0),
+        ),
+      ]:
+        let e = createEditorForBeep(Abc, start.line, start.column, smooth)
+        e.setRegister('a', register)
+
+        e.press(typed)
+
+        checkpoint($smooth & " " & $register & " " & $typed)
+        check e.lines == expected
+        check e.activeWindow.cursor == cursor
+
+  test "a key that runs nothing stops it, as Vim's clearopbeep, but not Escape or Ctrl-C":
+    for (register, typed, expected) in [
+      (@["F5", "x"], keys("@a"), @["a", "b", "c"]),
+      (@["3", "F5", "x"], keys("@a"), @["a", "b", "c"]),
+      (@["d", "F5", "x"], keys("@a"), @["a", "b", "c"]),
+      (@["\"", "b", "F5", "x"], keys("@a"), @["a", "b", "c"]),
+      (keys("gZx"), keys("@a"), @["a", "b", "c"]),
+      (@["F5", "x"], keys("@ax"), @["", "b", "c"]),
+      # Vim's nv_esc
+      (@["Escape", "x"], keys("@a"), @["", "b", "c"]),
+      (@["3", "Escape", "x"], keys("@a"), @["", "b", "c"]),
+      (@["d", "Escape", "x"], keys("@a"), @["", "b", "c"]),
+      (@["C-c", "x"], keys("@a"), @["", "b", "c"]),
+    ]:
+      let e = createEditorForBeep(Abc)
+      e.setRegister('a', register)
+
+      e.press(typed)
+
+      checkpoint($register & " " & $typed)
+      check e.lines == expected
+      check e.activeWindow.cursor == at(0, 0)
+
+  test "an operator over a command it cannot act over stops it, as Vim's checkclearop":
+    for (content, register, typed, expected, cursor) in [
+      ("abc", keys("dxiZ") & "Escape", keys("@a"), @["abc"], at(0, 0)),
+      ("abc", keys("dIx"), keys("@a"), @["abc"], at(0, 0)),
+      ("abc", keys("d\"ax"), keys("@a"), @["abc"], at(0, 0)),
+      ("abc", keys("drxx"), keys("@a"), @["abc"], at(0, 0)),
+      (Abc, keys("xjdx"), keys("3@a"), @["", "b", "c"], at(1, 0)),
+      # Typed keys run on.
+      ("abc", @[], keys("dxx"), @["bc"], at(0, 0)),
+      ("abc", @[], keys("d\"aX") & "Escape", @["aXbc"], at(0, 1)),
+    ]:
+      let e = createEditorForBeep(content)
+      e.setRegister('a', register)
+
+      e.press(typed)
+
+      checkpoint(content & " " & $register & " " & $typed)
+      check e.lines == expected
+      check e.activeWindow.cursor == cursor
+
+  test "a mapping's right-hand side stops at a key that runs nothing, not at Escape":
+    for (rhs, expected) in [
+      ("F5 x", @["a", "b", "c"]),
+      ("d x x", @["a", "b", "c"]),
+      ("Escape x", @["", "b", "c"]),
+    ]:
+      let e = createEditorForBeep(Abc)
+      check e.executeCommandOverlay(":nnoremap Q " & rhs) == roContinue
+
+      e.press(keys("Q"))
+
+      checkpoint(rhs)
+      check e.lines == expected

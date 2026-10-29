@@ -212,6 +212,12 @@ proc cursor*(ctx: CommandContext): var BufferPosition {.inline.} =
 proc `cursor=`*(ctx: CommandContext, pos: BufferPosition) {.inline.} =
   ctx.state.cursor = pos
 
+proc moveByMotion*(ctx: CommandContext, cmd: MotionCommand) =
+  ## Move the cursor by `cmd` as a Normal or Visual mode command, which beeps
+  ## when the motion fails, as Vim's clearopbeep.
+  if ctx.motionController.moveCursorByMotion(ctx.state, cmd).failed:
+    ctx.state.beep()
+
 proc clipboardConfig*(ctx: CommandContext): ClipboardConfig =
   ctx.state.config.clipboard
 

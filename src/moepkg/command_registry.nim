@@ -24,12 +24,11 @@
 ## registerBuiltinCommands wrapper that delegates to per-category registrars.
 
 import std/options
-from std/strutils import repeat
 
 import pkg/results
 
 import types, motion, key_bindings, modes, logger, visual_block
-import buffer/[core, edit, undo]
+import buffer/[core, undo]
 
 import command_handlers/visual_commands
 
@@ -93,24 +92,20 @@ proc executeFindCharMotion(
     targetChar: string,
     count: int,
     isRepeat: bool = false,
-): Result[(), string] =
+) =
   ## Move the cursor by f/F/t/T or their ; / , repeats (`isRepeat`) and refresh
   ## the match highlight. `motion` must be one of FindChar / FindCharBackward /
   ## TillChar / TillCharBackward.
-  let r = ctx.motionController.moveCursorByMotion(
-    ctx.state,
+  ctx.moveByMotion(
     MotionCommand(
       motion: motion, targetChar: targetChar, count: count, repeat: isRepeat
-    ),
+    )
   )
-  if r.isErr:
-    return err(r.error)
 
   # Highlight all matching characters on cursor line
   ctx.state.ui.findCharMatchLine = ctx.cursor.line
   ctx.state.ui.findCharMatches =
     findAllCharPositions(ctx.buffer, ctx.cursor.line, targetChar)
-  ok(())
 
 proc executeCommand*(
     registry: CommandRegistry, ctx: CommandContext, cmd: key_bindings.Command
@@ -177,7 +172,8 @@ proc executeCommand*(
     # find/till move, so 3; works too.
     if cmd.motion in {Motion.RepeatFind, Motion.RepeatFindReverse}:
       if ctx.state.editState.lastFindChar.isNone:
-        ctx.state.statusMessage = "No previous find"
+        # Vim's searchc fails without a message.
+        ctx.state.beep()
         return ok(())
       let last = ctx.state.editState.lastFindChar.get
       let motion =
@@ -185,9 +181,10 @@ proc executeCommand*(
           reverseFindMotion(last.motion)
         else:
           last.motion
-      return executeFindCharMotion(
+      executeFindCharMotion(
         ctx, motion, last.targetChar, max(1, cmd.count), isRepeat = true
       )
+      return ok(())
 
     # Bare G targets the last line, so a missing count is the 0 sentinel;
     # bare gg and 1gg both target line 1, so FirstLine needs no such case.
@@ -207,13 +204,7 @@ proc executeCommand*(
     }:
       recordJump(ctx.state)
 
-    let r = ctx.motionController.moveCursorByMotion(ctx.state, motionCmd)
-    if r.isErr:
-      return err(r.error)
-    logDebug(
-      "command",
-      "Motion returned cursor=(" & $r.value.line & "," & $r.value.column & ")",
-    )
+    ctx.moveByMotion(motionCmd)
 
     logDebug(
       "command",
@@ -272,66 +263,21 @@ proc executeCommand*(
       let motion = if cmd.reverse: Motion.FindCharBackward else: Motion.FindChar
       ctx.state.editState.lastFindChar =
         some(LastFindChar(motion: motion, targetChar: cmd.targetChar))
-      return executeFindCharMotion(ctx, motion, cmd.targetChar, count)
+      executeFindCharMotion(ctx, motion, cmd.targetChar, count)
+      return ok(())
     of "till":
       let motion = if cmd.reverse: Motion.TillCharBackward else: Motion.TillChar
       ctx.state.editState.lastFindChar =
         some(LastFindChar(motion: motion, targetChar: cmd.targetChar))
-      return executeFindCharMotion(ctx, motion, cmd.targetChar, count)
+      executeFindCharMotion(ctx, motion, cmd.targetChar, count)
+      return ok(())
     of "replace":
       # Execute replace character action (r command)
       # Replace count characters with the target character
       if cmd.targetChar.charLen != 1:
         return err("No character specified for replace")
 
-      let actualCount = max(1, count)
-      let lineContent = ctx.buffer.getLine(ctx.cursor.line)
-
-      # Check if we're at or past the end of the line
-      if ctx.cursor.column >= lineContent.charLen:
-        return err("Nothing to replace")
-
-      # Calculate how many characters we can actually replace
-      let charsAvailable = lineContent.charLen - ctx.cursor.column
-      let charsToReplace = min(actualCount, charsAvailable)
-
-      # Count via transformRange; refused for raw buffers.
-      let targetChar = cmd.targetChar
-      let repeatTarget = proc(text: string): string =
-        targetChar.repeat(text.charLen)
-
-      let startPos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column)
-      let endPos = BufferPosition(
-        line: ctx.cursor.line, column: ctx.cursor.column + charsToReplace - 1
-      )
-
-      let txr =
-        try:
-          withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
-            let res = ctx.buffer.transformRange(
-              startPos, endPos, "replace characters", repeatTarget
-            )
-            if res.isErr:
-              return err(res.error)
-        except TransactionRollbackError as exc:
-          # Surface a failed rollback (untrustworthy buffer) as a status message.
-          return err(exc.msg & " (buffer state may be inconsistent)")
-      if txr.isErr:
-        return err(txr.error)
-
-      # Record this command for repeat (.)
-      ctx.recordChange(
-        LastEditCommand(
-          kind: lecReplaceChar,
-          replaceChar: cmd.targetChar,
-          replaceCount: charsToReplace,
-        )
-      )
-
-      # Move cursor to the last replaced character (Vim behavior)
-      ctx.cursor.column += charsToReplace - 1
-
-      return ok(())
+      return ctx.replaceChars(cmd.targetChar, count)
     of "visual-replace":
       # Execute visual replace action (r command in visual mode)
       if cmd.targetChar.charLen != 1:
