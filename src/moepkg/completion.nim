@@ -98,7 +98,7 @@ type
     cancelLspRequest*: proc(requestId: int)
       ## Tells the server a request is no longer wanted. Nil without LSP.
     lspItems*: seq[CompletionItem] ## Raw LSP completion items
-    lspOnlyForMember: bool
+    lspOnlyAfterDot: bool
     lspResponseReceived: bool
     contextBufferId: BufferId
     contextLine, contextColumn: int
@@ -806,7 +806,7 @@ proc filterAndSortEntries*(
       )
     return
 
-  let lspOnly = mgr.lspOnlyForMember and mgr.lspResponseReceived
+  let lspOnly = mgr.lspOnlyAfterDot and mgr.lspResponseReceived
   if mgr.lspItems.len > 0 or lspOnly:
     # Collect the LSP items, dropping any whose filterText no longer fuzzy-matches
     # the typed prefix (the server already ranked/filtered them for us).
@@ -999,32 +999,32 @@ proc updateCompletionContext*(
     mgr: CompletionManager,
     buffer: TextBuffer,
     cursorLine, cursorCol: int,
-    lspOnlyForMembers: bool,
+    lspOnlyAfterDot: bool,
 ) =
-  ## Track the receiver and replacement start so responses cannot cross contexts.
-  if not lspOnlyForMembers and not mgr.hasCompletionContext:
+  ## Track the completion position so responses cannot cross contexts.
+  if not lspOnlyAfterDot and not mgr.hasCompletionContext:
     return
   let
     line = buffer.getLine(cursorLine)
     prefix = extractPrefixBeforeCursor(line, cursorCol)
     column = cursorCol - prefix.charLen
     runes = line.toCharRunes()
-    isMember =
-      lspOnlyForMembers and column > 0 and column <= runes.len and
+    isAfterDot =
+      lspOnlyAfterDot and column > 0 and column <= runes.len and
       runes[column - 1] == '.'.Rune
   if not mgr.hasCompletionContext or mgr.contextBufferId != buffer.id or
       mgr.contextLine != cursorLine or mgr.contextColumn != column or
-      mgr.lspOnlyForMember != isMember:
+      mgr.lspOnlyAfterDot != isAfterDot:
     mgr.dropLspRequest()
     mgr.lspItems = @[]
     mgr.lspResponseReceived = false
     mgr.lastLspPrefix = ""
     mgr.lastLspRequestTime = default(MonoTime)
-  mgr.hasCompletionContext = lspOnlyForMembers
+  mgr.hasCompletionContext = lspOnlyAfterDot
   mgr.contextBufferId = buffer.id
   mgr.contextLine = cursorLine
   mgr.contextColumn = column
-  mgr.lspOnlyForMember = isMember
+  mgr.lspOnlyAfterDot = isAfterDot
 
 proc triggerCompletion*(
     mgr: CompletionManager,
@@ -1069,7 +1069,7 @@ proc cancelCompletion*(mgr: CompletionManager) =
   mgr.menu.hasSelection = false
   mgr.dropLspRequest()
   mgr.lspItems = @[]
-  mgr.lspOnlyForMember = false
+  mgr.lspOnlyAfterDot = false
   mgr.lspResponseReceived = false
   mgr.hasCompletionContext = false
   mgr.schemaEntries = @[]

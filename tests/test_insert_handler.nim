@@ -3726,7 +3726,7 @@ suite "InsertModeHandler - autocomplete / lsp completion gates":
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 3)
     state.config.autocomplete.enable = true
-    state.config.autocomplete.lspOnlyForMembers = true
+    state.config.autocomplete.lspOnlyAfterDot = true
     state.config.lsp.completion.enable = false
 
     handler.triggerLspCompletionRequest(buf, state)
@@ -3941,18 +3941,18 @@ proc answerHandler(buf: TextBuffer): InsertModeHandler =
     newMotionController(buf, createTestState(), createTestViewport())
   newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
 
-suite "InsertModeHandler - LSP-only member completion":
+suite "InsertModeHandler - LSP-only after-dot completion":
   privateAccess(LspService)
 
-  test "member response replaces generic words while an error preserves them":
+  test "after-dot response replaces generic words while an error preserves them":
     for failure in [false, true]:
       let
-        path = getTempDir() / "moe_member_completion.nim"
+        path = getTempDir() / "moe_after_dot_completion.nim"
         buf = newTextBuffer("hello\nvalue.he", some(path))
         handler = answerHandler(buf)
         state = createTestState()
       state.cursor = BufferPosition(line: 1, column: 8)
-      state.config.autocomplete.lspOnlyForMembers = true
+      state.config.autocomplete.lspOnlyAfterDot = true
       handler.lsp.service.capabilities["nim"] =
         ServerCapabilities(completionProvider: some(CompletionOptions()))
       handler.lsp.documents[normalizedPath(absolutePath(path))] =

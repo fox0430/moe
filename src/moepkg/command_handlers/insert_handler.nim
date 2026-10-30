@@ -771,7 +771,7 @@ proc triggerLspCompletionRequest*(
     buffer,
     state.cursor.line,
     state.cursor.column,
-    state.config.autocomplete.lspOnlyForMembers and
+    state.config.autocomplete.lspOnlyAfterDot and
       handler.lspCompletionAllowed(buffer, state) and
       handler.lsp.hasCompletionSupport(buffer),
   )

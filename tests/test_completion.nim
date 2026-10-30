@@ -492,7 +492,7 @@ suite "Completion - completionItemKindToString":
     check completionItemKindToString(cikKeyword) == "Keyw"
 
 suite "Completion - filterAndSortEntries":
-  test "member-only completion keeps generic words until a successful LSP response":
+  test "after-dot completion keeps generic words until a successful LSP response":
     let
       mgr = newCompletionManager()
       buffer = newTextBuffer()
@@ -507,7 +507,7 @@ suite "Completion - filterAndSortEntries":
     check entries[0].word == "helper"
     check entries[0].source == csLsp
 
-  test "an empty successful member response hides generic words, while errors fall back":
+  test "an empty successful after-dot response hides generic words, while errors fall back":
     let
       mgr = newCompletionManager()
       buffer = newTextBuffer()
@@ -533,7 +533,7 @@ suite "Completion - filterAndSortEntries":
     mgr.setLspItems(@[CompletionItem(label: "helper")])
     check mgr.menu.entries.len == 2
 
-  test "disabled option preserves merging for member completion":
+  test "disabled option preserves merging for after-dot completion":
     let
       mgr = newCompletionManager()
       buffer = newTextBuffer()
@@ -559,7 +559,7 @@ suite "Completion - filterAndSortEntries":
     require entries.len == 1
     check entries[0].word == "hello"
 
-  test "member context uses character offsets for Unicode receivers":
+  test "after-dot context uses character offsets for Unicode receivers":
     let
       mgr = newCompletionManager()
       buffer = newTextBuffer()

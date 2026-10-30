@@ -487,9 +487,9 @@ type
       bool
     windowBorder* {.cfg, cfgDocDescription: "Show borderline on completion window".}:
       bool
-    lspOnlyForMembers* {.
+    lspOnlyAfterDot* {.
       cfg,
-      cfgDocDescription: "Show only LSP results for member completion after a response"
+      cfgDocDescription: "Show only LSP results after a dot once the server responds"
     .}: bool
 
   # Auto save settings
