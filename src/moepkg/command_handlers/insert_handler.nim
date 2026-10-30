@@ -809,7 +809,7 @@ proc triggerLspCompletionRequest*(
 
   # Without LSP (as while recording) the candidates it gave earlier go too.
   if not handler.lspCompletionAllowed(buffer, state):
-    handler.completionManager.lspItems = @[]
+    handler.completionManager.dropLspState()
 
   # First, show buffer completions immediately for instant feedback
   handler.completionManager.triggerCompletion(
@@ -834,8 +834,6 @@ proc triggerLspCompletionRequest*(
       handler.lsp.startCompletionRequest(buffer, state.cursor.line, state.cursor.column)
 
     if reqResult.isOk:
-      handler.completionManager.lastLspRequestTime = getMonoTime()
-      handler.completionManager.lastLspPrefix = prefix
       handler.completionManager.setLspRequestPending(reqResult.get, buffer.id)
     else:
       logLspDegraded("Completion request failed", reqResult.error)
@@ -1147,18 +1145,10 @@ proc handleInsertModeKey*(
           )
         else:
           handler.completionManager.cancelCompletion()
-      else:
-        # Update completion filter with new prefix. Backspace can move the
-        # cursor across a config context boundary, so re-analyze the line.
-        let line = buffer.getLine(state.cursor.line)
-        let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
-        if newPrefix.len >= MinPrefixLength:
-          handler.completionManager.refreshSchemaEntries(
-            buffer, state.cursor.line, state.cursor.column
-          )
-          handler.completionManager.updateFilter(newPrefix)
-        else:
-          handler.completionManager.cancelCompletion()
+      elif handler.completionManager.completeAfterBackspace(
+        buffer, state.cursor.line, state.cursor.column
+      ):
+        handler.triggerLspCompletionRequest(buffer, state)
       return backspaceResult
 
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
