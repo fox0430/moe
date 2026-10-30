@@ -3726,6 +3726,7 @@ suite "InsertModeHandler - autocomplete / lsp completion gates":
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 3)
     state.config.autocomplete.enable = true
+    state.config.autocomplete.lspOnlyForMembers = true
     state.config.lsp.completion.enable = false
 
     handler.triggerLspCompletionRequest(buf, state)
@@ -3939,6 +3940,35 @@ proc answerHandler(buf: TextBuffer): InsertModeHandler =
   let motionController =
     newMotionController(buf, createTestState(), createTestViewport())
   newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
+
+suite "InsertModeHandler - LSP-only member completion":
+  privateAccess(LspService)
+
+  test "member response replaces generic words while an error preserves them":
+    for failure in [false, true]:
+      let
+        path = getTempDir() / "moe_member_completion.nim"
+        buf = newTextBuffer("hello\nvalue.he", some(path))
+        handler = answerHandler(buf)
+        state = createTestState()
+      state.cursor = BufferPosition(line: 1, column: 8)
+      state.config.autocomplete.lspOnlyForMembers = true
+      handler.lsp.service.capabilities["nim"] =
+        ServerCapabilities(completionProvider: some(CompletionOptions()))
+      handler.lsp.documents[normalizedPath(absolutePath(path))] =
+        initLspDocumentState(1, buf.getTextString(), delivered = true)
+      handler.triggerLspCompletionRequest(buf, state)
+      check handler.completionManager.menu.entries.len > 0
+      handler.completionManager.setLspRequestPending(42, buf.id)
+      handler.lsp.service.pendingResponses[42] =
+        if failure:
+          (result: none(string), error: some("failed"))
+        else:
+          (result: some("""[{"label":"helper"}]"""), error: none(string))
+      handler.pollLspCompletion(state)
+      require handler.completionManager.menu.entries.len == 1
+      check handler.completionManager.menu.entries[0].word ==
+        (if failure: "hello" else: "helper")
 
 suite "InsertModeHandler - an LSP answer while the user picks":
   privateAccess(LspService)

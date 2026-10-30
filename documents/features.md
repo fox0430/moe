@@ -61,6 +61,19 @@ Both views keep the normal text color and mark added/deleted lines and changed w
 moe can now use simple auto-complete.  
 It is possible to auto-complete a words in the currently open buffer.
 
+To show only language server suggestions after a member-completion response,
+enable `lspOnlyForMembers` in the `[Autocomplete]` table:
+
+```toml
+[Autocomplete]
+lspOnlyForMembers = true
+```
+
+For completion after a dot, buffer words remain available while the server is
+responding or if the request fails. A successful response replaces them, even
+when it contains no suggestions. Other completions continue to merge buffer
+words and language-server results. The option defaults to `false`.
+
 ### moerc.toml completion
 
 When the open buffer is `moerc.toml`, the popup also offers the settings moe

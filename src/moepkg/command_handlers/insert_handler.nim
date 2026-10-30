@@ -767,6 +767,14 @@ proc triggerLspCompletionRequest*(
   # Extract prefix for debounce/skip check
   let line = buffer.getLine(state.cursor.line)
   let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
+  handler.completionManager.updateCompletionContext(
+    buffer,
+    state.cursor.line,
+    state.cursor.column,
+    state.config.autocomplete.lspOnlyForMembers and
+      handler.lspCompletionAllowed(buffer, state) and
+      handler.lsp.hasCompletionSupport(buffer),
+  )
 
   if handler.lspCompletionAllowed(buffer, state):
     # If LSP completion is available, check whether we can skip the request and
@@ -916,7 +924,7 @@ proc pollLspCompletion*(handler: InsertModeHandler, state: EditorState) =
     let (items, isIncomplete) = parseCompletionResponse(rawOpt.get)
     handler.completionManager.setLspItems(items, isIncomplete)
   else:
-    handler.completionManager.setLspItems(@[])
+    handler.completionManager.setLspItems(@[], successful = false)
 
 proc triggerResolveRequest*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState

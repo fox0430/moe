@@ -487,6 +487,10 @@ type
       bool
     windowBorder* {.cfg, cfgDocDescription: "Show borderline on completion window".}:
       bool
+    lspOnlyForMembers* {.
+      cfg,
+      cfgDocDescription: "Show only LSP results for member completion after a response"
+    .}: bool
 
   # Auto save settings
   AutoSaveConfig* {.cfgSection: "AutoSave".} = object

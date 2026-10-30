@@ -296,6 +296,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 |:---|:---|:---|:---|
 | enable | bool | true | Enable/Disable General-purpose autocompletion |
 | windowBorder | bool | true | Show borderline on completion window |
+| lspOnlyForMembers | bool | false | Show only LSP results for member completion after a response |
 <!-- AUTO-GEN:end Autocomplete -->
 
 

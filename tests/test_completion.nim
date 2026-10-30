@@ -492,6 +492,85 @@ suite "Completion - completionItemKindToString":
     check completionItemKindToString(cikKeyword) == "Keyw"
 
 suite "Completion - filterAndSortEntries":
+  test "member-only completion keeps generic words until a successful LSP response":
+    let
+      mgr = newCompletionManager()
+      buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "value.he")
+    mgr.updateCompletionContext(buffer, 0, 8, true)
+    mgr.allWords = @["hello", "help"]
+    mgr.menu.prefix = "he"
+    check mgr.filterAndSortEntries("he").len == 2
+    mgr.setLspItems(@[CompletionItem(label: "helper", kind: some(cikFunction))])
+    let entries = mgr.filterAndSortEntries("he")
+    require entries.len == 1
+    check entries[0].word == "helper"
+    check entries[0].source == csLsp
+
+  test "an empty successful member response hides generic words, while errors fall back":
+    let
+      mgr = newCompletionManager()
+      buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "value.he")
+    mgr.updateCompletionContext(buffer, 0, 8, true)
+    mgr.allWords = @["hello"]
+    mgr.menu.prefix = "he"
+    mgr.setLspItems(@[])
+    check mgr.menu.entries.len == 0
+    check mgr.state == csIdle
+    mgr.setLspItems(@[], successful = false)
+    check mgr.menu.entries.len == 1
+    check mgr.menu.entries[0].word == "hello"
+
+  test "ordinary completions still merge generic and LSP candidates":
+    let
+      mgr = newCompletionManager()
+      buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "he")
+    mgr.updateCompletionContext(buffer, 0, 2, true)
+    mgr.allWords = @["hello"]
+    mgr.menu.prefix = "he"
+    mgr.setLspItems(@[CompletionItem(label: "helper")])
+    check mgr.menu.entries.len == 2
+
+  test "disabled option preserves merging for member completion":
+    let
+      mgr = newCompletionManager()
+      buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "value.he")
+    mgr.updateCompletionContext(buffer, 0, 8, false)
+    mgr.allWords = @["hello"]
+    mgr.menu.prefix = "he"
+    mgr.setLspItems(@[CompletionItem(label: "helper")])
+    check mgr.menu.entries.len == 2
+
+  test "moving to another completion context discards old LSP results":
+    let
+      mgr = newCompletionManager()
+      buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "value.he\nhello")
+    mgr.updateCompletionContext(buffer, 0, 8, true)
+    mgr.allWords = @["hello"]
+    mgr.menu.prefix = "he"
+    mgr.setLspItems(@[CompletionItem(label: "helper")])
+    mgr.updateCompletionContext(buffer, 1, 2, true)
+    check mgr.lspItems.len == 0
+    let entries = mgr.filterAndSortEntries("he")
+    require entries.len == 1
+    check entries[0].word == "hello"
+
+  test "member context uses character offsets for Unicode receivers":
+    let
+      mgr = newCompletionManager()
+      buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "猫.he")
+    mgr.updateCompletionContext(buffer, 0, 4, true)
+    mgr.allWords = @["hello"]
+    mgr.menu.prefix = "he"
+    mgr.setLspItems(@[CompletionItem(label: "helper")])
+    require mgr.menu.entries.len == 1
+    check mgr.menu.entries[0].word == "helper"
+
   test "Filter buffer words by prefix":
     let mgr = newCompletionManager()
     mgr.allWords = @["hello", "help", "world", "helicopter"]

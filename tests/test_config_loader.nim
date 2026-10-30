@@ -1311,11 +1311,13 @@ suite "Config Validation - Autocomplete section":
 [Autocomplete]
 enable = true
 windowBorder = false
+lspOnlyForMembers = true
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
     check config.autocomplete.enable == true
     check config.autocomplete.windowBorder == false
+    check config.autocomplete.lspOnlyForMembers == true
 
   test "Invalid enable type is detected":
     let tomlStr = """
@@ -1325,6 +1327,11 @@ enable = 1
     let (_, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "Autocomplete.enable" in vr.errors[0].name
+
+  test "Invalid member completion option type is detected":
+    let (_, vr) = loadFromTomlString("[Autocomplete]\nlspOnlyForMembers = 1\n")
+    check vr.hasErrors
+    check "Autocomplete.lspOnlyForMembers" in vr.errors[0].name
 
 suite "Config Validation - Persist section":
   test "Valid Persist config passes validation":
