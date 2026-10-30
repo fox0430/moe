@@ -488,8 +488,7 @@ type
     windowBorder* {.cfg, cfgDocDescription: "Show borderline on completion window".}:
       bool
     lspOnlyAfterDot* {.
-      cfg,
-      cfgDocDescription: "Show only LSP results after a dot once the server responds"
+      cfg, cfgDocDescription: "Use LSP results instead of buffer words after a dot"
     .}: bool
 
   # Auto save settings

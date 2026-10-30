@@ -852,11 +852,7 @@ proc filterAndSortEntries*(
 
   # The schema knows exactly which keys and values are accepted, so its
   # candidates lead the list and buffer words repeating one are dropped.
-  let schemaBlock =
-    if lspOnly:
-      newSeq[CompletionEntry]()
-    else:
-      mgr.schemaEntryBlock(prefix)
+  let schemaBlock = mgr.schemaEntryBlock(prefix)
   if schemaBlock.len > 0:
     # Dedup on the matched text as well as the inserted one: a value
     # candidate carries TOML quotes in `word` while the buffer word does not,

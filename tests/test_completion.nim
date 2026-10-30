@@ -2285,6 +2285,24 @@ enable = true
     check mgr.menu.entries[0].word == "Completion"
     check mgr.menu.entries[0].label == "Lsp.Completion"
 
+  test "A dotted header retains schema candidates after an LSP response":
+    let buf = newTextBuffer("[Lsp.Compl", some(getTempDir() / "moerc.toml"))
+    let mgr = newCompletionManager()
+    mgr.updateCompletionContext(buf, 0, 10, true)
+    mgr.triggerCompletion(buf, 0, 10)
+    for items in [
+      @[CompletionItem(label: "Completion"), CompletionItem(label: "CompleteOther")],
+      newSeq[CompletionItem](),
+    ]:
+      mgr.setLspItems(items)
+      require mgr.menu.entries.len > 0
+      check mgr.menu.entries[0].word == "Completion"
+      check mgr.menu.entries[0].source == csConfigSchema
+      check mgr.menu.entries.filterIt(it.word == "Completion").len == 1
+      for entry in mgr.menu.entries:
+        check entry.source != csBuffer
+        check entry.source != csKeyword
+
   test "An array element shaped like a header is not one":
     # `[[1]]` inside a multi-line array is an element, not a section.
     let buf = newTextBuffer(
