@@ -487,6 +487,9 @@ type
       bool
     windowBorder* {.cfg, cfgDocDescription: "Show borderline on completion window".}:
       bool
+    lspOnlyAfterDot* {.
+      cfg, cfgDocDescription: "Use LSP results instead of buffer words after a dot"
+    .}: bool
 
   # Auto save settings
   AutoSaveConfig* {.cfgSection: "AutoSave".} = object

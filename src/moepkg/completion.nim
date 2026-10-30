@@ -98,6 +98,11 @@ type
     cancelLspRequest*: proc(requestId: int)
       ## Tells the server a request is no longer wanted. Nil without LSP.
     lspItems*: seq[CompletionItem] ## Raw LSP completion items
+    lspOnlyAfterDot: bool
+    lspResponseReceived: bool
+    contextBufferId: BufferId
+    contextLine, contextColumn: int
+    hasCompletionContext: bool
     otherBuffers*: seq[TextBuffer]
       ## Other FileEditMode buffers for multi-buffer completion
     schemaEntries*: seq[CompletionEntry]
@@ -801,7 +806,8 @@ proc filterAndSortEntries*(
       )
     return
 
-  if mgr.lspItems.len > 0:
+  let lspOnly = mgr.lspOnlyAfterDot and mgr.lspResponseReceived
+  if mgr.lspItems.len > 0 or lspOnly:
     # Collect the LSP items, dropping any whose filterText no longer fuzzy-matches
     # the typed prefix (the server already ranked/filtered them for us).
     for i, item in mgr.lspItems:
@@ -827,9 +833,10 @@ proc filterAndSortEntries*(
     for e in result:
       lspShown.incl(e.word)
       lspShown.incl(e.displayText)
-    for e in mgr.bufferWordEntries(prefix):
-      if e.word notin lspShown:
-        result.add(e)
+    if not lspOnly:
+      for e in mgr.bufferWordEntries(prefix):
+        if e.word notin lspShown:
+          result.add(e)
 
     # Promote prefix matches above loose fuzzy matches across BOTH sources, so an
     # exact-prefix keyword (e.g. "if" for "i") is not buried under a fuzzy LSP
@@ -984,6 +991,37 @@ proc refreshBufferWords(
     mgr.allWords.add(keyword)
     addedKeywords.incl(keyword)
 
+proc updateCompletionContext*(
+    mgr: CompletionManager,
+    buffer: TextBuffer,
+    cursorLine, cursorCol: int,
+    lspOnlyAfterDot: bool,
+) =
+  ## Track the completion position so responses cannot cross contexts.
+  if not lspOnlyAfterDot and not mgr.hasCompletionContext:
+    return
+  let
+    line = buffer.getLine(cursorLine)
+    prefix = extractPrefixBeforeCursor(line, cursorCol)
+    column = cursorCol - prefix.charLen
+    runes = line.toCharRunes()
+    isAfterDot =
+      lspOnlyAfterDot and column > 0 and column <= runes.len and
+      runes[column - 1] == '.'.Rune
+  if not mgr.hasCompletionContext or mgr.contextBufferId != buffer.id or
+      mgr.contextLine != cursorLine or mgr.contextColumn != column or
+      mgr.lspOnlyAfterDot != isAfterDot:
+    mgr.dropLspRequest()
+    mgr.lspItems = @[]
+    mgr.lspResponseReceived = false
+    mgr.lastLspPrefix = ""
+    mgr.lastLspRequestTime = default(MonoTime)
+  mgr.hasCompletionContext = lspOnlyAfterDot
+  mgr.contextBufferId = buffer.id
+  mgr.contextLine = cursorLine
+  mgr.contextColumn = column
+  mgr.lspOnlyAfterDot = isAfterDot
+
 proc triggerCompletion*(
     mgr: CompletionManager,
     buffer: TextBuffer,
@@ -1027,6 +1065,9 @@ proc cancelCompletion*(mgr: CompletionManager) =
   mgr.menu.hasSelection = false
   mgr.dropLspRequest()
   mgr.lspItems = @[]
+  mgr.lspOnlyAfterDot = false
+  mgr.lspResponseReceived = false
+  mgr.hasCompletionContext = false
   mgr.schemaEntries = @[]
   mgr.isPathCompletion = false
   mgr.pathBasePath = ""
@@ -1358,10 +1399,14 @@ proc shouldSkipLspRequest*(mgr: CompletionManager, newPrefix: string): bool =
   return false
 
 proc setLspItems*(
-    mgr: CompletionManager, items: seq[CompletionItem], isIncomplete: bool = false
+    mgr: CompletionManager,
+    items: seq[CompletionItem],
+    isIncomplete: bool = false,
+    successful: bool = true,
 ) =
   ## Set LSP completion items and update the menu
   mgr.lspItems = items
+  mgr.lspResponseReceived = successful
   mgr.isIncomplete = isIncomplete
   mgr.lspRequestId = none(int)
 

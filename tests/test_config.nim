@@ -226,6 +226,7 @@ suite "Config - newEditorConfig defaults":
 
     check config.autocomplete.enable == true
     check config.autocomplete.windowBorder == true
+    check config.autocomplete.lspOnlyAfterDot == false
 
   test "AutoSave config defaults":
     let config = newEditorConfig()

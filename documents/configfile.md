@@ -296,6 +296,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 |:---|:---|:---|:---|
 | enable | bool | true | Enable/Disable General-purpose autocompletion |
 | windowBorder | bool | true | Show borderline on completion window |
+| lspOnlyAfterDot | bool | false | Use LSP results instead of buffer words after a dot |
 <!-- AUTO-GEN:end Autocomplete -->
 
 
