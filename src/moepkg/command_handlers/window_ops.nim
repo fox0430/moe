@@ -25,7 +25,7 @@ when not defined(moe.embedded):
 
 import pkg/results
 
-import ../[editor, types, viewer_mode, window_manager]
+import ../[editor, types, viewer_mode, window_manager, fold_open]
 
 import editor_ops, handler_result
 
@@ -49,6 +49,7 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
             0
           else:
             min(targetCol, max(0, lineCharLen - 1))
+        e.state.openCursorFolds()
       e.updateViewportForCursor(e.cursor)
     else:
       e.state.statusMessage = activated.error

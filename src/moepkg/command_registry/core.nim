@@ -24,7 +24,10 @@ import std/[tables, options, strutils, unicode]
 import pkg/results
 
 import
-  ../[types, motion, key_bindings, config, logger, notification_popup, unicode_utils]
+  ../[
+    types, motion, key_bindings, config, logger, notification_popup, unicode_utils,
+    fold_open,
+  ]
 import ../buffer/[core, undo]
 
 type
@@ -215,7 +218,10 @@ proc `cursor=`*(ctx: CommandContext, pos: BufferPosition) {.inline.} =
 proc moveByMotion*(ctx: CommandContext, cmd: MotionCommand) =
   ## Move the cursor by `cmd` as a Normal or Visual mode command, which beeps
   ## when the motion fails, as Vim's clearopbeep.
-  if ctx.motionController.moveCursorByMotion(ctx.state, cmd).failed:
+  let landing = ctx.motionController.moveCursorByMotion(
+    ctx.state, cmd, openFolds = ctx.state.opensFolds
+  )
+  if landing.failed:
     ctx.state.beep()
 
 proc clipboardConfig*(ctx: CommandContext): ClipboardConfig =

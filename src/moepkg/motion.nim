@@ -1148,13 +1148,11 @@ proc clampPosition*(
   elif result.y < 0:
     result.y = 0
 
-  # Vim behavior: a collapsed fold is a single unit. If the cursor is on any
-  # line of a collapsed fold (its start line or a hidden interior line), pin it
-  # to the fold's start line at column 0 so it can't roam the hidden content.
+  # As Vim's foldAdjustCursor: in a closed fold, on to its first line, the
+  # column kept.
   let collapsedFold = buf.foldState.getCollapsedFoldAt(result.y)
   if collapsedFold.isSome:
     result.y = collapsedFold.get.startLine
-    result.x = 0
 
   # Clamp column - ensure line index is valid before accessing
   if result.y >= 0 and result.y < buf.len:
@@ -1277,6 +1275,25 @@ proc unwrapped(controller: MotionController, cmd: MotionCommand): MotionCommand 
       not controller.cursorManager.state.effectiveLineWrap():
     result.motion = if cmd.motion == Motion.ScreenLineDown: Motion.Down else: Motion.Up
 
+proc opensFoldOn(motion: Motion, start: BufferPosition, landing: MotionLanding): bool =
+  ## Whether `motion` from `start` opens the closed folds it lands in, as with
+  ## Vim's default 'foldopen': `hor` and `block` when they move or succeed,
+  ## and `percent` onto another line. Vim's ge, gE, g_ and | open none.
+  case motion
+  of Motion.Home, Motion.FirstNonBlank:
+    true
+  of Motion.Left, Motion.Right, Motion.Backspace:
+    landing.pos != start
+  of Motion.WordForward, Motion.WordBackward, Motion.WordEnd, Motion.WideWordForward,
+      Motion.WideWordBackward, Motion.WideWordEnd, Motion.FindChar,
+      Motion.FindCharBackward, Motion.TillChar, Motion.TillCharBackward,
+      Motion.ParagraphForward, Motion.ParagraphBackward, Motion.End:
+    not landing.failed
+  of Motion.MatchBracket:
+    not landing.failed and landing.pos.line != start.line
+  else:
+    false
+
 proc screenAim(
     controller: MotionController, rl: RowLayout, start: BufferPosition
 ): int =
@@ -1308,13 +1325,15 @@ proc landMotion*(
     start: BufferPosition,
     operator = none(OperatorType),
     aimedColumn = -1,
+    openFolds = false,
 ): MotionLanding =
   ## Where `cmd` takes the cursor from `start`, how `operator`, when one
   ## waits, takes the text up to there, and whether the motion fails. A
   ## vertical motion aims for the screen cell `aimedColumn`, or for the cell
   ## `start` begins at when it is -1; gj and gk aim as `screenAim`. Leaves the
   ## viewport alone. Only a cursor move is kept on the line and out of closed
-  ## folds; an operator widens over folds itself.
+  ## folds, or with `openFolds` opens the closed folds it lands in when
+  ## `opensFoldOn` says so; an operator widens over folds itself.
   let
     cmd = controller.unwrapped(cmd)
     rl = controller.rowLayout()
@@ -1354,6 +1373,9 @@ proc landMotion*(
     result.pos.column =
       buffer.getLine(result.pos.line).columnAtCell(aimed, state.tabStop, state.mode)
   if operator.isNone:
+    if openFolds and opensFoldOn(cmd.motion, start, result) and
+        buffer.foldState.openFoldsInRange(result.pos.line, result.pos.line):
+      controller.cursorManager.state.activeWindow.noteFoldOpened()
     let clamped = controller.cursorManager.clampPosition(
       CursorPosition(x: result.pos.column, y: result.pos.line),
       controller.executor.buffer,
@@ -1366,11 +1388,14 @@ proc executeMotion*(
     currentCursorPos: BufferPosition,
     updateViewport: bool = true,
     aimedColumn = -1,
+    openFolds = false,
 ): MotionLanding =
   ## Execute motion and return where the cursor goes. A failed motion leaves
   ## the cursor as far as it went. A vertical motion aims for the screen cell
   ## `aimedColumn`, or for the cell `currentCursorPos` begins at when it is -1.
-  result = controller.landMotion(cmd, currentCursorPos, aimedColumn = aimedColumn)
+  result = controller.landMotion(
+    cmd, currentCursorPos, aimedColumn = aimedColumn, openFolds = openFolds
+  )
   if updateViewport:
     controller.viewportManager.updateViewport(
       controller.cursorManager.state, controller.executor.buffer, result.pos
@@ -1398,8 +1423,10 @@ proc moveCursorByMotion*(
     state: EditorState,
     cmd: MotionCommand,
     updateViewport: bool = true,
+    openFolds = false,
 ): MotionLanding =
   ## Move the cursor of `state` by `cmd`; the landing says whether it failed.
+  ## With `openFolds` it opens the closed folds it lands in as `landMotion`.
   ## A vertical motion keeps the column it aimed for, as Vim keeps curswant.
   ## `$` makes vertical moves stick to line ends, even when its count goes past
   ## the last line, as Vim's nv_dollar; `g_` does too only then. `|` aims for
@@ -1412,7 +1439,8 @@ proc moveCursorByMotion*(
     cmd = controller.unwrapped(cmd)
     start = state.cursor
     aimed = state.aim
-    landing = controller.executeMotion(cmd, start, updateViewport, aimed.cell)
+    landing =
+      controller.executeMotion(cmd, start, updateViewport, aimed.cell, openFolds)
   state.cursor = landing.pos
   if cmd.motion in VerticalMotions:
     state.wanted = aimed

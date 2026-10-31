@@ -327,6 +327,7 @@ type
     startPos*: BufferPosition # Cursor position when search mode started (for incsearch)
     startView*: Option[ViewState]
       # What the window showed then, put back before each incsearch match
+    match*: Option[BufferPosition] # Where incsearch found the pattern
     # Search behavior settings
     ignorecase*: bool # Ignore case in search patterns
     smartcase*: bool # Override ignorecase if pattern contains uppercase
@@ -1107,6 +1108,9 @@ type
     pendingInput*: PendingInputState # See pending_input.nim for isActive/cancelAll.
     beepCount*: int
       ## Times a command has beeped (`beep`); a replay compares it around a key
+    keyTyped*: bool
+      ## The key running was typed, not put in by a mapping or a register, as
+      ## Vim's KeyTyped
     # QuickRun request flag
     requestQuickRun*: bool # Set by keybinding to request QuickRun execution
     # Command mode completion
@@ -1511,6 +1515,13 @@ proc aimInFold*(win: EditorWindow): Option[int] =
   ## after that leaves it aiming for the cell of its text.
   if win.aimedHere: win.aimedShown.get.foldCell else: win.foldShownAt
 
+proc noteFoldOpened*(win: EditorWindow) =
+  ## A command opened the closed fold the cursor of `win` showed in, so
+  ## vertical moves aim for the cell of its text, as Vim's redraw works
+  ## w_virtcol out again before the next command.
+  if win.aimedHere:
+    win.aimedShown.get.foldCell = none(int)
+
 proc noteCommandStart*(win: EditorWindow) =
   ## Note where `win` stands as a command, or the rest of one, begins.
   win.wantedColumnSince = win.spot
@@ -1758,6 +1769,7 @@ proc noteSearchStart*(state: EditorState) =
   ## Remember where the cursor is and what the window shows as a search
   ## begins, which incsearch goes back to.
   state.input.search.startPos = state.cursor
+  state.input.search.match = none(BufferPosition)
   state.input.search.startView =
     if state.activeWindow.isNil or state.activeWindow.viewport.isNil:
       none(ViewState)

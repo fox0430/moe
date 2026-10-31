@@ -392,6 +392,9 @@ proc finishOperator*(
   # starts, before any widening to lines, and the operator moves it on from
   # there: a yank leaves it (`yb`, `yj`), and so does a refusal (`gUb`).
   ctx.cursor = ctx.settle(min(target.get.start, target.get.finish))
+  if (target.get.start < target.get.finish or target.get.motionType == mtLinewise) and
+      ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line).isSome:
+    ctx.cursor = BufferPosition(line: ctx.cursor.line, column: 0)
   let opResult = executeOperatorOnRange(
     ctx, op.operatorType, range, op.operatorCount, some(op.topLine)
   )

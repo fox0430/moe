@@ -926,8 +926,13 @@ proc runNestedKeyCombo*(
   e.completeScrollAnimation()
   e.state.armInsertResume()
   let beeps = e.state.beepCount
-  e.asCommand:
-    result = manager.dispatchNestedKeyCombo(e, key)
+  let wasTyped = e.state.keyTyped
+  e.state.keyTyped = key.typed
+  try:
+    e.asCommand:
+      result = manager.dispatchNestedKeyCombo(e, key)
+  finally:
+    e.state.keyTyped = wasTyped
   if result == roContinue and e.state.beepCount > beeps:
     result = roAbort
   # Once the command has dropped the column vertical moves want, if it does,

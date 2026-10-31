@@ -8538,8 +8538,8 @@ suite "executeCommand - visual selections covering a closed fold":
     check ctx.state.visualSelection.start == BufferPosition(line: 0, column: 1)
     check ctx.state.cursor == BufferPosition(line: 3, column: 3)
 
-suite "executeCommand - cursor pinned on collapsed folds":
-  test "horizontal motion is pinned on a collapsed fold start line":
+suite "executeCommand - cursor on collapsed folds":
+  test "a horizontal motion not typed moves in a collapsed fold, as in Vim":
     let buffer = newTextBuffer("function main() {\nbody\nend\ntail")
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
@@ -8548,11 +8548,10 @@ suite "executeCommand - cursor pinned on collapsed folds":
 
     let cmd = Command(kind: ctMotion, motion: Motion.Right, count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    # The collapsed fold is a single unit; the cursor cannot roam its line.
-    check ctx.cursor.line == 0
-    check ctx.cursor.column == 0
+    check ctx.cursor == BufferPosition(line: 0, column: 1)
+    check buffer.foldState.getCollapsedFoldAt(0).isSome
 
-  test "moving onto a collapsed fold pins the cursor to its start at column 0":
+  test "moving onto a collapsed fold keeps the column, as in Vim":
     let buffer = newTextBuffer("aaaa\nbbbb\ncccc\ndddd\neeee")
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let ctx = createTestContext(buffer)
@@ -8561,8 +8560,7 @@ suite "executeCommand - cursor pinned on collapsed folds":
 
     let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    check ctx.cursor.line == 1
-    check ctx.cursor.column == 0
+    check ctx.cursor == BufferPosition(line: 1, column: 2)
 
 suite "executeCommand - a visual selection covers closed folds whole":
   test "a selection reaching into a closed fold covers the whole fold":

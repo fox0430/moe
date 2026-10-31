@@ -106,6 +106,7 @@ proc invalidatePositionStateForBuffer*(e: Editor, buf: TextBuffer) =
       some(EditorMode.Normal),
     )
     e.state.input.search.startPos = BufferPosition(line: start.y, column: start.x)
+    e.state.input.search.match = none(BufferPosition)
     if e.state.input.search.startView.isSome and
         e.state.input.search.startView.get.topLine >= buf.len:
       e.state.input.search.startView =
