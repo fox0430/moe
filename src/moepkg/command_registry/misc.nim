@@ -23,7 +23,10 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, buffer, motion, modes, search_utils, git_conflict, unicode_utils]
+import
+  ../[
+    types, buffer, motion, modes, search_utils, git_conflict, unicode_utils, fold_open
+  ]
 import ../command_handlers/[insert_commands, normal_commands]
 
 import core, insert_entry
@@ -321,6 +324,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     if match.isErr:
       return err(match.error)
     ctx.cursor = match.get
+    ctx.state.openCursorFolds()
     ctx.motionController.viewportManager.updateViewport(
       ctx.state, ctx.buffer, match.get
     )
@@ -530,90 +534,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     let word = line.charSubStr(startCol, endCol - startCol)
 
     return some(WordInfo(word: word, startCol: startCol, endCol: endCol))
-
-  proc findMatchingBracketAtCursor(
-      buffer: TextBuffer, cursor: BufferPosition
-  ): Result[BufferPosition, string] =
-    ## Helper proc to find matching bracket at cursor
-    if cursor.line < 0 or cursor.line >= buffer.len:
-      return err("Invalid cursor position")
-
-    let line = buffer.getLine(cursor.line)
-    if line.len == 0 or cursor.column >= line.charLen:
-      return err("No bracket at cursor")
-
-    let runes = line.toCharRunes()
-    if cursor.column >= runes.len:
-      return err("No bracket at cursor")
-
-    let charAtCursor = ($runes[cursor.column])[0]
-
-    # Define bracket pairs
-    const openBrackets = ['(', '[', '{', '<']
-    const closeBrackets = [')', ']', '}', '>']
-
-    var openChar, closeChar: char
-    var searchForward = false
-
-    # Check if cursor is on a bracket
-    if charAtCursor in openBrackets:
-      openChar = charAtCursor
-      closeChar = closeBrackets[openBrackets.find(charAtCursor)]
-      searchForward = true
-    elif charAtCursor in closeBrackets:
-      closeChar = charAtCursor
-      openChar = openBrackets[closeBrackets.find(charAtCursor)]
-      searchForward = false
-    else:
-      return err("No bracket at cursor")
-
-    if searchForward:
-      # Search forward for closing bracket
-      var depth = 1
-      var col = cursor.column + 1
-      while col < runes.len:
-        let ch = ($runes[col])[0]
-        if ch == openChar:
-          depth.inc
-        elif ch == closeChar:
-          depth.dec
-          if depth == 0:
-            return ok(BufferPosition(line: cursor.line, column: col))
-        col.inc
-    else:
-      # Search backward for opening bracket
-      var depth = 1
-      var col = cursor.column - 1
-      while col >= 0:
-        let ch = ($runes[col])[0]
-        if ch == closeChar:
-          depth.inc
-        elif ch == openChar:
-          depth.dec
-          if depth == 0:
-            return ok(BufferPosition(line: cursor.line, column: col))
-        col.dec
-
-    return err("No matching bracket found")
-
-  # % - Jump to matching bracket
-  registry.register(
-    custom("motion.match.bracket"),
-    "Match Bracket",
-    "Jump to matching bracket (%)",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let matchResult = findMatchingBracketAtCursor(ctx.buffer, ctx.cursor)
-      if matchResult.isErr:
-        return err(matchResult.error)
-
-      # Record jump before moving to matching bracket
-      recordJump(ctx.state)
-
-      ctx.cursor = matchResult.value
-      return Result[(), string].ok (),
-    0,
-    0,
-  )
 
   proc findWordUnderCursor(
       ctx: CommandContext, forward: bool, count: int

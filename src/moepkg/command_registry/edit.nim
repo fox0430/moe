@@ -27,7 +27,7 @@ import pkg/results
 import
   ../[
     types, motion, modes, registers, logger, unicode_utils, visual_selection,
-    visual_block,
+    visual_block, fold_open,
   ]
 import ../buffer/[core, edit, fold, undo]
 import ../command_handlers/[number_increment, put_text, visual_commands]
@@ -909,6 +909,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
       if lastCursorPos.isSome:
         ctx.cursor = lastCursorPos.get
+        ctx.cursor.line = min(ctx.cursor.line, max(0, ctx.buffer.len - 1))
+        ctx.state.openCursorFolds()
         clampCursorToBuffer(ctx)
 
       return Result[(), string].ok (),
@@ -934,6 +936,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
       if lastCursorPos.isSome:
         ctx.cursor = lastCursorPos.get
+        ctx.cursor.line = min(ctx.cursor.line, max(0, ctx.buffer.len - 1))
+        ctx.state.openCursorFolds()
         clampCursorToBuffer(ctx)
 
       return Result[(), string].ok (),

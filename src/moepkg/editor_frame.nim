@@ -397,10 +397,12 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
     let buf = e.activeBuffer()
     let collapsedFold = buf.foldState.getCollapsedFoldAt(e.activeWindow.cursor.line)
     if collapsedFold.isSome:
-      # Pin the cursor to the fold's start line at column 0 (the fold is a single
-      # unit; the cursor must not roam its hidden content).
-      e.activeWindow.cursor.line = collapsedFold.get.startLine
-      e.activeWindow.cursor.column = 0
+      let first = collapsedFold.get.startLine
+      e.activeWindow.cursor.line = first
+      e.activeWindow.cursor.column = min(
+        e.activeWindow.cursor.column,
+        maxCursorColumn(buf.getLine(first).charLen, e.currentMode),
+      )
 
   # Update highlight state (skip for the debug viewer)
   let isDebugBuffer = e.activeWindow.modeState.kind == mskDebug

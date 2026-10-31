@@ -10495,9 +10495,9 @@ suite "handleKeyCombo - gj and gk go over the rows of wrapped lines, as Vim's nv
 
   test "a closed fold is one row":
     for (line, column, keys, cursor) in [
-      (0, 23, @["g", "j"], at(1, 0)),
+      (0, 23, @["g", "j"], at(1, 3)),
       (0, 23, @["2", "g", "j"], at(3, 3)),
-      (3, 3, @["g", "k"], at(1, 0)),
+      (3, 3, @["g", "k"], at(1, 3)),
       (3, 3, @["g", "k", "g", "k"], at(0, 23)),
     ]:
       let e = createEditorForRows(
@@ -10514,14 +10514,15 @@ suite "handleKeyCombo - gj and gk go over the rows of wrapped lines, as Vim's nv
   test "from a closed fold they aim for where the cursor showed, as j and k":
     # Vim takes curswant from w_virtcol once a command has dropped it, and in a
     # closed fold w_virtcol is the window's left. A fold closed over the
-    # cursor after that leaves the cell of its text.
+    # cursor after that leaves the cell of its text. A typed search or `w`
+    # opens the fold it lands in ('foldopen').
     for (line, column, keys, cursor) in [
       (1, 12, @["z", "o", "l", "z", "c", "g", "j"], at(3, 13)),
       (1, 12, @["z", "o", "l", "z", "c", "j"], at(3, 13)),
       (1, 12, @["z", "o", "l", "z", "c", "g", "k"], at(0, 13)),
-      (0, 3, @["/", "t", "w", "o", "Enter", "g", "j"], at(3, 0)),
-      (0, 3, @["/", "t", "w", "o", "Enter", "j"], at(3, 0)),
-      (0, 18, @["w", "k"], at(0, 0)),
+      (0, 3, @["/", "t", "w", "o", "Enter", "g", "j"], at(3, 10)),
+      (0, 3, @["/", "t", "w", "o", "Enter", "j"], at(3, 10)),
+      (0, 18, @["w", "k"], at(0, 4)),
     ]:
       let e = createEditorForRows(
         "0123456789abcdefghij\n    fold line one that is long\nfold line two\n" &

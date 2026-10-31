@@ -27,7 +27,7 @@ import std/options
 
 import pkg/results
 
-import types, motion, key_bindings, modes, logger, visual_block
+import types, motion, key_bindings, modes, logger, visual_block, fold_open
 import buffer/[core, undo]
 
 import command_handlers/visual_commands
@@ -254,9 +254,12 @@ proc executeCommand*(
       if dest.isErr:
         return err(dest.error)
       recordJump(ctx.state)
+      let start = ctx.cursor
       ctx.cursor = dest.get
       if linewise:
         moveToFirstNonBlank(ctx, ctx.cursor.line)
+      if dest.get != start:
+        ctx.state.openCursorFolds()
       return ok(())
     of "find":
       # Remember this find so ; and , can repeat it, then run the shared motion.

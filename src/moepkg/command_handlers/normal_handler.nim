@@ -28,7 +28,7 @@ import pkg/results
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_registry, uri_utils, key_router,
-    unicode_utils, visual_selection, pending_input, insert_record,
+    unicode_utils, visual_selection, pending_input, insert_record, fold_open,
   ]
 import handler_types, visual_handler, command_passthrough
 from insert_commands import stepToAppend
@@ -92,6 +92,7 @@ proc updateCursorToJumpPosition(
     return
       NormalModeResult(kind: nmrError, errorMessage: "Cannot jump: buffer is empty")
 
+  let fromLine = state.cursor.line
   state.cursor.line = min(pos.line, buffer.len - 1)
   let line = buffer.getLine(state.cursor.line)
   let lineCharLen = line.charLen
@@ -101,6 +102,8 @@ proc updateCursorToJumpPosition(
     else:
       min(pos.column, max(0, lineCharLen - 1))
 
+  if state.cursor.line != fromLine:
+    state.openCursorFolds()
   handler.motionController.viewportManager.updateViewport(state, buffer, state.cursor)
   return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
@@ -490,6 +493,7 @@ proc handleNormalModeKey*(
             state.cursor.column = maxCol
         else:
           state.cursor = BufferPosition(line: 0, column: 0)
+        state.openCursorFolds()
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
@@ -507,6 +511,7 @@ proc handleNormalModeKey*(
             state.cursor.column = maxCol
         else:
           state.cursor = BufferPosition(line: 0, column: 0)
+        state.openCursorFolds()
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)

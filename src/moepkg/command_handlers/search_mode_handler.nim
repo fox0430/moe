@@ -29,7 +29,7 @@ import ../celina_backend as celina
 import
   ../[
     editor, key_bindings, modes, buffer, search_utils, types, help_viewer, config_mode,
-    unicode_utils,
+    unicode_utils, fold_open,
   ]
 import ../command_registry/core
 import command_mode_handler
@@ -93,6 +93,7 @@ proc executeSearchFromCurrentPosition(e: Editor, pattern: string): bool =
   if searchResult.isSome:
     let pos = searchResult.get
     e.cursor = pos
+    e.state.openCursorFolds()
     e.updateViewportForCursor(pos)
     e.state.statusMessage = "Found: " & pattern
     return true
@@ -170,7 +171,10 @@ proc finalizeSearch(e: Editor) =
       discard cfg.searchItems(pattern, startIndex, forward)
     else:
       if e.state.input.search.incsearch and not isRepeat:
-        # Incremental search already left the cursor on the match
+        # The frame keeps the cursor off the closed fold the match is in.
+        if e.state.input.search.match.isSome:
+          e.cursor = e.state.input.search.match.get
+          e.state.openCursorFolds()
         e.showFromSearchStart(e.cursor)
       else:
         # A repeat never ran the incremental search, so it searches now.
@@ -248,6 +252,7 @@ proc performIncrementalSearch(e: Editor) =
       discard cfg.searchItems(e.state.input.search.text, cfg.searchStartIndex, forward)
     return
 
+  e.state.input.search.match = none(BufferPosition)
   if e.state.input.search.text.len == 0:
     # Erasing the pattern restores the anchor, as the Config branch does.
     e.cursor = e.state.input.search.startPos
@@ -280,6 +285,7 @@ proc performIncrementalSearch(e: Editor) =
 
   if searchResult.isSome:
     let pos = searchResult.get
+    e.state.input.search.match = searchResult
     e.cursor = pos
     e.syncHelpViewerIndex(pos.line)
 
