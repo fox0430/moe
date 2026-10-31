@@ -858,9 +858,21 @@ proc pointerRange(
 ): tuple[first, last: BufferPosition] =
   case granularity
   of psgWord:
-    let wordRange = calculateTextObjectRange(buffer, position, toWord, tomInner)
-    if wordRange.isOk:
-      (wordRange.get.start, wordRange.get.endPos)
+    if position.line notin 0 ..< buffer.len:
+      return (position, position)
+    # `iw` from the character clicked, the last one past the line's end. On an
+    # empty last line it reaches back over the line break before.
+    let
+      last = max(0, buffer.lineRunesNoNl(position.line).len - 1)
+      word = buffer.currentWord(
+        BufferPosition(line: position.line, column: min(position.column, last)),
+        1,
+        toWord,
+        tomInner,
+        EditorMode.Normal,
+      )
+    if word.found and word.start <= word.cursor:
+      (word.start, word.cursor)
     else:
       (position, position)
   of psgLine:

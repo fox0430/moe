@@ -744,179 +744,107 @@ suite "Matching Bracket":
     check result.y == 0
     check result.x == 3
 
-suite "Text Objects - Word":
-  test "findWordBoundaries inner word":
-    let buffer = newTextBuffer("hello world")
-    let cursor = BufferPosition(line: 0, column: 2)
-    let result = findWordBoundaries(buffer, cursor, inner = true)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 0
-    check range.endPos.column == 4 # 'hello' is columns 0-4
+suite "currentWord":
+  # Expectations are Vim 9.2's current_word.
+  proc at(line, column: int): BufferPosition =
+    BufferPosition(line: line, column: column)
 
-  test "findWordBoundaries around word":
-    let buffer = newTextBuffer("hello world")
-    let cursor = BufferPosition(line: 0, column: 2)
-    let result = findWordBoundaries(buffer, cursor, inner = false)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 0
-    check range.endPos.column == 5 # 'hello ' including trailing space
+  proc word(
+      text: string,
+      cursor: BufferPosition,
+      around: bool,
+      bigword = false,
+      count = 1,
+      anchor = none(BufferPosition),
+  ): WordObject =
+    let mode = if anchor.isSome: EditorMode.Visual else: EditorMode.Normal
+    newTextBuffer(text).currentWord(cursor, count, around, bigword, mode, anchor)
 
-  test "findWordBoundaries inner word - Unicode (Japanese)":
-    let buffer = newTextBuffer("hello 日本語 world")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWordBoundaries(buffer, cursor, inner = true)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 6
-    check range.endPos.column == 8 # 日本語 is columns 6-8
+  test "a word or a run of blanks, with around the blanks after it":
+    for (text, cursor, around, bigword, start, finish) in [
+      ("hello world", at(0, 2), false, false, at(0, 0), at(0, 4)),
+      ("hello world", at(0, 2), true, false, at(0, 0), at(0, 5)),
+      ("hello ++ world", at(0, 6), false, false, at(0, 6), at(0, 7)),
+      ("hello ++ world", at(0, 6), true, false, at(0, 6), at(0, 8)),
+      ("hello 日本語 world", at(0, 6), false, false, at(0, 6), at(0, 8)),
+      ("hello 日本語 world", at(0, 6), true, false, at(0, 6), at(0, 9)),
+      ("hello   world", at(0, 6), false, false, at(0, 5), at(0, 7)),
+      ("hello   world", at(0, 6), false, true, at(0, 5), at(0, 7)),
+      # From blanks, the word after them
+      ("hello   world", at(0, 6), true, false, at(0, 5), at(0, 12)),
+      ("hello   \nworld", at(0, 6), true, true, at(0, 5), at(1, 4)),
+      ("hello   \nworld", at(0, 6), false, false, at(0, 5), at(0, 7)),
+      # With no blanks after, the ones before, but not an indent
+      ("hello world", at(0, 7), true, false, at(0, 5), at(0, 10)),
+      ("  foo", at(0, 3), true, false, at(0, 2), at(0, 4)),
+      # An ideographic space is a blank
+      ("foo　bar", at(0, 0), false, true, at(0, 0), at(0, 2)),
+      ("foo　bar", at(0, 4), true, true, at(0, 3), at(0, 6)),
+    ]:
+      let o = word(text, cursor, around, bigword)
+      checkpoint(text & " " & $cursor)
+      check o.found
+      check (o.start, o.cursor) == (start, finish)
+      check o.inclusive
 
-  test "findWordBoundaries around word - Unicode (Japanese)":
-    let buffer = newTextBuffer("hello 日本語 world")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWordBoundaries(buffer, cursor, inner = false)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 6
-    check range.endPos.column == 9 # 日本語 + trailing space
+  test "an empty line is an object of its own":
+    for (text, cursor, around, start, finish) in [
+      # The blanks before it stop there
+      ("hello   \n\nworld", at(0, 6), true, at(0, 5), at(1, 0)),
+      ("foo\n\nbar", at(1, 0), false, at(1, 0), at(1, 0)),
+      ("foo\n\nbar", at(1, 0), true, at(1, 0), at(2, 2)),
+      # On the last line it reaches back over the line break before
+      ("foo\n\n", at(1, 0), false, at(1, 0), at(0, 2)),
+    ]:
+      let o = word(text, cursor, around)
+      checkpoint(text & " " & $cursor)
+      check o.found
+      check (o.start, o.cursor) == (start, finish)
 
-  test "findWordBoundaries inner on symbol":
-    let buffer = newTextBuffer("hello ++ world")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWordBoundaries(buffer, cursor, inner = true)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 6
-    check range.endPos.column == 7 # ++ is columns 6-7
+  test "a count takes more objects, failing when the buffer ends first":
+    let twoAround = word("#  (abc) q", at(0, 5), true, bigword = true, count = 2)
+    check twoAround.found
+    check (twoAround.start, twoAround.cursor) == (at(0, 1), at(0, 9))
 
-  test "findWordBoundaries around on symbol":
-    let buffer = newTextBuffer("hello ++ world")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWordBoundaries(buffer, cursor, inner = false)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 6
-    check range.endPos.column == 8 # ++ + trailing space
+    let overLines = word("foo bar\n  baz", at(0, 4), true, count = 2)
+    check (overLines.start, overLines.cursor) == (at(0, 3), at(1, 4))
 
-  test "findWordBoundaries inner on whitespace":
-    let buffer = newTextBuffer("hello   world")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWordBoundaries(buffer, cursor, inner = true)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 5
-    check range.endPos.column == 7 # spaces at columns 5-7
+    # Past an empty line the end is the next line's start, which it excludes
+    let pastEmpty = word("foo\n\nbar", at(0, 0), false, count = 2)
+    check pastEmpty.found
+    check (pastEmpty.start, pastEmpty.cursor) == (at(0, 0), at(2, 0))
+    check not pastEmpty.inclusive
 
-  test "findWordBoundaries around on whitespace":
-    let buffer = newTextBuffer("hello   world")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWordBoundaries(buffer, cursor, inner = false)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 5
-    check range.endPos.column == 12 # spaces + 'world'
+    # The cursor stays as far as it went
+    for (text, cursor, around, count, finish) in [
+      ("foo bar", at(0, 0), true, 3, at(0, 7)),
+      ("foo bar", at(0, 0), false, 4, at(0, 7)),
+      ("word   ", at(0, 5), true, 1, at(0, 7)),
+      ("    ", at(0, 1), true, 1, at(0, 4)),
+    ]:
+      let o = word(text, cursor, around, count = count)
+      checkpoint(text & " " & $count)
+      check not o.found
+      check o.cursor == finish
 
-  test "findWordBoundaries aw cross-line from trailing whitespace":
-    let buffer = newTextBuffer("hello   \nworld")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWordBoundaries(buffer, cursor, inner = false)
-    check result.isOk
-    let range = result.get
-    check range.start.line == 0
-    check range.start.column == 5
-    check range.endPos.line == 1
-    check range.endPos.column == 4 # 'world' on next line
+  test "a Visual selection wider than a character grows toward the cursor":
+    for (text, cursor, anchor, around, bigword, start, finish) in [
+      ("foo.bar baz", at(0, 1), at(0, 1), false, false, at(0, 0), at(0, 2)),
+      ("foo.bar baz", at(0, 2), at(0, 0), false, false, at(0, 0), at(0, 3)),
+      ("foo.bar baz", at(0, 6), at(0, 0), false, true, at(0, 0), at(0, 7)),
+      ("foo bar\nbaz", at(0, 6), at(0, 4), false, false, at(0, 4), at(1, 2)),
+      # Before the anchor it grows backward
+      ("foo bar\nbaz", at(0, 4), at(0, 6), false, false, at(0, 6), at(0, 3)),
+    ]:
+      let o = word(text, cursor, around, bigword, anchor = some(anchor))
+      checkpoint(text & " " & $cursor & " " & $anchor)
+      check o.found
+      check (o.start, o.cursor) == (start, finish)
 
-  test "findWordBoundaries iw on whitespace stays on same line":
-    let buffer = newTextBuffer("hello   \nworld")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWordBoundaries(buffer, cursor, inner = true)
-    check result.isOk
-    let range = result.get
-    check range.start.line == 0
-    check range.endPos.line == 0 # stays on same line
-
-  test "findWideWordBoundaries inner on whitespace":
-    let buffer = newTextBuffer("hello   world")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWideWordBoundaries(buffer, cursor, inner = true)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 5
-    check range.endPos.column == 7
-
-  test "findWideWordBoundaries aW cross-line from trailing whitespace":
-    let buffer = newTextBuffer("hello   \nworld")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWideWordBoundaries(buffer, cursor, inner = false)
-    check result.isOk
-    let range = result.get
-    check range.start.line == 0
-    check range.start.column == 5
-    check range.endPos.line == 1
-    check range.endPos.column == 4
-
-  test "findWordBoundaries aw at end of line (no trailing space) uses leading":
-    let buffer = newTextBuffer("hello world")
-    let cursor = BufferPosition(line: 0, column: 7)
-    let result = findWordBoundaries(buffer, cursor, inner = false)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 5 # Leading space included
-    check range.endPos.column == 10 # 'world' ends at 10
-
-  test "findWordBoundaries aw cross-line skips empty lines":
-    let buffer = newTextBuffer("hello   \n\nworld")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWordBoundaries(buffer, cursor, inner = false)
-    check result.isOk
-    let range = result.get
-    check range.start.line == 0
-    check range.start.column == 5
-    check range.endPos.line == 2
-    check range.endPos.column == 4 # 'world' on line 2
-
-  test "findWideWordBoundaries aW cross-line skips empty lines":
-    let buffer = newTextBuffer("hello   \n\nworld")
-    let cursor = BufferPosition(line: 0, column: 6)
-    let result = findWideWordBoundaries(buffer, cursor, inner = false)
-    check result.isOk
-    let range = result.get
-    check range.start.line == 0
-    check range.start.column == 5
-    check range.endPos.line == 2
-    check range.endPos.column == 4
-
-  test "findWordBoundaries aw on trailing whitespace with no word ahead fails":
-    # Vim's "daw" on trailing whitespace at end of buffer is a no-op: there is
-    # no word to anchor the surrounding whitespace, so the object fails.
-    let buffer = newTextBuffer("word   ")
-    let cursor = BufferPosition(line: 0, column: 5)
-    let result = findWordBoundaries(buffer, cursor, inner = false)
-    check result.isErr
-
-  test "findWordBoundaries aw on whitespace-only line fails":
-    let buffer = newTextBuffer("    ")
-    let cursor = BufferPosition(line: 0, column: 1)
-    let result = findWordBoundaries(buffer, cursor, inner = false)
-    check result.isErr
-
-  test "findWideWordBoundaries aW on trailing whitespace with no word ahead fails":
-    let buffer = newTextBuffer("word   ")
-    let cursor = BufferPosition(line: 0, column: 5)
-    let result = findWideWordBoundaries(buffer, cursor, inner = false)
-    check result.isErr
-
-  test "findWordBoundaries iw on trailing whitespace still selects the run":
-    # Unlike "aw", "iw" on whitespace selects just the whitespace run.
-    let buffer = newTextBuffer("word   ")
-    let cursor = BufferPosition(line: 0, column: 5)
-    let result = findWordBoundaries(buffer, cursor, inner = true)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 4
-    check range.endPos.column == 6
+    # A cursor on no line finds nothing and leaves the anchor
+    let gone = word("foo", at(3, 0), false, anchor = some(at(0, 1)))
+    check not gone.found
+    check gone.start == at(0, 1)
 
 suite "Text Objects - Quoted":
   test "findQuotedBoundaries inner double quote":
@@ -1090,14 +1018,11 @@ suite "Text Objects - Parenthesis":
     check (aroundRes.get.endPos.line, aroundRes.get.endPos.column) == (2, 0)
 
 suite "calculateTextObjectRange":
-  test "word text object":
+  test "words are left to currentWord":
     let buffer = newTextBuffer("hello world")
     let cursor = BufferPosition(line: 0, column: 7)
-    let result = calculateTextObjectRange(buffer, cursor, toWord, tomInner)
-    check result.isOk
-    let range = result.get
-    check range.start.column == 6
-    check range.endPos.column == 10
+    check calculateTextObjectRange(buffer, cursor, toWord, tomInner).isErr
+    check calculateTextObjectRange(buffer, cursor, toWideWord, tomAround, 2).isErr
 
   test "double quoted text object":
     let buffer = newTextBuffer("say \"hi\"")
