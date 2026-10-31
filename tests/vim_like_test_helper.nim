@@ -20,7 +20,7 @@
 ## An editor that types as `vim -u NONE` does, and keys written as in Vim, for
 ## the tests measured against Vim.
 
-import std/[options, strutils]
+import std/[options, strutils, unicode]
 
 import ../src/moepkg/[buffer, types, registers, editor, config, key_bindings]
 
@@ -54,8 +54,9 @@ proc newVimLikeEditor*(
   result.activeWindow.cursor = BufferPosition(line: line, column: column)
 
 proc keysOf*(spec: string): seq[KeyCombo] =
-  ## `<Name>` is one key (`<Escape>`, `<C-u>`), any other character a key, and
-  ## so is a `<` that starts no key name, as the first of Vim's `<<Escape>`.
+  ## `<Name>` is one key (`<Escape>`, `<C-u>`), any other character a key (a
+  ## UTF-8 one whole), and so is a `<` that starts no key name, as the first
+  ## of Vim's `<<Escape>`.
   var i = 0
   while i < spec.len:
     let
@@ -81,8 +82,9 @@ proc keysOf*(spec: string): seq[KeyCombo] =
       result.add key.get
       i = close + 1
     else:
-      result.add(KeyCombo(isSpecial: false, char: $spec[i]))
-      inc i
+      let n = min(spec.runeLenAt(i), spec.len - i)
+      result.add(KeyCombo(isSpecial: false, char: spec[i ..< i + n]))
+      i += n
 
 proc lines*(e: Editor): seq[string] =
   for i in 0 ..< e.activeBuffer.len:

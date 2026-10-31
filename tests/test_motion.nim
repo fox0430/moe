@@ -341,6 +341,56 @@ suite "Word Motion":
     let result = executor.move(currentPos, Motion.WordEnd, 1)
     check result.x == 8 # End of '日本語'
 
+  test "w, e, b and ge stop where Vim's character class changes":
+    # Expectations are Vim 9.2's: kanji, katakana, punctuation and emoji are
+    # each a class apart from ASCII word characters.
+    let buffer = newTextBuffer("abc日本def カナ漢字、😀x")
+    let executor = newMotionExecutor(buffer)
+    for (motion, start, stops) in [
+      (Motion.WordForward, 0, @[3, 5, 9, 11, 13, 14, 15]),
+      (Motion.WordEnd, 0, @[2, 4, 7, 10, 12, 13, 14, 15]),
+      (Motion.WordBackward, 15, @[14, 13, 11, 9, 5, 3, 0]),
+      (Motion.WordEndBackward, 15, @[14, 13, 12, 10, 7, 4, 2]),
+    ]:
+      checkpoint($motion)
+      var pos = CursorPosition(x: start, y: 0)
+      var got: seq[int]
+      for _ in stops:
+        pos = executor.move(pos, motion, 1)
+        got.add pos.x
+      check got == stops
+
+  test "w keeps a composing character with the one it is part of":
+    # ❤ U+FE0F: the variation selector goes with the heart, as in Vim
+    let executor = newMotionExecutor(newTextBuffer("❤️ x"))
+    check executor.move(CursorPosition(x: 0, y: 0), Motion.WordForward, 1).x == 3
+
+  test "a composing character after an undecodable byte stands alone":
+    # Vim: 0x85 is punctuation, U+0301 after it a word character of its own
+    let executor = newMotionExecutor(newTextBuffer("a\x85\u0301b x"))
+    let start = CursorPosition(x: 0, y: 0)
+    check executor.move(start, Motion.WordForward, 1).x == 1
+    check executor.move(start, Motion.WordEnd, 1).x == 1
+
+  test "cw reads the character a composing one is part of":
+    # A mark over a blank is a blank, as Vim reads the character under it
+    let buffer = newTextBuffer("a \u0301b")
+    check not initWordWalker(buffer, BufferPosition(line: 0, column: 2)).onNonWhite
+    check initWordWalker(buffer, BufferPosition(line: 0, column: 3)).onNonWhite
+
+  test "w stops at a NUL, punctuation as Vim's line feed":
+    let executor = newMotionExecutor(newTextBuffer("a\0b c"))
+    check executor.move(CursorPosition(x: 0, y: 0), Motion.WordForward, 1).x == 1
+
+  test "w takes Latin-1 word characters as Vim's default 'iskeyword'":
+    let executor = newMotionExecutor(newTextBuffer("a×b c µs ªx"))
+    var pos = CursorPosition(x: 0, y: 0)
+    var got: seq[int]
+    for _ in 0 ..< 4:
+      pos = executor.move(pos, Motion.WordForward, 1)
+      got.add pos.x
+    check got == @[4, 6, 9, 10]
+
   test "e crosses a single empty line":
     let buffer = newTextBuffer("foo\n\nbar")
     let executor = newMotionExecutor(buffer)
@@ -768,6 +818,14 @@ suite "currentWord":
       ("hello ++ world", at(0, 6), true, false, at(0, 6), at(0, 8)),
       ("hello 日本語 world", at(0, 6), false, false, at(0, 6), at(0, 8)),
       ("hello 日本語 world", at(0, 6), true, false, at(0, 6), at(0, 9)),
+      # Kanji, kana and ASCII are classes apart
+      ("abc日本def", at(0, 3), false, false, at(0, 3), at(0, 4)),
+      ("abc日本 def", at(0, 0), true, false, at(0, 0), at(0, 2)),
+      ("漢字かな", at(0, 0), false, false, at(0, 0), at(0, 1)),
+      ("ラーメン人々", at(0, 0), false, false, at(0, 0), at(0, 3)),
+      ("abc日本 def", at(0, 0), true, true, at(0, 0), at(0, 5)),
+      # A composing character goes with the word of the one before it
+      ("❤️ x", at(0, 0), false, false, at(0, 0), at(0, 1)),
       ("hello   world", at(0, 6), false, false, at(0, 5), at(0, 7)),
       ("hello   world", at(0, 6), false, true, at(0, 5), at(0, 7)),
       # From blanks, the word after them

@@ -26,7 +26,9 @@ import std/[options, unicode]
 
 import pkg/results
 
-import cursor_util, types, unicode_utils, logger, render_utils, modes, wanted_column
+import
+  cursor_util, types, unicode_utils, char_class, logger, render_utils, modes,
+  wanted_column
 import buffer/[core, edit, fold, undo]
 import visible_rows
 
@@ -381,40 +383,21 @@ proc initWordWalker(
     buffer: buffer, pos: pos, runes: buffer.lineRunesNoNl(pos.line), bigword: bigword
   )
 
-proc isBlankClass(r: Rune): bool =
-  ## Vim's utf_class() 0: a space, a tab or one of Unicode's other spaces
-  ## (no-break, ideographic...).
-  case r.int32
-  of 0x20, 0x09, 0xa0, 0x1680, 0x2000 .. 0x200b, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000:
-    true
-  else:
-    false
-
-proc isVimWhite(r: Rune): bool =
-  ## Vim's VIM_ISWHITE: a space or a tab only.
-  r == Rune(' ') or r == Rune('\t')
-
 proc class(w: WordWalker): int =
-  ## Vim's cls(): 0 for a blank or the end of a line, 2 for a word character,
-  ## 1 for any other. With `bigword` every non-blank is 1.
+  ## Vim's cls(): the character's utf_class(), 0 at the end of a line. A
+  ## composing character has the class of the one it is part of. With
+  ## `bigword` every non-blank is 1.
   if w.pos.column >= w.runes.len:
     return 0
-  let r = w.runes[w.pos.column]
-  if r.isBlankClass:
-    0
-  elif w.bigword:
-    1
-  elif r.isWordChar:
-    2
-  else:
-    1
+  let c = utfClass(w.runes[w.runes.baseColumn(w.pos.column)])
+  if c != 0 and w.bigword: 1 else: c
 
 proc onEmptyLine(w: WordWalker): bool =
   w.runes.len == 0
 
 proc onNonWhite(w: WordWalker): bool =
   ## On a character other than a space or a tab, so on an ideographic space too.
-  w.pos.column < w.runes.len and not w.runes[w.pos.column].isVimWhite
+  w.pos.column < w.runes.len and not w.runes[w.runes.baseColumn(w.pos.column)].isVimWhite
 
 proc inc(w: var WordWalker): int =
   ## One step forward: 0 within the line, 2 onto its end, 1 onto the next line,
