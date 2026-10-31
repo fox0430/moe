@@ -69,40 +69,6 @@ proc findFrom(
   else:
     e.activeBuffer.findPrev(spec.pattern, pos, ignoreCase, spec.match)
 
-proc executeSearchFromCurrentPosition(e: Editor, spec: SearchSpec): bool =
-  ## Execute `spec` from the current cursor position
-  ##
-  ## This is called when:
-  ## - Enter is pressed in Search mode with incsearch disabled
-  ## - Enter is pressed on an empty prompt to repeat the last search
-  ##
-  ## Returns: true if search was successful, false otherwise
-  ##
-  ## Side effects:
-  ## - Updates cursor position if match found
-  ## - Updates viewport to follow cursor
-  ## - Sets status message (success or failure)
-  let pattern = spec.pattern
-
-  # Validate regex before searching (* and # match literally)
-  if spec.match == smRegex and
-      compileSearchRegex(pattern, e.state.input.search.ignoresCase(spec)).isNone:
-    e.state.statusMessage = "Invalid regex: " & pattern
-    return false
-
-  let searchResult = e.findFrom(spec, e.cursor)
-
-  if searchResult.isSome:
-    let pos = searchResult.get
-    e.cursor = pos
-    e.state.openCursorFolds()
-    e.updateViewportForCursor(pos)
-    e.state.statusMessage = "Found: " & pattern
-    return true
-  else:
-    e.state.statusMessage = "Pattern not found: " & pattern
-    return false
-
 proc showFromSearchStart(e: Editor, pos: BufferPosition) =
   ## Scroll to `pos` from what the window showed as the search began, as
   ## Vim's incsearch restores the view before it moves to a match.
@@ -111,6 +77,37 @@ proc showFromSearchStart(e: Editor, pos: BufferPosition) =
     e.showFromView(view.get, pos)
   else:
     e.updateViewportForCursor(pos)
+
+proc backToSearchStart(e: Editor) =
+  e.cursor = e.state.input.search.startPos
+  e.showFromSearchStart(e.state.input.search.startPos)
+  e.syncHelpViewerIndex(e.state.input.search.startPos.line)
+
+proc searchFromStart(e: Editor, spec: SearchSpec): bool =
+  ## Run `spec` from where the search began, as Vim's Enter does whatever
+  ## incsearch showed, and move there or back to the anchor.
+  let pattern = spec.pattern
+  let searchResult = e.findFrom(spec, e.state.input.search.startPos)
+
+  if searchResult.isSome:
+    e.cursor = searchResult.get
+    e.state.openCursorFolds()
+    if e.state.input.search.incsearch:
+      e.showFromSearchStart(e.cursor)
+    else:
+      e.updateViewportForCursor(e.cursor)
+    e.state.statusMessage = "Found: " & pattern
+    return true
+  else:
+    if e.state.input.search.incsearch:
+      e.backToSearchStart()
+    # * and # match literally.
+    e.state.statusMessage =
+      if spec.match != smRegex or
+          compileSearchRegex(pattern, e.state.input.search.ignoresCase(spec)).isSome:
+        "Pattern not found: " & pattern
+      else:
+        "Invalid regex: " & pattern
 
 proc addSearchHistory(e: Editor, pattern: string) =
   ## Push `pattern` onto the search history, most recent first, dropping an
@@ -132,8 +129,7 @@ proc finalizeSearch(e: Editor) =
   ##
   ## Behavior:
   ## - Empty input repeats the last search (vim's `/<CR>` and `?<CR>`)
-  ## - If incsearch enabled: Cursor already at match, just update viewport
-  ## - If incsearch disabled: Execute search now from current position
+  ## - Search again from where the search began; incsearch only previews
   ## - Save searchText to lastSearchText for n/N commands
   ## - Re-enable search highlight (hlsearch)
   ## - Transition to Normal mode
@@ -170,27 +166,13 @@ proc finalizeSearch(e: Editor) =
           cfg.searchStartIndex + 1
         else:
           cfg.searchStartIndex - 1
-      discard cfg.searchItems(pattern, startIndex, forward)
+      if cfg.searchItems(pattern, startIndex, forward).isNone:
+        e.state.statusMessage = "Pattern not found: " & pattern
     else:
-      let startPos = e.state.input.search.startPos
-      let found =
-        if e.state.input.search.incsearch and not isRepeat:
-          # The frame keeps the cursor off the closed fold the match is in.
-          if e.state.input.search.match.isSome:
-            e.cursor = e.state.input.search.match.get
-            e.state.openCursorFolds()
-          e.showFromSearchStart(e.cursor)
-          e.state.input.search.match.isSome
-        else:
-          # A repeat never ran the incremental search, so it searches now.
-          if isRepeat:
-            e.cursor = startPos
-          e.executeSearchFromCurrentPosition(e.state.input.search.last)
-
       # Vim records a jump for a search that found something, even one that
-      # came back to where it started.
-      if found:
-        recordJump(e.state, startPos)
+      # wrapped back to the anchor.
+      if e.searchFromStart(e.state.input.search.last):
+        recordJump(e.state, e.state.input.search.startPos)
 
       # Sync search query and position to help viewer state if in Help mode
       if e.state.mode == EditorMode.Help:
@@ -221,9 +203,7 @@ proc cancelSearch*(e: Editor) =
     if e.state.input.search.incsearch:
       cfg.selectedIndex = cfg.searchStartIndex
   elif e.state.input.search.incsearch:
-    e.cursor = e.state.input.search.startPos
-    e.showFromSearchStart(e.state.input.search.startPos)
-    e.syncHelpViewerIndex(e.state.input.search.startPos.line)
+    e.backToSearchStart()
   # Exit overlay and restore base mode
   e.state.exitOverlay()
   e.setMode(e.state.mode) # Sync window mode
@@ -241,7 +221,8 @@ proc performIncrementalSearch(e: Editor) =
   ## - Updates cursor position to match if found
   ## - Restores cursor to start position if not found
   ## - Updates viewport to follow cursor
-  ## - Sets appropriate status message
+  ## - Sets "Found" on a match and clears the message otherwise, as Vim holds
+  ##   back the error until Enter
   ##
   ## This provides real-time feedback as the user types their search query.
   if not e.state.input.search.incsearch:
@@ -254,30 +235,21 @@ proc performIncrementalSearch(e: Editor) =
       cfg.selectedIndex = cfg.searchStartIndex
     else:
       let forward = e.state.input.search.direction == Forward
-      discard cfg.searchItems(e.state.input.search.text, cfg.searchStartIndex, forward)
+      if cfg.searchItems(e.state.input.search.text, cfg.searchStartIndex, forward).isNone:
+        cfg.selectedIndex = cfg.searchStartIndex
     return
 
-  e.state.input.search.match = none(BufferPosition)
   if e.state.input.search.text.len == 0:
     # Erasing the pattern restores the anchor, as the Config branch does.
-    e.cursor = e.state.input.search.startPos
-    e.showFromSearchStart(e.state.input.search.startPos)
-    e.syncHelpViewerIndex(e.state.input.search.startPos.line)
+    e.backToSearchStart()
+    e.state.statusMessage = ""
     return
 
-  let typed = SearchSpec(pattern: e.state.input.search.text)
-
-  # Validate regex - silently ignore invalid patterns during typing
-  if compileSearchRegex(typed.pattern, e.state.input.search.ignoresCase(typed)).isNone:
-    e.state.statusMessage = "Invalid regex: " & e.state.input.search.text
-    return
-
-  # Perform search from the original search start position (not current cursor!)
-  let searchResult = e.findFrom(typed, e.state.input.search.startPos)
+  let searchResult =
+    e.findFrom(SearchSpec(pattern: e.state.input.search.text), e.state.input.search.startPos)
 
   if searchResult.isSome:
     let pos = searchResult.get
-    e.state.input.search.match = searchResult
     e.cursor = pos
     e.syncHelpViewerIndex(pos.line)
 
@@ -285,12 +257,10 @@ proc performIncrementalSearch(e: Editor) =
 
     e.state.statusMessage = "Found: " & e.state.input.search.text
   else:
-    # No match found, restore to start position
-    e.cursor = e.state.input.search.startPos
-    e.showFromSearchStart(e.state.input.search.startPos)
-    e.syncHelpViewerIndex(e.state.input.search.startPos.line)
+    e.backToSearchStart()
 
-    e.state.statusMessage = "Pattern not found: " & e.state.input.search.text
+    # Vim holds back the error until Enter.
+    e.state.statusMessage = ""
 
 proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## Handle character input in Search mode

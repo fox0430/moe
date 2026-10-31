@@ -327,7 +327,6 @@ type
     startPos*: BufferPosition # Cursor position when search mode started (for incsearch)
     startView*: Option[ViewState]
       # What the window showed then, put back before each incsearch match
-    match*: Option[BufferPosition] # Where incsearch found the pattern
     # Search behavior settings
     ignorecase*: bool # Ignore case in search patterns
     smartcase*: bool # Override ignorecase if pattern contains uppercase
@@ -1769,7 +1768,6 @@ proc noteSearchStart*(state: EditorState) =
   ## Remember where the cursor is and what the window shows as a search
   ## begins, which incsearch goes back to.
   state.input.search.startPos = state.cursor
-  state.input.search.match = none(BufferPosition)
   state.input.search.startView =
     if state.activeWindow.isNil or state.activeWindow.viewport.isNil:
       none(ViewState)

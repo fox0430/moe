@@ -23,16 +23,11 @@ import std/[options, strutils, unittest]
 
 import pkg/celina
 
-import ../src/moepkg/buffer
-import ../src/moepkg/types
-import ../src/moepkg/modes
-import ../src/moepkg/editor
-import ../src/moepkg/config
-import ../src/moepkg/config_mode
-import ../src/moepkg/help_viewer
-import ../src/moepkg/search_utils
-import ../src/moepkg/key_bindings
-import ../src/moepkg/unicode_utils
+import
+  ../src/moepkg/[
+    buffer, types, modes, editor, config, config_mode, help_viewer, editor_reload,
+    search_utils, key_bindings, unicode_utils,
+  ]
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
 
 proc setSearchText(e: Editor, text: string) =
@@ -913,6 +908,155 @@ suite "Search mode - jump list and viewport on a failed or erased search":
 
     check e.cursor == BufferPosition(line: 1, column: 0)
     check e.state.jumpList.list.len == 0
+
+  test "An invalid pattern brings the cursor back to the anchor":
+    let e = createTestEditorWithBuffer("foo\nabc\nxyz\nabc\nend\n")
+    e.cursor = BufferPosition(line: 1, column: 0)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    for ch in ["a", "b"]:
+      handleSearchCharacterInput(e, ch)
+    check e.cursor == BufferPosition(line: 3, column: 0)
+
+    handleSearchCharacterInput(e, "(")
+    check e.cursor == BufferPosition(line: 1, column: 0)
+    check e.state.statusMessage == ""
+
+    finalizeSearch(e)
+    check e.cursor == BufferPosition(line: 1, column: 0)
+    check e.state.jumpList.list.len == 0
+    check e.state.statusMessage == "Invalid regex: ab("
+    check e.state.input.search.last.pattern == "ab("
+
+  test "A valid pattern that matches nothing reports it on Enter only":
+    let e = createTestEditorWithBuffer("alpha\nbeta\n")
+    e.cursor = BufferPosition(line: 1, column: 0)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    for ch in "zzz":
+      handleSearchCharacterInput(e, $ch)
+    check e.state.statusMessage == ""
+
+    finalizeSearch(e)
+    check e.cursor == BufferPosition(line: 1, column: 0)
+    check e.state.statusMessage == "Pattern not found: zzz"
+
+  test "Help mode: an invalid pattern still becomes the help search query":
+    let e = createTestEditorInHelpMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    for ch in "ab(":
+      handleSearchCharacterInput(e, $ch)
+    finalizeSearch(e)
+
+    check e.state.statusMessage == "Invalid regex: ab("
+    check e.activeWindow.modeState.help.searchQuery == "ab("
+
+  test "A reload that drops the incsearch match searches again from the anchor":
+    let e = createTestEditorWithBuffer("x\nfoo\nfoo\nfoo\n")
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    for ch in "foo":
+      handleSearchCharacterInput(e, $ch)
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+    e.invalidatePositionStateForBuffer(e.activeBuffer)
+
+    finalizeSearch(e)
+    check e.cursor == BufferPosition(line: 1, column: 0)
+    check e.state.statusMessage == "Found: foo"
+
+  test "Config mode: a query that matches nothing reports it on Enter":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    for ch in "zzzzNoSuchItem":
+      handleSearchCharacterInput(e, $ch)
+    finalizeSearch(e)
+
+    check cfg.selectedIndex == 0
+    check e.state.statusMessage == "Pattern not found: zzzzNoSuchItem"
+
+  test "An invalid pattern brings the viewport back to the anchor in a backward search":
+    var content = ""
+    for i in 0 ..< 200:
+      content.add(if i == 150: "needle\n" else: "aaaa\n")
+    let e = createTestEditorWithBuffer(content)
+    e.state.enterSearchOverlay(Backward)
+    e.state.input.search.incsearch = true
+
+    for ch in "needle":
+      handleSearchCharacterInput(e, $ch)
+    check e.cursor.line == 150
+    check e.viewport.topLine > 0
+
+    handleSearchCharacterInput(e, "(")
+    check e.cursor.line == 0
+    check e.viewport.topLine == 0
+
+  test "Config mode: a pattern that stops matching brings the selection back":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    for ch in cfg.firstEditableName:
+      handleSearchCharacterInput(e, $ch)
+    check cfg.selectedIndex > 0
+
+    handleSearchCharacterInput(e, "\x01")
+    check cfg.selectedIndex == 0
+
+  test "Enter wraps back to the only match under the cursor":
+    for incsearch in [true, false]:
+      let e = createTestEditorWithBuffer("foo\nbar\n")
+      e.state.enterSearchOverlay(Forward)
+      e.state.input.search.incsearch = incsearch
+      for ch in "foo":
+        handleSearchCharacterInput(e, $ch)
+      finalizeSearch(e)
+
+      check e.cursor == BufferPosition(line: 0, column: 0)
+      check e.state.statusMessage == "Found: foo"
+      check e.state.jumpList.list.len == 1
+
+  test "A failed search leaves the cursor alone without incsearch":
+    let e = createTestEditorWithBuffer("alpha\nbeta\n")
+    e.cursor = BufferPosition(line: 1, column: 2)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = false
+    e.state.input.search.startPos = BufferPosition(line: 0, column: 0)
+    e.setSearchText("zzzz")
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 1, column: 2)
+    check e.state.jumpList.list.len == 0
+
+  test "Without incsearch Enter scrolls from the current view":
+    var content = ""
+    for i in 0 ..< 200:
+      content.add(if i == 150: "needle\n" else: "aaaa\n")
+    let e = createTestEditorWithBuffer(content)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = false
+    e.viewport.topLine = 140
+    e.setSearchText("needle")
+    finalizeSearch(e)
+
+    check e.cursor.line == 150
+    check e.viewport.topLine == 140
+
+  test "Erasing the pattern clears the Found message":
+    let e = createTestEditorWithBuffer("abc\n")
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    handleSearchCharacterInput(e, "a")
+    check e.state.statusMessage == "Found: a"
+
+    handleSearchBackspace(e)
+    check e.state.statusMessage == ""
 
   test "A failed search does not record a jump without incsearch":
     let e = createTestEditorWithBuffer("alpha\nbeta\n")

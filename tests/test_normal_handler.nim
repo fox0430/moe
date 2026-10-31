@@ -2618,6 +2618,20 @@ suite "NormalModeHandler - cgn (change search match forward)":
     check state.mode == EditorMode.Insert
     check buf.getLine(0) == "hello  hello"
 
+suite "NormalModeHandler - dn and cn on the only match":
+  test "dn deletes nothing and cn inserts at the match":
+    for (op, mode) in [("d", EditorMode.Normal), ("c", EditorMode.Insert)]:
+      let buf = newTextBuffer()
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "foo bar\nbaz")
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.input.search.last.pattern = "foo"
+
+      discard handler.typeKeys(buf, state, createTestViewport(), op, "n")
+      check buf.getLine(0) == "foo bar"
+      check state.cursor == BufferPosition(line: 0, column: 0)
+      check state.mode == mode
+
 suite "NormalModeHandler - guu / gUU (case operator on lines)":
   proc pressKeys(
       handler: NormalModeHandler,

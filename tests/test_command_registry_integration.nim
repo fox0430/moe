@@ -5485,6 +5485,19 @@ suite "Handler - Search Commands":
     # Just check it doesn't crash
     check true # Just verify no crash
 
+  test "n and N wrap back to the only match under the cursor":
+    for cmd in ["search.next", "search.prev"]:
+      let buffer = newTextBuffer("foo\nbar")
+      let ctx = createTestContext(buffer)
+      ctx.state.mode = EditorMode.Normal
+      ctx.setCursor(0, 0)
+      ctx.state.input.search.last.pattern = "foo"
+      let registry = createTestRegistry()
+
+      check registry.execute(ctx, custom(cmd)).isOk
+      check ctx.cursor == BufferPosition(line: 0, column: 0)
+      check ctx.state.statusMessage == "Found: foo"
+
 suite "Handler - Other Commands":
   test "show char info (ga)":
     let buffer = newTextBuffer("hello")
