@@ -23,7 +23,7 @@
 import std/[unittest, strutils]
 
 import ../src/moepkg/[types, modes, key_bindings, log_viewer]
-import ../src/moepkg/buffer/core
+import ../src/moepkg/buffer/[core, search]
 import ../src/moepkg/command_handlers/log_viewer_handler
 
 const TestViewportHeight = 24
@@ -674,7 +674,71 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
 
     check result.kind == lvrHandled
     check state.input.search.last.pattern == "hello"
-    check state.input.search.last.wholeWord == true
+    check state.input.search.last.match == smWord
+
+  test "# from inside a word searches from its start":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("foo bar foo\n")
+      state = newTestEditorState()
+    state.cursor.column = 2
+
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("#"))
+
+    check state.cursor.column == 8
+
+  test "* takes the word after the cursor, as Normal mode's":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("a-b abc日本\n")
+      state = newTestEditorState()
+    state.cursor.column = 1
+
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("*"))
+
+    check state.input.search.last == SearchSpec(pattern: "b", match: smWord)
+    check state.cursor.column == 2
+
+  test "g* also finds the word inside others":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("target targeted\n")
+      state = newTestEditorState()
+
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("g"))
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("*"))
+
+    check state.input.search.last == SearchSpec(pattern: "target", match: smLiteral)
+    check state.cursor.column == 7
+
+  test "* shows the matches again after :noh":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("foo foo\n")
+      state = newTestEditorState()
+    state.input.search.hlsearchTempDisabled = true
+
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("*"))
+
+    check not state.input.search.hlsearchTempDisabled
+
+  test "* with only blanks after the cursor fails":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("foo   \n")
+      state = newTestEditorState()
+    state.cursor.column = 4
+
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("*"))
+
+    check state.statusMessage == "E348: No string under cursor"
+    check state.cursor.column == 4
 
   test "# searches backward for word under cursor":
     let
@@ -688,7 +752,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
 
     check result.kind == lvrHandled
     check state.input.search.last.pattern == "hello"
-    check state.input.search.last.wholeWord == true
+    check state.input.search.last.match == smWord
     check state.cursor.column == 0 # found first "hello"
 
 suite "log_viewer_handler: handleLogViewerModeKey - Unhandled keys":
@@ -900,7 +964,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
     check result.kind == lvrHandled
     check "Pattern not found" in state.statusMessage
 
-  test "* on non-word character does nothing":
+  test "* on a blank takes the word after it":
     let
       logState = newLogViewerState()
       buffer = newTestBuffer("  hello\n")
@@ -911,10 +975,10 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("*"))
 
     check result.kind == lvrHandled
-    # search.last.pattern should remain empty or unchanged
-    check state.cursor.column == 0 # position unchanged
+    check state.input.search.last.pattern == "hello"
+    check state.cursor.column == 2
 
-  test "# on non-word character does nothing":
+  test "# on a blank takes the word after it":
     let
       logState = newLogViewerState()
       buffer = newTestBuffer("  hello\n")
@@ -925,9 +989,11 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("#"))
 
     check result.kind == lvrHandled
-    check state.cursor.column == 0 # position unchanged
+    check state.input.search.last.pattern == "hello"
+    check state.cursor.column == 2
 
-  test "* shows 'Pattern not found' when word not found elsewhere":
+  test "* finds the only occurrence again":
+    # The search wraps back to where it started, as Vim's does.
     let
       logState = newLogViewerState()
       buffer = newTestBuffer("unique\n")
@@ -939,11 +1005,10 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
 
     check result.kind == lvrHandled
     check state.input.search.last.pattern == "unique"
-    # Word is found at current position, but no other occurrence
-    # The implementation searches from current position, so it may find itself
-    # or show "Pattern not found" - depends on implementation
+    check state.cursor.column == 0
+    check "Pattern not found" notin state.statusMessage
 
-  test "# shows 'Pattern not found' when word not found elsewhere":
+  test "# finds the only occurrence again":
     let
       logState = newLogViewerState()
       buffer = newTestBuffer("unique\n")
@@ -955,6 +1020,8 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
 
     check result.kind == lvrHandled
     check state.input.search.last.pattern == "unique"
+    check state.cursor.column == 0
+    check "Pattern not found" notin state.statusMessage
 
 suite "log_viewer_handler: handleLogViewerModeKey - Paragraph motion edge cases":
   test "{ at beginning of buffer stays at line 0":

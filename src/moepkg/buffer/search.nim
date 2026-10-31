@@ -18,20 +18,29 @@
 #[############################################################################]#
 
 ## Buffer search: regex-based forward/backward search, per-line match ranges,
-## whole-word / current-word match enumeration. Compiled regexes are memoised
-## in a single private slot to avoid recompiling on every keystroke.
+## literal (* and #) / current-word match enumeration. Compiled regexes are
+## memoised in a single private slot to avoid recompiling on every keystroke.
 
 import std/[options, strutils, unicode]
 
 import pkg/regex
 
-import ../[primitives, search_utils, unicode_utils]
+import ../[primitives, unicode_utils, char_class]
 import core
 
-type CachedRegex = object
-  pattern: string
-  ignorecase: bool
-  compiled: Regex2
+type
+  SearchMatch* = enum
+    ## How a search pattern matches.
+    smRegex ## As a regex (/ and ?)
+    smLiteral ## As it is (g* and g#)
+    smWord
+      ## As it is, a word character at either end starting or ending a word, as
+      ## the `\<` and `\>` Vim's * and # put around a keyword
+
+  CachedRegex = object
+    pattern: string
+    ignorecase: bool
+    compiled: Regex2
 
 var regexCache: Option[CachedRegex]
 
@@ -93,51 +102,108 @@ proc toValidUtf8(line: string): string =
       result.add(line[i ..< i + sz])
       i += sz
 
-proc matchesPreparedAt(
-    line: string, needle: string, bytePos: int, ignorecase: bool
-): bool =
-  ## Compare `needle` (already lowered when ignorecase) against `line` at
-  ## `bytePos` without lowering a copy of the whole line.
-  if bytePos + needle.len > line.len:
-    return false
-  for k in 0 ..< needle.len:
-    let c =
-      if ignorecase:
-        line[bytePos + k].toLowerAscii
-      else:
-        line[bytePos + k]
-    if c != needle[k]:
-      return false
-  true
+type LiteralPattern = object
+  ## Text * and # (smWord), g* and g# (smLiteral) look for as it is, ready to
+  ## match against each line.
+  text: string
+  runes: seq[Rune] # Folded when ignoring case
+  ignorecase: bool
+  match: SearchMatch
+  boundsStart, boundsEnd: bool # Vim's `\<` and `\>`
 
-iterator wholeWordMatchRanges(
-    line: string, searchText: string, ignorecase: bool
-): ColumnRange =
-  ## Whole-word matches on `line`, left to right, without materialising a
-  ## lowercased copy of the line or its rune seq: callers that only need the
-  ## first or last match stop early instead of collecting every match.
-  let needle = prepareSearchString(searchText, ignorecase)
-  let needleCharLen = searchText.charLen
-  if needle.len > 0 and needleCharLen > 0:
-    var bytePos = 0
-    var charIdx = 0
-    var prevIsWordChar = false
-    while bytePos + needle.len <= line.len:
-      let size = line.runeSizeAt(bytePos)
+var literalCache: LiteralPattern
+
+proc fold(r: Rune): Rune =
+  ## `r` as 'ignorecase' compares it, as Vim's utf_fold() does.
+  if r.int < 0x80:
+    Rune(r.int.char.toLowerAscii.ord)
+  else:
+    r.toLower
+
+proc literalPattern(
+    text: string, ignorecase: bool, match: SearchMatch
+): LiteralPattern =
+  ## `text` ready to match. A word character at its start gets smWord's `\<`
+  ## and one at its end its `\>`, as Vim's * puts them only there (`->` gets
+  ## neither). The last one is kept, as the highlighter asks once per line.
+  let c = literalCache
+  if c.text == text and c.ignorecase == ignorecase and c.match == match:
+    return c
+  result = LiteralPattern(
+    text: text, runes: text.toCharRunes, ignorecase: ignorecase, match: match
+  )
+  if result.runes.len > 0 and match == smWord:
+    let last = result.runes[result.runes.baseColumn(result.runes.high)]
+    result.boundsStart = mbClass(result.runes[0]) >= 2
+    result.boundsEnd = mbClass(last) >= 2
+  if ignorecase:
+    for r in result.runes.mitems:
+      r = r.fold
+  literalCache = result
+
+type LiteralMatch = object
+  endByte: int # The byte after the match, -1 when there is none
+  last: Rune # The match's last character
+  lastBase: Rune # The character that one is part of
+
+proc matchAt(line: string, bytePos: int, p: LiteralPattern): LiteralMatch =
+  ## The match of `p` that starts at `bytePos`, if any.
+  result = LiteralMatch(endByte: -1)
+  var pos = bytePos
+  for i, want in p.runes:
+    if pos >= line.len:
+      return
+    let (r, size) = line.charAtByte(pos)
+    if (if p.ignorecase: r.fold else: r) != want:
+      return
+    if i == 0 or not continuesChar(result.last, r):
+      result.lastBase = r
+    result.last = r
+    pos += size
+  result.endByte = pos
+
+iterator literalMatchRanges(line: string, p: LiteralPattern): ColumnRange =
+  ## Matches of `p` on `line`, left to right. Each one is looked for after the
+  ## one before ends, as Vim's search does with 'cpoptions' c. A character and
+  ## its composing characters are one, as in Vim: no match starts or ends
+  ## between them. Vim's `\<` takes a match that starts with a word character
+  ## (mb_get_class 2 or more) of another class than the character before it,
+  ## and `\>` one that ends with a word character of another class than the
+  ## character after it.
+  ## Walks the line without materialising a folded copy or its rune seq:
+  ## callers that only need the first or last match stop early.
+  if p.runes.len > 0:
+    var
+      bytePos = 0
+      charIdx = 0
+      free = 0 # The first column a match may start at
+      prev = Rune(0)
+      prevBase = Rune(0) # The character before
+    while bytePos < line.len:
+      let (r, size) = line.charAtByte(bytePos)
       if size == 0:
         break
-      if not prevIsWordChar and line.matchesPreparedAt(needle, bytePos, ignorecase):
-        # Step the end in the line's own character model, as `charLen` counts.
-        var endByte = bytePos
-        for _ in 0 ..< needleCharLen:
-          if endByte >= line.len:
-            break
-          endByte += line.runeSizeAt(endByte)
-        let endIsWordChar =
-          endByte < line.len and isWordChar(line.charAtByte(endByte)[0])
-        if not endIsWordChar:
-          yield ColumnRange(startCol: charIdx, endCol: charIdx + needleCharLen)
-      prevIsWordChar = isWordChar(line.charAtByte(bytePos)[0])
+      let composed = charIdx > 0 and continuesChar(prev, r)
+      if not composed and charIdx >= free:
+        let m = line.matchAt(bytePos, p)
+        var matches = m.endByte >= 0
+        if matches and p.boundsStart:
+          let class = mbClass(r)
+          matches = class >= 2 and (charIdx == 0 or mbClass(prevBase) != class)
+        if matches and m.endByte < line.len:
+          let next = line.charAtByte(m.endByte)[0]
+          matches = not continuesChar(m.last, next)
+          if matches and p.boundsEnd:
+            let class = mbClass(m.lastBase)
+            matches = class >= 2 and mbClass(next) != class
+        elif matches and p.boundsEnd:
+          matches = mbClass(m.lastBase) >= 2
+        if matches:
+          yield ColumnRange(startCol: charIdx, endCol: charIdx + p.runes.len)
+          free = charIdx + p.runes.len
+      if not composed:
+        prevBase = r
+      prev = r
       bytePos += size
       inc charIdx
 
@@ -146,12 +212,10 @@ proc findSearchMatchRanges*(
     lineIndex: int,
     searchText: string,
     ignorecase = false,
-    wholeWord = false,
+    match = smRegex,
 ): seq[ColumnRange] =
-  ## Find all search match ranges on a given line.
+  ## Find all search match ranges on a given line, matching as `match` says.
   ## Returns a seq of ColumnRange (half-open [startCol, endCol)).
-  ## When wholeWord is true, uses literal matching with word boundary checks.
-  ## Otherwise uses regex matching.
 
   if searchText.len == 0:
     return @[]
@@ -163,9 +227,8 @@ proc findSearchMatchRanges*(
   if line.len == 0:
     return @[]
 
-  if wholeWord:
-    # Literal matching with word boundary checks (for * and # commands)
-    for r in wholeWordMatchRanges(line, searchText, ignorecase):
+  if match != smRegex:
+    for r in literalMatchRanges(line, literalPattern(searchText, ignorecase, match)):
       result.add(r)
   else:
     # Regex matching (undecodable bytes replaced for `regex` safety)
@@ -191,13 +254,13 @@ proc findNext*(
     searchText: string,
     startPos: BufferPosition,
     ignorecase = false,
-    wholeWord = false,
+    match = smRegex,
 ): Option[BufferPosition] =
-  ## Find the next occurrence of searchText (regex) starting from startPos.
-  ## When wholeWord is true, matches literally with word boundaries instead,
-  ## the definition findSearchMatchRanges highlights with.
+  ## Find the next occurrence of searchText starting from startPos, matching as
+  ## `match` says, the definition findSearchMatchRanges highlights with.
   ## Returns the position of the match or none if not found.
-  ## The search wraps around from the beginning if not found after startPos.
+  ## The search wraps around from the beginning if not found after startPos,
+  ## up to and including startPos: the only match is found again, as Vim does.
   ## Unicode-aware: All positions are in character (rune) indices, not byte indices.
   if searchText.len == 0:
     return none(BufferPosition)
@@ -209,12 +272,16 @@ proc findNext*(
   if startPos.line < 0 or startPos.line >= lineCount:
     return none(BufferPosition)
 
-  var re: Regex2
-  if not wholeWord:
+  var
+    re: Regex2
+    literal: LiteralPattern
+  if match == smRegex:
     let compiled = compileSearchRegex(searchText, ignorecase)
     if compiled.isNone:
       return none(BufferPosition)
     re = compiled.get
+  else:
+    literal = literalPattern(searchText, ignorecase, match)
 
   # Find first match in `line` at or after startCharCol, or -1.
   # Undecodable bytes are replaced with U+FFFD so `regex` only sees valid UTF-8.
@@ -236,8 +303,8 @@ proc findNext*(
 
   proc firstMatchCol(line: string, startCharCol: int): int =
     ## First match start column at or after startCharCol, or -1.
-    if wholeWord:
-      for r in wholeWordMatchRanges(line, searchText, ignorecase):
+    if match != smRegex:
+      for r in literalMatchRanges(line, literal):
         if r.startCol >= startCharCol:
           return r.startCol
       return -1
@@ -265,21 +332,17 @@ proc findNext*(
     if idx >= 0:
       return some(BufferPosition(line: lineIdx, column: idx))
 
-  # Wrap around
-  for lineIdx in 0 .. startPos.line:
+  # Wrap around to the current line, taking that one whole as the second round
+  # of Vim's searchit does: a match after startPos would have been found first.
+  # From before the line (column -1), the first pass took it whole already.
+  for lineIdx in 0 .. (if startPos.column < 0: startPos.line - 1
+  else: startPos.line):
     let line = b.getLine(lineIdx)
     if line.len == 0:
       continue
-    if lineIdx == startPos.line:
-      if startPos.column < 0:
-        continue
-      let idx = firstMatchCol(line, 0)
-      if idx >= 0 and idx < startPos.column:
-        return some(BufferPosition(line: lineIdx, column: idx))
-    else:
-      let idx = firstMatchCol(line, 0)
-      if idx >= 0:
-        return some(BufferPosition(line: lineIdx, column: idx))
+    let idx = firstMatchCol(line, 0)
+    if idx >= 0:
+      return some(BufferPosition(line: lineIdx, column: idx))
 
   return none(BufferPosition)
 
@@ -288,13 +351,13 @@ proc findPrev*(
     searchText: string,
     startPos: BufferPosition,
     ignorecase = false,
-    wholeWord = false,
+    match = smRegex,
 ): Option[BufferPosition] =
-  ## Find the previous occurrence of searchText (regex) starting from startPos.
-  ## When wholeWord is true, matches literally with word boundaries instead,
-  ## the definition findSearchMatchRanges highlights with.
-  ## Returns the position of the match or none if not found.
-  ## The search wraps around from the end if not found before startPos.
+  ## Find the previous occurrence of searchText starting from startPos,
+  ## matching as `match` says, the definition findSearchMatchRanges highlights
+  ## with. Returns the position of the match or none if not found.
+  ## The search wraps around from the end if not found before startPos, down
+  ## to and including startPos: the only match is found again, as Vim does.
   ## Unicode-aware: All positions are in character (rune) indices, not byte indices.
   if searchText.len == 0:
     return none(BufferPosition)
@@ -306,12 +369,16 @@ proc findPrev*(
   if startPos.line < 0 or startPos.line >= lineCount:
     return none(BufferPosition)
 
-  var re: Regex2
-  if not wholeWord:
+  var
+    re: Regex2
+    literal: LiteralPattern
+  if match == smRegex:
     let compiled = compileSearchRegex(searchText, ignorecase)
     if compiled.isNone:
       return none(BufferPosition)
     re = compiled.get
+  else:
+    literal = literalPattern(searchText, ignorecase, match)
 
   # Find last match with start < maxCharCol (<0 = no limit).
   proc findLastInLine(line: string, maxCharCol = -1): int =
@@ -343,33 +410,14 @@ proc findPrev*(
 
   proc lastMatchCol(line: string, maxCharCol: int): int =
     ## Last match start column before maxCharCol (<0 = no limit), or -1.
-    if wholeWord:
+    if match != smRegex:
       result = -1
-      for r in wholeWordMatchRanges(line, searchText, ignorecase):
+      for r in literalMatchRanges(line, literal):
         if maxCharCol >= 0 and r.startCol >= maxCharCol:
           break
         result = r.startCol
       return
     findLastInLine(line, maxCharCol)
-
-  proc lastMatchColFrom(line: string, minCharCol: int): int =
-    ## Last match start column at or after minCharCol, or -1.
-    result = -1
-    if wholeWord:
-      for r in wholeWordMatchRanges(line, searchText, ignorecase):
-        if r.startCol >= minCharCol:
-          result = r.startCol
-      return
-
-    let searchable = line.toValidUtf8
-    var searchBytePos = charToBytePos(searchable, minCharCol)
-    var m = RegexMatch2()
-    while searchBytePos <= searchable.len:
-      if not find(searchable, re, m, searchBytePos):
-        break
-      result = byteToCharPos(searchable, m.boundaries.a)
-      # Advance past match (avoid infinite loop on zero-width)
-      searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
 
   # Search backwards in current line
   let currentLine = b.getLine(startPos.line)
@@ -390,29 +438,16 @@ proc findPrev*(
     if lastIdx >= 0:
       return some(BufferPosition(line: lineIdx, column: lastIdx))
 
-  # Wrap around: search from end to current line
+  # Wrap around: search from end to current line, taking that one whole as the
+  # second round of Vim's searchit does: a match before startPos would have
+  # been found first.
   for lineIdx in countdown(lineCount - 1, startPos.line):
     let line = b.getLine(lineIdx)
     if line.len == 0:
       continue
-
-    if lineIdx == startPos.line:
-      let lineCharLen = line.charLen
-      let searchStartCharCol =
-        if startPos.column < 0:
-          0
-        else:
-          min(startPos.column + 1, lineCharLen)
-      if searchStartCharCol >= lineCharLen:
-        continue
-
-      let lastCharIdx = lastMatchColFrom(line, searchStartCharCol)
-      if lastCharIdx >= 0 and (startPos.column < 0 or lastCharIdx > startPos.column):
-        return some(BufferPosition(line: lineIdx, column: lastCharIdx))
-    else:
-      let lastIdx = lastMatchCol(line, -1)
-      if lastIdx >= 0:
-        return some(BufferPosition(line: lineIdx, column: lastIdx))
+    let lastIdx = lastMatchCol(line, -1)
+    if lastIdx >= 0:
+      return some(BufferPosition(line: lineIdx, column: lastIdx))
 
   return none(BufferPosition)
 
@@ -421,16 +456,15 @@ proc isPositionInSearchMatch*(
     pos: BufferPosition,
     searchText: string,
     ignorecase = false,
-    wholeWord = false,
+    match = smRegex,
 ): bool =
   ## Check if the given position is within a search match.
-  ## Uses regex matching unless wholeWord is true (literal match).
   if searchText.len == 0:
     return false
   if pos.line < 0 or pos.line >= b.len:
     return false
 
-  let ranges = b.findSearchMatchRanges(pos.line, searchText, ignorecase, wholeWord)
+  let ranges = b.findSearchMatchRanges(pos.line, searchText, ignorecase, match)
   for r in ranges:
     if pos.column >= r.startCol and pos.column < r.endCol:
       return true
@@ -499,3 +533,46 @@ proc findWordMatchRanges*(
   if runStartCol >= 0 and byteSliceEqualsWord(line, runStartByte, bytePos, word) and
       not (excludeCol >= 0 and excludeCol >= runStartCol and excludeCol < col):
     result.add(ColumnRange(startCol: runStartCol, endCol: col))
+
+proc identUnderCursor*(b: TextBuffer, pos: BufferPosition): Option[ColumnRange] =
+  ## The text * and # search for, as Vim's find_ident_under_cursor() finds it
+  ## on the line of `pos`: the keyword under or after `pos`, else the
+  ## non-blank text there. A keyword is a run of word characters of one class
+  ## (mb_get_class), so `日本` in `abc日本def` is one; the text runs on to a
+  ## blank. A character takes its composing characters with it.
+  if pos.line < 0 or pos.line >= b.len:
+    return none(ColumnRange)
+  let runes = b.getLine(pos.line).toCharRunes
+
+  proc class(col: int): int =
+    if col < runes.len:
+      mbClass(runes[runes.baseColumn(col)])
+    else:
+      0
+
+  let start =
+    if pos.column < runes.len:
+      runes.baseColumn(max(pos.column, 0))
+    else:
+      runes.len
+  var
+    col = start
+    keyword = true
+  while col < runes.len and class(col) < 2:
+    col = runes.nextCharColumn(col)
+  if col >= runes.len:
+    keyword = false
+    col = start
+    while col < runes.len and class(col) == 0:
+      col = runes.nextCharColumn(col)
+    if col >= runes.len:
+      return none(ColumnRange)
+
+  let startClass = class(col)
+  while col > 0 and class(col - 1) == startClass:
+    col = runes.baseColumn(col - 1)
+  var endCol = col
+  while endCol < runes.len and
+      (if keyword: class(endCol) == startClass else: class(endCol) != 0):
+    endCol = runes.nextCharColumn(endCol)
+  some(ColumnRange(startCol: col, endCol: endCol))

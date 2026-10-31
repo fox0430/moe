@@ -32,7 +32,6 @@ import
   sidebar,
   color,
   unicode_utils,
-  search_utils,
   highlight,
   modes,
   colorcode,
@@ -45,7 +44,8 @@ import
   buffer,
   visual_selection,
   visual_block,
-  wanted_column
+  wanted_column,
+  search_ops
 import command_handlers/visual_handler
 
 type
@@ -201,11 +201,8 @@ proc newLineStyleContext*(
       not e.state.input.search.hlsearchTempDisabled:
     let spec = e.state.effectiveSearchSpec()
     if spec.pattern.len > 0:
-      let shouldIgnoreCase = shouldIgnoreCase(
-        spec.pattern, e.state.input.search.ignorecase, e.state.input.search.smartcase
-      )
       result.searchRanges = textBuffer.findSearchMatchRanges(
-        lineIndex, spec.pattern, shouldIgnoreCase, spec.wholeWord
+        lineIndex, spec.pattern, e.state.input.search.ignoresCase(spec), spec.match
       )
 
   if textBuffer != nil and not e.state.isSearchOverlay and e.state.currentWord.len > 0:

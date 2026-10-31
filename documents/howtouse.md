@@ -181,6 +181,8 @@
 | <kbd>**y**</kbd> <kbd>**a**</kbd> <kbd>**W**</kbd> | Yank a WORD (including surrounding whitespace) |
 | <kbd>*****</kbd> | Search forwards for the word under cursor |
 | <kbd>**#**</kbd> | Search backwards for the word under cursor |
+| <kbd>**g**</kbd> <kbd>*****</kbd> | Search forwards for the word under cursor, also inside words |
+| <kbd>**g**</kbd> <kbd>**#**</kbd> | Search backwards for the word under cursor, also inside words |
 | <kbd>**f**</kbd> | Move to next any character on the current line |
 | <kbd>**F**</kbd> | Move to previous any character on the current line |
 | <kbd>**t**</kbd> | Move to the left of the any character on the current line |

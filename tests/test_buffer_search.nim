@@ -281,9 +281,9 @@ suite "Buffer Search - Edge cases":
     check result.isSome
     check result.get.column == 0
 
-    # From column 0, there's no next occurrence (wraps but doesn't include current position)
+    # From column 0 the search wraps back to the only occurrence, as Vim's does
     let result2 = buf.findNext("a", BufferPosition(line: 0, column: 0))
-    check result2.isNone # No next occurrence in single character buffer
+    check result2 == some(BufferPosition(line: 0, column: 0))
 
   test "Search pattern longer than line":
     let buf = newTextBuffer("hi")
@@ -788,45 +788,44 @@ suite "Buffer Search - Regex findSearchMatchRanges":
     let ranges = buf.findSearchMatchRanges(0, "[invalid")
     check ranges.len == 0
 
-  test "findSearchMatchRanges wholeWord uses literal matching":
+  test "findSearchMatchRanges smWord uses literal matching":
     let buf = newTextBuffer("foobar foo bar")
-    # wholeWord=true: "foo" should only match standalone "foo"
-    let ranges = buf.findSearchMatchRanges(0, "foo", wholeWord = true)
+    # "foo" should only match standalone "foo"
+    let ranges = buf.findSearchMatchRanges(0, "foo", match = smWord)
     check ranges.len == 1
     check ranges[0].startCol == 7
     check ranges[0].endCol == 10
 
-  test "findSearchMatchRanges wholeWord ignorecase matches either case":
+  test "findSearchMatchRanges smWord ignorecase matches either case":
     let buf = newTextBuffer("Foo foobar FOO")
-    let ranges =
-      buf.findSearchMatchRanges(0, "foo", ignorecase = true, wholeWord = true)
+    let ranges = buf.findSearchMatchRanges(0, "foo", ignorecase = true, match = smWord)
     check ranges.len == 2
     check ranges[0].startCol == 0
     check ranges[1].startCol == 11
 
-  test "findSearchMatchRanges wholeWord with CJK respects Unicode word boundaries":
+  test "findSearchMatchRanges smWord with CJK respects Unicode word boundaries":
     # "日本" appears standalone at col 5 and as a prefix of "日本語" at col 12.
     # Because CJK ideographs are now word characters, the "日本語" occurrence
     # must NOT count as a whole-word match: the trailing '語' extends the word
     # past the search term.
     let buf = newTextBuffer("test 日本 foo 日本語 bar")
-    let ranges = buf.findSearchMatchRanges(0, "日本", wholeWord = true)
+    let ranges = buf.findSearchMatchRanges(0, "日本", match = smWord)
     check ranges.len == 1
     check ranges[0].startCol == 5
     check ranges[0].endCol == 7
 
-  test "findSearchMatchRanges wholeWord matches CJK between non-word boundaries":
+  test "findSearchMatchRanges smWord matches CJK between non-word boundaries":
     # "日本語" surrounded by ASCII spaces is a complete word.
     let buf = newTextBuffer("abc 日本語 xyz")
-    let ranges = buf.findSearchMatchRanges(0, "日本語", wholeWord = true)
+    let ranges = buf.findSearchMatchRanges(0, "日本語", match = smWord)
     check ranges.len == 1
     check ranges[0].startCol == 4
     check ranges[0].endCol == 7
 
-  test "findSearchMatchRanges wholeWord=false treats as regex":
+  test "findSearchMatchRanges smRegex treats as regex":
     let buf = newTextBuffer("foobar foo bar")
-    # wholeWord=false: "foo" as regex matches "foobar" and "foo"
-    let ranges = buf.findSearchMatchRanges(0, "foo", wholeWord = false)
+    # "foo" as regex matches "foobar" and "foo"
+    let ranges = buf.findSearchMatchRanges(0, "foo", match = smRegex)
     check ranges.len == 2
     check ranges[0].startCol == 0
     check ranges[0].endCol == 3
@@ -1041,57 +1040,178 @@ suite "Buffer Search - invalid UTF-8 lines":
     check result.get.column == 1
 
 suite "Buffer search - whole word":
-  test "findNext wholeWord skips substring matches":
+  test "findNext smWord skips substring matches":
     let buf = newTextBuffer("targeted\ntarget\n")
     let result =
-      buf.findNext("target", BufferPosition(line: 0, column: -1), wholeWord = true)
+      buf.findNext("target", BufferPosition(line: 0, column: -1), match = smWord)
     check result.isSome
     check result.get == BufferPosition(line: 1, column: 0)
 
-  test "findNext wholeWord wraps around":
+  test "findNext smWord wraps around":
     let buf = newTextBuffer("target\ntargeted\n")
     let result =
-      buf.findNext("target", BufferPosition(line: 1, column: 0), wholeWord = true)
+      buf.findNext("target", BufferPosition(line: 1, column: 0), match = smWord)
     check result.isSome
     check result.get == BufferPosition(line: 0, column: 0)
 
-  test "findNext wholeWord finds a later match on the same line":
+  test "findNext smWord finds a later match on the same line":
     let buf = newTextBuffer("target targeted target\n")
     let result =
-      buf.findNext("target", BufferPosition(line: 0, column: 0), wholeWord = true)
+      buf.findNext("target", BufferPosition(line: 0, column: 0), match = smWord)
     check result.isSome
     check result.get == BufferPosition(line: 0, column: 16)
 
-  test "findNext wholeWord matches literally, not as a regex":
+  test "findNext smWord matches literally, not as a regex":
     let buf = newTextBuffer("axb\na.b\n")
     let result =
-      buf.findNext("a.b", BufferPosition(line: 0, column: -1), wholeWord = true)
+      buf.findNext("a.b", BufferPosition(line: 0, column: -1), match = smWord)
     check result.isSome
     check result.get == BufferPosition(line: 1, column: 0)
 
-  test "findNext wholeWord returns none when only substrings match":
+  test "findNext smWord returns none when only substrings match":
     let buf = newTextBuffer("targeted\nretarget\n")
     let result =
-      buf.findNext("target", BufferPosition(line: 0, column: -1), wholeWord = true)
+      buf.findNext("target", BufferPosition(line: 0, column: -1), match = smWord)
     check result.isNone
 
-  test "findPrev wholeWord skips substring matches":
+  test "findPrev smWord skips substring matches":
     let buf = newTextBuffer("target\ntargeted\n")
     let result =
-      buf.findPrev("target", BufferPosition(line: 1, column: 8), wholeWord = true)
+      buf.findPrev("target", BufferPosition(line: 1, column: 8), match = smWord)
     check result.isSome
     check result.get == BufferPosition(line: 0, column: 0)
 
-  test "findPrev wholeWord wraps around":
+  test "findPrev smWord wraps around":
     let buf = newTextBuffer("targeted\ntarget\n")
     let result =
-      buf.findPrev("target", BufferPosition(line: 0, column: 0), wholeWord = true)
+      buf.findPrev("target", BufferPosition(line: 0, column: 0), match = smWord)
     check result.isSome
     check result.get == BufferPosition(line: 1, column: 0)
 
-  test "findPrev wholeWord finds an earlier match on the same line":
+  test "findPrev smWord finds an earlier match on the same line":
     let buf = newTextBuffer("target targeted target\n")
     let result =
-      buf.findPrev("target", BufferPosition(line: 0, column: 16), wholeWord = true)
+      buf.findPrev("target", BufferPosition(line: 0, column: 16), match = smWord)
     check result.isSome
     check result.get == BufferPosition(line: 0, column: 0)
+
+  test "smWord bounds a word by a change of class, as Vim's \\< and \\>":
+    # `日本` is a word of its own between ASCII letters, as in Vim.
+    let buf = newTextBuffer("abc日本def 日本語")
+    check buf.findSearchMatchRanges(0, "日本", match = smWord) ==
+      @[ColumnRange(startCol: 3, endCol: 5)]
+    check buf.findSearchMatchRanges(0, "abc", match = smWord) ==
+      @[ColumnRange(startCol: 0, endCol: 3)]
+
+  test "smWord bounds only an end that is a word character":
+    # Vim's * puts no \< before punctuation, nor \> after it.
+    let buf = newTextBuffer("a->b ->")
+    check buf.findSearchMatchRanges(0, "->", match = smWord) ==
+      @[ColumnRange(startCol: 1, endCol: 3), ColumnRange(startCol: 5, endCol: 7)]
+    check buf.findSearchMatchRanges(0, "->b", match = smWord) ==
+      @[ColumnRange(startCol: 1, endCol: 4)]
+
+  test "smLiteral matches inside words and literally":
+    let buf = newTextBuffer("foobar foo a.b axb")
+    check buf.findSearchMatchRanges(0, "foo", match = smLiteral) ==
+      @[ColumnRange(startCol: 0, endCol: 3), ColumnRange(startCol: 7, endCol: 10)]
+    check buf.findSearchMatchRanges(0, "a.b", match = smLiteral) ==
+      @[ColumnRange(startCol: 11, endCol: 14)]
+
+  test "a literal match does not split a character from its composing ones":
+    # `cafe` followed by U+0301 is `café`: Vim matches neither `cafe` in it nor
+    # a match that starts on the U+0301.
+    let buf = newTextBuffer("café cafe")
+    check buf.findSearchMatchRanges(0, "cafe", match = smLiteral) ==
+      @[ColumnRange(startCol: 6, endCol: 10)]
+    check buf.findSearchMatchRanges(0, "café", match = smWord) ==
+      @[ColumnRange(startCol: 0, endCol: 5)]
+    check buf.findSearchMatchRanges(0, "́", match = smLiteral).len == 0
+
+  test "a literal match ignores the case of any letter, as Vim's utf_fold":
+    let buf = newTextBuffer("Ärger ärger ÄRGER")
+    check buf.findSearchMatchRanges(0, "Ärger", ignorecase = true, match = smWord).len ==
+      3
+    check buf.findSearchMatchRanges(0, "Ärger", match = smWord) ==
+      @[ColumnRange(startCol: 0, endCol: 5)]
+
+  test "Vim's \\< and \\> look at the classes of the line's characters":
+    # The Kelvin sign folds to `k` but is punctuation, so `\<k\>` skips it as
+    # Vim's does, while g* (no bounds) takes it.
+    let buf = newTextBuffer("k \u212a k")
+    check buf.findSearchMatchRanges(0, "k", ignorecase = true, match = smWord) ==
+      @[ColumnRange(startCol: 0, endCol: 1), ColumnRange(startCol: 4, endCol: 5)]
+    check buf.findSearchMatchRanges(0, "k", ignorecase = true, match = smLiteral).len ==
+      3
+
+  test "literal matches do not overlap, as Vim's search with cpoptions c":
+    # Each match is looked for from where the one before ends.
+    check newTextBuffer("aaaa").findSearchMatchRanges(0, "aa", match = smLiteral) ==
+      @[ColumnRange(startCol: 0, endCol: 2), ColumnRange(startCol: 2, endCol: 4)]
+    check newTextBuffer("aaa").findSearchMatchRanges(0, "aa", match = smLiteral) ==
+      @[ColumnRange(startCol: 0, endCol: 2)]
+    # So n from the match at column 4 skips the one at 5 (Vim's g* then n).
+    check newTextBuffer("aaa aaaa\naaaa").findNext(
+      "aaa", BufferPosition(line: 0, column: 4), match = smLiteral
+    ) == some(BufferPosition(line: 1, column: 0))
+
+suite "Buffer search - the only match":
+  # The second round of Vim's searchit takes the start line whole, so a search
+  # from the only match finds it again.
+  test "findNext finds the only match again":
+    let buf = newTextBuffer("foo bar\nbaz")
+    let start = BufferPosition(line: 0, column: 0)
+    check buf.findNext("foo", start) == some(start)
+    check buf.findNext("foo", start, match = smWord) == some(start)
+
+  test "findPrev finds the only match again":
+    let buf = newTextBuffer("baz\nbar foo")
+    let start = BufferPosition(line: 1, column: 4)
+    check buf.findPrev("foo", start) == some(start)
+    check buf.findPrev("foo", start, match = smWord) == some(start)
+
+  test "a match before the start on its line still comes first":
+    let buf = newTextBuffer("foo foo")
+    check buf.findNext("foo", BufferPosition(line: 0, column: 4)) ==
+      some(BufferPosition(line: 0, column: 0))
+    check buf.findPrev("foo", BufferPosition(line: 0, column: 0)) ==
+      some(BufferPosition(line: 0, column: 4))
+
+suite "Buffer search - identUnderCursor":
+  # Vim's find_ident_under_cursor() for * and #.
+  proc ident(text: string, column: int): Option[(int, int)] =
+    let r =
+      newTextBuffer(text).identUnderCursor(BufferPosition(line: 0, column: column))
+    if r.isSome:
+      some((r.get.startCol, r.get.endCol))
+    else:
+      none((int, int))
+
+  test "the keyword under the cursor":
+    check ident("foo bar baz", 5) == some((4, 7))
+    check ident("foo_bar1 x", 0) == some((0, 8))
+
+  test "the keyword after the cursor on the line":
+    check ident("x -> y", 2) == some((5, 6))
+    check ident("a.b a.b", 1) == some((2, 3))
+    check ident("foo   bar", 4) == some((6, 9))
+
+  test "the non-blank text when no keyword follows":
+    check ident("x ->  ", 3) == some((2, 4))
+    check ident("foo..", 4) == some((3, 5))
+
+  test "nothing after the cursor but blanks":
+    check ident("foo   ", 4).isNone
+    check ident("   ", 1).isNone
+    check ident("", 0).isNone
+
+  test "a keyword is a run of one class":
+    check ident("abc日本def", 3) == some((3, 5))
+    check ident("abc日本def", 1) == some((0, 3))
+    check ident("日本の 😀x", 0) == some((0, 2))
+    check ident("日本の 😀x", 4) == some((4, 5))
+
+  test "a character takes its composing characters":
+    check ident("café x", 0) == some((0, 5))
+    # On the composing character, as on the character it is part of.
+    check ident("ét", 1) == some((0, 3))

@@ -669,14 +669,24 @@ proc isComposing*(r: Rune): bool =
   ## Vim takes as part of that one.
   r.int32 >= 0x300 and Combining.rangeIndex(r.int32) >= 0
 
+proc continuesChar*(prev, r: Rune): bool =
+  ## Whether `r` after `prev` is part of the same character: a composing
+  ## character, unless after an undecodable byte, as in Vim's utfc_ptr2len().
+  r.isComposing and not prev.isInvalidByteRune
+
 proc baseColumn*(runes: openArray[Rune], column: int): int =
   ## The column of the character the one at `column` is part of: a composing
-  ## character's is the one before it. One that starts the line or follows an
-  ## undecodable byte stands alone, as in Vim's utfc_ptr2len().
+  ## character's is the one before it. One that starts the line stands alone.
   result = column
-  while result > 0 and runes[result].isComposing and
-      not runes[result - 1].isInvalidByteRune:
+  while result > 0 and continuesChar(runes[result - 1], runes[result]):
     dec result
+
+proc nextCharColumn*(runes: openArray[Rune], column: int): int =
+  ## The column of the character after the one at `column`, past the composing
+  ## characters that are part of it.
+  result = column + 1
+  while result < runes.len and continuesChar(runes[result - 1], runes[result]):
+    inc result
 
 proc isVimWhite*(r: Rune): bool =
   ## Vim's VIM_ISWHITE: a space or a tab only.

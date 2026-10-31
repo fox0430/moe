@@ -19,7 +19,7 @@
 
 ## Tests for command_handlers/search_mode_handler.nim
 
-import std/[options, unittest]
+import std/[options, strutils, unittest]
 
 import pkg/celina
 
@@ -440,7 +440,7 @@ suite "Incremental search - case insensitive highlighting":
     # Verify findSearchMatchRanges finds BOTH uppercase and lowercase matches
     # This is what the rendering uses for highlighting
     let ranges = e.activeBuffer.findSearchMatchRanges(
-      0, e.state.input.search.text, ignCase, e.state.input.search.last.wholeWord
+      0, e.state.input.search.text, ignCase, e.state.input.search.last.match
     )
     # Should find both "Hello" (col 0-5) and "hello" (col 12-17)
     check ranges.len == 2
@@ -476,7 +476,7 @@ suite "Incremental search - case insensitive highlighting":
 
     # Verify highlighting on line 0 (uppercase "Hello")
     let ranges0 = e.activeBuffer.findSearchMatchRanges(
-      0, e.state.input.search.text, ignCase, e.state.input.search.last.wholeWord
+      0, e.state.input.search.text, ignCase, e.state.input.search.last.match
     )
     check ranges0.len == 1
     check ranges0[0].startCol == 0
@@ -484,7 +484,7 @@ suite "Incremental search - case insensitive highlighting":
 
     # Verify highlighting on line 1 (lowercase "hello")
     let ranges1 = e.activeBuffer.findSearchMatchRanges(
-      1, e.state.input.search.text, ignCase, e.state.input.search.last.wholeWord
+      1, e.state.input.search.text, ignCase, e.state.input.search.last.match
     )
     check ranges1.len == 1
     check ranges1[0].startCol == 0
@@ -492,7 +492,7 @@ suite "Incremental search - case insensitive highlighting":
 
     # Verify highlighting on line 2 (all-caps "HELLO")
     let ranges2 = e.activeBuffer.findSearchMatchRanges(
-      2, e.state.input.search.text, ignCase, e.state.input.search.last.wholeWord
+      2, e.state.input.search.text, ignCase, e.state.input.search.last.match
     )
     check ranges2.len == 1
     check ranges2[0].startCol == 0
@@ -504,11 +504,11 @@ suite "Incremental search - case insensitive highlighting":
     ## cursor movement or highlighting.
     let e = createTestEditorWithBuffer("abc foobar foo baz")
     # Simulate * leaving a whole word search behind
-    e.state.input.search.last = SearchSpec(pattern: "abc", wholeWord: true)
+    e.state.input.search.last = SearchSpec(pattern: "abc", match: smWord)
 
     e.state.enterSearchOverlay(Forward)
     # The overlay does not touch the last search
-    check e.state.input.search.last == SearchSpec(pattern: "abc", wholeWord: true)
+    check e.state.input.search.last == SearchSpec(pattern: "abc", match: smWord)
 
     e.state.input.search.incsearch = true
     e.state.input.search.ignorecase = true
@@ -528,8 +528,9 @@ suite "Incremental search - case insensitive highlighting":
 
     # The highlight is a substring search too, so it finds both "foo" in
     # "foobar" (col 4) and standalone "foo" (col 11)
-    let ranges =
-      e.activeBuffer.findSearchMatchRanges(0, e.state.input.search.text, ignCase, false)
+    let ranges = e.activeBuffer.findSearchMatchRanges(
+      0, e.state.input.search.text, ignCase, smRegex
+    )
     check ranges.len == 2
     check ranges[0].startCol == 4
     check ranges[0].endCol == 7
@@ -794,24 +795,48 @@ suite "Search mode - empty Enter repeats the last search":
     # what searching from the erased "beta" match would have found.
     check e.cursor == BufferPosition(line: 0, column: 0)
 
+  test "A search for the only match at the cursor finds it again":
+    let e = createTestEditorWithBuffer("foo bar\n")
+    e.state.input.search.incsearch = false
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("foo")
+
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 0, column: 0)
+    check "Pattern not found" notin e.state.statusMessage
+    # It found something, so Vim records the jump.
+    check e.state.jumpList.list.len == 1
+
+  test "An incremental search for the only match at the cursor records a jump":
+    let e = createTestEditorWithBuffer("foo bar\n")
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    e.setSearchText("foo")
+    performIncrementalSearch(e)
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 0, column: 0)
+    check e.state.jumpList.list.len == 1
+
   test "A repeat keeps the whole word mode of a * search":
     let e = createTestEditorWithBuffer("target\ntargeted\ntarget\n")
-    e.state.input.search.last = SearchSpec(pattern: "target", wholeWord: true)
+    e.state.input.search.last = SearchSpec(pattern: "target", match: smWord)
     e.state.enterSearchOverlay(Forward)
 
     finalizeSearch(e)
 
-    check e.state.input.search.last == SearchSpec(pattern: "target", wholeWord: true)
+    check e.state.input.search.last == SearchSpec(pattern: "target", match: smWord)
 
   test "A cancelled search leaves the * search it was opened over":
     let e = createTestEditorWithBuffer("target\ntargeted\n")
-    e.state.input.search.last = SearchSpec(pattern: "target", wholeWord: true)
+    e.state.input.search.last = SearchSpec(pattern: "target", match: smWord)
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("targe")
 
     cancelSearch(e)
 
-    check e.state.input.search.last == SearchSpec(pattern: "target", wholeWord: true)
+    check e.state.input.search.last == SearchSpec(pattern: "target", match: smWord)
 
   test "A repeat does not push a duplicate history entry":
     let e = createTestEditorWithBuffer("alpha\ntarget\nbeta\ntarget\n")
@@ -1011,7 +1036,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
 
   test "A repeat of a * search keeps the word boundaries":
     let e = createTestEditorWithBuffer("target\ntargeted\ntarget\n")
-    e.state.input.search.last = SearchSpec(pattern: "target", wholeWord: true)
+    e.state.input.search.last = SearchSpec(pattern: "target", match: smWord)
     e.state.enterSearchOverlay(Forward)
 
     finalizeSearch(e)

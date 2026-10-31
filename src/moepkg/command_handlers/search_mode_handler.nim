@@ -28,8 +28,8 @@ import ../celina_backend as celina
 
 import
   ../[
-    editor, key_bindings, modes, buffer, search_utils, types, help_viewer, config_mode,
-    unicode_utils, fold_open,
+    editor, key_bindings, modes, buffer, types, help_viewer, config_mode, unicode_utils,
+    search_ops, fold_open,
   ]
 import ../command_registry/core
 import command_mode_handler
@@ -59,8 +59,18 @@ proc activeConfigState(e: Editor): ConfigModeState =
       return window.modeState.config
   return nil
 
-proc executeSearchFromCurrentPosition(e: Editor, pattern: string): bool =
-  ## Execute `pattern` from the current cursor position
+proc findFrom(
+    e: Editor, spec: SearchSpec, pos: BufferPosition
+): Option[BufferPosition] =
+  ## The match of `spec` from `pos`, the way the search goes.
+  let ignoreCase = e.state.input.search.ignoresCase(spec)
+  if e.state.input.search.direction == Forward:
+    e.activeBuffer.findNext(spec.pattern, pos, ignoreCase, spec.match)
+  else:
+    e.activeBuffer.findPrev(spec.pattern, pos, ignoreCase, spec.match)
+
+proc executeSearchFromCurrentPosition(e: Editor, spec: SearchSpec): bool =
+  ## Execute `spec` from the current cursor position
   ##
   ## This is called when:
   ## - Enter is pressed in Search mode with incsearch disabled
@@ -72,23 +82,15 @@ proc executeSearchFromCurrentPosition(e: Editor, pattern: string): bool =
   ## - Updates cursor position if match found
   ## - Updates viewport to follow cursor
   ## - Sets status message (success or failure)
-  let
-    shouldIgnoreCase = shouldIgnoreCase(
-      pattern, e.state.input.search.ignorecase, e.state.input.search.smartcase
-    )
-    wholeWord = e.state.input.search.last.wholeWord
+  let pattern = spec.pattern
 
-  # Validate regex before searching (whole word patterns are matched literally)
-  if not wholeWord and compileSearchRegex(pattern, shouldIgnoreCase).isNone:
+  # Validate regex before searching (* and # match literally)
+  if spec.match == smRegex and
+      compileSearchRegex(pattern, e.state.input.search.ignoresCase(spec)).isNone:
     e.state.statusMessage = "Invalid regex: " & pattern
     return false
 
-  let activeBuffer = e.activeBuffer()
-  let searchResult =
-    if e.state.input.search.direction == Forward:
-      activeBuffer.findNext(pattern, e.cursor, shouldIgnoreCase, wholeWord)
-    else:
-      activeBuffer.findPrev(pattern, e.cursor, shouldIgnoreCase, wholeWord)
+  let searchResult = e.findFrom(spec, e.cursor)
 
   if searchResult.isSome:
     let pos = searchResult.get
@@ -148,8 +150,8 @@ proc finalizeSearch(e: Editor) =
     e.state.input.search.hlsearchTempDisabled = false
 
     if not isRepeat:
-      # A repeat replays the previous search untouched, history entry and whole
-      # word mode included. A new one is a substring search (/ and ? are regex).
+      # A repeat replays the previous search untouched, history entry and how it
+      # matches included (a * search stays one). A new one is a regex search.
       e.state.input.search.last = SearchSpec(pattern: pattern)
       e.addSearchHistory(pattern)
 
@@ -170,22 +172,25 @@ proc finalizeSearch(e: Editor) =
           cfg.searchStartIndex - 1
       discard cfg.searchItems(pattern, startIndex, forward)
     else:
-      if e.state.input.search.incsearch and not isRepeat:
-        # The frame keeps the cursor off the closed fold the match is in.
-        if e.state.input.search.match.isSome:
-          e.cursor = e.state.input.search.match.get
-          e.state.openCursorFolds()
-        e.showFromSearchStart(e.cursor)
-      else:
-        # A repeat never ran the incremental search, so it searches now.
-        if isRepeat:
-          e.cursor = e.state.input.search.startPos
-        discard e.executeSearchFromCurrentPosition(pattern)
+      let startPos = e.state.input.search.startPos
+      let found =
+        if e.state.input.search.incsearch and not isRepeat:
+          # The frame keeps the cursor off the closed fold the match is in.
+          if e.state.input.search.match.isSome:
+            e.cursor = e.state.input.search.match.get
+            e.state.openCursorFolds()
+          e.showFromSearchStart(e.cursor)
+          e.state.input.search.match.isSome
+        else:
+          # A repeat never ran the incremental search, so it searches now.
+          if isRepeat:
+            e.cursor = startPos
+          e.executeSearchFromCurrentPosition(e.state.input.search.last)
 
-      # A search that found nothing left the cursor on the anchor, and vim does
-      # not record a jump for it.
-      if e.cursor != e.state.input.search.startPos:
-        recordJump(e.state, e.state.input.search.startPos)
+      # Vim records a jump for a search that found something, even one that
+      # came back to where it started.
+      if found:
+        recordJump(e.state, startPos)
 
       # Sync search query and position to help viewer state if in Help mode
       if e.state.mode == EditorMode.Help:
@@ -260,28 +265,15 @@ proc performIncrementalSearch(e: Editor) =
     e.syncHelpViewerIndex(e.state.input.search.startPos.line)
     return
 
-  # Apply smartcase logic to determine if we should ignore case
-  let shouldIgnoreCase = shouldIgnoreCase(
-    e.state.input.search.text, e.state.input.search.ignorecase,
-    e.state.input.search.smartcase,
-  )
+  let typed = SearchSpec(pattern: e.state.input.search.text)
 
   # Validate regex - silently ignore invalid patterns during typing
-  if compileSearchRegex(e.state.input.search.text, shouldIgnoreCase).isNone:
+  if compileSearchRegex(typed.pattern, e.state.input.search.ignoresCase(typed)).isNone:
     e.state.statusMessage = "Invalid regex: " & e.state.input.search.text
     return
 
   # Perform search from the original search start position (not current cursor!)
-  let activeBuffer = e.activeBuffer()
-  let searchResult =
-    if e.state.input.search.direction == Forward:
-      activeBuffer.findNext(
-        e.state.input.search.text, e.state.input.search.startPos, shouldIgnoreCase
-      )
-    else:
-      activeBuffer.findPrev(
-        e.state.input.search.text, e.state.input.search.startPos, shouldIgnoreCase
-      )
+  let searchResult = e.findFrom(typed, e.state.input.search.startPos)
 
   if searchResult.isSome:
     let pos = searchResult.get

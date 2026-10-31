@@ -253,6 +253,16 @@ const SearchCommands: seq[tuple[name, desc, commandId: string]] = @[
     "search-word-backward", "Search for word under cursor backward (#)",
     "search.word.backward",
   ),
+  (
+    "search-word-forward-partial",
+    "Search for word under cursor forward, also inside words (g*)",
+    "search.word.forward.partial",
+  ),
+  (
+    "search-word-backward-partial",
+    "Search for word under cursor backward, also inside words (g#)",
+    "search.word.backward.partial",
+  ),
   ("search-next-select", "Select next search match (gn)", "search.next.select"),
   ("search-prev-select", "Select previous search match (gN)", "search.prev.select"),
 ] ## Actions a waiting operator acts over (`dn`, `d*`, `dgn`)

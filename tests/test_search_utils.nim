@@ -251,23 +251,6 @@ suite "shouldIgnoreCase":
     check not shouldIgnoreCase("Hello", ignorecase = true, smartcase = true)
     check not shouldIgnoreCase("helloWorld", ignorecase = true, smartcase = true)
 
-suite "prepareSearchString":
-  test "case sensitive":
-    check prepareSearchString("Hello", ignorecase = false) == "Hello"
-    check prepareSearchString("ABC", ignorecase = false) == "ABC"
-
-  test "case insensitive":
-    check prepareSearchString("Hello", ignorecase = true) == "hello"
-    check prepareSearchString("ABC", ignorecase = true) == "abc"
-    check prepareSearchString("MixedCASE", ignorecase = true) == "mixedcase"
-
-  test "already lowercase":
-    check prepareSearchString("hello", ignorecase = true) == "hello"
-
-  test "empty string":
-    check prepareSearchString("", ignorecase = false) == ""
-    check prepareSearchString("", ignorecase = true) == ""
-
 suite "loadSearchHistory and saveSearchHistory":
   var originalHistory: seq[string] = @[]
   var historyPath: string = ""

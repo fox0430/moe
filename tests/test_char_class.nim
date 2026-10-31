@@ -97,6 +97,13 @@ suite "composing characters":
     # Nor does it go with an undecodable byte
     check @[Rune('a'), invalidByteRune(0x85), Rune(0x0301)].baseColumn(2) == 2
 
+  test "the next character starts after the composing ones":
+    let runes = "x❤️\u20e3y".toRunes
+    check runes.nextCharColumn(0) == 1
+    check runes.nextCharColumn(1) == 4
+    check runes.nextCharColumn(4) == 5
+    check @[Rune('a'), invalidByteRune(0x85), Rune(0x0301)].nextCharColumn(1) == 2
+
 suite "Vim's blanks":
   test "VIM_ISWHITE and vim_isspace":
     check Rune('\t').isVimWhite

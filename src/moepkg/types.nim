@@ -315,7 +315,7 @@ type
     ## an empty `/` and the highlighter all replay this value, so they cannot
     ## disagree about what counts as a match.
     pattern*: string
-    wholeWord*: bool # Match whole words only (* and #); matches literally
+    match*: SearchMatch # As a regex (/ and ?) or as it is (* and #)
 
   SearchState* = object ## Search-related state grouped together for better organization
     text*: string # Text being typed in search mode

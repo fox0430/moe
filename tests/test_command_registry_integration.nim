@@ -8721,7 +8721,8 @@ suite "executeCommand - read-only gate allowlists stay in sync":
       # Selection-only or non-buffer commands: safe on a read-only buffer.
       "fold.create", "lsp.selection.range", "macro.record", "scroll.halfpage.down",
       "scroll.halfpage.up", "scroll.page.down", "scroll.page.up", "search.next",
-      "search.prev", "search.word.backward", "search.word.forward", "textobject.around",
+      "search.prev", "search.word.backward", "search.word.backward.partial",
+      "search.word.forward", "search.word.forward.partial", "textobject.around",
       "textobject.inner", "visual.reselect", "visual.swap.selection", "visual.yank",
     ]
     for id in visualModeCommandIds():
@@ -9017,14 +9018,15 @@ suite "Handler - Whole word search":
     check registry.execute(ctx, custom("search.word.forward")).isOk
     check ctx.cursor == BufferPosition(line: 0, column: 16)
 
-  test "* reports not found when the word has no other whole word match":
+  test "* on the only whole word match finds it again, from its start":
+    # Vim puts the cursor at the word's start and its search wraps back there.
     let buffer = newTextBuffer("target targeted")
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
-    ctx.setCursor(0, 0)
+    ctx.setCursor(0, 3)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, custom("search.word.forward")).isErr
+    check registry.execute(ctx, custom("search.word.forward")).isOk
     check ctx.cursor == BufferPosition(line: 0, column: 0)
 
   test "# skips a substring match":
@@ -9059,6 +9061,60 @@ suite "Handler - Whole word search":
 
     check registry.execute(ctx, custom("search.word.forward")).isOk
     check registry.execute(ctx, custom("search.prev")).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+
+  # The keyword or text Vim's find_ident_under_cursor() finds, and the search
+  # nv_ident makes of it.
+  proc star(text: string, column: int, id = "search.word.forward"): CommandContext =
+    result = createTestContext(newTextBuffer(text))
+    result.setCursor(0, column)
+    discard createTestRegistry().execute(result, custom(id))
+
+  test "* takes a run of one class as the word":
+    check star("abc日本def 日本", 3).cursor == BufferPosition(line: 0, column: 9)
+    check star("日本 日本語 日本", 0).cursor == BufferPosition(
+      line: 0, column: 7
+    )
+
+  test "* off a word searches the word after the cursor on the line":
+    check star("a.b a.b", 1).cursor == BufferPosition(line: 0, column: 6)
+
+  test "* with no word after the cursor searches the text there":
+    let ctx = star("a -> ->", 2)
+    check ctx.cursor == BufferPosition(line: 0, column: 5)
+    check ctx.state.input.search.last == SearchSpec(pattern: "->", match: smWord)
+
+  test "* with only blanks after the cursor fails":
+    let ctx = createTestContext(newTextBuffer("foo   "))
+    ctx.setCursor(0, 4)
+    let r = createTestRegistry().execute(ctx, custom("search.word.forward"))
+    check r.isErr
+    check r.error == "E348: No string under cursor"
+    check ctx.cursor == BufferPosition(line: 0, column: 4)
+    check ctx.state.input.search.last.pattern == ""
+
+  test "* and the n after it ignore smartcase":
+    let ctx = createTestContext(newTextBuffer("Foo foo FOO"))
+    ctx.state.input.search.ignorecase = true
+    ctx.state.input.search.smartcase = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("search.word.forward")).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4)
+    check registry.execute(ctx, custom("search.next")).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 8)
+
+  test "g* and g# also find the word inside others":
+    let ctx = star("target targeted", 0, "search.word.forward.partial")
+    check ctx.cursor == BufferPosition(line: 0, column: 7)
+    check ctx.state.input.search.last == SearchSpec(pattern: "target", match: smLiteral)
+    check star("target targeted", 0, "search.word.backward.partial").cursor ==
+      BufferPosition(line: 0, column: 7)
+
+  test "n on the only match finds it again":
+    let ctx = createTestContext(newTextBuffer("foo bar"))
+    ctx.state.input.search.last = SearchSpec(pattern: "foo")
+    check createTestRegistry().execute(ctx, custom("search.next")).isOk
     check ctx.cursor == BufferPosition(line: 0, column: 0)
 
 suite "Doubled operators over lines":
