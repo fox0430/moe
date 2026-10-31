@@ -1900,6 +1900,42 @@ suite "frontend-neutral pointer and scroll input":
     check e.handlePointerInput(initPointerInput(0, 1, action = paRelease))
     check not e.state.pointerSelection.active
 
+  test "double-click on a closed fold or past a line's end takes the word there":
+    let folded = createTestEditorWithBuffer("alpha beta\ngamma\ndelta")
+    folded.state.showTabLine = false
+    folded.state.showLineNumbers = false
+    folded.state.showSidebar = false
+    check folded.activeBuffer.foldState.addFold(0, 1)
+
+    check folded.handlePointerInput(initPointerInput(0, 1, clickCount = 2))
+    check folded.state.mode == EditorMode.Visual
+    # Covered whole, as the fold is
+    check folded.state.visualSelection.start == BufferPosition(line: 0, column: 0)
+    check folded.state.visualSelection.current == BufferPosition(line: 1, column: 5)
+
+    let past = createTestEditorWithBuffer("alpha beta\ngamma")
+    past.state.showTabLine = false
+    past.state.showLineNumbers = false
+    past.state.showSidebar = false
+
+    check past.handlePointerInput(initPointerInput(0, 30, clickCount = 2))
+    check past.selectedText() == "beta"
+
+    # A place on no line selects just itself
+    let outside = BufferPosition(line: 5, column: 0)
+    check past.activeBuffer.pointerRange(outside, psgWord) == (outside, outside)
+
+  test "double-click on an empty last line selects just its place":
+    let e = createTestEditorWithBuffer("alpha\n\n")
+    check e.activeBuffer.len == 2
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+
+    check e.handlePointerInput(initPointerInput(1, 0, clickCount = 2))
+    check e.state.visualSelection.start == BufferPosition(line: 1, column: 0)
+    check e.state.visualSelection.current == BufferPosition(line: 1, column: 0)
+
   test "triple-click and drag creates a line selection":
     let e = createTestEditorWithBuffer("zero\none\ntwo")
     e.state.showTabLine = false
@@ -9592,6 +9628,133 @@ suite "handleKeyCombo - an operator acts over what a motion finds, as Vim's do_p
       check e.lines == @[line]
       check e.state.registers.getRegisterContent('"') == register
 
+  test "iw, aw, iW and aW take what Vim's current_word finds":
+    for (content, line, column, keys, lines, register, cursor) in [
+      # An empty line is an object of its own
+      ("foo\n\n", 1, 0, @["d", "i", "w"], @["fo"], "o\n", (0, 1)),
+      ("foo\n\nbar", 1, 0, @["d", "a", "w"], @["foo"], "\nbar\n", (0, 0)),
+      (
+        "foo\n\nbar",
+        1,
+        0,
+        @["c", "i", "w", "X", "Escape"],
+        @["foo", "X", "bar"],
+        "",
+        (1, 0),
+      ),
+      ("foo\n\nbar", 1, 0, @["y", "a", "W"], @["foo", "", "bar"], "\nbar", (1, 0)),
+      # The blanks before the last word, but not an indent
+      ("hello world", 0, 7, @["d", "a", "w"], @["hello"], " world", (0, 4)),
+      ("  foo", 0, 3, @["d", "a", "w"], @["  "], "foo", (0, 1)),
+      ("\tfoo", 0, 1, @["d", "a", "W"], @["\t"], "foo", (0, 0)),
+      ("#  (abc) q", 0, 5, @["d", "2", "a", "W"], @["#"], "  (abc) q", (0, 0)),
+      ("foo bar\n  baz", 0, 4, @["d", "2", "a", "w"], @["foo"], " bar\n  baz", (0, 2)),
+      ("foo bar baz", 0, 4, @["d", "a", "w", "."], @["foo"], " baz", (0, 2)),
+      # aw from blanks stops at an empty line
+      (
+        "hello   \n\nworld",
+        0,
+        6,
+        @["d", "a", "w"],
+        @["hello", "world"],
+        "   \n",
+        (0, 4),
+      ),
+      # Past an empty line the next line is excluded, which from an indent
+      # leaves whole lines
+      ("foo\n\nbar", 0, 0, @["d", "2", "i", "w"], @["bar"], "foo\n\n", (0, 0)),
+      ("x foo\n\nbar", 0, 2, @["d", "2", "i", "w"], @["x ", "bar"], "foo\n", (0, 1)),
+      # An ideographic space is a blank
+      ("foo　bar", 0, 4, @["d", "a", "W"], @["foo"], "　bar", (0, 2)),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint(content & " " & $keys)
+      check e.lines == lines
+      check e.state.registers.getRegisterContent('"') == register
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
+  test "a word object that runs out of words leaves the text, the cursor as far as it went":
+    for (content, column, keys, cursor) in [
+      ("foo bar", 0, @["d", "3", "a", "w"], 6),
+      ("foo bar", 0, @["d", "4", "i", "w"], 6),
+      ("foo bar", 0, @["c", "3", "a", "w"], 6),
+      ("foo   bar", 4, @["d", "2", "a", "w"], 8),
+      ("foo   ", 4, @["d", "a", "w"], 5),
+      ("word   ", 5, @["d", "a", "W"], 6),
+      ("    ", 1, @["d", "a", "w"], 3),
+    ]:
+      let e = createEditorForOperators(content, column = column)
+
+      e.press(keys)
+
+      checkpoint(content & " " & $keys)
+      check e.lines == @[content]
+      check e.state.registers.getRegisterContent('"') == ""
+      check e.cursor == BufferPosition(line: 0, column: cursor)
+      check e.state.mode == EditorMode.Normal
+
+  test "in Visual mode a word object grows a wider selection toward the cursor":
+    const Mixed = "foo.bar baz-qux end"
+    for (content, column, keys, lines, register, cursor) in [
+      (Mixed, 1, @["v", "i", "w", "i", "w", "d"], @["bar baz-qux end"], "foo.", (0, 0)),
+      (Mixed, 1, @["v", "i", "W", "i", "W", "d"], @["baz-qux end"], "foo.bar ", (0, 0)),
+      (Mixed, 1, @["v", "a", "W", "a", "W", "d"], @["end"], "foo.bar baz-qux ", (0, 0)),
+      (Mixed, 1, @["v", "e", "i", "w", "d"], @["fbar baz-qux end"], "oo.", (0, 1)),
+      (Mixed, 1, @["v", "l", "a", "W", "d"], @["fbaz-qux end"], "oo.bar ", (0, 1)),
+      (
+        "foo bar\nbaz",
+        4,
+        @["v", "i", "w", "i", "w", "d"],
+        @["foo "],
+        "bar\nbaz",
+        (0, 3),
+      ),
+      (
+        "foo bar\nbaz",
+        4,
+        @["v", "a", "w", "a", "w", "d"],
+        @["foo"],
+        " bar\nbaz",
+        (0, 2),
+      ),
+      # Before the anchor it grows backward
+      (
+        "foo bar\nbaz",
+        4,
+        @["v", "i", "w", "o", "i", "w", "d"],
+        @["foo", "baz"],
+        " bar",
+        (0, 2),
+      ),
+      # Linewise Visual turns charwise
+      ("foo bar\nbaz", 4, @["V", "i", "w", "d"], @["foo ", "baz"], "bar", (0, 3)),
+      ("foo bar\nbaz", 4, @["V", "a", "w", "d"], @["foo", "baz"], " bar", (0, 2)),
+    ]:
+      let e = createEditorForOperators(content, column = column)
+
+      e.press(keys)
+
+      checkpoint(content & " " & $keys)
+      check e.lines == lines
+      check e.state.registers.getRegisterContent('"') == register
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
+    let line = createEditorForOperators("foo bar\nbaz", column = 4)
+    line.press("V", "i", "w")
+    check line.state.mode == EditorMode.Visual
+
+    # When the words run out the selection keeps what was found
+    let short = createEditorForOperators("foo bar\nbaz", column = 4)
+    let beeps = short.state.beepCount
+    short.press("v", "3", "a", "w")
+    check short.state.mode == EditorMode.Visual
+    check short.activeWindow.visualAnchor == BufferPosition(line: 0, column: 4)
+    check short.cursor == BufferPosition(line: 1, column: 3)
+    check short.state.beepCount == beeps + 1
+
   test "} in the last paragraph goes to its last character, which an operator takes":
     for (content, line, column, keys, lines, cursor) in [
       ("a\nb\nc", 0, 0, @["}"], @["a", "b", "c"], (2, 0)),
@@ -10873,6 +11036,24 @@ suite "handleKeyCombo - a key that beeps stops the register or mapping it came f
       checkpoint(content & " " & $register)
       check e.lines == expected
       check e.activeWindow.cursor == cursor
+
+  test "a word object that runs out of words stops it, in Visual mode too":
+    for (content, start, register, expected, mode) in [
+      ("foo bar", at(0, 0), keys("d3awx"), @["foo bar"], EditorMode.Normal),
+      ("foo bar", at(0, 0), keys("c3awX"), @["foo bar"], EditorMode.Normal),
+      ("foo   ", at(0, 4), keys("dawx"), @["foo   "], EditorMode.Normal),
+      ("foo bar", at(0, 0), keys("v3awd"), @["foo bar"], EditorMode.Visual),
+      # On the blanks iw finds them, so the rest runs
+      ("foo   ", at(0, 4), keys("diwx"), @["fo"], EditorMode.Normal),
+    ]:
+      let e = createEditorForBeep(content, start.line, start.column)
+      e.setRegister('a', register)
+
+      e.press(keys("@a"))
+
+      checkpoint(content & " " & $register)
+      check e.lines == expected
+      check e.state.mode == mode
 
   test "the registers it runs in stop with it, a recursive one included":
     let recursive = createEditorForBeep("ab\ncd\nef")

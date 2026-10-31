@@ -224,9 +224,29 @@ proc markTarget(
     )
   )
 
+proc wordTarget(ctx: CommandContext, operand: Operand): Option[MotionTarget] =
+  ## iw aw iW aW. When the words run out the operator does nothing, and the
+  ## cursor stays as far as Vim's current_word went.
+  let o = ctx.buffer.currentWord(
+    ctx.cursor, operand.count, operand.textObjectKind, operand.textObjectModifier,
+    EditorMode.Normal,
+  )
+  if not o.found:
+    ctx.cursor = ctx.settle(o.cursor)
+    return none(MotionTarget)
+  some(
+    MotionTarget(
+      start: o.start,
+      finish: o.cursor,
+      motionType: if o.inclusive: mtInclusive else: mtExclusive,
+    )
+  )
+
 proc textObjectTarget(
     ctx: CommandContext, operand: Operand
 ): Result[Option[MotionTarget], string] =
+  if operand.textObjectKind in {toWord, toWideWord}:
+    return ok(ctx.wordTarget(operand))
   let r = ?calculateTextObjectRange(
     ctx.buffer, ctx.cursor, operand.textObjectKind, operand.textObjectModifier,
     operand.count,

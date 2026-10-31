@@ -366,10 +366,6 @@ proc searchChar(
     col -= step
   some(CursorPosition(x: col, y: currentPos.y))
 
-proc isSymbolChar(r: Rune): bool =
-  ## Check if a character is a symbol (non-word, non-whitespace)
-  return not isWordChar(r) and not isSpaceOrBreak(r)
-
 type WordWalker = object
   ## Steps through a buffer as Vim's inc_cursor/dec_cursor do: the end of a
   ## line is a place of its own, after its last character
@@ -505,62 +501,78 @@ proc fwdWord(w: var WordWalker, count: int, eol: bool, mode: EditorMode): bool =
         return true
   true
 
-proc bckWord(w: var WordWalker, count: int): bool =
+proc bckWord(w: var WordWalker, count: int, stop = false): bool =
   ## Vim's bck_word: back to the start of the `count`-th word, stopping at an
-  ## empty line. False when it started at the start of the buffer.
+  ## empty line. With `stop` the first stays on the word it stands at the
+  ## start of. False when it started at the start of the buffer.
+  var stop = stop
   for _ in 1 .. count:
     w.toFoldStart()
+    let startClass = w.class
     if w.dec == -1:
       return false
     block finished:
-      while w.class == 0:
-        if w.pos.column == 0 and w.onEmptyLine:
-          break finished
-        if w.dec == -1:
+      if not stop or startClass == w.class or startClass == 0:
+        while w.class == 0:
+          if w.pos.column == 0 and w.onEmptyLine:
+            break finished
+          if w.dec == -1:
+            return true
+        if w.skipClass(w.class, forward = false):
           return true
-      if w.skipClass(w.class, forward = false):
-        return true
       discard w.inc # overshot
+    stop = false
   true
 
-proc endWord(w: var WordWalker, count: int, stop: bool, mode: EditorMode): bool =
+proc endWord(
+    w: var WordWalker, count: int, stop: bool, mode: EditorMode, empty = false
+): bool =
   ## Vim's end_word: on to the end of the `count`-th word. With `stop` (`cw`)
-  ## the first stays on the word it stands at the end of. False when the
-  ## buffer ends first.
+  ## the first stays on the word it stands at the end of, and with `empty` it
+  ## stops at an empty line. False when the buffer ends first.
   var stop = stop
   for _ in 1 .. count:
     w.toFoldEnd(mode)
     let startClass = w.class
     if w.inc == -1:
       return false
-    if w.class == startClass and startClass != 0:
-      if w.skipClass(startClass, forward = true):
-        return false
-    elif not stop or startClass == 0:
-      while w.class == 0:
-        if w.inc == -1:
+    block finished:
+      if w.class == startClass and startClass != 0:
+        if w.skipClass(startClass, forward = true):
           return false
-      if w.skipClass(w.class, forward = true):
-        return false
-    discard w.dec # overshot
+      elif not stop or startClass == 0:
+        while w.class == 0:
+          if empty and w.pos.column == 0 and w.onEmptyLine:
+            break finished
+          if w.inc == -1:
+            return false
+        if w.skipClass(w.class, forward = true):
+          return false
+      discard w.dec # overshot
     stop = false
   true
 
-proc bckendWord(w: var WordWalker, count: int): bool =
+proc bckendWord(w: var WordWalker, count: int, eol = false): bool =
   ## Vim's bckend_word: back to the end of the `count`-th word, stopping at an
-  ## empty line. False when it started at the start of the buffer.
+  ## empty line, and with `eol` at the end of the line before. False when it
+  ## started at the start of the buffer.
   for _ in 1 .. count:
     let startClass = w.class
-    if w.dec == -1:
+    var i = w.dec
+    if i == -1:
       return false
+    if eol and i == 1:
+      return true
     if startClass != 0:
       while w.class == startClass:
-        if w.dec == -1:
+        i = w.dec
+        if i == -1 or (eol and i == 1):
           return true
     while w.class == 0:
       if w.pos.column == 0 and w.onEmptyLine:
         break
-      if w.dec == -1:
+      i = w.dec
+      if i == -1 or (eol and i == 1):
         return true
   true
 
@@ -1537,374 +1549,6 @@ proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] 
 
 ## Text object range calculation
 
-proc findWordBoundaries(
-    buffer: TextBuffer, cursor: BufferPosition, inner: bool
-): Result[TextObjectRange, string] =
-  ## Find word boundaries for iw (inner word) or aw (a word)
-  ## inner=true: just the word
-  ## inner=false: word + trailing whitespace (or leading if no trailing)
-
-  if cursor.line < 0 or cursor.line >= buffer.len:
-    return err("Cursor position out of bounds")
-
-  let line = buffer.getLine(cursor.line)
-  let runes = line.toCharRunes()
-
-  if runes.len == 0:
-    return err("Empty line")
-
-  let cursorCol = min(cursor.column, runes.len - 1)
-
-  # Case 1: Cursor is on whitespace
-  if isSpaceOrBreak(runes[cursorCol]):
-    if inner:
-      # Inner whitespace: select the whitespace sequence
-      var startCol = cursorCol
-      while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
-        startCol.dec
-      var endCol = cursorCol
-      while endCol + 1 < runes.len and isSpaceOrBreak(runes[endCol + 1]):
-        endCol.inc
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: startCol),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
-          isLinewise: false,
-        )
-      )
-    else:
-      # Around: skip whitespace and include the next word
-      var wordStart = cursorCol
-      while wordStart < runes.len and isSpaceOrBreak(runes[wordStart]):
-        wordStart.inc
-
-      if wordStart >= runes.len:
-        # No word after whitespace on this line - search subsequent lines
-        var foundLine = -1
-        var nextCol = 0
-        var nextEndCol = 0
-        for searchLine in (cursor.line + 1) ..< buffer.len:
-          let searchLineStr = buffer.getLine(searchLine)
-          let searchRunes = searchLineStr.toCharRunes()
-          var col = 0
-          # Skip leading whitespace
-          while col < searchRunes.len and isSpaceOrBreak(searchRunes[col]):
-            col.inc
-          if col < searchRunes.len:
-            # Found a non-whitespace character
-            foundLine = searchLine
-            nextCol = col
-            nextEndCol = col
-            if isWordChar(searchRunes[col]):
-              while nextEndCol + 1 < searchRunes.len and
-                  isWordChar(searchRunes[nextEndCol + 1]):
-                nextEndCol.inc
-            elif isSymbolChar(searchRunes[col]):
-              while nextEndCol + 1 < searchRunes.len and
-                  isSymbolChar(searchRunes[nextEndCol + 1]):
-                nextEndCol.inc
-            break
-
-        if foundLine >= 0:
-          # Include leading whitespace on current line
-          var startCol = cursorCol
-          while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
-            startCol.dec
-          return ok(
-            TextObjectRange(
-              start: BufferPosition(line: cursor.line, column: startCol),
-              endPos: BufferPosition(line: foundLine, column: nextEndCol),
-              isLinewise: false,
-            )
-          )
-
-        # No word/WORD anywhere ahead: Vim's "aw"/"aW" needs a word to anchor the
-        # surrounding whitespace, so it fails (no-op) here rather than selecting
-        # the surrounding whitespace on its own. ("iw"/"iW" on whitespace still
-        # selects the run via the inner branch above.)
-        return err("No word for text object after whitespace")
-
-      # Found word on same line after whitespace
-      var endCol = wordStart
-      if isWordChar(runes[wordStart]):
-        while endCol + 1 < runes.len and isWordChar(runes[endCol + 1]):
-          endCol.inc
-      elif isSymbolChar(runes[wordStart]):
-        while endCol + 1 < runes.len and isSymbolChar(runes[endCol + 1]):
-          endCol.inc
-
-      # Include leading whitespace
-      var startCol = cursorCol
-      while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
-        startCol.dec
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: startCol),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
-          isLinewise: false,
-        )
-      )
-
-  # Case 2: Cursor is on a word character
-  if isWordChar(runes[cursorCol]):
-    var startCol = cursorCol
-    while startCol > 0 and isWordChar(runes[startCol - 1]):
-      startCol.dec
-
-    var endCol = cursorCol
-    while endCol + 1 < runes.len and isWordChar(runes[endCol + 1]):
-      endCol.inc
-
-    if inner:
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: startCol),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
-          isLinewise: false,
-        )
-      )
-    else:
-      # Around word: word + trailing whitespace
-      var extendedEnd = endCol + 1
-      while extendedEnd < runes.len and isSpaceOrBreak(runes[extendedEnd]):
-        extendedEnd.inc
-
-      if extendedEnd > endCol + 1:
-        # Has trailing whitespace
-        return ok(
-          TextObjectRange(
-            start: BufferPosition(line: cursor.line, column: startCol),
-            endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
-            isLinewise: false,
-          )
-        )
-
-      # No trailing whitespace, try leading
-      if startCol > 0:
-        var extendedStart = startCol
-        while extendedStart > 0 and isSpaceOrBreak(runes[extendedStart - 1]):
-          extendedStart.dec
-        return ok(
-          TextObjectRange(
-            start: BufferPosition(line: cursor.line, column: extendedStart),
-            endPos: BufferPosition(line: cursor.line, column: endCol),
-            isLinewise: false,
-          )
-        )
-
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: startCol),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
-          isLinewise: false,
-        )
-      )
-
-  # Case 3: Cursor is on a symbol character
-  if isSymbolChar(runes[cursorCol]):
-    var startCol = cursorCol
-    while startCol > 0 and isSymbolChar(runes[startCol - 1]):
-      startCol.dec
-
-    var endCol = cursorCol
-    while endCol + 1 < runes.len and isSymbolChar(runes[endCol + 1]):
-      endCol.inc
-
-    if inner:
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: startCol),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
-          isLinewise: false,
-        )
-      )
-    else:
-      # Around symbol: symbols + trailing whitespace
-      var extendedEnd = endCol + 1
-      while extendedEnd < runes.len and isSpaceOrBreak(runes[extendedEnd]):
-        extendedEnd.inc
-
-      if extendedEnd > endCol + 1:
-        return ok(
-          TextObjectRange(
-            start: BufferPosition(line: cursor.line, column: startCol),
-            endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
-            isLinewise: false,
-          )
-        )
-
-      # No trailing whitespace, try leading
-      if startCol > 0:
-        var extendedStart = startCol
-        while extendedStart > 0 and isSpaceOrBreak(runes[extendedStart - 1]):
-          extendedStart.dec
-        return ok(
-          TextObjectRange(
-            start: BufferPosition(line: cursor.line, column: extendedStart),
-            endPos: BufferPosition(line: cursor.line, column: endCol),
-            isLinewise: false,
-          )
-        )
-
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: startCol),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
-          isLinewise: false,
-        )
-      )
-
-  return err("Unexpected character class")
-
-proc findWideWordBoundaries(
-    buffer: TextBuffer, cursor: BufferPosition, inner: bool
-): Result[TextObjectRange, string] =
-  ## Find WORD boundaries for iW (inner WORD) or aW (a WORD)
-  ## WORD is any sequence of non-whitespace characters
-  ## inner=true: just the WORD
-  ## inner=false: WORD + trailing whitespace (or leading if no trailing)
-
-  if cursor.line < 0 or cursor.line >= buffer.len:
-    return err("Cursor position out of bounds")
-
-  let line = buffer.getLine(cursor.line)
-  let runes = line.toCharRunes()
-
-  if runes.len == 0:
-    return err("Empty line")
-
-  let cursorCol = min(cursor.column, runes.len - 1)
-
-  # Case 1: Cursor is on whitespace
-  if isSpaceOrBreak(runes[cursorCol]):
-    if inner:
-      # Inner whitespace: select the whitespace sequence
-      var startCol = cursorCol
-      while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
-        startCol.dec
-      var endCol = cursorCol
-      while endCol + 1 < runes.len and isSpaceOrBreak(runes[endCol + 1]):
-        endCol.inc
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: startCol),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
-          isLinewise: false,
-        )
-      )
-    else:
-      # Around: skip whitespace and include the next WORD
-      var wordStart = cursorCol
-      while wordStart < runes.len and isSpaceOrBreak(runes[wordStart]):
-        wordStart.inc
-
-      if wordStart >= runes.len:
-        # No WORD after whitespace on this line - search subsequent lines
-        var foundLine = -1
-        var nextCol = 0
-        var nextEndCol = 0
-        for searchLine in (cursor.line + 1) ..< buffer.len:
-          let searchLineStr = buffer.getLine(searchLine)
-          let searchRunes = searchLineStr.toCharRunes()
-          var col = 0
-          while col < searchRunes.len and isSpaceOrBreak(searchRunes[col]):
-            col.inc
-          if col < searchRunes.len:
-            foundLine = searchLine
-            nextCol = col
-            nextEndCol = col
-            while nextEndCol + 1 < searchRunes.len and
-                not isSpaceOrBreak(searchRunes[nextEndCol + 1]):
-              nextEndCol.inc
-            break
-
-        if foundLine >= 0:
-          var startCol = cursorCol
-          while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
-            startCol.dec
-          return ok(
-            TextObjectRange(
-              start: BufferPosition(line: cursor.line, column: startCol),
-              endPos: BufferPosition(line: foundLine, column: nextEndCol),
-              isLinewise: false,
-            )
-          )
-
-        # No word/WORD anywhere ahead: Vim's "aw"/"aW" needs a word to anchor the
-        # surrounding whitespace, so it fails (no-op) here rather than selecting
-        # the surrounding whitespace on its own. ("iw"/"iW" on whitespace still
-        # selects the run via the inner branch above.)
-        return err("No word for text object after whitespace")
-
-      # Found WORD on same line after whitespace
-      var endCol = wordStart
-      while endCol + 1 < runes.len and not isSpaceOrBreak(runes[endCol + 1]):
-        endCol.inc
-
-      var startCol = cursorCol
-      while startCol > 0 and isSpaceOrBreak(runes[startCol - 1]):
-        startCol.dec
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: startCol),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
-          isLinewise: false,
-        )
-      )
-
-  # Case 2: Cursor is on a non-whitespace character (WORD)
-  var startCol = cursorCol
-  while startCol > 0 and not isSpaceOrBreak(runes[startCol - 1]):
-    startCol.dec
-
-  var endCol = cursorCol
-  while endCol + 1 < runes.len and not isSpaceOrBreak(runes[endCol + 1]):
-    endCol.inc
-
-  if inner:
-    return ok(
-      TextObjectRange(
-        start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: endCol),
-        isLinewise: false,
-      )
-    )
-  else:
-    # Around WORD: WORD + trailing whitespace
-    var extendedEnd = endCol + 1
-    while extendedEnd < runes.len and isSpaceOrBreak(runes[extendedEnd]):
-      extendedEnd.inc
-
-    if extendedEnd > endCol + 1:
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: startCol),
-          endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
-          isLinewise: false,
-        )
-      )
-
-    # No trailing whitespace, try leading
-    if startCol > 0:
-      var extendedStart = startCol
-      while extendedStart > 0 and isSpaceOrBreak(runes[extendedStart - 1]):
-        extendedStart.dec
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: extendedStart),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
-          isLinewise: false,
-        )
-      )
-
-    return ok(
-      TextObjectRange(
-        start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: endCol),
-        isLinewise: false,
-      )
-    )
-
 proc isEscaped(runes: seq[Rune], idx: int): bool =
   ## Check if the character at idx is escaped by counting preceding backslashes
   var backslashCount = 0
@@ -2022,6 +1666,128 @@ proc inIndent(w: WordWalker): bool =
   while blanks < w.runes.len and w.runes[blanks].isVimWhite:
     blanks += 1
   blanks >= w.pos.column + 1
+
+proc oneLeft(w: var WordWalker): bool =
+  ## Vim's oneleft: one character left within the line.
+  if w.pos.column == 0:
+    return false
+  w.pos.column -= 1
+  true
+
+proc backInLine(w: var WordWalker) =
+  ## Vim's back_in_line: back to the start of the word or the blanks the
+  ## walker is on, within its line.
+  let startClass = w.class
+  while w.pos.column > 0:
+    w.pos.column -= 1
+    if w.class != startClass:
+      w.pos.column += 1
+      break
+
+type WordObject* = object
+  ## What Vim's current_word finds, or how far it went when it failed
+  found*: bool
+  start*: BufferPosition ## Where the operated text starts, or the Visual anchor
+  cursor*: BufferPosition ## The other end, where the cursor goes
+  inclusive*: bool
+
+proc currentWord(
+    buffer: TextBuffer,
+    cursor: BufferPosition,
+    count: int,
+    around, bigword: bool,
+    mode: EditorMode,
+    anchor = none(BufferPosition),
+): WordObject =
+  ## iw aw iW aW as Vim's current_word: the word or the blanks under the
+  ## cursor, and `count - 1` more of either. `around` adds the blanks after a
+  ## word, or before it when none follow and they are not an indent. A Visual
+  ## selection (`anchor`) wider than a character grows toward the cursor's
+  ## side instead. Fails when the buffer ends before `count` are found.
+  if cursor.line notin 0 ..< buffer.len:
+    return WordObject(start: anchor.get(cursor), cursor: cursor)
+  var
+    w = initWordWalker(buffer, cursor, bigword)
+    startPos = cursor
+    left = max(1, count)
+    includeWhite = false
+  w.pos.column = min(w.pos.column, w.runes.len)
+  result = WordObject(start: anchor.get(cursor), inclusive: true)
+
+  template fail() =
+    result.cursor = w.pos
+    return
+
+  if anchor.isNone or anchor.get == cursor:
+    w.backInLine
+    startPos = w.pos
+    if (w.class == 0) == around:
+      if not w.endWord(1, stop = true, mode, empty = true):
+        fail()
+    else:
+      discard w.fwdWord(1, eol = true, mode)
+      # Back off the start of the next word, or the line break before it.
+      if not w.oneLeft:
+        discard w.decl
+      includeWhite = around
+    result.start = startPos
+    left -= 1
+
+  while left > 0:
+    result.inclusive = true
+    if anchor.isSome and w.pos < result.start:
+      if w.decl == -1:
+        fail()
+      if around != (w.class != 0):
+        if not w.bckWord(1, stop = true):
+          fail()
+      else:
+        if not w.bckendWord(1, eol = true):
+          fail()
+        discard w.incl
+    else:
+      if w.incl == -1:
+        fail()
+      if around != (w.class == 0):
+        if not w.fwdWord(1, eol = true, mode) and left > 1:
+          fail()
+        # Not past a line break onto the next line's first character.
+        if not w.oneLeft:
+          result.inclusive = false
+      else:
+        if not w.endWord(1, stop = true, mode, empty = true):
+          fail()
+    left -= 1
+
+  if includeWhite and (w.class != 0 or (w.pos.column == 0 and not result.inclusive)):
+    # No blanks after the last word: take those before the first, but not an
+    # indent.
+    var before = initWordWalker(buffer, startPos, bigword)
+    if before.oneLeft:
+      before.backInLine
+      if before.class == 0 and before.pos.column > 0:
+        result.start = before.pos
+  result.cursor = w.pos
+  result.found = true
+
+proc currentWord*(
+    buffer: TextBuffer,
+    cursor: BufferPosition,
+    count: int,
+    kind: TextObjectKind,
+    modifier: TextObjectModifier,
+    mode: EditorMode,
+    anchor = none(BufferPosition),
+): WordObject =
+  ## The word object `kind` (toWord or toWideWord) with `modifier`.
+  buffer.currentWord(
+    cursor,
+    count,
+    around = modifier == tomAround,
+    bigword = kind == toWideWord,
+    mode,
+    anchor,
+  )
 
 proc findUnmatched(
     buffer: TextBuffer, start: BufferPosition, target, other: Rune, forward: bool
@@ -2591,10 +2357,8 @@ proc calculateBaseTextObjectRange(
   let inner = (modifier == tomInner)
 
   case kind
-  of toWord:
-    return findWordBoundaries(buffer, cursor, inner)
-  of toWideWord:
-    return findWideWordBoundaries(buffer, cursor, inner)
+  of toWord, toWideWord:
+    return err("Words are found by currentWord")
   of toQuotedDouble:
     return findQuotedBoundaries(buffer, cursor, '"', inner)
   of toQuotedSingle:
@@ -2648,8 +2412,9 @@ proc calculateTextObjectRange*(
     modifier: TextObjectModifier,
     count: int = 1,
 ): Result[TextObjectRange, string] =
-  ## Range of a text object, extended over `count` objects (d2iw, 2dap, d3is,
-  ## 2dat, d2i(). `count <= 1` is a single object. The quote kinds ignore it.
+  ## Range of a text object, extended over `count` objects (2dap, d3is, 2dat,
+  ## d2i(). `count <= 1` is a single object. The quote kinds ignore it. Words
+  ## are found by currentWord, which also tells where a failed search went.
   let base = calculateBaseTextObjectRange(buffer, cursor, kind, modifier)
   if base.isErr or count <= 1:
     return base
@@ -2657,18 +2422,7 @@ proc calculateTextObjectRange*(
 
   case kind
   of toWord, toWideWord:
-    # Word/WORD model the gap (whitespace run) as its own counted object, so
-    # stepping one cell past the current end lands in the next object. Inner for
-    # the intermediate objects, the original modifier for the last.
-    for i in 1 ..< count:
-      let probe = nextObjectProbe(buffer, toRange.endPos.line, toRange.endPos.column)
-      if probe.isNone:
-        break
-      let m = if i == count - 1: modifier else: tomInner
-      let nextResult = calculateBaseTextObjectRange(buffer, probe.get, kind, m)
-      if nextResult.isErr:
-        break
-      toRange.endPos = nextResult.value.endPos
+    discard # refused by calculateBaseTextObjectRange
   of toParagraph:
     # Each count selects one more whole paragraph of the SAME modifier (Nap = N
     # paragraphs incl. their trailing blank runs; Nip = N alternating runs).

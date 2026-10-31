@@ -519,6 +519,29 @@ proc handleChangeToEnd*(
 
 ## Text object command handlers
 
+proc selectWords(
+    ctx: CommandContext, kind: TextObjectKind, textObj: PendingTextObject
+) =
+  ## iw aw iW aW in Visual mode, as Vim's current_word: a selection of one
+  ## character takes the object under the cursor, and a wider one grows by the
+  ## count toward the cursor. Linewise Visual turns charwise.
+  let o = ctx.buffer.currentWord(
+    ctx.cursor,
+    textObj.count,
+    kind,
+    textObj.modifier,
+    ctx.state.mode,
+    some(ctx.state.activeWindow.clampedAnchor),
+  )
+  if not o.found:
+    # The selection keeps what was found before the words ran out.
+    ctx.state.selectVisualRange(o.start, o.cursor)
+    ctx.state.beep()
+  elif ctx.state.mode == EditorMode.VisualLine:
+    ctx.state.enterVisual(vskChar, o.start, o.cursor)
+  else:
+    ctx.state.selectVisualRange(o.start, o.cursor)
+
 proc handleTextObjectInner*(
     ctx: CommandContext, count: int = 1, countGiven = false
 ): Result[(), string] =
@@ -1223,6 +1246,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
             ),
           )
         ctx.state.pendingInput.pendingTextObject = none(PendingTextObject)
+
+        if isVisualAllMode(ctx.state.mode) and kind in {toWord, toWideWord}:
+          ctx.selectWords(kind, textObj)
+          return ok(())
 
         let rangeResult = calculateTextObjectRange(
           ctx.buffer, ctx.cursor, kind, textObj.modifier, textObj.count
