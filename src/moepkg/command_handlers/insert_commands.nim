@@ -28,7 +28,8 @@ import pkg/results
 
 import
   ../[
-    cursor_util, types, modes, unicode_utils, insert_record, render_utils, wanted_column
+    cursor_util, types, modes, unicode_utils, char_class, insert_record, render_utils,
+    wanted_column,
   ]
 import ../buffer/[core, edit, undo]
 import smart_indent
@@ -646,15 +647,18 @@ proc deleteTypedBefore(
     return ok()
   var
     col = last.column
-    word = none(bool) # Whether the word being deleted is of word characters
+    class = none(int) # The class of the word being deleted
   while true:
-    dec col
+    # Back over a whole character, with its composing ones, as Vim's dec_cursor
+    let after = col
+    col = runes.baseColumn(col - 1)
     if unit == buWord:
-      if word.isNone:
-        if not runes[col].isSpaceOrBreak:
-          word = some(runes[col].isWordChar)
-      elif runes[col].isSpaceOrBreak or runes[col].isWordChar != word.get:
-        inc col
+      let r = runes[col]
+      if class.isNone:
+        if not r.isVimSpace:
+          class = some(mbClass(r))
+      elif r.isVimSpace or mbClass(r) != class.get:
+        col = after
         break
     if col <= floor or (pos.line == stop.line and col == stop.column):
       break
