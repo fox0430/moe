@@ -422,9 +422,11 @@ suite "Completion - LSP support":
   test "a list that comes back empty keeps it waiting for the answer":
     # Buffer words are refreshed while the request is in flight.
     let mgr = newCompletionManager()
-    mgr.setLspRequestPending(1, BufferId(1))
     let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "zq")
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "z")
+    mgr.triggerCompletion(buf, 0, 1)
+    mgr.setLspRequestPending(1, buf.id)
+    discard buf.insertText(BufferPosition(line: 0, column: 1), "q")
 
     mgr.triggerCompletion(buf, 0, 2)
 
@@ -1708,7 +1710,8 @@ suite "Completion - triggerCompletion preserves lspItems":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello hel")
 
-    # Simulate LSP items already present
+    # Simulate LSP items already present for "he"
+    mgr.triggerCompletion(buf, 0, 8)
     mgr.lspItems = @[
       CompletionItem(label: "hello", kind: some(cikFunction)),
       CompletionItem(label: "help", kind: some(cikVariable)),
@@ -1720,12 +1723,63 @@ suite "Completion - triggerCompletion preserves lspItems":
     check mgr.lspItems.len == 2
     check mgr.lspItems[0].label == "hello"
 
+  test "triggerCompletion at another word drops the lspItems and their request":
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "value.he\nhe")
+    mgr.triggerCompletion(buf, 0, 8)
+    mgr.lspItems = @[CompletionItem(label: "help")]
+    mgr.lastLspPrefix = "he"
+    mgr.lastLspRequestTime = getMonoTime()
+    mgr.setLspRequestPending(1, buf.id)
+    check mgr.shouldSkipLspRequest("he")
+
+    mgr.triggerCompletion(buf, 1, 2)
+
+    check mgr.lspItems.len == 0
+    check not mgr.isPendingLsp
+    check not mgr.shouldSkipLspRequest("he")
+    for entry in mgr.menu.entries:
+      check entry.source != csLsp
+
+  test "a resolve answer for a dropped list does not reach a buffer word":
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer("foo\nfo\nfo")
+    mgr.triggerCompletion(buf, 1, 2)
+    mgr.setLspItems(@[CompletionItem(label: "foo")])
+    mgr.resolvedIndex = 0
+
+    mgr.triggerCompletion(buf, 2, 2)
+    require mgr.menu.entries.len == 1
+    mgr.updateResolvedEntry(CompletionItem(label: "foo", detail: some("proc")))
+
+    check mgr.menu.entries[0].source == csBuffer
+    check mgr.menu.entries[0].detail.isNone
+
+  test "a word at the same column that does not extend the asked text drops them":
+    # Asked for "fo"; the user then erased it and typed "b" in its place.
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer("print(fo)")
+    mgr.triggerCompletion(buf, 0, 8)
+    mgr.lspItems = @[CompletionItem(label: "bar")]
+    mgr.lastLspPrefix = "fo"
+    for _ in 0 ..< 2:
+      discard buf.deleteChar(BufferPosition(line: 0, column: 6))
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "b")
+
+    mgr.triggerCompletion(buf, 0, 7)
+
+    check mgr.lspItems.len == 0
+    for entry in mgr.menu.entries:
+      check entry.source != csLsp
+
   test "triggerCompletion uses lspItems for filtering when present":
     let mgr = newCompletionManager()
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "tes")
 
     # Set LSP items first
+    mgr.triggerCompletion(buf, 0, 3)
     mgr.lspItems = @[
       CompletionItem(label: "test", kind: some(cikFunction), detail: some("fn()")),
       CompletionItem(label: "testing", kind: some(cikVariable)),

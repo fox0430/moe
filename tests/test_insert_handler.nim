@@ -2128,31 +2128,34 @@ suite "InsertModeHandler - completion commit":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 6)
 
-    handler.completionManager.lspItems = @[
-      CompletionItem(
-        label: "vec!",
-        textEdit: some(
-          %*{
-            "range":
-              {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 6}},
-            "newText": "vec!",
-          }
-        ),
-      ),
-      CompletionItem(
-        label: "version",
-        textEdit: some(
-          %*{
-            "range":
-              {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 6}},
-            "newText": "version",
-          }
-        ),
-      ),
-    ]
-
-    # Trigger completion to populate entries from lspItems
+    # The server answers the completion triggered on "ve"
     handler.completionManager.triggerCompletion(buf, 0, 6, langNone)
+    handler.completionManager.setLspItems(
+      @[
+        CompletionItem(
+          label: "vec!",
+          textEdit: some(
+            %*{
+              "range": {
+                "start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 6}
+              },
+              "newText": "vec!",
+            }
+          ),
+        ),
+        CompletionItem(
+          label: "version",
+          textEdit: some(
+            %*{
+              "range": {
+                "start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 6}
+              },
+              "newText": "version",
+            }
+          ),
+        ),
+      ]
+    )
     check handler.completionManager.isActive()
     check handler.completionManager.menu.entries.len >= 2
 
@@ -3919,6 +3922,7 @@ suite "InsertModeHandler - LSP completion request retirement":
 
     # Its answer and the candidates from before recording would differ in a
     # replay, so both go though no new request replaces them.
+    handler.completionManager.triggerCompletion(buf, 1, 3, langNone)
     handler.completionManager.setLspRequestPending(42, buf.id)
     handler.completionManager.lspItems = @[CompletionItem(label: "help")]
 
@@ -3969,6 +3973,146 @@ suite "InsertModeHandler - LSP-only after-dot completion":
       require handler.completionManager.menu.entries.len == 1
       check handler.completionManager.menu.entries[0].word ==
         (if failure: "hello" else: "helper")
+
+suite "InsertModeHandler - LSP candidates belong to the word asked about":
+  privateAccess(LspService)
+
+  proc key(c: char): KeyCombo =
+    KeyCombo(isSpecial: false, char: $c, modifiers: {})
+
+  proc answeredLate(): (TextBuffer, InsertModeHandler, EditorState) =
+    ## The answer for "value.b" arrives after "aq" is typed, so it matches
+    ## nothing and the popup closes with the candidates still held.
+    let
+      path = getTempDir() / "moe_completion_trigger.nim"
+      buf = newTextBuffer("hello\nvalue.b", some(path))
+      handler = answerHandler(buf)
+      state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 7)
+    handler.lsp.service.capabilities["nim"] =
+      ServerCapabilities(completionProvider: some(CompletionOptions()))
+    handler.lsp.documents[normalizedPath(absolutePath(path))] =
+      initLspDocumentState(1, buf.getTextString(), delivered = true)
+    handler.triggerLspCompletionRequest(buf, state)
+    discard handler.typeAndFrame(buf, state, key('a'))
+    discard handler.typeAndFrame(buf, state, key('q'))
+    # The request went out at "b"; the test has no server to send it to.
+    let mgr = handler.completionManager
+    mgr.setLspRequestPending(42, buf.id)
+    mgr.lastLspPrefix = "b"
+    handler.lsp.service.pendingResponses[42] =
+      (result: some("""[{"label":"bar"},{"label":"baz"}]"""), error: none(string))
+    handler.pollLspCompletion(state)
+    check not mgr.isActive
+    check mgr.lspItems.len == 2
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.typeAndFrame(buf, state, enterKey)
+    (buf, handler, state)
+
+  proc words(handler: InsertModeHandler): seq[string] =
+    for entry in handler.completionManager.menu.entries:
+      result.add entry.word
+
+  proc lspWords(handler: InsertModeHandler): seq[string] =
+    for entry in handler.completionManager.menu.entries:
+      if entry.source == csLsp:
+        result.add entry.word
+
+  test "a word on the next line that extends the old prefix asks anew":
+    let (buf, handler, state) = answeredLate()
+    discard handler.typeAndFrame(buf, state, key('b'))
+    check handler.lspWords.len == 0
+
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.typeAndFrame(buf, state, tabKey)
+    check buf.len == 3
+    check buf.getLine(1) == "value.baq"
+
+  test "a word on the next line does not merge the old candidates":
+    let (buf, handler, state) = answeredLate()
+    # Long past the debounce, so "z" asks anew rather than filtering what is
+    # held.
+    handler.completionManager.lastLspRequestTime = default(MonoTime)
+    discard handler.typeAndFrame(buf, state, key('z'))
+    check handler.lspWords.len == 0
+
+  proc answered(
+      text: string, cursor: BufferPosition, raw: string, afterDot = false
+  ): (TextBuffer, InsertModeHandler, EditorState) =
+    ## Ctrl-N at `cursor`, and the server's answer `raw` for the word there.
+    let
+      path = getTempDir() / "moe_completion_trigger.nim"
+      buf = newTextBuffer(text, some(path))
+      handler = answerHandler(buf)
+      state = createTestState()
+    state.cursor = cursor
+    state.config.autocomplete.lspOnlyAfterDot = afterDot
+    handler.lsp.service.capabilities["nim"] =
+      ServerCapabilities(completionProvider: some(CompletionOptions()))
+    handler.lsp.documents[normalizedPath(absolutePath(path))] =
+      initLspDocumentState(1, buf.getTextString(), delivered = true)
+    let ctrlN = KeyCombo(isSpecial: false, char: "n", modifiers: {kmCtrl})
+    discard handler.handleInsertModeKey(buf, state, ctrlN)
+    handler.completionManager.setLspRequestPending(42, buf.id)
+    handler.lsp.service.pendingResponses[42] = (result: some(raw), error: none(string))
+    handler.pollLspCompletion(state)
+    check handler.lspWords.len > 0
+    (buf, handler, state)
+
+  let backspaceKey =
+    KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+
+  test "Backspace below the asked text drops candidates whose edit reaches past it":
+    # The textEdit replaces "fo", so on "f" it would also take the ")". Also
+    # when no request follows, as with autocomplete turned off.
+    for autocomplete in [true, false]:
+      let (buf, handler, state) = answered(
+        "fizz\nprint(fo)",
+        BufferPosition(line: 1, column: 8),
+        """[{"label":"foo","textEdit":{"range":{"start":{"line":1,"character":6},""" &
+          """"end":{"line":1,"character":8}},"newText":"foo"}}]""",
+      )
+      state.config.autocomplete.enable = autocomplete
+      discard handler.typeAndFrame(buf, state, backspaceKey)
+      check handler.lspWords.len == 0
+
+      let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+      discard handler.typeAndFrame(buf, state, tabKey)
+      check buf.getLine(1) == "print(fizz)"
+
+  test "Backspace with an incomplete answer drops it within the debounce":
+    # As Vim's ins_compl_need_restart: the server is asked again.
+    let (buf, handler, state) = answered(
+      "print(f)",
+      BufferPosition(line: 0, column: 7),
+      """{"isIncomplete":true,"items":[{"label":"foo"}]}""",
+    )
+    # The request has just gone out, so "o" narrows what is held.
+    handler.completionManager.lastLspRequestTime = getMonoTime()
+    discard handler.typeAndFrame(buf, state, key('o'))
+    check handler.lspWords == @["foo"]
+    discard handler.typeAndFrame(buf, state, backspaceKey)
+    check handler.lspWords.len == 0
+
+  test "Backspace into what was typed after the request keeps the list":
+    let (buf, handler, state) =
+      answered("print(f)", BufferPosition(line: 0, column: 7), """[{"label":"foo"}]""")
+    discard handler.typeAndFrame(buf, state, key('o'))
+    discard handler.typeAndFrame(buf, state, backspaceKey)
+    check buf.getLine(0) == "print(f)"
+    check handler.lspWords == @["foo"]
+
+  test "Backspace past where the completion started ends it":
+    # As Vim's ins_compl_bs: before the dot, and onto the line above.
+    for (text, cursor, afterDot) in [
+      ("foobar\nfoo.", BufferPosition(line: 1, column: 4), true),
+      ("foobar\n", BufferPosition(line: 1, column: 0), false),
+    ]:
+      let (buf, handler, state) =
+        answered(text, cursor, """[{"label":"food"}]""", afterDot)
+      discard handler.typeAndFrame(buf, state, backspaceKey)
+      check not handler.completionManager.isActive
+      check handler.words.len == 0
 
 suite "InsertModeHandler - an LSP answer while the user picks":
   privateAccess(LspService)

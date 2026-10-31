@@ -73,6 +73,7 @@ type
     scrollOffset*: int ## For scrolling long lists
     maxVisible*: int ## Max items to show (default: 10)
     prefix*: string ## Current filter prefix
+    triggerBufferId: BufferId ## Buffer where completion was triggered
     triggerLine*: int ## Line where completion was triggered
     triggerCol*: int ## Column where completion was triggered
     hasSelection*: bool ## True after first Tab press (enables auto-insert)
@@ -97,12 +98,10 @@ type
     lspRequestBufferId*: BufferId ## Buffer the pending request was sent for
     cancelLspRequest*: proc(requestId: int)
       ## Tells the server a request is no longer wanted. Nil without LSP.
-    lspItems*: seq[CompletionItem] ## Raw LSP completion items
+    lspItems*: seq[CompletionItem]
+      ## Raw LSP completion items for the word at the trigger
     lspOnlyAfterDot: bool
     lspResponseReceived: bool
-    contextBufferId: BufferId
-    contextLine, contextColumn: int
-    hasCompletionContext: bool
     otherBuffers*: seq[TextBuffer]
       ## Other FileEditMode buffers for multi-buffer completion
     schemaEntries*: seq[CompletionEntry]
@@ -353,6 +352,40 @@ proc dropLspRequest(mgr: CompletionManager) =
   if mgr.lspRequestId.isSome and not mgr.cancelLspRequest.isNil:
     mgr.cancelLspRequest(mgr.lspRequestId.get)
   mgr.lspRequestId = none(int)
+
+proc dropLspState*(mgr: CompletionManager) =
+  ## Forget the server's candidates and the request asking for them.
+  mgr.dropLspRequest()
+  mgr.lspItems = @[]
+  mgr.lspOnlyAfterDot = false
+  mgr.lspResponseReceived = false
+  mgr.isIncomplete = false
+  mgr.lastLspPrefix = ""
+  mgr.lastLspRequestTime = default(MonoTime)
+  # A resolve in flight is for an entry of the dropped list.
+  mgr.resolvedIndex = -1
+
+proc extendsAskedText(mgr: CompletionManager, typed: string): bool =
+  ## `typed` extends the text the server was asked about, if any.
+  typed.startsWith(mgr.lastLspPrefix)
+
+proc lspListCovers(mgr: CompletionManager, typed: string): bool =
+  ## The server's answer, held or awaited, has every match for `typed`, so it
+  ## is narrowed rather than asked for again.
+  not mgr.isIncomplete and mgr.extendsAskedText(typed)
+
+proc setTrigger(
+    mgr: CompletionManager, bufferId: BufferId, line, column: int, typed: string
+) =
+  ## Start the completed word at (line, column), with `typed` before the cursor.
+  ## The server's candidates and their edit ranges are for the text they were
+  ## asked for, so they go when the word moves or no longer extends that text.
+  if mgr.menu.triggerBufferId != bufferId or mgr.menu.triggerLine != line or
+      mgr.menu.triggerCol != column or not mgr.extendsAskedText(typed):
+    mgr.dropLspState()
+  mgr.menu.triggerBufferId = bufferId
+  mgr.menu.triggerLine = line
+  mgr.menu.triggerCol = column
 
 proc getDocumentationText(doc: JsonNode): Option[string] =
   ## Extract documentation text from LSP documentation field
@@ -917,13 +950,11 @@ proc triggerPathCompletion*(
 
   mgr.pathOriginalPrefix = dirPart
   mgr.menu.prefix = filenamePart
-  mgr.menu.triggerLine = cursorLine
-  mgr.menu.triggerCol = cursorCol - filenamePart.charLen
+  mgr.setTrigger(buffer.id, cursorLine, cursorCol - filenamePart.charLen, filenamePart)
   mgr.menu.hasSelection = false
 
   # Clear LSP and schema state
-  mgr.lspItems = @[]
-  mgr.dropLspRequest()
+  mgr.dropLspState()
   mgr.schemaEntries = @[]
 
   # Collect and filter entries
@@ -997,30 +1028,17 @@ proc updateCompletionContext*(
     cursorLine, cursorCol: int,
     lspOnlyAfterDot: bool,
 ) =
-  ## Track the completion position so responses cannot cross contexts.
-  if not lspOnlyAfterDot and not mgr.hasCompletionContext:
-    return
+  ## Move the trigger to the word before the cursor, so responses cannot cross
+  ## words, and settle whether only the server's candidates are shown there.
   let
     line = buffer.getLine(cursorLine)
     prefix = extractPrefixBeforeCursor(line, cursorCol)
     column = cursorCol - prefix.charLen
-    runes = line.toCharRunes()
-    isAfterDot =
-      lspOnlyAfterDot and column > 0 and column <= runes.len and
-      runes[column - 1] == '.'.Rune
-  if not mgr.hasCompletionContext or mgr.contextBufferId != buffer.id or
-      mgr.contextLine != cursorLine or mgr.contextColumn != column or
-      mgr.lspOnlyAfterDot != isAfterDot:
-    mgr.dropLspRequest()
-    mgr.lspItems = @[]
-    mgr.lspResponseReceived = false
-    mgr.lastLspPrefix = ""
-    mgr.lastLspRequestTime = default(MonoTime)
-  mgr.hasCompletionContext = lspOnlyAfterDot
-  mgr.contextBufferId = buffer.id
-  mgr.contextLine = cursorLine
-  mgr.contextColumn = column
-  mgr.lspOnlyAfterDot = isAfterDot
+    isAfterDot = lspOnlyAfterDot and line.charSubStr(column - 1, 1) == "."
+  mgr.setTrigger(buffer.id, cursorLine, column, prefix)
+  if mgr.lspOnlyAfterDot != isAfterDot:
+    mgr.dropLspState()
+    mgr.lspOnlyAfterDot = isAfterDot
 
 proc triggerCompletion*(
     mgr: CompletionManager,
@@ -1040,8 +1058,7 @@ proc triggerCompletion*(
   mgr.refreshSchemaEntries(buffer, cursorLine, cursorCol)
 
   # Set trigger position
-  mgr.menu.triggerLine = cursorLine
-  mgr.menu.triggerCol = cursorCol - prefix.charLen
+  mgr.setTrigger(buffer.id, cursorLine, cursorCol - prefix.charLen, prefix)
 
   # Reset selection state so popup starts with no selection
   mgr.menu.hasSelection = false
@@ -1063,15 +1080,31 @@ proc cancelCompletion*(mgr: CompletionManager) =
   mgr.menu.scrollOffset = 0
   mgr.menu.prefix = ""
   mgr.menu.hasSelection = false
-  mgr.dropLspRequest()
-  mgr.lspItems = @[]
-  mgr.lspOnlyAfterDot = false
-  mgr.lspResponseReceived = false
-  mgr.hasCompletionContext = false
+  mgr.dropLspState()
   mgr.schemaEntries = @[]
   mgr.isPathCompletion = false
   mgr.pathBasePath = ""
   mgr.pathOriginalPrefix = ""
+
+proc completeAfterBackspace*(
+    mgr: CompletionManager, buffer: TextBuffer, cursorLine, cursorCol: int
+): bool =
+  ## Follow a Backspace in the word as Vim's ins_compl_bs: deleting the whole
+  ## word ends the completion. Deleting into the text the server was asked
+  ## about, or with an incomplete answer, drops the server's candidates and is
+  ## true, as the server must be asked again.
+  let prefix = extractPrefixBeforeCursor(buffer.getLine(cursorLine), cursorCol)
+  if cursorLine != mgr.menu.triggerLine or cursorCol <= mgr.menu.triggerCol or
+      prefix.len < MinPrefixLength:
+    mgr.cancelCompletion()
+    return false
+  result = not mgr.lspListCovers(prefix)
+  if result:
+    mgr.dropLspState()
+  # Backspace can move the cursor across a config context boundary, so
+  # re-analyze the line.
+  mgr.refreshSchemaEntries(buffer, cursorLine, cursorCol)
+  mgr.updateFilter(prefix)
 
 proc selectNext*(mgr: CompletionManager) =
   ## Select the next completion item
@@ -1364,9 +1397,12 @@ proc renderDocPanel*(termBuffer: var Buffer, docPanel: DocPanel, pos: PopupPosit
 # LSP completion support
 
 proc setLspRequestPending*(mgr: CompletionManager, requestId: int, bufferId: BufferId) =
-  ## Set the pending LSP request ID and the buffer it was sent for
+  ## Set the pending LSP request ID and the buffer it was sent for. It asks
+  ## about the word as the menu has it.
   mgr.lspRequestId = some(requestId)
   mgr.lspRequestBufferId = bufferId
+  mgr.lastLspPrefix = mgr.menu.prefix
+  mgr.lastLspRequestTime = getMonoTime()
 
 proc clearLspRequestPending*(mgr: CompletionManager) =
   ## Forget the in-flight request. Its answer targets an old prefix and cursor.
@@ -1388,8 +1424,7 @@ proc shouldSkipLspRequest*(mgr: CompletionManager, newPrefix: string): bool =
 
   # If last response was complete and new prefix extends the old one,
   # we can filter client-side without a new request
-  if not mgr.isIncomplete and mgr.lspItems.len > 0 and mgr.lastLspPrefix.len > 0 and
-      newPrefix.startsWith(mgr.lastLspPrefix):
+  if mgr.lspItems.len > 0 and mgr.lastLspPrefix.len > 0 and mgr.lspListCovers(newPrefix):
     return true
 
   # Debounce: skip if too soon since last request
@@ -1475,7 +1510,7 @@ proc updateResolvedEntry*(mgr: CompletionManager, resolved: CompletionItem) =
       # raw label must be trimmed the same way or this check always fails
       # for those items and the resolved data is silently dropped.
       resolved.label.strip(trailing = false)
-  if mgr.menu.entries[idx].word != resolvedWord:
+  if mgr.menu.entries[idx].source != csLsp or mgr.menu.entries[idx].word != resolvedWord:
     return
 
   if resolved.detail.isSome:
@@ -1508,8 +1543,7 @@ proc triggerLspCompletion*(
   mgr.refreshBufferWords(buffer, cursorLine, cursorCol, language)
 
   # Set trigger position
-  mgr.menu.triggerLine = cursorLine
-  mgr.menu.triggerCol = cursorCol - prefix.charLen
+  mgr.setTrigger(buffer.id, cursorLine, cursorCol - prefix.charLen, prefix)
   mgr.menu.prefix = prefix
   mgr.menu.hasSelection = false
 
