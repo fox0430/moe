@@ -245,8 +245,9 @@ proc performIncrementalSearch(e: Editor) =
     e.state.statusMessage = ""
     return
 
-  let searchResult =
-    e.findFrom(SearchSpec(pattern: e.state.input.search.text), e.state.input.search.startPos)
+  let searchResult = e.findFrom(
+    SearchSpec(pattern: e.state.input.search.text), e.state.input.search.startPos
+  )
 
   if searchResult.isSome:
     let pos = searchResult.get
