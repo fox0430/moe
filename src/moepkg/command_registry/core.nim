@@ -454,7 +454,9 @@ proc recordJump*(state: EditorState, pos: BufferPosition) =
     let lastPos = state.jumpList.list[^1]
     if lastPos.bufferId == currentPos.bufferId and lastPos.line == currentPos.line and
         lastPos.column == currentPos.column:
-      # Same position as last jump - don't record duplicate
+      # Same position as last jump - don't record duplicate, but stop
+      # navigating the list as any jump does (Vim's setpcmark)
+      state.jumpList.index = -1
       return
 
   # If we're navigating the jump list, truncate everything after current position

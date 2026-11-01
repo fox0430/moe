@@ -534,6 +534,17 @@ suite "editor_navigation - addToJumpList":
 
     check e.state.jumpList.index == -1
 
+  test "A duplicate of the last position still resets the index, as Vim's setpcmark":
+    let e = createTestEditor()
+    let origin = e.jumpOrigin()
+    e.state.jumpList.list = @[origin, origin]
+    e.state.jumpList.index = 0
+
+    e.addToJumpList(origin)
+
+    check e.state.jumpList.list.len == 2
+    check e.state.jumpList.index == -1
+
 suite "editor_navigation - jumpToLspLocation":
   test "Jumps to location in same file":
     let e = createTestEditor()

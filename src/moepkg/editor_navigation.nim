@@ -159,11 +159,13 @@ proc jumpOrigin*(e: Editor): JumpPosition =
 
 proc addToJumpList*(e: Editor, jumpPos: JumpPosition) =
   ## Add `jumpPos`, where a jump started, to the jump list.
-  # Don't add if same as last position (same buffer, line, and column)
+  # Don't add if same as last position (same buffer, line, and column), but
+  # stop navigating the list as any jump does (Vim's setpcmark)
   if e.state.jumpList.list.len > 0:
     let lastPos = e.state.jumpList.list[^1]
     if lastPos.bufferId == jumpPos.bufferId and lastPos.line == jumpPos.line and
         lastPos.column == jumpPos.column:
+      e.state.jumpList.index = -1
       return
 
   e.state.jumpList.list.add(jumpPos)

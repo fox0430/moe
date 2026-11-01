@@ -24,7 +24,7 @@
 ## - Search mode event handling helpers
 
 import std/[unittest, options, tables, os, osproc, times, posix]
-from std/strutils import contains, continuesWith, join, repeat, strip
+from std/strutils import contains, continuesWith, escape, join, repeat, strip
 
 import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
@@ -10933,15 +10933,16 @@ suite "handleKeyCombo - the :s preview covers the lines :s runs on, as Vim's inc
 
     check e.lines == previewed
 
-suite "handleKeyCombo - a key that beeps stops the register or mapping it came from, as Vim's beep_flush":
+suite "handleKeyCombo - a key that beeps or errs stops the register or mapping it came from, as Vim's beep_flush and emsg":
   # Expectations are Vim 9.2's, with the keys typed.
   proc createEditorForBeep(
-      content: string, line = 0, column = 0, smooth = true
+      content: string, line = 0, column = 0, smooth = true, incsearch = true
   ): Editor =
     var config = newEditorConfig()
     config.standard.autoIndent = false
     config.standard.autoDeleteParen = false
     config.smoothScroll.enable = smooth
+    config.standard.incrementalSearch = incsearch
     result = newEditor(config)
     result.state.registers = initRegisters()
     let buf = newTextBuffer(content)
@@ -10954,8 +10955,20 @@ suite "handleKeyCombo - a key that beeps stops the register or mapping it came f
     result.activeWindow.cursor = BufferPosition(line: line, column: column)
 
   proc keys(s: string): seq[string] =
+    ## One key per character, "\r" as Enter, "\e" as Escape and "\x0f" as
+    ## Ctrl-o.
     for c in s:
-      result.add $c
+      result.add(
+        case c
+        of '\r':
+          "Enter"
+        of '\e':
+          "Escape"
+        of '\x0f':
+          "C-o"
+        else:
+          $c
+      )
 
   proc setRegister(e: Editor, name: char, keys: openArray[string]) =
     var stored: seq[string]
@@ -11283,6 +11296,97 @@ suite "handleKeyCombo - a key that beeps stops the register or mapping it came f
 
       checkpoint(rhs)
       check e.lines == expected
+
+  test "Ctrl-o past the oldest jump stops it, as Vim's movemark":
+    let e = createEditorForBeep("abc\ndef")
+    e.setRegister('a', @["C-o", "C-o", "x"])
+
+    e.press(keys("G@a"))
+
+    check e.lines == @["abc", "def"]
+    check e.activeWindow.cursor == at(0, 0)
+
+  test "a jump from the newest entry after Ctrl-o starts Ctrl-o over, as Vim's setpcmark":
+    # gg starts from where the newest entry is, so it adds none, yet leaves
+    # the list as any jump does.
+    let e = createEditorForBeep("abc\ndef\nghi")
+    e.setRegister('a', @["C-o", "x"])
+
+    e.press(@["G", "C-o"] & keys("jjgg@a"))
+
+    check e.lines == @["abc", "def", "hi"]
+    check e.activeWindow.cursor == at(2, 0)
+
+  # A search that finds nothing is an error, which Vim's emsg flushes as
+  # beep_flush does.
+  test "a search that finds nothing drops the rest of the register, incsearch or not":
+    for incsearch in [false, true]:
+      for (content, start, register, typed, expected, cursor) in [
+        ("abc", at(0, 0), "/zzz\rx", "@a", @["abc"], at(0, 0)),
+        ("abc", at(0, 2), "?zzz\rx", "@a", @["abc"], at(0, 2)),
+        ("abc\nabc", at(0, 0), "/b\rx", "10@a", @["ac", "ac"], at(1, 1)),
+        ("abc\nabc", at(1, 2), "?b\rx", "10@a", @["ac", "ac"], at(0, 1)),
+        # The keys typed after it still run.
+        ("abc", at(0, 0), "/zzz\rx", "@ax", @["bc"], at(0, 0)),
+        # One that finds its match goes on.
+        ("abc", at(0, 0), "/c\rx", "@a", @["ab"], at(0, 1)),
+      ]:
+        let e =
+          createEditorForBeep(content, start.line, start.column, incsearch = incsearch)
+        e.setRegister('a', keys(register))
+
+        e.press(keys(typed))
+
+        checkpoint(
+          $incsearch & " " & content.escape & " " & register.escape & " " & typed
+        )
+        check e.lines == expected
+        check e.activeWindow.cursor == cursor
+        check e.state.mode == EditorMode.Normal
+
+  test "an empty search stops it when the pattern it repeats finds nothing, or there is none":
+    for (typed, register, message) in [
+      ("@a", "/\rx", "E35: No previous regular expression"),
+      ("@a", "?\rx", "E35: No previous regular expression"),
+      ("/zzz\r@a", "/\rx", "Pattern not found: zzz"),
+      ("/zzz\r@a", "?\rx", "Pattern not found: zzz"),
+    ]:
+      let e = createEditorForBeep("abc")
+      e.setRegister('a', keys(register))
+
+      e.press(keys(typed))
+
+      checkpoint(typed.escape & " " & register.escape)
+      check e.lines == @["abc"]
+      check e.state.statusMessage == message
+
+  test "the registers a search that finds nothing runs in stop with it":
+    let e = createEditorForBeep("abc")
+    e.setRegister('a', keys("@bx"))
+    e.setRegister('b', keys("/zzz\r"))
+
+    e.press(keys("@a"))
+
+    check e.lines == @["abc"]
+
+  test "Insert resumes after a Ctrl-o search that finds nothing, the rest dropped":
+    let e = createEditorForBeep("abc")
+    e.setRegister('a', keys("i\x0f/zzz\rx\e"))
+
+    e.press(keys("@a"))
+
+    check e.lines == @["abc"]
+    check e.state.mode == EditorMode.Insert
+
+  test "a mapping's right-hand side stops at a search that finds nothing, the typed keys after it do not":
+    let e = createEditorForBeep("abc")
+    check e.executeCommandOverlay(":nnoremap Q / z z z Enter x") == roContinue
+
+    e.press(keys("Q"))
+    check e.lines == @["abc"]
+
+    e.press(keys("Qx"))
+    check e.lines == @["bc"]
 
 suite "n and N go the way the last search went":
   # The way /, ?, *, # and their kin went, as Vim keeps it with the pattern
