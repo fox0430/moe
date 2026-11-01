@@ -298,6 +298,14 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "*", description: "Search forwards for the word under cursor"),
     HelpEntry(syntax: "#", description: "Search backwards for the word under cursor"),
     HelpEntry(
+      syntax: "g*",
+      description: "Search forwards for the word under cursor, also inside words",
+    ),
+    HelpEntry(
+      syntax: "g#",
+      description: "Search backwards for the word under cursor, also inside words",
+    ),
+    HelpEntry(
       syntax: "f", description: "Move to next any character on the current line"
     ),
     HelpEntry(

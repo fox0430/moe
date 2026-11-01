@@ -791,6 +791,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | search-prev-select | Select previous search match (gN) |
 | search-word-forward | Search for word under cursor forward (*) |
 | search-word-backward | Search for word under cursor backward (#) |
+| search-word-forward-partial | Search for word under cursor forward, also inside words (g*) |
+| search-word-backward-partial | Search for word under cursor backward, also inside words (g#) |
 
 ##### Bookmarks
 

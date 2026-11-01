@@ -48,14 +48,6 @@ proc shouldIgnoreCase*(searchText: string, ignorecase: bool, smartcase: bool): b
 
   true
 
-proc prepareSearchString*(text: string, ignorecase: bool): string =
-  ## Convert text to lowercase if case-insensitive search is needed
-  ## Returns original text if case-sensitive
-  if ignorecase:
-    text.toLowerAscii()
-  else:
-    text
-
 # Search history persistence
 
 const DefaultSearchHistoryLimit* = 1000

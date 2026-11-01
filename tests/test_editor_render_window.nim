@@ -4562,7 +4562,7 @@ suite "newLineStyleContext - search highlight":
     let e = createTestEditor()
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = false
-    e.state.input.search.last = SearchSpec(pattern: "foo", wholeWord: true)
+    e.state.input.search.last = SearchSpec(pattern: "foo", match: smWord)
 
     check e.searchRangesFor("foobar foo") == @[ColumnRange(startCol: 7, endCol: 10)]
 
@@ -4570,7 +4570,7 @@ suite "newLineStyleContext - search highlight":
     let e = createTestEditor()
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = false
-    e.state.input.search.last = SearchSpec(pattern: "foo", wholeWord: true)
+    e.state.input.search.last = SearchSpec(pattern: "foo", match: smWord)
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.text = "foo"
 
@@ -4595,7 +4595,7 @@ suite "newLineStyleContext - search highlight":
     let e = createTestEditor()
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = false
-    e.state.input.search.last = SearchSpec(pattern: "foo", wholeWord: true)
+    e.state.input.search.last = SearchSpec(pattern: "foo", match: smWord)
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.text = ""
 

@@ -66,6 +66,8 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("N", "search-prev"),
   ("*", "search-word-forward"),
   ("#", "search-word-backward"),
+  ("g *", "search-word-forward-partial"),
+  ("g #", "search-word-backward-partial"),
   ("%", "match-bracket"),
   # Viewport motion
   ("H", "viewport-high"),

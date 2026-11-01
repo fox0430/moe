@@ -1601,6 +1601,13 @@ suite "Default bindings coverage":
     check hash.isSome
     check hash.get.name == "search-word-backward"
 
+    for mode in [EditorMode.Normal, EditorMode.Visual]:
+      let sequences = registry.sequences[mode]
+      check sequences[@[toKeyCombo('g'), toKeyCombo('*')]].name ==
+        "search-word-forward-partial"
+      check sequences[@[toKeyCombo('g'), toKeyCombo('#')]].name ==
+        "search-word-backward-partial"
+
   test "Operator bindings":
     let registry = newKeyBindingRegistry()
     registry.setupDefaultBindings()

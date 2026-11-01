@@ -19,14 +19,12 @@
 
 ## Mode / insert / quickrun / search / git navigation handlers and registration.
 
-import std/[options, strutils, unicode]
+import std/[options, strutils]
 
 import pkg/results
 
 import
-  ../[
-    types, buffer, motion, modes, search_utils, git_conflict, unicode_utils, fold_open
-  ]
+  ../[types, buffer, motion, modes, git_conflict, unicode_utils, search_ops, fold_open]
 import ../command_handlers/[insert_commands, normal_commands]
 
 import core, insert_entry
@@ -84,12 +82,12 @@ proc findMatchContainingCursor*(
     searchText: string,
     cursorPos: BufferPosition,
     ignorecase: bool,
-    wholeWord: bool,
+    match: SearchMatch,
 ): Option[BufferPosition] =
   ## Return start position of a match that contains the cursor, if any.
   ## Uses findSearchMatchRanges for regex-aware match detection.
   let ranges =
-    buffer.findSearchMatchRanges(cursorPos.line, searchText, ignorecase, wholeWord)
+    buffer.findSearchMatchRanges(cursorPos.line, searchText, ignorecase, match)
   for r in ranges:
     if (cursorPos.column >= r.startCol and cursorPos.column < r.endCol) or
         (r.startCol == r.endCol and cursorPos.column == r.startCol):
@@ -101,39 +99,16 @@ proc getMatchEndCol*(
     searchText: string,
     matchStart: BufferPosition,
     ignorecase: bool,
-    wholeWord: bool,
+    match: SearchMatch,
 ): int =
   ## Get the end column (inclusive) of a match starting at matchStart.
   let ranges =
-    buffer.findSearchMatchRanges(matchStart.line, searchText, ignorecase, wholeWord)
+    buffer.findSearchMatchRanges(matchStart.line, searchText, ignorecase, match)
   for r in ranges:
     if r.startCol == matchStart.column:
       return r.endCol - 1
   # Fallback: use search text char length
   return matchStart.column + searchText.charLen - 1
-
-proc stepMatches(
-    first: BufferPosition,
-    count: int,
-    step: proc(pos: BufferPosition): Option[BufferPosition],
-): BufferPosition =
-  ## The match `count - 1` on from `first`, `step` finding each next one. The
-  ## search wraps around, so once round the matches only what is left over the
-  ## cycle matters (`999999n` does not search a million times), and a match
-  ## with no other to go to is the one found again.
-  result = first
-  var
-    left = count - 1
-    taken = 0
-  while left > 0:
-    let next = step(result)
-    if next.isNone:
-      break
-    result = next.get
-    left -= 1
-    taken += 1
-    if result == first:
-      left = left mod taken
 
 proc gnArea*(match: (BufferPosition, BufferPosition), forward: bool): VisualArea =
   ## The Visual area gn/gN select over `match`: like Vim's current_search, the
@@ -151,31 +126,28 @@ proc findGnMatch*(
   ## gN), and the `count`-th counting that one, by its first and last
   ## character. A zero-width match takes the character it stands at, the line
   ## break at the end of a line, as Vim's gn selects it.
-  let searchText = state.input.search.last.pattern
+  let spec = state.input.search.last
+  let searchText = spec.pattern
   if searchText.len == 0:
     return err("No previous search")
-  let
-    ignoreCase = shouldIgnoreCase(
-      searchText, state.input.search.ignorecase, state.input.search.smartcase
-    )
-    wholeWord = state.input.search.last.wholeWord
+  let ignoreCase = state.input.search.ignoresCase(spec)
   state.input.search.hlsearchTempDisabled = false
 
   proc step(pos: BufferPosition): Option[BufferPosition] =
     if forward:
-      findNext(buffer, searchText, pos, ignoreCase, wholeWord)
+      findNext(buffer, searchText, pos, ignoreCase, spec.match)
     else:
-      findPrev(buffer, searchText, pos, ignoreCase, wholeWord)
+      findPrev(buffer, searchText, pos, ignoreCase, spec.match)
 
   var match =
-    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, wholeWord)
+    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, spec.match)
   if match.isNone:
     match = step(state.cursor)
   if match.isNone:
     return err("Pattern not found: " & searchText)
 
   let pos = stepMatches(match.get, count, step)
-  let endCol = getMatchEndCol(buffer, searchText, pos, ignoreCase, wholeWord)
+  let endCol = getMatchEndCol(buffer, searchText, pos, ignoreCase, spec.match)
   ok((pos, BufferPosition(line: pos.line, column: max(pos.column, endCol))))
 
 proc registerMiscCommands*(registry: CommandRegistry) =
@@ -337,14 +309,15 @@ proc registerMiscCommands*(registry: CommandRegistry) =
         text: string,
         pos: BufferPosition,
         ignorecase: bool,
-        wholeWord: bool,
+        match: SearchMatch,
       ): Option[BufferPosition],
       count: int,
   ): Result[BufferPosition, string] =
     ## The `count`-th match of the last search from the cursor, the way
-    ## `searchProc` goes (n/N). They repeat the last search, whole word mode
+    ## `searchProc` goes (n/N). They repeat the last search, how it matches
     ## included, so they land only on the matches the highlighter draws.
-    let searchText = ctx.state.input.search.last.pattern
+    let spec = ctx.state.input.search.last
+    let searchText = spec.pattern
     if searchText.len == 0:
       return err("No previous search")
 
@@ -354,19 +327,15 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     # Re-enable highlight when using n/N
     ctx.state.input.search.hlsearchTempDisabled = false
 
-    let shouldIgnoreCase = shouldIgnoreCase(
-      searchText, ctx.state.input.search.ignorecase, ctx.state.input.search.smartcase
-    )
+    let ignoreCase = ctx.state.input.search.ignoresCase(spec)
 
-    # Validate regex (whole word patterns are matched literally)
-    if not ctx.state.input.search.last.wholeWord and
-        compileSearchRegex(searchText, shouldIgnoreCase).isNone:
+    # Validate regex (* and # match literally)
+    if spec.match == smRegex and compileSearchRegex(searchText, ignoreCase).isNone:
       ctx.state.statusMessage = "Invalid regex: " & searchText
       return err("Invalid regex")
 
-    let wholeWord = ctx.state.input.search.last.wholeWord
     proc step(pos: BufferPosition): Option[BufferPosition] =
-      searchProc(ctx.buffer, searchText, pos, shouldIgnoreCase, wholeWord)
+      searchProc(ctx.buffer, searchText, pos, ignoreCase, spec.match)
 
     let found = step(ctx.cursor)
     if found.isNone:
@@ -488,130 +457,60 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     0,
   )
 
-  # Helper type for word bounds
-  type WordInfo = object
-    word: string
-    startCol: int
-    endCol: int
-
-  proc getWordInfoUnderCursor(
-      buffer: TextBuffer, cursor: BufferPosition
-  ): Option[WordInfo] =
-    if cursor.line < 0 or cursor.line >= buffer.len:
-      return none(WordInfo)
-
-    let line = buffer.getLine(cursor.line)
-    if line.len == 0 or cursor.column >= line.charLen:
-      return none(WordInfo)
-
-    let runes = line.toCharRunes()
-    if cursor.column >= runes.len:
-      return none(WordInfo)
-
-    # Check if cursor is on a word character
-    let charAtCursor = $runes[cursor.column]
-    if not (charAtCursor[0].isAlphaNumeric or charAtCursor[0] == '_'):
-      return none(WordInfo)
-
-    # Find word start
-    var startCol = cursor.column
-    while startCol > 0:
-      let ch = $runes[startCol - 1]
-      if not (ch[0].isAlphaNumeric or ch[0] == '_'):
-        break
-      startCol.dec
-
-    # Find word end
-    var endCol = cursor.column
-    while endCol < runes.len:
-      let ch = $runes[endCol]
-      if not (ch[0].isAlphaNumeric or ch[0] == '_'):
-        break
-      endCol.inc
-
-    # Sliced out of the line rather than re-encoded: a byte that does not decode
-    # would come back as the replacement character.
-    let word = line.charSubStr(startCol, endCol - startCol)
-
-    return some(WordInfo(word: word, startCol: startCol, endCol: endCol))
-
-  proc findWordUnderCursor(
-      ctx: CommandContext, forward: bool, count: int
+  proc findIdentUnderCursor(
+      ctx: CommandContext, forward, bounded: bool, count: int
   ): Result[BufferPosition, string] =
-    ## The `count`-th other occurrence of the word under the cursor (* and #),
-    ## made the last search.
-    let wordInfo = getWordInfoUnderCursor(ctx.buffer, ctx.cursor)
-    if wordInfo.isNone:
-      return err("No word under cursor")
+    ## * and # (`bounded`), g* and g#, which jump from where the cursor was.
+    result = ctx.state.searchIdent(ctx.buffer, ctx.cursor, forward, bounded, count)
+    if result.isOk:
+      recordJump(ctx.state)
 
-    let info = wordInfo.get
+  proc registerIdentSearch(
+      commandId, name, description: string, forward, bounded: bool
+  ) =
+    ## Register a search for the text under the cursor, as a motion too (`d*`).
+    proc find(ctx: CommandContext, count: int): Result[BufferPosition, string] =
+      ctx.findIdentUnderCursor(forward, bounded, count)
 
-    # Record jump before searching
-    recordJump(ctx.state)
-
-    # * and # search the word under the cursor with word boundaries
-    ctx.state.input.search.last = SearchSpec(pattern: info.word, wholeWord: true)
-    ctx.state.input.search.hlsearchTempDisabled = false
-
-    let originalWordPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
-    let ignoreCase = shouldIgnoreCase(
-      info.word, ctx.state.input.search.ignorecase, ctx.state.input.search.smartcase
+    registry.register(
+      custom(commandId),
+      name,
+      description,
+      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+        ctx.moveToMatch(ctx.find(parseCount(args))),
+      0,
+      1,
     )
+    registry.registerTarget(commandId, searchTarget(find))
 
-    proc step(pos: BufferPosition): Option[BufferPosition] =
-      if forward:
-        findNext(ctx.buffer, info.word, pos, ignoreCase, true)
-      else:
-        findPrev(ctx.buffer, info.word, pos, ignoreCase, true)
-
-    # Search from the word's end (forward) or start (backward) to skip it.
-    # Wrapping back to the word under the cursor on the first step means it is
-    # the only match; a later step may wrap to it (`2d*`).
-    let found = step(
-      BufferPosition(
-        line: ctx.cursor.line, column: if forward: info.endCol else: info.startCol
-      )
-    )
-    if found.isNone or found.get == originalWordPos:
-      ctx.state.statusMessage = "Pattern not found: " & info.word
-      return err("Pattern not found")
-
-    ctx.state.statusMessage = "Found: " & info.word
-    ok(stepMatches(found.get, count, step))
-
-  proc findWordForward(
-      ctx: CommandContext, count: int
-  ): Result[BufferPosition, string] =
-    ctx.findWordUnderCursor(forward = true, count)
-
-  proc findWordBackward(
-      ctx: CommandContext, count: int
-  ): Result[BufferPosition, string] =
-    ctx.findWordUnderCursor(forward = false, count)
-
-  # * - Search word under cursor forward
-  registry.register(
-    custom("search.word.forward"),
+  registerIdentSearch(
+    "search.word.forward",
     "Search Word Forward",
     "Search for word under cursor forward (*)",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.moveToMatch(ctx.findWordForward(parseCount(args))),
-    0,
-    1,
+    forward = true,
+    bounded = true,
   )
-  registry.registerTarget("search.word.forward", searchTarget(findWordForward))
-
-  # # - Search word under cursor backward
-  registry.register(
-    custom("search.word.backward"),
+  registerIdentSearch(
+    "search.word.backward",
     "Search Word Backward",
     "Search for word under cursor backward (#)",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.moveToMatch(ctx.findWordBackward(parseCount(args))),
-    0,
-    1,
+    forward = false,
+    bounded = true,
   )
-  registry.registerTarget("search.word.backward", searchTarget(findWordBackward))
+  registerIdentSearch(
+    "search.word.forward.partial",
+    "Search Word Forward Partial",
+    "Search for word under cursor forward, also inside words (g*)",
+    forward = true,
+    bounded = false,
+  )
+  registerIdentSearch(
+    "search.word.backward.partial",
+    "Search Word Backward Partial",
+    "Search for word under cursor backward, also inside words (g#)",
+    forward = false,
+    bounded = false,
+  )
 
   proc matchTarget(forward: bool): TargetFinder =
     ## gn/gN as a motion: an operator takes the match the cursor is in or the
