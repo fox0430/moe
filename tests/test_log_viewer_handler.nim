@@ -956,6 +956,21 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion edge cases":
     check state.cursor.column == 4 # on second ':'
 
 suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
+  test "n and N wrap back to the only match under the cursor":
+    for key in ["n", "N"]:
+      let
+        logState = newLogViewerState()
+        buffer = newTestBuffer("foo\nbar\n")
+        state = newTestEditorState()
+      state.input.search.last.pattern = "foo"
+
+      discard handleLogViewerModeKey(
+        logState, buffer, state, TestViewportHeight, charKey(key)
+      )
+
+      check state.cursor == BufferPosition(line: 0, column: 0)
+      check state.statusMessage == "Found: foo"
+
   test "n shows 'Pattern not found' when search fails":
     let
       logState = newLogViewerState()
