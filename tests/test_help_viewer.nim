@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, options, strutils]
-import ../src/moepkg/[help_viewer, buffer]
+import ../src/moepkg/[help_viewer, buffer, primitives]
 
 suite "HelpViewer - State creation":
   test "newHelpViewerState creates state with lines":
@@ -239,19 +239,19 @@ suite "HelpViewer - Search query":
   test "setSearchQuery sets the query":
     let state = newHelpViewerState()
 
-    state.setSearchQuery("test")
+    state.setSearchQuery("test", Forward)
     check state.searchQuery == "test"
 
   test "clearSearch clears the query":
     let state = newHelpViewerState()
-    state.setSearchQuery("test")
+    state.setSearchQuery("test", Forward)
 
     state.clearSearch()
     check state.searchQuery == ""
 
   test "hasSearchQuery returns true when query exists":
     let state = newHelpViewerState()
-    state.setSearchQuery("test")
+    state.setSearchQuery("test", Forward)
 
     check state.hasSearchQuery == true
 
@@ -262,7 +262,7 @@ suite "HelpViewer - Search query":
 
   test "hasSearchQuery returns false after clearSearch":
     let state = newHelpViewerState()
-    state.setSearchQuery("test")
+    state.setSearchQuery("test", Forward)
     state.clearSearch()
 
     check state.hasSearchQuery == false
@@ -270,7 +270,7 @@ suite "HelpViewer - Search query":
 suite "HelpViewer - Line matching":
   test "isLineMatched returns true for matching line":
     let state = newHelpViewerState()
-    state.setSearchQuery("Normal mode")
+    state.setSearchQuery("Normal mode", Forward)
 
     # Find a line containing "Normal mode"
     var foundIndex = -1
@@ -284,7 +284,7 @@ suite "HelpViewer - Line matching":
 
   test "isLineMatched is case insensitive":
     let state = newHelpViewerState()
-    state.setSearchQuery("normal MODE")
+    state.setSearchQuery("normal MODE", Forward)
 
     var foundIndex = -1
     for i, line in state.items:
@@ -297,7 +297,7 @@ suite "HelpViewer - Line matching":
 
   test "isLineMatched returns false for non-matching line":
     let state = newHelpViewerState()
-    state.setSearchQuery("xyznonexistent123")
+    state.setSearchQuery("xyznonexistent123", Forward)
 
     check state.isLineMatched(0) == false
 
@@ -308,20 +308,20 @@ suite "HelpViewer - Line matching":
 
   test "isLineMatched returns false for negative index":
     let state = newHelpViewerState()
-    state.setSearchQuery("test")
+    state.setSearchQuery("test", Forward)
 
     check state.isLineMatched(-1) == false
 
   test "isLineMatched returns false for out of range index":
     let state = newHelpViewerState()
-    state.setSearchQuery("test")
+    state.setSearchQuery("test", Forward)
 
     check state.isLineMatched(state.items.len) == false
 
 suite "HelpViewer - Search forward":
   test "searchForward finds next matching line":
     let state = newHelpViewerState()
-    state.setSearchQuery(":w")
+    state.setSearchQuery(":w", Forward)
     state.selectedIndex = 0
 
     let result = state.searchForward()
@@ -332,7 +332,7 @@ suite "HelpViewer - Search forward":
 
   test "searchForward wraps around to beginning":
     let state = newHelpViewerState()
-    state.setSearchQuery("Exiting")
+    state.setSearchQuery("Exiting", Forward)
 
     # Set selectedIndex to after the "Exiting" section
     state.selectedIndex = state.items.high
@@ -344,7 +344,7 @@ suite "HelpViewer - Search forward":
 
   test "searchForward returns none when no match":
     let state = newHelpViewerState()
-    state.setSearchQuery("xyznonexistent123456")
+    state.setSearchQuery("xyznonexistent123456", Forward)
     state.selectedIndex = 0
 
     let result = state.searchForward()
@@ -360,7 +360,7 @@ suite "HelpViewer - Search forward":
 suite "HelpViewer - Search backward":
   test "searchBackward finds previous matching line":
     let state = newHelpViewerState()
-    state.setSearchQuery("mode")
+    state.setSearchQuery("mode", Forward)
     state.selectedIndex = state.items.high
 
     let result = state.searchBackward()
@@ -369,7 +369,7 @@ suite "HelpViewer - Search backward":
 
   test "searchBackward wraps around to end":
     let state = newHelpViewerState()
-    state.setSearchQuery("backup")
+    state.setSearchQuery("backup", Forward)
     state.selectedIndex = 0
 
     let result = state.searchBackward()
@@ -379,7 +379,7 @@ suite "HelpViewer - Search backward":
 
   test "searchBackward returns none when no match":
     let state = newHelpViewerState()
-    state.setSearchQuery("xyznonexistent123456")
+    state.setSearchQuery("xyznonexistent123456", Forward)
     state.selectedIndex = 10
 
     let result = state.searchBackward()
@@ -395,7 +395,7 @@ suite "HelpViewer - Search backward":
 suite "HelpViewer - Search first":
   test "searchFirst finds first matching line from beginning":
     let state = newHelpViewerState()
-    state.setSearchQuery("Exiting")
+    state.setSearchQuery("Exiting", Forward)
     state.selectedIndex = state.items.high
 
     let result = state.searchFirst()
@@ -405,7 +405,7 @@ suite "HelpViewer - Search first":
 
   test "searchFirst returns none when no match":
     let state = newHelpViewerState()
-    state.setSearchQuery("xyznonexistent123456")
+    state.setSearchQuery("xyznonexistent123456", Forward)
     state.selectedIndex = 0
 
     let result = state.searchFirst()
@@ -419,7 +419,7 @@ suite "HelpViewer - Search first":
 
   test "searchFirst always starts from line 0":
     let state = newHelpViewerState()
-    state.setSearchQuery("# Exiting")
+    state.setSearchQuery("# Exiting", Forward)
     state.selectedIndex = 50
 
     let result = state.searchFirst()

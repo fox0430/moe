@@ -11283,3 +11283,101 @@ suite "handleKeyCombo - a key that beeps stops the register or mapping it came f
 
       checkpoint(rhs)
       check e.lines == expected
+
+suite "n and N go the way the last search went":
+  # The way /, ?, *, # and their kin went, as Vim keeps it with the pattern
+  # (spats[0].off.dir). Expected positions are measured in Vim 9.2.
+  const Foos = "foo 0\nfoo 1\nfoo 2\nfoo 3\nfoo 4"
+
+  proc createEditorForSearch(line, column: int): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(Foos)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.activeWindow.cursor = BufferPosition(line: line, column: column)
+
+  proc typeKeys(e: Editor, keys: string) =
+    ## `keys` one by one, "\r" as Enter, "\e" as Escape and "\x0f" as Ctrl-o.
+    for c in keys:
+      let key =
+        case c
+        of '\r':
+          "Enter"
+        of '\e':
+          "Escape"
+        of '\x0f':
+          "C-o"
+        else:
+          $c
+      discard e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc at(line, column: int): BufferPosition =
+    BufferPosition(line: line, column: column)
+
+  test "each step lands where Vim's does":
+    for (start, steps, expected) in [
+      (
+        at(2, 2),
+        @["?foo\r", "n", "N", "2n", "3N"],
+        @[at(2, 0), at(1, 0), at(2, 0), at(0, 0), at(3, 0)],
+      ),
+      (at(2, 2), @["#", "n", "N", "2n"], @[at(1, 0), at(0, 0), at(1, 0), at(4, 0)]),
+      (at(2, 2), @["g#", "n", "N"], @[at(1, 0), at(0, 0), at(1, 0)]),
+      (at(0, 2), @["?foo\r", "n"], @[at(0, 0), at(4, 0)]),
+      # * and / turn it forward again.
+      (at(2, 2), @["?foo\r", "*", "n"], @[at(2, 0), at(3, 0), at(4, 0)]),
+      (at(2, 2), @["#", "/\r", "n"], @[at(1, 0), at(2, 0), at(3, 0)]),
+      # An empty ? turns the last search backward.
+      (at(2, 2), @["/foo\r", "?\r", "n"], @[at(3, 0), at(2, 0), at(1, 0)]),
+      # N goes the other way without turning it.
+      (at(2, 2), @["?foo\r", "N", "?\r"], @[at(2, 0), at(3, 0), at(2, 0)]),
+      # A cancelled search keeps the way the last one went.
+      (at(2, 2), @["?foo\r", "/bar\e", "n"], @[at(2, 0), at(2, 0), at(1, 0)]),
+      (at(2, 2), @["?foo\r", "A\x0fn\e"], @[at(2, 0), at(2, 0)]),
+    ]:
+      let e = createEditorForSearch(start.line, start.column)
+      var landed: seq[BufferPosition]
+      for step in steps:
+        e.typeKeys(step)
+        landed.add e.activeWindow.cursor
+      checkpoint($steps)
+      check landed == expected
+
+  test "an operator or Visual takes up to the match the way n goes":
+    block:
+      let e = createEditorForSearch(2, 2)
+      e.typeKeys("?foo\rlyn")
+      check e.state.registers.getRegisterContent('"') == "f"
+      check e.activeWindow.cursor == at(2, 0)
+    block:
+      let e = createEditorForSearch(2, 2)
+      e.typeKeys("#ldn")
+      check e.activeBuffer.getLine(1) == "oo 1"
+    block:
+      let e = createEditorForSearch(2, 2)
+      e.typeKeys("?foo\rvny")
+      check e.state.registers.getRegisterContent('"') == "foo 1\nf"
+      check e.activeWindow.cursor == at(1, 0)
+
+  test "a search that finds nothing still sets the way":
+    let e = createEditorForSearch(2, 2)
+    e.typeKeys("?foo\r/zzz\r")
+    check e.state.input.search.last ==
+      SearchSpec(pattern: "zzz", match: smRegex, direction: Forward)
+
+  test "an n that finds nothing records no jump":
+    let e = createEditorForSearch(2, 2)
+    e.typeKeys("/zzz\rn")
+    check e.state.jumpList.list.len == 0
+
+  test "n and gn with no previous search report E35":
+    for keys in ["n", "N", "gn", "dgn"]:
+      let e = createEditorForSearch(2, 2)
+      e.typeKeys(keys)
+      checkpoint(keys)
+      check e.state.statusMessage == "E35: No previous regular expression"

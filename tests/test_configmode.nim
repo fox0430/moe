@@ -2398,7 +2398,7 @@ suite "ConfigMode - Search":
 
   test "setSearchQuery / clearSearch":
     let state = newConfigModeState(newEditorConfig())
-    state.setSearchQuery("lsp")
+    state.setSearchQuery("lsp", Forward)
     check state.hasSearchQuery
     check state.searchQuery == "lsp"
     state.clearSearch()
@@ -2436,7 +2436,7 @@ suite "ConfigMode - Search":
     let idx = state.firstItemIndex
     let name = state.items[idx].displayName
     check not state.isItemMatched(idx) # no query yet
-    state.setSearchQuery(name)
+    state.setSearchQuery(name, Forward)
     check state.isItemMatched(idx)
     check not state.isItemMatched(-1)
     check not state.isItemMatched(state.items.len)
@@ -2444,7 +2444,7 @@ suite "ConfigMode - Search":
   test "searchForward wraps around to a match before the cursor":
     let state = newConfigModeState(newEditorConfig())
     let idx = state.firstItemIndex
-    state.setSearchQuery(state.items[idx].displayName)
+    state.setSearchQuery(state.items[idx].displayName, Forward)
     # Place the cursor after the match, then search forward: it must wrap.
     state.selectedIndex = state.items.high
     let found = state.searchForward()
@@ -2454,7 +2454,7 @@ suite "ConfigMode - Search":
   test "searchBackward wraps around to a match after the cursor":
     let state = newConfigModeState(newEditorConfig())
     let idx = state.firstItemIndex
-    state.setSearchQuery(state.items[idx].displayName)
+    state.setSearchQuery(state.items[idx].displayName, Forward)
     # Place the cursor before the match, then search backward: it must wrap.
     state.selectedIndex = 0
     let found = state.searchBackward()

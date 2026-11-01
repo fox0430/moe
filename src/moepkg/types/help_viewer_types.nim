@@ -24,9 +24,11 @@
 ## `help_generator` (and its large generated `HelpSentences` const) via the
 ## full `help_viewer` module.
 
+import ../primitives
 import list_viewer_types
 export list_viewer_types
 
 type HelpViewerState* = ref object of ListViewer[string] ## `items` holds the help lines.
   searchQuery*: string # Current search query
+  searchDirection*: SearchDirection # The way the search for it went
   lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight

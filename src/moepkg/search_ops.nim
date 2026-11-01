@@ -18,8 +18,8 @@
 #[############################################################################]#
 
 ## Searches as Normal mode and the viewers run them: the case a search
-## ignores, stepping over its matches, and the search * and # make of the text
-## under the cursor (Vim's nv_ident).
+## ignores, the way it goes, stepping over its matches, the search * and # make
+## of the text under the cursor (Vim's nv_ident) and n/N repeating the last one.
 
 import std/options
 
@@ -34,6 +34,20 @@ proc ignoresCase*(search: SearchState, spec: SearchSpec): bool =
   shouldIgnoreCase(
     spec.pattern, search.ignorecase, search.smartcase and spec.match == smRegex
   )
+
+proc findMatch*(
+    b: TextBuffer,
+    spec: SearchSpec,
+    pos: BufferPosition,
+    ignoreCase: bool,
+    direction = spec.direction,
+): Option[BufferPosition] =
+  ## The match of `spec` from `pos`, the way `direction` goes: the one `spec`
+  ## went unless given.
+  if direction == Forward:
+    b.findNext(spec.pattern, pos, ignoreCase, spec.match)
+  else:
+    b.findPrev(spec.pattern, pos, ignoreCase, spec.match)
 
 proc stepMatches*(
     first: BufferPosition,
@@ -79,18 +93,47 @@ proc searchIdent*(
       pattern:
         b.getLine(pos.line).charSubStr(ident.startCol, ident.endCol - ident.startCol),
       match: if bounded: smWord else: smLiteral,
+      direction: if forward: Forward else: Backward,
     )
   state.input.search.last = spec
   state.input.search.hlsearchTempDisabled = false
 
   let ignoreCase = state.input.search.ignoresCase(spec)
   proc step(pos: BufferPosition): Option[BufferPosition] =
-    if forward:
-      b.findNext(spec.pattern, pos, ignoreCase, spec.match)
-    else:
-      b.findPrev(spec.pattern, pos, ignoreCase, spec.match)
+    b.findMatch(spec, pos, ignoreCase)
 
   let first = step(BufferPosition(line: pos.line, column: ident.startCol))
+  if first.isNone:
+    state.statusMessage = "Pattern not found: " & spec.pattern
+    return err("Pattern not found")
+
+  state.statusMessage = "Found: " & spec.pattern
+  ok(stepMatches(first.get, count, step))
+
+proc searchLast*(
+    state: EditorState, b: TextBuffer, pos: BufferPosition, reverse: bool, count: int
+): Result[BufferPosition, string] =
+  ## The `count`-th match of the last search from `pos` (n), the other way when
+  ## `reverse` (N). As Vim keeps it with the pattern, the way is the one /, ?,
+  ## * or # went.
+  let spec = state.input.search.last
+  if spec.pattern.len == 0:
+    state.statusMessage = "E35: No previous regular expression"
+    return err(state.statusMessage)
+
+  state.input.search.hlsearchTempDisabled = false
+
+  let ignoreCase = state.input.search.ignoresCase(spec)
+  # * and # match literally
+  if spec.match == smRegex and compileSearchRegex(spec.pattern, ignoreCase).isNone:
+    state.statusMessage = "Invalid regex: " & spec.pattern
+    return err("Invalid regex")
+
+  let direction = repeatDirection(spec.direction, reverse)
+  proc step(pos: BufferPosition): Option[BufferPosition] =
+    b.findMatch(spec, pos, ignoreCase, direction)
+
+  let first = step(pos)
   if first.isNone:
     state.statusMessage = "Pattern not found: " & spec.pattern
     return err("Pattern not found")

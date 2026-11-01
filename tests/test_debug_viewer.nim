@@ -171,7 +171,7 @@ suite "debug_viewer - generateSearchInfo":
       lines,
       searchText = "foo",
       lastSearchText = "bar",
-      searchDirection = "forward",
+      lastDirection = "forward",
       historyLen = 5,
       ignorecase = true,
       smartcase = false,

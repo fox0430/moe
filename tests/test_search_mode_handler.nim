@@ -299,6 +299,17 @@ suite "Search mode - Help mode incremental search sync":
     cancelSearch(e)
     check helpState.selectedIndex == 10
 
+  test "A search keeps the way it went with its query, for n":
+    let e = createTestEditorInHelpMode()
+    e.state.enterSearchOverlay(Backward)
+    e.setSearchText("Visual")
+
+    finalizeSearch(e)
+
+    let help = e.activeWindow.modeState.help
+    check help.searchQuery == "Visual"
+    check help.searchDirection == Backward
+
 suite "Search mode - Config mode integration":
   test "performIncrementalSearch moves selection to a match from the anchor":
     let (e, cfg) = createTestEditorInConfigMode()
@@ -404,6 +415,18 @@ suite "Search mode - Config mode integration":
     check cfg.selectedIndex == 0
     # A cancelled search must not commit a query.
     check not cfg.hasSearchQuery
+
+  test "A search keeps the way it went with its query, for n":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Backward)
+    e.state.input.search.incsearch = true
+    let name = cfg.firstEditableName
+    e.setSearchText(name)
+
+    finalizeSearch(e)
+
+    check cfg.searchQuery == name
+    check cfg.searchDirection == Backward
 
 suite "Incremental search - case insensitive highlighting":
   test "Case-insensitive search highlights uppercase matches":

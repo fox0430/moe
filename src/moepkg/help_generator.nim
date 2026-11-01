@@ -144,8 +144,8 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
       syntax: "gP",
       description: "Paste before the cursor and leave the cursor after the pasted text",
     ),
-    HelpEntry(syntax: "n", description: "Search forwards"),
-    HelpEntry(syntax: "N", description: "Search backwards"),
+    HelpEntry(syntax: "n", description: "Repeat the last search"),
+    HelpEntry(syntax: "N", description: "Repeat the last search the other way"),
     HelpEntry(
       syntax: "gn", description: "Go to next search match and select it visually"
     ),
@@ -744,8 +744,8 @@ const ConfigModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "h", description: "Cycle enum backward, or decrement int/float"),
     HelpEntry(syntax: "/", description: "Search forwards"),
     HelpEntry(syntax: "?", description: "Search backwards"),
-    HelpEntry(syntax: "n", description: "Jump to next search match"),
-    HelpEntry(syntax: "N", description: "Jump to previous search match"),
+    HelpEntry(syntax: "n", description: "Repeat the last search"),
+    HelpEntry(syntax: "N", description: "Repeat the last search the other way"),
     HelpEntry(syntax: ":", description: "Enter command mode"),
     HelpEntry(syntax: "Esc", description: "Clear search highlight (press twice)"),
   ]
@@ -772,8 +772,8 @@ const LogViewerModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "Ctrl-b", description: "Page up"),
     HelpEntry(syntax: "/", description: "Search forwards"),
     HelpEntry(syntax: "?", description: "Search backwards"),
-    HelpEntry(syntax: "n", description: "Repeat last search forwards"),
-    HelpEntry(syntax: "N", description: "Repeat last search backwards"),
+    HelpEntry(syntax: "n", description: "Repeat the last search"),
+    HelpEntry(syntax: "N", description: "Repeat the last search the other way"),
     HelpEntry(syntax: "*", description: "Search forwards for the word under cursor"),
     HelpEntry(syntax: "#", description: "Search backwards for the word under cursor"),
     HelpEntry(syntax: "v", description: "Start character-wise Visual selection"),

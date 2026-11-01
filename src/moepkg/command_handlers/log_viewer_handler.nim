@@ -23,12 +23,12 @@
 ## The log viewer displays editor messages and LSP logs in a read-only buffer.
 ## Navigation uses normal cursor/buffer operations.
 
-import std/[options, unicode]
+import std/unicode
 
 import pkg/results
 
 import ../[types, key_bindings, render_utils, search_ops]
-import ../buffer/[core, search]
+import ../buffer/core
 import handler_types
 export handler_types
 
@@ -369,33 +369,13 @@ proc handleLogViewerModeKey*(
     of "r":
       # Refresh log content
       return LogViewerResult(kind: lvrRefresh)
-    of "n":
-      # Search next - find next occurrence of last search
-      if state.input.search.last.pattern.len > 0:
-        let spec = state.input.search.last
-        let searchResult = buffer.findNext(
-          spec.pattern, state.cursor, state.input.search.ignoresCase(spec), spec.match
-        )
-        if searchResult.isSome:
-          state.cursor = searchResult.get
-        else:
-          state.statusMessage = "Pattern not found: " & state.input.search.last.pattern
-      else:
-        state.statusMessage = "No previous search"
-      return LogViewerResult(kind: lvrHandled)
-    of "N":
-      # Search prev - find previous occurrence of last search
-      if state.input.search.last.pattern.len > 0:
-        let spec = state.input.search.last
-        let searchResult = buffer.findPrev(
-          spec.pattern, state.cursor, state.input.search.ignoresCase(spec), spec.match
-        )
-        if searchResult.isSome:
-          state.cursor = searchResult.get
-        else:
-          state.statusMessage = "Pattern not found: " & state.input.search.last.pattern
-      else:
-        state.statusMessage = "No previous search"
+    of "n", "N":
+      # Repeat the last search the way it went, N the other way
+      let found = state.searchLast(
+        buffer, state.cursor, reverse = keyCombo.char == "N", count = 1
+      )
+      if found.isOk:
+        state.cursor = found.get
       return LogViewerResult(kind: lvrHandled)
     of "*", "#":
       state.searchIdent(buffer, keyCombo.char == "*", bounded = true)

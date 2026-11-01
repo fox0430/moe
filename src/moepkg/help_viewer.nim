@@ -23,7 +23,7 @@
 
 import std/[strutils, options]
 
-import buffer/core, help_generator, list_viewer
+import buffer/core, help_generator, list_viewer, primitives
 
 import types/help_viewer_types
 export help_viewer_types, list_viewer
@@ -165,9 +165,12 @@ proc moveToPreviousSection*(state: HelpViewerState) =
       state.selectedIndex = i
       return
 
-proc setSearchQuery*(state: HelpViewerState, query: string) =
-  ## Set the search query
+proc setSearchQuery*(
+    state: HelpViewerState, query: string, direction: SearchDirection
+) =
+  ## Set the search query and the way its search went, which n goes too
   state.searchQuery = query
+  state.searchDirection = direction
 
 proc clearSearch*(state: HelpViewerState) =
   ## Clear the search query
@@ -226,6 +229,13 @@ proc searchBackward*(state: HelpViewerState): Option[int] =
       return some(i)
 
   none(int)
+
+proc repeatSearch*(state: HelpViewerState, reverse: bool): Option[int] =
+  ## n, or N when `reverse`: the next match the way the search went.
+  if repeatDirection(state.searchDirection, reverse) == Forward:
+    state.searchForward()
+  else:
+    state.searchBackward()
 
 proc searchFirst*(state: HelpViewerState): Option[int] =
   ## Search from the beginning of the document.
