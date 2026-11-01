@@ -585,8 +585,14 @@ proc handleNormalModeKey*(
         )
         state.jumpList.list.add(currentPos)
         state.jumpList.index = state.jumpList.list.len - 2
+      elif state.jumpList.index == 0:
+        # Nothing past the oldest, as Vim's movemark: failing stops a register
+        # or mapping, as Vim's beep does.
+        return NormalModeResult(
+          kind: nmrError, errorMessage: "Already at oldest jump position"
+        )
       else:
-        state.jumpList.index = max(0, state.jumpList.index - 1)
+        state.jumpList.index -= 1
 
       let pos = state.jumpList.list[state.jumpList.index]
 

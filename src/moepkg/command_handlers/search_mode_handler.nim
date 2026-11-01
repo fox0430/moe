@@ -32,7 +32,7 @@ import
     search_ops, fold_open,
   ]
 import ../command_registry/core
-import command_mode_handler
+import command_mode_handler, result_processor
 
 ## NOTE: While in Search Mode:
 ## - Character input: Add to searchText, trigger performIncrementalSearch (if enabled)
@@ -118,7 +118,7 @@ proc addSearchHistory(e: Editor, pattern: string) =
   if e.state.input.search.history.len > historyLimit:
     e.state.input.search.history.setLen(historyLimit)
 
-proc finalizeSearch(e: Editor) =
+proc finalizeSearch(e: Editor): bool =
   ## Finalize search and return to Normal mode
   ##
   ## Called when: Enter is pressed in Search mode
@@ -130,6 +130,8 @@ proc finalizeSearch(e: Editor) =
   ## - Re-enable search highlight (hlsearch)
   ## - Transition to Normal mode
   ## - Clear searchText buffer
+  ##
+  ## Returns whether the search found a match.
   let
     typed = e.state.input.search.text
     isRepeat = typed.len == 0 and e.state.input.search.last.pattern.len > 0
@@ -165,12 +167,14 @@ proc finalizeSearch(e: Editor) =
           cfg.searchStartIndex + 1
         else:
           cfg.searchStartIndex - 1
-      if cfg.searchItems(pattern, startIndex, forward).isNone:
+      result = cfg.searchItems(pattern, startIndex, forward).isSome
+      if not result:
         e.state.statusMessage = "Pattern not found: " & pattern
     else:
       # Vim records a jump for a search that found something, even one that
       # wrapped back to the anchor.
-      if e.searchFromStart(e.state.input.search.last):
+      result = e.searchFromStart(e.state.input.search.last)
+      if result:
         recordJump(e.state, e.state.input.search.startPos)
 
       # Sync search query and position to help viewer state if in Help mode
@@ -229,13 +233,12 @@ proc performIncrementalSearch(e: Editor) =
 
   let cfg = e.activeConfigState()
   if cfg != nil:
-    # Config mode: live-search the item list from the search start anchor.
-    if e.state.input.search.text.len == 0:
+    # Config mode: live-search the item list from the search start anchor. No
+    # match (and an empty text matches none) restores the anchor, as the
+    # buffer branch does.
+    let forward = e.state.input.search.direction == Forward
+    if cfg.searchItems(e.state.input.search.text, cfg.searchStartIndex, forward).isNone:
       cfg.selectedIndex = cfg.searchStartIndex
-    else:
-      let forward = e.state.input.search.direction == Forward
-      if cfg.searchItems(e.state.input.search.text, cfg.searchStartIndex, forward).isNone:
-        cfg.selectedIndex = cfg.searchStartIndex
     return
 
   if e.state.input.search.text.len == 0:
@@ -326,14 +329,16 @@ proc handleSearchBackspace(e: Editor) =
     e.state.input.search.cursor -= 1
     e.performIncrementalSearch()
 
-proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
+proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
   ## Handle a KeyCombo in Search mode. Same dispatch as `handleSearchModeEvent`
   ## but reachable from replay paths (macro playback, runtime mapping RHS) that
-  ## already hold a KeyCombo rather than a raw Event.
+  ## already hold a KeyCombo rather than a raw Event. `roAbort` when Enter
+  ## runs a search that fails, so the keys a register or mapping queued after
+  ## it are dropped, as Vim's error flushes them.
   # Escape: Cancel search and return to previous mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
     e.cancelSearch()
-    return true
+    return roContinue
 
   # Enter: Execute search and return to Normal mode
   let isEnter =
@@ -341,8 +346,7 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     (not keyCombo.isSpecial and (keyCombo.char == "\n" or keyCombo.char == "\r"))
 
   if isEnter:
-    e.finalizeSearch()
-    return true
+    return if e.finalizeSearch(): roContinue else: roAbort
 
   # Up arrow: Navigate to previous (older) search in history
   if keyCombo.isSpecial and keyCombo.special == skUp:
@@ -360,7 +364,7 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       e.state.input.search.cursor = e.state.input.search.text.charLen
       # Trigger incremental search with history entry
       e.performIncrementalSearch()
-    return true
+    return roContinue
 
   # Down arrow: Navigate to next (newer) search in history
   if keyCombo.isSpecial and keyCombo.special == skDown:
@@ -379,29 +383,29 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         e.state.input.search.cursor = 0
         # Empty text restores the anchor (cursor, viewport and Config index).
         e.performIncrementalSearch()
-    return true
+    return roContinue
 
   # Left arrow: Move cursor left within search text
   if keyCombo.isSpecial and keyCombo.special == skLeft:
     if e.state.input.search.cursor > 0:
       e.state.input.search.cursor -= 1
-    return true
+    return roContinue
 
   # Right arrow: Move cursor right within search text
   if keyCombo.isSpecial and keyCombo.special == skRight:
     if e.state.input.search.cursor < e.state.input.search.text.charLen:
       e.state.input.search.cursor += 1
-    return true
+    return roContinue
 
   # Home: Move cursor to start of search text
   if keyCombo.isSpecial and keyCombo.special == skHome:
     e.state.input.search.cursor = 0
-    return true
+    return roContinue
 
   # End: Move cursor to end of search text
   if keyCombo.isSpecial and keyCombo.special == skEnd:
     e.state.input.search.cursor = e.state.input.search.text.charLen
-    return true
+    return roContinue
 
   # Delete: Remove character at cursor position
   if keyCombo.isSpecial and keyCombo.special == skDelete:
@@ -411,32 +415,32 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       e.state.input.search.text =
         e.state.input.search.text.deleteCharAt(e.state.input.search.cursor)
       e.performIncrementalSearch()
-    return true
+    return roContinue
 
   # Backspace: Remove last character and re-search
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
     # Reset history navigation when user types
     e.state.input.search.historyIndex = -1
     e.handleSearchBackspace()
-    return true
+    return roContinue
 
   # Character input: Add character and perform incremental search
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
     # Reset history navigation when user types
     e.state.input.search.historyIndex = -1
     e.handleSearchCharacterInput(keyCombo.char)
-    return true
+    return roContinue
 
   # Ignore other special keys
-  return true
+  roContinue
 
-proc handleSearchModeEvent*(e: Editor, event: Event): bool =
+proc handleSearchModeEvent*(e: Editor, event: Event): ReplayOutcome =
   ## Handle Search mode events - main event dispatcher.
   ## Extracts the KeyCombo and forwards to `handleSearchModeKeyCombo`, which
   ## replay paths call directly.
   if event.kind != EventKind.Key:
-    return true
+    return roContinue
   let keyComboOpt = eventToKeyCombo(event)
   if keyComboOpt.isNone:
-    return true
+    return roContinue
   return e.handleSearchModeKeyCombo(keyComboOpt.get)

@@ -1354,6 +1354,30 @@ suite "NormalModeHandler - Jump List Edge Cases":
     check r.kind == nmrError
     check r.errorMessage == "Already at newest jump position"
 
+  test "Jump back at oldest position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    state.jumpList.list = @[
+      JumpPosition(bufferId: BufferId(0), line: 0, column: 0),
+      JumpPosition(bufferId: BufferId(0), line: 1, column: 0),
+    ]
+    state.jumpList.index = 0
+    state.windowDisplay.currentBufferId = BufferId(0)
+    state.cursor = BufferPosition(line: 1, column: 3)
+
+    # Simulate Ctrl-o
+    let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == nmrError
+    check r.errorMessage == "Already at oldest jump position"
+    check state.jumpList.index == 0
+    check state.cursor == BufferPosition(line: 1, column: 3)
+
   test "Jump back updates index correctly":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1")

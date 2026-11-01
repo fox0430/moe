@@ -1258,10 +1258,8 @@ proc handleInterrupt*(e: Editor): bool =
     result = e.handleInterruptCore()
 
 proc handleOverlayKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
-  ## Dispatch the Search and Rename overlays and Debug mode. Returns
-  ## some(result) if handled, none otherwise.
-  if e.state.isSearchOverlay:
-    return some(e.handleSearchModeKeyCombo(keyCombo))
+  ## Dispatch the Rename overlay and Debug mode. Returns some(result) if
+  ## handled, none otherwise.
   if e.state.isRenameOverlay:
     return some(e.handleRenameModeKeyCombo(keyCombo))
   if e.state.mode == EditorMode.Debug:
@@ -1430,13 +1428,20 @@ proc dispatchFrontLayers(e: Editor, keyCombo: KeyCombo): Option[ReplayOutcome] =
   ## The layers in front of the mode handlers, which run a key the mappings
   ## have had: the overlays, Debug mode, a viewer's Ctrl-W and Recent File
   ## mode. `none` falls through to the mode handlers.
-  if e.state.isCommandOverlay:
-    result = some(e.handleCommandModeKeyCombo(keyCombo))
+  # The command and search lines report how their Enter went themselves.
+  let line =
+    if e.state.isCommandOverlay:
+      some(e.handleCommandModeKeyCombo(keyCombo))
+    elif e.state.isSearchOverlay:
+      some(e.handleSearchModeKeyCombo(keyCombo))
+    else:
+      none(ReplayOutcome)
+  if line.isSome:
     e.enforceModePolicy()
-    return
+    return line
 
   let queued = e.hostResultRequestCount
-  # Handle overlay modes (Search, Rename) + Debug mode
+  # Handle the Rename overlay + Debug mode
   var handled = e.handleOverlayKeyCombo(keyCombo)
   if handled.isSome:
     e.enforceModePolicy()

@@ -29,6 +29,7 @@ import
     search_utils, key_bindings, unicode_utils,
   ]
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
+import ../src/moepkg/command_handlers/result_processor
 
 proc setSearchText(e: Editor, text: string) =
   ## Test helper: set search text and position cursor at the end,
@@ -169,7 +170,7 @@ suite "Search mode - leaving the overlay":
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("world")
 
-    finalizeSearch(e)
+    discard finalizeSearch(e)
 
     check e.state.mode == EditorMode.Normal
     check not e.state.isSearchOverlay
@@ -239,7 +240,7 @@ suite "Search mode - Help mode incremental search sync":
     performIncrementalSearch(e)
     let cursorLineAfterSearch = e.cursor.line
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     let helpState = e.activeWindow.modeState.help
     # selectedIndex should match cursor position, not reset to first match
@@ -253,7 +254,7 @@ suite "Search mode - Help mode incremental search sync":
     e.state.input.search.startPos = BufferPosition(line: 0, column: 0)
     e.setSearchText("Insert")
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     let helpState = e.activeWindow.modeState.help
     check helpState.selectedIndex == e.cursor.line
@@ -304,7 +305,7 @@ suite "Search mode - Help mode incremental search sync":
     e.state.enterSearchOverlay(Backward)
     e.setSearchText("Visual")
 
-    finalizeSearch(e)
+    discard finalizeSearch(e)
 
     let help = e.activeWindow.modeState.help
     check help.searchQuery == "Visual"
@@ -379,7 +380,7 @@ suite "Search mode - Config mode integration":
     let name = cfg.firstEditableName
     e.setSearchText(name)
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check cfg.searchQuery == name
     check cfg.isItemMatched(cfg.selectedIndex)
@@ -395,7 +396,7 @@ suite "Search mode - Config mode integration":
     let name = cfg.firstEditableName
     e.setSearchText(name)
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check cfg.searchQuery == name
     check cfg.isItemMatched(cfg.selectedIndex)
@@ -423,7 +424,7 @@ suite "Search mode - Config mode integration":
     let name = cfg.firstEditableName
     e.setSearchText(name)
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check cfg.searchQuery == name
     check cfg.searchDirection == Backward
@@ -745,11 +746,11 @@ suite "Search mode - empty Enter repeats the last search":
     e.state.input.search.incsearch = true
     e.setSearchText("target")
     performIncrementalSearch(e)
-    finalizeSearch(e)
+    check finalizeSearch(e)
     check e.cursor == BufferPosition(line: 1, column: 0)
 
     e.state.enterSearchOverlay(Forward)
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 3, column: 0)
     check e.state.input.search.last.pattern == "target"
@@ -759,11 +760,11 @@ suite "Search mode - empty Enter repeats the last search":
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = false
     e.setSearchText("target")
-    finalizeSearch(e)
+    check finalizeSearch(e)
     check e.cursor == BufferPosition(line: 1, column: 0)
 
     e.state.enterSearchOverlay(Forward)
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 3, column: 0)
 
@@ -774,11 +775,11 @@ suite "Search mode - empty Enter repeats the last search":
     e.state.input.search.incsearch = true
     e.setSearchText("target")
     performIncrementalSearch(e)
-    finalizeSearch(e)
+    check finalizeSearch(e)
     check e.cursor == BufferPosition(line: 2, column: 0)
 
     e.state.enterSearchOverlay(Backward)
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 0, column: 0)
 
@@ -787,7 +788,7 @@ suite "Search mode - empty Enter repeats the last search":
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
 
-    finalizeSearch(e)
+    check not finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 0, column: 0)
     check e.state.input.search.last.pattern == ""
@@ -807,7 +808,7 @@ suite "Search mode - empty Enter repeats the last search":
     for _ in 0 ..< "beta".len:
       handleSearchBackspace(e)
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     # Wraps from line 3, so the first match is line 0 - not line 2, which is
     # what searching from the erased "beta" match would have found.
@@ -819,7 +820,7 @@ suite "Search mode - empty Enter repeats the last search":
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("foo")
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 0, column: 0)
     check "Pattern not found" notin e.state.statusMessage
@@ -832,7 +833,7 @@ suite "Search mode - empty Enter repeats the last search":
     e.state.input.search.incsearch = true
     e.setSearchText("foo")
     performIncrementalSearch(e)
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 0, column: 0)
     check e.state.jumpList.list.len == 1
@@ -842,7 +843,7 @@ suite "Search mode - empty Enter repeats the last search":
     e.state.input.search.last = SearchSpec(pattern: "target", match: smWord)
     e.state.enterSearchOverlay(Forward)
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.state.input.search.last == SearchSpec(pattern: "target", match: smWord)
 
@@ -860,11 +861,11 @@ suite "Search mode - empty Enter repeats the last search":
     let e = createTestEditorWithBuffer("alpha\ntarget\nbeta\ntarget\n")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("target")
-    finalizeSearch(e)
+    discard finalizeSearch(e)
     let historyAfterSearch = e.state.input.search.history
 
     e.state.enterSearchOverlay(Forward)
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.state.input.search.history == historyAfterSearch
 
@@ -874,7 +875,7 @@ suite "Search mode - empty Enter repeats the last search":
     e.cursor = BufferPosition(line: 2, column: 0)
     e.state.enterSearchOverlay(Forward)
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 3, column: 0)
     check e.state.jumpList.list.len == 1
@@ -886,14 +887,14 @@ suite "Search mode - empty Enter repeats the last search":
     cfg.searchStartIndex = 0
     cfg.selectedIndex = 0
     e.setSearchText("e")
-    finalizeSearch(e)
+    check finalizeSearch(e)
     let firstMatch = cfg.selectedIndex
 
     # Reopening the prompt re-anchors on the current selection, as the
     # dispatcher does when / is pressed.
     e.state.enterSearchOverlay(Forward)
     cfg.searchStartIndex = cfg.selectedIndex
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check cfg.selectedIndex != firstMatch
     check cfg.items[cfg.selectedIndex].matchesSearchQuery(cfg.config, "e")
@@ -904,17 +905,17 @@ suite "Search mode - empty Enter repeats the last search":
     cfg.searchStartIndex = 0
     cfg.selectedIndex = 0
     e.setSearchText("e")
-    finalizeSearch(e)
+    check finalizeSearch(e)
     let firstMatch = cfg.selectedIndex
 
     e.state.enterSearchOverlay(Forward)
     cfg.searchStartIndex = cfg.selectedIndex
-    finalizeSearch(e)
+    check finalizeSearch(e)
     let secondMatch = cfg.selectedIndex
 
     e.state.enterSearchOverlay(Backward)
     cfg.searchStartIndex = cfg.selectedIndex
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check secondMatch != firstMatch
     check cfg.selectedIndex == firstMatch
@@ -927,7 +928,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.input.search.incsearch = true
     e.setSearchText("zzzz")
     performIncrementalSearch(e)
-    finalizeSearch(e)
+    check not finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 1, column: 0)
     check e.state.jumpList.list.len == 0
@@ -945,7 +946,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     check e.cursor == BufferPosition(line: 1, column: 0)
     check e.state.statusMessage == ""
 
-    finalizeSearch(e)
+    check not finalizeSearch(e)
     check e.cursor == BufferPosition(line: 1, column: 0)
     check e.state.jumpList.list.len == 0
     check e.state.statusMessage == "Invalid regex: ab("
@@ -960,7 +961,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
       handleSearchCharacterInput(e, $ch)
     check e.state.statusMessage == ""
 
-    finalizeSearch(e)
+    check not finalizeSearch(e)
     check e.cursor == BufferPosition(line: 1, column: 0)
     check e.state.statusMessage == "Pattern not found: zzz"
 
@@ -970,7 +971,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.input.search.incsearch = true
     for ch in "ab(":
       handleSearchCharacterInput(e, $ch)
-    finalizeSearch(e)
+    check not finalizeSearch(e)
 
     check e.state.statusMessage == "Invalid regex: ab("
     check e.activeWindow.modeState.help.searchQuery == "ab("
@@ -985,7 +986,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
 
     e.invalidatePositionStateForBuffer(e.activeBuffer)
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
     check e.cursor == BufferPosition(line: 1, column: 0)
     check e.state.statusMessage == "Found: foo"
 
@@ -997,7 +998,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     cfg.selectedIndex = 0
     for ch in "zzzzNoSuchItem":
       handleSearchCharacterInput(e, $ch)
-    finalizeSearch(e)
+    check not finalizeSearch(e)
 
     check cfg.selectedIndex == 0
     check e.state.statusMessage == "Pattern not found: zzzzNoSuchItem"
@@ -1039,7 +1040,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
       e.state.input.search.incsearch = incsearch
       for ch in "foo":
         handleSearchCharacterInput(e, $ch)
-      finalizeSearch(e)
+      check finalizeSearch(e)
 
       check e.cursor == BufferPosition(line: 0, column: 0)
       check e.state.statusMessage == "Found: foo"
@@ -1052,7 +1053,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.input.search.incsearch = false
     e.state.input.search.startPos = BufferPosition(line: 0, column: 0)
     e.setSearchText("zzzz")
-    finalizeSearch(e)
+    check not finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 1, column: 2)
     check e.state.jumpList.list.len == 0
@@ -1066,7 +1067,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.input.search.incsearch = false
     e.viewport.topLine = 140
     e.setSearchText("needle")
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.cursor.line == 150
     check e.viewport.topLine == 140
@@ -1087,7 +1088,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = false
     e.setSearchText("zzzz")
-    finalizeSearch(e)
+    check not finalizeSearch(e)
 
     check e.state.jumpList.list.len == 0
 
@@ -1136,13 +1137,13 @@ suite "Search mode - jump list and viewport on a failed or erased search":
 
     check handleSearchModeKeyCombo(
       e, KeyCombo(isSpecial: true, special: skUp, fnNum: 0, modifiers: {})
-    )
+    ) == roContinue
     check e.cursor.line == 150
     check e.viewport.topLine > 0
 
     check handleSearchModeKeyCombo(
       e, KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})
-    )
+    ) == roContinue
 
     check e.state.input.search.text == ""
     check e.cursor.line == 0
@@ -1206,6 +1207,6 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.input.search.last = SearchSpec(pattern: "target", match: smWord)
     e.state.enterSearchOverlay(Forward)
 
-    finalizeSearch(e)
+    check finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 2, column: 0)
