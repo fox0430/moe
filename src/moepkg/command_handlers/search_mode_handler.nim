@@ -168,8 +168,11 @@ proc finalizeSearch(e: Editor): bool =
         else:
           cfg.searchStartIndex - 1
       result = cfg.searchItems(pattern, startIndex, forward).isSome
-      if not result:
-        e.state.statusMessage = "Pattern not found: " & pattern
+      e.state.statusMessage =
+        if result:
+          "Found: " & pattern
+        else:
+          "Pattern not found: " & pattern
     else:
       # Vim records a jump for a search that found something, even one that
       # wrapped back to the anchor.
@@ -224,8 +227,7 @@ proc performIncrementalSearch(e: Editor) =
   ## - Updates cursor position to match if found
   ## - Restores cursor to start position if not found
   ## - Updates viewport to follow cursor
-  ## - Sets "Found" on a match and clears the message otherwise, as Vim holds
-  ##   back the error until Enter
+  ## - Leaves the message alone, as Vim reports only on Enter
   ##
   ## This provides real-time feedback as the user types their search query.
   if not e.state.input.search.incsearch:
@@ -244,7 +246,6 @@ proc performIncrementalSearch(e: Editor) =
   if e.state.input.search.text.len == 0:
     # Erasing the pattern restores the anchor, as the Config branch does.
     e.backToSearchStart()
-    e.state.statusMessage = ""
     return
 
   let searchResult = e.findFrom(
@@ -260,13 +261,8 @@ proc performIncrementalSearch(e: Editor) =
     e.syncHelpViewerIndex(pos.line)
 
     e.showFromSearchStart(pos)
-
-    e.state.statusMessage = "Found: " & e.state.input.search.text
   else:
     e.backToSearchStart()
-
-    # Vim holds back the error until Enter.
-    e.state.statusMessage = ""
 
 proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## Handle character input in Search mode

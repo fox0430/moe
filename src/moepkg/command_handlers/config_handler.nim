@@ -263,6 +263,10 @@ proc handleConfigModeKey*(
       # to; an empty query must not touch the gate.
       if found.isSome:
         return ConfigModeResult(kind: cmrRepeatSearch)
+      if configState.hasSearchQuery:
+        return ConfigModeResult(
+          kind: cmrError, errorMessage: "Pattern not found: " & configState.searchQuery
+        )
       return ConfigModeResult(kind: cmrHandled)
     of "j":
       configState.moveDown()

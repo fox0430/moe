@@ -1525,3 +1525,12 @@ suite "config_handler: Search":
     let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
     let result = handleConfigModeKey(configState, editorState, 24, n)
     check result.kind == cmrHandled
+
+  test "'n' reports a query that no longer matches":
+    let configState = createTestConfigState()
+    let editorState = createTestEditorState()
+    configState.setSearchQuery("zzzzNoSuchItem", Forward)
+    let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    let result = handleConfigModeKey(configState, editorState, 24, n)
+    check result.kind == cmrError
+    check result.errorMessage == "Pattern not found: zzzzNoSuchItem"

@@ -672,3 +672,10 @@ suite "Overlay - edge cases":
     # And overlay should be active
     check state.hasOverlay == true
     check state.isCommandOverlay == true
+
+suite "Overlay - message line":
+  test "The search prompt takes the message line, as Vim's command line does":
+    let state = createTestState()
+    state.setStatusQuiet("written")
+    state.enterSearchOverlay(Forward)
+    check state.statusMessage == ""
