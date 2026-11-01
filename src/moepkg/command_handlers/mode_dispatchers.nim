@@ -1038,7 +1038,9 @@ proc handleConfigMode*(
     # after :noh) so the highlight comes back across all windows/modes.
     state.input.search.hlsearchTempDisabled = false
     return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      kind: hrHandled,
+      modeTransition: none(EditorMode),
+      statusMessage: "Found: " & configState.searchQuery,
     )
   of cmrClearSearchHighlight:
     # Double-Escape: clear search highlight. Disable the global hlsearch gate

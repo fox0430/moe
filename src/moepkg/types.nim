@@ -1782,6 +1782,8 @@ proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   state.input.search.cursor = 0
   state.noteSearchStart()
   state.input.search.historyIndex = -1
+  # The prompt takes the message line, as Vim's command line does.
+  state.statusMessage = ""
   # Re-enable search highlight so incremental search results are visible
   state.input.search.hlsearchTempDisabled = false
 

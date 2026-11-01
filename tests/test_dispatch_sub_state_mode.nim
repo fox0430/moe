@@ -272,6 +272,7 @@ suite "dispatchSubStateMode - Config search highlight clear":
     let r = manager.dispatchSubStateMode(editor, n)
     check r.kind == hrHandled
     check not editor.state.input.search.hlsearchTempDisabled
+    check r.statusMessage == "Found: " & configState.items[idx].displayName
 
 suite "dispatchSubStateMode - FileTree search highlight clear":
   test "FileTree double-Escape clears the search via the dispatcher":

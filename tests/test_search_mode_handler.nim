@@ -1072,15 +1072,38 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     check e.cursor.line == 150
     check e.viewport.topLine == 140
 
-  test "Erasing the pattern clears the Found message":
-    let e = createTestEditorWithBuffer("abc\n")
+  test "The prompt takes the message line until Enter":
+    for typed in ["b", "zz", ""]:
+      let e = createTestEditorWithBuffer("abc\nbcd\n")
+      e.state.statusMessage = "written"
+      e.state.enterSearchOverlay(Forward)
+      e.state.input.search.incsearch = true
+      check e.state.statusMessage == ""
+
+      for ch in typed:
+        handleSearchCharacterInput(e, $ch)
+      handleSearchBackspace(e)
+      check e.state.statusMessage == ""
+
+      cancelSearch(e)
+      check e.state.statusMessage == ""
+
+  test "Config mode: a new search drops the last one's message":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.statusMessage = "Pattern not found: zzz"
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
-    handleSearchCharacterInput(e, "a")
-    check e.state.statusMessage == "Found: a"
-
-    handleSearchBackspace(e)
     check e.state.statusMessage == ""
+
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    let name = cfg.firstEditableName
+    for ch in name:
+      handleSearchCharacterInput(e, $ch)
+    check e.state.statusMessage == ""
+
+    check finalizeSearch(e)
+    check e.state.statusMessage == "Found: " & name
 
   test "A failed search does not record a jump without incsearch":
     let e = createTestEditorWithBuffer("alpha\nbeta\n")
