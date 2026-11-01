@@ -111,8 +111,8 @@
 | <kbd>**P**</kbd> | Paste the clipboard before the cursor |
 | <kbd>**g**</kbd> <kbd>**p**</kbd> | Paste and leave the cursor after the pasted text |
 | <kbd>**g**</kbd> <kbd>**P**</kbd> | Paste before the cursor and leave the cursor after the pasted text |
-| <kbd>**n**</kbd> | Search forwards |
-| <kbd>**N**</kbd> | Search backwards |
+| <kbd>**n**</kbd> | Repeat the last search |
+| <kbd>**N**</kbd> | Repeat the last search the other way |
 | <kbd>**g**</kbd> <kbd>**n**</kbd> | Go to next search match and select it visually |
 | <kbd>**g**</kbd> <kbd>**N**</kbd> | Go to previous search match and select it visually |
 | <kbd>**d**</kbd> <kbd>**g**</kbd> <kbd>**n**</kbd> | Delete next search match |
@@ -648,8 +648,8 @@ motions and searches.
 | <kbd>**Ctrl**</kbd> <kbd>**b**</kbd> | Page up |
 | <kbd>**/**</kbd> | Search forwards |
 | <kbd>**?**</kbd> | Search backwards |
-| <kbd>**n**</kbd> | Repeat last search forwards |
-| <kbd>**N**</kbd> | Repeat last search backwards |
+| <kbd>**n**</kbd> | Repeat the last search |
+| <kbd>**N**</kbd> | Repeat the last search the other way |
 | <kbd>*****</kbd> | Search forwards for the word under cursor |
 | <kbd>**#**</kbd> | Search backwards for the word under cursor |
 | <kbd>**v**</kbd> | Start character-wise Visual selection |
@@ -765,8 +765,8 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | <kbd>**h**</kbd> | Cycle enum backward, or decrement int/float |
 | <kbd>**/**</kbd> | Search forwards |
 | <kbd>**?**</kbd> | Search backwards |
-| <kbd>**n**</kbd> | Jump to next search match |
-| <kbd>**N**</kbd> | Jump to previous search match |
+| <kbd>**n**</kbd> | Repeat the last search |
+| <kbd>**N**</kbd> | Repeat the last search the other way |
 | <kbd>**:**</kbd> | Enter command mode |
 | <kbd>**Esc**</kbd> | Clear search highlight (press twice) |
 <!-- AUTO-GEN:end ConfigMode -->

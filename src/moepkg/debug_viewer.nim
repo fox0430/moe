@@ -299,7 +299,7 @@ proc generateSearchInfo*(
     lines: var seq[string],
     searchText: string,
     lastSearchText: string,
-    searchDirection: string,
+    lastDirection: string,
     historyLen: int,
     ignorecase: bool,
     smartcase: bool,
@@ -313,7 +313,7 @@ proc generateSearchInfo*(
   lines.addSection("SearchState")
   lines.addField("text", searchText)
   lines.addField("lastText", lastSearchText)
-  lines.addField("direction", searchDirection)
+  lines.addField("lastDirection", lastDirection)
   lines.addField("historyLen", $historyLen)
   lines.addField("ignorecase", formatBool(ignorecase))
   lines.addField("smartcase", formatBool(smartcase))

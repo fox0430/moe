@@ -515,9 +515,12 @@ proc matchesSearchQuery*(item: ConfigItem, cfg: EditorConfig, query: string): bo
   item.displayName.toLowerAscii.contains(q) or
     item.valueText(cfg).toLowerAscii.contains(q)
 
-proc setSearchQuery*(state: ConfigModeState, query: string) =
-  ## Set the active search query
+proc setSearchQuery*(
+    state: ConfigModeState, query: string, direction: SearchDirection
+) =
+  ## Set the active search query and the way its search went, which n goes too
   state.searchQuery = query
+  state.searchDirection = direction
 
 proc clearSearch*(state: ConfigModeState) =
   ## Clear the active search query
@@ -562,6 +565,13 @@ proc searchForward*(state: ConfigModeState): Option[int] =
 proc searchBackward*(state: ConfigModeState): Option[int] =
   ## Move to the previous match before the current selection (wraps around)
   state.searchItems(state.searchQuery, state.selectedIndex - 1, false)
+
+proc repeatSearch*(state: ConfigModeState, reverse: bool): Option[int] =
+  ## n, or N when `reverse`: the next match the way the search went.
+  if repeatDirection(state.searchDirection, reverse) == Forward:
+    state.searchForward()
+  else:
+    state.searchBackward()
 
 # Value manipulation
 

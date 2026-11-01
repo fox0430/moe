@@ -129,15 +129,14 @@ proc findGnMatch*(
   let spec = state.input.search.last
   let searchText = spec.pattern
   if searchText.len == 0:
-    return err("No previous search")
+    return err("E35: No previous regular expression")
   let ignoreCase = state.input.search.ignoresCase(spec)
   state.input.search.hlsearchTempDisabled = false
 
+  # gn goes forward and gN backward, as in Vim: not the way the last search went
+  let direction = if forward: Forward else: Backward
   proc step(pos: BufferPosition): Option[BufferPosition] =
-    if forward:
-      findNext(buffer, searchText, pos, ignoreCase, spec.match)
-    else:
-      findPrev(buffer, searchText, pos, ignoreCase, spec.match)
+    buffer.findMatch(spec, pos, ignoreCase, direction)
 
   var match =
     findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, spec.match)
@@ -303,47 +302,14 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     ok(())
 
   proc findLastSearch(
-      ctx: CommandContext,
-      searchProc: proc(
-        b: TextBuffer,
-        text: string,
-        pos: BufferPosition,
-        ignorecase: bool,
-        match: SearchMatch,
-      ): Option[BufferPosition],
-      count: int,
+      ctx: CommandContext, reverse: bool, count: int
   ): Result[BufferPosition, string] =
-    ## The `count`-th match of the last search from the cursor, the way
-    ## `searchProc` goes (n/N). They repeat the last search, how it matches
-    ## included, so they land only on the matches the highlighter draws.
-    let spec = ctx.state.input.search.last
-    let searchText = spec.pattern
-    if searchText.len == 0:
-      return err("No previous search")
-
-    # Record jump before searching
-    recordJump(ctx.state)
-
-    # Re-enable highlight when using n/N
-    ctx.state.input.search.hlsearchTempDisabled = false
-
-    let ignoreCase = ctx.state.input.search.ignoresCase(spec)
-
-    # Validate regex (* and # match literally)
-    if spec.match == smRegex and compileSearchRegex(searchText, ignoreCase).isNone:
-      ctx.state.statusMessage = "Invalid regex: " & searchText
-      return err("Invalid regex")
-
-    proc step(pos: BufferPosition): Option[BufferPosition] =
-      searchProc(ctx.buffer, searchText, pos, ignoreCase, spec.match)
-
-    let found = step(ctx.cursor)
-    if found.isNone:
-      ctx.state.statusMessage = "Pattern not found: " & searchText
-      return err("Pattern not found")
-
-    ctx.state.statusMessage = "Found: " & searchText
-    ok(stepMatches(found.get, count, step))
+    ## n, or N when `reverse`, which jump from where the cursor was. They repeat
+    ## the last search, how it matches included, so they land only on the
+    ## matches the highlighter draws.
+    result = ctx.state.searchLast(ctx.buffer, ctx.cursor, reverse, count)
+    if result.isOk:
+      recordJump(ctx.state)
 
   proc searchTarget(
       findMatch: proc(ctx: CommandContext, count: int): Result[BufferPosition, string]
@@ -363,16 +329,16 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       )
 
   proc findNextMatch(ctx: CommandContext, count: int): Result[BufferPosition, string] =
-    ctx.findLastSearch(findNext, count)
+    ctx.findLastSearch(reverse = false, count)
 
   proc findPrevMatch(ctx: CommandContext, count: int): Result[BufferPosition, string] =
-    ctx.findLastSearch(findPrev, count)
+    ctx.findLastSearch(reverse = true, count)
 
   # Search navigation commands
   registry.register(
     custom("search.next"),
     "Search Next",
-    "Find next occurrence of last search",
+    "Repeat the last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       ctx.moveToMatch(ctx.findNextMatch(parseCount(args))),
     0,
@@ -383,7 +349,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
   registry.register(
     custom("search.prev"),
     "Search Previous",
-    "Find previous occurrence of last search",
+    "Repeat the last search the other way",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       ctx.moveToMatch(ctx.findPrevMatch(parseCount(args))),
     0,

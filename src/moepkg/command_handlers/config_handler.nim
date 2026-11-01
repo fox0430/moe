@@ -256,15 +256,12 @@ proc handleConfigModeKey*(
       return ConfigModeResult(kind: cmrEnterSearch)
     of "?":
       return ConfigModeResult(kind: cmrEnterSearchBackward)
-    of "n":
-      # Jump to the next search match. Re-enable highlight (like Vim's n) only
-      # when there is a match to jump to; an empty query must not touch the gate.
-      if configState.searchForward().isSome:
-        return ConfigModeResult(kind: cmrRepeatSearch)
-      return ConfigModeResult(kind: cmrHandled)
-    of "N":
-      # Jump to the previous search match (see "n" for the gate rationale).
-      if configState.searchBackward().isSome:
+    of "n", "N":
+      # Jump to the match the way the search went, N the other way.
+      let found = configState.repeatSearch(reverse = keyCombo.char == "N")
+      # Re-enable highlight (like Vim's n) only when there is a match to jump
+      # to; an empty query must not touch the gate.
+      if found.isSome:
         return ConfigModeResult(kind: cmrRepeatSearch)
       return ConfigModeResult(kind: cmrHandled)
     of "j":

@@ -26,7 +26,7 @@
 ## closures and `ConfigItemDescriptor` stay in `config_mode` because they are
 ## implementation details of the descriptor table.
 
-import ../[config, color]
+import ../[config, color, primitives]
 
 type
   ConfigValueKind* = enum
@@ -70,6 +70,7 @@ type
     enumPopupOpen*: bool # Whether enum selection popup is open
     enumPopupIndex*: int # Selected index in enum popup
     searchQuery*: string # Active search query ("" when no search)
+    searchDirection*: SearchDirection # The way the search for it went
     searchStartIndex*: int # Selection index when the current search began
     config*: EditorConfig # Aliases `Editor.config`; never reassigned.
     waitingForG*: bool # Waiting for second 'g' for 'gg' command

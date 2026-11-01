@@ -243,8 +243,8 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
 ].withWindowCommands()
 
 const SearchCommands: seq[tuple[name, desc, commandId: string]] = @[
-  ("search-next", "Find next search result", "search.next"),
-  ("search-prev", "Find previous search result", "search.prev"),
+  ("search-next", "Repeat the last search", "search.next"),
+  ("search-prev", "Repeat the last search the other way", "search.prev"),
   (
     "search-word-forward", "Search for word under cursor forward (*)",
     "search.word.forward",

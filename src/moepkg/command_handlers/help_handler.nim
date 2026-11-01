@@ -87,14 +87,11 @@ proc handleHelpViewerModeKey*(
     return HelpViewerResult(kind: hvrEnterSearch)
   of "?":
     return HelpViewerResult(kind: hvrEnterSearchBackward)
-  of "n":
+  of "n", "N":
+    let found = helpState.repeatSearch(reverse = keyCombo.char == "N")
     # Re-enable highlight (like Vim's n) only when there is a match to jump to;
     # an empty query must not touch the gate.
-    if helpState.searchForward().isSome:
-      return HelpViewerResult(kind: hvrRepeatSearch)
-    return HelpViewerResult(kind: hvrHandled)
-  of "N":
-    if helpState.searchBackward().isSome:
+    if found.isSome:
       return HelpViewerResult(kind: hvrRepeatSearch)
     return HelpViewerResult(kind: hvrHandled)
   of "}":

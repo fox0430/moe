@@ -130,7 +130,7 @@ suite "renderConfig - search highlight gating":
       if item.kind != cvkSection:
         name = item.displayName
         break
-    configState.setSearchQuery(name)
+    configState.setSearchQuery(name, Forward)
     configState.selectedIndex = 0
     e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
       ModeState(kind: mskConfig, config: configState)
@@ -319,7 +319,7 @@ suite "renderConfig - search highlight with multibyte displayName":
       let maxNameWidth = calcMaxNameWidth(configState.items, buffer.area.width)
 
       configState.selectedIndex = strIdx
-      configState.setSearchQuery("XY")
+      configState.setSearchQuery("XY", Forward)
       e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
         ModeState(kind: mskConfig, config: configState)
       e.activeWindow.viewport.topLine = strIdx
@@ -370,7 +370,7 @@ suite "renderConfig - search highlight with multibyte displayName":
       let maxNameWidth = calcMaxNameWidth(configState.items, buffer.area.width)
 
       configState.selectedIndex = strIdx
-      configState.setSearchQuery("XY")
+      configState.setSearchQuery("XY", Forward)
       e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
         ModeState(kind: mskConfig, config: configState)
       e.activeWindow.viewport.topLine = strIdx

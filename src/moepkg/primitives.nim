@@ -37,9 +37,22 @@ type
     startCol*: int # inclusive
     endCol*: int # exclusive
 
+  SearchDirection* = enum
+    Forward # Search forward (/)
+    Backward # Search backward (?)
+
 proc `<`*(a, b: BufferPosition): bool {.inline.} =
   ## Document order: an earlier line, or the same line and an earlier column.
   a.line < b.line or (a.line == b.line and a.column < b.column)
 
 proc `<=`*(a, b: BufferPosition): bool {.inline.} =
   not (b < a)
+
+func repeatDirection*(last: SearchDirection, reverse: bool): SearchDirection =
+  ## The way n goes after a search that went `last`, or N when `reverse`.
+  if not reverse:
+    last
+  elif last == Forward:
+    Backward
+  else:
+    Forward

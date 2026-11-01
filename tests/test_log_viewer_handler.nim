@@ -636,6 +636,24 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
     check result.kind == lvrHandled
     check state.cursor.line == 3 # second "test"
 
+  test "n goes the way the last search went, N the other way":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("test 0\ntest 1\ntest 2\n")
+      state = newTestEditorState()
+    state.input.search.last = SearchSpec(pattern: "test", direction: Backward)
+    state.input.search.hlsearchTempDisabled = true
+    state.cursor.line = 1
+
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("n"))
+    check state.cursor.line == 0
+    check not state.input.search.hlsearchTempDisabled
+
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("N"))
+    check state.cursor.line == 1
+
   test "n with no previous search shows message":
     let
       logState = newLogViewerState()
@@ -647,7 +665,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("n"))
 
     check result.kind == lvrHandled
-    check state.statusMessage == "No previous search"
+    check state.statusMessage == "E35: No previous regular expression"
 
   test "N with no previous search shows message":
     let
@@ -660,7 +678,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("N"))
 
     check result.kind == lvrHandled
-    check state.statusMessage == "No previous search"
+    check state.statusMessage == "E35: No previous regular expression"
 
   test "* searches for word under cursor":
     let

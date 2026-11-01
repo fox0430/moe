@@ -785,8 +785,8 @@ Commands are grouped by category below. Any command name listed here can be used
 
 | Command | Description |
 |:----|:----|
-| search-next | Find next search result |
-| search-prev | Find previous search result |
+| search-next | Repeat the last search |
+| search-prev | Repeat the last search the other way |
 | search-next-select | Select next search match (gn) |
 | search-prev-select | Select previous search match (gN) |
 | search-word-forward | Search for word under cursor forward (*) |
