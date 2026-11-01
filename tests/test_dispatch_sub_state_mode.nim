@@ -263,7 +263,7 @@ suite "dispatchSubStateMode - Config search highlight clear":
         idx = i
         break
     check idx >= 0
-    configState.setSearchQuery(configState.items[idx].displayName)
+    configState.setSearchQuery(configState.items[idx].displayName, Forward)
     editor.activeWindow.modeState = ModeState(kind: mskConfig, config: configState)
     # Highlight was previously cleared.
     editor.state.input.search.hlsearchTempDisabled = true

@@ -62,12 +62,8 @@ proc activeConfigState(e: Editor): ConfigModeState =
 proc findFrom(
     e: Editor, spec: SearchSpec, pos: BufferPosition
 ): Option[BufferPosition] =
-  ## The match of `spec` from `pos`, the way the search goes.
-  let ignoreCase = e.state.input.search.ignoresCase(spec)
-  if e.state.input.search.direction == Forward:
-    e.activeBuffer.findNext(spec.pattern, pos, ignoreCase, spec.match)
-  else:
-    e.activeBuffer.findPrev(spec.pattern, pos, ignoreCase, spec.match)
+  ## The match of `spec` from `pos`, the way it goes.
+  e.activeBuffer.findMatch(spec, pos, e.state.input.search.ignoresCase(spec))
 
 proc executeSearchFromCurrentPosition(e: Editor, spec: SearchSpec): bool =
   ## Execute `spec` from the current cursor position
@@ -150,16 +146,19 @@ proc finalizeSearch(e: Editor) =
     e.state.input.search.hlsearchTempDisabled = false
 
     if not isRepeat:
-      # A repeat replays the previous search untouched, history entry and how it
-      # matches included (a * search stays one). A new one is a regex search.
+      # A repeat replays the previous search, history entry and how it matches
+      # included (a * search stays one). A new one is a regex search.
       e.state.input.search.last = SearchSpec(pattern: pattern)
       e.addSearchHistory(pattern)
+    # Either goes the prompt's way, and so does n after it: an empty ? turns
+    # the last search backward.
+    e.state.input.search.last.direction = e.state.input.search.direction
 
     let cfg = e.activeConfigState()
     if cfg != nil:
       # Config mode: commit the query and move the selection to the first match,
       # anchored from where the search started.
-      cfg.setSearchQuery(pattern)
+      cfg.setSearchQuery(pattern, e.state.input.search.direction)
       let forward = e.state.input.search.direction == Forward
       # searchItems scans inclusive of its start index, so a repeat, which
       # opens with the selection already on a match, steps off it first.
@@ -196,7 +195,7 @@ proc finalizeSearch(e: Editor) =
       if e.state.mode == EditorMode.Help:
         let window = e.activeWindow
         if window.modeState.kind == mskHelp:
-          window.modeState.help.setSearchQuery(pattern)
+          window.modeState.help.setSearchQuery(pattern, e.state.input.search.direction)
       e.syncHelpViewerIndex(e.cursor.line)
 
   # Exit overlay and return to base mode
@@ -265,7 +264,9 @@ proc performIncrementalSearch(e: Editor) =
     e.syncHelpViewerIndex(e.state.input.search.startPos.line)
     return
 
-  let typed = SearchSpec(pattern: e.state.input.search.text)
+  let typed = SearchSpec(
+    pattern: e.state.input.search.text, direction: e.state.input.search.direction
+  )
 
   # Validate regex - silently ignore invalid patterns during typing
   if compileSearchRegex(typed.pattern, e.state.input.search.ignoresCase(typed)).isNone:

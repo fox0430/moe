@@ -306,22 +306,21 @@ type
     topLine, topWrapOffset, leftCell, width, height: int
     typing: bool # In Insert or Replace
 
-  SearchDirection* = enum
-    Forward # Search forward (/)
-    Backward # Search backward (?)
-
   SearchSpec* = object
     ## One executed search: the pattern and the options it ran with. n/N, gn,
     ## an empty `/` and the highlighter all replay this value, so they cannot
     ## disagree about what counts as a match.
     pattern*: string
     match*: SearchMatch # As a regex (/ and ?) or as it is (* and #)
+    direction*: SearchDirection # The way it went, which n goes too
 
   SearchState* = object ## Search-related state grouped together for better organization
     text*: string # Text being typed in search mode
     cursor*: int # Cursor position within text (0-based character index)
     last*: SearchSpec # Last executed search, replayed by n/N and an empty `/`
-    direction*: SearchDirection # Direction of current search (/ or ?)
+    direction*: SearchDirection
+      # The way the search being typed goes (/ or ?). Leaving the prompt keeps
+      # the last search's own.
     history*: seq[string] # Search history (most recent first)
     historyIndex*: int # Current position in search history (-1 when not navigating)
     startPos*: BufferPosition # Cursor position when search mode started (for incsearch)

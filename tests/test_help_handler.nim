@@ -20,9 +20,9 @@
 ## Tests for help_handler.nim
 ## This module tests the Help Viewer mode command handler functionality.
 
-import std/unittest
+import std/[options, unittest]
 
-import ../src/moepkg/[key_bindings, help_viewer]
+import ../src/moepkg/[key_bindings, help_viewer, types]
 import ../src/moepkg/command_handlers/help_handler
 
 const TestViewportHeight = 24
@@ -287,7 +287,7 @@ suite "help_handler: handleHelpViewerModeKey - Mode transitions":
 suite "help_handler: handleHelpViewerModeKey - Search navigation":
   test "n searches forward":
     let helpState = newHelpViewerState()
-    helpState.setSearchQuery("Visual")
+    helpState.setSearchQuery("Visual", Forward)
     check helpState.selectedIndex == 0
 
     let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("n"))
@@ -300,7 +300,7 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
 
   test "N searches backward":
     let helpState = newHelpViewerState()
-    helpState.setSearchQuery("Normal")
+    helpState.setSearchQuery("Normal", Forward)
     # Move to end of document
     helpState.moveToLast()
     let lastIndex = helpState.selectedIndex
@@ -311,6 +311,21 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
     # highlight re-enable; the selection moves before the starting position.
     check result.kind == hvrRepeatSearch
     check helpState.selectedIndex < lastIndex
+
+  test "n goes the way the search went, N the other way":
+    let helpState = newHelpViewerState()
+    helpState.setSearchQuery("Normal", Backward)
+    let first = helpState.searchForward()
+    let second = helpState.searchForward()
+    check first.isSome and second.isSome and first.get < second.get
+
+    check handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("n")).kind ==
+      hvrRepeatSearch
+    check helpState.selectedIndex == first.get
+
+    check handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("N")).kind ==
+      hvrRepeatSearch
+    check helpState.selectedIndex == second.get
 
   test "n with no search query does not crash":
     let helpState = newHelpViewerState()
@@ -419,7 +434,7 @@ suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highl
 
   test "Second Escape returns clearSearchHighlight":
     let helpState = newHelpViewerState()
-    helpState.setSearchQuery("Visual")
+    helpState.setSearchQuery("Visual", Forward)
 
     # First Escape
     discard handleHelpViewerModeKey(helpState, TestViewportHeight, specialKey(skEscape))
@@ -445,7 +460,7 @@ suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highl
 
   test "Double-Escape clears search query":
     let helpState = newHelpViewerState()
-    helpState.setSearchQuery("Insert")
+    helpState.setSearchQuery("Insert", Forward)
     check helpState.hasSearchQuery == true
 
     # Double Escape

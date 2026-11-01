@@ -122,7 +122,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     debugLines,
     e.state.input.search.text,
     e.state.input.search.last.pattern,
-    $e.state.input.search.direction,
+    $e.state.input.search.last.direction,
     e.state.input.search.history.len,
     e.state.input.search.ignorecase,
     e.state.input.search.smartcase,

@@ -19,7 +19,7 @@
 
 ## Tests for config_handler.nim
 
-import std/[unittest]
+import std/[options, unittest]
 
 import ../src/moepkg/[types, key_bindings, config_mode, config]
 import ../src/moepkg/command_handlers/config_handler
@@ -1449,7 +1449,7 @@ suite "config_handler: Search":
         idx = i
         break
     check idx >= 0
-    configState.setSearchQuery(configState.items[idx].displayName)
+    configState.setSearchQuery(configState.items[idx].displayName, Forward)
     configState.selectedIndex = 0
     let keyCombo = KeyCombo(isSpecial: false, char: "n", modifiers: {})
     discard handleConfigModeKey(configState, editorState, 24, keyCombo)
@@ -1466,7 +1466,7 @@ suite "config_handler: Search":
   test "Double Escape requests highlight clear and keeps the query":
     let configState = createTestConfigState()
     let editorState = createTestEditorState()
-    configState.setSearchQuery("lsp")
+    configState.setSearchQuery("lsp", Forward)
     let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
     discard handleConfigModeKey(configState, editorState, 24, esc)
     let result = handleConfigModeKey(configState, editorState, 24, esc)
@@ -1496,10 +1496,26 @@ suite "config_handler: Search":
         idx = i
         break
     check idx >= 0
-    configState.setSearchQuery(configState.items[idx].displayName)
+    configState.setSearchQuery(configState.items[idx].displayName, Forward)
     let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
     let result = handleConfigModeKey(configState, editorState, 24, n)
     check result.kind == cmrRepeatSearch
+
+  test "'n' goes the way the search went, 'N' the other way":
+    let configState = createTestConfigState()
+    let editorState = createTestEditorState()
+    configState.setSearchQuery("lsp", Backward)
+    let first = configState.searchForward()
+    let second = configState.searchForward()
+    check first.isSome and second.isSome and first.get < second.get
+
+    let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    check handleConfigModeKey(configState, editorState, 24, n).kind == cmrRepeatSearch
+    check configState.selectedIndex == first.get
+
+    let bigN = KeyCombo(isSpecial: false, char: "N", modifiers: {})
+    check handleConfigModeKey(configState, editorState, 24, bigN).kind == cmrRepeatSearch
+    check configState.selectedIndex == second.get
 
   test "'n' returns cmrHandled (not cmrRepeatSearch) without a query":
     # An empty query must not request a gate change — pressing n is a no-op.
