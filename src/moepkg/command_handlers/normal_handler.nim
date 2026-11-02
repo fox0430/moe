@@ -164,10 +164,7 @@ proc searchMatchAndSelect(
   return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
 
 proc handleModeSwitchToOverlay*(
-    handler: NormalModeHandler,
-    overlay: OverlayKind,
-    state: EditorState,
-    commandName: string = "",
+    handler: NormalModeHandler, overlay: OverlayKind, state: EditorState
 ): NormalModeResult =
   ## Handle overlay mode switching commands
   case overlay
@@ -177,22 +174,15 @@ proc handleModeSwitchToOverlay*(
     state.input.commandCursor = 0 # Cursor starts after the ":"
     return NormalModeResult(kind: nmrHandled, overlayTransition: some(okCommand))
   of okSearch:
-    # Initialize search mode state
-    state.input.search.text = ""
-    state.input.search.cursor = 0
-    # Save current cursor position for incsearch cancellation
-    state.noteSearchStart()
-    # Set search direction based on command name
-    if commandName == "switch-to-search-backward":
-      state.input.search.direction = Backward
-    else:
-      state.input.search.direction = Forward
-    # Reset history navigation index
-    state.input.search.historyIndex = -1
-    return NormalModeResult(kind: nmrHandled, overlayTransition: some(okSearch))
+    # `/` and `?` open through the command registry, as in Visual.
+    return NormalModeResult(kind: nmrHandled)
   of okRename:
     # Rename mode is entered through LSP rename command, not mode switch
     return NormalModeResult(kind: nmrHandled)
+
+proc opensSearch(cmd: Command): bool =
+  ## `/` or `?`, which a waiting operator acts over (`d/foo`).
+  cmd.kind == ctOverlaySwitch and cmd.targetOverlay == okSearch
 
 proc handleModeSwitch*(
     handler: NormalModeHandler,
@@ -416,16 +406,18 @@ proc handleNormalModeKey*(
     let operand = handler.keyBindingRegistry.operandCommand
     let cancels =
       if route.kind == rrCommand:
-        not handler.commandRegistry.endsOperator(route.command)
+        not (
+          handler.commandRegistry.endsOperator(route.command) or
+          route.command.opensSearch
+        )
       else:
         operand.isSome and not handler.commandRegistry.endsOperator(operand.get)
     if cancels:
       # A command the operator cannot act over cancels it and does not run,
       # as Vim's checkclearop: `dx`, `dI`, `dv`. One that waits for a key
       # (`"`, `r`, `m`) takes none, so the next key starts a command of its
-      # own (`d"aw` appends). The search and command lines still open: moe
-      # applies no operator over them, and the keys typed for them must not
-      # run as commands.
+      # own (`d"aw` appends). The command line still opens: moe applies no
+      # operator over `:`, and the keys typed for it must not run as commands.
       handler.keyBindingRegistry.clearSequence()
       state.pendingInput.cancelOperatorPending()
       if route.kind != rrCommand or route.command.kind != ctOverlaySwitch:
@@ -433,9 +425,10 @@ proc handleNormalModeKey*(
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   if route.kind != rrCommand:
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-  if state.pendingInput.pendingOperator.isSome:
+  if state.pendingInput.pendingOperator.isSome or route.command.opensSearch:
     # The command ends the operator: a motion it acts over, a text object or
-    # an operator (`dd`, or another that cancels it).
+    # an operator (`dd`, or another that cancels it). `/` and `?` open the
+    # search as in Visual, and an operator waits on until Enter (`d/foo`).
     let ctx = handler.newContext(buffer, state, viewport, route.command.register)
     let cmdResult = handler.commandRegistry.executeCommand(ctx, route.command)
     if cmdResult.isOk:
@@ -459,7 +452,7 @@ proc handleNormalModeKey*(
   of ctModeSwitch:
     return handler.handleModeSwitch(cmd.targetMode, state, buffer, cmd.name, cmd.count)
   of ctOverlaySwitch:
-    return handler.handleModeSwitchToOverlay(cmd.targetOverlay, state, cmd.name)
+    return handler.handleModeSwitchToOverlay(cmd.targetOverlay, state)
   of ctAction:
     # Command mode command alias bridge: `exec.cmdline.<alias>` runs
     # `:<alias>` via the full command-line parser, so safety checks

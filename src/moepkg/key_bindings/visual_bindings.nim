@@ -86,6 +86,8 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   (";", "repeat-find"),
   (",", "repeat-find-reverse"),
   ("%", "match-bracket"),
+  ("/", "switch-to-search"),
+  ("?", "switch-to-search-backward"),
   ("n", "search-next"),
   ("N", "search-prev"),
   ("*", "search-word-forward"),

@@ -29,7 +29,7 @@ import ../celina_backend as celina
 import
   ../[
     editor, key_bindings, modes, buffer, types, help_viewer, config_mode, unicode_utils,
-    search_ops, fold_open,
+    search_ops, fold_open, pending_input,
   ]
 import ../command_registry/core
 import command_mode_handler, result_processor
@@ -59,12 +59,6 @@ proc activeConfigState(e: Editor): ConfigModeState =
       return window.modeState.config
   return nil
 
-proc findFrom(
-    e: Editor, spec: SearchSpec, pos: BufferPosition
-): Option[BufferPosition] =
-  ## The match of `spec` from `pos`, the way it goes.
-  e.activeBuffer.findMatch(spec, pos, e.state.input.search.ignoresCase(spec))
-
 proc showFromSearchStart(e: Editor, pos: BufferPosition) =
   ## Scroll to `pos` from what the window showed as the search began, as
   ## Vim's incsearch restores the view before it moves to a match.
@@ -82,41 +76,83 @@ proc backToSearchStart(e: Editor) =
 proc searchFromStart(e: Editor, spec: SearchSpec): bool =
   ## Run `spec` from where the search began, as Vim's Enter does whatever
   ## incsearch showed, and move there or back to the anchor.
-  let pattern = spec.pattern
-  let searchResult = e.findFrom(spec, e.state.input.search.startPos)
-
-  if searchResult.isSome:
-    e.cursor = searchResult.get
+  let found = e.state.searchSubmitted(
+    e.activeBuffer, spec, e.state.input.search.startPos, e.state.input.search.count
+  )
+  if found.isSome:
+    e.cursor = found.get
     e.state.openCursorFolds()
     if e.state.input.search.incsearch:
       e.showFromSearchStart(e.cursor)
     else:
       e.updateViewportForCursor(e.cursor)
-    e.state.statusMessage = "Found: " & pattern
     return true
-  else:
-    if e.state.input.search.incsearch:
-      e.backToSearchStart()
-    # * and # match literally.
-    e.state.statusMessage =
-      if spec.match != smRegex or
-          compileSearchRegex(pattern, e.state.input.search.ignoresCase(spec)).isSome:
-        "Pattern not found: " & pattern
+  elif e.state.input.search.incsearch:
+    e.backToSearchStart()
+
+proc operateOverSearch(e: Editor, typed: string): bool =
+  ## Enter with an operator waiting (`d/foo`): it acts from where the search
+  ## began up to the match, as Vim's normal_search, and `.` searches for
+  ## `typed` again.
+  e.cursor = e.state.input.search.startPos
+  let ctx = newCommandContext(
+    e.activeBuffer, e.state, e.viewport, e.motionController, e.keyBindingRegistry
+  )
+  let operated = e.commandRegistry.finishOperator(
+    ctx,
+    Operand(
+      kind: odSearch,
+      count: e.state.input.search.count,
+      countGiven: e.state.input.search.countGiven,
+      searchText: typed,
+      searchDirection: e.state.input.search.direction,
+    ),
+  )
+  if operated.isErr:
+    e.state.statusMessage = operated.error
+  e.showFromSearchStart(e.cursor)
+  operated.isOk
+
+proc goToSearch(e: Editor, spec: SearchSpec, isRepeat: bool): bool =
+  ## Move to the match of `spec`, the search Enter made the last one, from
+  ## where the search began: the selection in Config mode, the cursor
+  ## elsewhere. `isRepeat` for an empty `/`, which repeats the last search.
+  ## Returns whether there was one.
+  let pattern = spec.pattern
+  let cfg = e.activeConfigState()
+  if cfg != nil:
+    # Config mode: commit the query and move the selection to the first match,
+    # anchored from where the search started.
+    cfg.setSearchQuery(pattern, e.state.input.search.direction)
+    let forward = e.state.input.search.direction == Forward
+    # searchItems scans inclusive of its start index, so a repeat, which
+    # opens with the selection already on a match, steps off it first.
+    let startIndex =
+      if not isRepeat:
+        cfg.searchStartIndex
+      elif forward:
+        cfg.searchStartIndex + 1
       else:
-        "Invalid regex: " & pattern
+        cfg.searchStartIndex - 1
+    result = cfg.searchItems(pattern, startIndex, forward).isSome
+    e.state.statusMessage =
+      if result:
+        "Found: " & pattern
+      else:
+        "Pattern not found: " & pattern
+  else:
+    # Vim records a jump for a search that found something, even one that
+    # wrapped back to the anchor.
+    result = e.searchFromStart(spec)
+    if result:
+      recordJump(e.state, e.state.input.search.startPos)
 
-proc addSearchHistory(e: Editor, pattern: string) =
-  ## Push `pattern` onto the search history, most recent first, dropping an
-  ## older duplicate and trimming to the configured limit.
-  for i in countdown(e.state.input.search.history.high, 0):
-    if e.state.input.search.history[i] == pattern:
-      e.state.input.search.history.delete(i)
-
-  e.state.input.search.history.insert(pattern, 0)
-
-  let historyLimit = e.config.persist.searchHistoryLimit
-  if e.state.input.search.history.len > historyLimit:
-    e.state.input.search.history.setLen(historyLimit)
+    # Sync search query and position to help viewer state if in Help mode
+    if e.state.mode == EditorMode.Help:
+      let window = e.activeWindow
+      if window.modeState.kind == mskHelp:
+        window.modeState.help.setSearchQuery(pattern, e.state.input.search.direction)
+    e.syncHelpViewerIndex(e.cursor.line)
 
 proc finalizeSearch(e: Editor): bool =
   ## Finalize search and return to Normal mode
@@ -128,64 +164,18 @@ proc finalizeSearch(e: Editor): bool =
   ## - Search again from where the search began; incsearch only previews
   ## - Save searchText to lastSearchText for n/N commands
   ## - Re-enable search highlight (hlsearch)
+  ## - Apply an operator waiting for the search (`d/foo`)
   ## - Transition to Normal mode
   ## - Clear searchText buffer
   ##
   ## Returns whether the search found a match.
-  let
-    typed = e.state.input.search.text
-    isRepeat = typed.len == 0 and e.state.input.search.last.pattern.len > 0
-    pattern = if isRepeat: e.state.input.search.last.pattern else: typed
-
-  if pattern.len == 0:
-    e.state.statusMessage = "E35: No previous regular expression"
+  let typed = e.state.input.search.text
+  if e.state.pendingInput.pendingOperator.isSome:
+    result = e.operateOverSearch(typed)
   else:
-    # Re-enable highlight for this search
-    e.state.input.search.hlsearchTempDisabled = false
-
-    if not isRepeat:
-      # A repeat replays the previous search, history entry and how it matches
-      # included (a * search stays one). A new one is a regex search.
-      e.state.input.search.last = SearchSpec(pattern: pattern)
-      e.addSearchHistory(pattern)
-    # Either goes the prompt's way, and so does n after it: an empty ? turns
-    # the last search backward.
-    e.state.input.search.last.direction = e.state.input.search.direction
-
-    let cfg = e.activeConfigState()
-    if cfg != nil:
-      # Config mode: commit the query and move the selection to the first match,
-      # anchored from where the search started.
-      cfg.setSearchQuery(pattern, e.state.input.search.direction)
-      let forward = e.state.input.search.direction == Forward
-      # searchItems scans inclusive of its start index, so a repeat, which
-      # opens with the selection already on a match, steps off it first.
-      let startIndex =
-        if not isRepeat:
-          cfg.searchStartIndex
-        elif forward:
-          cfg.searchStartIndex + 1
-        else:
-          cfg.searchStartIndex - 1
-      result = cfg.searchItems(pattern, startIndex, forward).isSome
-      e.state.statusMessage =
-        if result:
-          "Found: " & pattern
-        else:
-          "Pattern not found: " & pattern
-    else:
-      # Vim records a jump for a search that found something, even one that
-      # wrapped back to the anchor.
-      result = e.searchFromStart(e.state.input.search.last)
-      if result:
-        recordJump(e.state, e.state.input.search.startPos)
-
-      # Sync search query and position to help viewer state if in Help mode
-      if e.state.mode == EditorMode.Help:
-        let window = e.activeWindow
-        if window.modeState.kind == mskHelp:
-          window.modeState.help.setSearchQuery(pattern, e.state.input.search.direction)
-      e.syncHelpViewerIndex(e.cursor.line)
+    let spec = e.state.submitSearch(typed, e.state.input.search.direction)
+    if spec.isSome:
+      result = e.goToSearch(spec.get, isRepeat = typed.len == 0)
 
   # Exit overlay and return to base mode
   # The base mode (Normal, LogViewer, Filer, etc.) is preserved
@@ -202,7 +192,9 @@ proc cancelSearch*(e: Editor) =
   ## - Exit overlay and return to base mode
   ## - Clear searchText buffer
   ## - Does NOT save to lastSearchText (search was cancelled)
+  ## - Cancels an operator waiting for it (`d/foo<Esc>`), as Vim's clearop
 
+  e.state.pendingInput.cancelOperatorPending()
   let cfg = e.activeConfigState()
   if cfg != nil:
     # Config mode: restore the selection that was active before the search.
@@ -248,11 +240,13 @@ proc performIncrementalSearch(e: Editor) =
     e.backToSearchStart()
     return
 
-  let searchResult = e.findFrom(
+  let searchResult = e.state.findCounted(
+    e.activeBuffer,
     SearchSpec(
       pattern: e.state.input.search.text, direction: e.state.input.search.direction
     ),
     e.state.input.search.startPos,
+    e.state.input.search.count,
   )
 
   if searchResult.isSome:

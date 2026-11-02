@@ -292,8 +292,9 @@ proc processResultEpilogue(
     of okCommand:
       e.state.enterCommandOverlay()
     of okSearch:
-      # Search mode needs direction from search state (already set by handler)
-      e.state.enterSearchOverlay(e.state.input.search.direction)
+      # Most handlers open the search themselves, with its count.
+      if not e.state.isSearchOverlay:
+        e.state.enterSearchOverlay(e.state.input.search.direction)
     of okRename:
       e.state.enterRenameOverlay(
         e.state.renameState.originalWord, e.state.renameState.cursorLine,
