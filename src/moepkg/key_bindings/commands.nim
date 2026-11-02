@@ -288,7 +288,7 @@ const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
     "paste-before-end", "Paste before cursor and leave cursor after pasted text",
     "paste.before.end",
   ),
-  ("join-lines", "Join current line with next line", "join.lines"),
+  ("join-lines", "Join count lines, at least two", "join.lines"),
   (
     "show-char-info", "Show ASCII/Unicode value of character under cursor",
     "show.char.info",
