@@ -192,7 +192,7 @@ suite "CrossBackend - Editing Operations":
 
     test "joinLines multiple [" & $be & "]":
       let b = buf("A\nB\nC\nD", be)
-      discard b.joinLines(0, 2)
+      discard b.joinLines(0, 3)
       check b.len == 2
       check b[0] == "A B C"
       check b[1] == "D"
@@ -1261,7 +1261,7 @@ suite "CrossBackend - diagnostics through random edits":
       discard b.insert(line, "new")
     of 5:
       if not nested and line + 1 < b.len:
-        discard b.joinLines(line, rng.rand(1) + 1)
+        discard b.joinLines(line, rng.rand(1) + 2)
     of 6:
       let replacement = @["p", "  q"][0 ..< rng.rand(2)]
       discard b.replaceLines(

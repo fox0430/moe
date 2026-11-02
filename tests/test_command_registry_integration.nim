@@ -2700,9 +2700,9 @@ suite "Handler - Join lines":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("join.lines"), @["3"]).isOk
-    # 3J joins current line with next 3 lines (all 4 lines become 1)
-    check buffer.len == 1
-    check buffer[0] == "line1 line2 line3 line4"
+    check buffer.len == 2
+    check buffer[0] == "line1 line2 line3"
+    check ctx.cursor == BufferPosition(line: 0, column: 11)
 
   test "join on last line returns error":
     let buffer = newTextBuffer("only line")

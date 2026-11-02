@@ -20,9 +20,9 @@
 ## Public editing API: insertText / deleteChar / insert / deleteLine /
 ## deleteRange / replaceLine / splitLine / NoUndo bypass procs.
 
-import std/[options, unicode]
+import std/options
 
-from std/strutils import replace, contains, count, join, rfind, split
+from std/strutils import replace, contains, count, join, rfind, split, strip
 
 import pkg/results
 
@@ -559,31 +559,27 @@ proc joinWithNextLine*(b: TextBuffer, line: int): Result[BufferPosition, string]
   ok(BufferPosition(line: line, column: b.getLine(line).byteToCharPos(prevLine.len)))
 
 proc joinLines*(
-    b: TextBuffer, startLine: int, count: int = 1, undoCursor = none(BufferPosition)
-): Result[(), string] =
-  ## Join lines starting from startLine
-  ## count: number of lines to join (default: 1, meaning join current line with next)
-  ## Example: count=1 joins 2 lines, count=2 joins 3 lines, etc.
+    b: TextBuffer, startLine: int, lines: int = 2, undoCursor = none(BufferPosition)
+): Result[BufferPosition, string] =
+  ## Join `lines` lines starting from startLine, as many as there are; one
+  ## joins nothing, as Vim's do_join, but still fails where a join would.
   ## Undo puts the cursor at `undoCursor`, else at startLine's start.
-  ## Returns error if there aren't enough lines to join
+  ## ok is the last join, on a character, where Vim's J leaves the cursor.
 
   if b.readOnly:
     return err("Buffer is read-only")
+  if startLine < 0 or startLine >= b.len:
+    return err("Line index out of bounds: " & $startLine)
+  let linesToJoin = min(lines, b.len - startLine)
+  if linesToJoin < 2:
+    if lines < 2:
+      return ok(BufferPosition(line: startLine, column: 0))
+    return err("No line to join with")
   # Join modifies whitespace; refused for raw buffers.
   if not b.allowsTextTransforms:
     return err(rawBytesRejection("join lines"))
-  if startLine < 0 or startLine >= b.len:
-    return err("Line index out of bounds: " & $startLine)
 
-  # Need at least one more line to join with
-  if startLine + 1 >= b.len:
-    return err("No line to join with")
-
-  # Calculate actual number of lines to join
-  let linesToJoin = min(count + 1, b.len - startLine)
-  if linesToJoin < 2:
-    return err("Not enough lines to join")
-
+  var lastJoin = 0
   let txr = withTransaction(
     b,
     "join " & $linesToJoin & " lines",
@@ -596,8 +592,9 @@ proc joinLines*(
         marksBeforeJoin = b.namedMarks
         visualBeforeJoin = b.lastVisual
 
-      let trimmedCurrent = currentLine.strip(leading = false, trailing = true)
-      let trimmedNext = nextLine.strip(leading = true, trailing = false)
+      # Blanks are space and tab alone, as Vim's.
+      let trimmedCurrent = strip(currentLine, leading = false, chars = {' ', '\t'})
+      let trimmedNext = strip(nextLine, trailing = false, chars = {' ', '\t'})
       let leadingTrim = nextLine.charLen - trimmedNext.charLen
 
       # Vim J: separate joined lines with a space, but not when the next line
@@ -610,6 +607,8 @@ proc joinLines*(
         currentLine.charLen + ord(separated and trimmedCurrent.len == currentLine.len)
       let joinAt = BufferPosition(line: startLine, column: trimmedCurrent.charLen)
       let joinedPrefixLen = joinAt.column + ord(separated)
+      lastJoin =
+        if trimmedCurrent.len < currentLine.len: joinedPrefixLen else: joinAt.column
 
       # Edit as text so followers on either side move with it, on undo too;
       # space goes in first.
@@ -662,7 +661,8 @@ proc joinLines*(
   if txr.isErr:
     return err(txr.error)
 
-  return ok(())
+  let lastColumn = max(0, b.getLine(startLine).charLen - 1)
+  return ok(BufferPosition(line: startLine, column: min(lastJoin, lastColumn)))
 
 proc transformRange*(
     b: TextBuffer,

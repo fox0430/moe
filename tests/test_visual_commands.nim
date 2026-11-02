@@ -1084,7 +1084,7 @@ suite "Visual Commands - visualJoinLines":
 
     check buf.len == 1
     check state.visualSelection.active == false
-    check state.statusMessage == "Joined 2 line(s)"
+    check state.cursor == BufferPosition(line: 0, column: 5)
 
   test "Join on the last line leaves it as it is":
     let buf = newTextBuffer()
@@ -1113,7 +1113,7 @@ suite "Visual Commands - visualJoinLines":
     visualJoinLines(buf, state)
 
     check buf.len == 1
-    check state.statusMessage == "Joined 3 line(s)"
+    check state.cursor == BufferPosition(line: 0, column: 13)
 
 suite "Visual Commands - visualToInsertMode":
   test "Switch from visual to insert mode":

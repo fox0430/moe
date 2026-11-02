@@ -461,16 +461,18 @@ proc visualJoinLines*(
   let
     startLine = min(sel.start.line, sel.current.line)
     endLine = max(sel.start.line, sel.current.line)
-    joinCount = max(1, endLine - startLine)
 
-  # Use buffer's joinLines which handles the transaction
-  result = buffer.joinLines(startLine, joinCount, some(undoCursor(sel, area)))
-  if result.isErr:
-    state.statusMessage = result.error
+  let joined = buffer.joinLines(
+    startLine, max(2, endLine - startLine + 1), some(undoCursor(sel, area))
+  )
+  if joined.isErr:
+    result = err(joined.error)
+    state.statusMessage = joined.error
     state.cursor = undoCursor(sel, area)
   else:
-    state.statusMessage = "Joined " & $(joinCount + 1) & " line(s)"
-    state.cursor = BufferPosition(line: startLine, column: 0)
+    result = ok(())
+    state.cursor = joined.get
+    state.preferredColumn = -1
 
   state.leaveVisual()
 

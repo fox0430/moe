@@ -439,25 +439,21 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
   return Result[(), string].ok ()
 
 proc handleJoinLines*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Join lines starting from current line (J command)
-  ## count: number of additional lines to join (default: 1, meaning join 2 lines total)
-  ## Example: count=1 joins current and next line, count=2 joins 3 lines, etc.
-
-  logDebug("join", "handleJoinLines called with count=" & $count)
-  let actualCount = max(1, count)
-
-  # J is not an operator: on a closed fold it joins the fold's first two lines
-  # and leaves the fold closed, so the range is deliberately not widened.
-  let joinResult = ctx.buffer.joinLines(ctx.cursor.line, actualCount)
-  if joinResult.isErr:
-    return err(joinResult.error)
-
-  # Record this command for repeat (.)
-  ctx.recordChange(LastEditCommand(kind: lecJoinLines, joinLinesCount: actualCount))
-
-  let totalLines = actualCount + 1
-  ctx.state.statusMessage = "Joined " & $totalLines & " line(s)"
-  return Result[(), string].ok ()
+  ## Join `count` lines, at least two, from the cursor line (J command), and
+  ## leave the cursor at the last join, as Vim's nv_join and do_join: a count
+  ## past the last line is cut to the lines left, and fails only below three.
+  # J is not an operator: on a closed fold it joins from the cursor line, so
+  # the range is deliberately not widened.
+  var lines = max(2, count)
+  let left = ctx.buffer.len - ctx.cursor.line
+  if lines > left:
+    if lines <= 2:
+      return err("No line to join with")
+    lines = left
+  ctx.cursor = ?ctx.buffer.joinLines(ctx.cursor.line, lines, some(ctx.cursor))
+  ctx.state.preferredColumn = -1
+  ctx.recordChange(LastEditCommand(kind: lecJoinLines, joinLinesCount: lines))
+  return ok(())
 
 proc handleShowCharInfo*(ctx: CommandContext): Result[(), string] =
   ## Show ASCII/Unicode value of character under cursor (ga command)
@@ -884,7 +880,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
   registry.register(
     custom("join.lines"),
     "Join Lines",
-    "Join current line with next line(s) (J command)",
+    "Join count lines, at least two, from the current line (J command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
       handleJoinLines(ctx, count),

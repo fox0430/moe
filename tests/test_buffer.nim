@@ -364,7 +364,7 @@ suite "Buffer - Editing Operations":
 
   test "joinLines multiple":
     let buf = newTextBuffer("A\nB\nC\nD")
-    discard buf.joinLines(0, 2)
+    discard buf.joinLines(0, 3)
     check buf.len == 2
     check buf[0] == "A B C"
     check buf[1] == "D"
@@ -4822,6 +4822,8 @@ suite "Buffer - UTF-16/32 file transcoding":
     check r.isErr
     check "raw undecodable bytes" in r.error
     check buf.getFileContent == original
+    # One line joins nothing, so there is nothing to refuse.
+    check buf.joinLines(2, 1).isOk
 
   test "UTF-8 BOM file: BOM stripped from buffer, re-emitted on save":
     let original = "\xEF\xBB\xBF" & "ab\ncd\n"
