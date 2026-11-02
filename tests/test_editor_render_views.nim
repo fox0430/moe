@@ -21,7 +21,7 @@
 
 import std/[unittest, strutils]
 
-import pkg/celina
+import ../src/moepkg/celina_backend
 
 import
   ../src/moepkg/[

@@ -26,7 +26,8 @@
 import std/[unittest, options, tables, os, osproc, times, posix]
 from std/strutils import contains, continuesWith, escape, join, repeat, strip
 
-import pkg/[celina, chronos]
+import pkg/chronos
+import ../src/moepkg/celina_backend
 import pkg/celina/core/mouse_logic
 
 import config_test_helper
