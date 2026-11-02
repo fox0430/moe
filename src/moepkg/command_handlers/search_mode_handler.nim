@@ -24,6 +24,8 @@
 
 import std/[options, strutils]
 
+import pkg/results
+
 import ../celina_backend as celina
 
 import
