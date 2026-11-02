@@ -37,7 +37,6 @@ import
   motion,
   page_scroll,
   quick_run_utils,
-  command_completion,
   build,
   render_utils,
   tab_line,
@@ -48,7 +47,7 @@ import
   cursor_util,
   background_process,
   key_router,
-  pending_input,
+  macro_recording,
   visible_rows,
   viewer_mode,
   frontend_input,
@@ -1198,26 +1197,13 @@ proc handleInterruptCore(e: Editor): bool =
 
   # Command overlay: clear command line and exit overlay
   if e.state.isCommandOverlay:
-    e.state.commandCompletionManager.cancelCompletion()
-    e.cancelSubstitutePreview()
-    e.state.exitOverlay()
-    e.setMode(e.state.mode)
+    e.cancelCommandLine()
     return true
 
   if e.state.mode == EditorMode.Normal:
-    # As in Vim, Ctrl-C ends the command being built and stays in Normal
-    # mode after Ctrl-o. Only a bare Ctrl-C tells how to quit.
-    let cancelled = e.cancelPendingCommand()
-    if e.state.resumesInsert:
-      e.state.insertResume = irNone
-    elif not cancelled:
-      e.state.statusMessage = "Type :qa and press <Enter> to exit"
+    ctrlCInNormal(e.state, e.keyRouter.registry)
   elif e.state.mode.isVisualAllMode:
-    # As Esc: back to the mode Visual was entered from, which may be a viewer.
-    # Unlike Esc, it stays there after Ctrl-o, as in Vim.
-    discard e.state.pendingInput.cancelAll(e.keyRouter.registry)
-    e.state.insertResume = irNone
-    e.state.leaveVisual()
+    escapeVisual(e.state, e.keyRouter.registry, ctrlC = true)
     e.enforceModePolicy()
   elif e.state.mode.isFileEditMode:
     # Insert and Replace: switch to Normal mode
@@ -1252,7 +1238,10 @@ proc handleInterruptCore(e: Editor): bool =
   return true
 
 proc handleInterrupt*(e: Editor): bool =
-  ## Handle a frontend interrupt request, such as Ctrl-C in a terminal.
+  ## Handle a frontend interrupt request, such as Ctrl-C in a terminal. A
+  ## register being recorded takes it as the Ctrl-C key, which each mode and
+  ## prompt runs as it runs the interrupt, as Vim records the typed Ctrl-C.
+  e.state.pendingInput.macroState.recordTypedKeys([CtrlC])
   e.prepareForInput(false)
   e.asInput:
     result = e.handleInterruptCore()

@@ -418,9 +418,25 @@ proc isDigitKey*(combo: KeyCombo): bool =
   let ch = combo.char.asciiChar
   ch.isSome and ch.get in '0' .. '9'
 
+proc isCtrl*(combo: KeyCombo, letter: char): bool =
+  ## Ctrl with `letter`, with Shift or not: Vim takes Ctrl-Shift-C as the same
+  ## key as Ctrl-C. Not with Alt.
+  not combo.isSpecial and combo.modifiers - {kmShift} == {kmCtrl} and
+    combo.char.toLowerAscii == $letter
+
 proc isCtrlO*(combo: KeyCombo): bool =
   ## Ctrl-O, which runs one Normal mode command from Insert mode.
-  not combo.isSpecial and kmCtrl in combo.modifiers and combo.char.toLowerAscii == "o"
+  combo.isCtrl('o')
+
+const CtrlC* = KeyCombo(isSpecial: false, char: "c", modifiers: {kmCtrl})
+
+proc isCtrlC*(combo: KeyCombo): bool =
+  ## Ctrl-C as a key. A typed one mostly comes as the frontend's interrupt
+  ## instead.
+  combo.isCtrl('c')
+
+proc isCtrlH*(combo: KeyCombo): bool =
+  combo.isCtrl('h')
 
 proc getNumericPrefix*(registry: KeyBindingRegistry): int =
   ## Get the numeric prefix as integer, defaulting to 1

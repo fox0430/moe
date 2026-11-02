@@ -158,13 +158,6 @@ proc hasPendingBuiltinInput*(editor: Editor): bool =
   ## True while any built-in multi-step input is still building.
   editor.state.pendingInput.isActive(editor.keyRouter.registry)
 
-proc cancelPendingCommand*(editor: Editor): bool =
-  ## End the command being built (an operator, a count, a register), as
-  ## Escape and Ctrl-C do in Normal mode. True when there was one.
-  result = editor.state.pendingInput.cancelAll(editor.keyRouter.registry)
-  if result:
-    editor.state.statusMessage = ""
-
 proc applyNormalModeResult(
     manager: HandlerManager, editor: Editor, r: NormalModeResult
 ): HandlerResult =
@@ -271,7 +264,7 @@ proc handleNormalMode*(
   # mapping cancels as the keys typed would. With nothing to cancel, a second
   # Escape in a row hides search highlighting.
   if keyCombo.isSpecial and keyCombo.special == skEscape:
-    if editor.cancelPendingCommand() or state.resumesInsert:
+    if state.cancelPendingCommand(editor.keyRouter.registry) or state.resumesInsert:
       state.lastKeyWasEscape = false
     elif state.lastKeyWasEscape:
       state.input.search.hlsearchTempDisabled = true

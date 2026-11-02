@@ -37,6 +37,17 @@ proc setSearchText(e: Editor, text: string) =
   e.state.input.search.text = text
   e.state.input.search.cursor = text.charLen
 
+proc backspace(e: Editor) =
+  e.eraseInSearch(KeyCombo(isSpecial: true, special: skBackspace))
+
+proc handleSearchModeEvent(e: Editor, event: Event): ReplayOutcome =
+  ## `event` typed on the search prompt.
+  let wasTyped = e.state.keyTyped
+  e.state.keyTyped = true
+  defer:
+    e.state.keyTyped = wasTyped
+  e.handleSearchModeKeyCombo(eventToKeyCombo(event).get)
+
 proc createTestEditorWithBuffer(content: string): Editor =
   let config = newEditorConfig()
   config.standard.mouse = true
@@ -77,13 +88,13 @@ proc firstEditableName(state: ConfigModeState): string =
       return item.displayName
   ""
 
-suite "handleSearchBackspace":
+suite "Search prompt - Backspace":
   test "Remove last ASCII character":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("abc")
 
-    handleSearchBackspace(e)
+    backspace(e)
 
     check e.state.input.search.text == "ab"
 
@@ -92,7 +103,7 @@ suite "handleSearchBackspace":
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("検索")
 
-    handleSearchBackspace(e)
+    backspace(e)
 
     check e.state.input.search.text == "検"
 
@@ -101,7 +112,7 @@ suite "handleSearchBackspace":
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("abc日本語")
 
-    handleSearchBackspace(e)
+    backspace(e)
 
     check e.state.input.search.text == "abc日本"
 
@@ -110,7 +121,7 @@ suite "handleSearchBackspace":
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("x")
 
-    handleSearchBackspace(e)
+    backspace(e)
 
     check e.state.input.search.text == ""
 
@@ -119,18 +130,31 @@ suite "handleSearchBackspace":
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("あ")
 
-    handleSearchBackspace(e)
+    backspace(e)
 
     check e.state.input.search.text == ""
 
-  test "Backspace on empty string does nothing":
+  test "Backspace on an empty prompt leaves it, as Vim's":
     let e = createTestEditorWithBuffer("hello")
+    e.state.input.search.history = @[]
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("")
 
-    handleSearchBackspace(e)
+    backspace(e)
 
-    check e.state.input.search.text == ""
+    check not e.state.isSearchOverlay
+    check e.state.input.search.history.len == 0
+
+  test "Backspace at the start of a prompt with text keeps it":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("ab")
+    e.state.input.search.cursor = 0
+
+    backspace(e)
+
+    check e.state.isSearchOverlay
+    check e.state.input.search.text == "ab"
 
 suite "Search prompt - invalid bytes use the buffer character model":
   test "Pasted truncated lead byte counts every byte as a character":
@@ -147,7 +171,7 @@ suite "Search prompt - invalid bytes use the buffer character model":
     e.state.enterSearchOverlay(Forward)
 
     e.insertPastedTextInSearch("\xF0abc")
-    handleSearchBackspace(e)
+    backspace(e)
 
     check e.state.input.search.text == "\xF0ab"
     check e.state.input.search.cursor == 3
@@ -260,7 +284,7 @@ suite "Search mode - Help mode incremental search sync":
     check helpState.selectedIndex == e.cursor.line
     check helpState.searchQuery == "Insert"
 
-  test "handleSearchBackspace syncs selectedIndex":
+  test "Backspace syncs selectedIndex":
     let e = createTestEditorInHelpMode()
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
@@ -276,8 +300,8 @@ suite "Search mode - Help mode incremental search sync":
     handleSearchCharacterInput(e, "m")
 
     # Backspace to widen search again
-    handleSearchBackspace(e)
-    handleSearchBackspace(e)
+    backspace(e)
+    backspace(e)
 
     let helpState = e.activeWindow.modeState.help
     # Should be back to same position as first match
@@ -353,7 +377,7 @@ suite "Search mode - Config mode integration":
 
     check cfg.items[cfg.selectedIndex].matchesSearchQuery(cfg.config, name)
 
-  test "handleSearchBackspace re-searches from the anchor on the shorter text":
+  test "Backspace re-searches from the anchor on the shorter text":
     let (e, cfg) = createTestEditorInConfigMode()
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
@@ -363,7 +387,7 @@ suite "Search mode - Config mode integration":
 
     for ch in name:
       handleSearchCharacterInput(e, $ch)
-    handleSearchBackspace(e)
+    backspace(e)
 
     # The selection still rests on an item matching the (shortened) live text.
     check e.state.input.search.text == name[0 ..< name.high]
@@ -700,15 +724,23 @@ suite "Search mode - Delete and Backspace at cursor":
     check e.state.input.search.text == "ac"
     check e.state.input.search.cursor == 1
 
-  test "Delete at end does nothing":
+  test "Delete at end erases the character before it, as Vim's":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("abc")
 
     discard handleSearchModeEvent(e, makeDeleteEvent())
 
-    check e.state.input.search.text == "abc"
-    check e.state.input.search.cursor == 3
+    check e.state.input.search.text == "ab"
+    check e.state.input.search.cursor == 2
+
+  test "Delete on an empty prompt leaves it":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+
+    discard handleSearchModeEvent(e, makeDeleteEvent())
+
+    check not e.state.isSearchOverlay
 
   test "Backspace removes character before cursor":
     let e = createTestEditorWithBuffer("hello")
@@ -806,7 +838,7 @@ suite "Search mode - empty Enter repeats the last search":
     for ch in "beta":
       handleSearchCharacterInput(e, $ch)
     for _ in 0 ..< "beta".len:
-      handleSearchBackspace(e)
+      backspace(e)
 
     check finalizeSearch(e)
 
@@ -1082,7 +1114,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
 
       for ch in typed:
         handleSearchCharacterInput(e, $ch)
-      handleSearchBackspace(e)
+      backspace(e)
       check e.state.statusMessage == ""
 
       cancelSearch(e)
@@ -1129,7 +1161,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     check e.viewport.topLine > 0
 
     for _ in 0 ..< "needle".len:
-      handleSearchBackspace(e)
+      backspace(e)
 
     check e.cursor.line == 0
     check e.viewport.topLine == 0

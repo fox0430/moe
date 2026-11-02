@@ -319,6 +319,23 @@ proc fromPassthrough(k: PassthroughKind): NormalModeResult {.inline.} =
   ## it back to a HandlerResult via command_passthrough.toHandlerResult.
   NormalModeResult(kind: nmrPassthrough, passthroughKind: k)
 
+proc cancelPendingCommand*(state: EditorState, registry: KeyBindingRegistry): bool =
+  ## End the command being built (an operator, a count, a register), as
+  ## Escape and Ctrl-C do in Normal mode. True when there was one.
+  result = state.pendingInput.cancelAll(registry)
+  if result:
+    state.statusMessage = ""
+
+proc ctrlCInNormal*(state: EditorState, registry: KeyBindingRegistry) =
+  ## Ctrl-C in Normal mode, typed or replayed, as Vim's nv_esc: it ends the
+  ## command being built and the wait Ctrl-o set to resume Insert. One that
+  ## ends neither tells how to quit.
+  let cancelled = state.cancelPendingCommand(registry)
+  if state.resumesInsert:
+    state.insertResume = irNone
+  elif not cancelled:
+    state.statusMessage = "Type :qa and press <Enter> to exit"
+
 proc handleNormalModeKey*(
     handler: NormalModeHandler,
     buffer: TextBuffer,
@@ -388,20 +405,20 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
 
   # Resolve the key through the router (numeric prefixes, sequences, f/t/r, etc.)
+  let endsPendingKeys = handler.keyBindingRegistry.hasPendingKeys
   let route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Normal, keyCombo)
   if route.kind == rrUnhandled:
     # A key that runs nothing ends the command being built, as Vim's
     # clearopbeep does: the count, the register and the operator go. Escape
-    # and Ctrl-C end it without the beep (nv_esc).
-    handler.keyBindingRegistry.clearSequence()
-    state.pendingInput.cancelOperatorPending()
-    let escapes =
-      if keyCombo.isSpecial:
-        keyCombo.special == skEscape
-      else:
-        keyCombo.modifiers == {kmCtrl} and keyCombo.char.toLowerAscii == "c"
-    if not escapes:
-      state.beep()
+    # and Ctrl-C end it without the beep (nv_esc). A Ctrl-C taken as the key
+    # after `f` or `g` is not a command of its own.
+    if keyCombo.isCtrlC and not endsPendingKeys:
+      ctrlCInNormal(state, handler.keyBindingRegistry)
+    else:
+      handler.keyBindingRegistry.clearSequence()
+      state.pendingInput.cancelOperatorPending()
+      if not (keyCombo.isCtrlC or (keyCombo.isSpecial and keyCombo.special == skEscape)):
+        state.beep()
   elif state.pendingInput.pendingOperator.isSome:
     let operand = handler.keyBindingRegistry.operandCommand
     let cancels =
