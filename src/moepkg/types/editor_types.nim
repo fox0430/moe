@@ -119,6 +119,9 @@ type
   RenderContext* = object
     ## Context for rendering operations to reduce parameter passing
     cursorLine*: int
+    lineFromCursor*: int
+      ## Lines from the cursor's row to the row being drawn, a closed fold
+      ## counting as one, for relative line numbers
     cursorCol*: int
     cursorDisplayCol*: int ## Screen column of cursor (accounting for tabs/wide chars)
     selection*: VisualSelection ## The rendered window's own selection

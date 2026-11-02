@@ -22,7 +22,7 @@
 import pkg/results
 
 import ../[types, modes, insert_record, unicode_utils]
-import ../buffer/core
+import ../buffer/[core, fold]
 import ../command_handlers/insert_commands
 
 import core, operator_engine
@@ -68,8 +68,15 @@ proc handleInsertAt*(
   of ieInsertNonBlank:
     ctx.cursor.column = getLineIndent(line).len
   of ieOpenBelow, ieOpenAbove:
+    let before = ctx.cursor
+    ctx.cursor.line =
+      if kind == ieOpenBelow:
+        ctx.buffer.foldEnd(ctx.cursor.line)
+      else:
+        ctx.buffer.foldStart(ctx.cursor.line)
     let begun = beginInsertModeSession(ctx.buffer, ctx.state)
     if begun.isErr:
+      ctx.cursor = before
       return err("Failed to begin transaction: " & begun.error)
     let opened =
       if kind == ieOpenBelow:
@@ -77,6 +84,7 @@ proc handleInsertAt*(
       else:
         insertLineAbove(ctx.buffer, ctx.state)
     if opened.isErr:
+      ctx.cursor = before
       if begun.get:
         return rollbackAndPropagate(ctx, opened.error)
       return err(opened.error)

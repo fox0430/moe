@@ -136,7 +136,7 @@ proc halfPage*(
     start = rl.spot(cursor)
     landed = rl.go(start, max(0, cursorRows), forward)
   result.cursorLine = landed.line
-  result.moved = vimTop != top or landed != start
+  result.moved = vimTop != top or landed.line != cursor.line or landed != start
 
 proc pageRows(rl: RowLayout, top: RowSpot, height: int, forward: bool): int =
   ## The rows a page scrolls: the window's height less the lines it keeps in
@@ -196,14 +196,15 @@ proc page*(
     top, rl.go(top, count * rl.pageRows(top, height, forward), forward), forward
   )
   result.top = fixed.top
-  result.moved = fixed.vimTop != top
   result.cursorLine =
-    if not result.moved:
-      cursor.line
+    if fixed.vimTop == top:
+      # As Vim's foldAdjustCursor.
+      rl.buffer.foldStart(cursor.line)
     elif forward:
       fixed.top.line
     else:
       rl.lastWholeRow(fixed.top.line, fixed.top.offset, height).line
+  result.moved = fixed.vimTop != top or result.cursorLine != cursor.line
 
 proc stopDistance(speed, friction, airDrag: float): float =
   ## Rows a scroll launched at `speed` rows a second goes until it stops.

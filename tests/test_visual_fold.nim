@@ -207,9 +207,38 @@ suite "A word motion over a closed fold, as in Vim":
     ("jdw", @["aa bb", "gg hh", "ii jj", "kk ll", "mm nn"], (1, 0)),
     ("jcwX<Esc>", @["aa bb", "X", "gg hh", "ii jj", "kk ll", "mm nn"], (1, 0)),
     ("jdb", @["aa ", "cc dd", "ee ff", "gg hh", "ii jj", "kk ll", "mm nn"], (0, 2)),
+    ("jde", @["aa bb", " hh", "ii jj", "kk ll", "mm nn"], (1, 0)),
+    ("jd2w", @["aa bb", "hh", "ii jj", "kk ll", "mm nn"], (1, 0)),
+    ("jdE", @["aa bb", " hh", "ii jj", "kk ll", "mm nn"], (1, 0)),
+    ("jceX<Esc>", @["aa bb", "X hh", "ii jj", "kk ll", "mm nn"], (1, 0)),
+    ("jc2wX<Esc>", @["aa bb", "X hh", "ii jj", "kk ll", "mm nn"], (1, 0)),
+    ("jye", Seven, (1, 0)),
+    ("jd$", @["aa bb", "gg hh", "ii jj", "kk ll", "mm nn"], (1, 0)),
+    ("jd3l", @["aa bb", "gg hh", "ii jj", "kk ll", "mm nn"], (1, 0)),
+    ("jdfh", Seven, (1, 0)),
+    ("jdth", Seven, (1, 0)),
   ]:
     test keys & " with lines 2-3 folded":
       let e = newVimLikeEditor(Seven, 0, 0)
+      check e.activeBuffer.foldState.addFold(1, 2, collapsed = true)
+      e.press(keys)
+      check e.lines == want
+      check e.cursorAt == wantCursor
+
+  const Three = @["aa bb", "cc dd", "ee ff"]
+  for (keys, want, wantCursor) in [
+    ("jw", Three, (2, 4)),
+    ("je", Three, (2, 4)),
+    ("jdw", @["aa bb"], (0, 0)),
+    ("jde", @["aa bb"], (0, 0)),
+    ("jd$", @["aa bb"], (0, 0)),
+    ("jye", Three, (1, 0)),
+    ("jwx", @["aa bb", "cc dd", "ee f"], (2, 3)),
+    ("jwr1", @["aa bb", "cc dd", "ee f1"], (2, 4)),
+    ("jcwX<Esc>", @["aa bb", "X"], (1, 0)),
+  ]:
+    test keys & " with the last lines 2-3 folded":
+      let e = newVimLikeEditor(Three, 0, 0)
       check e.activeBuffer.foldState.addFold(1, 2, collapsed = true)
       e.press(keys)
       check e.lines == want

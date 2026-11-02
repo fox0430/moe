@@ -304,16 +304,6 @@ proc getNextVisibleLine*(state: FoldState, line: int, maxLine: int): int =
       return min(fold.endLine + 1, maxLine)
   return line
 
-proc getPrevVisibleLine*(state: FoldState, line: int): int =
-  ## Get the previous visible line (skip over collapsed folds)
-  ## If line is at the end of a collapsed fold, jump to the start line
-  for fold in state.folds:
-    if fold.startLine > line:
-      break
-    if fold.collapsed and line > fold.startLine and line <= fold.endLine:
-      return fold.startLine
-  return line
-
 proc formatFoldText*(b: TextBuffer, fold: Fold): string =
   ## Format the display text for a collapsed fold (vim-style)
   ## Example: "+-- 10 lines: func foo() {...}"

@@ -146,8 +146,7 @@ proc toOperatorRange*(
   result.useRegOne = target.useRegOne
 
 proc settle(ctx: CommandContext, pos: BufferPosition): BufferPosition =
-  ## `pos` as a Normal mode cursor: on a character of its line, and at the
-  ## start of a closed fold it lies in.
+  ## `pos` as a Normal mode cursor: on a character of its line.
   let p = ctx.motionController.cursorManager.clampPosition(
     CursorPosition(x: pos.column, y: pos.line), ctx.buffer, some(EditorMode.Normal)
   )
@@ -394,7 +393,7 @@ proc finishOperator*(
   ctx.cursor = ctx.settle(min(target.get.start, target.get.finish))
   if (target.get.start < target.get.finish or target.get.motionType == mtLinewise) and
       ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line).isSome:
-    ctx.cursor = BufferPosition(line: ctx.cursor.line, column: 0)
+    ctx.cursor = BufferPosition(line: ctx.buffer.foldStart(ctx.cursor.line), column: 0)
   let opResult = executeOperatorOnRange(
     ctx, op.operatorType, range, op.operatorCount, some(op.topLine)
   )

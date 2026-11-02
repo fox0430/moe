@@ -164,6 +164,8 @@ proc linesDown*(buffer: TextBuffer, line, count: int): int =
   let last = buffer.len - 1
   if last < 0:
     return 0
+  if line <= last and buffer.foldEnd(line) >= last:
+    return line
   if line + count >= last:
     return buffer.foldStart(last)
   if buffer.foldState.folds.len == 0:
@@ -1147,12 +1149,6 @@ proc clampPosition*(
     result.y = buf.len - 1
   elif result.y < 0:
     result.y = 0
-
-  # As Vim's foldAdjustCursor: in a closed fold, on to its first line, the
-  # column kept.
-  let collapsedFold = buf.foldState.getCollapsedFoldAt(result.y)
-  if collapsedFold.isSome:
-    result.y = collapsedFold.get.startLine
 
   # Clamp column - ensure line index is valid before accessing
   if result.y >= 0 and result.y < buf.len:
