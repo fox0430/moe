@@ -346,14 +346,8 @@ proc handleFoldOpen*(ctx: CommandContext, args: seq[string]): Result[(), string]
 
 proc handleFoldClose*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Close fold at cursor position (zc command)
-  if ctx.buffer.foldState.closeFold(ctx.cursor.line):
-    # Ensure cursor is not on a hidden line after closing
-    if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
-      ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
-      # Clamp column to new line's length
-      let lineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
-      ctx.cursor.column = min(ctx.cursor.column, max(0, lineLen - 1))
-  elif ctx.buffer.foldState.foldIndexAt(ctx.cursor.line).isNone:
+  if not ctx.buffer.foldState.closeFold(ctx.cursor.line) and
+      ctx.buffer.foldState.foldIndexAt(ctx.cursor.line).isNone:
     # Distinguish "no fold here" from "fold already closed" (the latter is a
     # silent no-op, matching vim and handleFoldOpen).
     ctx.state.statusMessage = "No fold found"
@@ -362,11 +356,6 @@ proc handleFoldClose*(ctx: CommandContext, args: seq[string]): Result[(), string
 proc handleFoldToggle*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Toggle fold at cursor position (za command)
   if ctx.buffer.foldState.toggleFold(ctx.cursor.line):
-    # Ensure cursor is not on a hidden line after closing
-    if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
-      ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
-      let lineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
-      ctx.cursor.column = min(ctx.cursor.column, max(0, lineLen - 1))
     return ok(())
   else:
     ctx.state.statusMessage = "No fold found"
@@ -380,12 +369,6 @@ proc handleFoldOpenAll*(ctx: CommandContext, args: seq[string]): Result[(), stri
 proc handleFoldCloseAll*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Close all folds (zM command)
   ctx.buffer.foldState.closeAllFolds()
-  # Ensure cursor is not on a hidden line
-  if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
-    ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
-    # Clamp column to new line's length
-    let lineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
-    ctx.cursor.column = min(ctx.cursor.column, max(0, lineLen - 1))
   return ok(())
 
 proc handleFoldCreate*(ctx: CommandContext, args: seq[string]): Result[(), string] =

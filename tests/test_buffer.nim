@@ -833,17 +833,6 @@ suite "Buffer - Folding":
     check buf.foldState.isLineInCollapsedFold(2) == true # Inside fold
     check buf.foldState.isLineInCollapsedFold(3) == false
 
-  test "getPrevVisibleLine snaps a hidden line to the fold start":
-    let buf = newTextBuffer("0\n1\n2\n3\n4")
-    discard buf.foldState.addFold(1, 3, collapsed = true)
-    # Lines hidden inside the collapsed fold snap back to its start line.
-    check buf.foldState.getPrevVisibleLine(2) == 1
-    check buf.foldState.getPrevVisibleLine(3) == 1
-    # Visible lines (including the fold start) are unchanged.
-    check buf.foldState.getPrevVisibleLine(1) == 1
-    check buf.foldState.getPrevVisibleLine(0) == 0
-    check buf.foldState.getPrevVisibleLine(4) == 4
-
   test "openFoldsInRange opens every collapsed fold overlapping the range":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
     discard buf.foldState.addFold(0, 2, collapsed = true) # A

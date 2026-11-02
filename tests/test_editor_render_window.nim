@@ -593,7 +593,7 @@ suite "renderFoldLine - Basic behavior":
 
     let fold = Fold(startLine: 0, endLine: 2, collapsed: true)
 
-    e.renderFoldLine(buffer, window, 0, 0, fold)
+    e.renderFoldLine(buffer, window, 0, RenderContext(), 0, fold)
 
   test "Render fold marker with line number":
     let e = createTestEditor()
@@ -611,7 +611,7 @@ suite "renderFoldLine - Basic behavior":
 
     let fold = Fold(startLine: 0, endLine: 2, collapsed: true)
 
-    e.renderFoldLine(buffer, window, 4, 0, fold)
+    e.renderFoldLine(buffer, window, 4, RenderContext(), 0, fold)
 
   test "Render fold marker at window offset":
     let e = createTestEditor()
@@ -628,7 +628,7 @@ suite "renderFoldLine - Basic behavior":
 
     let fold = Fold(startLine: 0, endLine: 1, collapsed: true)
 
-    e.renderFoldLine(buffer, window, 4, 0, fold)
+    e.renderFoldLine(buffer, window, 4, RenderContext(), 0, fold)
 
 suite "renderWindow - Basic behavior":
   test "Render window with single line":

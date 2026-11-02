@@ -373,9 +373,9 @@ proc tick*(e: Editor) =
   e.tickNotifications()
 
 proc updateForFrame*(e: Editor, buffer: Buffer): bool =
-  ## Advance per-frame editor state: smooth-scroll animation, fold cursor pin,
-  ## matching-paren / current-word, syntax + semantic highlight, viewport size,
-  ## and window layout (viewport scroll, selection-cursor sync, screen cursor).
+  ## Advance per-frame editor state: smooth-scroll animation, matching-paren /
+  ## current-word, syntax + semantic highlight, viewport size, and window layout
+  ## (viewport scroll, selection-cursor sync, screen cursor).
   ## No drawing — the draw pass (`draw`) is a read-only projection of the state
   ## this produces. Returns true if the viewport was resized.
 
@@ -388,31 +388,18 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
       e.motionController.rowLayout()
     )
 
-  # Keep the active cursor off lines hidden inside a collapsed fold. Many cursor
-  # moves (search, :N, LSP jumps, mouse clicks, cursor restore on open) bypass
-  # the motion clamp; normalize here so the cursor always sits on a visible line.
-  # Non-file buffers have no folds, so this is a no-op for them.
-  if not e.state.windowDisplay.scrollAnimation.active and
-      not e.currentMode.isVisualAllMode:
-    let buf = e.activeBuffer()
-    let collapsedFold = buf.foldState.getCollapsedFoldAt(e.activeWindow.cursor.line)
-    if collapsedFold.isSome:
-      let first = collapsedFold.get.startLine
-      e.activeWindow.cursor.line = first
-      e.activeWindow.cursor.column = min(
-        e.activeWindow.cursor.column,
-        maxCursorColumn(buf.getLine(first).charLen, e.currentMode),
-      )
-
   # Update highlight state (skip for the debug viewer)
   let isDebugBuffer = e.activeWindow.modeState.kind == mskDebug
 
-  if e.config.highlight.pairOfParen and not isDebugBuffer:
+  # Nothing on a line hidden in a closed fold shows.
+  let cursorShown = e.activeBuffer().foldState.getCollapsedFoldAt(e.cursor.line).isNone
+
+  if e.config.highlight.pairOfParen and not isDebugBuffer and cursorShown:
     e.state.matchingParenPos = findMatchingParenPosition(e.activeBuffer(), e.cursor)
   else:
     e.state.matchingParenPos = none(BufferPosition)
 
-  if e.config.highlight.currentWord and not isDebugBuffer:
+  if e.config.highlight.currentWord and not isDebugBuffer and cursorShown:
     e.state.currentWord = getWordAtPosition(e.activeBuffer(), e.cursor)
   else:
     e.state.currentWord = ""

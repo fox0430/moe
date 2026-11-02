@@ -19,7 +19,7 @@
 
 ## Window and line rendering procedures
 
-import std/[options, strutils, unicode, tables]
+import std/[enumerate, options, strutils, unicode, tables]
 
 import celina_backend as celina
 
@@ -783,10 +783,10 @@ proc renderLineSegmentWithSelection*(
     displayX += 1
 
 proc fmtLineNum(
-    state: EditorState, lineIndex: int, cursorLine: int, width: int
+    state: EditorState, lineIndex, lineFromCursor: int, width: int
 ): string =
   if state.relativeLineNumbers:
-    formatRelativeLineNumber(lineIndex, cursorLine, width)
+    formatRelativeLineNumber(lineIndex, lineIndex - lineFromCursor, width)
   else:
     formatLineNumber(lineIndex, width)
 
@@ -828,7 +828,7 @@ proc renderWindowLineWrapped*(
       return
     # Empty line: the line number (if enabled) and the cells after its end
     if lineNumOffset > 0:
-      let lineNumStr = e.state.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
+      let lineNumStr = e.state.fmtLineNum(lineIndex, ctx.lineFromCursor, lineNumOffset)
       if lineNumScreenX + lineNumStr.len <= buffer.area.width:
         buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
     let textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
@@ -893,7 +893,7 @@ proc renderWindowLineWrapped*(
     if lineNumOffset > 0:
       if wrapLineCount == 0:
         let lineNumStr =
-          e.state.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
+          e.state.fmtLineNum(lineIndex, ctx.lineFromCursor, lineNumOffset)
         if lineNumScreenX + lineNumStr.len <= buffer.area.width:
           buffer.setString(lineNumScreenX, currentActualScreenY, lineNumStr, lineStyle)
       else:
@@ -955,7 +955,7 @@ proc renderWindowLineNoWrap*(
 
   # Render line number (if enabled)
   if lineNumOffset > 0:
-    let lineNumStr = e.state.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
+    let lineNumStr = e.state.fmtLineNum(lineIndex, ctx.lineFromCursor, lineNumOffset)
     if lineNumScreenX + lineNumStr.len <= buffer.area.width:
       buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
 
@@ -1019,6 +1019,7 @@ proc renderFoldLine*(
     buffer: var Buffer,
     window: EditorWindow,
     lineNumOffset: int,
+    ctx: RenderContext,
     screenY: int,
     fold: Fold,
 ) =
@@ -1033,10 +1034,15 @@ proc renderFoldLine*(
 
   # Render line number (if enabled)
   if lineNumOffset > 0:
-    let lineNumStr =
-      e.state.fmtLineNum(fold.startLine, window.cursor.line, lineNumOffset)
+    let
+      lineNumStr = e.state.fmtLineNum(fold.startLine, ctx.lineFromCursor, lineNumOffset)
+      style =
+        if ctx.lineFromCursor == 0:
+          currentLineStyle()
+        else:
+          lineNumStyle()
     if lineNumScreenX + lineNumStr.len <= buffer.area.width:
-      buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineNumStyle())
+      buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, style)
 
   # Render fold text
   if textScreenX < buffer.area.width:
@@ -1183,7 +1189,7 @@ proc renderWindow*(
       window.cursor.column
 
   # Create render context for this window
-  let ctx = RenderContext(
+  var ctx = RenderContext(
     cursorLine: window.cursor.line,
     cursorCol: window.cursor.column,
     cursorDisplayCol: cursorDisplayCol,
@@ -1211,9 +1217,28 @@ proc renderWindow*(
   # `updateForFrame`; the draw pass must not advance re-parses, or the
   # per-window charges (N windows x 1000 lines) would bypass the budget.
 
-  for row in rl.visibleLines(
-    window.viewport.topLine, window.viewport.topWrapOffset, visibleHeight
+  # A cursor in a closed fold is on the fold's row.
+  let cursorRowLine = window.buffer.foldStart(window.cursor.line)
+  var cursorIndex = -1
+  for i, row in enumerate(
+    rl.visibleLines(
+      window.viewport.topLine, window.viewport.topWrapOffset, visibleHeight
+    )
   ):
+    if row.line == cursorRowLine:
+      cursorIndex = i
+      break
+
+  for i, row in enumerate(
+    rl.visibleLines(
+      window.viewport.topLine, window.viewport.topWrapOffset, visibleHeight
+    )
+  ):
+    ctx.lineFromCursor =
+      if cursorIndex >= 0:
+        i - cursorIndex
+      else:
+        row.line - cursorRowLine
     # sidebarIndex is 0-based index into sidebar buffer (based on logical line, not screen row)
     let
       sidebarIndex = row.line - window.viewport.topLine
@@ -1223,7 +1248,7 @@ proc renderWindow*(
       renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
 
     if row.fold.isSome:
-      e.renderFoldLine(buffer, window, lineNumOffset, screenY, row.fold.get)
+      e.renderFoldLine(buffer, window, lineNumOffset, ctx, screenY, row.fold.get)
     elif e.lineWrap:
       # `renderWindowLineWrapped` advances its own screenY / lineIndex across the
       # segments it paints; the walk owns the next row, so the copies are dropped.
