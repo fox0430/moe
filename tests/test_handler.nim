@@ -24,7 +24,7 @@
 ## - Search mode event handling helpers
 
 import std/[unittest, options, tables, os, osproc, times, posix]
-from std/strutils import contains, continuesWith, escape, join, repeat, strip
+from std/strutils import contains, continuesWith, endsWith, escape, join, repeat, strip
 
 import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
@@ -39,6 +39,7 @@ import
     completion, signature_help, macro_recording, wanted_column,
   ]
 import ../src/moepkg/handler {.all.}
+from ../src/moepkg/command_completion import isActive
 import ../src/moepkg/editor_build_jobs {.all.}
 import ../src/moepkg/job_lanes
 import ../src/moepkg/terminal_mode
@@ -5760,7 +5761,7 @@ suite "Macro recording - Command / Search overlay keys":
     check e.state.pendingInput.macroState.recording.get.keys ==
       @["w", "o", "r", "<Enter>"]
 
-  test "Command overlay Escape recorded so playback replays cancel":
+  test "Command overlay Escape is recorded with the keys before it":
     let e = createEditorForOverlayRecord("hello")
     e.startRecording('a')
     e.state.enterCommandOverlay()
@@ -5822,6 +5823,315 @@ suite "Macro playback - overlay-aware routing":
       discard e.handlerManager.runKeyCombo(e, kc)
 
     check e.state.input.search.text == "wor"
+
+suite "The search prompt and the command line end as Vim's getcmdline":
+  # Expectations are Vim 9.2's: the keys typed, or put in by a register or a
+  # mapping, with `q` as the last search pattern.
+  proc createEditorForPrompt(content: string, column = 0, incsearch = true): Editor =
+    var config = newEditorConfig()
+    config.standard.incrementalSearch = incsearch
+    result = newEditor(config)
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.activeWindow.cursor = BufferPosition(line: 0, column: column)
+    result.state.input.search.last = SearchSpec(pattern: "q")
+    # Not the history files the editor read.
+    result.state.input.search.history = @[]
+    result.state.input.commandState.history = @[]
+
+  proc keys(s: string): seq[string] =
+    ## One key per character, "\r" as Enter, "\e" as Escape, "\b" as
+    ## Backspace, "\x7f" as Delete, "\x03" as Ctrl-C, "\x0f" as Ctrl-o and
+    ## "\x01" as Home.
+    for c in s:
+      result.add(
+        case c
+        of '\r':
+          "Enter"
+        of '\e':
+          "Escape"
+        of '\b':
+          "Backspace"
+        of '\x7f':
+          "Delete"
+        of '\x03':
+          "C-c"
+        of '\x0f':
+          "C-o"
+        of '\x01':
+          "Home"
+        else:
+          $c
+      )
+
+  proc setRegister(e: Editor, name: char, keys: openArray[string]) =
+    var stored: seq[string]
+    for key in keys:
+      stored.add keyComboToString(parseKeyCombo(key).get)
+    e.state.pendingInput.macroState.registers[name] = stored
+
+  proc press(e: Editor, keys: openArray[string]) =
+    ## A typed Ctrl-C comes as the terminal's interrupt.
+    for key in keys:
+      if key == "C-c":
+        check e.handleInterrupt()
+      else:
+        check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  type By = enum
+    byTyping
+    byRegister
+    byMapping
+
+  proc run(e: Editor, by: By, ks: seq[string]) =
+    ## `ks` typed, or put in by register a or by the mapping X.
+    case by
+    of byTyping:
+      e.press(ks)
+    of byRegister:
+      e.setRegister('a', ks)
+      e.press(keys("@a"))
+    of byMapping:
+      check e.executeCommandOverlay(":nnoremap X " & ks.join(" ")) == roContinue
+      e.state.input.commandState.history = @[]
+      e.press(keys("X"))
+
+  proc run(e: Editor, by: By, s: string) =
+    e.run(by, keys(s))
+
+  test "Backspace or Delete on an empty line leaves it, however the key came":
+    for incsearch in [false, true]:
+      for by in By:
+        for (s, column, expected) in [
+          ("/\bx", 0, "bcdef"),
+          ("/c\b\bx", 0, "bcdef"),
+          ("/\x7fx", 0, "bcdef"),
+          ("/ce\x7f\x7f\x7fx", 0, "bcdef"),
+          ("?\bx", 3, "abcef"),
+          (":\bx", 0, "bcdef"),
+          (":s\b\bx", 0, "bcdef"),
+          (":\x7fx", 0, "bcdef"),
+        ]:
+          let e = createEditorForPrompt("abcdef", column, incsearch)
+
+          e.run(by, s)
+
+          checkpoint($incsearch & " " & $by & " " & s.escape)
+          check e.lines == @[expected]
+          check not e.state.hasOverlay
+          check e.state.input.search.last.pattern == "q"
+          check e.state.input.search.history.len == 0
+
+  test "Backspace at the start of a line and Delete at its end edit it":
+    for incsearch in [false, true]:
+      for (s, expected, cursor) in [
+        ("/c\x01\b\r", "abcdef", 2),
+        ("/ce\x7f\r", "abcdef", 2),
+        (":s/c/X/\x01\b\r", "abXdef", 0),
+      ]:
+        let e = createEditorForPrompt("abcdef", incsearch = incsearch)
+
+        e.press(keys(s))
+
+        checkpoint($incsearch & " " & s.escape)
+        check e.lines == @[expected]
+        check e.activeWindow.cursor == BufferPosition(line: 0, column: cursor)
+
+  test "an Esc a register or a mapping puts in runs the line, a typed one leaves it":
+    for incsearch in [false, true]:
+      for (by, s, column, expected, pattern) in [
+        (byTyping, "/c\ex", 0, "bcdef", "q"),
+        (byRegister, "/c\ex", 0, "abdef", "c"),
+        (byMapping, "/c\ex", 0, "abdef", "c"),
+        (byRegister, "?c\ex", 4, "abdef", "c"),
+        # A search that fails stops the keys after it.
+        (byRegister, "/zzz\ex", 0, "abcdef", "zzz"),
+        (byRegister, "/\ex", 0, "abcdef", "q"),
+        # `:s` keeps the last search pattern in moe, unlike Vim's.
+        (byTyping, ":s/c/X/\ex", 0, "bcdef", ""),
+        (byRegister, ":s/c/X/\ex", 0, "bXdef", ""),
+        (byMapping, ":s/c/X/\ex", 0, "bXdef", ""),
+        (byRegister, ":\ex", 0, "bcdef", ""),
+        (byRegister, ":s/zzz/X/\ex", 0, "abcdef", ""),
+      ]:
+        let e = createEditorForPrompt("abcdef", column, incsearch)
+
+        e.run(by, s)
+
+        checkpoint($incsearch & " " & $by & " " & s.escape)
+        check e.lines == @[expected]
+        check not e.state.hasOverlay
+        if pattern.len > 0:
+          check e.state.input.search.last.pattern == pattern
+
+    let e = createEditorForPrompt("abcdef", 4)
+    e.run(byRegister, "?c\e")
+    check e.state.input.search.last.direction == Backward
+
+  test "Ctrl-C leaves either line, however it came":
+    for incsearch in [false, true]:
+      for by in By:
+        for s in ["/c\x03x", ":s/c/X/\x03x"]:
+          let e = createEditorForPrompt("abcdef", incsearch = incsearch)
+
+          e.run(by, s)
+
+          checkpoint($incsearch & " " & $by & " " & s.escape)
+          check e.lines == @["bcdef"]
+          check not e.state.hasOverlay
+          check e.state.input.search.last.pattern == "q"
+
+  test "Enter on an empty command line closes the completion menu":
+    let e = createEditorForPrompt("abcdef")
+    e.press(keys(":s"))
+    check e.state.commandCompletionManager.isActive()
+
+    e.press(keys("\b\r"))
+
+    check not e.state.hasOverlay
+    check not e.state.commandCompletionManager.isActive()
+
+  test "Ctrl-H erases as Backspace does":
+    for incsearch in [false, true]:
+      for by in By:
+        for ks in [@["/", "c", "C-h", "C-h", "x"], @[":", "s", "C-h", "C-h", "x"]]:
+          let e = createEditorForPrompt("abcdef", incsearch = incsearch)
+
+          e.run(by, ks)
+
+          checkpoint($incsearch & " " & $by & " " & $ks)
+          check e.lines == @["bcdef"]
+          check not e.state.hasOverlay
+
+  test "Ctrl-J and Ctrl-M run either line as Enter does":
+    for by in By:
+      for key in ["C-j", "C-m"]:
+        for (ks, expected, cursor) in [
+          (@["/", "c", key], "abcdef", 2), (keys(":s/c/X/") & key, "abXdef", 0)
+        ]:
+          let e = createEditorForPrompt("abcdef")
+
+          e.run(by, ks)
+
+          checkpoint($by & " " & $ks)
+          check e.lines == @[expected]
+          check e.activeWindow.cursor == BufferPosition(line: 0, column: cursor)
+          check not e.state.hasOverlay
+
+  test "Ctrl-Shift-C leaves either line as Ctrl-C does, and Ctrl-Alt-C does not":
+    # Vim's <C-S-c> is the byte Ctrl-C is. A frontend gives it as Ctrl with "C".
+    for prompt in ["/", ":"]:
+      for (key, leaves) in [
+        (KeyCombo(isSpecial: false, char: "c", modifiers: {kmCtrl, kmShift}), true),
+        (KeyCombo(isSpecial: false, char: "C", modifiers: {kmCtrl}), true),
+        (KeyCombo(isSpecial: false, char: "c", modifiers: {kmCtrl, kmAlt}), false),
+      ]:
+        let e = createEditorForPrompt("abcdef")
+        e.press(keys(prompt & "c"))
+
+        check e.handleKeyCombo(key)
+
+        checkpoint(prompt & " " & keyComboToString(key))
+        check e.state.hasOverlay == not leaves
+
+  test "a Ctrl-C typed while recording goes into the register, which runs it as typed":
+    for incsearch in [false, true]:
+      for (s, expected, cursor) in [
+        ("qa/c\x03xqu@a", "bcdef", 0),
+        ("qa:s/c/X/\x03xqu@a", "bcdef", 0),
+        ("qaifoo\x03qu@a", "fooabcdef", 2),
+        ("qavl\x03xq@a", "acef", 2),
+      ]:
+        let e = createEditorForPrompt("abcdef", incsearch = incsearch)
+
+        e.press(keys(s))
+
+        checkpoint($incsearch & " " & s.escape)
+        check "<C-c>" in e.state.pendingInput.macroState.registers['a']
+        check e.lines == @[expected]
+        check e.activeWindow.cursor == BufferPosition(line: 0, column: cursor)
+        check e.state.mode == EditorMode.Normal
+        check not e.state.hasOverlay
+
+  test "a Ctrl-C after Insert's Ctrl-o stays in Normal mode, however the key came":
+    # Vim's nv_esc ends the wait to resume Insert on Ctrl-C, typed or not.
+    for by in By:
+      for (s, expected, cursor) in [
+        ("ifoo\x0f\x03x", "foobcdef", 3), ("ifoo\x0fvl\x03x", "fooacdef", 4)
+      ]:
+        let e = createEditorForPrompt("abcdef")
+
+        e.run(by, s)
+
+        checkpoint($by & " " & s.escape)
+        check e.lines == @[expected]
+        check e.activeWindow.cursor == BufferPosition(line: 0, column: cursor)
+        check e.state.mode == EditorMode.Normal
+        check not e.state.resumesInsert
+
+    let e = createEditorForPrompt("abcdef")
+    e.press(keys("qaifoo\x0f\x03xqu@a"))
+    check e.lines == @["foofoobcdef"]
+    check e.state.mode == EditorMode.Normal
+
+  test "only a Ctrl-C of its own tells how to quit, not one taken as the key after f or g":
+    for by in By:
+      for (s, hints) in [("\x03", true), ("f\x03", false), ("g\x03", false)]:
+        let e = createEditorForPrompt("abcdef")
+
+        e.run(by, s)
+
+        checkpoint($by & " " & s.escape)
+        check (e.state.statusMessage == "Type :qa and press <Enter> to exit") == hints
+        check not e.keyBindingRegistry.hasActiveSequence
+        check e.state.mode == EditorMode.Normal
+
+  test "an erase ends browsing the history even when it erases nothing":
+    for prompt in [":", "/"]:
+      let e = createEditorForPrompt("abcdef")
+      e.state.input.commandState.history = @["s/c/X/"]
+      e.state.input.search.history = @["c"]
+
+      e.press(@[prompt, "Up", "Home", "Backspace"])
+
+      checkpoint(prompt)
+      if prompt == ":":
+        check e.state.input.commandText == ":s/c/X/"
+        check e.state.input.commandState.historyIndex == -1
+      else:
+        check e.state.input.search.text == "c"
+        check e.state.input.search.historyIndex == -1
+
+  test "a search left with Esc or Ctrl-C goes into the history, unlike the last pattern":
+    for incsearch in [false, true]:
+      for (by, s, history, pattern) in [
+        (byTyping, "/c\e", @["c"], "q"),
+        (byTyping, "/c\x03", @["c"], "q"),
+        (byRegister, "/c\x03", @["c"], "q"),
+        (byTyping, "/c\e/d\e/c\e", @["c", "d"], "q"),
+        (byTyping, "/c\r/d\r0/\e", @["d", "c"], "d"),
+        # A line browsed back to goes in as an edited one does.
+        (byTyping, "/c\r/d\r0/", @["c", "d"], "d"),
+      ]:
+        let e = createEditorForPrompt("abcdef", incsearch = incsearch)
+
+        e.run(by, s)
+        if s.endsWith("/"):
+          e.press(@["Up", "Up", "Escape"])
+
+        checkpoint($incsearch & " " & $by & " " & s.escape)
+        check e.state.input.search.history == history
+        check e.state.input.search.last.pattern == pattern
 
 suite "updateViewportReservedLines - steady reserve":
   test "Multi-line status message keeps the motion reserve steady":

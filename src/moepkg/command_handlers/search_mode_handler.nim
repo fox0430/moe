@@ -31,16 +31,19 @@ import ../celina_backend as celina
 import
   ../[
     editor, key_bindings, modes, buffer, types, help_viewer, config_mode, unicode_utils,
-    search_ops, fold_open, pending_input,
+    search_ops, fold_open, pending_input, prompt_keys,
   ]
 import ../command_registry/core
 import command_mode_handler, result_processor
 
 ## NOTE: While in Search Mode:
 ## - Character input: Add to searchText, trigger performIncrementalSearch (if enabled)
-## - Backspace: Remove from searchText, trigger performIncrementalSearch (if enabled)
-## - Enter: Save search, execute if needed, return to Normal mode
-## - Escape: Cancel search, restore cursor if incsearch, return to previous mode
+## - Backspace: Remove from searchText, trigger performIncrementalSearch (if enabled);
+##   on an empty prompt, cancel
+## - Enter, or Escape a mapping or register put in: Save search, execute if
+##   needed, return to Normal mode
+## - Escape typed, Ctrl-C: Cancel search, restore cursor if incsearch, return to
+##   previous mode
 
 proc syncHelpViewerIndex(e: Editor, line: int) =
   ## Sync help viewer selectedIndex with the given line position.
@@ -194,8 +197,11 @@ proc cancelSearch*(e: Editor) =
   ## - Exit overlay and return to base mode
   ## - Clear searchText buffer
   ## - Does NOT save to lastSearchText (search was cancelled)
+  ## - Keeps what was typed in the history, as Vim's getcmdline does
   ## - Cancels an operator waiting for it (`d/foo<Esc>`), as Vim's clearop
 
+  if e.state.input.search.text.len > 0:
+    e.state.addSearchHistory(e.state.input.search.text)
   e.state.pendingInput.cancelOperatorPending()
   let cfg = e.activeConfigState()
   if cfg != nil:
@@ -213,7 +219,7 @@ proc performIncrementalSearch(e: Editor) =
   ##
   ## Called when:
   ## - Character is added to searchText (handleSearchCharacterInput)
-  ## - Character is removed from searchText (handleSearchBackspace)
+  ## - Character is removed from searchText (eraseInSearch)
   ##
   ## Behavior:
   ## - Only executes if incsearch is enabled AND searchText is not empty
@@ -305,40 +311,35 @@ proc insertPastedTextInSearch*(e: Editor, text: string) =
     byteToCharPos(e.state.input.search.text, bytePos + insertText.len)
   e.performIncrementalSearch()
 
-proc handleSearchBackspace(e: Editor) =
-  ## Handle Backspace key in Search mode
-  ##
-  ## Called when: Backspace is pressed
-  ##
-  ## Behavior:
-  ## - Remove the character before the cursor (if any)
-  ## - Move cursor left by one
-  ## - If incsearch enabled: Trigger incremental search with updated text
-  ## - Always trigger redraw to update search highlight
-  if e.state.input.search.cursor > 0:
-    e.state.input.search.text =
-      e.state.input.search.text.deleteCharAt(e.state.input.search.cursor - 1)
-    e.state.input.search.cursor -= 1
+proc eraseInSearch(e: Editor, key: KeyCombo) =
+  ## Backspace or Delete in Search mode: erase a character and search again,
+  ## or leave the prompt when it is empty.
+  # An erase ends browsing the history even when it erases nothing.
+  e.state.input.search.historyIndex = -1
+  case erase(e.state.input.search.text, e.state.input.search.cursor, key)
+  of eoLeave:
+    e.cancelSearch()
+  of eoUnchanged:
+    discard
+  of eoErased:
     e.performIncrementalSearch()
 
 proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
-  ## Handle a KeyCombo in Search mode. Same dispatch as `handleSearchModeEvent`
-  ## but reachable from replay paths (macro playback, runtime mapping RHS) that
-  ## already hold a KeyCombo rather than a raw Event. `roAbort` when Enter
+  ## Run `keyCombo` on the search prompt, typed or replayed (macro playback,
+  ## mapping RHS): `state.keyTyped` tells which, as Vim's KeyTyped. `roAbort` when Enter
   ## runs a search that fails, so the keys a register or mapping queued after
   ## it are dropped, as Vim's error flushes them.
-  # Escape: Cancel search and return to previous mode
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
+  case promptKey(keyCombo, e.state.keyTyped)
+  of pkEnter, pkRun:
+    return if e.finalizeSearch(): roContinue else: roAbort
+  of pkLeave:
     e.cancelSearch()
     return roContinue
-
-  # Enter: Execute search and return to Normal mode
-  let isEnter =
-    (keyCombo.isSpecial and keyCombo.special == skEnter) or
-    (not keyCombo.isSpecial and (keyCombo.char == "\n" or keyCombo.char == "\r"))
-
-  if isEnter:
-    return if e.finalizeSearch(): roContinue else: roAbort
+  of pkErase:
+    e.eraseInSearch(keyCombo)
+    return roContinue
+  of pkOther:
+    discard
 
   # Up arrow: Navigate to previous (older) search in history
   if keyCombo.isSpecial and keyCombo.special == skUp:
@@ -399,23 +400,6 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
     e.state.input.search.cursor = e.state.input.search.text.charLen
     return roContinue
 
-  # Delete: Remove character at cursor position
-  if keyCombo.isSpecial and keyCombo.special == skDelete:
-    if e.state.input.search.cursor < e.state.input.search.text.charLen:
-      # Reset history navigation when user edits
-      e.state.input.search.historyIndex = -1
-      e.state.input.search.text =
-        e.state.input.search.text.deleteCharAt(e.state.input.search.cursor)
-      e.performIncrementalSearch()
-    return roContinue
-
-  # Backspace: Remove last character and re-search
-  if keyCombo.isSpecial and keyCombo.special == skBackspace:
-    # Reset history navigation when user types
-    e.state.input.search.historyIndex = -1
-    e.handleSearchBackspace()
-    return roContinue
-
   # Character input: Add character and perform incremental search
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
     # Reset history navigation when user types
@@ -425,14 +409,3 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
 
   # Ignore other special keys
   roContinue
-
-proc handleSearchModeEvent*(e: Editor, event: Event): ReplayOutcome =
-  ## Handle Search mode events - main event dispatcher.
-  ## Extracts the KeyCombo and forwards to `handleSearchModeKeyCombo`, which
-  ## replay paths call directly.
-  if event.kind != EventKind.Key:
-    return roContinue
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return roContinue
-  return e.handleSearchModeKeyCombo(keyComboOpt.get)

@@ -869,7 +869,7 @@ proc answerHitEnter(e: Editor, keyCombo: KeyCombo): bool =
     return keyCombo.special == skEnter and keyCombo.modifiers == {}
   if keyCombo.modifiers == {}:
     return keyCombo.char == " "
-  keyCombo.modifiers == {kmCtrl} and keyCombo.char in ["c", "C", "j", "J"]
+  keyCombo.isCtrlC or keyCombo.isCtrl('j')
 
 proc runAsItself(manager: HandlerManager, e: Editor, key: KeyInput): ReplayOutcome =
   ## Run `key` with no mapping applied: a layer in front of the mode handlers
@@ -975,8 +975,9 @@ proc runKeyCombo*(
 ): HandlerResult =
   ## HandlerResult-returning form of `runNestedKeyCombo`, for tests that
   ## inspect kind/errorMessage. Full processResult side effects fire on every
-  ## path (precheck, direct dispatch, hrPlaybackMacro expansion) so the
-  ## observable state after this call matches production `handleEvent`. The
+  ## path (precheck, direct dispatch, hrPlaybackMacro expansion). The key runs
+  ## as one a register or a mapping sends, not a typed one: an Esc runs the
+  ## search or command line instead of leaving it. The
   ## returned HandlerResult is a status signal (hrHandled/hrQuit/hrError),
   ## not the raw dispatched result — inspect `state.mode`, `state.overlay`,
   ## and other mutations directly.

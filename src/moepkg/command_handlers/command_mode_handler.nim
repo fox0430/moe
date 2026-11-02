@@ -29,7 +29,7 @@ import pkg/chronos
 import
   ../[
     editor, key_bindings, buffer, types, command_line, command_completion,
-    unicode_utils, key_router,
+    unicode_utils, key_router, prompt_keys,
   ]
 import editor_ops, result_processor
 from command_handler import resolveExRange
@@ -146,20 +146,74 @@ proc findHistoryMatch(
     i += step
   return -1
 
+proc cancelCommandLine*(e: Editor) =
+  ## Leave the command line without running it. Unlike Vim, the line does not
+  ## go into the history, since `@:` runs the newest entry.
+  e.state.commandCompletionManager.cancelCompletion()
+  # Cancel substitute preview and restore original content
+  e.cancelSubstitutePreview()
+  # Exit overlay and restore base mode
+  e.state.exitOverlay()
+  e.setMode(e.state.mode) # Sync window mode
+
+proc updateCompletionAfterEdit(e: Editor) =
+  ## Follow an edit of the command text with the completion menu and the
+  ## substitute preview.
+  let mgr = e.state.commandCompletionManager
+  if ' ' in e.state.input.commandText:
+    # Argument mode
+    mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
+  elif mgr.isActive():
+    let prefix = extractCommandPrefix(e.state.input.commandText)
+    mgr.updateFilter(prefix)
+  e.updateSubstitutePreviewIfNeeded()
+
+proc eraseInCommandLine(e: Editor, key: KeyCombo) =
+  ## Backspace or Delete on the command line, or leave it when it is empty.
+  let text = e.state.input.commandText
+  var
+    line =
+      if text.len > 0:
+        text[1 ..^ 1]
+      else:
+        ""
+    cursor = e.state.input.commandCursor
+  # An erase ends browsing the history even when it erases nothing.
+  e.state.input.commandState.historyIndex = -1
+  case erase(line, cursor, key)
+  of eoLeave:
+    e.cancelCommandLine()
+  of eoUnchanged:
+    discard
+  of eoErased:
+    e.state.input.commandText = ":" & line
+    e.state.input.commandCursor = cursor
+    e.updateCompletionAfterEdit()
+
+proc runCommandLine(e: Editor): ReplayOutcome =
+  ## Run the command line, or leave it when there is nothing after the `:`.
+  if e.state.input.commandText.len > 1:
+    # Full-lifecycle dispatch (pre-teardown, side effects, post-teardown)
+    # is centralised in executeCommandOverlay so the Command overlay Enter
+    # path and hrExecCommand (@:) share a single entry point.
+    return e.executeCommandOverlay(e.state.input.commandText)
+  e.cancelCommandLine()
+  roContinue
+
 proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
   ## Run `keyCombo` on the command line. Its mappings (`cmap`) have already
   ## had the key: a mapping's keys run here as keys of their own, so the ones
   ## after an Enter that ends the command line reach the mode it returns to.
-
-  # Handle Escape to exit Command mode and return to previous (base) mode
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
-    e.state.commandCompletionManager.cancelCompletion()
-    # Cancel substitute preview and restore original content
-    e.cancelSubstitutePreview()
-    # Exit overlay and restore base mode
-    e.state.exitOverlay()
-    e.setMode(e.state.mode) # Sync window mode
+  let key = promptKey(keyCombo, e.state.keyTyped)
+  case key
+  of pkLeave:
+    e.cancelCommandLine()
     return roContinue
+  of pkErase:
+    e.eraseInCommandLine(keyCombo)
+    return roContinue
+  of pkEnter, pkRun, pkOther:
+    discard
 
   # Handle Tab key for command completion
   if keyCombo.isSpecial and (keyCombo.special == skTab or keyCombo.special == skBackTab):
@@ -214,14 +268,11 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
           mgr.triggerCompletion(e.commandLineParser, e.state.input.commandText)
     return roContinue
 
-  # Handle Enter to execute command
-  let isEnter =
-    (keyCombo.isSpecial and keyCombo.special == skEnter) or
-    (not keyCombo.isSpecial and (keyCombo.char == "\n" or keyCombo.char == "\r"))
-
-  if isEnter:
+  # Handle Enter to execute command. An Esc a mapping put in runs the line as
+  # it stands, the completion Tab put in included.
+  if key in {pkEnter, pkRun}:
     # If completion popup is active with a selection, confirm it
-    if e.state.commandCompletionManager.isActive() and
+    if key == pkEnter and e.state.commandCompletionManager.isActive() and
         e.state.commandCompletionManager.menu.selectedIndex >= 0:
       let mgr = e.state.commandCompletionManager
       # Check if selected item is a directory (for file path mode)
@@ -242,19 +293,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
       if not shouldExecuteNow:
         return roContinue
       # Otherwise, fall through to execute the command immediately
-
-    if e.state.input.commandText.len > 1: # Must have something after :
-      # Full-lifecycle dispatch (pre-teardown, side effects, post-teardown)
-      # is centralised in executeCommandOverlay so the Command overlay Enter
-      # path and hrExecCommand (@:) share a single entry point.
-      return e.executeCommandOverlay(e.state.input.commandText)
-
-    # Empty command (just ":"): no dispatch, just return to base mode.
-    e.state.exitOverlay()
-    e.setMode(e.state.mode)
-    e.state.input.commandText = ""
-    e.state.input.commandCursor = 0
-    return roContinue
+    return e.runCommandLine()
 
   # Handle Left arrow - move cursor left
   if keyCombo.isSpecial and keyCombo.special == skLeft:
@@ -270,42 +309,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
     if e.state.input.commandCursor < maxPos:
       e.state.input.commandCursor += 1
       e.state.commandCompletionManager.cancelCompletion()
-    return roContinue
-
-  # Handle Backspace - delete character before cursor
-  if keyCombo.isSpecial and keyCombo.special == skBackspace:
-    e.state.input.commandState.historyIndex = -1
-    if e.state.input.commandCursor > 0 and e.state.input.commandText.charLen > 1:
-      # Delete the character before cursor (commandCursor is 0-based after ":")
-      let pos = e.state.input.commandCursor # Character position in commandText
-      e.state.input.commandText = e.state.input.commandText.deleteCharAt(pos)
-      e.state.input.commandCursor -= 1
-      # Update completion
-      let mgr = e.state.commandCompletionManager
-      if ' ' in e.state.input.commandText:
-        # Argument mode
-        mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
-      elif mgr.isActive():
-        let prefix = extractCommandPrefix(e.state.input.commandText)
-        mgr.updateFilter(prefix)
-      e.updateSubstitutePreviewIfNeeded()
-    return roContinue
-
-  # Handle Delete - delete character at cursor
-  if keyCombo.isSpecial and keyCombo.special == skDelete:
-    let charPos = e.state.input.commandCursor + 1
-      # Character position in commandText (after ":")
-    if charPos < e.state.input.commandText.charLen:
-      e.state.input.commandText = e.state.input.commandText.deleteCharAt(charPos)
-      # Update completion
-      let mgr = e.state.commandCompletionManager
-      if ' ' in e.state.input.commandText:
-        # Argument mode
-        mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
-      elif mgr.isActive():
-        let prefix = extractCommandPrefix(e.state.input.commandText)
-        mgr.updateFilter(prefix)
-      e.updateSubstitutePreviewIfNeeded()
     return roContinue
 
   # Handle Home - move cursor to beginning

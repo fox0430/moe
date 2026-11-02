@@ -1415,9 +1415,7 @@ proc handleInsertModeKey*(
     let cmd = route.command
     case cmd.kind
     of ctModeSwitch:
-      let isInterruptExit =
-        not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
-        keyCombo.char.toLowerAscii == "c" and cmd.name == "switch-to-normal"
+      let isInterruptExit = keyCombo.isCtrlC and cmd.name == "switch-to-normal"
       return handler.handleModeSwitch(cmd.targetMode, isInterruptExit)
     of ctOverlaySwitch:
       # Overlay switches not supported in insert mode

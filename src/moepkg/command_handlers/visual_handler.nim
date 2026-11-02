@@ -161,6 +161,16 @@ proc executeCommand*(
   else:
     return VisualModeResult(kind: vmrError, errorMessage: r.error)
 
+proc escapeVisual*(state: EditorState, registry: KeyBindingRegistry, ctrlC: bool) =
+  ## Escape or Ctrl-C in Visual mode, typed or replayed, as Vim's nv_esc: back
+  ## to the mode Visual was entered from, which may be a viewer. After Ctrl-o,
+  ## Ctrl-C also ends the wait to resume Insert; Escape keeps it.
+  if registry != nil:
+    discard state.pendingInput.cancelAll(registry)
+  if ctrlC:
+    state.insertResume = irNone
+  state.leaveVisual()
+
 proc handleVisualModeKey*(
     handler: VisualModeHandler,
     buffer: TextBuffer,
@@ -237,12 +247,8 @@ proc handleVisualModeKey*(
     # built, so a count or register typed before it goes.
     handler.keyBindingRegistry.clearSequence()
     # ESC/C-c with no user mapping returns to previousMode.
-    if (keyCombo.isSpecial and keyCombo.special == skEscape) or (
-      not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == "c"
-    ):
-      if handler.keyBindingRegistry != nil:
-        discard state.pendingInput.cancelAll(handler.keyBindingRegistry)
-      state.leaveVisual()
+    if (keyCombo.isSpecial and keyCombo.special == skEscape) or keyCombo.isCtrlC:
+      escapeVisual(state, handler.keyBindingRegistry, keyCombo.isCtrlC)
       return VisualModeResult(kind: vmrHandled, modeTransition: some(state.mode))
     return VisualModeResult(kind: vmrUnhandled)
 
