@@ -9204,13 +9204,13 @@ suite "handleKeyCombo - a command an operator cannot act over cancels it, as Vim
       check e.activeBuffer.getLine(0) == "bc def"
       check e.state.pendingInput.macroState.isRecording == false
 
-  test "the search line opens without it":
+  test "the command line opens without it":
     let e = createEditorForOperators("abc def ghi")
 
-    e.press("d", "/", "d", "e", "f", "Enter", "w")
+    e.press("d", ":", "Escape", "x")
 
-    check e.activeBuffer.getLine(0) == "abc def ghi"
-    check e.cursor.column == 8
+    check e.activeBuffer.getLine(0) == "bc def ghi"
+    check e.state.pendingInput.pendingOperator.isNone
 
   test "a motion, a text object, a mark and the operator again end it":
     for (keys, line) in [
@@ -10004,6 +10004,158 @@ suite "handleKeyCombo - an operator acts over what a motion finds, as Vim's do_p
     check g.cursor == BufferPosition(line: 0, column: 4)
     check g.state.registers.getRegisterContent('0') == "def"
 
+  proc search(e: Editor, prompt: string, pattern: string) =
+    ## `prompt` (`/` or `?`), `pattern` a key a character, then Enter.
+    e.press(prompt)
+    for c in pattern:
+      e.press($c)
+    e.press("Enter")
+
+  test "/ and ? stop short of the match they find, incsearch or not":
+    # Exclusive: one that ends at a line start stops at the end of the line
+    # before, and takes whole lines when it starts in the indent.
+    for incsearch in [false, true]:
+      for (content, line, column, keys, prompt, pattern, lines, deleted, cursor) in [
+        ("abcdef", 0, 0, @["d"], "/", "c", @["cdef"], "ab", 0),
+        ("abc\ndef", 0, 0, @["d"], "/", "e", @["ef"], "abc\nd", 0),
+        ("abc\ndef", 0, 0, @["d"], "/", "d", @["def"], "abc\n", 0),
+        ("abc\ndef", 0, 1, @["d"], "/", "d", @["a", "def"], "bc", 0),
+        ("  abc\ndef", 0, 1, @["d"], "/", "d", @["def"], "  abc\n", 0),
+        ("abcdef", 0, 4, @["d"], "?", "b", @["aef"], "bcd", 1),
+        ("abc\ndef", 1, 1, @["d"], "?", "b", @["aef"], "bc\nd", 1),
+        # From before the cursor, as the search wraps
+        ("xa\nya", 1, 0, @["d"], "/", "x", @["ya"], "xa\n", 0),
+        # The counts multiply, and wrap round the matches.
+        ("xcxcxc", 0, 0, @["d", "2"], "/", "c", @["cxc"], "xcx", 0),
+        ("xcxcxc", 0, 0, @["2", "d"], "/", "c", @["cxc"], "xcx", 0),
+        ("xcxcxcxcxc", 0, 0, @["2", "d", "2"], "/", "c", @["cxc"], "xcxcxcx", 0),
+        ("xcxc", 0, 0, @["d", "9"], "/", "c", @["cxc"], "x", 0),
+      ]:
+        let e = createEditorForOperators(content, line = line, column = column)
+        e.state.input.search.incsearch = incsearch
+
+        e.press(keys)
+        e.search(prompt, pattern)
+
+        checkpoint($incsearch & " " & content.escape & " " & $keys & prompt & pattern)
+        check e.lines == lines
+        check e.state.registers.getRegisterContent('"') == deleted
+        check e.state.registers.getRegisterContent('1') == deleted
+        check e.cursor == BufferPosition(line: 0, column: cursor)
+        check e.state.pendingInput.pendingOperator.isNone
+        check e.state.mode == EditorMode.Normal
+
+  test "y/ and c/ act from where the search began":
+    let y = createEditorForOperators("abc\ndef", column = 1)
+    y.press("y")
+    y.search("/", "e")
+    check y.state.registers.getRegisterContent('0') == "bc\nd"
+    check y.lines == @["abc", "def"]
+    check y.cursor == BufferPosition(line: 0, column: 1)
+
+    let c = createEditorForOperators("abcdef", column = 1)
+    c.press("c")
+    c.search("/", "d")
+    c.press("X", "Y", "Escape")
+    check c.lines == @["aXYdef"]
+    check c.cursor == BufferPosition(line: 0, column: 2)
+
+    let u = createEditorForOperators("abcdef")
+    u.press("g", "U")
+    u.search("/", "e")
+    check u.lines == @["ABCDef"]
+
+  test "/ with an operator is the last search, its way and a jump, as one without":
+    let e = createEditorForOperators("1a2b3a4b5b", column = 9)
+
+    e.press("d")
+    e.search("?", "a")
+
+    check e.lines == @["1a2b3b"]
+    check e.state.input.search.last.pattern == "a"
+    check e.state.input.search.last.direction == Backward
+    check e.state.input.search.history[0] == "a"
+    check e.state.jumpList.list.len == 1
+    check e.state.jumpList.list[0].column == 9
+
+    # The empty pattern repeats it, the way the prompt goes.
+    let r = createEditorForOperators("xaxaxa", column = 5)
+    r.search("/", "a")
+    r.press("$", "d")
+    r.search("?", "")
+    check r.lines == @["xaxa"]
+    check r.state.input.search.last.direction == Backward
+
+  test "an operator a search finds nothing for, or that is left, ends with no change":
+    for incsearch in [false, true]:
+      for (keys, message) in [
+        (@["d", "/", "z", "z", "z", "Enter"], "Pattern not found: zzz"),
+        (@["d", "/", "c", "Escape"], ""),
+        (@["d", "/", "Enter"], "E35: No previous regular expression"),
+      ]:
+        let e = createEditorForOperators("abcdef")
+        e.state.input.search.incsearch = incsearch
+
+        e.press(keys)
+
+        checkpoint($incsearch & " " & $keys)
+        check e.lines == @["abcdef"]
+        check e.cursor == BufferPosition(line: 0, column: 0)
+        check e.state.statusMessage == message
+        check e.state.pendingInput.pendingOperator.isNone
+        # The next key is a command of its own.
+        e.press("x")
+        check e.lines == @["bcdef"]
+
+  test "`.` searches for the pattern typed again, not the last search":
+    for (content, column, keys, lines) in [
+      ("1a2b3a4b5b", 0, @["d", "/", "b", "Enter", "."], @["b5b"]),
+      ("1a2b3a4b5b", 0, @["d", "/", "b", "Enter", "/", "a", "Enter", "."], @["b3b5b"]),
+      ("1b2b3b4b5b", 0, @["d", "/", "b", "Enter", "2", "."], @["b4b5b"]),
+      ("1a2b3a4b5b", 0, @["c", "/", "b", "Enter", "X", "Escape", "l", "."], @["XXb5b"]),
+      ("1a2b3a4b5b", 9, @["d", "?", "a", "Enter", "."], @["1b"]),
+    ]:
+      let e = createEditorForOperators(content, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.state.input.search.last.pattern == keys[2]
+
+    # One that finds nothing is not the change `.` repeats.
+    let x = createEditorForOperators("abcdef")
+    x.press("x", "d", "/", "z", "Enter", ".")
+    check x.lines == @["cdef"]
+
+    # It keeps whether a count was typed, as the other motions do.
+    for (keys, count, countGiven) in [
+      (@["d", "/", "b", "Enter"], 1, false),
+      (@["2", "d", "/", "b", "Enter"], 2, true),
+      (@["d", "3", "/", "b", "Enter"], 3, true),
+    ]:
+      let e = createEditorForOperators("1b2b3b4b5b")
+
+      e.press(keys)
+
+      checkpoint($keys)
+      let change = e.state.editState.lastEditCommand.get
+      check change.kind == lecOperatorMotion
+      check change.operand.count == count
+      check change.operand.countGiven == countGiven
+
+  test "Insert's Ctrl-o waits for the search and resumes after it":
+    for (pattern, lines) in [("d", @["aXdef"]), ("zzz", @["aXbcdef"])]:
+      let e = createEditorForOperators("abcdef", column = 1)
+
+      e.press("i", "C-o", "d")
+      e.search("/", pattern)
+      e.press("X")
+
+      checkpoint(pattern)
+      check e.lines == lines
+      check e.state.mode == EditorMode.Insert
+
 suite "handleKeyCombo - the registers a yank or delete fills, as Vim's op_yank and op_delete":
   # Expectations are Vim 9.2's, with "1-"3 holding R1-R3 beforehand.
   proc createEditorForRegisters(content: string): Editor =
@@ -10780,6 +10932,10 @@ suite "handleKeyCombo - Visual mode moves by Normal's motions, as in Vim":
   proc at(line, column: int): BufferPosition =
     BufferPosition(line: line, column: column)
 
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
   const Text = "foo(bar) baz\n  qux end  \nlast a"
 
   test "the motions Normal mode has extend the selection":
@@ -10837,6 +10993,46 @@ suite "handleKeyCombo - Visual mode moves by Normal's motions, as in Vim":
     for name in ["visual-move-end", "visual-move-word", "visual-move-down"]:
       check registry.commandRegistry.hasKey(name)
       check registry.commandRegistry[name].kind == ctMotion
+
+  test "/ and ? extend the selection to the match, incsearch or not":
+    for incsearch in [false, true]:
+      for (content, start, keys, lines) in [
+        ("abcdef", at(0, 0), @["v", "/", "d", "Enter", "d"], @["ef"]),
+        ("abcdef", at(0, 4), @["v", "?", "b", "Enter", "d"], @["af"]),
+        ("abc\ndef", at(0, 1), @["v", "/", "e", "Enter", "d"], @["af"]),
+        ("abc\ndef", at(0, 1), @["v", "j", "?", "a", "Enter", "d"], @["c", "def"]),
+        ("a\nb\nc\nd", at(0, 0), @["V", "/", "c", "Enter", "d"], @["d"]),
+        ("a\nb\nc\nd", at(3, 0), @["V", "?", "b", "Enter", "d"], @["a"]),
+        (
+          "abcd\nabcd\nabcd",
+          at(0, 0),
+          @["C-v", "/", "c", "Enter", "j", "d"],
+          @["d", "d", "abcd"],
+        ),
+        ("xcxcxc", at(0, 0), @["v", "2", "/", "c", "Enter", "d"], @["xc"]),
+        ("abcdef", at(0, 1), @["v", "/", "d", "Enter", "o", "d"], @["aef"]),
+        # One that finds nothing, or that is left, keeps the selection.
+        ("abcdef", at(0, 0), @["v", "/", "z", "Enter", "d"], @["bcdef"]),
+        ("abcdef", at(0, 0), @["v", "/", "c", "Escape", "d"], @["bcdef"]),
+      ]:
+        let e = createEditorForVisual(content, start.line, start.column)
+        e.state.input.search.incsearch = incsearch
+
+        e.press(keys)
+
+        checkpoint($incsearch & " " & content.escape & " " & $keys)
+        check e.lines == lines
+        check e.state.mode == EditorMode.Normal
+
+  test "a search in Visual mode is the last search and a jump":
+    let e = createEditorForVisual("abcdef")
+
+    e.press("v", "/", "d", "Enter")
+
+    check e.state.mode == EditorMode.Visual
+    check e.activeWindow.cursor == at(0, 3)
+    check e.state.input.search.last.pattern == "d"
+    check e.state.jumpList.list.len == 1
 
 suite "handleKeyCombo - the :s preview covers the lines :s runs on, as Vim's incsearch":
   proc createEditorForPreview(content: string, line: int): Editor =
@@ -11378,6 +11574,29 @@ suite "handleKeyCombo - a key that beeps or errs stops the register or mapping i
     check e.lines == @["abc"]
     check e.state.mode == EditorMode.Insert
 
+  test "a search an operator or Visual mode waits for stops it when it finds nothing":
+    for incsearch in [false, true]:
+      for (register, lines, mode) in [
+        ("d/zzz\rx", @["abc"], EditorMode.Normal),
+        ("v/zzz\rd", @["abc"], EditorMode.Visual),
+        ("i\x0fd/zzz\rx\e", @["abc"], EditorMode.Insert),
+        # One that acts over nothing goes on.
+        ("d/a\rx", @["bc"], EditorMode.Normal),
+      ]:
+        let e = createEditorForBeep("abc", incsearch = incsearch)
+        e.setRegister('a', keys(register))
+
+        e.press(keys("@a"))
+
+        checkpoint($incsearch & " " & register.escape)
+        check e.lines == lines
+        check e.state.mode == mode
+
+    let e = createEditorForBeep("ab\nab\nab")
+    e.setRegister('a', keys("d/b\rj0"))
+    e.press(keys("10@a"))
+    check e.lines == @["b", "b", "b"]
+
   test "a mapping's right-hand side stops at a search that finds nothing, the typed keys after it do not":
     let e = createEditorForBeep("abc")
     check e.executeCommandOverlay(":nnoremap Q / z z z Enter x") == roContinue
@@ -11422,6 +11641,22 @@ suite "n and N go the way the last search went":
 
   proc at(line, column: int): BufferPosition =
     BufferPosition(line: line, column: column)
+
+  test "a count before / or ? goes to that match, incsearch or not":
+    for incsearch in [false, true]:
+      for (keys, expected) in [
+        ("2/foo\r", at(2, 0)),
+        ("3?foo\r", at(2, 0)),
+        ("9/foo\r", at(4, 0)),
+        ("/foo\r2/\r", at(3, 0)),
+      ]:
+        let e = createEditorForSearch(0, 0)
+        e.state.input.search.incsearch = incsearch
+
+        e.typeKeys(keys)
+
+        checkpoint($incsearch & " " & keys.escape)
+        check e.activeWindow.cursor == expected
 
   test "each step lands where Vim's does":
     for (start, steps, expected) in [

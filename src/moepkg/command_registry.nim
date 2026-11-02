@@ -224,9 +224,17 @@ proc executeCommand*(
     of okCommand:
       ctx.state.enterCommandOverlay()
     of okSearch:
-      # Search direction is determined by command name
+      # `/` or `?`. A waiting operator waits on until Enter runs the search
+      # (`d/foo`), which goes to the match the counts make together (`2d3/x`,
+      # the sixth).
       let direction = if cmd.name == "switch-to-search-backward": Backward else: Forward
-      ctx.state.enterSearchOverlay(direction)
+      let op = ctx.state.pendingInput.pendingOperator
+      if op.isSome:
+        ctx.state.enterSearchOverlay(
+          direction, op.get.operandCount(cmd.count), op.get.countGiven or cmd.hasCount
+        )
+      else:
+        ctx.state.enterSearchOverlay(direction, cmd.count, cmd.hasCount)
     of okRename:
       # Rename is typically entered via LSP, not keybinding
       discard

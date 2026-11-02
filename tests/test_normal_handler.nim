@@ -130,11 +130,10 @@ suite "NormalModeHandler - Mode Switching":
     let state = createTestState()
     state.cursor = BufferPosition(line: 5, column: 10)
 
-    let result = handler.handleModeSwitchToOverlay(okSearch, state, "switch-to-search")
+    let result = handler.typeKeys(buf, state, createTestViewport(), "/")
 
     check result.kind == nmrHandled
-    check result.overlayTransition.isSome
-    check result.overlayTransition.get == okSearch
+    check state.isSearchOverlay
     check state.input.search.text == ""
     check state.input.search.direction == Forward
     check state.input.search.startPos.line == 5
@@ -146,12 +145,10 @@ suite "NormalModeHandler - Mode Switching":
     let state = createTestState()
     state.cursor = BufferPosition(line: 3, column: 5)
 
-    let result =
-      handler.handleModeSwitchToOverlay(okSearch, state, "switch-to-search-backward")
+    let result = handler.typeKeys(buf, state, createTestViewport(), "?")
 
     check result.kind == nmrHandled
-    check result.overlayTransition.isSome
-    check result.overlayTransition.get == okSearch
+    check state.isSearchOverlay
     check state.input.search.direction == Backward
 
   test "Switch to Visual mode":

@@ -114,9 +114,7 @@ suite "HandlerManager - Overlay Transitions":
     check r.overlayTransition.isSome
     check r.overlayTransition.get == okCommand
 
-  test "Forward slash key returns overlayTransition for search overlay":
-    ## This test ensures that pressing '/' in Normal mode returns
-    ## an overlayTransition to okSearch.
+  test "Forward slash key opens the search overlay":
     let manager = createTestManager()
     let buffer = newTextBuffer()
     let state = createTestState()
@@ -130,12 +128,10 @@ suite "HandlerManager - Overlay Transitions":
     )
 
     check r.kind == hrHandled
-    check r.overlayTransition.isSome
-    check r.overlayTransition.get == okSearch
+    check state.isSearchOverlay
+    check state.input.search.direction == Forward
 
-  test "Question mark key returns overlayTransition for backward search overlay":
-    ## This test ensures that pressing '?' in Normal mode returns
-    ## an overlayTransition to okSearch (backward direction).
+  test "Question mark key opens the backward search overlay":
     let manager = createTestManager()
     let buffer = newTextBuffer()
     let state = createTestState()
@@ -149,8 +145,8 @@ suite "HandlerManager - Overlay Transitions":
     )
 
     check r.kind == hrHandled
-    check r.overlayTransition.isSome
-    check r.overlayTransition.get == okSearch
+    check state.isSearchOverlay
+    check state.input.search.direction == Backward
 
 suite "HandlerManager - getOverlayTransition helper":
   test "getOverlayTransition returns overlay from hrHandled result":

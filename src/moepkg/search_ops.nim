@@ -18,8 +18,9 @@
 #[############################################################################]#
 
 ## Searches as Normal mode and the viewers run them: the case a search
-## ignores, the way it goes, stepping over its matches, the search * and # make
-## of the text under the cursor (Vim's nv_ident) and n/N repeating the last one.
+## ignores, the way it goes, stepping over its matches, the search / and ?
+## make of what is typed after them, the search * and # make of the text under
+## the cursor (Vim's nv_ident) and n/N repeating the last one.
 
 import std/options
 
@@ -72,6 +73,72 @@ proc stepMatches*(
     if result == first:
       left = left mod taken
 
+proc findCounted*(
+    state: EditorState,
+    b: TextBuffer,
+    spec: SearchSpec,
+    pos: BufferPosition,
+    count: int,
+    direction = spec.direction,
+): Option[BufferPosition] =
+  ## The `count`-th match of `spec` from `pos`, the way `direction` goes.
+  let ignoreCase = state.input.search.ignoresCase(spec)
+  proc step(pos: BufferPosition): Option[BufferPosition] =
+    b.findMatch(spec, pos, ignoreCase, direction)
+
+  let first = step(pos)
+  if first.isSome:
+    some(stepMatches(first.get, count, step))
+  else:
+    none(BufferPosition)
+
+proc addSearchHistory*(state: EditorState, pattern: string) =
+  ## Push `pattern` onto the search history, most recent first, dropping an
+  ## older duplicate and trimming to the configured limit.
+  for i in countdown(state.input.search.history.high, 0):
+    if state.input.search.history[i] == pattern:
+      state.input.search.history.delete(i)
+
+  state.input.search.history.insert(pattern, 0)
+
+  let historyLimit = state.config.persist.searchHistoryLimit
+  if state.input.search.history.len > historyLimit:
+    state.input.search.history.setLen(historyLimit)
+
+proc submitSearch*(
+    state: EditorState, typed: string, direction: SearchDirection
+): Option[SearchSpec] =
+  ## Make what was typed after / or ? (`direction`) the last search, as Enter
+  ## does. An empty one repeats the last, history entry and how it matches
+  ## included (a * search stays one); either goes `direction`, and so does n
+  ## after it. None, with E35, when there is nothing to repeat.
+  let isRepeat = typed.len == 0
+  if isRepeat and state.input.search.last.pattern.len == 0:
+    state.statusMessage = "E35: No previous regular expression"
+    return none(SearchSpec)
+  state.input.search.hlsearchTempDisabled = false
+  if not isRepeat:
+    state.input.search.last = SearchSpec(pattern: typed)
+    state.addSearchHistory(typed)
+  state.input.search.last.direction = direction
+  some(state.input.search.last)
+
+proc searchSubmitted*(
+    state: EditorState, b: TextBuffer, spec: SearchSpec, pos: BufferPosition, count: int
+): Option[BufferPosition] =
+  ## The `count`-th match of `spec` from `pos`, as Enter after / or ? finds
+  ## it, with the message it leaves.
+  result = state.findCounted(b, spec, pos, count)
+  # * and # match literally.
+  state.statusMessage =
+    if result.isSome:
+      "Found: " & spec.pattern
+    elif spec.match != smRegex or
+      compileSearchRegex(spec.pattern, state.input.search.ignoresCase(spec)).isSome:
+      "Pattern not found: " & spec.pattern
+    else:
+      "Invalid regex: " & spec.pattern
+
 proc searchIdent*(
     state: EditorState,
     b: TextBuffer,
@@ -98,17 +165,15 @@ proc searchIdent*(
   state.input.search.last = spec
   state.input.search.hlsearchTempDisabled = false
 
-  let ignoreCase = state.input.search.ignoresCase(spec)
-  proc step(pos: BufferPosition): Option[BufferPosition] =
-    b.findMatch(spec, pos, ignoreCase)
-
-  let first = step(BufferPosition(line: pos.line, column: ident.startCol))
-  if first.isNone:
+  let match = state.findCounted(
+    b, spec, BufferPosition(line: pos.line, column: ident.startCol), count
+  )
+  if match.isNone:
     state.statusMessage = "Pattern not found: " & spec.pattern
     return err("Pattern not found")
 
   state.statusMessage = "Found: " & spec.pattern
-  ok(stepMatches(first.get, count, step))
+  ok(match.get)
 
 proc searchLast*(
     state: EditorState, b: TextBuffer, pos: BufferPosition, reverse: bool, count: int
@@ -129,14 +194,11 @@ proc searchLast*(
     state.statusMessage = "Invalid regex: " & spec.pattern
     return err("Invalid regex")
 
-  let direction = repeatDirection(spec.direction, reverse)
-  proc step(pos: BufferPosition): Option[BufferPosition] =
-    b.findMatch(spec, pos, ignoreCase, direction)
-
-  let first = step(pos)
-  if first.isNone:
+  let found =
+    state.findCounted(b, spec, pos, count, repeatDirection(spec.direction, reverse))
+  if found.isNone:
     state.statusMessage = "Pattern not found: " & spec.pattern
     return err("Pattern not found")
 
   state.statusMessage = "Found: " & spec.pattern
-  ok(stepMatches(first.get, count, step))
+  ok(found.get)

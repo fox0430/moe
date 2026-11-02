@@ -301,6 +301,13 @@ proc register*(
   if id.kind == ckBuiltin and id.builtin != bcNone:
     registry.builtinCommands[id.builtin] = cmd
 
+proc searchMatchTarget*(op: PendingOperator, match: BufferPosition): MotionTarget =
+  ## A search as a motion (`d/foo`, `dn`): the operator takes up to the match,
+  ## not including it, as Vim's normal_search.
+  MotionTarget(
+    start: op.startPos, finish: match, motionType: mtExclusive, useRegOne: true
+  )
+
 proc registerTarget*(registry: CommandRegistry, id: string, finder: TargetFinder) =
   ## Let a waiting operator act over the command `id` (`dn`), up to `finder`'s
   ## place.

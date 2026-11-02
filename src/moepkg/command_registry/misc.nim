@@ -319,14 +319,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     proc(
         ctx: CommandContext, op: PendingOperator, count: int, countGiven: bool
     ): Result[Option[MotionTarget], string] =
-      let match = ?findMatch(ctx, count)
-      ok(
-        some(
-          MotionTarget(
-            start: op.startPos, finish: match, motionType: mtExclusive, useRegOne: true
-          )
-        )
-      )
+      ok(some(op.searchMatchTarget(?findMatch(ctx, count))))
 
   proc findNextMatch(ctx: CommandContext, count: int): Result[BufferPosition, string] =
     ctx.findLastSearch(reverse = false, count)

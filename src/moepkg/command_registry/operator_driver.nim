@@ -24,7 +24,7 @@ import std/[options, tables, unicode]
 
 import pkg/results
 
-import ../[types, motion, key_bindings, unicode_utils, modes]
+import ../[types, motion, key_bindings, unicode_utils, modes, search_ops]
 import ../buffer/[core, fold]
 
 import core, operator_engine, insert_entry
@@ -224,6 +224,20 @@ proc markTarget(
     )
   )
 
+proc searchTarget(
+    ctx: CommandContext, op: PendingOperator, operand: Operand
+): Result[Option[MotionTarget], string] =
+  ## / or ? with what was typed after it, made the last search.
+  let spec = ctx.state.submitSearch(operand.searchText, operand.searchDirection)
+  if spec.isNone:
+    return err(ctx.state.statusMessage)
+  let match =
+    ctx.state.searchSubmitted(ctx.buffer, spec.get, op.startPos, operand.count)
+  if match.isNone:
+    return err(ctx.state.statusMessage)
+  recordJump(ctx.state, op.startPos)
+  ok(some(op.searchMatchTarget(match.get)))
+
 proc wordTarget(ctx: CommandContext, operand: Operand): Option[MotionTarget] =
   ## iw aw iW aW. When the words run out the operator does nothing, and the
   ## cursor stays as far as Vim's current_word went.
@@ -380,6 +394,8 @@ proc finishOperator*(
       if operand.commandId notin registry.targets:
         return err("Not a motion: " & operand.commandId)
       ?registry.targets[operand.commandId](ctx, op, operand.count, operand.countGiven)
+    of odSearch:
+      ?ctx.searchTarget(op, operand)
     of odLines:
       ctx.linesTarget(op, operand)
   if target.isNone:

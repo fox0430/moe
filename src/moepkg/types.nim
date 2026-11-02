@@ -326,6 +326,8 @@ type
     startPos*: BufferPosition # Cursor position when search mode started (for incsearch)
     startView*: Option[ViewState]
       # What the window showed then, put back before each incsearch match
+    count*: int # The count typed before / or ?: which match the search goes to
+    countGiven*: bool # Whether one was typed, before a waiting operator too
     # Search behavior settings
     ignorecase*: bool # Ignore case in search patterns
     smartcase*: bool # Override ignorecase if pattern contains uppercase
@@ -661,6 +663,7 @@ type
     odMotion ## A cursor motion, f/F/t/T with their character
     odMark ## ' or ` to a named mark
     odCommand ## A registered command that finds a place (n, *, gn)
+    odSearch ## / or ? with the pattern typed after it (`d/foo`)
     odTextObject
     odLines ## The operator's own key again, over lines (`dd`, `3>>`)
 
@@ -677,6 +680,9 @@ type
       markLinewise*: bool
     of odCommand:
       commandId*: string
+    of odSearch:
+      searchText*: string ## As typed: an empty one repeats the last search
+      searchDirection*: SearchDirection
     of odTextObject:
       textObjectModifier*: TextObjectModifier
       textObjectKind*: TextObjectKind
@@ -1773,11 +1779,15 @@ proc noteSearchStart*(state: EditorState) =
     else:
       some(state.activeWindow.viewport.viewState)
 
-proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
-  ## Enter search mode overlay
+proc enterSearchOverlay*(
+    state: EditorState, direction: SearchDirection, count = 1, countGiven = false
+) =
+  ## Enter search mode overlay, for the `count`-th match (`3/foo`)
   ## The base mode (Normal, LogViewer, etc.) is preserved
   state.overlay = some(okSearch)
   state.input.search.direction = direction
+  state.input.search.count = max(1, count)
+  state.input.search.countGiven = countGiven
   state.input.search.text = ""
   state.input.search.cursor = 0
   state.noteSearchStart()
