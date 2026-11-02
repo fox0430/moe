@@ -247,7 +247,7 @@ proc handleVisualModeKey*(
     # built, so a count or register typed before it goes.
     handler.keyBindingRegistry.clearSequence()
     # ESC/C-c with no user mapping returns to previousMode.
-    if (keyCombo.isSpecial and keyCombo.special == skEscape) or keyCombo.isCtrlC:
+    if keyCombo.isEscOrCtrlC:
       escapeVisual(state, handler.keyBindingRegistry, keyCombo.isCtrlC)
       return VisualModeResult(kind: vmrHandled, modeTransition: some(state.mode))
     return VisualModeResult(kind: vmrUnhandled)

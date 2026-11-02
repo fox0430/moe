@@ -57,7 +57,6 @@ type
     of imrHandled:
       modeTransition*: Option[EditorMode]
       overlayTransition*: Option[OverlayKind]
-      isInterruptExit*: bool
       isCtrlOExit*: bool # Leaves for one Normal mode command (Ctrl-o)
       typedBefore*: seq[TypedInput]
         # What the key did that typing it again would not (a completion taken,
@@ -252,13 +251,11 @@ proc closeInsertPopups*(handler: InsertModeHandler) =
   handler.signatureHelpManager.hide()
 
 proc handleModeSwitch*(
-    handler: InsertModeHandler, targetMode: EditorMode, isInterruptExit = false
+    handler: InsertModeHandler, targetMode: EditorMode
 ): InsertModeResult =
   ## Handle mode switching from insert mode
   handler.closeInsertPopups()
-  return InsertModeResult(
-    kind: imrHandled, modeTransition: some(targetMode), isInterruptExit: isInterruptExit
-  )
+  return InsertModeResult(kind: imrHandled, modeTransition: some(targetMode))
 
 proc charOffsetToBufferPos(
     insertText: string, charOffset: int, startLine, startCol: int
@@ -1415,8 +1412,7 @@ proc handleInsertModeKey*(
     let cmd = route.command
     case cmd.kind
     of ctModeSwitch:
-      let isInterruptExit = keyCombo.isCtrlC and cmd.name == "switch-to-normal"
-      return handler.handleModeSwitch(cmd.targetMode, isInterruptExit)
+      return handler.handleModeSwitch(cmd.targetMode)
     of ctOverlaySwitch:
       # Overlay switches not supported in insert mode
       return InsertModeResult(kind: imrUnhandled)

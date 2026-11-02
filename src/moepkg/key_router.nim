@@ -50,6 +50,8 @@
 ##   (`hasActiveBuiltinSequence`/`clearBuiltinSequence`/`cancel` below), so
 ##   "router = single decode entry point" holds at the API level as-is.
 
+import std/tables
+
 import key_router/types
 import key_bindings except Command
 import modes
@@ -117,6 +119,28 @@ proc mappingsFor(router: KeyRouter, mode: EditorMode): seq[RuntimeKeyMapping] =
     router.registry.getRuntimeKeySeqMappings(mode)
   else:
     router.registry.getAllRuntimeMappings(mode)
+
+proc startsMapping*(router: KeyRouter, mode: EditorMode, key: KeyCombo): bool =
+  ## True when a mapping of `mode` starts with `key`, as the router matches
+  ## keys. A typed Ctrl-C one does is a key, not an interrupt, as Vim's
+  ## mapped_ctrl_c. The command line runs only key-sequence mappings; the
+  ## modes with key bindings also run command mappings through them, and the
+  ## Visual Line and Visual Block ones Visual's as well.
+  proc starts(mode: EditorMode, kinds: set[RuntimeMappingKind]): bool =
+    router.registry.runtimeMappings.withValue(mode, mappings):
+      for m in mappings[]:
+        if m.kind in kinds and m.triggerKeys.len > 0 and m.triggerKeys[0] == key:
+          return true
+
+  case mode
+  of EditorMode.Command:
+    starts(mode, {rmkKeySequence})
+  of EditorMode.VisualLine, EditorMode.VisualBlock:
+    starts(mode, {rmkKeySequence, rmkCommand}) or starts(
+      EditorMode.Visual, {rmkCommand}
+    )
+  else:
+    starts(mode, {rmkKeySequence, rmkCommand})
 
 proc leadingMapping(
     keys: seq[KeyCombo], mappings: seq[RuntimeKeyMapping]

@@ -24,7 +24,8 @@
 ## - Search mode event handling helpers
 
 import std/[unittest, options, tables, os, osproc, times, posix]
-from std/strutils import contains, continuesWith, endsWith, escape, join, repeat, strip
+from std/strutils import
+  contains, continuesWith, endsWith, escape, join, repeat, split, strip
 
 import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
@@ -36,7 +37,7 @@ import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
     render_utils, clipboard, message_log, frontend_input, pending_input, key_router,
-    completion, signature_help, macro_recording, wanted_column,
+    completion, signature_help, macro_recording, wanted_column, hover_popup,
   ]
 import ../src/moepkg/handler {.all.}
 from ../src/moepkg/command_completion import isActive
@@ -5711,6 +5712,23 @@ suite "forced Insert mode":
     check e.state.mode == EditorMode.Normal
     check not e.activeBuffer.inTransaction
 
+  test "a typed Ctrl-C meets the mappings of the mode the policy restores":
+    # Normal mode maps Ctrl-C, Insert mode does not: the policy puts the
+    # window back in Insert before the key, where Ctrl-C interrupts and drops
+    # the held `j`.
+    let e = createForcedInsertEditor()
+    check e.executeCommandOverlay(":inoremap jk Escape") == roContinue
+    check e.executeCommandOverlay(":nnoremap C-c d l") == roContinue
+    check e.handleKeyCombo(charKey("j"))
+    check e.keyRouter.isHoldingKeys
+    e.setMode(EditorMode.Normal)
+
+    check e.handleInterrupt()
+
+    check e.state.mode == EditorMode.Insert
+    check not e.keyRouter.isHoldingKeys
+    check $e.activeBuffer.getLine(0) == ""
+
   test "policy restores a directly assigned Normal mode":
     let e = createForcedInsertEditor()
 
@@ -6132,6 +6150,219 @@ suite "The search prompt and the command line end as Vim's getcmdline":
         checkpoint($incsearch & " " & $by & " " & s.escape)
         check e.state.input.search.history == history
         check e.state.input.search.last.pattern == pattern
+
+suite "A typed Ctrl-C interrupts as Vim's got_int":
+  # A typed Ctrl-C is the Ctrl-C key and an interrupt; one a register or a
+  # mapping puts in is the key alone. Expected values are measured in Vim 9.2
+  # with the keys typed into a terminal.
+  proc createEditorForInterrupt(text: string): Editor =
+    result = createTestEditorWithBuffer(text)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.registers = initRegisters()
+
+  proc press(e: Editor, keys: openArray[string]) =
+    ## A typed Ctrl-C comes as the terminal's interrupt.
+    for key in keys:
+      if key == "C-c":
+        check e.handleInterrupt()
+      else:
+        check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc fromRegister(e: Editor, keys: openArray[string]) =
+    var stored: seq[string]
+    for key in keys:
+      stored.add keyComboToString(parseKeyCombo(key).get)
+    e.state.pendingInput.macroState.registers['a'] = stored
+    e.press(["@", "a"])
+
+  proc mapping(e: Editor, line: string) =
+    check e.executeCommandOverlay(":" & line) == roContinue
+
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  test "a typed Ctrl-C ends a counted insert at once, one put in types it again":
+    for (ks, typed, putIn) in [
+      ("3 i f o o C-c", @["fooabc"], @["foofoofooabc"]),
+      ("2 o f o o C-c", @["abc", "foo"], @["abc", "foo", "foo"]),
+    ]:
+      let e = createEditorForInterrupt("abc")
+      e.press(ks.split(' '))
+      checkpoint("typed " & ks)
+      check e.lines == typed
+      check e.state.mode == EditorMode.Normal
+
+      let r = createEditorForInterrupt("abc")
+      r.fromRegister(ks.split(' '))
+      checkpoint("register " & ks)
+      check r.lines == putIn
+      check r.state.mode == EditorMode.Normal
+
+      let m = createEditorForInterrupt("abc")
+      m.mapping("nnoremap X " & ks)
+      m.press(["X"])
+      checkpoint("mapping " & ks)
+      check m.lines == putIn
+
+  test "a typed Ctrl-C leaves a block insert on its first line, one put in copies it":
+    for (ks, typed, typedCursor, putIn, putInCursor) in [
+      (
+        "l C-v j j I X Y C-c",
+        @["aXYbcd", "abcd", "abcd"],
+        2,
+        @["aXYbcd", "aXYbcd", "aXYbcd"],
+        1,
+      ),
+      (
+        "l C-v j j A X Y C-c",
+        @["abXYcd", "abcd", "abcd"],
+        3,
+        @["abXYcd", "abXYcd", "abXYcd"],
+        1,
+      ),
+      # The block goes from every line before the typing starts.
+      ("l C-v j j l c X Y C-c", @["aXYd", "ad", "ad"], 2, @["aXYd", "aXYd", "aXYd"], 2),
+    ]:
+      let e = createEditorForInterrupt("abcd\nabcd\nabcd")
+      e.press(ks.split(' '))
+      checkpoint("typed " & ks)
+      check e.lines == typed
+      check e.activeWindow.cursor == BufferPosition(line: 0, column: typedCursor)
+      check e.state.editState.visualBlockInsertContext.isNone
+
+      let r = createEditorForInterrupt("abcd\nabcd\nabcd")
+      r.fromRegister(ks.split(' '))
+      checkpoint("register " & ks)
+      check r.lines == putIn
+      check r.activeWindow.cursor == BufferPosition(line: 0, column: putInCursor)
+
+  test "a mapping of Ctrl-C takes the typed one, which then does not interrupt":
+    for (map, ks, expected) in [
+      ("inoremap C-c Escape", "3 i f o o C-c", "foofoofooabc"),
+      ("nnoremap C-c d l", "C-c", "bc"),
+      ("vnoremap C-c d", "v l C-c", "c"),
+    ]:
+      let e = createEditorForInterrupt("abc")
+      e.mapping(map)
+      e.press(ks.split(' '))
+      checkpoint(map)
+      check e.lines == @[expected]
+      check e.state.mode == EditorMode.Normal
+      check "qa" notin e.state.statusMessage
+
+  test "Esc and Ctrl-C end an operator before a Normal mapping of them, not a count":
+    # Vim maps an operator's motion with omap only; a count goes with the
+    # mapping.
+    for (key, typed) in [("Escape", true), ("C-c", true), ("C-c", false)]:
+      for (text, ks, expected) in [
+        ("abc\ndef", @["d", key, "x"], @["bc", "def"]),
+        ("abcdef", @["3", key], @["def"]),
+      ]:
+        let e = createEditorForInterrupt(text)
+        e.mapping("nnoremap " & key & " d l")
+
+        if typed:
+          e.press(ks)
+        else:
+          e.fromRegister(ks)
+
+        checkpoint(key & " " & $typed & " " & $ks)
+        check e.lines == expected
+        check e.state.mode == EditorMode.Normal
+
+  test "a typed Ctrl-C drops the keys held for a mapping":
+    let e = createEditorForInterrupt("abc")
+    e.mapping("inoremap jk Escape")
+    e.press(["i", "f", "o", "o", "j"])
+    check e.keyRouter.isHoldingKeys
+
+    e.press(["C-c", "x"])
+
+    check e.lines == @["foabc"]
+    check e.state.mode == EditorMode.Normal
+    check not e.keyRouter.isHoldingKeys
+
+  test "Ctrl-C leaves the rename line as Esc does, however it came":
+    for typed in [true, false]:
+      let e = createEditorForInterrupt("abc")
+      e.state.enterRenameOverlay("abc", 0, 0)
+      e.state.renameState.text = "abcd"
+
+      if typed:
+        check e.handleInterrupt()
+      else:
+        discard e.handlerManager.runKeyCombo(e, CtrlC)
+
+      checkpoint($typed)
+      check not e.state.isRenameOverlay
+      check e.state.statusMessage == "Rename cancelled"
+
+  test "Ctrl-C closes a hover popup K opened, and goes on past an automatic one":
+    # Vim's Ctrl-C closes a popup with a filter; one without takes no keys.
+    for auto in [false, true]:
+      let e = createEditorForInterrupt("abc")
+      e.state.lspCache.hoverPopup.show("docs", 0, 0)
+      e.state.lspCache.hoverPopup.isAutoHover = auto
+
+      check e.handleInterrupt()
+
+      checkpoint($auto)
+      check not e.state.lspCache.hoverPopup.isActive
+      check ("qa" in e.state.statusMessage) == auto
+
+  test "a typed Ctrl-C leaves a window scrolled off the cursor as it shows":
+    # As input that is not a key, unlike the keys that take the window back.
+    var text = ""
+    for i in 0 ..< 100:
+      text.add "line " & $i & "\n"
+    let e = createEditorForInterrupt(text)
+    e.viewport.topLine = 50
+    e.viewport.detachedFromCursor = true
+
+    check e.handleInterrupt()
+
+    check e.viewport.detachedFromCursor
+    check e.viewport.topLine == 50
+
+  test "the rename line ends and erases as the command line does":
+    # As Vim's input(): an Esc put in runs it, an erase on an empty line
+    # leaves it.
+    for (keys, typed, text, open, message) in [
+      (@["Escape"], true, "abcd", false, "Rename cancelled"),
+      (@["Escape"], false, "abc", false, "Rename cancelled: same name"),
+      (@["Backspace"], true, "", false, "Rename cancelled"),
+      (@["C-h"], true, "abcd", true, ""),
+      (@["Delete"], true, "abcd", true, ""),
+      (@["C-m"], true, "abc", false, "Rename cancelled: same name"),
+    ]:
+      let e = createEditorForInterrupt("abc")
+      e.state.enterRenameOverlay("abc", 0, 0)
+      e.state.renameState.text = text
+
+      for key in keys:
+        if typed:
+          check e.handleKeyCombo(parseKeyCombo(key).get)
+        else:
+          discard e.handlerManager.runKeyCombo(e, parseKeyCombo(key).get)
+
+      checkpoint($keys & " " & $typed & " " & text)
+      check e.state.isRenameOverlay == open
+      if open:
+        check e.state.renameState.text == "abc"
+      else:
+        check e.state.statusMessage == message
+
+  test "Ctrl-C closes the CodeLens picker as Esc does":
+    let e = createEditorForInterrupt("abc")
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[CodeLensItem(line: 0, title: "run", command: "run")], isActive: true
+    )
+
+    check e.handleInterrupt()
+
+    check not e.state.lspCache.codeLensPicker.isActive
+    check "qa" notin e.state.statusMessage
 
 suite "updateViewportReservedLines - steady reserve":
   test "Multi-line status message keeps the motion reserve steady":
@@ -6829,6 +7060,17 @@ suite "Ctrl-C in Terminal mode":
 
     check e.activeWindow.modeState.terminal.pty.droppableBytes == 0
 
+  test "Ctrl-C the hit-enter prompt takes leaves the queued paste draining":
+    for subMode in [tsmNormal, tsmInput]:
+      let e = createTerminalEditorWithPaste(subMode)
+      e.state.ui.tempMessages = @["message"]
+
+      check e.handleInterrupt()
+
+      checkpoint($subMode)
+      check e.state.ui.tempMessages.len == 0
+      check e.activeWindow.modeState.terminal.pty.droppableBytes == 5
+
   test "Ctrl-C meant for an overlay leaves the queued paste draining":
     let e = createTerminalEditorWithPaste()
     e.state.enterCommandOverlay()
@@ -6896,16 +7138,31 @@ suite "gn - the match becomes the selection":
 
 suite "handleInterrupt - Visual":
   test "Ctrl-C leaves Visual like Esc, back to the mode it was entered from":
+    for leave in ["Escape", "C-c"]:
+      let e = createTestEditorWithBuffer("hello world")
+      e.motionController.bindToWindow(e.activeWindow)
+      for i in 0 ..< 3:
+        addMessageLog("log line " & $i & " to select from")
+      for key in [":", "l", "o", "g", "Enter", "j", "v", "l", "l", "l", "l"]:
+        check e.handleKeyCombo(parseKeyCombo(key).get)
+      check e.state.mode == EditorMode.Visual
+      let cursor = e.cursor
+
+      check e.handleKeyCombo(parseKeyCombo(leave).get)
+
+      checkpoint(leave)
+      check e.state.mode == EditorMode.LogViewer
+      check e.cursor == cursor
+
+  test "Ctrl-C leaves the cursor where Visual had it, unlike leaving Insert":
     let e = createTestEditorWithBuffer("hello world")
     e.state.selectVisual(
       BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
     )
-    e.state.previousMode = EditorMode.LogViewer
 
     check e.handleInterrupt()
 
-    check e.state.mode == EditorMode.LogViewer
-    # Unlike leaving Insert, the cursor stays put.
+    check e.state.mode == EditorMode.Normal
     check e.cursor == BufferPosition(line: 0, column: 4)
 
   test "switching the Visual kind keeps the mode Visual was entered from":
@@ -8163,6 +8420,18 @@ suite "handleKeyCombo - page scrolls":
     check not e.state.windowDisplay.scrollAnimation.active
     check e.top == settled.top
     check e.cursor == settled.cursor
+
+  test "a typed Ctrl-C stops a smooth scroll where it shows, which a key finishes":
+    let e = createEditorForPages(smooth = true)
+    e.press("C-f")
+    discard e.updateForFrame(newBuffer(80, 24))
+    check e.state.windowDisplay.scrollAnimation.active
+    let shown = e.top
+
+    check e.handleInterrupt()
+
+    check not e.state.windowDisplay.scrollAnimation.active
+    check e.top == shown
 
   test "a key replayed during a smooth scroll runs where it ends":
     let typed = createEditorForPages(smooth = true)

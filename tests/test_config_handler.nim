@@ -530,6 +530,26 @@ suite "config_handler: Edit Mode":
       check result.kind == cmrHandled
       check configState.isEditing() == false
 
+  test "Ctrl-C cancels an edit as Escape does":
+    let configState = createTestConfigState()
+    let editorState = createTestEditorState()
+
+    var intIndex = -1
+    for i, item in configState.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    check intIndex >= 0
+    configState.selectedIndex = intIndex
+    configState.startEdit()
+    check configState.isEditing()
+
+    let result = handleConfigModeKey(configState, editorState, 24, CtrlC)
+
+    check result.kind == cmrHandled
+    check not configState.isEditing()
+
   test "Confirm edit with Enter":
     let configState = createTestConfigState()
     let editorState = createTestEditorState()
@@ -734,6 +754,26 @@ suite "config_handler: Enum Popup":
 
       check result.kind == cmrHandled
       check configState.isEnumPopupOpen() == false
+
+  test "Ctrl-C closes the enum popup as Escape does":
+    let configState = createTestConfigState()
+    let editorState = createTestEditorState()
+
+    var enumIndex = -1
+    for i, item in configState.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    check enumIndex >= 0
+    configState.selectedIndex = enumIndex
+    configState.openEnumPopup()
+    check configState.isEnumPopupOpen()
+
+    let result = handleConfigModeKey(configState, editorState, 24, CtrlC)
+
+    check result.kind == cmrHandled
+    check not configState.isEnumPopupOpen()
 
   test "Confirm enum popup with Enter":
     let configState = createTestConfigState()
