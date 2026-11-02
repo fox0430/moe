@@ -71,4 +71,4 @@ when defined(moe.embedded):
 else:
   import pkg/celina
 
-  export celina
+  export celina except Viewport, ViewportKind

@@ -21,7 +21,7 @@
 ## This module tests window and line rendering procedures
 
 import std/[unittest, options, strutils, tables, unicode]
-import pkg/celina
+import ../src/moepkg/celina_backend
 import visual_test_helper
 import
   ../src/moepkg/[
