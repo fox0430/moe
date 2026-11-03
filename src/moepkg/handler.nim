@@ -70,7 +70,7 @@ import
     handler_manager, command_mode_handler, search_mode_handler, result_processor,
     command_passthrough,
   ]
-import prompt_keys
+import prompt_line
 export command_mode_handler, search_mode_handler, cursor_util, frontend_input
 
 proc addRunningProcess*(e: Editor, p: BackgroundProcess, label = "", path = "") =
@@ -129,42 +129,32 @@ proc releaseExternalResources*(e: Editor) =
 
 proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in Rename mode - for LSP rename symbol input. It ends
-  ## and erases as the command line does (`promptKey`), as Vim's input():
+  ## and edits as the command line does (prompt_line), as Vim's input():
   ## Enter, and an Esc a mapping or a register puts in, run the rename; a
-  ## typed Esc, Ctrl-C and an erase on an empty line cancel it.
+  ## typed Esc and Ctrl-C cancel it. An erase on an empty line does not, as
+  ## the prompt has words of its own.
   ##
   ## Returns: true (event handled)
-  proc cancel(e: Editor) =
+  case e.state.input.line.takeKey(keyCombo, e.state.keyTyped)
+  of pkLeave:
     e.state.exitOverlay()
     e.setMode(e.state.mode) # Sync window mode
     e.state.statusMessage = "Rename cancelled"
-
-  case promptKey(keyCombo, e.state.keyTyped)
-  of pkLeave:
-    e.cancel()
   of pkEnter, pkRun:
-    let newName = e.state.renameState.text
+    let newName = e.state.input.line.text
+    e.state.exitOverlay()
+    e.setMode(e.state.mode) # Sync window mode
     if newName.len == 0:
       e.state.statusMessage = "Rename cancelled: empty name"
-      e.state.exitOverlay()
-      e.setMode(e.state.mode) # Sync window mode
     elif newName == e.state.renameState.originalWord:
       e.state.statusMessage = "Rename cancelled: same name"
-      e.state.exitOverlay()
-      e.setMode(e.state.mode) # Sync window mode
     else:
       # Execute the LSP rename asynchronously
-      e.state.exitOverlay()
-      e.setMode(e.state.mode) # Sync window mode
       asyncSpawn e.requestLspRename(newName)
-  of pkErase:
-    # Typing goes on at the end of the name.
-    var cursor = e.state.renameState.text.charLen
-    if erase(e.state.renameState.text, cursor, keyCombo) == eoLeave:
-      e.cancel()
   of pkOther:
-    if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-      e.state.renameState.text &= keyCombo.char
+    # No history of its own yet: Up and Down beep, as on an empty one.
+    if e.state.input.line.edit(keyCombo, @[]) == leBeep:
+      e.state.beep()
   true
 
 proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
@@ -282,14 +272,14 @@ when not defined(moe.embedded):
 
 type PasteSink = enum
   ## Where a paste goes. One precedence list for both paste paths.
-  psOverlay ## The Command / Search line, which owns the keys while it is up
+  psOverlay ## The prompt's line, which owns the keys while it is up
   psTerminal ## The child process of a Terminal window
   psBuffer ## The window's text buffer
 
 proc pasteSinkOf(e: Editor, window: EditorWindow): PasteSink =
   ## Where a paste into `window` would go. `window` need not hold the keys yet:
   ## a click resolves its target before it moves the focus there.
-  if e.state.isCommandOverlay or e.state.isSearchOverlay:
+  if e.state.isCommandOverlay or e.state.isSearchOverlay or e.state.isRenameOverlay:
     return psOverlay
   when not defined(moe.embedded):
     if window.mode == EditorMode.Terminal:
@@ -300,6 +290,15 @@ proc resolvePasteSink(e: Editor): PasteSink =
   ## The sink for the window that has the keys.
   e.pasteSinkOf(e.activeWindow)
 
+proc insertPastedTextInPrompt(e: Editor, text: string) =
+  ## A paste into the open prompt's line, which the prompt then follows.
+  if e.state.isCommandOverlay:
+    e.insertPastedTextInCommand(text)
+  elif e.state.isSearchOverlay:
+    e.insertPastedTextInSearch(text)
+  else:
+    discard e.state.input.line.insertPasted(text)
+
 proc handlePasteText(e: Editor, text: string): bool =
   ## Insert pasted text without triggering auto-indentation.
   e.state.armInsertResume()
@@ -309,10 +308,7 @@ proc handlePasteText(e: Editor, text: string): bool =
     let overlayText = text.sanitizeInvalidUtf8().normalizeNewlines()
     if overlayText.len == 0:
       return true
-    if e.state.isCommandOverlay:
-      e.insertPastedTextInCommand(overlayText)
-    else:
-      e.insertPastedTextInSearch(overlayText)
+    e.insertPastedTextInPrompt(overlayText)
     return true
   of psTerminal:
     when not defined(moe.embedded):
@@ -747,10 +743,7 @@ proc middleClickPaste(e: Editor, row, col: int) =
     let pastedText = readResult.get().normalizeNewlines()
     if pastedText.len == 0:
       return
-    if e.state.isCommandOverlay:
-      e.insertPastedTextInCommand(pastedText)
-    else:
-      e.insertPastedTextInSearch(pastedText)
+    e.insertPastedTextInPrompt(pastedText)
     return
   of psTerminal:
     when not defined(moe.embedded):

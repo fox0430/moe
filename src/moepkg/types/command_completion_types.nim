@@ -54,3 +54,6 @@ type
     baseCommand*: string ## The command being completed (for argument mode)
     argStartX*: int ## X position where argument starts (for popup positioning)
     originalDirPrefix*: string ## Original directory prefix when completion started
+    typedLine*: tuple[text: string, cursor: int]
+      ## The prompt line before a completion was selected, which comes back
+      ## when the selection goes round to none, as in Vim's wildmenu

@@ -123,12 +123,12 @@ proc effectiveSearchSpec(state: EditorState): SearchSpec =
   ## - Command overlay: substitute pattern if present, else last search
   ## - Otherwise: last search
   if state.isSearchOverlay:
-    if state.input.search.text.len > 0:
-      SearchSpec(pattern: state.input.search.text)
+    if state.input.line.text.len > 0:
+      SearchSpec(pattern: state.input.line.text)
     else:
       state.input.search.last
   elif state.isCommandOverlay:
-    let subPattern = extractSubstitutePattern(state.input.commandText)
+    let subPattern = extractSubstitutePattern(state.commandLine)
     if subPattern.len > 0:
       SearchSpec(pattern: subPattern)
     else:

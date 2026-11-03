@@ -22,7 +22,7 @@
 ## This module handles incremental search mode (/ and ? commands).
 ## Extracted from handler.nim to reduce file size.
 
-import std/[options, strutils]
+import std/options
 
 import pkg/results
 
@@ -30,16 +30,15 @@ import ../celina_backend as celina
 
 import
   ../[
-    editor, key_bindings, modes, buffer, types, help_viewer, config_mode, unicode_utils,
-    search_ops, fold_open, pending_input, prompt_keys,
+    editor, key_bindings, modes, buffer, types, help_viewer, config_mode, search_ops,
+    fold_open, pending_input, prompt_line,
   ]
 import ../command_registry/core
 import command_mode_handler, result_processor
 
 ## NOTE: While in Search Mode:
-## - Character input: Add to searchText, trigger performIncrementalSearch (if enabled)
-## - Backspace: Remove from searchText, trigger performIncrementalSearch (if enabled);
-##   on an empty prompt, cancel
+## - An edit of the line (prompt_line): trigger performIncrementalSearch (if
+##   enabled); an erase on an empty prompt cancels
 ## - Enter, or Escape a mapping or register put in: Save search, execute if
 ##   needed, return to Normal mode
 ## - Escape typed, Ctrl-C: Cancel search, restore cursor if incsearch, return to
@@ -174,7 +173,7 @@ proc finalizeSearch(e: Editor): bool =
   ## - Clear searchText buffer
   ##
   ## Returns whether the search found a match.
-  let typed = e.state.input.search.text
+  let typed = e.state.input.line.text
   if e.state.pendingInput.pendingOperator.isSome:
     result = e.operateOverSearch(typed)
   else:
@@ -200,8 +199,8 @@ proc cancelSearch*(e: Editor) =
   ## - Keeps what was typed in the history, as Vim's getcmdline does
   ## - Cancels an operator waiting for it (`d/foo<Esc>`), as Vim's clearop
 
-  if e.state.input.search.text.len > 0:
-    e.state.addSearchHistory(e.state.input.search.text)
+  if e.state.input.line.text.len > 0:
+    e.state.addSearchHistory(e.state.input.line.text)
   e.state.pendingInput.cancelOperatorPending()
   let cfg = e.activeConfigState()
   if cfg != nil:
@@ -217,9 +216,7 @@ proc cancelSearch*(e: Editor) =
 proc performIncrementalSearch(e: Editor) =
   ## Perform incremental search and update cursor position dynamically
   ##
-  ## Called when:
-  ## - Character is added to searchText (handleSearchCharacterInput)
-  ## - Character is removed from searchText (eraseInSearch)
+  ## Called after an edit of the line.
   ##
   ## Behavior:
   ## - Only executes if incsearch is enabled AND searchText is not empty
@@ -239,11 +236,11 @@ proc performIncrementalSearch(e: Editor) =
     # match (and an empty text matches none) restores the anchor, as the
     # buffer branch does.
     let forward = e.state.input.search.direction == Forward
-    if cfg.searchItems(e.state.input.search.text, cfg.searchStartIndex, forward).isNone:
+    if cfg.searchItems(e.state.input.line.text, cfg.searchStartIndex, forward).isNone:
       cfg.selectedIndex = cfg.searchStartIndex
     return
 
-  if e.state.input.search.text.len == 0:
+  if e.state.input.line.text.len == 0:
     # Erasing the pattern restores the anchor, as the Config branch does.
     e.backToSearchStart()
     return
@@ -251,7 +248,7 @@ proc performIncrementalSearch(e: Editor) =
   let searchResult = e.state.findCounted(
     e.activeBuffer,
     SearchSpec(
-      pattern: e.state.input.search.text, direction: e.state.input.search.direction
+      pattern: e.state.input.line.text, direction: e.state.input.search.direction
     ),
     e.state.input.search.startPos,
     e.state.input.search.count,
@@ -266,62 +263,9 @@ proc performIncrementalSearch(e: Editor) =
   else:
     e.backToSearchStart()
 
-proc handleSearchCharacterInput(e: Editor, ch: string) =
-  ## Handle character input in Search mode
-  ##
-  ## Called when: Any printable character is typed
-  ##
-  ## Behavior:
-  ## - Insert character at cursor position in searchText
-  ## - Advance cursor past the inserted character
-  ## - If incsearch enabled: Trigger incremental search
-  ## - Always trigger redraw to update search highlight
-  let bytePos = charToBytePos(e.state.input.search.text, e.state.input.search.cursor)
-  e.state.input.search.text =
-    e.state.input.search.text[0 ..< bytePos] & ch &
-    e.state.input.search.text[bytePos ..^ 1]
-  # Recompute from the insertion end byte so a seam merge between the
-  # existing bytes and the input keeps the cursor on the inserted tail.
-  e.state.input.search.cursor =
-    byteToCharPos(e.state.input.search.text, bytePos + ch.len)
-  e.performIncrementalSearch()
-
 proc insertPastedTextInSearch*(e: Editor, text: string) =
-  ## Insert pasted text at the cursor position in the search text.
-  ## The search line is single-line: only the first line of the paste is used
-  ## (everything up to the first newline). A stray CR is stripped defensively so
-  ## a raw \r can never leak into the field even if a caller skips normalizing.
-  let nlIdx = text.find('\n')
-  let firstLine =
-    if nlIdx >= 0:
-      text[0 ..< nlIdx]
-    else:
-      text
-  let insertText = firstLine.replace("\r", "")
-  if insertText.len == 0:
-    return
-
-  let bytePos = charToBytePos(e.state.input.search.text, e.state.input.search.cursor)
-  e.state.input.search.text =
-    e.state.input.search.text[0 ..< bytePos] & insertText &
-    e.state.input.search.text[bytePos ..^ 1]
-  # Recompute from the insertion end byte so a seam merge between the
-  # existing bytes and the paste keeps the cursor on the inserted tail.
-  e.state.input.search.cursor =
-    byteToCharPos(e.state.input.search.text, bytePos + insertText.len)
-  e.performIncrementalSearch()
-
-proc eraseInSearch(e: Editor, key: KeyCombo) =
-  ## Backspace or Delete in Search mode: erase a character and search again,
-  ## or leave the prompt when it is empty.
-  # An erase ends browsing the history even when it erases nothing.
-  e.state.input.search.historyIndex = -1
-  case erase(e.state.input.search.text, e.state.input.search.cursor, key)
-  of eoLeave:
-    e.cancelSearch()
-  of eoUnchanged:
-    discard
-  of eoErased:
+  ## Insert a paste's first line at the cursor of the search prompt.
+  if e.state.input.line.insertPasted(text):
     e.performIncrementalSearch()
 
 proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
@@ -329,83 +273,22 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
   ## mapping RHS): `state.keyTyped` tells which, as Vim's KeyTyped. `roAbort` when Enter
   ## runs a search that fails, so the keys a register or mapping queued after
   ## it are dropped, as Vim's error flushes them.
-  case promptKey(keyCombo, e.state.keyTyped)
+  case e.state.input.line.takeKey(keyCombo, e.state.keyTyped)
   of pkEnter, pkRun:
     return if e.finalizeSearch(): roContinue else: roAbort
   of pkLeave:
     e.cancelSearch()
     return roContinue
-  of pkErase:
-    e.eraseInSearch(keyCombo)
-    return roContinue
   of pkOther:
     discard
 
-  # Up arrow: Navigate to previous (older) search in history
-  if keyCombo.isSpecial and keyCombo.special == skUp:
-    if e.state.input.search.history.len > 0:
-      # If not yet navigating history, start from the most recent entry
-      if e.state.input.search.historyIndex == -1:
-        e.state.input.search.historyIndex = 0
-      # Otherwise, move to the next older entry
-      elif e.state.input.search.historyIndex < e.state.input.search.history.high:
-        e.state.input.search.historyIndex += 1
-
-      # Update search text with history entry
-      e.state.input.search.text =
-        e.state.input.search.history[e.state.input.search.historyIndex]
-      e.state.input.search.cursor = e.state.input.search.text.charLen
-      # Trigger incremental search with history entry
-      e.performIncrementalSearch()
-    return roContinue
-
-  # Down arrow: Navigate to next (newer) search in history
-  if keyCombo.isSpecial and keyCombo.special == skDown:
-    if e.state.input.search.history.len > 0 and e.state.input.search.historyIndex >= 0:
-      # Move to newer entry
-      if e.state.input.search.historyIndex > 0:
-        e.state.input.search.historyIndex -= 1
-        e.state.input.search.text =
-          e.state.input.search.history[e.state.input.search.historyIndex]
-        e.state.input.search.cursor = e.state.input.search.text.charLen
-        e.performIncrementalSearch()
-      else:
-        # Reached the newest entry, clear search text
-        e.state.input.search.historyIndex = -1
-        e.state.input.search.text = ""
-        e.state.input.search.cursor = 0
-        # Empty text restores the anchor (cursor, viewport and Config index).
-        e.performIncrementalSearch()
-    return roContinue
-
-  # Left arrow: Move cursor left within search text
-  if keyCombo.isSpecial and keyCombo.special == skLeft:
-    if e.state.input.search.cursor > 0:
-      e.state.input.search.cursor -= 1
-    return roContinue
-
-  # Right arrow: Move cursor right within search text
-  if keyCombo.isSpecial and keyCombo.special == skRight:
-    if e.state.input.search.cursor < e.state.input.search.text.charLen:
-      e.state.input.search.cursor += 1
-    return roContinue
-
-  # Home: Move cursor to start of search text
-  if keyCombo.isSpecial and keyCombo.special == skHome:
-    e.state.input.search.cursor = 0
-    return roContinue
-
-  # End: Move cursor to end of search text
-  if keyCombo.isSpecial and keyCombo.special == skEnd:
-    e.state.input.search.cursor = e.state.input.search.text.charLen
-    return roContinue
-
-  # Character input: Add character and perform incremental search
-  if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-    # Reset history navigation when user types
-    e.state.input.search.historyIndex = -1
-    e.handleSearchCharacterInput(keyCombo.char)
-    return roContinue
-
-  # Ignore other special keys
+  case e.state.input.line.edit(keyCombo, e.state.input.search.history)
+  of leNone, leStill, leMoved:
+    discard
+  of leBeep:
+    e.state.beep()
+  of leEmptyErase:
+    e.cancelSearch()
+  of leTyped, leErased, leRecalled:
+    e.performIncrementalSearch()
   roContinue

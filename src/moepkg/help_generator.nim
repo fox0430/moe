@@ -613,6 +613,88 @@ const InsertModeCommands*: HelpGroup = HelpGroup(
   ]
 )
 
+const CommandLineEditingIntro* =
+  "The `:` command line, the `/` and `?` search prompts and the LSP rename\n" &
+  "prompt take these keys. Completion is only on the `:` line, and the rename\n" &
+  "prompt has no history yet.\n"
+  ## What comes before the keys of CommandLineEditingCommands, in the help and
+  ## in howtouse.md.
+
+const CommandLineEditingCommands*: HelpGroup = HelpGroup(
+  ## The keys of the `:` command line, the `/` and `?` search prompt and the
+  ## LSP rename prompt (prompt_line).
+  entries: @[
+    HelpEntry(syntax: "Enter", description: "Run the line"),
+    HelpEntry(
+      syntax: "Esc or Ctrl-c",
+      description:
+        "Leave without running the line; an Esc a mapping or a register puts in runs it",
+    ),
+    HelpEntry(syntax: "Left", description: "Move the cursor one character left"),
+    HelpEntry(syntax: "Right", description: "Move the cursor one character right"),
+    HelpEntry(
+      syntax: "Shift-Left or Ctrl-Left",
+      description: "Move the cursor left to just after a space",
+    ),
+    HelpEntry(
+      syntax: "Shift-Right or Ctrl-Right",
+      description: "Move the cursor right to a space or the end",
+    ),
+    HelpEntry(syntax: "Home or Ctrl-b", description: "Move the cursor to the start"),
+    HelpEntry(syntax: "End or Ctrl-e", description: "Move the cursor to the end"),
+    HelpEntry(
+      syntax: "Ctrl-h or Backspace",
+      description:
+        "Delete the character before the cursor; on an empty `:`, `/` or `?` line, leave it",
+    ),
+    HelpEntry(
+      syntax: "Delete",
+      description:
+        "Delete the character under the cursor, or the one before it at the end; on an empty `:`, `/` or `?` line, leave it",
+    ),
+    HelpEntry(
+      syntax: "Up",
+      description:
+        "Recall an older history entry that starts with the text before the cursor",
+    ),
+    HelpEntry(
+      syntax: "Down",
+      description:
+        "Recall a newer history entry that starts with the same text, or that text after the newest",
+    ),
+    HelpEntry(syntax: "Shift-Up", description: "Recall the next older history entry"),
+    HelpEntry(
+      syntax: "Page Up",
+      description:
+        "Select the previous page of completions, or recall the next older history entry",
+    ),
+    HelpEntry(syntax: "Shift-Down", description: "Recall the next newer history entry"),
+    HelpEntry(
+      syntax: "Page Down",
+      description:
+        "Select the next page of completions, or recall the next newer history entry",
+    ),
+    HelpEntry(
+      syntax: "Tab",
+      description:
+        "On the `:` line, complete the command name or argument, or select the next completion",
+    ),
+    HelpEntry(
+      syntax: "Shift-Tab",
+      description: "On the `:` line, select the previous completion",
+    ),
+    HelpEntry(
+      syntax: "Ctrl-n",
+      description: "Select the next completion, or recall the next newer history entry",
+    ),
+    HelpEntry(
+      syntax: "Ctrl-p",
+      description:
+        "Select the previous completion, or recall the next older history entry",
+    ),
+  ]
+)
+
 const TerminalInputCommands*: HelpGroup = HelpGroup(
   entries: @[
     HelpEntry(
@@ -911,6 +993,11 @@ proc renderReplaceModeSection*(): string {.compileTime.} =
 proc renderInsertModeSection*(): string {.compileTime.} =
   ## The "# Insert mode" section body.
   renderGroup(InsertModeCommands)
+
+proc renderCommandLineEditingSection*(): string {.compileTime.} =
+  ## The "## Editing the command line" section body: its intro and its keys.
+  parseDescription(CommandLineEditingIntro).toPlainText & "\n" &
+    renderGroup(CommandLineEditingCommands)
 
 proc renderTerminalInputSection*(): string {.compileTime.} =
   ## The "## Terminal-Input sub-mode" body (just the key entry,

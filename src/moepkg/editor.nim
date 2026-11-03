@@ -193,14 +193,12 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       input: InputState(
         # Search state (grouped in SearchState)
         search: SearchState(
-          text: "",
           direction: Forward,
           history:
             if editorConfig.persist.search:
               loadSearchHistory(editorConfig.persist.searchHistoryLimit)
             else:
               @[],
-          historyIndex: -1,
           startPos: BufferPosition(line: 0, column: 0),
           ignorecase: editorConfig.standard.ignorecase,
           smartcase: editorConfig.standard.smartcase,
@@ -214,8 +212,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
             if editorConfig.persist.commandHistory:
               loadCommandHistory(editorConfig.persist.commandHistoryLimit)
             else:
-              @[],
-          historyIndex: -1,
+              @[]
         ),
       ),
       pendingInput: PendingInputState(

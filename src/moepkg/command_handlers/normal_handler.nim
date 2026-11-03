@@ -169,9 +169,6 @@ proc handleModeSwitchToOverlay*(
   ## Handle overlay mode switching commands
   case overlay
   of okCommand:
-    # Initialize command mode state
-    state.input.commandText = ":"
-    state.input.commandCursor = 0 # Cursor starts after the ":"
     return NormalModeResult(kind: nmrHandled, overlayTransition: some(okCommand))
   of okSearch:
     # `/` and `?` open through the command registry, as in Visual.

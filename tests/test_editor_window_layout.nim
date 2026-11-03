@@ -317,8 +317,8 @@ suite "calculateReservedLines":
     e.state.showStatusLine = true
     e.state.enterCommandOverlay()
     # ":" + 100 chars = 101 columns -> 2 rows at width 80, + status line row
-    e.state.input.commandText = ":" & "a".repeat(100)
-    e.state.input.commandCursor = 0
+    e.state.input.line.text = "a".repeat(100)
+    e.state.input.line.cursor = 0
     check e.calculateReservedLines(isBottomWindow = true) == 3
 
   test "terminal dimensions stay steady under a multi-line message":

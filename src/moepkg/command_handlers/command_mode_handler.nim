@@ -29,7 +29,7 @@ import pkg/chronos
 import
   ../[
     editor, key_bindings, buffer, types, command_line, command_completion,
-    unicode_utils, key_router, prompt_keys,
+    unicode_utils, key_router, prompt_line,
   ]
 import editor_ops, result_processor
 from command_handler import resolveExRange
@@ -70,13 +70,13 @@ proc jumpToFirstSubstituteMatch*(
 
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## Update or cancel the live substitute preview based on the current command
-  ## text. Call after any edit to commandText (backspace, delete, char input).
+  ## text. Call after any edit of the line.
   ##
   ## Behavior:
   ## - Pattern only (e.g. ":%s/foo"): jump cursor to first match (incsearch-like)
   ## - Pattern + replacement (e.g. ":%s/foo/bar"): also preview the replacement
   ##   in the buffer when config.highlight.replaceText is enabled.
-  let commandText = normalizeSubstituteLongForm(e.state.input.commandText)
+  let commandText = normalizeSubstituteLongForm(e.state.commandLine)
   if commandText.contains("s/"):
     let parsed = parseSubstituteCommand(commandText)
     if parsed.pattern.len > 0:
@@ -102,49 +102,10 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
       e.cancelSubstitutePreview()
 
 proc insertPastedTextInCommand*(e: Editor, text: string) =
-  ## Insert pasted text at the current command-line cursor.
-  ## The command line is single-line: only the first line of the paste is used
-  ## (everything up to the first newline). A stray CR is stripped defensively so
-  ## a raw \r can never leak into the field even if a caller skips normalizing.
-  let nlIdx = text.find('\n')
-  let firstLine =
-    if nlIdx >= 0:
-      text[0 ..< nlIdx]
-    else:
-      text
-  let insertText = firstLine.replace("\r", "")
-  if insertText.len == 0:
-    return
-
-  e.state.input.commandState.historyIndex = -1
-  if e.state.input.commandText.len == 0:
-    e.state.input.commandText = ":"
-    e.state.input.commandCursor = 0
-
-  let bytePos =
-    charToBytePos(e.state.input.commandText, e.state.input.commandCursor + 1)
-  e.state.input.commandText =
-    e.state.input.commandText[0 ..< bytePos] & insertText &
-    e.state.input.commandText[bytePos ..^ 1]
-  # Recompute from the insertion end byte (minus the ":" prefix) so a seam
-  # merge between the existing bytes and the paste keeps the cursor in place.
-  e.state.input.commandCursor =
-    byteToCharPos(e.state.input.commandText, bytePos + insertText.len) - 1
-
-  e.state.commandCompletionManager.cancelCompletion()
-  e.updateSubstitutePreviewIfNeeded()
-
-proc findHistoryMatch(
-    history: seq[string], prefix: string, startIndex, step: int
-): int =
-  ## Find the next history entry starting with `prefix`, scanning from
-  ## `startIndex` by `step` (+1 = older, -1 = newer). Returns -1 if none.
-  var i = startIndex
-  while i >= 0 and i <= history.high:
-    if history[i].startsWith(prefix):
-      return i
-    i += step
-  return -1
+  ## Insert a paste's first line at the cursor of the command line.
+  if e.state.input.line.insertPasted(text):
+    e.state.commandCompletionManager.cancelCompletion()
+    e.updateSubstitutePreviewIfNeeded()
 
 proc cancelCommandLine*(e: Editor) =
   ## Leave the command line without running it. Unlike Vim, the line does not
@@ -157,124 +118,99 @@ proc cancelCommandLine*(e: Editor) =
   e.setMode(e.state.mode) # Sync window mode
 
 proc updateCompletionAfterEdit(e: Editor) =
-  ## Follow an edit of the command text with the completion menu and the
-  ## substitute preview.
+  ## Follow an erase in the line with the completion menu and the substitute
+  ## preview.
   let mgr = e.state.commandCompletionManager
-  if ' ' in e.state.input.commandText:
+  if ' ' in e.state.input.line.text:
     # Argument mode
-    mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
+    mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
   elif mgr.isActive():
-    let prefix = extractCommandPrefix(e.state.input.commandText)
-    mgr.updateFilter(prefix)
+    mgr.updateFilter(extractCommandPrefix(e.state.commandLine))
   e.updateSubstitutePreviewIfNeeded()
 
-proc eraseInCommandLine(e: Editor, key: KeyCombo) =
-  ## Backspace or Delete on the command line, or leave it when it is empty.
-  let text = e.state.input.commandText
-  var
-    line =
-      if text.len > 0:
-        text[1 ..^ 1]
-      else:
-        ""
-    cursor = e.state.input.commandCursor
-  # An erase ends browsing the history even when it erases nothing.
-  e.state.input.commandState.historyIndex = -1
-  case erase(line, cursor, key)
-  of eoLeave:
-    e.cancelCommandLine()
-  of eoUnchanged:
-    discard
-  of eoErased:
-    e.state.input.commandText = ":" & line
-    e.state.input.commandCursor = cursor
-    e.updateCompletionAfterEdit()
+proc updateCompletionAfterTyping(e: Editor, typed: string) =
+  ## Follow a typed character with the completion menu and the substitute
+  ## preview.
+  let mgr = e.state.commandCompletionManager
+  if typed == " ":
+    # Space is a delimiter - trigger argument completion if applicable
+    mgr.cancelCompletion()
+    mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
+  elif ' ' in e.state.input.line.text:
+    # In argument mode - always update argument completion
+    mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
+  elif mgr.isActive():
+    mgr.updateFilter(extractCommandPrefix(e.state.commandLine))
+  else:
+    # Auto-trigger command completion on first character
+    mgr.triggerCompletion(e.commandLineParser, e.state.commandLine)
+  e.updateSubstitutePreviewIfNeeded()
 
 proc runCommandLine(e: Editor): ReplayOutcome =
   ## Run the command line, or leave it when there is nothing after the `:`.
-  if e.state.input.commandText.len > 1:
+  if e.state.input.line.text.len > 0:
     # Full-lifecycle dispatch (pre-teardown, side effects, post-teardown)
     # is centralised in executeCommandOverlay so the Command overlay Enter
     # path and hrExecCommand (@:) share a single entry point.
-    return e.executeCommandOverlay(e.state.input.commandText)
+    return e.executeCommandOverlay(e.state.commandLine)
   e.cancelCommandLine()
   roContinue
+
+proc applyCompletion(e: Editor): bool =
+  ## Put the selected completion in the line. Returns whether it was a
+  ## directory, whose contents complete next.
+  let mgr = e.state.commandCompletionManager
+  let selected = mgr.getSelectedCommand()
+  if selected.len == 0:
+    return false
+  template line(): untyped =
+    e.state.input.line
+
+  case mgr.mode
+  of cmCommand:
+    line.text = selected
+  of cmFilePath:
+    # Use original directory prefix (saved when completion started)
+    line.text = mgr.baseCommand & " " & mgr.originalDirPrefix & selected
+    result = selected.endsWith("/")
+  of cmSetOption:
+    # Replace only the argument part
+    line.text = parseCommandLine(e.state.commandLine).cmd & " " & selected
+  line.cursor = line.text.charLen
+
+proc selectCompletion(e: Editor, next: bool) =
+  ## Tab or Ctrl-N, Shift-Tab or Ctrl-P: the next or the previous completion,
+  ## put in the line. Going round to none puts back what was typed, as Vim's
+  ## wildmenu does.
+  let mgr = e.state.commandCompletionManager
+  template line(): untyped =
+    e.state.input.line
+
+  if mgr.menu.selectedIndex < 0:
+    mgr.typedLine = (line.text, line.cursor)
+  if next:
+    mgr.selectNext()
+  else:
+    mgr.selectPrevious()
+  if mgr.menu.selectedIndex >= 0:
+    discard e.applyCompletion()
+  else:
+    (line.text, line.cursor) = mgr.typedLine
 
 proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
   ## Run `keyCombo` on the command line. Its mappings (`cmap`) have already
   ## had the key: a mapping's keys run here as keys of their own, so the ones
   ## after an Enter that ends the command line reach the mode it returns to.
-  let key = promptKey(keyCombo, e.state.keyTyped)
+  let key = e.state.input.line.takeKey(keyCombo, e.state.keyTyped)
+  let mgr = e.state.commandCompletionManager
   case key
   of pkLeave:
     e.cancelCommandLine()
     return roContinue
-  of pkErase:
-    e.eraseInCommandLine(keyCombo)
-    return roContinue
-  of pkEnter, pkRun, pkOther:
-    discard
-
-  # Handle Tab key for command completion
-  if keyCombo.isSpecial and (keyCombo.special == skTab or keyCombo.special == skBackTab):
-    let mgr = e.state.commandCompletionManager
-    let hasSpace = ' ' in e.state.input.commandText
-
-    proc applyCompletion(): bool =
-      ## Apply the selected completion to command text
-      ## Returns true if a directory was selected (needs re-trigger)
-      let selected = mgr.getSelectedCommand()
-      if selected.len == 0:
-        return false
-
-      case mgr.mode
-      of cmCommand:
-        e.state.input.commandText = ":" & selected
-        e.state.input.commandCursor = selected.charLen
-        return false
-      of cmFilePath:
-        # Use original directory prefix (saved when completion started)
-        let newArg = mgr.originalDirPrefix & selected
-        e.state.input.commandText = ":" & mgr.baseCommand & " " & newArg
-        e.state.input.commandCursor = mgr.baseCommand.charLen + 1 + newArg.charLen
-        # Return true if directory selected (ends with /)
-        return selected.endsWith("/")
-      of cmSetOption:
-        # Replace only the argument part
-        let (cmd, _) = parseCommandLine(e.state.input.commandText)
-        e.state.input.commandText = ":" & cmd & " " & selected
-        e.state.input.commandCursor = cmd.charLen + 1 + selected.charLen
-        return false
-
-    if kmShift in keyCombo.modifiers or keyCombo.special == skBackTab:
-      # Shift+Tab (or BackTab): select previous item
-      if mgr.isActive():
-        mgr.selectPrevious()
-        # Apply if something is now selected
-        if mgr.menu.selectedIndex >= 0:
-          discard applyCompletion()
-    else:
-      # Tab: trigger or select next item
-      if mgr.isActive():
-        mgr.selectNext()
-        # Apply if something is now selected
-        if mgr.menu.selectedIndex >= 0:
-          discard applyCompletion()
-      else:
-        # Trigger completion
-        if hasSpace:
-          mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
-        else:
-          mgr.triggerCompletion(e.commandLineParser, e.state.input.commandText)
-    return roContinue
-
-  # Handle Enter to execute command. An Esc a mapping put in runs the line as
-  # it stands, the completion Tab put in included.
-  if key in {pkEnter, pkRun}:
-    # If completion popup is active with a selection, confirm it
-    if key == pkEnter and e.state.commandCompletionManager.isActive() and
-        e.state.commandCompletionManager.menu.selectedIndex >= 0:
-      let mgr = e.state.commandCompletionManager
+  of pkEnter, pkRun:
+    # An Esc a mapping put in runs the line as it stands, the completion Tab
+    # put in included. Enter on a selected completion confirms it first.
+    if key == pkEnter and mgr.isActive() and mgr.menu.selectedIndex >= 0:
       # Check if selected item is a directory (for file path mode)
       let isDir = mgr.mode == cmFilePath and mgr.getSelectedCommand().endsWith("/")
       let isFile = mgr.mode == cmFilePath and not isDir
@@ -287,123 +223,55 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
       mgr.cancelCompletion()
       # If directory was confirmed, re-trigger completion for its contents
       if isDir:
-        mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
+        mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
         return roContinue
       # If not a no-argument command, wait for more input
       if not shouldExecuteNow:
         return roContinue
       # Otherwise, fall through to execute the command immediately
     return e.runCommandLine()
+  of pkOther:
+    discard
 
-  # Handle Left arrow - move cursor left
-  if keyCombo.isSpecial and keyCombo.special == skLeft:
-    if e.state.input.commandCursor > 0:
-      e.state.input.commandCursor -= 1
-      e.state.commandCompletionManager.cancelCompletion()
-    return roContinue
-
-  # Handle Right arrow - move cursor right
-  if keyCombo.isSpecial and keyCombo.special == skRight:
-    # commandText includes the ":" prefix, so max cursor position is charLen - 1
-    let maxPos = e.state.input.commandText.charLen - 1
-    if e.state.input.commandCursor < maxPos:
-      e.state.input.commandCursor += 1
-      e.state.commandCompletionManager.cancelCompletion()
-    return roContinue
-
-  # Handle Home - move cursor to beginning
-  if keyCombo.isSpecial and keyCombo.special == skHome:
-    e.state.input.commandCursor = 0
-    e.state.commandCompletionManager.cancelCompletion()
-    return roContinue
-
-  # Handle End - move cursor to end
-  if keyCombo.isSpecial and keyCombo.special == skEnd:
-    e.state.input.commandCursor = e.state.input.commandText.charLen - 1
-    e.state.commandCompletionManager.cancelCompletion()
-    return roContinue
-
-  # Up arrow: Navigate to previous (older) command in history, restricted to
-  # entries starting with the prefix captured when navigation began.
-  if keyCombo.isSpecial and keyCombo.special == skUp:
-    if e.state.input.commandState.history.len > 0:
-      let startIndex =
-        if e.state.input.commandState.historyIndex == -1:
-          # First Up: lock the current text as the prefix filter.
-          e.state.input.commandState.historyPrefix = e.state.input.commandText[1 ..^ 1]
-          0
-        else:
-          e.state.input.commandState.historyIndex + 1
-      let idx = findHistoryMatch(
-        e.state.input.commandState.history, e.state.input.commandState.historyPrefix,
-        startIndex, 1,
-      )
-      if idx >= 0:
-        e.state.input.commandState.historyIndex = idx
-        e.state.input.commandText = ":" & e.state.input.commandState.history[idx]
-        e.state.input.commandCursor = e.state.input.commandText.charLen - 1
-        e.state.commandCompletionManager.cancelCompletion()
-        e.updateSubstitutePreviewIfNeeded()
-    return roContinue
-
-  # Down arrow: Navigate to next (newer) command in history, restricted to
-  # entries starting with the locked prefix. Falling off the newest match
-  # restores the original prefix instead of clearing the line.
-  if keyCombo.isSpecial and keyCombo.special == skDown:
-    if e.state.input.commandState.history.len > 0 and
-        e.state.input.commandState.historyIndex >= 0:
-      let idx = findHistoryMatch(
-        e.state.input.commandState.history,
-        e.state.input.commandState.historyPrefix,
-        e.state.input.commandState.historyIndex - 1,
-        -1,
-      )
-      if idx >= 0:
-        e.state.input.commandState.historyIndex = idx
-        e.state.input.commandText = ":" & e.state.input.commandState.history[idx]
-        e.state.input.commandCursor = e.state.input.commandText.charLen - 1
+  # Tab completes; Ctrl-N and Ctrl-P go through the completions while they
+  # show, as Vim's do through its matches, and through the history otherwise.
+  if keyCombo.isSpecial and keyCombo.special in {skTab, skBackTab}:
+    let next = kmShift notin keyCombo.modifiers and keyCombo.special == skTab
+    if mgr.isActive():
+      e.selectCompletion(next)
+    elif next:
+      if ' ' in e.state.input.line.text:
+        mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
       else:
-        e.state.input.commandState.historyIndex = -1
-        e.state.input.commandText = ":" & e.state.input.commandState.historyPrefix
-        e.state.input.commandCursor = e.state.input.commandState.historyPrefix.charLen
-      e.state.commandCompletionManager.cancelCompletion()
-      e.updateSubstitutePreviewIfNeeded()
+        mgr.triggerCompletion(e.commandLineParser, e.state.commandLine)
+    return roContinue
+  if mgr.isActive() and (keyCombo.isCtrl('n') or keyCombo.isCtrl('p')):
+    e.selectCompletion(keyCombo.isCtrl('n'))
+    return roContinue
+  # PageUp and PageDown page the completions while one is selected, as Vim's
+  # wild menu does; with none selected they go through the history.
+  if mgr.isActive() and mgr.menu.selectedIndex >= 0 and keyCombo.isSpecial and
+      keyCombo.special in {skPageUp, skPageDown}:
+    mgr.pageSelection(keyCombo.special == skPageDown)
+    discard e.applyCompletion()
     return roContinue
 
-  # Handle character input - insert at cursor position
-  if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-    e.state.input.commandState.historyIndex = -1
-    # Guard against empty commandText (should have at least ":")
-    if e.state.input.commandText.len == 0:
-      e.state.input.commandText = ":"
-      e.state.input.commandCursor = 0
-    let bytePos =
-      charToBytePos(e.state.input.commandText, e.state.input.commandCursor + 1)
-    e.state.input.commandText =
-      e.state.input.commandText[0 ..< bytePos] & keyCombo.char &
-      e.state.input.commandText[bytePos ..^ 1]
-    # Recompute from the insertion end byte (minus the ":" prefix) so a seam
-    # merge between the existing bytes and the input keeps the cursor in place.
-    e.state.input.commandCursor =
-      byteToCharPos(e.state.input.commandText, bytePos + keyCombo.char.len) - 1
-    # Handle completion
-    let mgr = e.state.commandCompletionManager
-    let hasSpace = ' ' in e.state.input.commandText
-    if keyCombo.char == " ":
-      # Space is a delimiter - trigger argument completion if applicable
-      mgr.cancelCompletion()
-      mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
-    elif hasSpace:
-      # In argument mode - always update argument completion
-      mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
-    elif mgr.isActive():
-      let prefix = extractCommandPrefix(e.state.input.commandText)
-      mgr.updateFilter(prefix)
-    else:
-      # Auto-trigger command completion on first character
-      mgr.triggerCompletion(e.commandLineParser, e.state.input.commandText)
+  case e.state.input.line.edit(keyCombo, e.state.input.commandState.history)
+  of leNone, leStill:
+    discard
+  of leBeep:
+    e.state.beep()
+  of leEmptyErase:
+    e.cancelCommandLine()
+  of leMoved:
+    # Home, End, Ctrl-B and Ctrl-E too with the cursor already there, so the
+    # next Enter runs the line.
+    mgr.cancelCompletion()
+  of leTyped:
+    e.updateCompletionAfterTyping(keyCombo.char)
+  of leErased:
+    e.updateCompletionAfterEdit()
+  of leRecalled:
+    mgr.cancelCompletion()
     e.updateSubstitutePreviewIfNeeded()
-    return roContinue
-
-  # Ignore other special keys
-  return roContinue
+  roContinue

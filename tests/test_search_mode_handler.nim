@@ -34,11 +34,15 @@ import ../src/moepkg/command_handlers/result_processor
 proc setSearchText(e: Editor, text: string) =
   ## Test helper: set search text and position cursor at the end,
   ## matching the state after the user has typed the text.
-  e.state.input.search.text = text
-  e.state.input.search.cursor = text.charLen
+  e.state.input.line.text = text
+  e.state.input.line.cursor = text.charLen
 
 proc backspace(e: Editor) =
-  e.eraseInSearch(KeyCombo(isSpecial: true, special: skBackspace))
+  discard e.handleSearchModeKeyCombo(KeyCombo(isSpecial: true, special: skBackspace))
+
+proc typeInSearch(e: Editor, ch: string) =
+  ## `ch` typed on the search prompt.
+  discard e.handleSearchModeKeyCombo(KeyCombo(isSpecial: false, char: ch))
 
 proc handleSearchModeEvent(e: Editor, event: Event): ReplayOutcome =
   ## `event` typed on the search prompt.
@@ -96,7 +100,7 @@ suite "Search prompt - Backspace":
 
     backspace(e)
 
-    check e.state.input.search.text == "ab"
+    check e.state.input.line.text == "ab"
 
   test "Remove last multibyte character (Japanese)":
     let e = createTestEditorWithBuffer("hello")
@@ -105,7 +109,7 @@ suite "Search prompt - Backspace":
 
     backspace(e)
 
-    check e.state.input.search.text == "検"
+    check e.state.input.line.text == "検"
 
   test "Remove last character from mixed ASCII and multibyte":
     let e = createTestEditorWithBuffer("hello")
@@ -114,7 +118,7 @@ suite "Search prompt - Backspace":
 
     backspace(e)
 
-    check e.state.input.search.text == "abc日本"
+    check e.state.input.line.text == "abc日本"
 
   test "Backspace on single character leaves empty string":
     let e = createTestEditorWithBuffer("hello")
@@ -123,7 +127,7 @@ suite "Search prompt - Backspace":
 
     backspace(e)
 
-    check e.state.input.search.text == ""
+    check e.state.input.line.text == ""
 
   test "Backspace on single multibyte character leaves empty string":
     let e = createTestEditorWithBuffer("hello")
@@ -132,7 +136,7 @@ suite "Search prompt - Backspace":
 
     backspace(e)
 
-    check e.state.input.search.text == ""
+    check e.state.input.line.text == ""
 
   test "Backspace on an empty prompt leaves it, as Vim's":
     let e = createTestEditorWithBuffer("hello")
@@ -149,12 +153,12 @@ suite "Search prompt - Backspace":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("ab")
-    e.state.input.search.cursor = 0
+    e.state.input.line.cursor = 0
 
     backspace(e)
 
     check e.state.isSearchOverlay
-    check e.state.input.search.text == "ab"
+    check e.state.input.line.text == "ab"
 
 suite "Search prompt - invalid bytes use the buffer character model":
   test "Pasted truncated lead byte counts every byte as a character":
@@ -163,8 +167,8 @@ suite "Search prompt - invalid bytes use the buffer character model":
 
     e.insertPastedTextInSearch("\xF0abc")
 
-    check e.state.input.search.text == "\xF0abc"
-    check e.state.input.search.cursor == 4
+    check e.state.input.line.text == "\xF0abc"
+    check e.state.input.line.cursor == 4
 
   test "Backspace after invalid paste removes the last byte only":
     let e = createTestEditorWithBuffer("hello")
@@ -173,19 +177,19 @@ suite "Search prompt - invalid bytes use the buffer character model":
     e.insertPastedTextInSearch("\xF0abc")
     backspace(e)
 
-    check e.state.input.search.text == "\xF0ab"
-    check e.state.input.search.cursor == 3
+    check e.state.input.line.text == "\xF0ab"
+    check e.state.input.line.cursor == 3
 
   test "Paste completing a truncated lead byte keeps cursor at insertion end":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
 
-    e.state.input.search.text = "\xE2"
-    e.state.input.search.cursor = 1
+    e.state.input.line.text = "\xE2"
+    e.state.input.line.cursor = 1
     e.insertPastedTextInSearch("\x82\xAC")
 
-    check e.state.input.search.text == "\xE2\x82\xAC"
-    check e.state.input.search.cursor == 1
+    check e.state.input.line.text == "\xE2\x82\xAC"
+    check e.state.input.line.cursor == 1
 
 suite "Search mode - leaving the overlay":
   test "finalizeSearch returns to the base mode":
@@ -238,7 +242,7 @@ suite "Search mode - Help mode incremental search sync":
     # selectedIndex should be restored to startPos line
     check helpState.selectedIndex == 5
 
-  test "handleSearchCharacterInput syncs selectedIndex during typing":
+  test "typing syncs selectedIndex in the help viewer":
     let e = createTestEditorInHelpMode()
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
@@ -246,7 +250,7 @@ suite "Search mode - Help mode incremental search sync":
 
     # Type "Replace" character by character
     for ch in "Replace":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
 
     let helpState = e.activeWindow.modeState.help
     # selectedIndex should match cursor
@@ -296,8 +300,8 @@ suite "Search mode - Help mode incremental search sync":
     let firstMatchLine = e.cursor.line
 
     # Add more characters to narrow search
-    handleSearchCharacterInput(e, " ")
-    handleSearchCharacterInput(e, "m")
+    typeInSearch(e, " ")
+    typeInSearch(e, "m")
 
     # Backspace to widen search again
     backspace(e)
@@ -364,7 +368,7 @@ suite "Search mode - Config mode integration":
 
     check cfg.selectedIndex == 0
 
-  test "handleSearchCharacterInput live-updates the selection while typing":
+  test "typing live-updates the selection in Config mode":
     let (e, cfg) = createTestEditorInConfigMode()
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
@@ -373,7 +377,7 @@ suite "Search mode - Config mode integration":
     let name = cfg.firstEditableName
 
     for ch in name:
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
 
     check cfg.items[cfg.selectedIndex].matchesSearchQuery(cfg.config, name)
 
@@ -386,13 +390,13 @@ suite "Search mode - Config mode integration":
     let name = cfg.firstEditableName
 
     for ch in name:
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     backspace(e)
 
     # The selection still rests on an item matching the (shortened) live text.
-    check e.state.input.search.text == name[0 ..< name.high]
+    check e.state.input.line.text == name[0 ..< name.high]
     check cfg.items[cfg.selectedIndex].matchesSearchQuery(
-      cfg.config, e.state.input.search.text
+      cfg.config, e.state.input.line.text
     )
 
   test "finalizeSearch commits the query and selects the first match":
@@ -463,27 +467,27 @@ suite "Incremental search - case insensitive highlighting":
     e.state.input.search.startPos = BufferPosition(line: 0, column: 0)
 
     # Type lowercase "hello"
-    handleSearchCharacterInput(e, "h")
-    handleSearchCharacterInput(e, "e")
-    handleSearchCharacterInput(e, "l")
-    handleSearchCharacterInput(e, "l")
-    handleSearchCharacterInput(e, "o")
+    typeInSearch(e, "h")
+    typeInSearch(e, "e")
+    typeInSearch(e, "l")
+    typeInSearch(e, "l")
+    typeInSearch(e, "o")
 
     # Search should find "hello" at column 12 (next match after startPos)
     check e.cursor == BufferPosition(line: 0, column: 12)
 
     # Verify shouldIgnoreCase returns true for lowercase pattern
     let ignCase = shouldIgnoreCase(
-      e.state.input.search.text, e.state.input.search.ignorecase,
+      e.state.input.line.text, e.state.input.search.ignorecase,
       e.state.input.search.smartcase,
     )
     check ignCase == true
-    check e.state.input.search.text == "hello"
+    check e.state.input.line.text == "hello"
 
     # Verify findSearchMatchRanges finds BOTH uppercase and lowercase matches
     # This is what the rendering uses for highlighting
     let ranges = e.activeBuffer.findSearchMatchRanges(
-      0, e.state.input.search.text, ignCase, e.state.input.search.last.match
+      0, e.state.input.line.text, ignCase, e.state.input.search.last.match
     )
     # Should find both "Hello" (col 0-5) and "hello" (col 12-17)
     check ranges.len == 2
@@ -501,25 +505,25 @@ suite "Incremental search - case insensitive highlighting":
     e.state.input.search.smartcase = true
     e.state.input.search.startPos = BufferPosition(line: 0, column: 0)
 
-    handleSearchCharacterInput(e, "h")
-    handleSearchCharacterInput(e, "e")
-    handleSearchCharacterInput(e, "l")
-    handleSearchCharacterInput(e, "l")
-    handleSearchCharacterInput(e, "o")
+    typeInSearch(e, "h")
+    typeInSearch(e, "e")
+    typeInSearch(e, "l")
+    typeInSearch(e, "l")
+    typeInSearch(e, "o")
 
     # Should find "hello" on line 1 (next after startPos)
     check e.cursor.line == 1
     check e.cursor.column == 0
 
     let ignCase = shouldIgnoreCase(
-      e.state.input.search.text, e.state.input.search.ignorecase,
+      e.state.input.line.text, e.state.input.search.ignorecase,
       e.state.input.search.smartcase,
     )
     check ignCase == true
 
     # Verify highlighting on line 0 (uppercase "Hello")
     let ranges0 = e.activeBuffer.findSearchMatchRanges(
-      0, e.state.input.search.text, ignCase, e.state.input.search.last.match
+      0, e.state.input.line.text, ignCase, e.state.input.search.last.match
     )
     check ranges0.len == 1
     check ranges0[0].startCol == 0
@@ -527,7 +531,7 @@ suite "Incremental search - case insensitive highlighting":
 
     # Verify highlighting on line 1 (lowercase "hello")
     let ranges1 = e.activeBuffer.findSearchMatchRanges(
-      1, e.state.input.search.text, ignCase, e.state.input.search.last.match
+      1, e.state.input.line.text, ignCase, e.state.input.search.last.match
     )
     check ranges1.len == 1
     check ranges1[0].startCol == 0
@@ -535,7 +539,7 @@ suite "Incremental search - case insensitive highlighting":
 
     # Verify highlighting on line 2 (all-caps "HELLO")
     let ranges2 = e.activeBuffer.findSearchMatchRanges(
-      2, e.state.input.search.text, ignCase, e.state.input.search.last.match
+      2, e.state.input.line.text, ignCase, e.state.input.search.last.match
     )
     check ranges2.len == 1
     check ranges2[0].startCol == 0
@@ -557,23 +561,22 @@ suite "Incremental search - case insensitive highlighting":
     e.state.input.search.ignorecase = true
     e.state.input.search.smartcase = true
 
-    handleSearchCharacterInput(e, "f")
-    handleSearchCharacterInput(e, "o")
-    handleSearchCharacterInput(e, "o")
+    typeInSearch(e, "f")
+    typeInSearch(e, "o")
+    typeInSearch(e, "o")
 
     # findNext finds "foo" in "foobar" at col 4
     check e.cursor == BufferPosition(line: 0, column: 4)
 
     let ignCase = shouldIgnoreCase(
-      e.state.input.search.text, e.state.input.search.ignorecase,
+      e.state.input.line.text, e.state.input.search.ignorecase,
       e.state.input.search.smartcase,
     )
 
     # The highlight is a substring search too, so it finds both "foo" in
     # "foobar" (col 4) and standalone "foo" (col 11)
-    let ranges = e.activeBuffer.findSearchMatchRanges(
-      0, e.state.input.search.text, ignCase, smRegex
-    )
+    let ranges =
+      e.activeBuffer.findSearchMatchRanges(0, e.state.input.line.text, ignCase, smRegex)
     check ranges.len == 2
     check ranges[0].startCol == 4
     check ranges[0].endCol == 7
@@ -609,27 +612,27 @@ suite "Search mode - cursor movement":
 
     discard handleSearchModeEvent(e, makeLeftEvent())
 
-    check e.state.input.search.cursor == 2
+    check e.state.input.line.cursor == 2
 
   test "Left arrow does not move past start":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("abc")
-    e.state.input.search.cursor = 0
+    e.state.input.line.cursor = 0
 
     discard handleSearchModeEvent(e, makeLeftEvent())
 
-    check e.state.input.search.cursor == 0
+    check e.state.input.line.cursor == 0
 
   test "Right arrow moves cursor right":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("abc")
-    e.state.input.search.cursor = 0
+    e.state.input.line.cursor = 0
 
     discard handleSearchModeEvent(e, makeRightEvent())
 
-    check e.state.input.search.cursor == 1
+    check e.state.input.line.cursor == 1
 
   test "Right arrow does not move past end":
     let e = createTestEditorWithBuffer("hello")
@@ -638,7 +641,7 @@ suite "Search mode - cursor movement":
 
     discard handleSearchModeEvent(e, makeRightEvent())
 
-    check e.state.input.search.cursor == 3
+    check e.state.input.line.cursor == 3
 
   test "Left arrow steps over multibyte character":
     let e = createTestEditorWithBuffer("hello")
@@ -647,7 +650,7 @@ suite "Search mode - cursor movement":
 
     discard handleSearchModeEvent(e, makeLeftEvent())
 
-    check e.state.input.search.cursor == 1
+    check e.state.input.line.cursor == 1
 
   test "Home moves cursor to start":
     let e = createTestEditorWithBuffer("hello")
@@ -656,40 +659,40 @@ suite "Search mode - cursor movement":
 
     discard handleSearchModeEvent(e, makeHomeEvent())
 
-    check e.state.input.search.cursor == 0
+    check e.state.input.line.cursor == 0
 
   test "End moves cursor to end":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("abc")
-    e.state.input.search.cursor = 0
+    e.state.input.line.cursor = 0
 
     discard handleSearchModeEvent(e, makeEndEvent())
 
-    check e.state.input.search.cursor == 3
+    check e.state.input.line.cursor == 3
 
 suite "Search mode - character insertion at cursor":
   test "Insert character at cursor position":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("ac")
-    e.state.input.search.cursor = 1
+    e.state.input.line.cursor = 1
 
     discard handleSearchModeEvent(e, makeCharEvent("b"))
 
-    check e.state.input.search.text == "abc"
-    check e.state.input.search.cursor == 2
+    check e.state.input.line.text == "abc"
+    check e.state.input.line.cursor == 2
 
   test "Insert character at start":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("bc")
-    e.state.input.search.cursor = 0
+    e.state.input.line.cursor = 0
 
     discard handleSearchModeEvent(e, makeCharEvent("a"))
 
-    check e.state.input.search.text == "abc"
-    check e.state.input.search.cursor == 1
+    check e.state.input.line.text == "abc"
+    check e.state.input.line.cursor == 1
 
   test "Insert character at end (append)":
     let e = createTestEditorWithBuffer("hello")
@@ -698,31 +701,31 @@ suite "Search mode - character insertion at cursor":
 
     discard handleSearchModeEvent(e, makeCharEvent("c"))
 
-    check e.state.input.search.text == "abc"
-    check e.state.input.search.cursor == 3
+    check e.state.input.line.text == "abc"
+    check e.state.input.line.cursor == 3
 
   test "Insert multibyte character at cursor":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("a検")
-    e.state.input.search.cursor = 1
+    e.state.input.line.cursor = 1
 
     discard handleSearchModeEvent(e, makeCharEvent("索"))
 
-    check e.state.input.search.text == "a索検"
-    check e.state.input.search.cursor == 2
+    check e.state.input.line.text == "a索検"
+    check e.state.input.line.cursor == 2
 
 suite "Search mode - Delete and Backspace at cursor":
   test "Delete removes character at cursor":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("abc")
-    e.state.input.search.cursor = 1
+    e.state.input.line.cursor = 1
 
     discard handleSearchModeEvent(e, makeDeleteEvent())
 
-    check e.state.input.search.text == "ac"
-    check e.state.input.search.cursor == 1
+    check e.state.input.line.text == "ac"
+    check e.state.input.line.cursor == 1
 
   test "Delete at end erases the character before it, as Vim's":
     let e = createTestEditorWithBuffer("hello")
@@ -731,8 +734,8 @@ suite "Search mode - Delete and Backspace at cursor":
 
     discard handleSearchModeEvent(e, makeDeleteEvent())
 
-    check e.state.input.search.text == "ab"
-    check e.state.input.search.cursor == 2
+    check e.state.input.line.text == "ab"
+    check e.state.input.line.cursor == 2
 
   test "Delete on an empty prompt leaves it":
     let e = createTestEditorWithBuffer("hello")
@@ -746,30 +749,30 @@ suite "Search mode - Delete and Backspace at cursor":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("abc")
-    e.state.input.search.cursor = 2
+    e.state.input.line.cursor = 2
 
     discard handleSearchModeEvent(e, makeBackspaceEvent())
 
-    check e.state.input.search.text == "ac"
-    check e.state.input.search.cursor == 1
+    check e.state.input.line.text == "ac"
+    check e.state.input.line.cursor == 1
 
   test "Backspace at start does nothing":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("abc")
-    e.state.input.search.cursor = 0
+    e.state.input.line.cursor = 0
 
     discard handleSearchModeEvent(e, makeBackspaceEvent())
 
-    check e.state.input.search.text == "abc"
-    check e.state.input.search.cursor == 0
+    check e.state.input.line.text == "abc"
+    check e.state.input.line.cursor == 0
 
 suite "Search mode - enterSearchOverlay cursor init":
   test "enterSearchOverlay resets cursor to 0":
     let e = createTestEditorWithBuffer("hello")
-    e.state.input.search.cursor = 5
+    e.state.input.line.cursor = 5
     e.state.enterSearchOverlay(Forward)
-    check e.state.input.search.cursor == 0
+    check e.state.input.line.cursor == 0
 
 suite "Search mode - empty Enter repeats the last search":
   test "Empty input repeats the previous search with incsearch":
@@ -836,7 +839,7 @@ suite "Search mode - empty Enter repeats the last search":
 
     # Type a pattern that matches elsewhere, then erase it again
     for ch in "beta":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     for _ in 0 ..< "beta".len:
       backspace(e)
 
@@ -971,10 +974,10 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
     for ch in ["a", "b"]:
-      handleSearchCharacterInput(e, ch)
+      typeInSearch(e, ch)
     check e.cursor == BufferPosition(line: 3, column: 0)
 
-    handleSearchCharacterInput(e, "(")
+    typeInSearch(e, "(")
     check e.cursor == BufferPosition(line: 1, column: 0)
     check e.state.statusMessage == ""
 
@@ -990,7 +993,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
     for ch in "zzz":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     check e.state.statusMessage == ""
 
     check not finalizeSearch(e)
@@ -1002,7 +1005,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
     for ch in "ab(":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     check not finalizeSearch(e)
 
     check e.state.statusMessage == "Invalid regex: ab("
@@ -1013,7 +1016,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
     for ch in "foo":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     check e.cursor == BufferPosition(line: 1, column: 0)
 
     e.invalidatePositionStateForBuffer(e.activeBuffer)
@@ -1029,7 +1032,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     cfg.searchStartIndex = 0
     cfg.selectedIndex = 0
     for ch in "zzzzNoSuchItem":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     check not finalizeSearch(e)
 
     check cfg.selectedIndex == 0
@@ -1044,11 +1047,11 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.input.search.incsearch = true
 
     for ch in "needle":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     check e.cursor.line == 150
     check e.viewport.topLine > 0
 
-    handleSearchCharacterInput(e, "(")
+    typeInSearch(e, "(")
     check e.cursor.line == 0
     check e.viewport.topLine == 0
 
@@ -1059,10 +1062,10 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     cfg.searchStartIndex = 0
     cfg.selectedIndex = 0
     for ch in cfg.firstEditableName:
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     check cfg.selectedIndex > 0
 
-    handleSearchCharacterInput(e, "\x01")
+    typeInSearch(e, "\x01")
     check cfg.selectedIndex == 0
 
   test "Enter wraps back to the only match under the cursor":
@@ -1071,7 +1074,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
       e.state.enterSearchOverlay(Forward)
       e.state.input.search.incsearch = incsearch
       for ch in "foo":
-        handleSearchCharacterInput(e, $ch)
+        typeInSearch(e, $ch)
       check finalizeSearch(e)
 
       check e.cursor == BufferPosition(line: 0, column: 0)
@@ -1113,7 +1116,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
       check e.state.statusMessage == ""
 
       for ch in typed:
-        handleSearchCharacterInput(e, $ch)
+        typeInSearch(e, $ch)
       backspace(e)
       check e.state.statusMessage == ""
 
@@ -1131,7 +1134,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     cfg.selectedIndex = 0
     let name = cfg.firstEditableName
     for ch in name:
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     check e.state.statusMessage == ""
 
     check finalizeSearch(e)
@@ -1156,7 +1159,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.input.search.incsearch = true
 
     for ch in "needle":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     check e.cursor.line == 150
     check e.viewport.topLine > 0
 
@@ -1175,7 +1178,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.input.search.incsearch = true
 
     for ch in "needle":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     cancelSearch(e)
 
     check e.cursor.line == 0
@@ -1200,7 +1203,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
       e, KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})
     ) == roContinue
 
-    check e.state.input.search.text == ""
+    check e.state.input.line.text == ""
     check e.cursor.line == 0
     check e.viewport.topLine == 0
 
@@ -1215,7 +1218,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.input.search.incsearch = true
 
     for ch in "needle":
-      handleSearchCharacterInput(e, $ch)
+      typeInSearch(e, $ch)
     check e.viewport.topLine > 100
     cancelSearch(e)
 
@@ -1238,12 +1241,12 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     e.state.enterSearchOverlay(Backward)
     e.state.input.search.incsearch = true
 
-    handleSearchCharacterInput(e, "a")
+    typeInSearch(e, "a")
     check e.viewport.topLine == 38
-    handleSearchCharacterInput(e, "b")
+    typeInSearch(e, "b")
     check e.viewport.topLine == 33
     # Far above the window as the search began, the match comes to the middle.
-    handleSearchCharacterInput(e, "c")
+    typeInSearch(e, "c")
     check e.cursor.line == 28
     check e.viewport.topLine < 28
 

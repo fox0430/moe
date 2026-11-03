@@ -390,6 +390,17 @@ proc cancelCompletion*(mgr: CommandCompletionManager) =
   mgr.baseCommand = ""
   mgr.originalDirPrefix = ""
 
+proc keepSelectionVisible(mgr: CommandCompletionManager) =
+  ## Scroll the menu so the selected completion shows.
+  let selected = mgr.menu.selectedIndex
+  if selected < 0:
+    return
+  let visible = max(1, mgr.menu.maxVisible)
+  if selected < mgr.menu.scrollOffset:
+    mgr.menu.scrollOffset = selected
+  elif selected >= mgr.menu.scrollOffset + visible:
+    mgr.menu.scrollOffset = selected - visible + 1
+
 proc selectNext*(mgr: CommandCompletionManager) =
   ## Select the next completion item
   ## Cycles: -1 → 0 → 1 → ... → n-1 → -1
@@ -404,13 +415,7 @@ proc selectNext*(mgr: CommandCompletionManager) =
     mgr.menu.selectedIndex = -1
   else:
     inc mgr.menu.selectedIndex
-
-  # Adjust scroll offset if needed
-  if mgr.menu.selectedIndex >= 0:
-    if mgr.menu.selectedIndex >= mgr.menu.scrollOffset + mgr.menu.maxVisible:
-      mgr.menu.scrollOffset = mgr.menu.selectedIndex - mgr.menu.maxVisible + 1
-    elif mgr.menu.selectedIndex < mgr.menu.scrollOffset:
-      mgr.menu.scrollOffset = mgr.menu.selectedIndex
+  mgr.keepSelectionVisible()
 
 proc selectPrevious*(mgr: CommandCompletionManager) =
   ## Select the previous completion item
@@ -426,13 +431,23 @@ proc selectPrevious*(mgr: CommandCompletionManager) =
     mgr.menu.selectedIndex = -1
   else:
     dec mgr.menu.selectedIndex
+  mgr.keepSelectionVisible()
 
-  # Adjust scroll offset if needed
-  if mgr.menu.selectedIndex >= 0:
-    if mgr.menu.selectedIndex < mgr.menu.scrollOffset:
-      mgr.menu.scrollOffset = mgr.menu.selectedIndex
-    elif mgr.menu.selectedIndex >= mgr.menu.scrollOffset + mgr.menu.maxVisible:
-      mgr.menu.scrollOffset = mgr.menu.selectedIndex - mgr.menu.maxVisible + 1
+proc pageSelection*(mgr: CommandCompletionManager, forward: bool) =
+  ## Move the selected completion a page (`maxVisible` entries), clamped to the
+  ## list, as Vim's wild menu pages its matches. Nothing happens without a
+  ## selection: the history keys take the line then, as they do in Vim while
+  ## no menu shows.
+  if mgr.menu.entries.len == 0 or mgr.menu.selectedIndex < 0:
+    return
+
+  let visible = max(1, mgr.menu.maxVisible)
+  mgr.menu.selectedIndex =
+    if forward:
+      min(mgr.menu.entries.high, mgr.menu.selectedIndex + visible)
+    else:
+      max(0, mgr.menu.selectedIndex - visible)
+  mgr.keepSelectionVisible()
 
 proc getSelectedCommand*(mgr: CommandCompletionManager): string =
   ## Get the currently selected command

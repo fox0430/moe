@@ -518,8 +518,6 @@ proc handleFilerMode*(
     )
   of frEnterCommand:
     # Enter command mode from filer
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -560,8 +558,6 @@ proc handleFileTreeMode*(
   of ftrOpenFile:
     return HandlerResult(kind: hrFileTreeOpenFile, fileTreeFilePath: r.filePath)
   of ftrEnterCommand:
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -595,8 +591,6 @@ proc handleLogViewerMode*(
     )
   of lvrEnterCommand:
     # Enter command mode from log viewer
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -646,8 +640,6 @@ proc handleReferencesMode*(
     )
   of rvrEnterCommand:
     # Enter command mode from references viewer
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -681,8 +673,6 @@ proc handleDocumentSymbolMode*(
     )
   of dsvrEnterCommand:
     # Enter command mode from document symbol viewer
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -715,8 +705,6 @@ proc handleCallHierarchyMode*(
     )
   of chvrEnterCommand:
     # Enter command mode from call hierarchy viewer
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -758,14 +746,12 @@ proc handleHelpViewerMode*(
     )
   of hvrEnterCommand:
     # Enter command mode from help viewer
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of hvrEnterSearch:
     # Enter search mode (forward) from help viewer.
-    # historyIndex/text/etc. are reset by enterSearchOverlay on transition.
+    # The prompt's line is reset by enterSearchOverlay on transition.
     state.input.search.direction = Forward
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
@@ -819,8 +805,6 @@ proc handleBufferManagerMode*(
     )
   of bmrEnterCommand:
     # Enter command mode from buffer manager
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -856,8 +840,6 @@ proc handleBookmarkManagerMode*(
       kind: hrBookmarkManagerDelete, bookmarkDeleteEntryIndex: r.deleteEntryIndex
     )
   of bkmrEnterCommand:
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -893,8 +875,6 @@ proc handleBackupManagerMode*(
     return HandlerResult(kind: hrBackupManagerRefresh)
   of bkmrEnterCommand:
     # Enter command mode from backup manager
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -939,8 +919,6 @@ proc handleRecoveryManagerMode*(
   of rcmrRefresh:
     return HandlerResult(kind: hrRecoveryManagerRefresh)
   of rcmrEnterCommand:
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -963,8 +941,6 @@ proc handleDiffViewerMode*(
     )
   of dvrEnterCommand:
     # Enter command mode from diff viewer
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -995,14 +971,12 @@ proc handleConfigMode*(
     )
   of cmrEnterCommand:
     # Enter command mode from config mode
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of cmrEnterSearch:
     # Enter search mode (forward) from config mode.
-    # historyIndex/text/etc. are reset by enterSearchOverlay on transition;
+    # The prompt's line is reset by enterSearchOverlay on transition;
     # searchStartIndex is the config-specific anchor for the upcoming search.
     state.input.search.direction = Forward
     configState.searchStartIndex = configState.selectedIndex
@@ -1101,8 +1075,6 @@ when not defined(moe.embedded):
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
     of trEnterCommand:
-      state.input.commandText = ":"
-      state.input.commandCursor = 0
       return HandlerResult(
         kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
       )

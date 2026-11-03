@@ -412,6 +412,54 @@ suite "CommandCompletion - selectNext scroll offset":
     mgr.selectPrevious() # index 1, should scroll up
     check mgr.menu.scrollOffset == 1
 
+suite "CommandCompletion - pageSelection":
+  proc pageEntries(n: int): seq[CommandCompletionEntry] =
+    for i in 0 ..< n:
+      result.add CommandCompletionEntry(command: $i, description: "", matchScore: n - i)
+
+  test "pages by maxVisible and clamps to the list":
+    let mgr = newCommandCompletionManager()
+    mgr.menu.maxVisible = 3
+    mgr.menu.entries = pageEntries(7)
+    mgr.menu.selectedIndex = 0
+
+    mgr.pageSelection(true)
+    check mgr.menu.selectedIndex == 3
+    mgr.pageSelection(true)
+    check mgr.menu.selectedIndex == 6
+    mgr.pageSelection(true)
+    check mgr.menu.selectedIndex == 6 # Clamped at the end
+    mgr.pageSelection(false)
+    check mgr.menu.selectedIndex == 3
+    mgr.pageSelection(false)
+    check mgr.menu.selectedIndex == 0
+    mgr.pageSelection(false)
+    check mgr.menu.selectedIndex == 0 # Clamped at the start
+
+  test "keeps the selection visible":
+    let mgr = newCommandCompletionManager()
+    mgr.menu.maxVisible = 3
+    mgr.menu.entries = pageEntries(7)
+    mgr.menu.selectedIndex = 0
+
+    mgr.pageSelection(true)
+    check mgr.menu.scrollOffset == 1
+    mgr.pageSelection(false)
+    check mgr.menu.scrollOffset == 0
+
+  test "does nothing without a selection or with no entries":
+    let mgr = newCommandCompletionManager()
+    mgr.menu.entries = pageEntries(3)
+    mgr.menu.selectedIndex = -1
+
+    mgr.pageSelection(true)
+    check mgr.menu.selectedIndex == -1
+
+    mgr.menu.entries = @[]
+    mgr.menu.selectedIndex = 0
+    mgr.pageSelection(true)
+    check mgr.menu.selectedIndex == 0
+
 suite "CommandCompletion - getSelectedCommand":
   test "Get selected command":
     let mgr = newCommandCompletionManager()

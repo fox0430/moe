@@ -314,7 +314,7 @@ suite "Keys let go by the key router":
     e.press(":", "w")
 
     check e.state.isCommandOverlay
-    check e.state.input.commandText == ":w"
+    check e.state.input.line.text == "w"
     check e.state.cursor.column == 0
 
 suite "q after an operator":

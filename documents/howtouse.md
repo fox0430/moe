@@ -23,6 +23,7 @@
 - [Terminal Mode](#terminal-mode)
 - [Configuration Mode](#configuration-mode)
 - [Command Mode](#command-mode)
+- [Editing the command line](#editing-the-command-line)
 - [Runtime Key Mapping](#runtime-key-mapping)
 
 
@@ -888,6 +889,44 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `conflictnext` | Jump to next git merge conflict block |
 | `conflictprev` | Jump to previous git merge conflict block |
 <!-- AUTO-GEN:end CommandMode -->
+
+</details>
+
+### Editing the command line
+
+<!-- AUTO-GEN:start CommandLineEditingIntro -->
+The `:` command line, the `/` and `?` search prompts and the LSP rename
+prompt take these keys. Completion is only on the `:` line, and the rename
+prompt has no history yet.
+<!-- AUTO-GEN:end CommandLineEditingIntro -->
+
+<details open>
+  <summary>Command-line editing keys</summary>
+
+<!-- AUTO-GEN:start CommandLineEditing -->
+| Keys | Description |
+|:---|:---|
+| <kbd>**Enter**</kbd> | Run the line |
+| <kbd>**Esc**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**c**</kbd> | Leave without running the line; an Esc a mapping or a register puts in runs it |
+| <kbd>**Left**</kbd> | Move the cursor one character left |
+| <kbd>**Right**</kbd> | Move the cursor one character right |
+| <kbd>**Shift**</kbd> <kbd>**Left**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**Left**</kbd> | Move the cursor left to just after a space |
+| <kbd>**Shift**</kbd> <kbd>**Right**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**Right**</kbd> | Move the cursor right to a space or the end |
+| <kbd>**Home**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**b**</kbd> | Move the cursor to the start |
+| <kbd>**End**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**e**</kbd> | Move the cursor to the end |
+| <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd> | Delete the character before the cursor; on an empty `:`, `/` or `?` line, leave it |
+| <kbd>**Delete**</kbd> | Delete the character under the cursor, or the one before it at the end; on an empty `:`, `/` or `?` line, leave it |
+| <kbd>**Up**</kbd> | Recall an older history entry that starts with the text before the cursor |
+| <kbd>**Down**</kbd> | Recall a newer history entry that starts with the same text, or that text after the newest |
+| <kbd>**Shift**</kbd> <kbd>**Up**</kbd> | Recall the next older history entry |
+| <kbd>**Page Up**</kbd> | Select the previous page of completions, or recall the next older history entry |
+| <kbd>**Shift**</kbd> <kbd>**Down**</kbd> | Recall the next newer history entry |
+| <kbd>**Page Down**</kbd> | Select the next page of completions, or recall the next newer history entry |
+| <kbd>**Tab**</kbd> | On the `:` line, complete the command name or argument, or select the next completion |
+| <kbd>**Shift**</kbd> <kbd>**Tab**</kbd> | On the `:` line, select the previous completion |
+| <kbd>**Ctrl**</kbd> <kbd>**n**</kbd> | Select the next completion, or recall the next newer history entry |
+| <kbd>**Ctrl**</kbd> <kbd>**p**</kbd> | Select the previous completion, or recall the next older history entry |
+<!-- AUTO-GEN:end CommandLineEditing -->
 
 </details>
 

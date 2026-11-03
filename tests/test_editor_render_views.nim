@@ -333,8 +333,8 @@ suite "renderBottomLines - Command mode":
     e.viewport.width = 80
     e.viewport.height = 24
     e.state.enterCommandOverlay()
-    e.state.input.commandText = ":write"
-    e.state.input.commandCursor = 5 # 0-based after ":", max = runeLen - 1
+    e.state.input.line.text = "write"
+    e.state.input.line.cursor = 5 # 0-based after ":", max = runeLen - 1
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -350,8 +350,8 @@ suite "renderBottomLines - Command mode":
     e.viewport.width = 80
     e.viewport.height = 24
     e.state.enterCommandOverlay()
-    e.state.input.commandText = ":"
-    e.state.input.commandCursor = 0
+    e.state.input.line.text = ""
+    e.state.input.line.cursor = 0
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -366,8 +366,8 @@ suite "renderBottomLines - Command mode":
     e.viewport.width = 80
     e.viewport.height = 24
     e.state.enterCommandOverlay()
-    e.state.input.commandText = ":set tabstop=4 shiftwidth=4 expandtab"
-    e.state.input.commandCursor = 36 # 0-based after ":", max = runeLen - 1
+    e.state.input.line.text = "set tabstop=4 shiftwidth=4 expandtab"
+    e.state.input.line.cursor = 36 # 0-based after ":", max = runeLen - 1
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -383,8 +383,8 @@ suite "renderBottomLines - Command mode":
     e.viewport.height = 24
     e.state.enterCommandOverlay()
     # "あいう" are 3 characters, each with display width 2
-    e.state.input.commandText = ":あいう"
-    e.state.input.commandCursor = 3 # After all 3 wide chars
+    e.state.input.line.text = "あいう"
+    e.state.input.line.cursor = 3 # After all 3 wide chars
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -401,8 +401,8 @@ suite "renderBottomLines - Command mode":
     e.viewport.height = 24
     e.state.enterCommandOverlay()
     # "eあb" = 'e'(1) + 'あ'(2) + 'b'(1) = 4 display columns
-    e.state.input.commandText = ":eあb"
-    e.state.input.commandCursor = 2 # After "eあ"
+    e.state.input.line.text = "eあb"
+    e.state.input.line.cursor = 2 # After "eあ"
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -419,8 +419,8 @@ suite "renderBottomLines - Search mode":
     e.viewport.width = 80
     e.viewport.height = 24
     e.state.enterSearchOverlay(Forward)
-    e.state.input.search.text = "pattern"
-    e.state.input.search.cursor = 7
+    e.state.input.line.text = "pattern"
+    e.state.input.line.cursor = 7
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -436,8 +436,8 @@ suite "renderBottomLines - Search mode":
     e.viewport.width = 80
     e.viewport.height = 24
     e.state.enterSearchOverlay(Backward)
-    e.state.input.search.text = "test"
-    e.state.input.search.cursor = 4
+    e.state.input.line.text = "test"
+    e.state.input.line.cursor = 4
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -453,7 +453,7 @@ suite "renderBottomLines - Search mode":
     e.viewport.width = 80
     e.viewport.height = 24
     e.state.enterSearchOverlay(Forward)
-    e.state.input.search.text = ""
+    e.state.input.line.text = ""
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -505,8 +505,8 @@ suite "renderBottomLines - Wrapped overlay input":
     e.viewport.height = 24
     e.state.enterCommandOverlay()
     # ":" + 80 chars = 81 columns -> 2 rows at width 80
-    e.state.input.commandText = ":" & "a".repeat(80)
-    e.state.input.commandCursor = 80 # cursor at end
+    e.state.input.line.text = "a".repeat(80)
+    e.state.input.line.cursor = 80 # cursor at end
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -526,8 +526,8 @@ suite "renderBottomLines - Wrapped overlay input":
     e.viewport.height = 24
     e.state.enterCommandOverlay()
     # ":" + 79 chars = exactly 80 columns; the cursor cell overflows
-    e.state.input.commandText = ":" & "a".repeat(79)
-    e.state.input.commandCursor = 79
+    e.state.input.line.text = "a".repeat(79)
+    e.state.input.line.cursor = 79
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -546,8 +546,8 @@ suite "renderBottomLines - Wrapped overlay input":
     e.viewport.height = 24
     e.state.enterCommandOverlay()
     # 1 + 12*80 columns -> 13 wrap rows, capped at MaxStatusMessageLines (10)
-    e.state.input.commandText = ":" & "a".repeat(80 * 12)
-    e.state.input.commandCursor = 80 * 12
+    e.state.input.line.text = "a".repeat(80 * 12)
+    e.state.input.line.cursor = 80 * 12
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -565,8 +565,8 @@ suite "renderBottomLines - Wrapped overlay input":
     e.viewport.width = 80
     e.viewport.height = 24
     e.state.enterSearchOverlay(Forward)
-    e.state.input.search.text = "x".repeat(85)
-    e.state.input.search.cursor = 85
+    e.state.input.line.text = "x".repeat(85)
+    e.state.input.line.cursor = 85
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -946,8 +946,8 @@ suite "renderSplitView - Viewport adjustment":
     # A command input long enough to wrap to multiple rows grows the
     # bottom area, but must not scroll the persistent viewport
     e.state.enterCommandOverlay()
-    e.state.input.commandText = ":" & "a".repeat(200)
-    e.state.input.commandCursor = 200
+    e.state.input.line.text = "a".repeat(200)
+    e.state.input.line.cursor = 200
     e.renderSplitView(buffer, false)
     check e.windowManager.windows[0].viewport.topLine == settledTopLine
 
@@ -1152,8 +1152,8 @@ suite "Integration - Full render cycle":
 
     # Switch to command mode
     e.state.enterCommandOverlay()
-    e.state.input.commandText = ":quit"
-    e.state.input.commandCursor = 5
+    e.state.input.line.text = "quit"
+    e.state.input.line.cursor = 5
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
@@ -1565,7 +1565,7 @@ suite "Bottom area - status line and command line share last row":
 
     # Enter command mode
     e.state.enterCommandOverlay()
-    e.state.input.commandText = ":write"
+    e.state.input.line.text = "write"
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
@@ -1618,8 +1618,8 @@ suite "Status line - grown area in multiStatusLine mode":
 
     # ":" + 100 chars -> 2 wrapped rows; status row reserved above them
     e.state.enterCommandOverlay()
-    e.state.input.commandText = ":" & "a".repeat(100)
-    e.state.input.commandCursor = 100
+    e.state.input.line.text = "a".repeat(100)
+    e.state.input.line.cursor = 100
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
@@ -1648,8 +1648,8 @@ suite "Status line - grown area in multiStatusLine mode":
     check e.windowManager.windows.len == 2
 
     e.state.enterCommandOverlay()
-    e.state.input.commandText = ":" & "a".repeat(100)
-    e.state.input.commandCursor = 100
+    e.state.input.line.text = "a".repeat(100)
+    e.state.input.line.cursor = 100
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)

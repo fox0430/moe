@@ -121,8 +121,8 @@ suite "NormalModeHandler - Mode Switching":
     check result.kind == nmrHandled
     check result.overlayTransition.isSome
     check result.overlayTransition.get == okCommand
-    check state.input.commandText == ":"
-    check state.input.commandCursor == 0
+    check state.input.line.text == ""
+    check state.input.line.cursor == 0
 
   test "Switch to Search overlay (forward)":
     let buf = newTextBuffer()
@@ -134,7 +134,7 @@ suite "NormalModeHandler - Mode Switching":
 
     check result.kind == nmrHandled
     check state.isSearchOverlay
-    check state.input.search.text == ""
+    check state.input.line.text == ""
     check state.input.search.direction == Forward
     check state.input.search.startPos.line == 5
     check state.input.search.startPos.column == 10

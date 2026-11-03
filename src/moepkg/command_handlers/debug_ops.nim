@@ -68,12 +68,12 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
       )
     generateEditorStateInfo(
       debugLines, e.state.mode, e.state.previousMode, e.activeWindow.cursor.line,
-      e.activeWindow.cursor.column, e.state.input.commandText, e.state.statusMessage,
+      e.activeWindow.cursor.column, e.state.commandLine, e.state.statusMessage,
       debugConfig.editorView.enable,
     )
     generateSearchInfo(
       debugLines,
-      e.state.input.search.text,
+      e.state.searchLine,
       e.state.input.search.last.pattern,
       $e.state.input.search.last.direction,
       e.state.input.search.history.len,

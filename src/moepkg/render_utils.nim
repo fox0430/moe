@@ -636,20 +636,18 @@ func motionReservedLines*(state: EditorState): int {.inline.} =
     steadyBottomAreaHeight()
 
 proc overlayInput*(state: EditorState): tuple[text: string, cursorChar: int] =
-  ## Full display text and character-index cursor position for the active overlay.
-  ## Matches the rendering in renderBottomLines: command text includes the
-  ## leading ':', search text is prefixed with '/' or '?', rename input is
-  ## prefixed with "Rename: " (cursor pinned at the end).
-  if state.isCommandOverlay:
-    (state.input.commandText, state.input.commandCursor + 1)
-  elif state.isSearchOverlay:
-    let prompt = if state.input.search.direction == Forward: "/" else: "?"
-    (prompt & state.input.search.text, 1 + state.input.search.cursor)
-  elif state.isRenameOverlay:
-    let prompt = "Rename: " & state.renameState.text
-    (prompt, prompt.charLen)
-  else:
-    ("", 0)
+  ## Full display text and character-index cursor position for the active
+  ## overlay: its line after the prompt's `:`, `/`, `?` or "Rename: ".
+  let prompt =
+    if state.isCommandOverlay:
+      ":"
+    elif state.isSearchOverlay:
+      if state.input.search.direction == Forward: "/" else: "?"
+    elif state.isRenameOverlay:
+      "Rename: "
+    else:
+      return ("", 0)
+  (prompt & state.input.line.text, prompt.charLen + state.input.line.cursor)
 
 proc wrappedInputCursor*(
     text: string, cursorChar: int, width: int
