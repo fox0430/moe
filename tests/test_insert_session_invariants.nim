@@ -254,7 +254,7 @@ let Invariants = @[
     skipFiles: @[],
     match: matchRecordEnd,
     allow: @[
-      ("moepkg/editor_mode.nim", 2), ("moepkg/command_handlers/mode_dispatchers.nim", 2)
+      ("moepkg/editor_mode.nim", 2), ("moepkg/command_handlers/mode_dispatchers.nim", 1)
     ],
   ),
   Invariant(

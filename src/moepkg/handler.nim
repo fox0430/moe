@@ -67,10 +67,10 @@ when not defined(moe.embedded):
   import terminal_mode
 import
   command_handlers/[
-    handler_manager, command_mode_handler, search_mode_handler, insert_commands,
-    result_processor, command_passthrough,
+    handler_manager, command_mode_handler, search_mode_handler, result_processor,
+    command_passthrough,
   ]
-from command_handlers/insert_handler import closeInsertPopups
+import prompt_keys
 export command_mode_handler, search_mode_handler, cursor_util, frontend_input
 
 proc addRunningProcess*(e: Editor, p: BackgroundProcess, label = "", path = "") =
@@ -128,28 +128,21 @@ proc releaseExternalResources*(e: Editor) =
   e.savePersistData()
 
 proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
-  ## Handle a KeyCombo in Rename mode - for LSP rename symbol input
-  ##
-  ## Key Mappings:
-  ## - Escape      -> Cancel rename, return to Normal mode
-  ## - Enter/CR    -> Execute rename with current text
-  ## - Backspace   -> Remove last character
-  ## - Character   -> Add character to rename text
+  ## Handle a KeyCombo in Rename mode - for LSP rename symbol input. It ends
+  ## and erases as the command line does (`promptKey`), as Vim's input():
+  ## Enter, and an Esc a mapping or a register puts in, run the rename; a
+  ## typed Esc, Ctrl-C and an erase on an empty line cancel it.
   ##
   ## Returns: true (event handled)
-  # Escape: Cancel rename and return to base mode
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
+  proc cancel(e: Editor) =
     e.state.exitOverlay()
     e.setMode(e.state.mode) # Sync window mode
     e.state.statusMessage = "Rename cancelled"
-    return true
 
-  # Enter: Execute rename
-  let isEnter =
-    (keyCombo.isSpecial and keyCombo.special == skEnter) or
-    (not keyCombo.isSpecial and (keyCombo.char == "\n" or keyCombo.char == "\r"))
-
-  if isEnter:
+  case promptKey(keyCombo, e.state.keyTyped)
+  of pkLeave:
+    e.cancel()
+  of pkEnter, pkRun:
     let newName = e.state.renameState.text
     if newName.len == 0:
       e.state.statusMessage = "Rename cancelled: empty name"
@@ -164,22 +157,15 @@ proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       e.state.exitOverlay()
       e.setMode(e.state.mode) # Sync window mode
       asyncSpawn e.requestLspRename(newName)
-    return true
-
-  # Backspace: Remove last character (Unicode-aware)
-  if keyCombo.isSpecial and keyCombo.special == skBackspace:
-    if e.state.renameState.text.charLen > 0:
-      e.state.renameState.text =
-        e.state.renameState.text.charSubStr(0, e.state.renameState.text.charLen - 1)
-    return true
-
-  # Character input: Add character to rename text
-  if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-    e.state.renameState.text &= keyCombo.char
-    return true
-
-  # Ignore other special keys
-  return true
+  of pkErase:
+    # Typing goes on at the end of the name.
+    var cursor = e.state.renameState.text.charLen
+    if erase(e.state.renameState.text, cursor, keyCombo) == eoLeave:
+      e.cancel()
+  of pkOther:
+    if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+      e.state.renameState.text &= keyCombo.char
+  true
 
 proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in Recent File mode.
@@ -1054,9 +1040,8 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
 
   return none(bool)
 
-proc prepareForInput(e: Editor, isKeyInput: bool) =
-  ## Per-input setup: clear stale status, refresh input timestamp, end any
-  ## smooth page scroll on its way.
+proc beginInput(e: Editor) =
+  ## Clear stale status, keep the mode policy and refresh the input time.
 
   # Clear status message from previous event cycle:
   # messages persist for one render frame, then clear on next input)
@@ -1066,8 +1051,9 @@ proc prepareForInput(e: Editor, isKeyInput: bool) =
   # Update last input time for auto backup idle detection
   e.updateInputTime()
 
-  # A key runs where a smooth page scroll ends and resumes cursor-following;
-  # other input acts on what the window shows.
+proc settleWindowForInput(e: Editor, isKeyInput: bool) =
+  ## A key runs where a smooth page scroll ends and resumes cursor-following;
+  ## other input acts on what the window shows.
   if isKeyInput:
     e.state.windowDisplay.scrollAnimation.finishPageScroll()
     e.state.pointerSelection.active = false
@@ -1075,6 +1061,12 @@ proc prepareForInput(e: Editor, isKeyInput: bool) =
       e.activeWindow.viewport.detachedFromCursor = false
   else:
     e.state.windowDisplay.scrollAnimation.stopPageScroll()
+
+proc prepareForInput(e: Editor, isKeyInput: bool) =
+  ## Per-input setup: clear stale status, refresh input timestamp, end any
+  ## smooth page scroll on its way.
+  e.beginInput()
+  e.settleWindowForInput(isKeyInput)
 
 proc prepareForKeyCombo(e: Editor) =
   ## Per-input setup for frontend-neutral key handling.
@@ -1161,91 +1153,6 @@ proc handleMouseEvent*(e: Editor, event: Event): bool =
   e.asInput:
     result = e.handleMouseEventCore(event)
 
-proc handleInterruptCore(e: Editor): bool =
-  ## Handle Ctrl-C. Behaviour depends on the
-  ## current mode/overlay: forward to Terminal PTY, cancel overlays, give up
-  ## resuming Insert after Ctrl-o, or transition file-edit modes back to Normal.
-  e.state.armInsertResume()
-  # Before anything closes: a held key let go later would meet another mode.
-  e.keyRouter.dropHeldKeys()
-
-  # As at Vim's hit-enter prompt, Ctrl-C only dismisses the messages.
-  if e.state.ui.tempMessages.len > 0:
-    e.state.ui.tempMessages = @[]
-    return true
-
-  when not defined(moe.embedded):
-    # An overlay opened over Terminal still owns Ctrl-C; the session gets it
-    # only while the keys are the window's own, in either sub-mode.
-    if e.state.mode == EditorMode.Terminal and not e.state.hasOverlay:
-      let activeWin = e.activeWindow
-      if activeWin.modeState.kind == mskTerminal:
-        let termState = activeWin.modeState.terminal
-        if activeWin.modeState.terminalSubMode == tsmInput:
-          # Input sub-mode: forward Ctrl-C to the PTY as \x03.
-          termState.interrupt()
-        else:
-          # Normal sub-mode: the keys are ours, but a paste queued before
-          # the switch is still draining and must stay cancellable.
-          termState.cancelQueuedPastes()
-        return true
-
-  # Search overlay: cancel the search as Esc does
-  if e.state.isSearchOverlay:
-    e.cancelSearch()
-    return true
-
-  # Command overlay: clear command line and exit overlay
-  if e.state.isCommandOverlay:
-    e.cancelCommandLine()
-    return true
-
-  if e.state.mode == EditorMode.Normal:
-    ctrlCInNormal(e.state, e.keyRouter.registry)
-  elif e.state.mode.isVisualAllMode:
-    escapeVisual(e.state, e.keyRouter.registry, ctrlC = true)
-    e.enforceModePolicy()
-  elif e.state.mode.isFileEditMode:
-    # Insert and Replace: switch to Normal mode
-    let activeBuffer = e.activeBuffer()
-
-    # Ctrl-C records the insert for dot-repeat, but does not run Escape-only
-    # counted-insert replay or visual-block replication.
-    if e.state.mode == EditorMode.Insert:
-      # Leaving Insert ends completion and signature help, as on Escape.
-      e.handlerManager.insertHandler.closeInsertPopups()
-      let finalizeResult = finalizeInsertInterrupt(activeBuffer, e.state)
-      if finalizeResult.isErr:
-        e.state.statusMessage = finalizeResult.error
-    elif e.state.mode == EditorMode.Replace:
-      if activeBuffer.inTransaction:
-        clearAutoIndentIfUnedited(activeBuffer, e.state)
-        let commitResult = activeBuffer.commitTransaction()
-        if commitResult.isErr:
-          logError "handler", "Failed to commit transaction: " & commitResult.error
-          e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
-      e.state.editState.replaceHistory = @[]
-
-    e.state.previousMode = e.state.mode
-    e.setMode(EditorMode.Normal)
-    e.enforceModePolicy()
-
-    # Adjust the cursor only when the transition really entered Normal mode.
-    # Forced Insert mode redirects it into a fresh Insert session instead.
-    if e.state.mode == EditorMode.Normal:
-      e.activeWindow.adjustCursorAfterInsertExit()
-
-  return true
-
-proc handleInterrupt*(e: Editor): bool =
-  ## Handle a frontend interrupt request, such as Ctrl-C in a terminal. A
-  ## register being recorded takes it as the Ctrl-C key, which each mode and
-  ## prompt runs as it runs the interrupt, as Vim records the typed Ctrl-C.
-  e.state.pendingInput.macroState.recordTypedKeys([CtrlC])
-  e.prepareForInput(false)
-  e.asInput:
-    result = e.handleInterruptCore()
-
 proc handleOverlayKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## Dispatch the Rename overlay and Debug mode. Returns some(result) if
   ## handled, none otherwise.
@@ -1263,8 +1170,8 @@ proc handlePopupKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
 
   # Handle CodeLens picker input when active
   if e.state.lspCache.codeLensPicker.isActive:
-    # Escape - cancel picker
-    if keyCombo.isSpecial and keyCombo.special == skEscape:
+    # Escape or Ctrl-C - cancel picker, as a Vim popup menu
+    if keyCombo.isEscOrCtrlC:
       e.state.lspCache.hideCodeLensPicker()
       e.state.statusMessage = ""
       return some(true)
@@ -1312,6 +1219,11 @@ proc handlePopupKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
 
     # Manual hover (K key): allow j/k/h/l and arrow keys for scrolling
     if not e.state.lspCache.hoverPopup.isAutoHover:
+      # Ctrl-C closes it as Esc does, as a Vim popup with a filter. An
+      # automatic one takes no keys, so Ctrl-C goes on as any other key.
+      if keyCombo.isCtrlC:
+        e.state.lspCache.hideHoverPopup()
+        return some(true)
       if not keyCombo.isSpecial:
         if keyCombo.char == "j":
           e.state.lspCache.hoverPopupScrollDown()
@@ -1455,11 +1367,34 @@ promptLayerHook = proc(e: Editor, keyCombo: KeyCombo): Option[ReplayOutcome] =
 frontLayerHook = proc(e: Editor, keyCombo: KeyCombo): Option[ReplayOutcome] =
   e.dispatchFrontLayers(keyCombo)
 
+proc flushTypeahead(e: Editor) =
+  ## Drop the input queued before an interrupt, as Vim flushes its typeahead:
+  ## the keys held for a mapping, and the pastes the active terminal has yet
+  ## to send.
+  e.keyRouter.dropHeldKeys()
+  when not defined(moe.embedded):
+    # An overlay over Terminal or the hit-enter prompt takes the Ctrl-C; the
+    # session's pastes stay.
+    if e.state.mode == EditorMode.Terminal and not e.state.hasOverlay and
+        e.state.ui.tempMessages.len == 0:
+      let win = e.activeWindow
+      if win.modeState.kind == mskTerminal:
+        win.modeState.terminal.cancelQueuedPastes()
+
 proc dispatchKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle one frontend-neutral key combination, without noting a quit.
   ## Public entry points (`handleKeyCombo`, `handleTextInput`, `handleEvent`)
-  ## record the result through `noteQuit`.
-  e.prepareForKeyCombo()
+  ## record the result through `noteQuit`. A typed Ctrl-C no mapping of the
+  ## mode it meets takes is also an interrupt, as Vim's got_int.
+  e.beginInput()
+  let interrupts =
+    keyCombo.isCtrlC and (
+      e.readsKeyUnmapped(keyCombo) or
+      not e.keyRouter.startsMapping(e.routerMode, keyCombo)
+    )
+  # Like input that is not a key, an interrupt leaves the window as it shows:
+  # a smooth page scroll stops there.
+  e.settleWindowForInput(isKeyInput = not interrupts)
   e.state.armInsertResume()
 
   when not defined(moe.embedded):
@@ -1475,7 +1410,19 @@ proc dispatchKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   # The one place a key enters as typed, so every mode records it alike.
   # Playback loops enter `runNestedKeyCombo` directly and stand for no typed
   # keys.
-  let outcome = e.handlerManager.runNestedKeyCombo(e, typedKey(keyCombo))
+  var key = typedKey(keyCombo)
+  let wasInterrupted = e.state.interrupted
+  if interrupts:
+    e.flushTypeahead()
+    # Recorded as it is read, whatever then takes it, as Vim records it.
+    e.state.pendingInput.macroState.recordTypedKeys([CtrlC])
+    key.standsFor = @[]
+    e.state.interrupted = true
+  let outcome =
+    try:
+      e.handlerManager.runNestedKeyCombo(e, key)
+    finally:
+      e.state.interrupted = wasInterrupted
 
   # In Config mode, sync display state only when a value was actually mutated.
   # Plain cursor movement leaves pendingApply false, avoiding a theme reread and
@@ -1513,9 +1460,9 @@ proc dispatchEvent(e: Editor, event: Event): bool =
       return true
     return e.dispatchKeyCombo(keyComboOpt.get)
 
-  # Handle Ctrl-C (Quit event from celina)
+  # A terminal's Ctrl-C comes as celina's Quit event.
   if event.kind == EventKind.Quit:
-    return e.handleInterrupt()
+    return e.dispatchKeyCombo(CtrlC)
 
   # Handle mouse events first
   if event.kind == EventKind.Mouse:
@@ -1836,6 +1783,12 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   ## paste, and mouse input remain handled by `handleEvent`.
   e.asInput:
     result = e.noteQuit(e.dispatchKeyCombo(keyCombo))
+
+proc handleInterrupt*(e: Editor): bool =
+  ## Handle a frontend interrupt request, such as Ctrl-C in a terminal: the
+  ## typed Ctrl-C key, which interrupts unless a mapping takes it. False when
+  ## the editor decided to quit.
+  e.handleKeyCombo(CtrlC)
 
 proc handleTextInput*(e: Editor, text: string): bool =
   ## Handle committed text from a GUI text-input protocol. False when the

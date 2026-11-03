@@ -431,9 +431,13 @@ proc isCtrlO*(combo: KeyCombo): bool =
 const CtrlC* = KeyCombo(isSpecial: false, char: "c", modifiers: {kmCtrl})
 
 proc isCtrlC*(combo: KeyCombo): bool =
-  ## Ctrl-C as a key. A typed one mostly comes as the frontend's interrupt
-  ## instead.
+  ## Ctrl-C as a key. A typed one is also an interrupt, unless a mapping takes
+  ## it (`Editor.dispatchKeyCombo`).
   combo.isCtrl('c')
+
+proc isEscOrCtrlC*(combo: KeyCombo): bool =
+  ## Esc or Ctrl-C, which close a prompt or a popup alike.
+  (combo.isSpecial and combo.special == skEscape) or combo.isCtrlC
 
 proc isCtrlH*(combo: KeyCombo): bool =
   combo.isCtrl('h')

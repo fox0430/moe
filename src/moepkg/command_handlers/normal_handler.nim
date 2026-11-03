@@ -417,7 +417,7 @@ proc handleNormalModeKey*(
     else:
       handler.keyBindingRegistry.clearSequence()
       state.pendingInput.cancelOperatorPending()
-      if not (keyCombo.isCtrlC or (keyCombo.isSpecial and keyCombo.special == skEscape)):
+      if not keyCombo.isEscOrCtrlC:
         state.beep()
   elif state.pendingInput.pendingOperator.isSome:
     let operand = handler.keyBindingRegistry.operandCommand

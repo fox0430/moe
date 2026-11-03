@@ -51,15 +51,14 @@ proc handleEditModeKey(
     configState: ConfigModeState, editorState: EditorState, keyCombo: KeyCombo
 ): ConfigModeResult =
   ## Handle key press while in edit mode (editing Int or String value)
+  if keyCombo.isEscOrCtrlC:
+    configState.cancelEdit()
+    return ConfigModeResult(kind: cmrHandled)
   if keyCombo.isSpecial:
     case keyCombo.special
     of skEnter:
       # Confirm edit
       discard configState.confirmEdit(editorState)
-      return ConfigModeResult(kind: cmrHandled)
-    of skEscape:
-      # Cancel edit
-      configState.cancelEdit()
       return ConfigModeResult(kind: cmrHandled)
     of skBackspace:
       configState.editBackspace()
@@ -91,13 +90,13 @@ proc handleEnumPopupKey(
     configState: ConfigModeState, editorState: EditorState, keyCombo: KeyCombo
 ): ConfigModeResult =
   ## Handle key press while enum popup is open
+  if keyCombo.isEscOrCtrlC:
+    configState.closeEnumPopup()
+    return ConfigModeResult(kind: cmrHandled)
   if keyCombo.isSpecial:
     case keyCombo.special
     of skEnter:
       configState.enumPopupConfirm(editorState)
-      return ConfigModeResult(kind: cmrHandled)
-    of skEscape:
-      configState.closeEnumPopup()
       return ConfigModeResult(kind: cmrHandled)
     of skUp:
       configState.enumPopupMoveUp()

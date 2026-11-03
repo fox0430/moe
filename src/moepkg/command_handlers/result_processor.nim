@@ -849,12 +849,20 @@ proc letHeldKeysGo*(manager: HandlerManager, editor: Editor): ReplayOutcome =
     editor.keyRouter.dropHeldKeys()
     result = editor.stopRecursiveMapping()
 
-proc escapeEndsCommand(e: Editor, keyCombo: KeyCombo): bool =
-  ## Escape ends a Normal mode command being built before a Normal mode
-  ## mapping can take it: Vim uses none for an operator's motion or a character
-  ## argument.
-  keyCombo.isSpecial and keyCombo.special == skEscape and
-    e.state.mode == EditorMode.Normal and hasPendingBuiltinInput(e)
+proc cancelEndsCommand(e: Editor, keyCombo: KeyCombo): bool =
+  ## Escape and Ctrl-C end an operator before a Normal mode mapping can take
+  ## them: Vim maps an operator's motion with omap, which moe has none of.
+  ## After a count or a register name, a mapping takes them.
+  keyCombo.isEscOrCtrlC and e.state.mode == EditorMode.Normal and
+    e.state.pendingInput.pendingOperator.isSome
+
+proc readsKeyUnmapped*(e: Editor, keyCombo: KeyCombo): bool =
+  ## The command being built reads `keyCombo` as it is, before the mappings
+  ## while none hold keys: an operand, or what cancels the command.
+  e.routerMode != EditorMode.Command and (
+    e.state.pendingInput.waitsForOperand(e.keyRouter.registry) or
+    e.cancelEndsCommand(keyCombo)
+  )
 
 proc answerHitEnter(e: Editor, keyCombo: KeyCombo): bool =
   ## Dismiss temporary messages (e.g. :jump output) on any key, as Vim's
@@ -902,13 +910,9 @@ proc dispatchNestedKeyCombo(
       let prompted = e.recordingIfRan(key.standsFor, promptLayerHook(e, key.combo))
       if prompted.isSome:
         return prompted.get
-  let mode = e.routerMode
-  let literal =
-    mode != EditorMode.Command and (
-      e.state.pendingInput.waitsForOperand(manager.keyBindingRegistry) or
-      e.escapeEndsCommand(key.combo)
-    )
-  let routed = manager.runRoute(e, e.keyRouter.feedKey(mode, key, literal))
+  let routed = manager.runRoute(
+    e, e.keyRouter.feedKey(e.routerMode, key, e.readsKeyUnmapped(key.combo))
+  )
   if routed.isSome:
     return routed.get
   e.recordingIfRan(key.standsFor, some(manager.runAsItself(e, key))).get

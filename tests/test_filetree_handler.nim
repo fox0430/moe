@@ -286,6 +286,21 @@ suite "FileTree handler":
     check state.searchText == "src" # Search text preserved
     check result.statusMessage == "/src"
 
+  test "Ctrl-C cancels search as Escape does, without typing c":
+    let tmpDir = createTestTree()
+    defer:
+      removeDir(tmpDir)
+
+    let state = newFileTreeState(tmpDir)
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("/"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("x"))
+
+    let result = state.handleFileTreeModeKey(20, CtrlC)
+
+    check result.kind == ftrHandled
+    check not state.isSearching
+    check state.searchText == ""
+
   test "Escape cancels search":
     let tmpDir = createTestTree()
     defer:

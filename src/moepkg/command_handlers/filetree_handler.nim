@@ -53,13 +53,13 @@ proc handleFileTreeModeKey*(
 
   # Search input mode
   if fileTreeState.isSearching:
+    if keyCombo.isEscOrCtrlC:
+      # Cancel search
+      fileTreeState.isSearching = false
+      fileTreeState.clearSearch()
+      return FileTreeResult(kind: ftrHandled, statusMessage: "")
     if keyCombo.isSpecial:
       case keyCombo.special
-      of skEscape:
-        # Cancel search
-        fileTreeState.isSearching = false
-        fileTreeState.clearSearch()
-        return FileTreeResult(kind: ftrHandled, statusMessage: "")
       of skEnter:
         # Confirm search (keep searchText so the match highlight persists)
         fileTreeState.isSearching = false

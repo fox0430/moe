@@ -76,7 +76,8 @@ proc replicateBlockInsert*(
 ): string =
   ## End a Visual-block insert: copy what the first line gained, from where
   ## typing started, onto the block's other lines, as Vim does. Nothing is
-  ## copied when the cursor left the first line. An `I` or `A` that typed
+  ## copied when the cursor left the first line or a typed Ctrl-C interrupts
+  ## (Vim's op_insert and op_change). An `I` or `A` that typed
   ## something then puts the cursor on the block's top left, as Vim's
   ## op_insert, unless Insert goes on where it is (`bieTyping`), and the step
   ## back of leaving Insert leaves it there. Returns an error message, or "".
@@ -85,7 +86,8 @@ proc replicateBlockInsert*(
   let ctx = state.editState.visualBlockInsertContext.get
   state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
   let area = ctx.area
-  if state.cursor.line != area.firstLine or area.firstLine >= buffer.len:
+  if state.cursor.line != area.firstLine or area.firstLine >= buffer.len or
+      state.interrupted:
     return ""
   let
     firstLine = buffer.getLine(area.firstLine)
@@ -149,18 +151,6 @@ proc finalizeInsertExit*(
 
   ok("")
 
-proc finalizeInsertInterrupt*(
-    buffer: TextBuffer, state: EditorState
-): Result[void, string] =
-  ## Finish Insert mode for Ctrl-C without the count's repeats or visual-block
-  ## replication.
-  state.snippetSession.active = false
-  state.endInsertRecord()
-  clearAutoIndentIfUnedited(buffer, state)
-
-  state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
-  commitInsertModeBoundary(buffer, state)
-
 proc leaveInsertForCtrlO(state: EditorState, buffer: TextBuffer) =
   ## Vim's Ctrl-o keeps for vertical motions the column the cursor showed on
   ## in Insert, a tab's first cell. Past the end of the line, it puts the
@@ -181,12 +171,15 @@ proc leaveInsert*(
     manager: HandlerManager, editor: Editor, target = EditorMode.Normal, thenExec = ""
 ): HandlerResult =
   ## Leave Insert as Escape does, running the command line `thenExec` after if
-  ## given. A count types the record again first (`3ifoo`, `2o`).
+  ## given. A count types the record again first (`3ifoo`, `2o`), unless a
+  ## typed Ctrl-C interrupts, as Vim's ins_esc.
   let buffer = editor.activeBuffer
   let state = editor.state
   manager.insertHandler.closeInsertPopups()
   let times = state.editState.typing.repeatsLeft
-  if target == EditorMode.Normal and state.editState.typing.open and times > 0:
+  if state.interrupted:
+    state.editState.typing.repeatsLeft = 0
+  elif target == EditorMode.Normal and state.editState.typing.open and times > 0:
     state.editState.typing.repeatsLeft = 0
     let record = state.editState.insertRecord
     return HandlerResult(
@@ -283,16 +276,6 @@ proc handleInsertMode*(
           modeTransition: r.modeTransition,
           statusMessage:
             if finalizeResult.isErr: finalizeResult.error else: finalizeResult.get,
-        )
-
-      # Resolve the keybinding before applying Ctrl-C's interrupt semantics so
-      # :iunmap and Insert-mode remaps remain authoritative.
-      if r.isInterruptExit:
-        let interruptResult = finalizeInsertInterrupt(buffer, state)
-        return HandlerResult(
-          kind: hrHandled,
-          modeTransition: r.modeTransition,
-          statusMessage: if interruptResult.isErr: interruptResult.error else: "",
         )
 
       return manager.leaveInsert(editor, r.modeTransition.get)

@@ -368,6 +368,45 @@ suite "KeyRouter - rmkCommand routing":
     let r = router.feedKey(EditorMode.Command, toKeyCombo('j', ctrl = true))
     check r.kind == rrUnhandled
 
+suite "KeyRouter - startsMapping":
+  test "a mapping starts with a key as the router matches it":
+    let router = newRouter()
+    router.registry.addKeySeqMapping(EditorMode.Normal, "C-c x", "d l")
+    router.registry.registerRmkCommand(
+      EditorMode.Insert, "C-c", "window-prev", "window.prev"
+    )
+    router.registry.addKeySeqMapping(EditorMode.Visual, "x C-c", "d")
+    let ctrlShiftC = KeyCombo(isSpecial: false, char: "c", modifiers: {kmCtrl, kmShift})
+
+    check router.startsMapping(EditorMode.Normal, CtrlC)
+    check not router.startsMapping(EditorMode.Normal, ctrlShiftC)
+    check router.startsMapping(EditorMode.Insert, CtrlC)
+    check not router.startsMapping(EditorMode.Visual, CtrlC)
+    check not router.startsMapping(EditorMode.Replace, CtrlC)
+
+  test "Visual Line and Visual Block count Visual's command mappings":
+    # The Visual handler runs them there too.
+    let router = newRouter()
+    router.registry.registerRmkCommand(
+      EditorMode.Visual, "C-c", "window-prev", "window.prev"
+    )
+    check router.startsMapping(EditorMode.VisualLine, CtrlC)
+    check router.startsMapping(EditorMode.VisualBlock, CtrlC)
+
+    let keySeq = newRouter()
+    keySeq.registry.addKeySeqMapping(EditorMode.Visual, "C-c", "d")
+    check not keySeq.startsMapping(EditorMode.VisualLine, CtrlC)
+
+  test "the command line counts only the mappings it runs":
+    let router = newRouter()
+    router.registry.registerRmkCommand(
+      EditorMode.Command, "C-c", "window-prev", "window.prev"
+    )
+    check not router.startsMapping(EditorMode.Command, CtrlC)
+
+    router.registry.addKeySeqMapping(EditorMode.Command, "C-c", "a")
+    check router.startsMapping(EditorMode.Command, CtrlC)
+
 suite "KeyRouter - stale accumulator":
   test "feedKey flushes stale accumulator when mappings table becomes empty":
     let router = newRouter()

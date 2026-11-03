@@ -1115,6 +1115,9 @@ type
     keyTyped*: bool
       ## The key running was typed, not put in by a mapping or a register, as
       ## Vim's KeyTyped
+    interrupted*: bool
+      ## A typed Ctrl-C no mapping takes is running, as Vim's got_int: the
+      ## command it ends stops short of repeating what was typed
     # QuickRun request flag
     requestQuickRun*: bool # Set by keybinding to request QuickRun execution
     # Command mode completion
