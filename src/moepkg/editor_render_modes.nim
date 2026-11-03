@@ -76,7 +76,7 @@ proc renderConfig*(
     if not searchHighlightOn:
       ""
     elif e.state.isSearchOverlay():
-      e.state.input.search.text
+      e.state.input.line.text
     else:
       configState.searchQuery
 

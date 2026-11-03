@@ -50,7 +50,7 @@ const HelpSentences* =
 
 """ &
   renderCommandModeHead() & "\n" & renderSetOptionsSection() & renderCommandModeTail() &
-  """
+  "\n## Editing the command line\n\n" & renderCommandLineEditingSection() & """
 
 ## Runtime Key Mapping
 

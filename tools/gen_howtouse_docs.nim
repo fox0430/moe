@@ -61,6 +61,8 @@ let Sections: seq[tuple[name: string, body: proc(): string]] = @[
   (name: "TerminalInput", body: renderTerminalInputTable),
   (name: "TerminalNormal", body: renderTerminalNormalTable),
   (name: "CommandMode", body: renderCommandModeTable),
+  (name: "CommandLineEditingIntro", body: renderCommandLineEditingIntro),
+  (name: "CommandLineEditing", body: renderCommandLineEditingTable),
   (name: "RuntimeKeyMap", body: renderRuntimeKeyMapTable),
 ]
 

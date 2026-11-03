@@ -134,8 +134,8 @@ suite "Overlay - enterCommandOverlay":
 
     check state.overlay.isSome
     check state.overlay.get == okCommand
-    check state.input.commandText == ":"
-    check state.input.commandCursor == 0
+    check state.input.line.text == ""
+    check state.input.line.cursor == 0
 
   test "Preserves base mode when entering command overlay":
     let state = createTestState()
@@ -145,12 +145,12 @@ suite "Overlay - enterCommandOverlay":
     check state.mode == EditorMode.Normal
     check state.isCommandOverlay == true
 
-  test "Sets legacy commandText and commandCursor":
+  test "Sets the prompt line and its cursor":
     let state = createTestState()
     state.enterCommandOverlay()
 
-    check state.input.commandText == ":"
-    check state.input.commandCursor == 0
+    check state.input.line.text == ""
+    check state.input.line.cursor == 0
 
   test "Preserves Filer as base mode":
     let state = createTestState()
@@ -193,9 +193,9 @@ suite "Overlay - enterSearchOverlay":
     state.enterSearchOverlay(Forward)
 
     check state.input.search.direction == Forward
-    check state.input.search.text == ""
+    check state.input.line.text == ""
     check state.input.search.startPos == BufferPosition(line: 3, column: 7)
-    check state.input.search.historyIndex == -1
+    check state.input.line.entry.isNone
 
   test "Resets hlsearchTempDisabled":
     let state = createTestState()
@@ -220,7 +220,7 @@ suite "Overlay - enterRenameOverlay":
 
     check state.overlay.isSome
     check state.overlay.get == okRename
-    check state.renameState.text == "myVariable"
+    check state.input.line.text == "myVariable"
     check state.renameState.originalWord == "myVariable"
     check state.renameState.cursorLine == 10
     check state.renameState.cursorColumn == 5
@@ -237,7 +237,7 @@ suite "Overlay - enterRenameOverlay":
     let state = createTestState()
     state.enterRenameOverlay("testFunc", 15, 20)
 
-    check state.renameState.text == "testFunc"
+    check state.input.line.text == "testFunc"
     check state.renameState.originalWord == "testFunc"
     check state.renameState.cursorLine == 15
     check state.renameState.cursorColumn == 20
@@ -285,27 +285,27 @@ suite "Overlay - exitOverlay":
     check state.hasOverlay == false
     check state.mode == EditorMode.Normal
 
-  test "Clears legacy command text and cursor":
+  test "Clears the prompt line and its cursor":
     let state = createTestState()
     state.enterCommandOverlay()
-    state.input.commandText = ":wq"
-    state.input.commandCursor = 2
+    state.input.line.text = "wq"
+    state.input.line.cursor = 2
 
     state.exitOverlay()
 
-    check state.input.commandText == ""
-    check state.input.commandCursor == 0
+    check state.input.line.text == ""
+    check state.input.line.cursor == 0
 
   test "Clears search text and history index":
     let state = createTestState()
     state.enterSearchOverlay(Forward)
-    state.input.search.text = "pattern"
-    state.input.search.historyIndex = 2
+    state.input.line.text = "pattern"
+    state.input.line.entry = some(2)
 
     state.exitOverlay()
 
-    check state.input.search.text == ""
-    check state.input.search.historyIndex == -1
+    check state.input.line.text == ""
+    check state.input.line.entry.isNone
 
   test "Does nothing when no overlay is active":
     let state = createTestState()

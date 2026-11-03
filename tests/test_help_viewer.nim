@@ -564,15 +564,21 @@ suite "HelpViewer - Command mode rendering (snapshot)":
       "conflictprev - Jump to previous git merge conflict block"
     )
 
-  test "blank line separates Command mode section from Runtime Key Mapping":
+  test "blank lines separate Command mode, its editing keys and Runtime Key Mapping":
     let state = newHelpViewerState()
-    # The last Command-mode line, a blank line, then the next subsection header
+    # The last line of a section, a blank line, then the next subsection header
     # must appear consecutively in the rendered output.
     let idx =
       state.items.find("conflictprev - Jump to previous git merge conflict block")
     check idx >= 0
     check state.items[idx + 1] == ""
-    check state.items[idx + 2] == "## Runtime Key Mapping"
+    check state.items[idx + 2] == "## Editing the command line"
+    let last = state.items.find(
+      "Ctrl-p                    - Select the previous completion, or recall the next older history entry"
+    )
+    check last > idx
+    check state.items[last + 1] == ""
+    check state.items[last + 2] == "## Runtime Key Mapping"
 
 suite "HelpViewer - Mode sections (snapshot)":
   ## Snapshot assertions for the per-mode `render*Section` procs in

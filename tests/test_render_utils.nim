@@ -749,15 +749,15 @@ suite "overlayInput":
   test "command overlay includes the ':' prefix":
     let state = newTestState()
     state.enterCommandOverlay()
-    state.input.commandText = ":edit file"
-    state.input.commandCursor = 4
+    state.input.line.text = "edit file"
+    state.input.line.cursor = 4
     check state.overlayInput() == (text: ":edit file", cursorChar: 5)
 
   test "search overlay uses '/' or '?' prompt":
     let state = newTestState()
     state.enterSearchOverlay(Forward)
-    state.input.search.text = "foo"
-    state.input.search.cursor = 2
+    state.input.line.text = "foo"
+    state.input.line.cursor = 2
     check state.overlayInput() == (text: "/foo", cursorChar: 3)
 
     state.input.search.direction = Backward
@@ -776,7 +776,7 @@ suite "commandLineAreaHeight":
   test "non-positive width falls back to the steady floor":
     let state = newTestState()
     state.enterCommandOverlay()
-    state.input.commandText = ":" & "a".repeat(200)
+    state.input.line.text = "a".repeat(200)
     check state.commandLineAreaHeight(0) == 1
     check state.commandLineAreaHeight(-1) == 1
 
@@ -784,15 +784,15 @@ suite "commandLineAreaHeight":
     let state = newTestState()
     state.enterCommandOverlay()
     # ":"  + 9 chars = 10 columns -> 3 rows at width 4
-    state.input.commandText = ":" & "a".repeat(9)
-    state.input.commandCursor = 0
+    state.input.line.text = "a".repeat(9)
+    state.input.line.cursor = 0
     check state.commandLineAreaHeight(4) == 3
 
   test "overlay growth is capped at MaxStatusMessageLines":
     let state = newTestState()
     state.enterCommandOverlay()
-    state.input.commandText = ":" & "a".repeat(80 * (MaxStatusMessageLines + 5))
-    state.input.commandCursor = 0
+    state.input.line.text = "a".repeat(80 * (MaxStatusMessageLines + 5))
+    state.input.line.cursor = 0
     check state.commandLineAreaHeight(80) == MaxStatusMessageLines
 
   test "multi-line status message grows the area":

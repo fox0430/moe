@@ -313,6 +313,12 @@ proc renderReplaceModeTable*(): string =
 proc renderInsertModeTable*(): string =
   renderKbdHelpGroup(InsertModeCommands)
 
+proc renderCommandLineEditingIntro*(): string =
+  CommandLineEditingIntro
+
+proc renderCommandLineEditingTable*(): string =
+  renderKbdHelpGroup(CommandLineEditingCommands)
+
 proc renderBackupModeTable*(): string =
   renderKbdHelpGroup(BackupModeCommands)
 

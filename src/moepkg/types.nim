@@ -56,6 +56,7 @@ when not defined(moe.embedded):
 
 from lsp/protocol/types import SemanticTokensLegend
 from cursor_util import clampCursorToLastChar, adjustCursorAfterInsertExit
+from unicode_utils import charLen
 
 export
   buffer.LineMarkerKind, registers_types, command_completion_types, filer_types,
@@ -314,15 +315,24 @@ type
     match*: SearchMatch # As a regex (/ and ?) or as it is (* and #)
     direction*: SearchDirection # The way it went, which n goes too
 
+  PromptLine* = object
+    ## The line typed at the `:`, `/` or `?` prompt, or at the LSP rename's,
+    ## as Vim's ccline. One prompt is open at a time, so they share it.
+    text*: string # Without the prompt's own `:`, `/` or `?`
+    cursor*: int # Character index into text
+    entry*: Option[int]
+      # The history entry the line came from (0 is the newest), as Vim's
+      # hiscnt: an edit keeps it, so Up and Down go on from there.
+    lookfor*: Option[string]
+      # What Up and Down look for: the text before the cursor when they began.
+      # Any other key but Left and Right drops it.
+
   SearchState* = object ## Search-related state grouped together for better organization
-    text*: string # Text being typed in search mode
-    cursor*: int # Cursor position within text (0-based character index)
     last*: SearchSpec # Last executed search, replayed by n/N and an empty `/`
     direction*: SearchDirection
       # The way the search being typed goes (/ or ?). Leaving the prompt keeps
       # the last search's own.
     history*: seq[string] # Search history (most recent first)
-    historyIndex*: int # Current position in search history (-1 when not navigating)
     startPos*: BufferPosition # Cursor position when search mode started (for incsearch)
     startView*: Option[ViewState]
       # What the window showed then, put back before each incsearch match
@@ -337,10 +347,6 @@ type
 
   CommandState* = object ## Command mode (ex-mode) state grouped together
     history*: seq[string] # Command history (most recent first)
-    historyIndex*: int # Current position in command history (-1 when not navigating)
-    historyPrefix*: string
-      # Prefix captured when history navigation started; only entries starting
-      # with this prefix are surfaced by Up/Down. Empty means "match any".
 
   MacroRecording* = object ## One `q<reg>...q` session
     register*: char # Register (a-z) being recorded to
@@ -489,7 +495,6 @@ type
     featureGeneration*: array[LspRequestFeature, int]
 
   RenameState* = object ## State for LSP rename mode
-    text*: string # New name being typed
     cursorLine*: int # Line where rename was initiated
     cursorColumn*: int # Column where rename was initiated
     originalWord*: string # Original word being renamed
@@ -1078,10 +1083,8 @@ type
     pendingCommand*: PendingCommand # Ctrl-W etc.
 
   InputState* = object ## Command-line / search input state grouped together.
-    commandText*: string # Text being typed in command mode
-    commandCursor*: int
-      # Cursor position within commandText (0-based, after the : prefix)
-    search*: SearchState # Search-related state (text, history, settings)
+    line*: PromptLine # The line of the open prompt
+    search*: SearchState # Search-related state (history, settings)
     commandState*: CommandState # Command mode (ex-mode) state (history)
 
   JumpListState* = object ## Jump list navigation state (Ctrl-o / Ctrl-i).
@@ -1761,16 +1764,25 @@ proc isRenameOverlay*(state: EditorState): bool =
   ## Check if rename overlay is active
   state.overlay == some(okRename)
 
+proc commandLine*(state: EditorState): string =
+  ## The open command line with its `:`, as the parser and the completion
+  ## take it, or "" with none open.
+  if state.isCommandOverlay:
+    ":" & state.input.line.text
+  else:
+    ""
+
+proc searchLine*(state: EditorState): string =
+  ## The pattern typed at the open search prompt, or "" with none open.
+  if state.isSearchOverlay: state.input.line.text else: ""
+
 proc enterCommandOverlay*(state: EditorState) =
   ## Enter command mode overlay
   ## The base mode (Normal, Filer, etc.) is preserved; Visual ends first, as
   ## in Vim.
   state.leaveVisual()
   state.overlay = some(okCommand)
-  state.input.commandText = ":"
-  state.input.commandCursor = 0
-  state.input.commandState.historyIndex = -1
-  state.input.commandState.historyPrefix = ""
+  state.input.line = PromptLine()
 
 proc noteSearchStart*(state: EditorState) =
   ## Remember where the cursor is and what the window shows as a search
@@ -1791,10 +1803,8 @@ proc enterSearchOverlay*(
   state.input.search.direction = direction
   state.input.search.count = max(1, count)
   state.input.search.countGiven = countGiven
-  state.input.search.text = ""
-  state.input.search.cursor = 0
+  state.input.line = PromptLine()
   state.noteSearchStart()
-  state.input.search.historyIndex = -1
   # The prompt takes the message line, as Vim's command line does.
   state.statusMessage = ""
   # Re-enable search highlight so incremental search results are visible
@@ -1804,7 +1814,8 @@ proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
   ## Enter rename mode overlay
   ## The base mode (Normal) is preserved
   state.overlay = some(okRename)
-  state.renameState.text = word
+  # Typing goes on at the end of the word, as input() with a default.
+  state.input.line = PromptLine(text: word, cursor: word.charLen)
   state.renameState.originalWord = word
   state.renameState.cursorLine = line
   state.renameState.cursorColumn = col
@@ -1813,14 +1824,7 @@ proc exitOverlay*(state: EditorState) =
   ## Exit the current overlay and return to the base mode
   if state.overlay.isSome:
     state.overlay = none(OverlayKind)
-    # Clear overlay-specific state
-    state.input.commandText = ""
-    state.input.commandCursor = 0
-    state.input.commandState.historyIndex = -1
-    state.input.commandState.historyPrefix = ""
-    state.input.search.text = ""
-    state.input.search.cursor = 0
-    state.input.search.historyIndex = -1
+    state.input.line = PromptLine()
 
 proc baseMode*(state: EditorState): EditorMode =
   ## Get the base mode (the mode under the overlay)
