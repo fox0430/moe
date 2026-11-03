@@ -4013,10 +4013,12 @@ suite "Handler - Text Object operations":
       check "raw undecodable bytes" in r.error
       check buffer[1] == before
 
-  test "guu and gUU refuse a raw buffer":
+  test "guu, gUU and g~~ refuse a raw buffer":
     # The operator is pending after the first press; the second applies it.
     for (command, before) in [
-      ("operator.lowercase", "Hello"), ("operator.uppercase", "hello")
+      ("operator.lowercase", "Hello"),
+      ("operator.uppercase", "hello"),
+      ("operator.togglecase", "Hello"),
     ]:
       let buffer = newTextBuffer(before)
       buffer.keepRaw = true

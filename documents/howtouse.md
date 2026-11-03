@@ -137,6 +137,7 @@
 | <kbd>**~**</kbd> | Toggle case of character under cursor |
 | <kbd>**g**</kbd> <kbd>**u**</kbd> | Lowercase (operator) |
 | <kbd>**g**</kbd> <kbd>**U**</kbd> | Uppercase (operator) |
+| <kbd>**g**</kbd> <kbd>**~**</kbd> | Toggle case (operator) |
 | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd> | Delete the characters in the current line and start insert mode |
 | <kbd>**s**</kbd> OR <kbd>**c**</kbd> <kbd>**l**</kbd> | Delete the current character and enter insert mode |
 | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**"**</kbd> | Delete the inside of double quotes and enter insert mode |

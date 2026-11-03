@@ -24,7 +24,7 @@ import std/[options, tables, unicode]
 
 import pkg/results
 
-import ../[types, motion, key_bindings, unicode_utils, modes, search_ops]
+import ../[types, motion, key_bindings, unicode_utils, modes, search_ops, cursor_util]
 import ../buffer/[core, fold]
 
 import core, operator_engine, insert_entry
@@ -145,6 +145,10 @@ proc toOperatorRange*(
   result = buffer.rangeUpTo(target, operator)
   result.useRegOne = target.useRegOne
 
+proc firstNonBlankOf(buffer: TextBuffer, line: int): BufferPosition =
+  ## Where Vim's beginline(BL_WHITE | BL_FIX) puts the cursor on `line`.
+  BufferPosition(line: line, column: firstNonBlankColumn(buffer.getLine(line)))
+
 proc settle(ctx: CommandContext, pos: BufferPosition): BufferPosition =
   ## `pos` as a Normal mode cursor: on a character of its line.
   let p = ctx.motionController.cursorManager.clampPosition(
@@ -216,7 +220,12 @@ proc markTarget(
     some(
       MotionTarget(
         start: op.startPos,
-        finish: dest,
+        # `'a` lands on the mark line's first non-blank, as Vim's nv_gomark.
+        finish:
+          if operand.markLinewise:
+            ctx.buffer.firstNonBlankOf(dest.line)
+          else:
+            dest,
         motionType: if operand.markLinewise: mtLinewise else: mtExclusive,
         useRegOne: not operand.markLinewise,
       )
@@ -287,7 +296,8 @@ proc linesTarget(
 ): Option[MotionTarget] =
   ## The operator's line and the `count - 1` lines below it, a closed fold
   ## counting as one, as Vim's nv_lineop. None when there are lines to go down
-  ## over and none below (`2dd` on the last line).
+  ## over and none below (`2dd` on the last line). They end on the last line's
+  ## first non-blank, except for a yank, which keeps the column.
   let
     start = op.startPos
     below = max(1, operand.count) - 1
@@ -296,12 +306,15 @@ proc linesTarget(
     return none(MotionTarget)
   if below > 0 and ctx.buffer.foldEnd(start.line) >= ctx.buffer.len - 1:
     return none(MotionTarget)
+  let last = ctx.buffer.linesDown(start.line, below)
   some(
     MotionTarget(
       start: start,
-      finish: BufferPosition(
-        line: ctx.buffer.linesDown(start.line, below), column: start.column
-      ),
+      finish:
+        if op.operatorType == OpYank:
+          BufferPosition(line: last, column: start.column)
+        else:
+          ctx.buffer.firstNonBlankOf(last),
       motionType: mtLinewise,
     )
   )

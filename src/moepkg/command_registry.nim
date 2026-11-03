@@ -47,7 +47,8 @@ const EditCommandIds = [
   "paste.after.end", "paste.before.end", "edit.paste", "join.lines", "substitute.char",
   "substitute.line", "toggle.case", "operator.delete", "operator.change",
   "operator.indent", "operator.outdent", "operator.lowercase", "operator.uppercase",
-  "autoindent.line", "edit.increment", "edit.decrement", "edit.repeat",
+  "operator.togglecase", "autoindent.line", "edit.increment", "edit.decrement",
+  "edit.repeat",
 ]
   ## Built-in command ids (dotted form, as carried by Command.commandId) that
   ## modify the buffer at the cursor, used to classify a command for the

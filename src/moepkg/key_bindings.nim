@@ -466,7 +466,7 @@ proc getNumericPrefix*(registry: KeyBindingRegistry): int =
     logDebug("keybind", "getNumericPrefix returning 1 (no prefix)")
     return 1
 
-proc applyCountToCommand(registry: KeyBindingRegistry, cmd: Command): Command =
+proc applyCountToCommand*(registry: KeyBindingRegistry, cmd: Command): Command =
   ## Give a command the count and the register typed before it, and clear them
   result = cmd
   let countBefore = registry.sequenceState.registerCount

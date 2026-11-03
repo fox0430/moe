@@ -171,6 +171,7 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("y", "operator-yank"),
   ("g u", "operator-lowercase"),
   ("g U", "operator-uppercase"),
+  ("g ~", "operator-togglecase"),
   # Character ops
   ("D", "delete-to-end"),
   ("C", "change-to-end"),

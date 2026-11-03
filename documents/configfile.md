@@ -754,6 +754,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | operator-outdent | Outdent operator |
 | operator-uppercase | Uppercase operator |
 | operator-lowercase | Lowercase operator |
+| operator-togglecase | Toggle case operator |
 
 ##### Text objects (used after an operator)
 

@@ -353,6 +353,7 @@ const OperatorCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("operator-outdent", "Outdent operator", "operator.outdent"),
   ("operator-lowercase", "Lowercase operator", "operator.lowercase"),
   ("operator-uppercase", "Uppercase operator", "operator.uppercase"),
+  ("operator-togglecase", "Toggle case operator", "operator.togglecase"),
 ] ## Operators: one of its own kind goes on to lines (`dd`), another cancels it (`dy`)
 
 const TextObjectCommands: seq[tuple[name, desc, commandId: string]] = @[

@@ -29,8 +29,8 @@ import
     buffer, types, key_bindings, modes, motion, command_registry, config, registers,
     macro_recording,
   ]
-import
-  ../src/moepkg/command_handlers/[normal_handler, command_passthrough, handler_result]
+import ../src/moepkg/command_handlers/[command_passthrough, handler_result]
+import ../src/moepkg/command_handlers/normal_handler {.all.}
 import ../src/moepkg/types/editor_types except Command
 
 proc createTestState(): EditorState =
@@ -2857,17 +2857,53 @@ suite "NormalModeHandler - guu / gUU (case operator on lines)":
     check buf.getLine(0) == "\t\tHELLO"
     check state.cursor.column == 2
 
-  test "guu on a blank-only line keeps the cursor inside the line":
+  test "guu in the indent leaves the cursor where it is, as Vim's nv_lineop":
+    # The operator starts at the nearer of the cursor and the first non-blank.
+    for content in ["   ", "    Hello"]:
+      let buf = newTextBuffer()
+      discard buf.insertText(BufferPosition(line: 0, column: 0), content)
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      let viewport = createTestViewport()
+      state.cursor = BufferPosition(line: 0, column: 1)
+
+      discard pressKeys(handler, buf, state, viewport, @["g", "u", "u"])
+      checkpoint(content)
+      check state.cursor.column == 1
+
+  test "each operator doubled by its own key names an operator command":
+    # A name missing from the bindings would raise only when the key is typed.
+    let registry = newKeyBindingRegistry()
+    setupDefaultBindings(registry)
+    for (operatorType, key, name) in DoubledByOwnKey:
+      checkpoint(name)
+      check name in registry.commandRegistry
+      check registry.commandRegistry.getOrDefault(name).kind == ctOperator
+
+  test "g~~ toggles the current line instead of one character":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    check pressKeys(handler, buf, state, viewport, @["g", "~", "~"]).kind == nmrHandled
+    check buf.getLine(0) == "hELLO wORLD"
+    check buf.getLine(1) == "Second Line"
+    check state.pendingInput.pendingOperator.isNone
+
+  test "g~2~ toggles two lines and takes the count with it":
     let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "   ")
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "One\nTwo\nThree\nFour")
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    discard pressKeys(handler, buf, state, viewport, @["g", "u", "u"])
-    check buf.getLine(0) == "   "
-    check state.cursor.column == 2
+    discard pressKeys(handler, buf, state, viewport, @["g", "~", "2", "~"])
+    check buf.getLine(0) == "oNE"
+    check buf.getLine(1) == "tWO"
+    check buf.getLine(2) == "Three"
+
+    # A count left behind would take `j` past the next line
+    discard pressKeys(handler, buf, state, viewport, @["j"])
+    check state.cursor.line == 1
 
   test ">> on a blank-only line keeps the cursor inside the line":
     let buf = newTextBuffer()

@@ -1172,6 +1172,16 @@ proc registerEditCommands*(registry: CommandRegistry) =
     1, # Accept optional count
   )
 
+  registry.register(
+    custom("operator.togglecase"),
+    "Toggle Case Operator",
+    "Toggle case operator - waits for motion (g~w, g~$, etc.)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      registry.operatorKey(ctx, OpSwapCase, parseCount(args), args.len > 0, "g~"),
+    0,
+    1, # Accept optional count
+  )
+
   # D - Delete to end of line (equivalent to d$)
   registry.register(
     custom("operator.delete.to.end"),

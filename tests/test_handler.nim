@@ -10486,6 +10486,117 @@ suite "handleKeyCombo - an operator acts over what a motion finds, as Vim's do_p
       check e.lines == lines
       check e.state.pendingInput.pendingOperator.isNone
 
+  test "g~ toggles the case of what a motion, a text object or its doubled key takes":
+    for (content, line, column, keys, lines, cursor) in [
+      ("foo Bar baz", 0, 0, @["g", "~", "w"], @["FOO Bar baz"], (0, 0)),
+      ("foo Bar baz", 0, 5, @["g", "~", "i", "w"], @["foo bAR baz"], (0, 4)),
+      ("foo Bar", 0, 2, @["g", "~", "$"], @["foO bAR"], (0, 2)),
+      ("Foo 日本 Ab", 0, 4, @["g", "~", "$"], @["Foo 日本 aB"], (0, 4)),
+      ("Foo\nBar\nBaz", 0, 0, @["g", "~", "~"], @["fOO", "Bar", "Baz"], (0, 0)),
+      ("Foo\nBar\nBaz", 0, 0, @["g", "~", "g", "~"], @["fOO", "Bar", "Baz"], (0, 0)),
+      ("Foo\nBar\nBaz", 0, 0, @["2", "g", "~", "~"], @["fOO", "bAR", "Baz"], (0, 0)),
+      ("Foo\nBar\nBaz", 0, 0, @["g", "~", "2", "~"], @["fOO", "bAR", "Baz"], (0, 0)),
+      ("Foo\nBar\nBaz", 1, 1, @["g", "~", "k"], @["fOO", "bAR", "Baz"], (0, 1)),
+      # Too few lines below: nothing changes, as Vim's nv_lineop
+      ("Foo\nBar", 1, 0, @["2", "g", "~", "~"], @["Foo", "Bar"], (1, 0)),
+      # `~` and `u` are no motions: they end the operator without running
+      ("Foo", 0, 0, @["g", "u", "~"], @["Foo"], (0, 0)),
+      ("Foo", 0, 0, @["g", "~", "u"], @["Foo"], (0, 0)),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys & " on " & content)
+      check e.lines == lines
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+      check e.state.pendingInput.pendingOperator.isNone
+
+  test "a doubled case operator leaves the cursor at the first non-blank or before it, as Vim's nv_lineop":
+    # nv_lineop moves to the last line's first non-blank and the operator
+    # starts at the nearer of that and the cursor; op_tilde leaves it there.
+    for (content, column, keys, cursor) in [
+      ("    Foo", 6, @["g", "~", "~"], (0, 4)),
+      ("    Foo", 1, @["g", "~", "~"], (0, 1)),
+      ("    Foo", 1, @["g", "u", "u"], (0, 1)),
+      ("    Foo", 1, @["g", "U", "g", "U"], (0, 1)),
+      ("   ", 0, @["g", "~", "~"], (0, 0)),
+      ("    Foo\n  Bar", 6, @["2", "g", "~", "~"], (0, 6)),
+      ("    Foo\n  Bar", 6, @["g", "U", "j"], (0, 6)),
+    ]:
+      let e = createEditorForOperators(content, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys & " from " & $column)
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
+  test "an operator over 'a starts at the mark line's first non-blank, as Vim's nv_gomark":
+    for (keys, line0) in [
+      (@["m", "a", "j", "g", "U", "'", "a"], "  HELLO WORLD"),
+      (@["m", "a", "g", "U", "'", "a"], "  HELLO WORLD"),
+      (@["m", "a", "j", "y", "'", "a"], "  hello world"),
+    ]:
+      let e = createEditorForOperators("  hello world\n  foo bar", column = 9)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines[0] == line0
+      check e.cursor == BufferPosition(line: 0, column: 2)
+
+  test "g~~ goes through the checks g~g~ does":
+    # The f/t highlight goes, and a read-only buffer refuses with its message.
+    let e = createEditorForOperators("foo bar")
+    e.press("f", "o")
+    check e.state.ui.findCharMatches.len > 0
+
+    e.press("g", "~", "~")
+
+    check e.lines == @["FOO BAR"]
+    check e.state.ui.findCharMatches.len == 0
+
+    let r = createEditorForOperators("foo bar")
+    r.activeBuffer.readOnly = true
+
+    r.press("g", "~", "~")
+
+    check r.lines == @["foo bar"]
+    check r.state.statusMessage == "Buffer is read-only"
+    check r.state.pendingInput.pendingOperator.isNone
+
+  test "`.` repeats g~ with its count, or the count typed before `.`":
+    for (content, keys, lines) in [
+      ("foo bar", @["g", "~", "w", "w", "."], @["FOO BAR"]),
+      (
+        "a\nb\nc\nd\ne",
+        @["2", "g", "~", "~", "j", "j", "."],
+        @["A", "B", "C", "D", "e"],
+      ),
+      ("a\nb\nc\nd", @["g", "~", "~", "j", "3", "."], @["A", "B", "C", "D"]),
+    ]:
+      let e = createEditorForOperators(content)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+
+  test "an undo of a case operator puts the cursor back where the operator left it":
+    for (content, line, column, keys, cursor) in [
+      ("    Foo\nBar", 0, 6, @["g", "~", "~", "u"], (0, 4)),
+      ("    Foo\nBar", 0, 1, @["g", "U", "U", "u"], (0, 1)),
+      ("  ab\n  cd\n  ef", 0, 3, @["3", "g", "~", "~", "u"], (0, 3)),
+      ("foo bar", 0, 5, @["g", "~", "i", "w", "u"], (0, 4)),
+    ]:
+      let e = createEditorForOperators(content, line = line, column = column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == content.split('\n')
+      check e.cursor == BufferPosition(line: cursor[0], column: cursor[1])
+
   test "`.` repeats an operator over a text object or gn":
     let e = createEditorForOperators("foo bar baz")
     e.press("d", "i", "w", ".")
