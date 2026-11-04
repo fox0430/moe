@@ -217,6 +217,8 @@ suite "help / keybinding consistency":
         "mark-set",
         "mark-line",
         "mark-exact",
+        # Ctrl-\ Ctrl-N is the Terminal-Input idiom, of no use in Normal mode.
+        "end-command",
       ]
     )
     let missing = block:
@@ -245,6 +247,8 @@ suite "help / keybinding consistency":
         "visual-block-append",
         # Register prefix: documented with an "any" placeholder (`" any`).
         "register-select",
+        # Ctrl-\ Ctrl-N is the Terminal-Input idiom.
+        "end-command",
       ]
     )
     var allVisual: seq[tuple[key, cmd: string]]

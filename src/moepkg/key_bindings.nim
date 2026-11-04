@@ -430,6 +430,10 @@ proc isCtrlO*(combo: KeyCombo): bool =
 
 const CtrlC* = KeyCombo(isSpecial: false, char: "c", modifiers: {kmCtrl})
 
+proc isPlainChar*(combo: KeyCombo, ch: string): bool =
+  ## The character `ch`, with no modifier.
+  not combo.isSpecial and combo.modifiers == {} and combo.char == ch
+
 proc isCtrlC*(combo: KeyCombo): bool =
   ## Ctrl-C as a key. A typed one is also an interrupt, unless a mapping takes
   ## it (`Editor.dispatchKeyCombo`).

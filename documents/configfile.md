@@ -739,6 +739,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | toggle-case | Toggle case of character at cursor |
 | autoindent-line | Auto indent current line |
 | repeat-last-change | Repeat last change |
+| end-command | End the command being built |
 | join-lines | Join count lines, at least two |
 | increment-number | Increment the number at or after cursor by count |
 | decrement-number | Decrement the number at or after cursor by count |

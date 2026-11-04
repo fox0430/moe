@@ -736,6 +736,9 @@ All keystrokes are forwarded to the running shell/command.
 |:---|:---|
 | <kbd>**i**</kbd> | Return to Terminal-Input sub-mode |
 | <kbd>**a**</kbd> | Return to Terminal-Input sub-mode |
+| <kbd>**I**</kbd> | Return to Terminal-Input sub-mode |
+| <kbd>**A**</kbd> | Return to Terminal-Input sub-mode |
+| <kbd>**q**</kbd> | Close the tab after the program exited |
 | <kbd>**:**</kbd> | Enter command mode |
 <!-- AUTO-GEN:end TerminalNormal -->
 

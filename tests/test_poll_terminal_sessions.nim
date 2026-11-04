@@ -155,6 +155,9 @@ suite "pollTerminalSessions - sub-mode round trip":
     let e = singleTerminalEditor()
     let w = e.windowManager.windows[0]
     let termBufId = w.buffer.id
+    let session = w.modeState.terminal
+    let exitCode = session.exitCode
+    session.exitCode = none(int)
 
     discard
       e.handleKeyCombo(KeyCombo(isSpecial: false, char: "\\", modifiers: {kmCtrl}))
@@ -166,6 +169,7 @@ suite "pollTerminalSessions - sub-mode round trip":
     # The window is back on the registered buffer, not a fresh one.
     check w.buffer.id == termBufId
 
+    session.exitCode = exitCode
     e.pollTerminalSessions()
 
     check not e.terminalStates.hasKey(termBufId)
@@ -185,6 +189,17 @@ suite "pollTerminalSessions - sub-mode round trip":
 
     check not e.terminalStates.hasKey(termBufId)
     check w.mode != EditorMode.Terminal
+
+  test "An exited shell stays while a window selects in its scrollback":
+    let e = createTestEditor()
+    let w = e.windowManager.windows[0]
+    let termBuf = e.registerExitedTerminalInWindow(w, "bash")
+    w.modeState.scrollbackSnapshot = newTextBuffer("")
+    w.mode = EditorMode.Visual
+
+    e.pollTerminalSessions()
+
+    check e.terminalStates.hasKey(termBuf.id)
 
   test "An exited shell stays while any window on it browses the scrollback":
     let e = createTestEditor()

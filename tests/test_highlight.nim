@@ -5953,3 +5953,19 @@ suite "Highlight - Nim lexer wiring":
       if seg.lastRow > lastRow:
         lastRow = seg.lastRow
     check lastRow == buffer.high
+
+suite "Highlight: literal colors":
+  let segment = ColorSegment(
+    firstRow: 0,
+    firstColumn: 0,
+    lastRow: 0,
+    lastColumn: 2,
+    color: EditorColorPairIndex.default,
+    style: Style(fg: ColorValue(kind: Indexed256, indexed256: 1'u8)),
+  )
+
+  test "the style is the segment's, and blank outside the segments":
+    let hl = Highlight(colorSegments: @[segment], literalColors: true)
+
+    check hl.literalStyleAt(0, 0) == segment.style
+    check hl.literalStyleAt(5, 0) == Style()

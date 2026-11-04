@@ -294,10 +294,11 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
   # Set the modifiers once
   combo.modifiers = modifiers
 
-  # Ctrl + non-letter is undetectable; multi-byte counts as non-letter.
+  # Ctrl + non-letter is undetectable but for Ctrl-\, a control character of
+  # its own; multi-byte counts as non-letter.
   if kmCtrl in combo.modifiers and not combo.isSpecial:
     let ch = combo.char.asciiChar
-    if ch.isNone or ch.get notin {'a' .. 'z', 'A' .. 'Z'}:
+    if ch.isNone or ch.get notin {'a' .. 'z', 'A' .. 'Z', '\\'}:
       return none(KeyCombo)
 
   # Shift+letter: terminals send uppercase without Shift (see eventToKeyCombo).

@@ -20,13 +20,15 @@
 ## Terminal mode state management.
 ## Integrates PTY handle with ANSI parser grid and manages sub-modes.
 
-import std/[options, os]
+import std/[options, os, strutils]
 
 import pkg/results
 
+import celina_backend as celina
+
 import terminal/[pty, ansi_parser]
 import buffer/core
-import logger
+import highlight, logger
 
 import types/terminal_mode_types
 export terminal_mode_types
@@ -268,11 +270,93 @@ proc interrupt*(state: TerminalState) =
   state.cancelQueuedPastes()
   state.sendInput("\x03")
 
+proc terminalColorToColorValue(tc: TerminalColor): ColorValue =
+  ## Convert ansi_parser TerminalColor to celina ColorValue.
+  case tc.kind
+  of ckDefault:
+    ColorValue(kind: Default)
+  of ckIndexed:
+    ColorValue(kind: Indexed256, indexed256: tc.index)
+  of ckRgb:
+    ColorValue(kind: celina.Rgb, rgb: RgbColor(r: tc.r, g: tc.g, b: tc.b))
+
+proc terminalCellToStyle*(cell: TerminalCell): Style =
+  ## Convert a TerminalCell's colors and attributes to a celina Style.
+  var modifiers: set[StyleModifier] = {}
+  if taBold in cell.attrs:
+    modifiers.incl(StyleModifier.Bold)
+  if taDim in cell.attrs:
+    modifiers.incl(StyleModifier.Dim)
+  if taItalic in cell.attrs:
+    modifiers.incl(StyleModifier.Italic)
+  if taUnderline in cell.attrs:
+    modifiers.incl(StyleModifier.Underline)
+  if taReverse in cell.attrs:
+    modifiers.incl(StyleModifier.Reversed)
+  if taStrikethrough in cell.attrs:
+    modifiers.incl(StyleModifier.Crossed)
+
+  Style(
+    fg: terminalColorToColorValue(cell.fg),
+    bg: terminalColorToColorValue(cell.bg),
+    modifiers: modifiers,
+  )
+
+proc addRowSegments(
+    segments: var seq[ColorSegment], row: seq[TerminalCell], line: int
+) =
+  ## One segment per run of a style on `row`, positioned in the characters of
+  ## its text. An empty row gets one too: `indexOf` takes a position in a gap
+  ## for the segment before it.
+  var
+    column, first = 0
+    runStyle: Style
+  template addRun() =
+    segments.add(
+      ColorSegment(
+        firstRow: line,
+        firstColumn: first,
+        lastRow: line,
+        lastColumn: column - 1,
+        color: EditorColorPairIndex.default,
+        style: runStyle,
+      )
+    )
+
+  for cell in row:
+    if cell.widePadding:
+      continue
+    let style = terminalCellToStyle(cell)
+    if column == 0:
+      runStyle = style
+    elif style != runStyle:
+      addRun()
+      first = column
+      runStyle = style
+    inc column
+  addRun()
+
 proc snapshotScrollback*(state: TerminalState): TextBuffer =
   ## A read-only copy of the scrollback and screen for Terminal-Normal
-  ## browsing. The session keeps running; the window browsing holds the copy.
-  result = newTextBuffer(state.grid.toPlainText())
+  ## browsing, in the colors they were drawn. The session keeps running; the
+  ## window browsing holds the copy.
+  var
+    lines: seq[string]
+    segments: seq[ColorSegment]
+  for row in state.grid.snapshotRows:
+    segments.addRowSegments(row, lines.len)
+    lines.add(rowText(row))
+  result = newTextBuffer(lines.join("\n"))
   result.readOnly = true
+  result.isUtilityBuffer = true
+  result.highlightNeedsUpdate = false
+  result.highlight = Highlight(colorSegments: segments, literalColors: true)
+  if state.lastSnapshot != nil:
+    result.lastVisual = state.lastSnapshot.lastVisual
+    for name, mark in state.lastSnapshot.namedMarks:
+      if mark.isSome and mark.get.line < result.len:
+        result.namedMarks[name] = mark
+  state.lastSnapshot = result
 
 proc resize*(state: TerminalState, cols, rows: int) =
   ## Resize the terminal grid and notify the PTY.

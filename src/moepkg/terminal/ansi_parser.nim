@@ -1048,53 +1048,50 @@ proc processOutput*(grid: TerminalGrid, data: string) =
     i += 1
   grid.needsRedraw = true
 
-proc toPlainText*(grid: TerminalGrid): string =
-  ## Convert the current grid to plain text (no colors).
-  ## Useful for creating a TextBuffer snapshot for Terminal-Normal mode.
-  var lines: seq[string] = @[]
+func isPainted*(cell: TerminalCell): bool =
+  ## A blank here still shows: a background, reverse video or a line.
+  cell.bg.kind != ckDefault or taReverse in cell.attrs or taUnderline in cell.attrs or
+    taStrikethrough in cell.attrs
 
-  proc stripTrailingSpaces(line: string): string =
-    var endIdx = line.len
-    while endIdx > 0 and line[endIdx - 1] == ' ':
-      dec endIdx
-    line[0 ..< endIdx]
-
-  # Include scrollback first, but only on the primary screen. While the
-  # alternate screen is active the scrollback holds unrelated primary-buffer
-  # history, so mixing it into the snapshot would misrepresent what's on screen.
+iterator snapshotRows*(grid: TerminalGrid): lent seq[TerminalCell] =
+  ## The rows of a snapshot for Terminal-Normal: the scrollback, then the grid
+  ## down to its last row with something to show.
+  # Scrollback only on the primary screen. While the alternate screen is active
+  # it holds unrelated primary-buffer history, so mixing it into the snapshot
+  # would misrepresent what's on screen.
   if not grid.altScreenActive:
     for row in grid.scrollbackBuffer:
-      var line = ""
-      for cell in row:
-        if cell.widePadding:
-          continue
-        if cell.ch.len > 0:
-          line.add(cell.ch)
-        else:
-          line.add(' ')
-      lines.add(stripTrailingSpaces(line))
+      yield row
 
-  # Then current grid (only up to the last row with content)
   var lastNonEmptyRow = -1
   for r in 0 ..< grid.rows:
     for c in 0 ..< grid.cols:
-      if grid.cells[r][c].ch.len > 0 and not grid.cells[r][c].widePadding:
+      let cell = grid.cells[r][c]
+      if (cell.ch.len > 0 and not cell.widePadding) or cell.isPainted:
         lastNonEmptyRow = r
         break
 
-  if lastNonEmptyRow >= 0:
-    for r in 0 .. lastNonEmptyRow:
-      var line = ""
-      for c in 0 ..< grid.cols:
-        let cell = grid.cells[r][c]
-        if cell.widePadding:
-          continue
-        if cell.ch.len > 0:
-          line.add(cell.ch)
-        else:
-          line.add(' ')
-      lines.add(stripTrailingSpaces(line))
+  for r in 0 .. lastNonEmptyRow:
+    yield grid.cells[r]
 
-  if lines.len == 0:
-    return ""
+proc rowText*(row: seq[TerminalCell]): string =
+  ## The text of a snapshot row, down to its last cell that shows anything. A
+  ## painted blank is text, as a space a program wrote is in Vim.
+  var textEnd = 0
+  for cell in row:
+    if cell.widePadding:
+      continue
+    if cell.ch.len > 0:
+      result.add(cell.ch)
+    else:
+      result.add(' ')
+    if (cell.ch.len > 0 and cell.ch != " ") or cell.isPainted:
+      textEnd = result.len
+  result.setLen(textEnd)
+
+proc toPlainText*(grid: TerminalGrid): string =
+  ## Convert the snapshot rows to plain text (no colors).
+  var lines: seq[string] = @[]
+  for row in grid.snapshotRows:
+    lines.add(rowText(row))
   lines.join("\n")

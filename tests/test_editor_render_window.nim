@@ -3347,6 +3347,100 @@ suite "render layer predicates":
     e.state.showCursorColumn = true
     check not e.cursorColumnApplies(displayCol = 3, cursorDisplayCol = 5)
 
+suite "Terminal-Normal colors":
+  proc snapshotBuffer(): TextBuffer =
+    result = newTextBuffer("red")
+    result.isUtilityBuffer = true
+    result.highlight = Highlight(
+      literalColors: true,
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 2,
+          color: EditorColorPairIndex.default,
+          style: Style(
+            fg: ColorValue(kind: Indexed256, indexed256: 1'u8),
+            bg: ColorValue(kind: Default),
+          ),
+        )
+      ],
+    )
+
+  test "are not syntax highlighting":
+    let e = createTestEditor()
+    e.state.showSyntax = false
+    let style = e.getSelectionStyleAt(
+      snapshotBuffer(),
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 5,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+
+    check style.fg == ColorValue(kind: Indexed256, indexed256: 1'u8)
+
+  test "the default colors stay the terminal's, not the theme's":
+    let e = createTestEditor()
+    let buffer = snapshotBuffer()
+    buffer.highlight.colorSegments[0].style = Style()
+    let style = e.getSelectionStyleAt(
+      buffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 5,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+
+    check style.fg.kind == Default
+    check style.bg.kind == Default
+
+  test "past the text the fill is the default colors":
+    let e = createTestEditor()
+    e.state.showCursorLine = false
+
+    check e.lineFillPatch(LineStyleContext(defaultFill: true), 10, -1, false) ==
+      full(Style())
+
+  test "reverse video goes under an overlay background":
+    let e = createTestEditor()
+    let buffer = snapshotBuffer()
+    buffer.highlight.colorSegments[0].style.modifiers = {StyleModifier.Reversed}
+    e.state.showCursorLine = false
+
+    check StyleModifier.Reversed in
+      e.getSelectionStyleAt(
+        buffer,
+        hasSelection = false,
+        pos = BufferPosition(line: 0, column: 0),
+        cursorLine = 5,
+        cursorCol = 0,
+        windowMode = EditorMode.Normal,
+      ).modifiers
+
+    e.state.showCursorLine = true
+    let onCursorLine = e.getSelectionStyleAt(
+      buffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 0,
+      cursorCol = 1,
+      windowMode = EditorMode.Normal,
+    )
+    check StyleModifier.Reversed notin onCursorLine.modifiers
+    check onCursorLine.bg == cursorLineHighlightStyle().bg
+
+  test "the file decorations leave a utility buffer's look alone":
+    let e = createTestEditor()
+    e.config.highlight.fullWidthSpace = true
+    let ctx = RenderContext(windowMode: EditorMode.Normal)
+    let lineCtx = LineStyleContext(undecorated: true, trailingSpaceStart: high(int))
+
+    check e.charOverridePatch(ctx, lineCtx, FULLWIDTH_SPACE, 0) == noPatch
+
 suite "charOverridePatch":
   proc fileEditCtx(): RenderContext =
     RenderContext(windowMode: EditorMode.Normal, windowRightEdge: 80)

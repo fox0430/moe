@@ -30,11 +30,14 @@ import
   ../src/moepkg/[
     editor, config, types, modes, terminal_mode, editor_window, editor_window_tab,
     handler, key_bindings, viewer_mode, buffer_manager, window_manager,
-    editor_render_views, render_utils, filetree,
+    editor_render_views, render_utils, filetree, highlight, editor_window_layout,
+    unicode_utils, frontend_input,
   ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/buffer/core
-import ../src/moepkg/command_handlers/[editor_ops, handler_result, result_processor]
+import
+  ../src/moepkg/command_handlers/
+    [editor_ops, handler_result, result_processor, visual_handler]
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -108,14 +111,15 @@ proc runCommand(e: Editor, command: string) =
 template checkOnSession(e: Editor, win: EditorWindow, termBuf: TextBuffer) =
   ## `win` is parked on `termBuf`'s session and shows what its sub-mode says.
   check win.tabBufferId == termBuf.id
-  check win.mode == EditorMode.Terminal
   check win.modeState.kind == mskTerminal
   if win.modeState.kind == mskTerminal:
     check win.modeState.terminal == e.terminalStates[termBuf.id]
     case win.modeState.terminalSubMode
     of tsmNormal:
+      check win.mode == EditorMode.Normal
       check win.buffer == win.modeState.scrollbackSnapshot
     of tsmInput:
+      check win.mode == EditorMode.Terminal
       check win.buffer == termBuf
 
 proc focusWindow(e: Editor, win: EditorWindow) =
@@ -307,6 +311,464 @@ suite "Terminal tabs - hrCloseWindow via processResult":
     check e.terminalStates.len == 0
     check not e.terminalStates.hasKey(termBufId)
     check e.activeWindow.mode != EditorMode.Terminal
+
+proc browsing(e: Editor, output: string): tuple[termBuf, snapshot: TextBuffer] =
+  ## Terminal-Normal over a screen `output` drew.
+  let state = fakeTerminalState()
+  state.grid.processOutput(output)
+  let termBuf = registerFakeTerminal(e, "bash", state)
+  (termBuf, e.enterNormal())
+
+proc press(e: Editor, keys: string) =
+  for ch in keys:
+    discard e.handleKeyCombo(charKey($ch))
+
+proc pressEscape(e: Editor) =
+  discard e.handleKeyCombo(KeyCombo(isSpecial: true, special: skEscape))
+
+suite "Terminal tabs - Terminal-Normal is Normal mode over the snapshot":
+  test "motions run on the snapshot":
+    let e = createTestEditor()
+    let (termBuf, _) = e.browsing("one\r\ntwo\r\nthree")
+    let win = e.activeWindow
+    check win.cursor.line == 2
+
+    e.press("k")
+    check win.cursor.line == 1
+    e.press("gg")
+    check win.cursor.line == 0
+    e.press("G$")
+    check win.cursor == BufferPosition(line: 2, column: 4)
+    e.checkOnSession(win, termBuf)
+
+  test "motions follow the snapshot back after a look at the shell":
+    let e = createTestEditor()
+    let (_, _) = e.browsing("one\r\ntwo\r\nthree")
+    e.press("i")
+    e.activeWindow.modeState.terminal.grid.processOutput("\r\nfour\r\nfive")
+    discard e.enterNormal()
+
+    e.press("gg")
+    e.press("4j")
+    check e.activeWindow.cursor.line == 4
+
+  test "a key inside a command is the command's":
+    let e = createTestEditor()
+    let (termBuf, _) = e.browsing("foo bar")
+    let win = e.activeWindow
+
+    e.press("0fa")
+    check win.cursor.column == 5
+    e.press("yiw")
+    e.press("2l")
+    e.checkOnSession(win, termBuf)
+    check win.modeState.terminalSubMode == tsmNormal
+
+  test "the window is in Normal mode, and back in Terminal on the job":
+    let e = createTestEditor()
+    let (termBuf, _) = e.browsing("foo")
+    let win = e.activeWindow
+
+    check win.mode == EditorMode.Normal
+    check win.shownMode == EditorMode.Terminal
+    e.press("v")
+    check win.shownMode == EditorMode.Visual
+    e.pressEscape()
+    e.press("i")
+    check win.mode == EditorMode.Terminal
+    e.checkOnSession(win, termBuf)
+
+  test "every way into Insert goes back to the job, with a count or from Visual":
+    for keys in ["i", "a", "I", "A", "3i", "2A", "vI", "vA", "VI", "VA"]:
+      let e = createTestEditor()
+      let (termBuf, _) = e.browsing("foo bar")
+      let win = e.activeWindow
+
+      e.press(keys)
+
+      checkpoint(keys)
+      check win.modeState.terminalSubMode == tsmInput
+      e.checkOnSession(win, termBuf)
+
+  test "over an ended session Insert is refused and the output stays":
+    for keys in ["i", "a", "A", "I", "3i", "yA", "vI", "vA", "."]:
+      let e = createTestEditor()
+      e.press("ix")
+      e.pressEscape()
+      let (termBuf, _) = e.browsing("foo")
+      let win = e.activeWindow
+      win.modeState.terminal.exitCode = some(0)
+
+      e.press(keys)
+
+      checkpoint(keys)
+      check win.isBrowsingTerminal
+      e.pressEscape()
+      e.checkOnSession(win, termBuf)
+
+  test "marks and the last Visual area stay across a look at the job":
+    let e = createTestEditor()
+    discard e.browsing("one\r\ntwo\r\nthree")
+    e.press("ggmavl")
+    e.pressEscape()
+    let win = e.activeWindow
+
+    e.press("i")
+    discard e.enterNormal()
+    require win.cursor.line == 2
+
+    e.press("'a")
+    check win.cursor.line == 0
+    e.press("Ggv")
+    check e.state.mode == EditorMode.Visual
+    check win.cursor.line == 0
+
+  test "a mark past a shorter snapshot goes":
+    let e = createTestEditor()
+    let (_, _) = e.browsing("one\r\ntwo\r\nthree")
+    e.press("mz")
+    let win = e.activeWindow
+    e.press("i")
+    win.modeState.terminal.grid.processOutput("\x1b[?1049h\x1b[Hx")
+
+    let snapshot = e.enterNormal()
+
+    check snapshot.len == 1
+    check snapshot.namedMarks['z'].isNone
+
+  test "an underlined blank shows":
+    let e = createTestEditor()
+    let (_, snapshot) = e.browsing("a\x1b[4m  \x1b[0m\r\n\x1b[9m \x1b[0m")
+
+    check snapshot.getLine(0) == "a  "
+    check snapshot.getLine(1) == " "
+
+  test "the block Visual A and I go back to the job too":
+    for key in ["A", "I"]:
+      let e = createTestEditor()
+      discard e.browsing("foo bar")
+
+      discard
+        e.handleKeyCombo(KeyCombo(isSpecial: false, char: "v", modifiers: {kmCtrl}))
+      require e.state.mode == EditorMode.VisualBlock
+      e.press(key)
+
+      check e.activeWindow.modeState.terminalSubMode == tsmInput
+
+  test "after an operator I and A go back to the job, i and a are text objects":
+    for keys in ["yA", "yI", "dA", "2yA"]:
+      let e = createTestEditor()
+      discard e.browsing("foo bar")
+
+      e.press(keys)
+
+      checkpoint(keys)
+      check e.activeWindow.modeState.terminalSubMode == tsmInput
+      check e.state.pendingInput.pendingOperator.isNone
+
+    let e = createTestEditor()
+    discard e.browsing("foo bar")
+    e.press("0yiw")
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
+    check e.state.mode == EditorMode.Normal
+
+  test "an edit operator takes its keys whole and is refused at the end":
+    for keys in ["diw", "ciw", "da(", "gUiw", ">ip", "dd", "cc", "dw", "d2j"]:
+      let e = createTestEditor()
+      let (termBuf, snapshot) = e.browsing("foo (bar)\r\nbaz\r\nend")
+      let win = e.activeWindow
+      win.cursor = BufferPosition(line: 0, column: 5)
+
+      e.press(keys)
+
+      checkpoint(keys)
+      e.checkOnSession(win, termBuf)
+      check win.modeState.terminalSubMode == tsmNormal
+      check e.state.pendingInput.pendingOperator.isNone
+      check snapshot.getLine(0) == "foo (bar)"
+      check snapshot.len == 3
+
+  test "an operator waiting is refused only after its keys, and a search is its operand":
+    let e = createTestEditor()
+    let (_, snapshot) = e.browsing("foo bar")
+    e.press("0d")
+    check e.state.pendingInput.pendingOperator.isSome
+    check e.state.statusMessage != "Buffer is read-only"
+
+    e.press("/bar")
+    check e.state.hasOverlay
+    discard e.handleKeyCombo(KeyCombo(isSpecial: true, special: skEnter))
+
+    check snapshot.getLine(0) == "foo bar"
+    check e.state.statusMessage == "Buffer is read-only"
+    check e.state.pendingInput.pendingOperator.isNone
+
+  test "Ctrl-\\ Ctrl-N ends an operator without a failure":
+    let e = createTestEditor()
+    discard e.browsing("foo")
+
+    e.press("d")
+    discard e.enterNormal()
+
+    check e.state.pendingInput.pendingOperator.isNone
+    check e.state.beepCount == 0
+
+  test "Ctrl-\\ Ctrl-N ends Visual over the snapshot":
+    let e = createTestEditor()
+    discard e.browsing("foo")
+    e.press("v")
+
+    discard e.enterNormal()
+
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
+    check e.state.beepCount == 0
+
+  test "Ctrl-\\ Ctrl-N again is no failure, in a macro either":
+    let e = createTestEditor()
+    let (_, _) = e.browsing("one\r\ntwo\r\nthree")
+    let win = e.activeWindow
+
+    discard e.enterNormal()
+    check e.state.beepCount == 0
+    check win.modeState.terminalSubMode == tsmNormal
+
+    e.press("qa")
+    discard e.enterNormal()
+    e.press("ggqG")
+    check win.cursor.line == 2
+
+    e.press("@a")
+    check win.cursor.line == 0
+
+    e.runCommand("nnoremap X C-\\ C-n G")
+    e.press("X")
+    check win.cursor.line == 2
+
+  test "a Visual binding that switches to Insert goes back to the job":
+    let e = createTestEditor()
+    discard e.browsing("foo")
+    let cmd =
+      Command(name: "to-insert", kind: ctModeSwitch, targetMode: EditorMode.Insert)
+    check e.state.goesToTerminalJob(cmd)
+    e.press("v")
+    check e.state.goesToTerminalJob(cmd)
+
+  test "Normal mode mappings apply":
+    let e = createTestEditor()
+    let (_, _) = e.browsing("one\r\ntwo\r\nthree")
+    e.runCommand("nnoremap X gg")
+
+    e.press("X")
+
+    check e.activeWindow.cursor.line == 0
+
+  test "q records a macro while the job runs":
+    let e = createTestEditor()
+    let (termBuf, _) = e.browsing("one\r\ntwo\r\nthree")
+    let win = e.activeWindow
+
+    e.press("qakq")
+    e.checkOnSession(win, termBuf)
+    check win.modeState.terminalSubMode == tsmNormal
+    check win.cursor.line == 1
+
+    e.press("@a")
+    check win.cursor.line == 0
+
+  test "q closes the window of a session that has ended":
+    let e = createTestEditor()
+    let (_, _) = e.browsing("foo")
+    let win = e.activeWindow
+    win.modeState.terminal.exitCode = some(0)
+
+    # Only as a command's first key.
+    e.press("fq")
+    check win.modeState.kind == mskTerminal
+    e.press("dq")
+    check win.modeState.kind == mskTerminal
+
+    e.press("q")
+    check win.modeState.kind == mskNone
+
+  test "forced Insert leaves it alone":
+    let e = createTestEditor()
+    e.config.standard.forceInsertMode = true
+    let (termBuf, _) = e.browsing("foo")
+
+    e.checkOnSession(e.activeWindow, termBuf)
+    check e.state.mode == EditorMode.Normal
+
+    e.press("vl")
+    e.pressEscape()
+    e.checkOnSession(e.activeWindow, termBuf)
+    check e.state.mode == EditorMode.Normal
+
+  test "the wheel and a click work as in Visual over it":
+    let e = createTestEditor()
+    var output = "x"
+    for _ in 0 ..< 100:
+      output.add("\r\nx")
+    discard e.browsing(output)
+    let win = e.activeWindow
+    let top = win.viewport.topLine
+    e.config.standard.mouse = true
+
+    check e.handleScrollInput(initScrollInput(1, 1, -3)).handled
+    check win.viewport.topLine == top - 3
+
+    let before = win.cursor
+    check e.handlePointerInput(initPointerInput(2, 0))
+    check win.cursor != before
+    check win.modeState.terminalSubMode == tsmNormal
+
+  test ". of typed text goes back to the job and sends nothing":
+    let e = createTestEditor()
+    e.press("ix")
+    e.pressEscape()
+    let (termBuf, snapshot) = e.browsing("foo")
+
+    e.press(".")
+
+    check snapshot.getLine(0) == "foo"
+    check termBuf.getLine(0) == ""
+    check e.state.mode == EditorMode.Terminal
+    check e.activeWindow.modeState.terminalSubMode == tsmInput
+
+  test "leaving Visual returns to the session without opening another":
+    let e = createTestEditor()
+    let (termBuf, _) = e.browsing("foo bar")
+    let win = e.activeWindow
+
+    e.press("0vl")
+    check win.mode == EditorMode.Visual
+    e.pressEscape()
+    e.checkOnSession(win, termBuf)
+    check win.modeState.terminalSubMode == tsmNormal
+
+    e.press("vy")
+    e.checkOnSession(win, termBuf)
+    check win.modeState.terminalSubMode == tsmNormal
+    check e.terminalStates.len == 1
+
+  test "edits are refused and stay on the session":
+    let e = createTestEditor()
+    let (termBuf, snapshot) = e.browsing("foo\r\nbar")
+    let win = e.activeWindow
+
+    e.press("dd")
+    e.press("x")
+    e.press("o")
+    e.press("R")
+    e.pressEscape()
+    e.press("Vd")
+    e.pressEscape()
+
+    check snapshot.getLine(0) == "foo"
+    check snapshot.len == 2
+    e.checkOnSession(win, termBuf)
+    check win.modeState.terminalSubMode == tsmNormal
+
+  test "a window moved to a text tab from Visual leaves the session":
+    let e = createTestEditor()
+    let textBuf = e.activeBuffer()
+    let (_, _) = e.browsing("foo")
+    let win = e.activeWindow
+
+    e.press("v")
+    discard e.moveWindowToTab(win, textBuf)
+
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer == textBuf
+
+  test "a window in Visual keeps its say in the PTY size":
+    let e = createTestEditor()
+    let (termBuf, _) = e.browsing("foo")
+
+    e.press("v")
+
+    check e.minimumTerminalAreaDimensions(termBuf.id).isSome
+
+  test "the cursor shows though the program had hidden it":
+    let e = createTestEditor()
+    let (_, _) = e.browsing("foo")
+    e.state.cursorVisible = false
+
+    var buffer = newBuffer(80, 24)
+    buffer.area = Rect(x: 0, y: 0, width: 80, height: 24)
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderSplitView(buffer)
+
+    check e.state.cursorVisible
+
+suite "Terminal tabs - the snapshot draws like the screen":
+  test "no line numbers":
+    let e = createTestEditor()
+    let (_, snapshot) = e.browsing("foo")
+
+    check calculateLineNumOffset(snapshot, true) == 0
+
+  test "colors and attributes stay on their characters":
+    let e = createTestEditor()
+    let (_, snapshot) = e.browsing("\x1b[31mred\x1b[0m \x1b[1;42mgo\x1b[0m")
+    let hl = snapshot.highlight
+
+    check hl.literalStyleAt(0, 0).fg == ColorValue(kind: Indexed256, indexed256: 1'u8)
+    check hl.literalStyleAt(0, 3).fg.kind == Default
+    check hl.getSegmentBg(0, 4) == some(ColorValue(kind: Indexed256, indexed256: 2'u8))
+    check StyleModifier.Bold in hl.getSegmentModifiers(0, 4)
+    check StyleModifier.Bold notin hl.getSegmentModifiers(0, 0)
+
+  test "painted blanks are text, in their colors":
+    let e = createTestEditor()
+    let (_, snapshot) = e.browsing("\x1b[41mfoo   \x1b[42m   \x1b[0m   \r\nplain   ")
+    let hl = snapshot.highlight
+
+    check snapshot.getLine(0) == "foo      "
+    check hl.literalStyleAt(0, 4).bg == ColorValue(kind: Indexed256, indexed256: 1'u8)
+    check hl.literalStyleAt(0, 7).bg == ColorValue(kind: Indexed256, indexed256: 2'u8)
+    check snapshot.getLine(1) == "plain"
+
+  test "reverse video blanks are text too":
+    let e = createTestEditor()
+    let (_, snapshot) = e.browsing("\x1b[7mbar  \x1b[0m")
+
+    check snapshot.getLine(0) == "bar  "
+
+  test "a row of painted blanks at the bottom stays":
+    let e = createTestEditor()
+    let (_, snapshot) = e.browsing("a\r\n\x1b[44m  \x1b[0m")
+
+    check snapshot.len == 2
+    check snapshot.getLine(1) == "  "
+
+  test "a wide character takes one column of the line":
+    let e = createTestEditor()
+    let (_, snapshot) = e.browsing("\x1b[31m\xe6\xbc\xa2\x1b[32mx\x1b[0m")
+
+    check snapshot.getLine(0).charLen == 2
+    check snapshot.highlight.literalStyleAt(0, 1).fg ==
+      ColorValue(kind: Indexed256, indexed256: 2'u8)
+
+  test "an empty row keeps the rows after it in place":
+    let e = createTestEditor()
+    let (_, snapshot) = e.browsing("\x1b[31ma\x1b[0m\r\n\r\n\x1b[32mb\x1b[0m")
+
+    check snapshot.getLine(1) == ""
+    check snapshot.highlight.literalStyleAt(1, 0).fg.kind == Default
+    check snapshot.highlight.literalStyleAt(2, 0).fg ==
+      ColorValue(kind: Indexed256, indexed256: 2'u8)
+
+  test "scrollback rows keep their colors":
+    let e = createTestEditor()
+    var output = "\x1b[31mtop\x1b[0m"
+    for _ in 0 ..< 30:
+      output.add("\r\nx")
+    let (_, snapshot) = e.browsing(output)
+
+    check snapshot.getLine(0) == "top"
+    check snapshot.highlight.literalStyleAt(0, 0).fg.kind != Default
 
 suite "Terminal tabs - Terminal-Normal browses an unregistered snapshot":
   test "bdelete closes the session instead of failing on the snapshot":
@@ -674,7 +1136,6 @@ suite "Terminal tabs - the window's mode follows its tab":
     discard e.handleKeyCombo(charKey("q"))
 
     checkOnSession(e, e.activeWindow, termBuf)
-    check e.state.mode == EditorMode.Terminal
     check e.activeWindow.modeState.terminalSubMode == tsmNormal
 
     discard e.handleKeyCombo(charKey("i"))

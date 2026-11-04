@@ -46,9 +46,7 @@ proc toCursorStyle(ct: CursorType): CursorStyle =
 proc isBrowsed(e: Editor, id: BufferId): bool =
   ## Whether a window on the session parked on `id` is in Terminal-Normal.
   for window in e.windowManager.windows:
-    if window.mode == EditorMode.Terminal and window.tabBufferId == id and
-        window.modeState.kind == mskTerminal and
-        window.modeState.terminalSubMode == tsmNormal:
+    if window.tabBufferId == id and window.isBrowsingTerminal:
       return true
   false
 

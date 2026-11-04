@@ -575,7 +575,7 @@ proc renderStatusLine*(
     buffer.area.x,
     statusLineY,
     buffer.area.width,
-    state.mode,
+    state.activeWindow.shownMode,
     config,
     isActiveWindow = true,
     showMode = config.mode,

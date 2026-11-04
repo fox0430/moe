@@ -45,15 +45,14 @@ const EditCommandIds = [
   "delete.char", "delete.char.before", "delete.line", "delete.word",
   "operator.delete.to.end", "operator.change.to.end", "paste.after", "paste.before",
   "paste.after.end", "paste.before.end", "edit.paste", "join.lines", "substitute.char",
-  "substitute.line", "toggle.case", "operator.delete", "operator.change",
-  "operator.indent", "operator.outdent", "operator.lowercase", "operator.uppercase",
-  "operator.togglecase", "autoindent.line", "edit.increment", "edit.decrement",
-  "edit.repeat",
+  "substitute.line", "toggle.case", "autoindent.line", "edit.increment",
+  "edit.decrement", "edit.repeat",
 ]
   ## Built-in command ids (dotted form, as carried by Command.commandId) that
   ## modify the buffer at the cursor, used to classify a command for the
   ## read-only gate. The `r` replace command is handled separately via its
-  ## ctOperatorPending operatorType (EditOperatorTypes).
+  ## ctOperatorPending operatorType (EditOperatorTypes). An operator is not one
+  ## of them: it is refused once it has its operand (`finishOperator`).
   ##
   ## NOTE: when adding a new buffer-modifying command, add its id here too, or
   ## it will bypass the read-only gate. A guard test ("read-only gate allowlists
@@ -121,10 +120,7 @@ proc executeCommand*(
   # Buffer-modifying commands, classified for the read-only gate below. Folds
   # are not opened here: an operator widens its own range over a closed fold.
   let isEditCommand =
-    (
-      ctx.state.pendingInput.pendingOperator.isSome and
-      ctx.state.pendingInput.pendingOperator.get.operatorType != OpYank
-    ) or (cmd.kind == ctOperatorPending and cmd.operatorType in EditOperatorTypes) or (
+    (cmd.kind == ctOperatorPending and cmd.operatorType in EditOperatorTypes) or (
       cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
       cmd.commandId in EditCommandIds
     )

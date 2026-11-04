@@ -94,6 +94,8 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   ("#", "search-word-backward"),
   ("g *", "search-word-forward-partial"),
   ("g #", "search-word-backward-partial"),
+  ("C-\\ C-n", "end-command"),
+  ("C-\\ C-g", "end-command"),
   # Edit
   ("I", "visual-to-insert"),
   ("d", "visual-delete"),

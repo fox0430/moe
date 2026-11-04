@@ -35,6 +35,8 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("k", "move-up"),
   ("l", "move-right"),
   ("C-j", "move-down"), # CTRL-J / <NL> = down (Vim built-in)
+  ("C-\\ C-n", "end-command"),
+  ("C-\\ C-g", "end-command"),
   ("g j", "move-down-screen-line"),
   ("g k", "move-up-screen-line"),
   ("g Down", "move-down-screen-line"),

@@ -26,6 +26,7 @@
 import std/options
 
 import ../terminal/[pty, ansi_parser]
+import ../buffer/core
 
 const TtyQuitChar* = "\x1c"
   ## The byte Ctrl-\ produces (FS), which a tty delivers as SIGQUIT.
@@ -41,6 +42,9 @@ type
     exitCode*: Option[int]
     waitingForCtrlN*: bool # Waiting for Ctrl-N after Ctrl-\
     needsBufferRefresh*: bool
+    lastSnapshot*: TextBuffer
+      ## The latest Terminal-Normal copy, whose marks and last Visual area the
+      ## next one takes: in Vim they belong to the one terminal buffer.
     responseFlushBlocked*: bool
       ## Set while a query answer is stuck unwritten, so the retry each poll
       ## makes is not logged once per render frame.

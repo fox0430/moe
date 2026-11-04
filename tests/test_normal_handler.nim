@@ -3249,7 +3249,7 @@ block namedMarks:
     discard press(handler, buf, state, "ma")
     state.cursor.line = 0
     buf.readOnly = true
-    discard press(handler, buf, state, "d'a")
-    doAssert state.statusMessage == "Buffer is read-only"
+    let refused = press(handler, buf, state, "d'a")
+    doAssert refused.kind == nmrError and refused.errorMessage == "Buffer is read-only"
     doAssert state.pendingInput.pendingOperator.isNone
     doAssert buf.len == 2
