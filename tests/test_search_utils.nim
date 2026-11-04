@@ -297,6 +297,21 @@ suite "loadSearchHistory and saveSearchHistory":
       let loaded = loadSearchHistory(50)
       check loaded.len <= 50
 
+  test "an entry with a line break is not saved, as it would read back as two":
+    let hadCacheHome = existsEnv("XDG_CACHE_HOME")
+    let cacheHome = getEnv("XDG_CACHE_HOME")
+    let dir = getTempDir() / ("moe_search_history_" & $getCurrentProcessId())
+    createDir(dir)
+    putEnv("XDG_CACHE_HOME", dir)
+    defer:
+      if hadCacheHome:
+        putEnv("XDG_CACHE_HOME", cacheHome)
+      else:
+        delEnv("XDG_CACHE_HOME")
+      removeDir(dir)
+    check saveSearchHistory(@["one", "foo\rbar\r", "a\nb", "two"]).isOk
+    check loadSearchHistory() == @["one", "two"]
+
   test "saveSearchHistory and loadSearchHistory roundtrip":
     if not pathAvailable:
       skip()

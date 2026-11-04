@@ -92,6 +92,15 @@ proc findCounted*(
   else:
     none(BufferPosition)
 
+proc matchEnd*(
+    state: EditorState, b: TextBuffer, spec: SearchSpec, pos: BufferPosition
+): BufferPosition =
+  ## Just past the match of `spec` that starts at `pos`, which is `pos` when
+  ## none does.
+  let endCol =
+    b.matchEndCol(pos, spec.pattern, state.input.search.ignoresCase(spec), spec.match)
+  BufferPosition(line: pos.line, column: endCol.get(pos.column))
+
 proc addSearchHistory*(state: EditorState, pattern: string) =
   ## Push `pattern` onto the search history, most recent first, dropping an
   ## older duplicate and trimming to the configured limit.

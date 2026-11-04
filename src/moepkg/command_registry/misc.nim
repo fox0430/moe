@@ -102,13 +102,10 @@ proc getMatchEndCol*(
     match: SearchMatch,
 ): int =
   ## Get the end column (inclusive) of a match starting at matchStart.
-  let ranges =
-    buffer.findSearchMatchRanges(matchStart.line, searchText, ignorecase, match)
-  for r in ranges:
-    if r.startCol == matchStart.column:
-      return r.endCol - 1
   # Fallback: use search text char length
-  return matchStart.column + searchText.charLen - 1
+  buffer.matchEndCol(matchStart, searchText, ignorecase, match).get(
+    matchStart.column + searchText.charLen
+  ) - 1
 
 proc gnArea*(match: (BufferPosition, BufferPosition), forward: bool): VisualArea =
   ## The Visual area gn/gN select over `match`: like Vim's current_search, the

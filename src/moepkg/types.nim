@@ -315,6 +315,19 @@ type
     match*: SearchMatch # As a regex (/ and ?) or as it is (* and #)
     direction*: SearchDirection # The way it went, which n goes too
 
+  PromptWait* = enum
+    ## What the prompt's next key is read as instead of being run.
+    pwNone
+    pwRegister # After Ctrl-R: a register, or Ctrl-R for pwRegisterLiterally
+    pwRegisterLiterally # After Ctrl-R Ctrl-R: a register
+    pwLiteral # After Ctrl-V: a key as it is, or a character's code
+
+  LiteralCode* = object ## What Ctrl-V has read of a code, as Vim's get_literal.
+    hex*, octal*: bool
+    unicodeDigits*: int # 4 after `u`, 8 after `U`, else 0
+    value*: int
+    digits*: int
+
   PromptLine* = object
     ## The line typed at the `:`, `/` or `?` prompt, or at the LSP rename's,
     ## as Vim's ccline. One prompt is open at a time, so they share it.
@@ -326,6 +339,11 @@ type
     lookfor*: Option[string]
       # What Up and Down look for: the text before the cursor when they began.
       # Any other key but Left and Right drops it.
+    wait*: PromptWait
+    literal*: LiteralCode
+    wordAt*: Option[BufferPosition]
+      # Where Ctrl-R Ctrl-W reads while 'incsearch' shows a match or `:s` a
+      # preview, as neither leaves the cursor where Vim's stays.
 
   SearchState* = object ## Search-related state grouped together for better organization
     last*: SearchSpec # Last executed search, replayed by n/N and an empty `/`
@@ -1113,6 +1131,8 @@ type
     # Full register system (vim-style)
     registers*: Registers # All registers (", 0-9, a-z, -, *, +)
     pendingInput*: PendingInputState # See pending_input.nim for isActive/cancelAll.
+    stuffedKeys*: seq[tuple[combo: KeyCombo, typed: bool]]
+      # Keys the key being run left to run next, as Vim's stuff buffer
     beepCount*: int
       ## Times a command has beeped (`beep`); a replay compares it around a key
     keyTyped*: bool

@@ -866,7 +866,7 @@ suite "Editor - Substitute preview":
     e.cursor = BufferPosition(line: 0, column: 0)
     e.startSubstitutePreview()
 
-    e.jumpToFirstSubstituteMatch("foo")
+    check e.jumpToFirstSubstituteMatch("foo")
 
     check e.cursor == BufferPosition(line: 2, column: 7)
 
@@ -877,7 +877,7 @@ suite "Editor - Substitute preview":
       e.motionController.bindToWindow(e.activeWindow)
       e.startSubstitutePreview()
       for pattern in patterns:
-        e.jumpToFirstSubstituteMatch(pattern)
+        check e.jumpToFirstSubstituteMatch(pattern)
       check e.cursor.line == 112
       e.activeWindow.viewport.topLine
 
@@ -930,7 +930,7 @@ suite "Editor - Substitute preview":
     e.activeWindow.viewport.topWrapOffset = 0
     e.activeWindow.viewport.leftCell = 0
 
-    e.jumpToFirstSubstituteMatch("zzz")
+    check not e.jumpToFirstSubstituteMatch("zzz")
 
     check e.cursor == BufferPosition(line: 0, column: 4)
     check e.activeWindow.viewport.topLine == 3

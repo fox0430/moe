@@ -670,6 +670,14 @@ proc repeatInsert(e: Editor, r: HandlerResult): ReplayOutcome =
       e.activeBuffer,
     )
 
+template expandingMapping(router: KeyRouter, body: untyped) =
+  ## Run `body` as one expansion, which `MaxMapRecursionDepth` bounds.
+  router.mapExpandDepth += 1
+  try:
+    body
+  finally:
+    router.mapExpandDepth -= 1
+
 proc stopRecursiveMapping(editor: Editor): ReplayOutcome =
   ## End a mapping that keeps expanding, as Vim's E223 does.
   editor.state.statusMessage = "recursive mapping (max " & $MaxMapRecursionDepth & ")"
@@ -692,11 +700,8 @@ proc replayMappingKeys(
     editor.state.pendingInput.macroState.recordTypedKeys(standsFor)
     return editor.stopRecursiveMapping()
   let remapFrom = if targetKeys.startsWith(mapping.triggerKeys): 1 else: 0
-  editor.keyRouter.mapExpandDepth += 1
-  try:
+  editor.keyRouter.expandingMapping:
     result = playbackKeyCombosImpl(editor, targetKeys, remapFrom, standsFor)
-  finally:
-    editor.keyRouter.mapExpandDepth -= 1
 
 proc replayRuntimeKeySequence(
     editor: Editor, mapping: RuntimeKeyMapping, standsFor: seq[KeyCombo]
@@ -789,8 +794,7 @@ proc releaseHeldKeys*(
     # Unmapped, so the typed keys cannot start the cycle again.
     return
       manager.feedHeldKeys(editor, keys, editor.stopRecursiveMapping(), remap = false)
-  router.mapExpandDepth += 1
-  try:
+  router.expandingMapping:
     var first = none(ReplayOutcome)
     var next = 1
     if leading.isSome:
@@ -803,8 +807,6 @@ proc releaseHeldKeys*(
       unmapped.remap = false
       first = some(runNestedKeyCombo(manager, editor, unmapped))
     result = manager.feedHeldKeys(editor, keys[next .. ^1], first.get)
-  finally:
-    router.mapExpandDepth -= 1
 
 proc runRoute*(
     manager: HandlerManager, editor: Editor, route: RouteResult
@@ -859,10 +861,11 @@ proc cancelEndsCommand(e: Editor, keyCombo: KeyCombo): bool =
 proc readsKeyUnmapped*(e: Editor, keyCombo: KeyCombo): bool =
   ## The command being built reads `keyCombo` as it is, before the mappings
   ## while none hold keys: an operand, or what cancels the command.
-  e.routerMode != EditorMode.Command and (
+  if e.routerMode == EditorMode.Command:
+    e.state.input.line.wait != pwNone
+  else:
     e.state.pendingInput.waitsForOperand(e.keyRouter.registry) or
-    e.cancelEndsCommand(keyCombo)
-  )
+      e.cancelEndsCommand(keyCombo)
 
 proc answerHitEnter(e: Editor, keyCombo: KeyCombo): bool =
   ## Dismiss temporary messages (e.g. :jump output) on any key, as Vim's
@@ -917,6 +920,25 @@ proc dispatchNestedKeyCombo(
     return routed.get
   e.recordingIfRan(key.standsFor, some(manager.runAsItself(e, key))).get
 
+proc runStuffedKeys(
+    manager: HandlerManager, e: Editor, outcome: ReplayOutcome
+): ReplayOutcome =
+  ## Run the keys the key before left to run next, ahead of any others and
+  ## unmapped, as from Vim's stuff buffer. Keys that keep stuffing keys (a
+  ## register that puts in itself) end as a recursive mapping does.
+  result = outcome
+  if e.state.stuffedKeys.len == 0:
+    return
+  var keys: seq[KeyInput]
+  for (combo, typed) in e.state.stuffedKeys:
+    keys.add KeyInput(combo: combo, remap: false, typed: typed)
+  e.state.stuffedKeys = @[]
+  let router = e.keyRouter
+  if router.mapExpandDepth >= MaxMapRecursionDepth:
+    return manager.feedHeldKeys(e, keys, e.stopRecursiveMapping(), remap = false)
+  router.expandingMapping:
+    result = manager.feedHeldKeys(e, keys, outcome, remap = false)
+
 proc runNestedKeyCombo*(
     manager: HandlerManager, e: Editor, key: KeyInput
 ): ReplayOutcome =
@@ -940,6 +962,7 @@ proc runNestedKeyCombo*(
     e.state.keyTyped = wasTyped
   if result == roContinue and e.state.beepCount > beeps:
     result = roAbort
+  result = manager.runStuffedKeys(e, result)
   # Once the command has dropped the column vertical moves want, if it does,
   # so Insert resumes past the end only as Vim's would.
   if result != roQuit:

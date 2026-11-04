@@ -23,7 +23,7 @@
 ## that don't depend heavily on Editor state. Extracted from editor.nim to
 ## improve modularity and prepare for additional rendering features.
 
-import std/unicode
+import std/[strutils, unicode]
 import celina_backend as celina
 
 import types, buffer/core, unicode_utils, color, modes, sidebar
@@ -635,6 +635,36 @@ func motionReservedLines*(state: EditorState): int {.inline.} =
   else:
     steadyBottomAreaHeight()
 
+proc shownPromptLine(line: PromptLine): tuple[text: string, cursor: int] =
+  ## `line` as a prompt shows it: a control character as `^M` or `<9b>`, and at
+  ## the cursor the `"` of a waiting Ctrl-R or the `^` of a Ctrl-V, with the
+  ## rest of the line after it.
+  proc shown(text: string): string =
+    var i = 0
+    while i < text.len:
+      let c = text[i]
+      if c == '\n':
+        result.add "^@" # Vim keeps a NUL as a line feed
+      elif c < ' ' or c == '\x7f':
+        result.add '^'
+        result.add chr(ord(c) xor 0x40)
+      elif c == '\xC2' and i + 1 < text.len and text[i + 1] in '\x80' .. '\x9F':
+        inc i
+        result.add "<" & text[i].ord.toHex(2).toLowerAscii & ">"
+      else:
+        result.add c
+      inc i
+
+  let
+    at = charToBytePos(line.text, line.cursor)
+    before = shown(line.text[0 ..< at])
+    mark =
+      case line.wait
+      of pwNone: ""
+      of pwRegister, pwRegisterLiterally: "\""
+      of pwLiteral: "^"
+  (before & mark & shown(line.text[at ..^ 1]), before.charLen)
+
 proc overlayInput*(state: EditorState): tuple[text: string, cursorChar: int] =
   ## Full display text and character-index cursor position for the active
   ## overlay: its line after the prompt's `:`, `/`, `?` or "Rename: ".
@@ -647,7 +677,8 @@ proc overlayInput*(state: EditorState): tuple[text: string, cursorChar: int] =
       "Rename: "
     else:
       return ("", 0)
-  (prompt & state.input.line.text, prompt.charLen + state.input.line.cursor)
+  let (text, cursor) = state.input.line.shownPromptLine
+  (prompt & text, prompt.charLen + cursor)
 
 proc wrappedInputCursor*(
     text: string, cursorChar: int, width: int

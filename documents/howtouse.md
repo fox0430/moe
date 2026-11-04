@@ -917,6 +917,14 @@ prompt has no history yet.
 | <kbd>**End**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**e**</kbd> | Move the cursor to the end |
 | <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd> | Delete the character before the cursor; on an empty `:`, `/` or `?` line, leave it |
 | <kbd>**Delete**</kbd> | Delete the character under the cursor, or the one before it at the end; on an empty `:`, `/` or `?` line, leave it |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Delete all the text before the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> | Delete the word before the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> <kbd>**Any key**</kbd> | Insert a register as if typed, with what would end the line as it is: a letter or a digit, `"`, `-`, `*`, `+`, `_`, `%` for the file name, `/` for the last search or `:` for the last command line |
+| <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> <kbd>**Any key**</kbd> | Insert a register, or what the keys below take, literally; Ctrl-r Ctrl-o is the same |
+| <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> | Insert the word under the cursor; with incsearch, at the match and without what was typed of it |
+| <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> | Insert the WORD under the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> <kbd>**Ctrl**</kbd> <kbd>**l**</kbd> | Insert the line under the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**v**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**q**</kbd> | Insert the next key as it is, or a character by its code: up to 3 decimal digits, `o` and 3 octal ones, `x` and 2 hex ones, `u` and 4 or `U` and 8 |
 | <kbd>**Up**</kbd> | Recall an older history entry that starts with the text before the cursor |
 | <kbd>**Down**</kbd> | Recall a newer history entry that starts with the same text, or that text after the newest |
 | <kbd>**Shift**</kbd> <kbd>**Up**</kbd> | Recall the next older history entry |

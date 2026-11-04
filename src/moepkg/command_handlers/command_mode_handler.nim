@@ -52,11 +52,11 @@ proc findFirstSubstituteMatch*(
 
 proc jumpToFirstSubstituteMatch*(
     e: Editor, pattern: string, firstLine: int = 0, lastLine: int = high(int)
-) =
+): bool =
   ## Move cursor/viewport to the first pattern match in lines
   ## `firstLine .. lastLine` (incsearch-like behavior), scrolling from what the
   ## window showed as the preview began. If no match is found, restore cursor
-  ## and view to those at preview start.
+  ## and view to those at preview start. Returns whether one was.
   let match = findFirstSubstituteMatch(
     e.state.ui.substitutePreview.originalLines, pattern, firstLine, lastLine
   )
@@ -64,9 +64,11 @@ proc jumpToFirstSubstituteMatch*(
     let pos = match.get
     e.cursor = pos
     e.showFromView(e.state.ui.substitutePreview.originalView, pos)
+    true
   else:
     e.cursor = e.state.ui.substitutePreview.originalCursor
     e.activeWindow.viewport.restoreViewState(e.state.ui.substitutePreview.originalView)
+    false
 
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## Update or cancel the live substitute preview based on the current command
@@ -76,6 +78,7 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## - Pattern only (e.g. ":%s/foo"): jump cursor to first match (incsearch-like)
   ## - Pattern + replacement (e.g. ":%s/foo/bar"): also preview the replacement
   ##   in the buffer when config.highlight.replaceText is enabled.
+  e.state.input.line.wordAt = none(BufferPosition)
   let commandText = normalizeSubstituteLongForm(e.state.commandLine)
   if commandText.contains("s/"):
     let parsed = parseSubstituteCommand(commandText)
@@ -97,9 +100,22 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
         # Pattern-only state: restore buffer (in case a replacement preview was
         # previously applied) but keep the preview active for cursor tracking.
         e.restoreFromPreview()
-      e.jumpToFirstSubstituteMatch(parsed.pattern, firstLine, lastLine)
+      let found = e.jumpToFirstSubstituteMatch(parsed.pattern, firstLine, lastLine)
+      # Vim's cursor stays put unless 'incsearch' takes it to the end of the
+      # match, and comes back once the pattern is followed by more.
+      e.state.input.line.wordAt = some(
+        if found and e.state.input.search.incsearch and not parsed.hasReplacement:
+          BufferPosition(
+            line: e.cursor.line, column: e.cursor.column + parsed.pattern.charLen
+          )
+        else:
+          e.state.ui.substitutePreview.originalCursor
+      )
     elif e.state.ui.substitutePreview.isActive:
       e.cancelSubstitutePreview()
+  elif e.state.ui.substitutePreview.isActive:
+    # Ctrl-U and Ctrl-W take the `s/` as well.
+    e.cancelSubstitutePreview()
 
 proc insertPastedTextInCommand*(e: Editor, text: string) =
   ## Insert a paste's first line at the cursor of the command line.
@@ -125,7 +141,11 @@ proc updateCompletionAfterEdit(e: Editor) =
     # Argument mode
     mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
   elif mgr.isActive():
-    mgr.updateFilter(extractCommandPrefix(e.state.commandLine))
+    if e.state.input.line.text.len == 0 or mgr.mode != cmCommand:
+      # All of it went, or the argument the completions were for.
+      mgr.cancelCompletion()
+    else:
+      mgr.updateFilter(extractCommandPrefix(e.state.commandLine))
   e.updateSubstitutePreviewIfNeeded()
 
 proc updateCompletionAfterTyping(e: Editor, typed: string) =
@@ -197,11 +217,34 @@ proc selectCompletion(e: Editor, next: bool) =
   else:
     (line.text, line.cursor) = mgr.typedLine
 
+proc editCommandLine(e: Editor, keyCombo: KeyCombo) =
+  ## Edit the line with `keyCombo`, and have the completions and the
+  ## substitute preview follow.
+  let mgr = e.state.commandCompletionManager
+  case e.state.editPrompt(e.activeBuffer, keyCombo, e.state.input.commandState.history)
+  of leNone, leStill:
+    discard
+  of leBeep:
+    e.state.beep()
+  of leEmptyErase:
+    e.cancelCommandLine()
+  of leMoved:
+    # Home, End, Ctrl-B and Ctrl-E too with the cursor already there, so the
+    # next Enter runs the line.
+    mgr.cancelCompletion()
+  of leTyped:
+    e.updateCompletionAfterTyping(keyCombo.char)
+  of leErased:
+    e.updateCompletionAfterEdit()
+  of leRecalled, lePasted:
+    mgr.cancelCompletion()
+    e.updateSubstitutePreviewIfNeeded()
+
 proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
   ## Run `keyCombo` on the command line. Its mappings (`cmap`) have already
   ## had the key: a mapping's keys run here as keys of their own, so the ones
   ## after an Enter that ends the command line reach the mode it returns to.
-  let key = e.state.input.line.takeKey(keyCombo, e.state.keyTyped)
+  let key = e.state.input.line.takeKey(keyCombo, e.state.keyTyped, e.state.interrupted)
   let mgr = e.state.commandCompletionManager
   case key
   of pkLeave:
@@ -230,6 +273,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
         return roContinue
       # Otherwise, fall through to execute the command immediately
     return e.runCommandLine()
+  of pkArgument:
+    e.editCommandLine(keyCombo)
+    return roContinue
   of pkOther:
     discard
 
@@ -256,22 +302,5 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
     discard e.applyCompletion()
     return roContinue
 
-  case e.state.input.line.edit(keyCombo, e.state.input.commandState.history)
-  of leNone, leStill:
-    discard
-  of leBeep:
-    e.state.beep()
-  of leEmptyErase:
-    e.cancelCommandLine()
-  of leMoved:
-    # Home, End, Ctrl-B and Ctrl-E too with the cursor already there, so the
-    # next Enter runs the line.
-    mgr.cancelCompletion()
-  of leTyped:
-    e.updateCompletionAfterTyping(keyCombo.char)
-  of leErased:
-    e.updateCompletionAfterEdit()
-  of leRecalled:
-    mgr.cancelCompletion()
-    e.updateSubstitutePreviewIfNeeded()
+  e.editCommandLine(keyCombo)
   roContinue

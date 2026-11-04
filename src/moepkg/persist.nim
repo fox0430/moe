@@ -115,7 +115,8 @@ proc saveCommandHistory*(
 
     var content = ""
     for i, entry in entriesToSave:
-      if entry.len == 0:
+      # A line break would make it two entries when read
+      if entry.len == 0 or entry.contains({'\r', '\n'}):
         continue
       content.add entry
       if i < entriesToSave.high:
