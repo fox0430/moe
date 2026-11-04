@@ -87,15 +87,20 @@ jobs:
       # Runs in the lsp-e2e job instead so the shards never pay for
       # `nimble install lasm`.
       MOE_TEST_EXCLUDE: test_lsp_e2e_lasm.nim
+      CCACHE_DIR: /home/runner/.ccache
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 1G
     steps:
     - uses: actions/checkout@v7
     - run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
+          ccache \
           x11-xserver-utils \
           xsel \
           xclip
+        echo /usr/lib/ccache >> "$GITHUB_PATH"
 
     - name: Cache nimble
       id: cache-nimble
@@ -106,15 +111,15 @@ jobs:
         restore-keys: |
           unit-tests-nimble-v3-
 
-    # Nim skips the C compile of unchanged modules. Only pushes save, so PRs
-    # share the caches of their base branch.
-    - name: Restore nimcache
+    # Only pushes save, so PRs share the caches of their base branch.
+    - name: Restore ccache
+      id: restore-ccache
       uses: actions/cache/restore@v6
       with:
-        path: ~/.cache/nim
-        key: unit-tests-nimcache-v1-shard${{ matrix.shard }}-${{ github.sha }}
+        path: ~/.ccache
+        key: unit-tests-ccache-v1-shard${{ matrix.shard }}-${{ github.sha }}
         restore-keys: |
-          unit-tests-nimcache-v1-shard${{ matrix.shard }}-
+          unit-tests-ccache-v1-shard${{ matrix.shard }}-
 
     - uses: jiro4989/setup-nim-action@v2
       with:
@@ -133,14 +138,48 @@ jobs:
         TERM: xterm-256color
       run: |
         nimble setup
+        ccache --zero-stats
         xvfb-run env XDG_SESSION_TYPE=x11 nim r tools/paralleltest.nim
 
-    - name: Save nimcache
-      if: github.event_name == 'push' && !cancelled()
+    - name: Show ccache stats
+      if: ${{ !cancelled() }}
+      run: ccache --show-stats
+
+    - name: Save ccache
+      if: >-
+        github.event_name == 'push' && !cancelled() &&
+        steps.restore-ccache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
       with:
-        path: ~/.cache/nim
-        key: unit-tests-nimcache-v1-shard${{ matrix.shard }}-${{ github.sha }}
+        path: ~/.ccache
+        key: unit-tests-ccache-v1-shard${{ matrix.shard }}-${{ github.sha }}
+
+  # Separate from the shards so that test code never runs with actions: write.
+  prune-ccache:
+    name: prune ccache
+    needs: test
+    if: github.event_name == 'push' && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+    - name: Delete all but the newest cache of each shard
+      run: |
+        for shard in 1 2 3 4; do
+          gh cache list \
+            --ref "$GITHUB_REF" \
+            --key "unit-tests-ccache-v1-shard$shard-" \
+            --sort created_at \
+            --order desc \
+            --limit 100 \
+            --json id \
+            --jq '.[1:][].id' |
+            xargs -r -n1 gh cache delete
+        done
 
   lsp-e2e:
     name: lsp e2e (lasm)
