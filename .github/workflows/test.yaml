@@ -106,6 +106,16 @@ jobs:
         restore-keys: |
           unit-tests-nimble-v3-
 
+    # Nim skips the C compile of unchanged modules. Only pushes save, so PRs
+    # share the caches of their base branch.
+    - name: Restore nimcache
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.cache/nim
+        key: unit-tests-nimcache-v1-shard${{ matrix.shard }}-${{ github.sha }}
+        restore-keys: |
+          unit-tests-nimcache-v1-shard${{ matrix.shard }}-
+
     - uses: jiro4989/setup-nim-action@v2
       with:
         nim-version: 'stable'
@@ -124,6 +134,13 @@ jobs:
       run: |
         nimble setup
         xvfb-run env XDG_SESSION_TYPE=x11 nim r tools/paralleltest.nim
+
+    - name: Save nimcache
+      if: github.event_name == 'push' && !cancelled()
+      uses: actions/cache/save@v6
+      with:
+        path: ~/.cache/nim
+        key: unit-tests-nimcache-v1-shard${{ matrix.shard }}-${{ github.sha }}
 
   lsp-e2e:
     name: lsp e2e (lasm)

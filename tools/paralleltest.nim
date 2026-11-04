@@ -12,7 +12,7 @@
 #   MOE_TEST_SHARD     1-based index of the shard to run (default: 1)
 #   MOE_TEST_DRY_RUN   list the selected files and exit without running them
 
-import std/[algorithm, osproc, os, strutils, sequtils]
+import std/[algorithm, hashes, osproc, os, strutils, sequtils]
 
 const
   # Fallback when the number of CPUs cannot be detected (countProcessors() == 0).
@@ -93,19 +93,17 @@ proc main() =
     .mapIt(it.path)
     .filterIt(it notin excluded)
 
-  # Largest first: it packs the parallel batch better and makes the shard split
-  # below deterministic regardless of the order walkDir happens to return.
+  # Largest first: it packs the parallel batch better and keeps the order
+  # deterministic regardless of what walkDir happens to return.
   discovered.sort do(a, b: string) -> int:
     result = cmp(getFileSize("tests" / b), getFileSize("tests" / a))
     if result == 0:
       result = cmp(a, b)
 
-  # Round-robin over the size-sorted list so each shard gets a comparable share
-  # of the (compile dominated) workload.
-  var allTestFiles: seq[string]
-  for i, file in discovered:
-    if i mod shardTotal == shardIndex - 1:
-      allTestFiles.add(file)
+  # By name so a test keeps its shard, and so its nimcache, across commits.
+  let allTestFiles = discovered.filterIt(
+    cast[uint](hash(it)) mod shardTotal.uint == uint(shardIndex - 1)
+  )
 
   let parallelFiles = allTestFiles.filterIt(it notin SequentialTests)
   let sequentialFiles = allTestFiles.filterIt(it in SequentialTests)
