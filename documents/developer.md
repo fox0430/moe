@@ -45,6 +45,16 @@ Environment variables understood by the runner (`tools/paralleltest.nim`):
 |----------------------|----------------------------------------------------|
 | `MOE_TEST_JOBS`      | Parallel job count (default: 4)                    |
 | `MOE_TEST_TIMEOUT`   | Per-file timeout in seconds (default: 120, 0 off)  |
+| `MOE_TEST_SHARDS`    | Total shards (default: 1, i.e. run everything); above 1 it must match `tools/test_shards.txt` |
+| `MOE_TEST_SHARD`     | 1-based shard to run (default: 1)                  |
+
+CI splits the suite with the fixed assignment in `tools/test_shards.txt`, so a test stays on the same runner across commits. New tests go to the lightest shard until the file is regenerated from a Unit tests run:
+
+```sh
+gh run view <run id> --log | nim r tools/gen_test_shards.nim [shards]
+```
+
+The generator refuses a log that does not cover every test, such as a cancelled run. To change the shard count, regenerate with the new count and update the matrix and `MOE_TEST_SHARDS` in `.github/workflows/test.yaml`; the runner stops if they disagree.
 
 Test files live under `tests/` and follow the `test_<module>.nim` naming convention. They use `std/unittest` (`suite` / `test` / `check`) and are compiled with the chronos async backend (`tests/config.nims` sets `-d:asyncBackend=chronos`).
 

@@ -10,19 +10,24 @@
 #   MOE_TEST_EXCLUDE   comma separated file names to skip entirely
 #   MOE_TEST_SHARDS    total number of shards (default: 1, i.e. run everything)
 #   MOE_TEST_SHARD     1-based index of the shard to run (default: 1)
+#                      More than one shard follows tools/test_shards.txt, so
+#                      MOE_TEST_SHARDS must match the count recorded there.
+#                      Regenerate it with tools/gen_test_shards.nim.
 #   MOE_TEST_DRY_RUN   list the selected files and exit without running them
 
-import std/[algorithm, osproc, os, strutils, sequtils]
+import std/[algorithm, osproc, os, strutils, sequtils, tables]
 
 const
   # Fallback when the number of CPUs cannot be detected (countProcessors() == 0).
   FallbackJobs = 4
   DefaultTimeoutSec = 120
   DefaultCompileTimeoutSec = 600
+  ShardTableFile* = "tools/test_shards.txt"
+  ShardCountPrefix* = "# shards: "
 
   # Flaky tests that must be run sequentially after the parallel batch
   # so concurrent file/clipboard/etc. usage cannot perturb them.
-  SequentialTests = [
+  SequentialTests* = [
     "test_registers.nim", "test_terminal_handler.nim", "test_pty.nim",
     "test_deadly_signals.nim", "test_signal_watcher.nim", "test_terminal_command.nim",
     "test_exit_sequence.nim",
@@ -58,6 +63,71 @@ proc shardConfig(): tuple[index, total: int] =
 
   (index, total)
 
+proc loadShardTable(total: int): Table[string, tuple[shard: int, weight: float]] =
+  if not fileExists(ShardTableFile):
+    quit(ShardTableFile & " is missing", 1)
+  var tableTotal = 0
+  for line in lines(ShardTableFile):
+    if line.startsWith(ShardCountPrefix):
+      tableTotal = parseInt(line.substr(ShardCountPrefix.len).strip())
+      if tableTotal != total:
+        quit(
+          ShardTableFile & " is for " & $tableTotal & " shards, MOE_TEST_SHARDS is " &
+            $total,
+          1,
+        )
+      continue
+    if line.len == 0 or line.startsWith("#"):
+      continue
+    let fields = line.splitWhitespace()
+    if fields.len != 3:
+      quit("Malformed line in " & ShardTableFile & ": " & line, 1)
+    let shard = parseInt(fields[1])
+    if shard < 1 or shard > total:
+      quit(ShardTableFile & " does not fit " & $total & " shards: " & line, 1)
+    result[fields[0]] = (shard, parseFloat(fields[2]))
+  if tableTotal == 0:
+    quit(ShardTableFile & " has no \"" & ShardCountPrefix.strip() & "\" line", 1)
+
+proc assignShards(files: seq[string], total: int): Table[string, int] =
+  # Listed files keep their shard so each one stays in the same runner across
+  # commits. New files go to the lightest shard, in name order, so that every
+  # shard derives the same split on its own.
+  let table = loadShardTable(total)
+  var
+    loads = newSeq[float](total)
+    newFiles: seq[string]
+    listedWeight = 0.0
+    listedCount = 0
+
+  for file in files:
+    if file in table:
+      let entry = table[file]
+      result[file] = entry.shard
+      loads[entry.shard - 1] += entry.weight
+      listedWeight += entry.weight
+      listedCount.inc
+    else:
+      newFiles.add(file)
+
+  # Must stay above zero or every new file lands on the first shard.
+  let newFileWeight =
+    if listedWeight > 0:
+      listedWeight / listedCount.float
+    else:
+      1.0
+  for file in newFiles.sorted():
+    let lightest = loads.find(loads.min())
+    result[file] = lightest + 1
+    loads[lightest] += newFileWeight
+
+proc discoverTestFiles*(): seq[string] =
+  toSeq(walkDir("tests", relative = true))
+    .filterIt(
+      it.kind == pcFile and it.path.startsWith("t") and it.path.endsWith(".nim")
+    )
+    .mapIt(it.path)
+
 proc main() =
   let jobs =
     if paramCount() >= 1:
@@ -86,26 +156,19 @@ proc main() =
     excluded = parseFileList(getEnv("MOE_TEST_EXCLUDE"))
     (shardIndex, shardTotal) = shardConfig()
 
-  var discovered = toSeq(walkDir("tests", relative = true))
-    .filterIt(
-      it.kind == pcFile and it.path.startsWith("t") and it.path.endsWith(".nim")
-    )
-    .mapIt(it.path)
-    .filterIt(it notin excluded)
+  var discovered = discoverTestFiles().filterIt(it notin excluded)
 
-  # Largest first: it packs the parallel batch better and makes the shard split
-  # below deterministic regardless of the order walkDir happens to return.
+  # Largest first: it packs the parallel batch better and keeps the order
+  # deterministic regardless of what walkDir happens to return.
   discovered.sort do(a, b: string) -> int:
     result = cmp(getFileSize("tests" / b), getFileSize("tests" / a))
     if result == 0:
       result = cmp(a, b)
 
-  # Round-robin over the size-sorted list so each shard gets a comparable share
-  # of the (compile dominated) workload.
-  var allTestFiles: seq[string]
-  for i, file in discovered:
-    if i mod shardTotal == shardIndex - 1:
-      allTestFiles.add(file)
+  var allTestFiles = discovered
+  if shardTotal > 1:
+    let shards = assignShards(discovered, shardTotal)
+    allTestFiles = discovered.filterIt(shards[it] == shardIndex)
 
   let parallelFiles = allTestFiles.filterIt(it notin SequentialTests)
   let sequentialFiles = allTestFiles.filterIt(it in SequentialTests)
@@ -189,4 +252,5 @@ proc main() =
 
   quit(exitCode)
 
-main()
+when isMainModule:
+  main()
