@@ -983,6 +983,20 @@ proc registerEditCommands*(registry: CommandRegistry) =
     1, # Accept optional count argument
   )
 
+  registry.register(
+    custom("edit.end.command"),
+    "End Command",
+    "End the command being built, Visual and Ctrl-o (Ctrl-\\ Ctrl-N)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      if ctx.state.mode.isVisualAllMode:
+        ctx.state.leaveVisual()
+      # Vim's nv_normal clears restart_edit: Ctrl-o does not bring Insert back.
+      ctx.state.insertResume = irNone
+      ok(()),
+    0,
+    0,
+  )
+
   # Repeat last change command (.)
   registry.register(
     custom("edit.repeat"),

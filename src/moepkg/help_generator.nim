@@ -738,6 +738,9 @@ const TerminalNormalCommands*: HelpGroup = HelpGroup(
   entries: @[
     HelpEntry(syntax: "i", description: "Return to Terminal-Input sub-mode"),
     HelpEntry(syntax: "a", description: "Return to Terminal-Input sub-mode"),
+    HelpEntry(syntax: "I", description: "Return to Terminal-Input sub-mode"),
+    HelpEntry(syntax: "A", description: "Return to Terminal-Input sub-mode"),
+    HelpEntry(syntax: "q", description: "Close the tab after the program exited"),
     HelpEntry(syntax: ":", description: "Enter command mode"),
   ],
 )

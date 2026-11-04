@@ -414,6 +414,10 @@ proc finishOperator*(
     # Nothing to act over (`dj` on the last line): Vim's clearopbeep.
     ctx.state.beep()
     return ok(())
+  # Refused here and not at the operator's key, as Vim's E21: `diw` takes its
+  # keys whole, so none of them runs as a command of its own.
+  if ctx.buffer.readOnly and op.operatorType != OpYank:
+    return err("Buffer is read-only")
 
   let range = ctx.buffer.toOperatorRange(target.get, op.operatorType)
   # As Vim's do_pending_operator, the cursor goes where the operated text

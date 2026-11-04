@@ -1046,18 +1046,18 @@ when not defined(moe.embedded):
       window: EditorWindow,
   ): HandlerResult =
     ## Handle Terminal mode input
-    let r = handleTerminalModeKey(termState, window.modeState.terminalSubMode, keyCombo)
-    case r.kind
+    case handleTerminalModeKey(termState, keyCombo)
     of trHandled:
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
     of trSwitchToNormal:
-      # Switch to Terminal-Normal sub-mode: snapshot grid to TextBuffer.
+      # Terminal-Normal: snapshot grid to TextBuffer.
       # Terminal windows hold no Insert session, so no finalization is needed.
       # Sub-mode and placement only; `syncTerminalView` derives the view.
       let snapshotBuffer = termState.snapshotScrollback()
       window.modeState.scrollbackSnapshot = snapshotBuffer
+      window.setMode(EditorMode.Normal)
       window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)
       window.viewport.resetViewportTop(
         max(0, snapshotBuffer.len - window.viewport.height)
@@ -1067,23 +1067,6 @@ when not defined(moe.embedded):
         modeTransition: none(EditorMode),
         statusMessage: "-- TERMINAL NORMAL --",
       )
-    of trReturnToInput:
-      # `syncTerminalView` puts the session's tab buffer back under the grid.
-      window.modeState.scrollbackSnapshot = nil
-      window.cursor = BufferPosition(line: 0, column: 0)
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    of trEnterCommand:
-      return HandlerResult(
-        kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-      )
-    of trQuit:
-      return HandlerResult(kind: hrTerminalQuit)
-    of trUnhandled:
-      return HandlerResult(kind: hrUnhandled)
-    of trError:
-      return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 template dispatchSubState(
     variantKind: ModeStateKind,

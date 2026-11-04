@@ -1856,6 +1856,36 @@ when not defined(moe.embedded):
     ## Only for an `mskTerminal` state.
     if state.scrollbackSnapshot == nil: tsmInput else: tsmNormal
 
+  func isBrowsingTerminal*(win: EditorWindow): bool =
+    ## Terminal-Normal: Normal mode, as in Vim, on a copy of the session's
+    ## screen. Visual over it stays here. The mode says nothing of it.
+    win.modeState.kind == mskTerminal and win.modeState.terminalSubMode == tsmNormal
+
+  func hasTerminalJob*(win: EditorWindow): bool =
+    ## In Terminal-Normal with a job still running to go back to. Over an ended
+    ## one Insert is refused as on any read-only buffer, as in Vim.
+    win.isBrowsingTerminal and win.modeState.terminal.exitCode.isNone
+
+  proc returnToTerminalJob*(state: EditorState): bool =
+    ## Insert in Terminal-Normal goes back to the job, as Vim's edit(). False
+    ## when there is none to go back to. `syncTerminalView` follows.
+    let win = state.activeWindow
+    result = win.hasTerminalJob
+    if result:
+      win.modeState.scrollbackSnapshot = nil
+      win.setMode(EditorMode.Terminal)
+      win.cursor = BufferPosition(line: 0, column: 0)
+
+proc shownMode*(win: EditorWindow): EditorMode =
+  ## The mode the status line names: Terminal-Normal is Terminal's to users.
+  when defined(moe.embedded):
+    win.mode
+  else:
+    if win.mode == EditorMode.Normal and win.isBrowsingTerminal:
+      EditorMode.Terminal
+    else:
+      win.mode
+
 proc modeStateKind*(mode: EditorMode): ModeStateKind =
   ## Map an `EditorMode` to the `ModeStateKind` it expects on `EditorWindow`.
   ## Modes that do not own per-window state (Normal/Insert/Visual/... and

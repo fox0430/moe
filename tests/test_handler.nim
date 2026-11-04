@@ -7192,8 +7192,16 @@ suite "Ctrl-C in Terminal mode":
         else:
           nil,
     )
-    result.activeWindow.mode = EditorMode.Terminal
-    result.state.mode = EditorMode.Terminal
+    result.activeWindow.mode =
+      if subMode == tsmNormal: EditorMode.Normal else: EditorMode.Terminal
+
+  test "a snapshot gives no words to completion":
+    let e = createTerminalEditor(tsmNormal)
+    e.activeWindow.setView(e.activeWindow.modeState.scrollbackSnapshot)
+
+    e.syncCompletionOtherBuffers(newTextBuffer(""))
+
+    check e.handlerManager.insertHandler.completionManager.otherBuffers.len == 0
 
   test "Ctrl-C closes a command overlay opened over the Terminal":
     let e = createTerminalEditor(tsmNormal)
@@ -7202,7 +7210,7 @@ suite "Ctrl-C in Terminal mode":
     check e.handleInterrupt()
 
     check not e.state.hasOverlay
-    check e.state.mode == EditorMode.Terminal
+    check e.state.mode == EditorMode.Normal
 
   test "Ctrl-C closes a search overlay opened over the Terminal":
     let e = createTerminalEditor(tsmNormal)
@@ -7211,7 +7219,7 @@ suite "Ctrl-C in Terminal mode":
     check e.handleInterrupt()
 
     check not e.state.hasOverlay
-    check e.state.mode == EditorMode.Terminal
+    check e.state.mode == EditorMode.Normal
 
   proc createTerminalEditorWithPaste(subMode: TerminalSubMode = tsmNormal): Editor =
     result = createTerminalEditor(subMode)
@@ -7221,6 +7229,14 @@ suite "Ctrl-C in Terminal mode":
 
   test "Ctrl-C over the Terminal drops the queued paste":
     let e = createTerminalEditorWithPaste()
+
+    check e.handleInterrupt()
+
+    check e.activeWindow.modeState.terminal.pty.droppableBytes == 0
+
+  test "Ctrl-C from Visual over the Terminal drops the queued paste":
+    let e = createTerminalEditorWithPaste()
+    e.setMode(EditorMode.Visual)
 
     check e.handleInterrupt()
 
@@ -7263,6 +7279,19 @@ suite "Ctrl-C in Terminal mode":
     check e.state.mode == EditorMode.Terminal
     # `interrupt()` would have dropped the paste on its way to the child.
     check e.activeWindow.modeState.terminal.pty.droppableBytes == 5
+
+suite "Ctrl-\\ Ctrl-N in Normal":
+  test "ends a Ctrl-o wait, so Insert does not come back":
+    let e = createTestEditorWithBuffer("foo")
+    discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "i", modifiers: {}))
+    discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl}))
+    require e.state.mode == EditorMode.Normal
+
+    discard
+      e.handleKeyCombo(KeyCombo(isSpecial: false, char: "\\", modifiers: {kmCtrl}))
+    discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "n", modifiers: {kmCtrl}))
+
+    check e.state.mode == EditorMode.Normal
 
 suite "gn - the match becomes the selection":
   proc charKey(c: string): KeyCombo =

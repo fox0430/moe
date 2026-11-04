@@ -75,6 +75,8 @@ type
       ## whose syntax segment lacks a bg — inherits this color, so a code block
       ## reads as a uniform stripe rather than only tinted characters. Ranks
       ## below cursor line / cursor column / git conflict / visual selection.
+    defaultFill*: bool ## Past its text the line takes the default colors
+    undecorated*: bool ## The file-edit decorations stay off this line
 
   LinePrecomputed* = object
     ## Per-logical-line values a row is rendered with. The wrap path builds
@@ -83,10 +85,14 @@ type
     indentInfo*: IndentInfo
     lineCtx*: LineStyleContext
 
+template decorates(ctx: RenderContext, lineCtx: LineStyleContext): bool =
+  ## Whether the file-edit decorations draw on the line.
+  ctx.windowMode.isFileEditMode and not lineCtx.undecorated
+
 template hasSyntaxHighlight(
     e: Editor, buffer: TextBuffer, windowMode: EditorMode
 ): bool =
-  e.showSyntax and not buffer.highlight.isNil and
+  not buffer.highlight.isNil and (e.showSyntax or buffer.highlight.literalColors) and
     (windowMode.isFileEditMode or buffer.language != langNone or buffer.isUtilityBuffer)
 
 proc resolveLineConflict(
@@ -174,6 +180,11 @@ proc newLineStyleContext*(
     useTwoColor: e.config.highlight.gitConflictTwoColor,
     trailingSpaceStart: high(int), # disabled: `col >= trailingSpaceStart` never matches
     lineBg: resolveLineBg(e, textBuffer, lineIndex),
+    defaultFill:
+      textBuffer != nil and not textBuffer.highlight.isNil and
+      textBuffer.highlight.literalColors,
+    # A utility buffer's look is its own, also while Visual runs on it.
+    undecorated: textBuffer != nil and textBuffer.isUtilityBuffer,
   )
   if not drawsText:
     return
@@ -182,14 +193,14 @@ proc newLineStyleContext*(
   # styleOverrideAt). Skip the whole-line scan when it cannot fire. Don't clip
   # to the cap: trailing whitespace lives at the line *end*, past the cap, so
   # the input must stay the full line.
-  if e.config.highlight.trailingSpaces and ctx.windowMode.isFileEditMode:
+  if e.config.highlight.trailingSpaces and ctx.decorates(result):
     result.trailingSpaceStart = findTrailingSpaceStart(fullLine)
 
   # Bound the color-code scan to the cap: scanLineForColorCodes allocates an
   # O(line) byte->rune map, and past the cap the line is plain text anyway.
   # (Search/current-word ranges stay uncapped: they're functional, not
   # decorative — a match past the cap must still be shown.)
-  if e.config.highlight.colorCodeHighlight and ctx.windowMode.isFileEditMode:
+  if e.config.highlight.colorCodeHighlight and ctx.decorates(result):
     let cap = if textBuffer != nil: textBuffer.maxHighlightLineLength else: 0
     result.colorCodeMatches =
       if cap > 0 and fullLine.len > cap:
@@ -313,6 +324,32 @@ proc overlayPatchSyntax(
       return bgOnly(cursorColumnHighlightStyle().bg)
   noPatch
 
+proc segmentStyle(
+    highlight: Highlight,
+    pos: BufferPosition,
+    colorPair: EditorColorPairIndex,
+    lineCtx: LineStyleContext,
+    overlaid: bool,
+): Style =
+  ## The style of `pos` from its highlight segments. `overlaid`: a background
+  ## goes on top, which reverse video would turn into the text's color.
+  if highlight.literalColors:
+    result = highlight.literalStyleAt(pos.line, pos.column)
+    if overlaid:
+      result.modifiers.excl(StyleModifier.Reversed)
+    return
+  result = colorIndexToStyle(colorPair)
+  result.modifiers =
+    result.modifiers + highlight.getSegmentModifiers(pos.line, pos.column)
+  let segBg = highlight.getSegmentBg(pos.line, pos.column)
+  if segBg.isSome:
+    result = result.merge(bgOnly(segBg.get))
+  elif lineCtx.lineBg.isSome:
+    # Fence tokens (```) and the language-name keyword carry no segment bg, so
+    # without this the fence line reads as un-tinted islands inside the block's
+    # stripe. Overlays (cursorLine / gitConflict / …) still win on top.
+    result = result.merge(bgOnly(lineCtx.lineBg.get))
+
 proc baseStyleWithOverlay(
     e: Editor,
     buffer: TextBuffer,
@@ -325,20 +362,10 @@ proc baseStyleWithOverlay(
   ## Compute base style (syntax highlight + document highlight / cursor line/column overlay).
   if e.hasSyntaxHighlight(buffer, windowMode):
     let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
-    var style = colorIndexToStyle(colorPair)
-    style.modifiers =
-      style.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
-    let segBg = buffer.highlight.getSegmentBg(pos.line, pos.column)
-    if segBg.isSome:
-      style = style.merge(bgOnly(segBg.get))
-    elif lineCtx.lineBg.isSome:
-      # Fence tokens (```) and the language-name keyword carry no segment bg,
-      # so without this the fence line reads as un-tinted islands inside the
-      # block's stripe. Overlays below (cursorLine / gitConflict / …) still
-      # win via `overlayPatchSyntax`.
-      style = style.merge(bgOnly(lineCtx.lineBg.get))
-    style.merge(
+    let overlay =
       e.overlayPatchSyntax(pos, lineCtx, displayCol, cursorDisplayCol, colorPair)
+    buffer.highlight.segmentStyle(pos, colorPair, lineCtx, overlay.bg.isSome).merge(
+      overlay
     )
   else:
     let highlightKind = e.state.isPositionInDocumentHighlight(lineCtx.bufferId, pos)
@@ -402,16 +429,12 @@ proc getSelectionStyle*(
   # Keep the original foreground (syntax highlight) for bg-only overlays.
   template syntaxBaseStyle(): Style =
     if e.hasSyntaxHighlight(buffer, windowMode):
-      let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
-      var s = colorIndexToStyle(colorPair)
-      s.modifiers =
-        s.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
-      let segBg = buffer.highlight.getSegmentBg(pos.line, pos.column)
-      if segBg.isSome:
-        s = s.merge(bgOnly(segBg.get))
-      elif lineCtx.lineBg.isSome:
-        s = s.merge(bgOnly(lineCtx.lineBg.get))
-      s
+      buffer.highlight.segmentStyle(
+        pos,
+        buffer.highlight.getColorPair(pos.line, pos.column),
+        lineCtx,
+        overlaid = true,
+      )
     else:
       normalStyle()
 
@@ -442,10 +465,6 @@ proc shouldShowIndentationGuide*(
   if not e.showIndentationLines:
     return false
 
-  # Don't show indentation guides in utility buffers (jumplist, log, etc.)
-  if e.activeBuffer().isUtilityBuffer:
-    return false
-
   # Only show guides at indent levels (multiples of tabStop)
   if displayX mod e.tabStop != 0:
     return false
@@ -470,10 +489,10 @@ proc charOverridePatch(
   ## Returns `noPatch` when no override fires.
   var patch = noPatch
   if rune == FULLWIDTH_SPACE and e.config.highlight.fullWidthSpace and
-      ctx.windowMode.isFileEditMode:
+      ctx.decorates(lineCtx):
     patch = full(fullWidthSpaceStyle())
   if e.config.highlight.trailingSpaces and col >= lineCtx.trailingSpaceStart and
-      ctx.windowMode.isFileEditMode and
+      ctx.decorates(lineCtx) and
       (rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE):
     patch = full(trailingSpacesStyle())
   for ccm in lineCtx.colorCodeMatches:
@@ -491,7 +510,7 @@ proc lineFillPatch(
 ): StylePatch =
   ## Style of a cell past the line's text: the fill and the end-of-line
   ## virtual text. Priority: visualSelection > gitConflict > cursorLine >
-  ## cursorColumn > lineBg > none. Returns `noPatch` when the cell should keep
+  ## cursorColumn > lineBg > defaultFill > none. Returns `noPatch` when the cell should keep
   ## `normalStyle()`.
   if inVisualSelection:
     return full(visualStyle())
@@ -503,6 +522,8 @@ proc lineFillPatch(
     return full(cursorColumnHighlightStyle())
   if lineCtx.lineBg.isSome:
     return bgOnly(lineCtx.lineBg.get)
+  if lineCtx.defaultFill:
+    return full(Style())
   noPatch
 
 proc appendEndOfLineVirtualText(
@@ -668,7 +689,7 @@ proc renderLineSegmentWithSelection*(
       if displayX >= 0 and screenX + displayX < ctx.windowRightEdge:
         # No guides in the diff viewer: +/- markers and synthetic
         # side-by-side rows make the leading-whitespace analysis misfire.
-        if ctx.windowMode != EditorMode.DiffViewer and
+        if ctx.windowMode != EditorMode.DiffViewer and not lineCtx.undecorated and
             e.shouldShowIndentationGuide(indentInfo, leftCell + displayX, col):
           let guideStyle = indentationLineStyle().merge(bgOnly(cellStyle.bg))
           buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
@@ -713,6 +734,7 @@ proc renderLineSegmentWithSelection*(
       displayX += width
       afterFiller = true
     elif cellRune == ' '.Rune and ctx.windowMode != EditorMode.DiffViewer and
+        not lineCtx.undecorated and
         e.shouldShowIndentationGuide(indentInfo, leftCell + displayX, col):
       if screenX + displayX < ctx.windowRightEdge:
         let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))

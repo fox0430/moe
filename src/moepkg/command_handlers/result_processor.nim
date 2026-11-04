@@ -362,8 +362,7 @@ proc processResultEpilogue(
 
   # Terminal view follows the window's sub-mode, which the dispatcher set.
   when not defined(moe.embedded):
-    if e.state.mode == EditorMode.Terminal:
-      e.syncTerminalView(e.activeWindow)
+    e.syncTerminalView(e.activeWindow)
 
   # Filer buffer regeneration after state changes (e.g. enterDirectory, toggleHidden)
   if e.state.mode == EditorMode.Filer:

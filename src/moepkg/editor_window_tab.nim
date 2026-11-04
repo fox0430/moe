@@ -33,6 +33,7 @@ import types/editor_types, editor_mode, editor_window_state, logger, modes
 
 when not defined(moe.embedded):
   import std/tables
+  import commands
 
 when not defined(moe.embedded):
   proc syncTerminalView*(e: Editor, win: EditorWindow) =
@@ -46,6 +47,8 @@ when not defined(moe.embedded):
     of tsmInput:
       # View is only for the status line/tab list; `renderTerminal` draws the grid.
       win.setView(e.tabBuffer(win))
+    if win == e.activeWindow:
+      e.motionController.bindToWindow(win)
 
 proc syncTabView*(e: Editor, win: EditorWindow) =
   ## Show what `win`'s tab and `modeState` make it show when no viewer covers
@@ -66,10 +69,10 @@ proc applyTabMode(e: Editor, win: EditorWindow, tabId: BufferId) =
       # First arrival starts live; staying keeps the browsing state.
       if win.modeState.kind != mskTerminal or win.modeState.terminal != session:
         win.modeState = ModeState(kind: mskTerminal, terminal: session)
-      win.mode = EditorMode.Terminal
+      win.mode = if win.isBrowsingTerminal: EditorMode.Normal else: EditorMode.Terminal
       e.syncTerminalView(win)
       return
-  if win.mode == EditorMode.Terminal:
+  if win.modeState.kind == mskTerminal:
     win.modeState = ModeState(kind: mskNone)
     win.mode = EditorMode.Normal
 

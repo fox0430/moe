@@ -85,8 +85,7 @@ proc minimumTerminalAreaDimensions*(
   var found = false
   var cols, rows: int
   for window in e.windowManager.windows:
-    if window.mode == EditorMode.Terminal and window.modeState.kind == mskTerminal and
-        window.tabBufferId == id:
+    if window.modeState.kind == mskTerminal and window.tabBufferId == id:
       let (windowCols, windowRows) = e.calculateTerminalAreaDimensions(window)
       if found:
         cols = min(cols, windowCols)

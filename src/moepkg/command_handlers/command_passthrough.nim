@@ -79,6 +79,8 @@ type PassthroughKind* = enum
   ptLspSelectionRange
   ptLspDocumentLink
   ptLspDocumentSymbol
+  # terminal
+  ptTerminalQuit
 
 proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
   ## Return the canonical PassthroughKind for `commandId`, or none for
@@ -166,6 +168,8 @@ proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
 proc toHandlerResult*(k: PassthroughKind): HandlerResult =
   ## Translate a PassthroughKind into its canonical HandlerResult.
   case k
+  of ptTerminalQuit:
+    HandlerResult(kind: hrTerminalQuit)
   of ptNextWindow:
     HandlerResult(kind: hrNextWindow)
   of ptPrevWindow:

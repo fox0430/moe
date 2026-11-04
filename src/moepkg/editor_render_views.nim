@@ -299,9 +299,7 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
         when defined(moe.embedded):
           false
         else:
-          e.activeWindow.mode == EditorMode.Terminal and
-            e.activeWindow.modeState.kind == mskTerminal and
-            e.activeWindow.modeState.terminalSubMode == tsmInput
+          e.activeWindow.mode == EditorMode.Terminal
       isConfig = e.activeWindow.mode == EditorMode.Config
 
     if not isTerminalInput and not isConfig:
@@ -408,18 +406,9 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
           layout.isActiveWindow, tabLineOffset,
         )
       else:
-        # Terminal mode renders grid directly in Input sub-mode,
-        # or uses standard window rendering in Normal sub-mode
-        if window.modeState.kind == mskTerminal and
-            window.modeState.terminalSubMode == tsmInput:
-          e.renderTerminal(
-            buffer, window, layout.isBottomWindow, layout.isActiveWindow, tabLineOffset
-          )
-        else:
-          e.renderWindow(
-            buffer, window, layout.lineNumOffset, layout.isBottomWindow,
-            layout.isActiveWindow, tabLineOffset,
-          )
+        e.renderTerminal(
+          buffer, window, layout.isBottomWindow, layout.isActiveWindow, tabLineOffset
+        )
     else:
       # Normal buffer rendering (Normal, Insert, Visual, Command, Search, etc.)
       e.renderWindow(
@@ -450,7 +439,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
         window.viewport.x,
         window.viewport.width,
         layout.isActiveWindow,
-        window.mode,
+        window.shownMode,
         window.cursor,
         e.config.statusLine,
         e.owesPreservedWork(window.buffer),

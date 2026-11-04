@@ -29,6 +29,7 @@ import
   ../[
     types, buffer, modes, motion, key_bindings, command_registry, uri_utils, key_router,
     unicode_utils, visual_selection, pending_input, insert_record, fold_open,
+    macro_recording,
   ]
 import handler_types, visual_handler, command_passthrough
 from insert_commands import stepToAppend
@@ -287,6 +288,30 @@ proc resumeInsert*(
 # All text manipulation (delete, yank, change) is now handled by the
 # operator+motion system in command_registry.nim
 
+proc fromPassthrough(k: PassthroughKind): NormalModeResult {.inline.} =
+  ## Wrap a PassthroughKind in NormalModeResult. handler_manager will unwrap
+  ## it back to a HandlerResult via command_passthrough.toHandlerResult.
+  NormalModeResult(kind: nmrPassthrough, passthroughKind: k)
+
+when not defined(moe.embedded):
+  proc browsingCommand(
+      handler: NormalModeHandler, state: EditorState, cmd: Command
+  ): Option[NormalModeResult] =
+    ## What a command does otherwise in Terminal-Normal: back to the job, ahead
+    ## of an operator (`yA`) as Vim's nv_edit is. `q` closes the window of a
+    ## session that has ended, which leaves nothing to go back to.
+    if state.goesToTerminalJob(cmd):
+      handler.keyBindingRegistry.clearSequence()
+      state.pendingInput.cancelOperatorPending()
+      discard state.returnToTerminalJob()
+      return some(NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode)))
+    let win = state.activeWindow
+    if win.isBrowsingTerminal and win.modeState.terminal.exitCode.isSome and
+        cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
+        cmd.commandId == "macro.record" and state.pendingInput.pendingOperator.isNone and
+        not state.pendingInput.macroState.isRecording:
+      return some(fromPassthrough(ptTerminalQuit))
+
 proc repeatLastChange(
     handler: NormalModeHandler,
     buffer: TextBuffer,
@@ -305,6 +330,13 @@ proc repeatLastChange(
       some(state.editState.insertRecord.typed)
     else:
       none(seq[TypedInput])
+  when not defined(moe.embedded):
+    # What was typed stays behind: it was for a buffer, not the job.
+    if typed.isSome and
+        state.editState.insertRecord.entry.kind in
+        {ieInsert, ieAppend, ieAppendEnd, ieInsertNonBlank} and
+        state.returnToTerminalJob():
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   let ctx = handler.newContext(buffer, state, viewport, cmd.register)
   let repeated = handler.commandRegistry.executeCommand(ctx, cmd)
   if repeated.isErr:
@@ -320,11 +352,6 @@ proc requestMacroPlayback(keys: seq[string], count: int = 1): NormalModeResult =
   ## This returns the keys to be played back, and handler_manager will
   ## dispatch each key to the appropriate mode handler
   NormalModeResult(kind: nmrPlaybackMacro, macroKeys: keys, macroCount: count)
-
-proc fromPassthrough(k: PassthroughKind): NormalModeResult {.inline.} =
-  ## Wrap a PassthroughKind in NormalModeResult. handler_manager will unwrap
-  ## it back to a HandlerResult via command_passthrough.toHandlerResult.
-  NormalModeResult(kind: nmrPassthrough, passthroughKind: k)
 
 proc cancelPendingCommand*(state: EditorState, registry: KeyBindingRegistry): bool =
   ## End the command being built (an operator, a count, a register), as
@@ -405,6 +432,11 @@ proc handleNormalModeKey*(
   # Resolve the key through the router (numeric prefixes, sequences, f/t/r, etc.)
   let endsPendingKeys = handler.keyBindingRegistry.hasPendingKeys
   let route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Normal, keyCombo)
+  when not defined(moe.embedded):
+    if route.kind == rrCommand:
+      let browsing = handler.browsingCommand(state, route.command)
+      if browsing.isSome:
+        return browsing.get
   if route.kind == rrUnhandled:
     # A key that runs nothing ends the command being built, as Vim's
     # clearopbeep does: the count, the register and the operator go. Escape
@@ -436,7 +468,9 @@ proc handleNormalModeKey*(
       handler.keyBindingRegistry.clearSequence()
       state.pendingInput.cancelOperatorPending()
       if route.kind != rrCommand or route.command.kind != ctOverlaySwitch:
-        state.beep()
+        # Ending the command is what `end-command` is for: no failure.
+        if route.kind != rrCommand or route.command.name != "end-command":
+          state.beep()
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   if route.kind != rrCommand:
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

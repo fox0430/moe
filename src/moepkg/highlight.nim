@@ -73,6 +73,10 @@ type
 
   Highlight* = ref object
     colorSegments*: seq[ColorSegment]
+    literalColors*: bool
+      ## The segments' styles are what to draw, default colors included, for
+      ## colors no theme index names. Elsewhere `style.fg` is a copy of `color`
+      ## from when the segment was built, stale after a theme change.
     semantic*: Table[int, SemanticOverlayLine]
       ## Residual LSP semantic overlay, composed with `colorSegments` at render.
     semanticContentVersion*: int = -1
@@ -417,6 +421,14 @@ proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
   let idx = highlight.indexOf(line, col)
   return highlight[idx].color
 
+proc segmentStyleAt(highlight: Highlight, line, col: int): Option[Style] =
+  ## The style of the color segment at (`line`, `col`), inside the segments.
+  if highlight.colorSegments.len > 0 and
+      (line, col) >= (highlight[0].firstRow, highlight[0].firstColumn) and
+      (line, col) <= (highlight[^1].lastRow, highlight[^1].lastColumn):
+    return some(highlight[highlight.indexOf(line, col)].style)
+  none(Style)
+
 proc getSegmentModifiers*(highlight: Highlight, line, col: int): set[StyleModifier] =
   ## Syntax and semantic-overlay modifiers are unioned (so e.g. URI underline
   ## survives a semantic hit). A diagnostic overlay hit replaces the syntax
@@ -432,11 +444,10 @@ proc getSegmentModifiers*(highlight: Highlight, line, col: int): set[StyleModifi
         diagHit = true
         break
 
-  if not diagHit and highlight.colorSegments.len > 0 and
-      (line, col) >= (highlight[0].firstRow, highlight[0].firstColumn) and
-      (line, col) <= (highlight[^1].lastRow, highlight[^1].lastColumn):
-    let idx = highlight.indexOf(line, col)
-    mods = highlight[idx].style.modifiers
+  if not diagHit:
+    let seg = highlight.segmentStyleAt(line, col)
+    if seg.isSome:
+      mods = seg.get.modifiers
 
   if highlight.semantic.len > 0:
     highlight.semantic.withValue(line, lineOv):
@@ -447,14 +458,14 @@ proc getSegmentModifiers*(highlight: Highlight, line, col: int): set[StyleModifi
   return mods
 
 proc getSegmentBg*(highlight: Highlight, line, col: int): Option[ColorValue] =
-  if highlight.colorSegments.len > 0 and
-      (line, col) >= (highlight[0].firstRow, highlight[0].firstColumn) and
-      (line, col) <= (highlight[^1].lastRow, highlight[^1].lastColumn):
-    let idx = highlight.indexOf(line, col)
-    let bg = highlight[idx].style.bg
-    if bg.kind != Default:
-      return some(bg)
-  return none(ColorValue)
+  let seg = highlight.segmentStyleAt(line, col)
+  if seg.isSome and seg.get.bg.kind != Default:
+    return some(seg.get.bg)
+  none(ColorValue)
+
+proc literalStyleAt*(highlight: Highlight, line, col: int): Style =
+  ## With `literalColors`: the style to draw at (`line`, `col`).
+  highlight.segmentStyleAt(line, col).get(Style())
 
 template isIntersect(s, t: ColorSegment): bool =
   not (

@@ -282,7 +282,7 @@ proc pasteSinkOf(e: Editor, window: EditorWindow): PasteSink =
   if e.state.isCommandOverlay or e.state.isSearchOverlay or e.state.isRenameOverlay:
     return psOverlay
   when not defined(moe.embedded):
-    if window.mode == EditorMode.Terminal:
+    if window.modeState.kind == mskTerminal:
       return psTerminal
   psBuffer
 
@@ -1302,7 +1302,8 @@ proc syncCompletionOtherBuffers(e: Editor, activeBuffer: TextBuffer) =
   ## buffers except the active one.
   var otherBufs: seq[TextBuffer] = @[]
   for win in e.windowManager.windows:
-    if win.mode.isFileEditMode and win.buffer != activeBuffer:
+    if win.mode.isFileEditMode and win.buffer != activeBuffer and
+        not win.buffer.isUtilityBuffer:
       otherBufs.add(win.buffer)
   e.handlerManager.insertHandler.completionManager.otherBuffers = otherBufs
 
@@ -1368,11 +1369,10 @@ proc flushTypeahead(e: Editor) =
   when not defined(moe.embedded):
     # An overlay over Terminal or the hit-enter prompt takes the Ctrl-C; the
     # session's pastes stay.
-    if e.state.mode == EditorMode.Terminal and not e.state.hasOverlay and
+    let win = e.activeWindow
+    if win.modeState.kind == mskTerminal and not e.state.hasOverlay and
         e.state.ui.tempMessages.len == 0:
-      let win = e.activeWindow
-      if win.modeState.kind == mskTerminal:
-        win.modeState.terminal.cancelQueuedPastes()
+      win.modeState.terminal.cancelQueuedPastes()
 
 proc dispatchKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle one frontend-neutral key combination, without noting a quit.

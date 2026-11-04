@@ -19,9 +19,8 @@
 
 ## Terminal mode command handler
 ##
-## Handles input in Terminal mode. Has two sub-modes:
-## - Terminal-Input: forwards keystrokes to PTY
-## - Terminal-Normal: Vim-like scrollback navigation
+## Handles input in Terminal mode, Terminal-Input: forwards keystrokes to the
+## PTY. Terminal-Normal is Normal mode.
 
 import std/options
 
@@ -29,22 +28,9 @@ import ../[terminal_mode, key_bindings, unicode_utils]
 import handler_types
 export handler_types
 
-type
-  TerminalResultKind* = enum
-    trHandled # Key was forwarded to PTY or processed
-    trSwitchToNormal # Switch to Terminal-Normal sub-mode
-    trReturnToInput # Return to Terminal-Input sub-mode
-    trEnterCommand # Enter command mode (:)
-    trQuit # Close terminal
-    trUnhandled # Key not handled (delegate to normal mode in tsmNormal)
-    trError # Error occurred
-
-  TerminalResult* = object
-    case kind*: TerminalResultKind
-    of trError:
-      errorMessage*: string
-    else:
-      discard
+type TerminalResult* = enum
+  trHandled # Key was forwarded to PTY or processed
+  trSwitchToNormal # Switch to Terminal-Normal sub-mode
 
 func isCtrlChar(keyCombo: KeyCombo, chars: openArray[string]): bool =
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char in chars
@@ -156,50 +142,25 @@ proc releaseHeldQuitForKey*(termState: TerminalState, keyCombo: KeyCombo) =
   termState.releaseHeldQuit()
 
 proc handleTerminalModeKey*(
-    termState: TerminalState, subMode: TerminalSubMode, keyCombo: KeyCombo
+    termState: TerminalState, keyCombo: KeyCombo
 ): TerminalResult =
-  ## Handle a key press in Terminal mode. `subMode` is the window's.
+  ## Handle a key press in Terminal-Input: forward almost everything to the PTY.
 
-  case subMode
-  of tsmInput:
-    # Terminal-Input sub-mode: forward almost everything to PTY
+  # Ctrl-\ is held back rather than swallowed: only Ctrl-N completes the
+  # idiom, and every other key releases it first.
+  if termState.waitingForCtrlN and keyCombo.isCtrlChar(["n", "N"]):
+    termState.waitingForCtrlN = false
+    return trSwitchToNormal
 
-    # Ctrl-\ is held back rather than swallowed: only Ctrl-N completes the
-    # idiom, and every other key releases it first.
-    if termState.waitingForCtrlN and keyCombo.isCtrlChar(["n", "N"]):
-      termState.waitingForCtrlN = false
-      return TerminalResult(kind: trSwitchToNormal)
+  # Check for Ctrl-\ (escape sequence to enter Normal sub-mode)
+  if keyCombo.isCtrlChar(["\\", TtyQuitChar]):
+    # A doubled Ctrl-\ is the whole idiom: it delivers the held quit
+    # character and arms nothing further.
+    if termState.waitingForCtrlN:
+      termState.releaseHeldQuit()
+    else:
+      termState.waitingForCtrlN = true
+    return trHandled
 
-    # Check for Ctrl-\ (escape sequence to enter Normal sub-mode)
-    if keyCombo.isCtrlChar(["\\", TtyQuitChar]):
-      # A doubled Ctrl-\ is the whole idiom: it delivers the held quit
-      # character and arms nothing further.
-      if termState.waitingForCtrlN:
-        termState.releaseHeldQuit()
-      else:
-        termState.waitingForCtrlN = true
-      return TerminalResult(kind: trHandled)
-
-    termState.sendInput(keyComboToBytes(keyCombo))
-    return TerminalResult(kind: trHandled)
-  of tsmNormal:
-    # Terminal-Normal sub-mode: Vim-like scrollback navigation
-
-    # 'i' or 'a' returns to Terminal-Input sub-mode
-    if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-      case keyCombo.char
-      of "i", "a":
-        return TerminalResult(kind: trReturnToInput)
-      of ":":
-        return TerminalResult(kind: trEnterCommand)
-      of "q":
-        # Close terminal if process has exited
-        if termState.exitCode.isSome:
-          return TerminalResult(kind: trQuit)
-        # Otherwise ignore (process still running)
-        return TerminalResult(kind: trHandled)
-      else:
-        discard
-
-    # Delegate unhandled keys to normal mode navigation (j/k/gg/G/search etc.)
-    return TerminalResult(kind: trUnhandled)
+  termState.sendInput(keyComboToBytes(keyCombo))
+  trHandled

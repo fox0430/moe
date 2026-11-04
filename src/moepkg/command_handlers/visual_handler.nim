@@ -171,6 +171,27 @@ proc escapeVisual*(state: EditorState, registry: KeyBindingRegistry, ctrlC: bool
     state.insertResume = irNone
   state.leaveVisual()
 
+when not defined(moe.embedded):
+  proc goesToTerminalJob*(state: EditorState, cmd: Command): bool =
+    ## Whether `cmd` goes back to the job from Terminal-Normal: the ways into
+    ## Insert of Vim's nv_edit, with `i` and `a` text objects after an operator
+    ## and in Visual. The other edits are refused like any on a read-only buffer.
+    if not state.activeWindow.hasTerminalJob:
+      return false
+    case cmd.kind
+    of ctModeSwitch:
+      cmd.targetMode == EditorMode.Insert
+    of ctAction, ctOperator, ctTextObject, ctCustom:
+      cmd.commandId in [
+        "insert.append", "insert.append.end", "insert.first.non.blank",
+        "visual.to.insert", "visual.block.append",
+      ] or (
+        cmd.commandId in ["textobject.inner", "textobject.around"] and
+        state.pendingInput.pendingOperator.isNone and not state.mode.isVisualAllMode
+      )
+    else:
+      false
+
 proc handleVisualModeKey*(
     handler: VisualModeHandler,
     buffer: TextBuffer,
@@ -231,6 +252,16 @@ proc handleVisualModeKey*(
     return VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
   if route.kind == rrUnhandled and state.mode != EditorMode.Visual:
     route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Visual, keyCombo)
+
+  when not defined(moe.embedded):
+    # Charwise and linewise Visual have no `A` of their own.
+    if (route.kind == rrCommand and state.goesToTerminalJob(route.command)) or (
+      route.kind == rrUnhandled and keyCombo.isPlainChar("A") and
+      state.activeWindow.hasTerminalJob
+    ):
+      handler.keyBindingRegistry.clearSequence()
+      discard state.returnToTerminalJob()
+      return VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
 
   case route.kind
   of rrWaiting:

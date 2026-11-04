@@ -8734,11 +8734,12 @@ suite "executeCommand - read-only gate allowlists stay in sync":
     # other direction: a new visual binding fails until it is gated or listed.
     const VisualNonEditCommandIds = [
       # Selection-only or non-buffer commands: safe on a read-only buffer.
-      "fold.create", "lsp.selection.range", "macro.record", "scroll.halfpage.down",
-      "scroll.halfpage.up", "scroll.page.down", "scroll.page.up", "search.next",
-      "search.prev", "search.word.backward", "search.word.backward.partial",
-      "search.word.forward", "search.word.forward.partial", "textobject.around",
-      "textobject.inner", "visual.reselect", "visual.swap.selection", "visual.yank",
+      "edit.end.command", "fold.create", "lsp.selection.range", "macro.record",
+      "scroll.halfpage.down", "scroll.halfpage.up", "scroll.page.down",
+      "scroll.page.up", "search.next", "search.prev", "search.word.backward",
+      "search.word.backward.partial", "search.word.forward",
+      "search.word.forward.partial", "textobject.around", "textobject.inner",
+      "visual.reselect", "visual.swap.selection", "visual.yank",
     ]
     for id in visualModeCommandIds():
       # EditCommandIds covers the cursor-edit ids also bound in visual modes.

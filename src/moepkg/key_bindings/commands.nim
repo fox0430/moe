@@ -171,6 +171,7 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("file-close", "Close current buffer", "file.close"),
   ("filer-open", "Open file explorer", "filer.open"),
   ("repeat-last-change", "Repeat last change", "edit.repeat"),
+  ("end-command", "End the command being built", "edit.end.command"),
   ("background", "Suspend moe to the shell", "editor.background"),
   ("buffer-next-tab", "Switch to next buffer tab", "buffer.next.tab"),
   ("buffer-prev-tab", "Switch to previous buffer tab", "buffer.prev.tab"),
