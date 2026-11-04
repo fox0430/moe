@@ -1976,3 +1976,28 @@ suite "Vim parity - CTRL-J (<NL>) down motion":
       let v = registry.findBinding(mode, ctrlJ)
       check v.isSome
       check v.get.name == "move-down"
+
+suite "eventToKeyCombo - control bytes celina names as digits":
+  proc charEvent(ch: string, mods: set[celina.KeyModifier]): celina.Event =
+    celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(code: celina.KeyCode.Char, char: ch, modifiers: mods),
+    )
+
+  test "Ctrl-4 to Ctrl-7 are the keys a terminal sends those bytes for":
+    for (digit, name) in [("4", "\\"), ("5", "]"), ("6", "^"), ("7", "_")]:
+      let combo = eventToKeyCombo(charEvent(digit, {celina.KeyModifier.Ctrl})).get
+      check combo.char == name
+      check kmCtrl in combo.modifiers
+
+  test "Other digits stay digits":
+    check eventToKeyCombo(charEvent("4", {})).get.char == "4"
+    check eventToKeyCombo(charEvent("3", {celina.KeyModifier.Ctrl})).get.char == "3"
+
+  test "Alt+Ctrl-4 to Alt+Ctrl-7 keep the digit":
+    for digit in ["4", "5", "6", "7"]:
+      let combo = eventToKeyCombo(
+        charEvent(digit, {celina.KeyModifier.Ctrl, celina.KeyModifier.Alt})
+      ).get
+      check combo.char == digit
+      check kmAlt in combo.modifiers

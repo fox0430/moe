@@ -719,6 +719,16 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.defaultBindings = registry.bindings
   registry.defaultSequences = registry.sequences
 
+func ctrlCharOf(ch: string): string =
+  ## celina names the bytes 0x1c-0x1f Ctrl-4 to Ctrl-7, but a terminal sends
+  ## the same bytes for Ctrl-\, Ctrl-], Ctrl-^ and Ctrl-_.
+  case ch
+  of "4": "\\"
+  of "5": "]"
+  of "6": "^"
+  of "7": "_"
+  else: ch
+
 proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
   ## Convert a Celina event to a key combination
   if event.kind != celina.EventKind.Key:
@@ -728,7 +738,12 @@ proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
 
   # Check if it's a character key
   if event.key.code == celina.KeyCode.Char:
-    combo = KeyCombo(isSpecial: false, char: $event.key.char)
+    let ch = $event.key.char
+    # Alt is the ESC-prefixed form of the same byte, which is a different key.
+    let remapCtrl =
+      celina.KeyModifier.Ctrl in event.key.modifiers and
+      celina.KeyModifier.Alt notin event.key.modifiers
+    combo = KeyCombo(isSpecial: false, char: if remapCtrl: ch.ctrlCharOf else: ch)
   else:
     # Map special keys
     case event.key.code
