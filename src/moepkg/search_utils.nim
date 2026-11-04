@@ -134,8 +134,8 @@ proc saveSearchHistory*(
     # Write each entry on a separate line
     var content = ""
     for i, entry in entriesToSave:
-      # Skip empty entries
-      if entry.len == 0:
+      # Skip empty entries, and ones a line break would make two when read
+      if entry.len == 0 or entry.contains({'\r', '\n'}):
         continue
       content.add entry
       # Add newline except for last entry

@@ -22,7 +22,8 @@
 
 import std/[options, unittest]
 
-import ../src/moepkg/[types, key_bindings, prompt_line]
+import ../src/moepkg/[types, key_bindings]
+import ../src/moepkg/prompt_line {.all.}
 from ../src/moepkg/unicode_utils import charLen
 
 proc key(name: string): KeyCombo =
@@ -188,6 +189,86 @@ suite "prompt_line: editing":
     check line.text == "ab3x"
     check line.lookfor.isNone
     check not line.insertPasted("\nz")
+
+  test "a character goes whole with the composing characters on it":
+    var line = typed("ae\u0301")
+    check line.press(@[], "Left") == leMoved
+    check line.cursor == 1
+    check line.press(@[], "Right") == leMoved
+    check line.cursor == 3
+    check line.press(@[], "Backspace") == leErased
+    check line.text == "a"
+    line = typed("e\u0301a")
+    check line.press(@[], "Home", "Delete") == leErased
+    check line.text == "a"
+
+  test "Ctrl-U takes all before the cursor, and an empty line stays open":
+    var line = typed("abc")
+    check line.press(@[], "Left", "C-u") == leErased
+    check line.text == "c"
+    check line.cursor == 0
+    check line.press(@[], "C-u") == leStill
+    line = typed("")
+    check line.press(@[], "C-u") == leStill
+    line = typed("日本語")
+    check line.press(@[], "Left", "C-u") == leErased
+    check line.text == "語"
+
+  test "Ctrl-W takes a word, the white space after it and no more":
+    for (text, left) in [
+      ("foo bar", "foo "),
+      ("foo bar   ", "foo "),
+      ("foo.bar", "foo."),
+      ("foo..", "foo"),
+      ("foo(bar)", "foo(bar"),
+      ("a.b c,d", "a.b c,"),
+      ("x", ""),
+      ("   ", ""),
+      ("  foo", "  "),
+      ("foo\tbar", "foo\t"),
+      ("foo\t", ""),
+      ("日本語abc", "日本語"),
+      ("ひらがなカタカナ", "ひらがな"),
+      ("あ\u3000", "あ"),
+      ("あ\u3000い", "あ\u3000"),
+      ("a\u00a0b", "a\u00a0"),
+      ("a😀", "a"),
+      ("e\u0301 f", "e\u0301 "),
+      ("ab e\u0301", "ab "),
+      ("foo\x01", "foo"),
+    ]:
+      var line = typed(text)
+      check line.press(@[], "C-w") == leErased
+      check line.text == left
+      check line.cursor == left.charLen
+
+  test "Ctrl-W stops at the cursor's start and leaves the rest":
+    var line = typed("foo bar")
+    check line.press(@[], "Left", "Left", "C-w") == leErased
+    check line.text == "foo ar"
+    check line.cursor == 4
+    line = typed("foo")
+    check line.press(@[], "Home", "C-w") == leStill
+    line = typed("")
+    check line.press(@[], "C-w") == leStill
+
+  test "Ctrl-U and Ctrl-W keep the place in the history, and drop what Up looks for":
+    var line = typed("a")
+    discard line.press(History, "Up", "C-u")
+    check line.lookfor.isNone
+    check line.entry == some(0)
+    check line.press(History, "Up") == leRecalled
+    check line.text == "ab2"
+
+  test "the control characters taken as keys are the ones the line takes":
+    # Ctrl-] and Ctrl-^ do nothing here, as a typed one does in Vim.
+    for c in 1 .. 0x1f:
+      if c in {0x1d, 0x1e}:
+        check chr(c) in ActsWhenTyped
+      else:
+        var line = typed("ab")
+        check (line.edit(($chr(c)).keyOf, @["old"]) != leNone) ==
+          (chr(c) in ActsWhenTyped)
 
   test "a key with a modifier the line does not take is left alone":
     var line = typed("a")

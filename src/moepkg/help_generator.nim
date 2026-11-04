@@ -653,6 +653,30 @@ const CommandLineEditingCommands*: HelpGroup = HelpGroup(
       description:
         "Delete the character under the cursor, or the one before it at the end; on an empty `:`, `/` or `?` line, leave it",
     ),
+    HelpEntry(syntax: "Ctrl-u", description: "Delete all the text before the cursor"),
+    HelpEntry(syntax: "Ctrl-w", description: "Delete the word before the cursor"),
+    HelpEntry(
+      syntax: "Ctrl-r any",
+      description:
+        "Insert a register as if typed, with what would end the line as it is: a letter or a digit, `\"`, `-`, `*`, `+`, `_`, `%` for the file name, `/` for the last search or `:` for the last command line",
+    ),
+    HelpEntry(
+      syntax: "Ctrl-r Ctrl-r any",
+      description:
+        "Insert a register, or what the keys below take, literally; Ctrl-r Ctrl-o is the same",
+    ),
+    HelpEntry(
+      syntax: "Ctrl-r Ctrl-w",
+      description:
+        "Insert the word under the cursor; with incsearch, at the match and without what was typed of it",
+    ),
+    HelpEntry(syntax: "Ctrl-r Ctrl-a", description: "Insert the WORD under the cursor"),
+    HelpEntry(syntax: "Ctrl-r Ctrl-l", description: "Insert the line under the cursor"),
+    HelpEntry(
+      syntax: "Ctrl-v or Ctrl-q",
+      description:
+        "Insert the next key as it is, or a character by its code: up to 3 decimal digits, `o` and 3 octal ones, `x` and 2 hex ones, `u` and 4 or `U` and 8",
+    ),
     HelpEntry(
       syntax: "Up",
       description:

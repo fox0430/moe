@@ -68,6 +68,18 @@ suite "persist - saveCommandHistory and loadCommandHistory":
     check loaded[1] == "cmd2"
     check loaded[2] == "cmd1"
 
+  test "An entry with a line break is not saved, as it would read back as two":
+    let hadCacheHome = existsEnv("XDG_CACHE_HOME")
+    let cacheHome = getEnv("XDG_CACHE_HOME")
+    putEnv("XDG_CACHE_HOME", TestPersistDir)
+    defer:
+      if hadCacheHome:
+        putEnv("XDG_CACHE_HOME", cacheHome)
+      else:
+        delEnv("XDG_CACHE_HOME")
+    check saveCommandHistory(@["one", "foo\rbar\r", "a\nb", "two"]).isOk
+    check loadCommandHistory() == @["one", "two"]
+
   test "Load empty history from non-existent file":
     let loaded = loadCommandHistory()
     # Should return empty seq if file doesn't exist

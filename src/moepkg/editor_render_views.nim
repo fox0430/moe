@@ -556,7 +556,7 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     if e.state.isCommandOverlay and e.state.commandCompletionManager.isActive() and
         not e.hostPopupMenus:
       let popupPos = calculateCommandPopupPosition(
-        e.state.input.line.cursor,
+        cursorChar - 1, # Past the `:`
         buffer.area.width,
         buffer.area.height,
         e.state.commandCompletionManager.menu.entries,

@@ -249,6 +249,35 @@ proc findSearchMatchRanges*(
       # Advance past match (avoid infinite loop on zero-width)
       searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
 
+proc matchEndCol*(
+    b: TextBuffer,
+    pos: BufferPosition,
+    searchText: string,
+    ignorecase = false,
+    match = smRegex,
+): Option[int] =
+  ## The end column (exclusive) of the match that starts at `pos`, which
+  ## findNext can land on when it overlaps a match findSearchMatchRanges took.
+  if searchText.len == 0 or pos.line < 0 or pos.line >= b.len:
+    return none(int)
+  let line = b.getLine(pos.line)
+  if match != smRegex:
+    for r in literalMatchRanges(line, literalPattern(searchText, ignorecase, match)):
+      if r.startCol == pos.column:
+        return some(r.endCol)
+    return none(int)
+  let compiled = compileSearchRegex(searchText, ignorecase)
+  if compiled.isNone:
+    return none(int)
+  let
+    searchable = line.toValidUtf8
+    start = charToBytePos(searchable, pos.column)
+  var m = RegexMatch2()
+  if find(searchable, compiled.get, m, start) and m.boundaries.a == start:
+    some(byteToCharPos(searchable, m.boundaries.b + 1))
+  else:
+    none(int)
+
 proc findNext*(
     b: TextBuffer,
     searchText: string,
@@ -534,15 +563,14 @@ proc findWordMatchRanges*(
       not (excludeCol >= 0 and excludeCol >= runStartCol and excludeCol < col):
     result.add(ColumnRange(startCol: runStartCol, endCol: col))
 
-proc identUnderCursor*(b: TextBuffer, pos: BufferPosition): Option[ColumnRange] =
+proc identInLine*(line: string, column: int, ident = true): Option[ColumnRange] =
   ## The text * and # search for, as Vim's find_ident_under_cursor() finds it
-  ## on the line of `pos`: the keyword under or after `pos`, else the
-  ## non-blank text there. A keyword is a run of word characters of one class
-  ## (mb_get_class), so `日本` in `abc日本def` is one; the text runs on to a
-  ## blank. A character takes its composing characters with it.
-  if pos.line < 0 or pos.line >= b.len:
-    return none(ColumnRange)
-  let runes = b.getLine(pos.line).toCharRunes
+  ## in `line`: the keyword under or after `column`, else the non-blank text
+  ## there. A keyword is a run of word characters of one class (mb_get_class),
+  ## so `日本` in `abc日本def` is one; the text runs on to a blank. A character
+  ## takes its composing characters with it. Without `ident`, the whole run of
+  ## non-blanks there (FIND_STRING alone).
+  let runes = line.toCharRunes
 
   proc class(col: int): int =
     if col < runes.len:
@@ -551,16 +579,17 @@ proc identUnderCursor*(b: TextBuffer, pos: BufferPosition): Option[ColumnRange] 
       0
 
   let start =
-    if pos.column < runes.len:
-      runes.baseColumn(max(pos.column, 0))
+    if column < runes.len:
+      runes.baseColumn(max(column, 0))
     else:
       runes.len
   var
     col = start
-    keyword = true
-  while col < runes.len and class(col) < 2:
-    col = runes.nextCharColumn(col)
-  if col >= runes.len:
+    keyword = ident
+  if ident:
+    while col < runes.len and class(col) < 2:
+      col = runes.nextCharColumn(col)
+  if not ident or col >= runes.len:
     keyword = false
     col = start
     while col < runes.len and class(col) == 0:
@@ -569,10 +598,22 @@ proc identUnderCursor*(b: TextBuffer, pos: BufferPosition): Option[ColumnRange] 
       return none(ColumnRange)
 
   let startClass = class(col)
-  while col > 0 and class(col - 1) == startClass:
+  proc sameRun(col: int): bool =
+    if ident:
+      class(col) == startClass
+    else:
+      class(col) != 0
+
+  while col > 0 and sameRun(col - 1):
     col = runes.baseColumn(col - 1)
   var endCol = col
   while endCol < runes.len and
       (if keyword: class(endCol) == startClass else: class(endCol) != 0):
     endCol = runes.nextCharColumn(endCol)
   some(ColumnRange(startCol: col, endCol: endCol))
+
+proc identUnderCursor*(b: TextBuffer, pos: BufferPosition): Option[ColumnRange] =
+  ## `identInLine` on the line of `pos`.
+  if pos.line < 0 or pos.line >= b.len:
+    return none(ColumnRange)
+  b.getLine(pos.line).identInLine(pos.column)

@@ -227,6 +227,7 @@ proc performIncrementalSearch(e: Editor) =
   ## - Leaves the message alone, as Vim reports only on Enter
   ##
   ## This provides real-time feedback as the user types their search query.
+  e.state.input.line.wordAt = none(BufferPosition)
   if not e.state.input.search.incsearch:
     return
 
@@ -245,18 +246,17 @@ proc performIncrementalSearch(e: Editor) =
     e.backToSearchStart()
     return
 
+  let spec = SearchSpec(
+    pattern: e.state.input.line.text, direction: e.state.input.search.direction
+  )
   let searchResult = e.state.findCounted(
-    e.activeBuffer,
-    SearchSpec(
-      pattern: e.state.input.line.text, direction: e.state.input.search.direction
-    ),
-    e.state.input.search.startPos,
-    e.state.input.search.count,
+    e.activeBuffer, spec, e.state.input.search.startPos, e.state.input.search.count
   )
 
   if searchResult.isSome:
     let pos = searchResult.get
     e.cursor = pos
+    e.state.input.line.wordAt = some(e.state.matchEnd(e.activeBuffer, spec, pos))
     e.syncHelpViewerIndex(pos.line)
 
     e.showFromSearchStart(pos)
@@ -273,22 +273,22 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
   ## mapping RHS): `state.keyTyped` tells which, as Vim's KeyTyped. `roAbort` when Enter
   ## runs a search that fails, so the keys a register or mapping queued after
   ## it are dropped, as Vim's error flushes them.
-  case e.state.input.line.takeKey(keyCombo, e.state.keyTyped)
+  case e.state.input.line.takeKey(keyCombo, e.state.keyTyped, e.state.interrupted)
   of pkEnter, pkRun:
     return if e.finalizeSearch(): roContinue else: roAbort
   of pkLeave:
     e.cancelSearch()
     return roContinue
-  of pkOther:
+  of pkOther, pkArgument:
     discard
 
-  case e.state.input.line.edit(keyCombo, e.state.input.search.history)
+  case e.state.editPrompt(e.activeBuffer, keyCombo, e.state.input.search.history)
   of leNone, leStill, leMoved:
     discard
   of leBeep:
     e.state.beep()
   of leEmptyErase:
     e.cancelSearch()
-  of leTyped, leErased, leRecalled:
+  of leTyped, leErased, lePasted, leRecalled:
     e.performIncrementalSearch()
   roContinue

@@ -1215,3 +1215,23 @@ suite "Buffer search - identUnderCursor":
     check ident("café x", 0) == some((0, 5))
     # On the composing character, as on the character it is part of.
     check ident("ét", 1) == some((0, 3))
+
+suite "matchEndCol":
+  test "it is the end of the match at the position, overlapping another or not":
+    let b = newTextBuffer("a a a zz qq\n")
+    check b.findNext("a a ", BufferPosition(line: 0, column: 0)) ==
+      some(BufferPosition(line: 0, column: 2))
+    check b.matchEndCol(BufferPosition(line: 0, column: 2), "a a ") == some(6)
+    check b.matchEndCol(BufferPosition(line: 0, column: 0), "a a ") == some(4)
+
+  test "there is none where no match starts":
+    let b = newTextBuffer("foo\n")
+    check b.matchEndCol(BufferPosition(line: 0, column: 1), "foo").isNone
+    check b.matchEndCol(BufferPosition(line: 3, column: 0), "foo").isNone
+    check b.matchEndCol(BufferPosition(line: 0, column: 0), "").isNone
+
+  test "a word match goes by the column and a wide character counts as one":
+    let b = newTextBuffer("日本 foo\n")
+    check b.matchEndCol(BufferPosition(line: 0, column: 3), "foo") == some(6)
+    check b.matchEndCol(BufferPosition(line: 0, column: 3), "foo", match = smWord) ==
+      some(6)

@@ -135,7 +135,7 @@ proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## the prompt has words of its own.
   ##
   ## Returns: true (event handled)
-  case e.state.input.line.takeKey(keyCombo, e.state.keyTyped)
+  case e.state.input.line.takeKey(keyCombo, e.state.keyTyped, e.state.interrupted)
   of pkLeave:
     e.state.exitOverlay()
     e.setMode(e.state.mode) # Sync window mode
@@ -151,9 +151,9 @@ proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
     else:
       # Execute the LSP rename asynchronously
       asyncSpawn e.requestLspRename(newName)
-  of pkOther:
+  of pkOther, pkArgument:
     # No history of its own yet: Up and Down beep, as on an empty one.
-    if e.state.input.line.edit(keyCombo, @[]) == leBeep:
+    if e.state.editPrompt(e.activeBuffer, keyCombo, @[]) == leBeep:
       e.state.beep()
   true
 
