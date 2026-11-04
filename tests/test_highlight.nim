@@ -2988,6 +2988,19 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for Zsh .zshrc":
     check detectLanguage("custom.zshrc") == SourceLanguage.langZsh
 
+  test "detectLanguage for bash startup files":
+    for name in [
+      ".bashrc", ".bash_profile", "bash_profile", ".bash_login", ".bash_logout",
+      ".bash_aliases", ".profile",
+    ]:
+      check detectLanguage(name) == SourceLanguage.langShell
+      check detectLanguage("/home/user/" & name) == SourceLanguage.langShell
+
+  test "detectLanguage for zsh startup files":
+    for name in [".zshrc", ".zprofile", "zprofile", ".zshenv", ".zlogin", ".zlogout"]:
+      check detectLanguage(name) == SourceLanguage.langZsh
+      check detectLanguage("/home/user/" & name) == SourceLanguage.langZsh
+
   test "detectLanguage for Zsh .zshenv":
     check detectLanguage("env.zshenv") == SourceLanguage.langZsh
 

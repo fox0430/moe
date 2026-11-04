@@ -1954,6 +1954,11 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langJson
   of "hyprland.conf":
     return SourceLanguage.langHyprland
+  of ".bashrc", ".bash_profile", "bash_profile", ".bash_login", ".bash_logout",
+      ".bash_aliases", ".profile":
+    return SourceLanguage.langShell
+  of ".zshrc", ".zprofile", "zprofile", ".zshenv", ".zlogin", ".zlogout":
+    return SourceLanguage.langZsh
   else:
     # Check for Dockerfile variants (Dockerfile, Dockerfile.prod, etc.)
     if basename.startsWith("Dockerfile"):
