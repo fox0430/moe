@@ -607,7 +607,7 @@ type
     OpYank # y - yank (copy)
     OpIndent # > - indent
     OpOutdent # < - outdent
-    OpSwapCase # ~ - swap case
+    OpSwapCase # g~ - toggle case
     OpLowerCase # gu - lowercase
     OpUpperCase # gU - uppercase
 
@@ -789,7 +789,7 @@ type
     register*: Option[char] ## Register named by `"x` for the change
     case kind*: LastEditCommandKind
     of lecOperatorMotion:
-      operator*: OperatorType # d, c, y, >, <, ~, gu, gU
+      operator*: OperatorType # d, c, y, >, <, g~, gu, gU
       operand*: Operand
     of lecInsert:
       discard

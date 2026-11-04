@@ -83,6 +83,8 @@ proc textRewriteAction*(operatorType: OperatorType): Option[string] =
     some("lowercase")
   of OpUpperCase:
     some("uppercase")
+  of OpSwapCase:
+    some("toggle case")
   else:
     none(string)
 
@@ -101,8 +103,10 @@ proc applyCaseOperator(
     action: string,
     transform: proc(text: string): string {.closure, gcsafe.},
 ): Result[(), string] =
-  ## Shared body of gu/gU: rewrite the range's text through `transform`.
-  let txr = withTransaction(ctx.buffer, label):
+  ## Shared body of gu/gU/g~: rewrite the range's text through `transform`.
+  ## The cursor stays where the driver put it, as Vim's op_tilde leaves it,
+  ## and an undo brings it back there.
+  let txr = withTransaction(ctx.buffer, label, some(ctx.cursor)):
     if range.isLinewise:
       for lineNum in range.start.line .. range.endPos.line:
         if lineNum < ctx.buffer.len:
@@ -119,11 +123,6 @@ proc applyCaseOperator(
         return err(res.error)
   if txr.isErr:
     return err("Transaction failed: " & txr.error)
-
-  ctx.cursor = range.start
-  if range.isLinewise:
-    # guu/gUU land on the first non-blank (matches >>/<<)
-    moveToFirstNonBlank(ctx, range.start.line)
   ok(())
 
 proc shiftedLines(buffer: TextBuffer, range: OperatorRange): (int, int) =
@@ -333,9 +332,7 @@ proc executeOperatorOnRange*(
   of OpUpperCase:
     return applyCaseOperator(ctx, range, "Uppercase", "uppercase", toUpperAscii)
   of OpSwapCase:
-    # Rewrites nothing yet, so it is absent from textRewriteAction; add it
-    # there along with the applyCaseOperator call that implements it.
-    return err("Operator " & $operatorType & " not yet implemented")
+    return applyCaseOperator(ctx, range, "Toggle case", "toggle case", toggleAsciiCase)
 
 ## Operator command helpers
 

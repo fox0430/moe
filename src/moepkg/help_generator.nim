@@ -182,6 +182,7 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "~", description: "Toggle case of character under cursor"),
     HelpEntry(syntax: "gu", description: "Lowercase (operator)"),
     HelpEntry(syntax: "gU", description: "Uppercase (operator)"),
+    HelpEntry(syntax: "g~", description: "Toggle case (operator)"),
     HelpEntry(
       syntax: "S or cc",
       description: "Delete the characters in the current line and start insert mode",

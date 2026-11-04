@@ -177,6 +177,16 @@ proc handleModeSwitchToOverlay*(
     # Rename mode is entered through LSP rename command, not mode switch
     return NormalModeResult(kind: nmrHandled)
 
+const DoubledByOwnKey = [
+  (OpLowerCase, "u", "operator-lowercase"),
+  (OpUpperCase, "U", "operator-uppercase"),
+  (OpSwapCase, "~", "operator-togglecase"),
+]
+  ## Operators whose doubled form ends in a key of its own (`guu`, `gUU`,
+  ## `g~~`), which acts as the operator's command (`gugu`), as Vim's nv_undo,
+  ## nv_Undo and nv_tilde pass it to nv_operator. The router would run the key
+  ## as undo or a one-character toggle.
+
 proc opensSearch(cmd: Command): bool =
   ## `/` or `?`, which a waiting operator acts over (`d/foo`).
   cmd.kind == ctOverlaySwitch and cmd.targetOverlay == okSearch
@@ -372,34 +382,25 @@ proc handleNormalModeKey*(
       state.statusMessage = ""
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
-  # `guu` / `gUU` lowercase/uppercase whole lines. Handled here because the
-  # second key is not the operator key: the router would turn `u` into undo.
-  # (`gugu` / `gUgU` need no special case - they re-enter the operator handler.)
-  # A key the router waits for (`gufu`, `gu'u`) or one in a sequence is not it.
+  # The last key of `guu` / `gUU` / `g~~`. A key the router waits for
+  # (`gufu`, `gu'u`) or one in a sequence is not it.
   let pendingOp = state.pendingInput.pendingOperator
   if pendingOp.isSome and not keyCombo.isSpecial and keyCombo.modifiers == {} and
-      not handler.keyBindingRegistry.hasPendingKeys and (
-    (pendingOp.get.operatorType == OpLowerCase and keyCombo.char == "u") or
-    (pendingOp.get.operatorType == OpUpperCase and keyCombo.char == "U")
-  ):
-    let doubledOperatorId =
-      if pendingOp.get.operatorType == OpLowerCase:
-        "operator.lowercase"
-      else:
-        "operator.uppercase"
-
-    # Consume a count typed between the halves (gu3u); the router never sees
-    # the key that would clear it
-    let count = handler.keyBindingRegistry.getNumericPrefix()
-    handler.keyBindingRegistry.clearSequence()
-
-    let ctx = handler.newContext(buffer, state, viewport)
-
-    let cmdResult = handler.commandRegistry.execute(ctx, doubledOperatorId, @[$count])
-    if cmdResult.isOk:
-      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-    else:
-      return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
+      not handler.keyBindingRegistry.hasPendingKeys:
+    for (operatorType, key, name) in DoubledByOwnKey:
+      if pendingOp.get.operatorType == operatorType and keyCombo.char == key:
+        # It takes a count typed between the halves (gu3u), as the router
+        # gives one to the command it runs.
+        let cmd = handler.keyBindingRegistry.applyCountToCommand(
+          handler.keyBindingRegistry.commandRegistry[name]
+        )
+        handler.keyBindingRegistry.clearSequence()
+        let ctx = handler.newContext(buffer, state, viewport, cmd.register)
+        let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
+        if cmdResult.isOk:
+          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+        else:
+          return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
 
   # Resolve the key through the router (numeric prefixes, sequences, f/t/r, etc.)
   let endsPendingKeys = handler.keyBindingRegistry.hasPendingKeys
