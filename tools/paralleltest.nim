@@ -58,6 +58,23 @@ proc shardConfig(): tuple[index, total: int] =
 
   (index, total)
 
+proc crc32(s: string): uint32 =
+  # Explicit so that a Nim upgrade cannot reshuffle the shards.
+  result = high(uint32)
+  for c in s:
+    result = result xor uint32(c)
+    for _ in 0 .. 7:
+      result = (result shr 1) xor (0xEDB88320'u32 and (0'u32 - (result and 1)))
+  result = not result
+
+proc shardOf(file: string, shardTotal: int): int =
+  # By name so a test keeps its shard, and so its ccache, across commits.
+  let sequentialIndex = SequentialTests.find(file)
+  if sequentialIndex >= 0:
+    sequentialIndex mod shardTotal
+  else:
+    int(crc32(file) mod uint32(shardTotal))
+
 proc main() =
   let jobs =
     if paramCount() >= 1:
@@ -93,19 +110,14 @@ proc main() =
     .mapIt(it.path)
     .filterIt(it notin excluded)
 
-  # Largest first: it packs the parallel batch better and makes the shard split
-  # below deterministic regardless of the order walkDir happens to return.
+  # Largest first: it packs the parallel batch better and keeps the order
+  # deterministic regardless of what walkDir happens to return.
   discovered.sort do(a, b: string) -> int:
     result = cmp(getFileSize("tests" / b), getFileSize("tests" / a))
     if result == 0:
       result = cmp(a, b)
 
-  # Round-robin over the size-sorted list so each shard gets a comparable share
-  # of the (compile dominated) workload.
-  var allTestFiles: seq[string]
-  for i, file in discovered:
-    if i mod shardTotal == shardIndex - 1:
-      allTestFiles.add(file)
+  let allTestFiles = discovered.filterIt(shardOf(it, shardTotal) == shardIndex - 1)
 
   let parallelFiles = allTestFiles.filterIt(it notin SequentialTests)
   let sequentialFiles = allTestFiles.filterIt(it in SequentialTests)

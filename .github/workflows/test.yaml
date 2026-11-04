@@ -45,6 +45,9 @@ on:
 permissions:
   contents: read
 
+env:
+  CCACHE_KEY_PREFIX: unit-tests-ccache-v1-shard
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   # Superseded PR runs are pointless, but a develop/master run is the
@@ -87,15 +90,20 @@ jobs:
       # Runs in the lsp-e2e job instead so the shards never pay for
       # `nimble install lasm`.
       MOE_TEST_EXCLUDE: test_lsp_e2e_lasm.nim
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 400M
     steps:
     - uses: actions/checkout@v7
     - run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
+          ccache \
           x11-xserver-utils \
           xsel \
           xclip
+        echo /usr/lib/ccache >> "$GITHUB_PATH"
+        echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
 
     - name: Cache nimble
       id: cache-nimble
@@ -105,6 +113,16 @@ jobs:
         key: unit-tests-nimble-v3-${{ hashFiles('nimble.lock', 'moe.nimble') }}
         restore-keys: |
           unit-tests-nimble-v3-
+
+    # Only pushes save, so PRs share the caches of their base branch.
+    - name: Restore ccache
+      id: restore-ccache
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.ccache
+        key: ${{ env.CCACHE_KEY_PREFIX }}${{ matrix.shard }}-${{ github.sha }}
+        restore-keys: |
+          ${{ env.CCACHE_KEY_PREFIX }}${{ matrix.shard }}-
 
     - uses: jiro4989/setup-nim-action@v2
       with:
@@ -123,7 +141,50 @@ jobs:
         TERM: xterm-256color
       run: |
         nimble setup
+        ccache --zero-stats
         xvfb-run env XDG_SESSION_TYPE=x11 nim r tools/paralleltest.nim
+
+    - name: Show ccache stats
+      if: ${{ !cancelled() }}
+      run: ccache --show-stats
+
+    # Only after success, so a shard that died early cannot replace a full cache
+    # with a nearly empty one.
+    - name: Save ccache
+      if: >-
+        github.event_name == 'push' &&
+        steps.restore-ccache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/.ccache
+        key: ${{ steps.restore-ccache.outputs.cache-primary-key }}
+
+  # Separate from the shards so that test code never runs with actions: write.
+  prune-ccache:
+    name: prune ccache
+    needs: test
+    if: ${{ !cancelled() && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+    - name: Delete all but the newest cache of each shard
+      continue-on-error: true
+      shell: bash
+      run: |
+        gh cache list \
+          --ref "$GITHUB_REF" \
+          --key "$CCACHE_KEY_PREFIX" \
+          --sort created_at \
+          --order desc \
+          --limit 100 \
+          --json id,key,createdAt \
+          --jq 'group_by(.key | split("-")[:-1]) | map(sort_by(.createdAt)[:-1][].id) | .[]' |
+          xargs -r -n1 gh cache delete
 
   lsp-e2e:
     name: lsp e2e (lasm)
