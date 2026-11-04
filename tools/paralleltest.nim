@@ -12,7 +12,7 @@
 #   MOE_TEST_SHARD     1-based index of the shard to run (default: 1)
 #   MOE_TEST_DRY_RUN   list the selected files and exit without running them
 
-import std/[algorithm, math, osproc, os, strutils, sequtils, tables]
+import std/[algorithm, osproc, os, strutils, sequtils]
 
 const
   # Fallback when the number of CPUs cannot be detected (countProcessors() == 0).
@@ -58,11 +58,22 @@ proc shardConfig(): tuple[index, total: int] =
 
   (index, total)
 
-proc sizeBand(file: string): int =
-  if file in SequentialTests:
-    0
+proc crc32(s: string): uint32 =
+  # Explicit so that a Nim upgrade cannot reshuffle the shards.
+  result = high(uint32)
+  for c in s:
+    result = result xor uint32(c)
+    for _ in 0 .. 7:
+      result = (result shr 1) xor (0xEDB88320'u32 and (0'u32 - (result and 1)))
+  result = not result
+
+proc shardOf(file: string, shardTotal: int): int =
+  # By name so a test keeps its shard, and so its ccache, across commits.
+  let sequentialIndex = SequentialTests.find(file)
+  if sequentialIndex >= 0:
+    sequentialIndex mod shardTotal
   else:
-    max(1, int(log2(float(max(getFileSize("tests" / file), 1))) * 1.5))
+    int(crc32(file) mod uint32(shardTotal))
 
 proc main() =
   let jobs =
@@ -106,17 +117,7 @@ proc main() =
     if result == 0:
       result = cmp(a, b)
 
-  # Dealing per size band balances the shards, while a change only moves tests
-  # of the same band, so the rest keep their ccache across commits.
-  var
-    bandCounts: CountTable[int]
-    shardOf: Table[string, int]
-  for file in sorted(discovered):
-    let band = sizeBand(file)
-    shardOf[file] = (band + bandCounts[band]) mod shardTotal
-    bandCounts.inc(band)
-
-  let allTestFiles = discovered.filterIt(shardOf[it] == shardIndex - 1)
+  let allTestFiles = discovered.filterIt(shardOf(it, shardTotal) == shardIndex - 1)
 
   let parallelFiles = allTestFiles.filterIt(it notin SequentialTests)
   let sequentialFiles = allTestFiles.filterIt(it in SequentialTests)
