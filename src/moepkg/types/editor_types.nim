@@ -101,6 +101,8 @@ type
       ## nothing, keeping buffers usable outside a full editor.
     xHostPopupMenus: bool
     hostCommandFilter*: HostCommandFilter
+      ## An abbreviated name arrives with `action == claUnknown`, so a filter
+      ## that goes by action also has to read `abbreviatedAction`.
     hostResultFilter*: HostResultFilter
     xHostCommandRequests: seq[ParsedCommand]
     xHostResultRequests: seq[handler_result_types.HandlerResult]

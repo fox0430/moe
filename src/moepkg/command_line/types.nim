@@ -72,6 +72,7 @@ type
     claJumpList # :jump (show jump list)
     claChanges # :changes (show change list)
     claBookmarks # :bookmarks (show bookmark list)
+    claVersion # :version (show version information)
     claConflictNext # :conflictnext (jump to next git conflict block)
     claConflictPrev # :conflictprev (jump to previous git conflict block)
     claBuild # :build (build current buffer)
@@ -119,6 +120,9 @@ type
 
   ParsedCommand* = object
     action*: CommandLineAction
+    abbreviatedAction*: Option[CommandLineAction]
+      ## What an abbreviated name runs. `action` stays `claUnknown` so that a
+      ## host's command filter can claim the name first; `execute` applies it.
     range*: ExLineRange
       ## The range in front of the name, stripped by `parseCommandLine`.
     args*: seq[string]
@@ -217,6 +221,8 @@ type
     of claChanges:
       discard
     of claBookmarks:
+      discard
+    of claVersion:
       discard
     of claConflictNext:
       discard
@@ -323,7 +329,7 @@ const NoArgumentActions* = {
   claVnew, claBufferNext, claBufferPrev, claBufferFirst, claBufferLast, claBufferDelete,
   claStripWhitespace, claLogViewer, claJobs, claQuickRun, claBufferManager,
   claBackupManager, claRecoveryManager, claRecentFile, claClearSearchHighlight,
-  claBackground, claJumpList, claChanges, claBookmarks, claConflictNext,
+  claBackground, claJumpList, claChanges, claBookmarks, claVersion, claConflictNext,
   claConflictPrev, claBuild, claDebug, claConfig, claPutConfigFile, claLspLog,
   claLspFormat, claLspRestart, claLspFold, claLspCallHierarchyIncoming,
   claLspCallHierarchyOutgoing, claMapclear, claNmapclear, claImapclear, claVmapclear,

@@ -20,10 +20,11 @@
 ## Command-line parser construction, alias management, and parseCommandLine
 ## (string -> ParsedCommand).
 
-import std/[strutils, tables]
+import std/[options, strutils, tables]
 
 import pkg/results
 
+import ../command_line_commands
 import types, substitute_parser
 
 proc newCommandLineParser*(): CommandLineParser =
@@ -48,6 +49,14 @@ proc removeAlias*(parser: CommandLineParser, alias: string) =
 proc clearAliases*(parser: CommandLineParser) =
   ## Clear all command aliases
   parser.aliases.clear
+
+proc abbreviatedAction(
+    parser: CommandLineParser, name: string
+): Option[CommandLineAction] =
+  if name in CommandAbbreviations:
+    let target = CommandAbbreviations[name]
+    if parser.aliases.getOrDefault(target.name, claUnknown) == target.action:
+      return some(target.action)
 
 proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand =
   ## Parse a command line input string into a structured command
@@ -122,7 +131,8 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     if bangPos <= 0 or bangPos >= first.high:
       break splitEmbeddedBang
     let prefix = first[0 ..< bangPos].toLowerAscii()
-    if prefix notin parser.aliases and prefix notin parser.shellCommands:
+    if prefix notin parser.aliases and prefix notin parser.shellCommands and
+        parser.abbreviatedAction(prefix).isNone:
       break splitEmbeddedBang
     let rest = first[bangPos + 1 ..^ 1]
     parts[0] = first[0 .. bangPos]
@@ -154,6 +164,7 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     result.args = @[shellCmd]
   else:
     result.action = claUnknown
+    result.abbreviatedAction = parser.abbreviatedAction(baseCmd)
     # Collect remaining parts as arguments
     if parts.len > 1:
       result.args = parts[1 ..^ 1]

@@ -248,6 +248,9 @@ proc processResultWithHost(
     return e.processJumpResult(r)
   of hrChanges:
     return e.processChangeResult(r)
+  of hrVersion:
+    e.showVersion()
+    return true
   of hrConflictNext:
     return e.processConflictJumpResult(r)
   of hrConflictPrev:

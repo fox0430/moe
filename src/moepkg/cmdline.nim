@@ -34,14 +34,6 @@ type CmdLineConfig* = object ## Command line configuration
   bufferBackend*: Option[BufferBackendKind]
     ## Override of the configured buffer backend. `none` keeps the TOML value.
 
-proc generateVersionInfoMessage(): string =
-  const
-    VersionInfo = "moe v" & moeSemVersionStr()
-    GitHash = "Git hash: " & gitHash()
-    BuildType = "Build type: " & buildType()
-
-  result = VersionInfo & "\n\n" & GitHash & "\n" & BuildType
-
 proc showVersion() =
   ## Display version info and exit
   echo generateVersionInfoMessage()

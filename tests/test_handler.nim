@@ -48,6 +48,7 @@ import ../src/moepkg/terminal_mode
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/command_handlers/result_processor
 import ../src/moepkg/command_handlers/[handler_result, misc_ops]
+from ../src/moepkg/app_info import generateVersionInfoMessage
 
 proc createTestViewport(x, y, width, height, topLine, leftCell: int): ViewPort =
   ViewPort(
@@ -12605,3 +12606,27 @@ suite "n and N go the way the last search went":
       e.typeKeys(keys)
       checkpoint(keys)
       check e.state.statusMessage == "E35: No previous regular expression"
+
+suite "Version command":
+  test ":version and its abbreviations show every line of the version information":
+    for command in [":version", ":versio", ":versi", ":vers", ":ver", ":ve"]:
+      let e = createTestEditorWithBuffer("hello")
+      checkpoint(command)
+      check e.executeCommandOverlay(command) == roContinue
+      check e.state.ui.tempMessages.join("\n") == generateVersionInfoMessage()
+
+  test ":version keeps the viewer it was typed from":
+    let e = createFilerEditor(2)
+    e.activeWindow.mode = EditorMode.Filer
+
+    check e.executeCommandOverlay(":version") == roContinue
+
+    check e.currentMode == EditorMode.Filer
+    check e.activeWindow.modeState.kind == mskFiler
+    check e.state.ui.tempMessages.join("\n") == generateVersionInfoMessage()
+
+    check e.handleKeyCombo(parseKeyCombo("j").get)
+
+    check e.state.ui.tempMessages.len == 0
+    check e.currentMode == EditorMode.Filer
+    check e.activeWindow.modeState.filer.selectedIndex == 1

@@ -831,6 +831,7 @@ suite "CommandLine - execute additional commands":
     parser.addAlias("ju", claJumpList)
     parser.addAlias("jump", claJumpList)
     parser.addAlias("changes", claChanges)
+    parser.addAlias("version", claVersion)
     parser.addAlias("build", claBuild)
     parser.addAlias("debug", claDebug)
     parser.addAlias("conf", claConfig)
@@ -978,6 +979,54 @@ suite "CommandLine - execute additional commands":
   test "Execute :changes":
     let result = parser.parseAndExecute(":changes")
     check result.kind == claChanges
+
+  test "Execute :version":
+    let result = parser.parseAndExecute(":version")
+    check result.kind == claVersion
+
+  test ":version abbreviations":
+    for command in [":ve", ":ver", ":vers", ":versi", ":versio"]:
+      check parser.parseAndExecute(command).kind == claVersion
+    check parser.parseAndExecute(":v").kind == claUnknown
+
+  test "an alias takes priority over an abbreviation":
+    parser.addAlias("ve", claQuit)
+    check parser.parseCommandLine(":ve").action == claQuit
+
+  test "an abbreviation stays unknown to the host until it is executed":
+    let parsed = parser.parseCommandLine(":ve")
+    check parsed.action == claUnknown
+    check parser.execute(parsed).kind == claVersion
+
+  test "a shell command takes priority over an abbreviation":
+    parser.shellCommands["ve"] = ShellCommandEntry(command: "true")
+    check parser.parseCommandLine(":ve").action == claShellCommand
+
+  test "an abbreviation stops when its command is removed":
+    parser.removeAlias("version")
+    check parser.parseAndExecute(":ve").kind == claUnknown
+
+  test "an abbreviation does not reach what took over its command's name":
+    parser.removeAlias("version")
+    parser.shellCommands["version"] = ShellCommandEntry(command: "true")
+    check parser.parseAndExecute(":ve").kind == claUnknown
+
+    parser.addAlias("version", claQuit)
+    check parser.parseAndExecute(":ve").kind == claUnknown
+
+  test "an abbreviated action reaches the branches that read the action":
+    let parsed = ParsedCommand(
+      action: claUnknown, abbreviatedAction: some(claNnoremap), args: @["a", "b"]
+    )
+    let result = parser.execute(parsed)
+    check result.kind == claNmap
+    check result.noremap
+
+  test "an abbreviation splits an embedded bang":
+    let parsed = parser.parseCommandLine(":ve!x")
+    check "force" in parsed.flags
+    check parsed.args == @["x"]
+    check parser.execute(parsed).kind == claVersion
 
   test "Execute :build":
     let result = parser.parseAndExecute(":build")

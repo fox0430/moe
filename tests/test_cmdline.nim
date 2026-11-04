@@ -19,6 +19,7 @@
 
 import std/[options, unittest, strutils]
 
+import ../src/moepkg/app_info
 import ../src/moepkg/cmdline {.all.}
 import ../src/moepkg/config
 
