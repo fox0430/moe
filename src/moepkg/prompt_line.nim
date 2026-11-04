@@ -408,7 +408,7 @@ proc edit*(line: var PromptLine, key: KeyCombo, history: seq[string]): LineEdit 
     leNone
 
 const
-  CtrlV = Rune(0x16)
+  CtrlV = '\x16'
   CtrlVKey = KeyCombo(isSpecial: false, char: "v", modifiers: {kmCtrl})
   ActsWhenTyped = {
     '\x02', '\x05', '\x08', '\x0e', '\x10', '\x11', '\x12', '\x15', '\x16', '\x17',
@@ -417,26 +417,26 @@ const
     ## The control characters a prompt takes as keys, the ones that do nothing
     ## there among them (Ctrl-], Ctrl-^). Any other goes in as it is.
 
-proc isControl(r: Rune): bool =
-  r.int < 0x20 or r.int == 0x7f
+proc isControl(c: char): bool =
+  c < ' ' or c == '\x7f'
 
-proc keyOf(r: Rune): KeyCombo =
-  ## The key that types `r`.
-  case r.int
-  of 0x09:
+proc keyOf(c: string): KeyCombo =
+  ## The key that types the character `c`, whose bytes it keeps.
+  case c[0]
+  of '\t':
     KeyCombo(isSpecial: true, special: skTab)
-  of 0x0d:
+  of '\r':
     KeyCombo(isSpecial: true, special: skEnter)
-  of 0x1b:
+  of '\e':
     KeyCombo(isSpecial: true, special: skEscape)
-  of 0x7f:
+  of '\x7f':
     KeyCombo(isSpecial: true, special: skBackspace)
-  of 0x00 .. 0x08, 0x0a .. 0x0c, 0x0e .. 0x1a, 0x1c .. 0x1f:
+  of '\x00' .. '\x08', '\x0a' .. '\x0c', '\x0e' .. '\x1a', '\x1c' .. '\x1f':
     KeyCombo(
-      isSpecial: false, char: $chr(r.int + 0x40).toLowerAscii, modifiers: {kmCtrl}
+      isSpecial: false, char: $chr(ord(c[0]) + 0x40).toLowerAscii, modifiers: {kmCtrl}
     )
   else:
-    KeyCombo(isSpecial: false, char: r.toUTF8)
+    KeyCombo(isSpecial: false, char: c)
 
 proc asTyped(lines: openArray[string]): tuple[plain: string, keys: seq[KeyCombo]] =
   ## `lines` as Vim's cmdline_paste_reg types them, each with a CR between
@@ -449,41 +449,52 @@ proc asTyped(lines: openArray[string]): tuple[plain: string, keys: seq[KeyCombo]
       if result.keys.len == 0:
         result.plain.add '\r'
       else:
-        result.keys.add [CtrlVKey, Rune('\r').keyOf]
+        result.keys.add [CtrlVKey, "\r".keyOf]
     var at = 0
     if result.keys.len == 0:
       while at < text.len and text[at] notin ActsWhenTyped:
         inc at
       result.plain.add text[0 ..< at]
-    let runes = text[at ..^ 1].toRunes
-    var i = 0
-    while i < runes.len:
-      let viaCtrlV = runes[i] == CtrlV
-      if viaCtrlV and i + 1 < runes.len:
-        inc i
-      let r = runes[i]
-      inc i
-      if viaCtrlV or (r.isControl and char(r.int) notin ActsWhenTyped):
+    while at < text.len:
+      var size = text.runeSizeAt(at)
+      let viaCtrlV = text[at] == CtrlV
+      if viaCtrlV and at + size < text.len:
+        at += size
+        size = text.runeSizeAt(at)
+      if viaCtrlV or (text[at].isControl and text[at] notin ActsWhenTyped):
         result.keys.add CtrlVKey
-      result.keys.add r.keyOf
+      result.keys.add text[at ..< at + size].keyOf
+      at += size
 
 proc runOnLine(line: var PromptLine, keys: seq[KeyCombo]): int =
   ## Run the first of `keys` that only edit the line, so what follows an edit
-  ## runs once for them all, as Vim's char_avail has it. Returns how many ran:
-  ## one that reads a register or the history stops it, and one the line does
-  ## not take or that would leave the prompt.
+  ## runs once for them all, as Vim's char_avail has it. Runs of text go in
+  ## whole, as each insert rebuilds the line. Returns how many ran: one that
+  ## reads a register or the history stops it, and one the line does not take
+  ## or that would leave the prompt.
+  var text = ""
+  template putText() =
+    line.insert(text)
+    text = ""
+
   while result < keys.len:
     let key = keys[result]
     if line.wait == pwLiteral:
       let read = line.readCode(key)
       if read.isSome:
-        line.insert(read.get.text)
+        text.add read.get.text
         if read.get.unread:
           continue
-    elif key.isCtrl('r') or key.isCtrl('p') or key.isCtrl('n') or
-        line.edit(key, @[]) in {leNone, leEmptyErase}:
-      return
+    elif not key.isSpecial and key.modifiers == {}:
+      text.add key.char
+    else:
+      if not key.isCtrl('v'):
+        putText()
+      if key.isCtrl('r') or key.isCtrl('p') or key.isCtrl('n') or
+          line.edit(key, @[]) in {leNone, leEmptyErase}:
+        return
     inc result
+  putText()
 
 proc withoutTypedPart(line: PromptLine, word: string, ignoreCase: bool): string =
   ## `word` past the keyword before the cursor when it starts with that, as
@@ -520,9 +531,10 @@ proc registerText(
     state: EditorState, b: TextBuffer, key: KeyCombo
 ): Result[seq[string], string] =
   ## The lines Ctrl-R puts in for `key`, a CR to go between them: none for a
-  ## key that names no register or a register with no text. The last of
-  ## linewise text is empty, so it ends in a CR as well. The read-only
-  ## registers fail as Vim's get_spec_reg does.
+  ## key that names no register or a register with no text, which a selection
+  ## that cannot be read counts as. The last of linewise text is empty, so it
+  ## ends in a CR as well. The read-only registers fail as Vim's get_spec_reg
+  ## does.
   template line(): untyped =
     state.input.line
 
@@ -563,7 +575,10 @@ proc registerText(
     if not name.isValidRegisterName:
       return ok(newSeq[string]())
     ok(
-      (?state.registers.textToPut(name, state.config.clipboard)).getContent.split('\n')
+      state.registers
+        .textToPut(name, state.config.clipboard)
+        .get(Register()).getContent
+        .split('\n')
     )
 
 proc readRegister(state: EditorState, b: TextBuffer, key: KeyCombo): LineEdit =

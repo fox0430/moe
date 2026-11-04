@@ -20,7 +20,7 @@
 ## Tests for prompt_line.nim: the line every prompt edits. The results are
 ## Vim 9.2's getcmdline.
 
-import std/[options, unicode, unittest]
+import std/[options, unittest]
 
 import ../src/moepkg/[types, key_bindings]
 import ../src/moepkg/prompt_line {.all.}
@@ -267,9 +267,8 @@ suite "prompt_line: editing":
         check chr(c) in ActsWhenTyped
       else:
         var line = typed("ab")
-        check (line.edit(Rune(c).keyOf, @["old"]) != leNone) == (
-          chr(c) in ActsWhenTyped
-        )
+        check (line.edit(($chr(c)).keyOf, @["old"]) != leNone) ==
+          (chr(c) in ActsWhenTyped)
 
   test "a key with a modifier the line does not take is left alone":
     var line = typed("a")

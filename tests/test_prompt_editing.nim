@@ -20,7 +20,7 @@
 ## Ctrl-R and Ctrl-V at the prompts, through the keys. The results are Vim
 ## 9.2's, the ones with 'incsearch' and a typed Ctrl-C measured in a terminal.
 
-import std/[options, strutils, tables, unittest]
+import std/[options, os, strutils, tables, unittest]
 
 import pkg/results
 
@@ -29,6 +29,8 @@ import
     buffer, command_completion, config, editor, handler, key_bindings, keybind_config,
     modes, prompt_line, registers, render_utils, types,
   ]
+
+import clipboard_test_helper
 
 proc createEditor(lines: seq[string], line = 0, column = 0, incsearch = false): Editor =
   var cfg = newEditorConfig()
@@ -154,6 +156,56 @@ suite "prompt: Ctrl-R":
     discard e.state.editPrompt(e.activeBuffer, parseKeyCombo("a").get, @[])
     check e.state.stuffedKeys.len == 0
     check e.line == "f\x1bg\r" & "h".repeat(1000)
+
+  test "text goes in where the keys before it left the cursor":
+    let e = createEditor(@["x"])
+    e.setReg('a', "\x02ab\x05cd\x02\x16\te")
+    e.press(":", "z", "C-r", "a")
+    check e.line == "\teabzcd"
+    check e.cursorChar == 2
+
+  test "text before a key that stops them goes in":
+    let e = createEditor(@["x"])
+    e.setReg('a', "\x05a\x10b")
+    e.press(":", "C-r", "a", "y")
+    check e.line == "ay"
+
+  test "text after a key that runs keeps its bytes":
+    # 0xE9 leads a three byte character but must not take what follows it.
+    for text in ["caf\xE9 x", "\xE9", "a\xE3\x81", "\xE9\nb"]:
+      let e = createEditor(@["x"])
+      e.setReg('a', "\x02" & text)
+      e.press(":", "z", "C-r", "a")
+      check e.line == text.replace('\n', '\r') & "z"
+
+  test "a Ctrl-V covers the last character of the text":
+    for (text, expected) in [("a\x16\x02", "a\x02"), ("\x05\x16\x02", "\x02")]:
+      let e = createEditor(@["x"])
+      e.setReg('a', text)
+      e.press(":", "C-r", "a")
+      check e.line == expected
+
+  test "a byte a Ctrl-V covers goes in as it is":
+    let e = createEditor(@["x"])
+    e.setReg('a', "\x02\x16\xE9 x")
+    e.press(":", "C-r", "a")
+    check e.line == "\xE9 x"
+
+  test "a selection that cannot be read has no text, and stops nothing":
+    let fakeDir = installFakeClipboardTool("")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        writeFile(fakeDir / "xclip", "#!/bin/sh\nexit 1\n")
+        let e = createEditor(@["x"])
+        e.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        e.state.registers.setClipboardTool(cbtXclip)
+        e.state.pendingInput.macroState.registers['m'] = @[":", "<C-r>", "+", "z"]
+        e.press("@", "m")
+        check e.line == "z"
+      finally:
+        removeFakeClipboardTool(fakeDir)
 
   test "a key the line does not take goes on as a key":
     # The Ctrl-Q takes the Ctrl-V that covers the Esc, which then runs the line.
