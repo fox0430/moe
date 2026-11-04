@@ -157,13 +157,13 @@ jobs:
       uses: actions/cache/save@v6
       with:
         path: ~/.ccache
-        key: ${{ env.CCACHE_KEY_PREFIX }}${{ matrix.shard }}-${{ github.sha }}
+        key: ${{ steps.restore-ccache.outputs.cache-primary-key }}
 
   # Separate from the shards so that test code never runs with actions: write.
   prune-ccache:
     name: prune ccache
     needs: test
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -173,6 +173,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
     - name: Delete all but the newest cache of each shard
+      continue-on-error: true
       shell: bash
       run: |
         gh cache list \
