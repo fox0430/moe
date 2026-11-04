@@ -24,6 +24,19 @@ import ../src/moepkg/buffer/core
 import ../src/moepkg/command_handlers/terminal_handler
 import ../src/moepkg/terminal/[pty, ansi_parser]
 
+from pkg/celina import nil
+from pkg/celina/core/key_logic import mapAltKey, mapCtrlLetterKey, mapCtrlNumberKey
+
+proc keyFromByte(b: char): KeyCombo =
+  ## The key the input path delivers for the byte a terminal sends.
+  let decoded =
+    if b in '\x1c' .. '\x1f':
+      mapCtrlNumberKey(b)
+    else:
+      mapCtrlLetterKey(b)
+  doAssert decoded.isCtrlKey
+  eventToKeyCombo(celina.Event(kind: celina.EventKind.Key, key: decoded.keyEvent)).get
+
 proc charKey(c: string, mods: set[KeyModifier] = {}): KeyCombo =
   KeyCombo(isSpecial: false, char: c, modifiers: mods)
 
@@ -144,6 +157,38 @@ suite "handleTerminalModeKey - Terminal-Input sub-mode":
       check result.kind == trHandled
       check termState.get.waitingForCtrlN == true
       termState.get.cleanup()
+
+suite "Control keys as a terminal sends them":
+  test "Ctrl-\\ Ctrl-N switches to Terminal-Normal":
+    let termState = newTerminalState("echo test", 80, 24)
+    require termState.isOk
+    let ts = termState.get
+    defer:
+      ts.cleanup()
+
+    check handleTerminalModeKey(ts, tsmInput, keyFromByte('\x1c')).kind == trHandled
+    check ts.waitingForCtrlN
+    check handleTerminalModeKey(ts, tsmInput, keyFromByte('\x0e')).kind ==
+      trSwitchToNormal
+
+  test "Ctrl-\\, Ctrl-], Ctrl-^ and Ctrl-_ keep their bytes":
+    for b in ['\x1c', '\x1d', '\x1e', '\x1f']:
+      check keyComboToBytes(keyFromByte(b)) == $b
+
+  test "Alt+Ctrl-\\ does not arm the Ctrl-N switch":
+    let termState = newTerminalState("echo test", 80, 24)
+    require termState.isOk
+    let ts = termState.get
+    defer:
+      ts.cleanup()
+
+    let altQuit = eventToKeyCombo(
+      celina.Event(kind: celina.EventKind.Key, key: mapAltKey('\x1c'))
+    ).get
+    check altQuit.char == "4"
+    check handleTerminalModeKey(ts, tsmInput, altQuit).kind == trHandled
+    check not ts.waitingForCtrlN
+    check handleTerminalModeKey(ts, tsmInput, keyFromByte('\x0e')).kind == trHandled
 
 suite "handleTerminalModeKey - Terminal-Normal sub-mode":
   test "'i' in Normal sub-mode returns trReturnToInput":
