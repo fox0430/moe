@@ -29,6 +29,8 @@ import ../command_line_commands
 
 proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult =
   ## Execute a parsed command and return the result
+  var cmd = cmd
+  cmd.action = cmd.abbreviatedAction.get(cmd.action)
   # A local, so a branch can construct with it as the discriminator.
   let action = cmd.action
   if action in FileNameActions and cmd.args.len > 1:
@@ -227,6 +229,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claChanges)
   of claBookmarks:
     return CommandLineResult(kind: claBookmarks)
+  of claVersion:
+    return CommandLineResult(kind: claVersion)
   of claConflictNext:
     return CommandLineResult(kind: claConflictNext)
   of claConflictPrev:

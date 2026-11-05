@@ -142,6 +142,7 @@ type
     hrBackground # Pause editor and show terminal (:bg)
     hrJumpList # Show jump list (:ju, :jump)
     hrChanges # Show change list (:changes)
+    hrVersion # Show version information (:version)
     hrConflictNext # Jump to next git conflict block (:conflictnext)
     hrConflictPrev # Jump to previous git conflict block (:conflictprev)
     hrBuild # Build current buffer (:build)
@@ -370,6 +371,8 @@ type
       discard
     of hrChanges:
       discard
+    of hrVersion:
+      discard
     of hrConflictNext:
       discard
     of hrConflictPrev:
@@ -527,7 +530,7 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
     hrgExitToNewMode
   of hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrNew, hrVnew, hrEdit,
       hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
-      hrShellCommand, hrMan, hrBackground, hrSave, hrSaveAll, hrSaveAndQuit,
+      hrVersion, hrShellCommand, hrMan, hrBackground, hrSave, hrSaveAll, hrSaveAndQuit,
       hrSaveAllAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
       hrBuffer, hrBufferDelete, hrStripWhitespace, hrOnlyWindow, hrEnterFileTree,
       hrJumpToBuffer, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,

@@ -17,9 +17,34 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, strutils, os, pegs]
+import std/[strformat, strutils, os]
 
 import pkg/results
+
+const
+  MoeVersion = "0.5.0"
+    ## Keep in sync with moe.nimble, which cannot import this as `nimble install`
+    ## drops src/ from the path.
+  RepoRoot = currentSourcePath.parentDir.parentDir.parentDir
+  HasNimble = fileExists(RepoRoot / "moe.nimble")
+
+proc parseNimbleVersion*(nimbleSpec: string): string =
+  ## The value of the top-level `version` line, or empty without one.
+
+  for line in nimbleSpec.splitLines:
+    let parts = line.split('=', maxsplit = 1)
+    if parts.len == 2 and parts[0].strip(leading = false) == "version":
+      let quoted = parts[1].split('"')
+      return
+        if quoted.len >= 3:
+          quoted[1]
+        else:
+          ""
+
+when HasNimble:
+  static:
+    doAssert parseNimbleVersion(staticRead(RepoRoot / "moe.nimble")) == MoeVersion,
+      "MoeVersion differs from moe.nimble"
 
 type VersionInfo* = object
   major*, minor*, patch*: int
@@ -39,34 +64,29 @@ proc parseVersionInfo*(s: string): Result[VersionInfo, string] =
     return
       Result[VersionInfo, string].err fmt"Invalid value: {getCurrentExceptionMsg()}"
 
-proc staticReadVersionFromNimble(): string {.compileTime.} =
-  ## Get the moe version from moe.nimble.
-
-  let
-    peg = """@ "version" \s* "=" \s* \" {[0-9.]+} \" @ $""".peg
-
-    nimblePath = currentSourcePath.parentDir() / "../../moe.nimble"
-    nimbleSpec = staticRead(nimblePath)
-
-  var captures: seq[string] = @[""]
-  assert nimbleSpec.match(peg, captures)
-  assert captures.len == 1
-  return captures[0]
-
 proc moeVersion*(): VersionInfo {.compileTime.} =
-  staticReadVersionFromNimble().parseVersionInfo.get
+  MoeVersion.parseVersionInfo.get
 
 proc moeSemVersionStr*(): string {.compileTime.} =
   moeVersion().toSemVerString
 
-proc staticGetGitHash(): string {.compileTime.} =
-  ## Get the current git hash.
+proc parseGitHash*(output: string, exitCode: int): string =
+  ## Parse `git rev-parse HEAD`. Git warnings can precede the hash, as gorgeEx
+  ## merges stderr.
 
-  const CmdResult = gorgeEx("git rev-parse HEAD")
-  if CmdResult.exitCode == 0 and CmdResult.output.len == 40:
-    return CmdResult.output
-  else:
-    return ""
+  let lastLine = output.strip(leading = false).splitLines[^1]
+  if exitCode == 0 and lastLine.len in [40, 64] and lastLine.allCharsInSet(HexDigits):
+    return lastLine
+
+proc staticGetGitHash(): string {.compileTime.} =
+  ## Get the current git hash. Empty unless moe.nimble and .git are both at
+  ## the root, so a vendored copy does not report its embedder's commit.
+  ## --git-dir also keeps an inherited GIT_DIR from selecting the embedder's.
+
+  if HasNimble:
+    let cmdResult =
+      gorgeEx("git " & quoteShell("--git-dir=" & RepoRoot / ".git") & " rev-parse HEAD")
+    return parseGitHash(cmdResult.output, cmdResult.exitCode)
 
 proc gitHash*(): string {.compileTime.} =
   staticGetGitHash()
@@ -78,3 +98,14 @@ proc buildType*(): string {.compileTime.} =
     return "Release"
   else:
     return "Debug"
+
+proc formatVersionInfo*(version, hash, buildType: string): string =
+  ## An empty `hash` is shown as unknown.
+
+  let hashValue = if hash.len > 0: hash else: "unknown"
+  result =
+    "moe v" & version & "\n\nGit hash: " & hashValue & "\nBuild type: " & buildType
+
+proc generateVersionInfoMessage*(): string =
+  const Message = formatVersionInfo(moeSemVersionStr(), gitHash(), buildType())
+  result = Message

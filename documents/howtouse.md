@@ -890,6 +890,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `terminal command` | Run command in terminal emulator |
 | `changes` | Show Change list |
 | `bookmarks` | Show bookmark list |
+| `ve[rsion]` | Show version information |
 | `conflictnext` | Jump to next git merge conflict block |
 | `conflictprev` | Jump to previous git merge conflict block |
 <!-- AUTO-GEN:end CommandMode -->

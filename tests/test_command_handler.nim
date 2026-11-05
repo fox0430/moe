@@ -1633,6 +1633,13 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":changes")
     check result.kind == hrChanges
 
+  test "Handle :version command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":version")
+    check result.kind == hrVersion
+
   test "Handle :man command":
     let handler = setupHandler()
     let buffer = setupBuffer()

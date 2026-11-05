@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, tables, algorithm, strutils]
+import std/[unittest, os, tables, algorithm, strutils, sequtils]
 
 import pkg/celina
 
@@ -1073,6 +1073,17 @@ suite "CommandCompletion - edge cases":
         check cmd.description == "Write file"
       if cmd.command == "wq":
         check cmd.description == "Write and quit"
+
+  test "Abbreviations are not listed":
+    let config = newCommandConfig()
+    config.loadDefaultConfig()
+
+    let parser = newCommandLineParser()
+    config.applyToParser(parser)
+
+    let commands = collectCommands(parser)
+    check commands.countIt(it.command == "version") == 1
+    check commands.countIt(it.command == "ve") == 0
 
   test "All default commands have descriptions":
     let config = newCommandConfig()

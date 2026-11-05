@@ -191,6 +191,20 @@ suite "Host result interception":
     check e.executeCommandOverlay(":split") != roQuit
     check e.takeHostResultRequest().isSome
 
+  test "a command hook sees an abbreviation before it runs":
+    let e = testEditor()
+    defer:
+      e.releaseExternalResources()
+    e.hostCommandFilter = proc(host: Editor, command: ParsedCommand): bool =
+      command.action == claUnknown and command.rawText == ":ver"
+    check e.executeCommandOverlay(":ver") != roQuit
+    check e.takeHostCommandRequest().isSome
+    check e.state.ui.tempMessages.len == 0
+
+    check e.executeCommandOverlay(":ve") != roQuit
+    check e.takeHostCommandRequest().isNone
+    check e.state.ui.tempMessages.len > 0
+
   test "a host-owned replay error still aborts the replay":
     let e = testEditor()
     defer:

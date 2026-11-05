@@ -61,7 +61,9 @@ pane, or viewer operation before processing further input.
 Unlike `hostCommandFilter`, this hook also covers window keys, runtime mappings,
 `mode_switch` viewer entries, and Filer split-open actions. Declining a result
 preserves Moe's normal behavior. The command hook remains available for custom
-commands or interception before command validation.
+commands or interception before command validation. It sees an abbreviated name
+such as `:ve` with `action == claUnknown` and the real action in
+`abbreviatedAction`, so that a host can define the name itself.
 
 The `moepkg/frontend` facade exports `HostResultFilter`, `HandlerResult`,
 `HandlerResultKind`, and `takeHostResultRequest`. A host-owned quit result leaves

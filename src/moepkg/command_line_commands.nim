@@ -84,6 +84,11 @@ type
       ## spec the shortest runnable name for the same action, preferring
       ## the ones that declare this exact `keymapBaseDescription`.
       ## Derived as `command_config.keyMappableCommandModeAliases`.
+    minAbbrev*: int
+      ## When positive, the parser accepts `name` cut down to this many
+      ## characters or more, as Vim's `:ve[rsion]`. Those forms are not aliases:
+      ## they stay out of the popup, and work only while `name` runs this
+      ## spec's action. Derived as `CommandAbbreviations`.
 
 const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   # Quit / save (Exiting section)
@@ -907,6 +912,15 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
+    name: "version",
+    completionDescription: "Show version information",
+    helpEntries:
+      @[HelpEntry(syntax: "ve[rsion]", description: "Show version information")],
+    action: some(claVersion),
+    isCanonicalLong: true,
+    minAbbrev: 2,
+  ),
+  CommandLineCommandSpec(
     name: "conflictnext",
     completionDescription: "Jump to next git merge conflict block",
     helpEntries: @[
@@ -1204,6 +1218,23 @@ const FileNameActions*: set[CommandLineAction] = block:
     if spec.takesFilePath and spec.action.isSome:
       actions.incl spec.action.get
   actions
+
+const CommandAbbreviations*:
+  Table[string, tuple[name: string, action: CommandLineAction]] = block:
+  ## Abbreviation -> what it stands for, from `minAbbrev`.
+  var
+    t: Table[string, tuple[name: string, action: CommandLineAction]]
+    names: seq[string]
+  for spec in CommandLineCommandTable:
+    names.add spec.name
+  for spec in CommandLineCommandTable:
+    if spec.minAbbrev > 0:
+      for len in spec.minAbbrev ..< spec.name.len:
+        let abbreviation = spec.name[0 ..< len]
+        doAssert abbreviation notin t and abbreviation notin names,
+          "Ambiguous abbreviation: " & abbreviation
+        t[abbreviation] = (spec.name, spec.action.get)
+  t
 
 const CommandLineSpecialHelp*:
   tuple[

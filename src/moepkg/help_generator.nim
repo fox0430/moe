@@ -1119,6 +1119,7 @@ proc renderCommandModeTail*(): string {.compileTime.} =
     helpEntriesFor("terminal"),
     helpEntriesFor("changes"),
     helpEntriesFor("bookmarks"),
+    helpEntriesFor("version"),
     helpEntriesFor("conflictnext") & helpEntriesFor("conflictprev"),
   ]
   for i, entries in groups:

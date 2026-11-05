@@ -75,6 +75,10 @@ jobs:
     - name: Compile and run embedded frontend smoke test
       run: nim c -r -d:moe.embedded tools/embedded_smoke.nim
 
+    - name: Check embedded frontend without moe.nimble or git
+      shell: bash
+      run: bash tools/check_embedded_src_only.sh
+
   test:
     name: shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
@@ -143,6 +147,10 @@ jobs:
         nimble setup
         ccache --zero-stats
         xvfb-run env XDG_SESSION_TYPE=x11 nim r tools/paralleltest.nim
+
+    - name: Check embedded frontend without moe.nimble or git
+      if: matrix.shard == 1
+      run: bash tools/check_embedded_src_only.sh
 
     - name: Show ccache stats
       if: ${{ !cancelled() }}

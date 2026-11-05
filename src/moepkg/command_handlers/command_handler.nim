@@ -667,6 +667,8 @@ proc handleCommandModeInput*(
     HandlerResult(kind: hrChanges)
   of claBookmarks:
     HandlerResult(kind: hrEnterBookmarkManager)
+  of claVersion:
+    HandlerResult(kind: hrVersion)
   of claConflictNext:
     HandlerResult(kind: hrConflictNext)
   of claConflictPrev:

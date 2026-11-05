@@ -17,12 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-## Listing and jump side effects (jump list, change list, git conflicts),
+## Listing and jump side effects (jump list, change list, version, git conflicts),
 ## split out of result_processor.nim.
 
 import std/[os, unicode]
+from std/strutils import splitLines
 
-import ../[buffer, editor, git_conflict, types, unicode_utils]
+import ../[app_info, buffer, editor, git_conflict, types, unicode_utils]
 
 import editor_ops, handler_result
 
@@ -90,6 +91,10 @@ proc processChangeResult*(e: Editor, r: HandlerResult): bool =
     return true
   else:
     return true # Not the change-list kind; caller misrouted (defensive)
+
+proc showVersion*(e: Editor) =
+  ## Show the version information in a temp message.
+  e.state.ui.tempMessages = generateVersionInfoMessage().splitLines
 
 proc processConflictJumpResult*(e: Editor, r: HandlerResult): bool =
   ## Jump to the next or previous git conflict marker. Returns true to continue.

@@ -218,16 +218,16 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrLspDocumentSymbol, hrLspCodeLensExecute, hrLspCallHierarchyIncoming,
       hrLspCallHierarchyOutgoing, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
       hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrShellCommand, hrFilter,
-      hrBackground, hrJumpList, hrChanges, hrBuild, hrDebug, hrDebugViewerQuit,
-      hrConfig, hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile, hrTheme, hrLspLog,
-      hrLspFormat, hrLspRestart, hrLspFold, hrLspExecuteCommand, hrSubstitute,
-      hrDeleteLines, hrMan, hrReferencesQuit, hrReferencesJumpTo, hrDocumentSymbolQuit,
-      hrDocumentSymbolJumpTo, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
-      hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing, hrEnterTerminal,
-      hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
-      hrFileTreeQuit, hrOpenUri, hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd,
-      hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro, hrRepeatInsert, hrUndo,
-      hrRedo, hrJobs:
+      hrBackground, hrJumpList, hrChanges, hrVersion, hrBuild, hrDebug,
+      hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile,
+      hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold, hrLspExecuteCommand,
+      hrSubstitute, hrDeleteLines, hrMan, hrReferencesQuit, hrReferencesJumpTo,
+      hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrCallHierarchyQuit,
+      hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
+      hrCallHierarchyRequestOutgoing, hrEnterTerminal, hrTerminalQuit, hrExecCommand,
+      hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri,
+      hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd, hrMapRemove, hrMapClear,
+      hrMapList, hrPlaybackMacro, hrRepeatInsert, hrUndo, hrRedo, hrJobs:
     discard # Not expected from RecentFile mode handler
 
   # Route overlay/mode transitions through processResult so a viewer target
