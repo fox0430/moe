@@ -194,11 +194,15 @@ proc tomlTable(g: var GeneralTokenizer, position: int): int =
 proc tomlNextToken*(g: var GeneralTokenizer) =
   var pos = g.pos
   g.start = g.pos
+
   if g.state == gtStringLit:
     g.kind = gtStringLit
     while true:
       case g.buf[pos]
       of '\\':
+        # Emit the text before the escape as its own token.
+        if pos > g.start:
+          break
         g.kind = gtEscapeSequence
         inc(pos)
         case g.buf[pos]
@@ -223,10 +227,11 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         of DecChars:
           while g.buf[pos] in DecChars:
             inc(pos)
-        of '\0':
-          g.state = gtNone
         else:
-          inc(pos)
+          g.skipEscapedChar(pos)
+        # Basic strings end with the line, even right after an escape.
+        if g.buf[pos] in eolChars:
+          g.state = gtNone
         break
       of '\0', '\r', '\n':
         g.state = gtNone
