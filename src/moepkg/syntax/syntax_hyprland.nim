@@ -49,13 +49,15 @@ proc hyprlandNextToken*(g: var GeneralTokenizer) =
     while true:
       case g.buf[pos]
       of '\\':
+        # Emit the text before the escape as its own token.
+        if pos > g.start:
+          break
         g.kind = gtEscapeSequence
         inc(pos)
-        case g.buf[pos]
-        of '\0':
+        g.skipEscapedChar(pos)
+        # Strings end with the line, even right after an escape.
+        if g.buf[pos] in eolChars:
           g.state = gtNone
-        else:
-          inc(pos)
         break
       of '\0', '\r', '\n':
         g.state = gtNone

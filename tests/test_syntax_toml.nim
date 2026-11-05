@@ -21,6 +21,47 @@ import std/unittest
 
 import ../src/moepkg/syntax/[tokenizer, syntax_toml]
 
+suite "syntax_toml - string cut off after an escape":
+  proc tokens(code: string): seq[(TokenClass, int)] =
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(code)
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      result.add (g.kind, g.length)
+
+  test "at the end of the input":
+    check tokens("\"C-\\\\") == @[(gtStringLit, 3), (gtEscapeSequence, 2)]
+
+  test "at the end of the line":
+    check tokens("\"C-\\\\\na") ==
+      @[(gtStringLit, 3), (gtEscapeSequence, 2), (gtWhitespace, 1), (gtIdentifier, 1)]
+
+  test "escaped closing quote":
+    check tokens("\"\\\"") == @[(gtStringLit, 1), (gtEscapeSequence, 2)]
+
+  test "a backslash at the end of the line leaves the newline alone":
+    check tokens("\"a\\\nb") ==
+      @[(gtStringLit, 2), (gtEscapeSequence, 1), (gtWhitespace, 1), (gtIdentifier, 1)]
+
+  test "a backslash before CRLF leaves the line ending alone":
+    check tokens("\"a\\\r\nb") ==
+      @[(gtStringLit, 2), (gtEscapeSequence, 1), (gtWhitespace, 2), (gtIdentifier, 1)]
+
+  test "a backslash at the end of the input":
+    check tokens("\"a\\") == @[(gtStringLit, 2), (gtEscapeSequence, 1)]
+
+  test "text between two escapes stays string":
+    check tokens("\"a\\tb\\tc\"") ==
+      @[
+        (gtStringLit, 2),
+        (gtEscapeSequence, 2),
+        (gtStringLit, 1),
+        (gtEscapeSequence, 2),
+        (gtStringLit, 2),
+      ]
+
 suite "syntax_toml - tomlNextToken booleans":
   test "true keyword":
     var g: GeneralTokenizer
