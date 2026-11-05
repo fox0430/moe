@@ -207,15 +207,13 @@ proc continueInitialHighlight*(
 
   var startLine = parsedUpTo + 1
 
-  # The boundary state may not resume in a fresh chunk (YAML block scalars,
-  # blank / alone-header lines), so rewind to a safe line and re-parse the
-  # previous chunk's tail together with the new one.
+  # The boundary state may not resume in a fresh chunk (a YAML block scalar
+  # header), so rewind to a safe line and re-parse the previous chunk's tail
+  # together with the new one.
   while startLine > 0 and
       b.incrementalHighlight.lineStates.states[startLine - 1].backend == hbBuiltin and
       chunkHandoffUnsafe(
-        b.language,
-        b.incrementalHighlight.lineStates.states[startLine - 1].state,
-        b.getLine(startLine),
+        b.language, b.incrementalHighlight.lineStates.states[startLine - 1]
       )
   :
     dec startLine

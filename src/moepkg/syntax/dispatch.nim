@@ -28,6 +28,8 @@ import
   syntax_nim, syntax_python, syntax_rust, syntax_shell, syntax_tcl, syntax_toml,
   syntax_yaml, syntax_json, syntax_jsonc, syntax_typescript, syntax_xml, syntax_zsh
 
+export noteYamlLine
+
 proc languageNextToken(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
   of langNone, langMarkdown:
