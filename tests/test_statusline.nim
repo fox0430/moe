@@ -19,12 +19,13 @@
 
 ## Tests for status_line.nim - Status line rendering for moe editor
 
-import std/[unittest, options, tables, strutils, os, importutils]
+import std/[unittest, options, tables, strutils, os, importutils, sequtils, times]
 
 import pkg/celina
 
 import ../src/moepkg/[types, modes, registers, config, git_cache, unicode_utils]
 import ../src/moepkg/buffer/core
+import ../src/moepkg/search_ops
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/status_line {.all.}
 
@@ -151,6 +152,137 @@ proc getBufferLine(buffer: celina.Buffer, y: int): string =
   result = ""
   for x in 0 ..< buffer.area.width:
     result.add(buffer[x, y].symbol)
+
+suite "StatusLine - search count":
+  proc searchState(pattern: string): EditorState =
+    result = createTestState()
+    result.showStatusLine = true
+    result.multiStatusLine = true
+    result.config.statusLine.searchCount = true
+    result.input.search.hlsearch = true
+    result.input.search.last = SearchSpec(pattern: pattern)
+
+  proc countShown(
+      state: EditorState, textBuffer: TextBuffer, mode = EditorMode.Normal
+  ): string =
+    state.mode = mode
+    state.updateSearchCount(textBuffer)
+    state.buildSearchCount().joined
+
+  test "Shows the cursor's match and the total":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("", false, "foo\nbar\nfoo\nfoo")
+    state.activeWindow.cursor = BufferPosition(line: 2, column: 0)
+    check state.countShown(textBuffer) == " [2/3]"
+
+  test "Follows the cursor, also in Visual":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("", false, "foo\nfoo")
+    state.activeWindow.cursor = BufferPosition(line: 1, column: 0)
+    check state.countShown(textBuffer, EditorMode.VisualLine) == " [2/2]"
+
+  test "Shows nothing without a search, a match, or after :nohlsearch":
+    let textBuffer = createTestTextBuffer("", false, "foo")
+    check searchState("").countShown(textBuffer) == ""
+    check searchState("zzz").countShown(textBuffer) == ""
+    check searchState("(").countShown(textBuffer) == ""
+    let state = searchState("foo")
+    state.input.search.hlsearchTempDisabled = true
+    check state.countShown(textBuffer) == ""
+
+  test "Shows with 'hlsearch' off":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("", false, "foo")
+    state.input.search.hlsearch = false
+    check state.countShown(textBuffer) == " [1/1]"
+
+  test "Shows nothing in Insert or a viewer, or when turned off":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("", false, "foo")
+    check state.countShown(textBuffer, EditorMode.Insert) == ""
+    check state.countShown(textBuffer, EditorMode.Replace) == ""
+    check state.countShown(textBuffer, EditorMode.Filer) == ""
+    state.config.statusLine.searchCount = false
+    check state.countShown(textBuffer) == ""
+
+  test "Counts what the search prompt holds, as 'incsearch' highlights it":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("", false, "foo bar bar")
+    state.input.search.incsearch = true
+    state.enterSearchOverlay(Forward)
+    state.input.line.text = "bar"
+    check state.countShown(textBuffer) == " [0/2]"
+    state.input.line.text = ""
+    check state.countShown(textBuffer) == " [1/1]"
+
+  test "Shows nothing while a command line is typed, which a :s preview changes":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("", false, "foo bar bar")
+    state.input.search.incsearch = true
+    state.enterCommandOverlay()
+    state.input.line.text = "s/bar"
+    check state.countShown(textBuffer) == ""
+
+  test "Counts nothing with the status line hidden":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("", false, "foo")
+    state.showStatusLine = false
+    state.updateSearchCount(textBuffer)
+    check state.searchCount.isNone
+    check textBuffer.searchCounts.allIt(it.before.len == 0)
+
+  test "A search hidden and shown again keeps its count":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("", false, "foo\nfoo")
+    check state.countShown(textBuffer) == " [1/2]"
+    state.input.search.hlsearchTempDisabled = true
+    check state.countShown(textBuffer) == ""
+    state.input.search.hlsearchTempDisabled = false
+    state.updateSearchCount(textBuffer, DurationZero)
+    check state.buildSearchCount().joined == " [1/2]"
+
+  test "A command line keeps what has been counted":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("", false, "foo\nfoo")
+    check state.countShown(textBuffer) == " [1/2]"
+    state.enterCommandOverlay()
+    check state.countShown(textBuffer) == ""
+    state.exitOverlay()
+    state.updateSearchCount(textBuffer, DurationZero)
+    check state.buildSearchCount().joined == " [1/2]"
+
+  test "An active window shows it after the file name, an inactive one does not":
+    let
+      state = searchState("foo")
+      textBuffer = createTestTextBuffer("/path/file.nim", true, "foo")
+    var
+      displayBuffer = createTestBuffer()
+      config = createTestStatusLineConfig()
+    state.updateSearchCount(textBuffer)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, state.cursor,
+      config,
+    )
+    check "/path/file.nim [+] [1/1]" in getBufferLine(displayBuffer, 10)
+
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 11, 0, 80, false, state.mode, state.cursor,
+      config,
+    )
+    check "[1/1]" notin getBufferLine(displayBuffer, 11)
+
+  test "Is left out first when the status line is narrow":
+    var left = @[part(" file.nim", srName), part(" [1/1]", srExtra)]
+    check layoutStatusLine(left, Ruler(), 10).left == @[" file.nim", ""]
 
 suite "StatusLine - toggleStatusLine":
   test "Toggle from true to false":

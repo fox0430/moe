@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, importutils, strutils]
+import std/[unittest, options, importutils, strutils, times]
 
 import pkg/results
 
@@ -1521,3 +1521,190 @@ suite "substitutions":
     for s in b.substitutions(0 .. 1, ",", parseReplacement("\\r"), false, true, smRegex):
       got.add s.line
     check got == @[0, 1]
+
+suite "Buffer Search - countMatches":
+  const Enough = initDuration(seconds = 60)
+
+  proc at(line, column: int): BufferPosition =
+    BufferPosition(line: line, column: column)
+
+  test "counts the matches that start at or before the position, as searchcount()":
+    let b = newTextBuffer("foo bar\nbaz\nfoo foo\nqux\nfoo\n")
+    check b.countMatches(at(0, 0), "foo", Enough).current == 1
+    check b.countMatches(at(2, 0), "foo", Enough).current == 2
+    check b.countMatches(at(2, 1), "foo", Enough).current == 2
+    check b.countMatches(at(3, 0), "foo", Enough).current == 3
+    check b.countMatches(at(4, 2), "foo", Enough).current == 4
+    check b.countMatches(at(4, 0), "foo", Enough).total == 4
+
+  test "empty and line-end matches count where n stops, as searchcount() in Vim 9.2":
+    let b = newTextBuffer("abc\n\nfoo")
+    check b.countMatches(at(0, 1), "x*", Enough) ==
+      MatchCount(current: 2, total: 7, complete: true)
+    check b.countMatches(at(0, 2), "$", Enough) ==
+      MatchCount(current: 0, total: 3, complete: true)
+    check b.countMatches(at(1, 0), "$", Enough) ==
+      MatchCount(current: 2, total: 3, complete: true)
+    check b.countMatches(at(1, 0), "^", Enough) ==
+      MatchCount(current: 2, total: 3, complete: true)
+    check newTextBuffer("xax").countMatches(at(0, 1), "a*", Enough) ==
+      MatchCount(current: 2, total: 3, complete: true)
+    check newTextBuffer("aaa\nfoo aaaa").countMatches(at(1, 4), "aa", Enough) ==
+      MatchCount(current: 2, total: 3, complete: true)
+
+  test "none has started before the first match":
+    let b = newTextBuffer("a foo\n")
+    check b.countMatches(at(0, 0), "foo", Enough).current == 0
+
+  test "an edit counts again":
+    let b = newTextBuffer("foo foo\n")
+    check b.countMatches(at(0, 0), "foo", Enough).total == 2
+    check b.replaceLines(1, 0, ["foo"]).isOk
+    check b.countMatches(at(0, 0), "foo", Enough).total == 3
+
+  test "another buffer, pattern, case or kind of match counts again":
+    let
+      first = newTextBuffer("Foo foo\n")
+      second = newTextBuffer("foo\n")
+    check first.countMatches(at(0, 0), "foo", Enough).total == 1
+    check second.countMatches(at(0, 0), "foo", Enough).total == 1
+    check first.countMatches(at(0, 0), "o", Enough).total == 4
+    check first.countMatches(at(0, 0), "foo", Enough, ignorecase = true).total == 2
+    check first.countMatches(at(0, 0), "fo.", Enough, match = smLiteral).total == 0
+
+  test "an empty or invalid pattern has no matches":
+    let b = newTextBuffer("foo\n")
+    check b.countMatches(at(0, 0), "", Enough) == MatchCount(complete: true)
+    check b.countMatches(at(0, 0), "(", Enough) == MatchCount(complete: true)
+
+  test "running out of time leaves the count incomplete, until a later count goes on":
+    let b = newTextBuffer("foo\nbar\nfoo\n")
+    check not b.countMatches(at(2, 0), "foo", DurationZero).complete
+    check b.countMatches(at(2, 0), "foo", Enough) ==
+      MatchCount(current: 2, total: 2, complete: true)
+
+  test "each buffer keeps its own count":
+    let
+      first = newTextBuffer("foo foo\n")
+      second = newTextBuffer("foo\n")
+    check first.countMatches(at(0, 0), "foo", Enough).total == 2
+    check second.countMatches(at(0, 0), "foo", DurationZero).total == 0
+    check first.countMatches(at(0, 0), "foo", DurationZero) ==
+      MatchCount(current: 1, total: 2, complete: true)
+
+  test "the search before is kept along with the one counted":
+    let b = newTextBuffer("foo bar\n")
+    check b.countMatches(at(0, 0), "foo", Enough).total == 1
+    check b.countMatches(at(0, 0), "b", Enough).total == 1
+    check b.countMatches(at(0, 0), "foo", DurationZero).complete
+    check b.countMatches(at(0, 0), "ba", Enough).total == 1
+    check not b.countMatches(at(0, 0), "b", DurationZero).complete
+
+  test "the count follows the position without counting again":
+    let b = newTextBuffer("foo foo\nfoo\n")
+    check b.countMatches(at(0, 3), "foo", Enough).current == 1
+    check b.countMatches(at(0, 4), "foo", Enough).current == 2
+    check b.countMatches(at(1, 0), "foo", Enough).current == 3
+    check b.countMatches(at(0, 0), "foo", Enough).current == 1
+
+  test "a count out of time goes on from the match it stopped at":
+    for (text, pattern, match) in [
+      ("foo foo foo\nfoo\n\nfoofoo", "foo", smRegex),
+      ("foo foo foo\nfoo\n\nfoofoo", "foo", smLiteral),
+      ("abc\n\nfoo", "x*", smRegex),
+      ("abc\n\nfoo", "$", smRegex),
+      ("aaaa aa\na", "aa", smRegex),
+      ("aaaa aa\na", "aa", smLiteral),
+      ("foo foobar foo\u0301 foo", "foo", smWord),
+      ("e\u0301e e\u0301", "e", smLiteral),
+    ]:
+      let
+        text = repeat(text & " ", 100)
+        whole =
+          newTextBuffer(text).countMatches(at(1, 0), pattern, Enough, match = match)
+        b = newTextBuffer(text)
+      var
+        count = b.countMatches(at(1, 0), pattern, DurationZero, match = match)
+        calls = 1
+      check not count.complete
+      while not count.complete and calls < 2000:
+        count = b.countMatches(at(1, 0), pattern, DurationZero, match = match)
+        calls.inc
+      check count == whole
+
+  test "a line with many matches is counted however short the time":
+    let b = newTextBuffer(repeat("a,", 1000))
+    var
+      count = b.countMatches(at(0, 0), ",", DurationZero)
+      calls = 1
+    while not count.complete and calls < 2000:
+      count = b.countMatches(at(0, 0), ",", DurationZero)
+      calls.inc
+    check count == MatchCount(current: 0, total: 1000, complete: true)
+
+  test "a long line is counted in parts between its matches":
+    let line = repeat("a", 20_000) & "b"
+    let b = newTextBuffer(line)
+    check not b.countMatches(at(0, 0), "b", DurationZero, match = smLiteral).complete
+    check b.searchCounts[b.recentSearchCount].place.pos in 1 ..< line.len
+    var calls = 1
+    while not b.countMatches(at(0, 0), "b", DurationZero, match = smLiteral).complete:
+      calls.inc
+    check calls > 1
+
+  test "the search being typed does not take the last search's place":
+    let b = newTextBuffer("foo bar\n")
+    check b.countMatches(at(0, 0), "foo", Enough).total == 1
+    let keep = SearchCountKey(pattern: "foo")
+    check b.countMatches(at(0, 0), "b", Enough, keep = keep).total == 1
+    check b.countMatches(at(0, 0), "ba", Enough, keep = keep).total == 1
+    check b.countMatches(at(0, 0), "foo", DurationZero).complete
+    check not b.countMatches(at(0, 0), "b", DurationZero).complete
+
+  test "only the same pattern searched the same way is kept":
+    let
+      b = newTextBuffer("foo bar\n")
+      keep = SearchCountKey(pattern: "foo", match: smWord)
+    check b.countMatches(at(0, 0), "foo", Enough, match = smWord).total == 1
+    check b.countMatches(at(0, 0), "foo", Enough, keep = keep).total == 1
+    check b.countMatches(at(0, 0), "foo", DurationZero, match = smWord).complete
+    check b.countMatches(at(0, 0), "b", Enough, keep = keep).total == 1
+    check b.countMatches(at(0, 0), "foo", DurationZero, match = smWord).complete
+
+  test "the count follows the cursor along a line it has counted":
+    let b = newTextBuffer("x foo foo foo\nfoo\n")
+    check b.countMatches(at(1, 0), "foo", Enough).total == 4
+    check b.countMatches(at(0, 12), "foo", Enough).current == 3
+    check b.countMatches(at(0, 0), "foo", DurationZero).current == 0
+    check b.countMatches(at(0, 2), "foo", DurationZero).current == 1
+    check b.countMatches(at(0, 7), "foo", DurationZero).current == 2
+    check b.countMatches(at(0, 12), "foo", DurationZero).current == 3
+
+  test "the cursor's line is walked in parts, only as far as its column":
+    let b = newTextBuffer("foo\n" & repeat("a,", 1000))
+    check b.countMatches(at(0, 0), ",", Enough).total == 1000
+    var
+      count = b.countMatches(at(1, 9), ",", DurationZero)
+      calls = 1
+    while not count.complete and calls < 2000:
+      count = b.countMatches(at(1, 9), ",", DurationZero)
+      calls.inc
+    check count == MatchCount(current: 5, total: 1000, complete: true)
+    check b.searchCounts[b.recentSearchCount].atStarts.len == 6
+    while not count.complete or count.current != 1000:
+      count = b.countMatches(at(1, 1999), ",", DurationZero)
+      calls.inc
+    check calls < 4000
+    check b.searchCounts[b.recentSearchCount].atDone
+
+  test "a regex count keeps the line it walks, valid or not":
+    let line = repeat("a,\xff", 1000)
+    for (pattern, match) in [(",", smRegex), (",", smLiteral)]:
+      let
+        whole = newTextBuffer(line).countMatches(at(0, 2000), pattern, Enough, match = match)
+        b = newTextBuffer(line)
+      var count = b.countMatches(at(0, 2000), pattern, DurationZero, match = match)
+      while not count.complete:
+        count = b.countMatches(at(0, 2000), pattern, DurationZero, match = match)
+      check count == whole
+      check whole == MatchCount(current: 667, total: 1000, complete: true)

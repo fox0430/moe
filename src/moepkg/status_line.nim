@@ -279,6 +279,17 @@ proc buildGitInfo(
       if branch.len > 0:
         result.add part(" ᚠ " & branch, srExtra)
 
+proc buildSearchCount(state: EditorState): seq[StatusItem] =
+  ## The cursor's place among the search's matches, as Vim's `[3/10]`,
+  ## `[?/??]` while it is being counted.
+  if state.searchCount.isNone:
+    return
+  let count = state.searchCount.get
+  if not count.complete:
+    result.add part(" [?/??]", srExtra)
+  elif count.total > 0:
+    result.add part(fmt" [{count.current}/{count.total}]", srExtra)
+
 proc lineEndingLabel(textBuffer: TextBuffer): string =
   ## Raw buffer: `lineEnding` is unused; report RAW.
   if not textBuffer.allowsTextTransforms:
@@ -583,6 +594,8 @@ proc drawStatusLine(
     left.add part(fmt" {recordingLabel} ", srLabel)
   left.add buildGitInfo(state.git, textBuffer, mode, config, isActiveWindow)
   left.add buildFileDisplay(textBuffer, mode, config, owesPreservedWork)
+  if isActiveWindow:
+    left.add state.buildSearchCount()
   if isActiveWindow and state.ui.lspProgressText.len > 0:
     # A blank column apart from the file name
     left.add part(fmt"  {sanitizeForDisplay(state.ui.lspProgressText)} ", srExtra)

@@ -174,6 +174,7 @@ You can use the [example](../example/moerc.toml).
 | gitBranchName | bool | true | Display the current git branch name |
 | showGitInactive | bool | false | Display the git branch name on the status line in inactive windows |
 | showModeInactive | bool | false | Display the mode on the status line in inactive windows |
+| searchCount | bool | true | Display the cursor's place among the search matches |
 | setupText | string | "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType}" | Text to customize the items displayed in the status line. Please check StatusLineItem |
 <!-- AUTO-GEN:end StatusLine -->
 

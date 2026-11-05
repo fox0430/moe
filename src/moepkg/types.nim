@@ -1141,6 +1141,8 @@ type
     matchingParenPos*: Option[BufferPosition]
       # Position of matching paren (for highlighting)
     currentWord*: string # Word under cursor (for currentWord highlighting)
+    searchCount*: Option[MatchCount]
+      ## The cursor's place among the search's matches the status line shows
     statusMessageStr: string # Internal - use statusMessage getter/setter
     editState*: EditState # Edit operation state (motions, repeat, etc.)
     pointerSelection*: PointerSelectionGesture
