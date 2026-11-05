@@ -914,16 +914,20 @@ suite "updateForFrame - split buffer re-parse budget":
     let config = newEditorConfig()
     let e = newEditor(config)
 
-    # Buffer 1: a YAML top-level block scalar with a >1000-line blank run —
-    # a re-parse anchored at the top sits fully inside the handoff hazard
-    # for at least the first `ChunkSize`-sized window.
+    # Buffer 1: YAML whose re-parse windows (100, 200, 400...) each end on a
+    # block scalar header, with the scalars before it reaching back to the
+    # first line: no handoff is safe until the windows pass the last header.
     var stuck = newTextBuffer()
     let stuckPath = getTempDir() / "moe_test_frame_stuck.yaml"
     defer:
       removeFile(stuckPath)
-    var stuckContent = "long: |\n"
-    for i in 0 ..< 5000:
-      stuckContent.add("\n")
+    # The rows the windows end on once the edit below inserts a line.
+    var windowEnds: seq[int]
+    for doublings in 0 .. 5:
+      windowEnds.add((ChunkSize shl doublings) - 1)
+    var stuckContent = "  long: |\n"
+    for row in 2 .. windowEnds[^1] * 2:
+      stuckContent.add(if row in windowEnds: "  next: |\n" else: "\n")
     stuckContent.add("after: tail\n")
     writeFile(stuckPath, stuckContent)
     discard stuck.loadFile(stuckPath)

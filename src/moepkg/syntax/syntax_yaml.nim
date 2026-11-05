@@ -35,6 +35,27 @@ const
     ".nan", ".NaN", ".NAN",
   ]
 
+proc noteYamlLine*(state: var YamlState, buf: string, first, last: int) =
+  ## Record `buf[first ..< last]`, one line without its newline, as the nearest
+  ## line above an alone header. A blank line changes nothing.
+  var indent = first
+  while indent < last and buf[indent] == ' ':
+    inc(indent)
+  var content = indent
+  while content < last and buf[content] in {' ', '\t'}:
+    inc(content)
+  if content == last:
+    return
+  let isMarker =
+    last - first >= 3 and buf[first] == '-' and buf[first + 1] == '-' and
+    buf[first + 2] == '-' and
+    (last == first + 3 or buf[first + 3] in {'\t' .. '\r', ' '})
+  state.headerIndentAbove =
+    if isMarker:
+      0
+    else:
+      indent - first + 1
+
 proc yamlPlainStrLit(g: var GeneralTokenizer, pos: var int) =
   g.kind = gtStringLit
   while g.buf[pos] notin {'\0', '\t' .. '\r', ',', ']', '}'}:
@@ -334,7 +355,9 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       minIndentation: int
       indentation: int
       headerStart = -1
-    let resuming = g.buf[pos] notin {'\n', '\r'} and g.lang.yaml.blockScalarActive
+    # A header below always enters with the flag clear, so it marks a resume
+    # even on a blank line.
+    let resuming = g.lang.yaml.blockScalarActive
     if resuming:
       # Chunk-boundary resume: the boundary capture persisted the scalar's
       # context (a fresh buffer lacks the header line above); the
@@ -389,12 +412,11 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         while g.buf[lookbehind + indentation] == ' ':
           inc(indentation)
       if headerAlone and not foundParent:
-        # Alone header with nothing above it: top level. Keyed on
-        # `foundParent`, not `lookbehind == -1`, because a reparse chunk can
-        # start on the parent line itself; forcing top level there would let
-        # the block swallow following keys. The `--- |` marker below still
-        # forces top level.
-        indentation = 0
+        # Nothing above it in this buffer: the state knows the line above the
+        # buffer, or there is none (top level). Keyed on `foundParent`, not
+        # `lookbehind == -1`, because a reparse chunk can start on the parent
+        # line itself. The `--- |` marker below still forces top level.
+        indentation = g.lang.yaml.headerIndentAbove
       elif g.buf[lookbehind + 1] == '-' and g.buf[lookbehind + 2] == '-' and
           g.buf[lookbehind + 3] == '-' and g.buf[lookbehind + 4] in {'\t' .. '\r', ' '}:
         # The line at `lookbehind + 1` (the parent line for an alone header,

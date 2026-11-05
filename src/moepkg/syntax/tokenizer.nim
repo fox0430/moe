@@ -140,10 +140,11 @@ type
   YamlState* = object
     isKey*: bool
     blockScalarActive*: bool
-      ## True while a block scalar is in flight: boundary captures carry its
-      ## context so a chunk cut inside it can resume without the header line
-      ## above. Cleared when the scalar ends (`gtOther`); only read in
-      ## `gtLongStringLit`.
+      ## True while a block scalar is in flight: a chunk cut inside it resumes
+      ## from the context below, without the header line above. Cleared when
+      ## the scalar ends (`gtOther`), so the boundaries a finished scalar
+      ## crossed read false: those lines can only be parsed from the header.
+      ## Only read in `gtLongStringLit`.
     blockScalarParentIndent*: int
       ## Parent indentation of the key line the scalar belongs to (-1 = top
       ## level), derived at the header; the content loop compares against it.
@@ -158,6 +159,11 @@ type
       ## line folded in, or an explicit indicator). A chunk cut right after
       ## the header must not persist the empty scan's 0 as the minimum: the
       ## end checks would then never fire.
+    headerIndentAbove*: int
+      ## Indentation + 1 of the nearest non-blank line above, which an alone
+      ## header (`|`/`>` on its own line) takes as its parent; 0 with no such
+      ## line or a `---` marker there (top level). Lets a chunk starting at or
+      ## above the header resolve it without the lines above.
 
   MarkdownState* = object
     ## Per-line transient `inIndentedCode` lives on `GeneralTokenizer`, not here.

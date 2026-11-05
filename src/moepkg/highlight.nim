@@ -1273,6 +1273,51 @@ when defined(moe.matter) or defined(features.moe.matter):
         inc tailIndex
       result.lineStates.add(TokenizerState(backend: hbMatter, matterState: state))
 
+proc chunkHandoffUnsafe*(language: SourceLanguage, state: TokenizerState): bool =
+  ## True when a chunked parse must not hand `state` to a fresh chunk. The
+  ## single dispatch point for all chunked drivers (the entry rewind and the
+  ## internal handoff scan in `updateHighlightIncremental`, the resume rewind in
+  ## `continueInitialHighlight`): a language whose constructs resolve against
+  ## lines above the resume point gets an arm here, not a new predicate wired
+  ## into each driver. Context a state can carry instead belongs in
+  ## `carryLineContext`.
+  case language
+  of SourceLanguage.langYaml:
+    # After a header the scalar still needs the header line; inside a scalar
+    # only a state cut at the end of a buffer can resume it (see
+    # `blockScalarActive`). A boundary a finished scalar crossed cannot.
+    state.state == gtCommand or
+      (state.state == gtLongStringLit and not state.lang.yaml.blockScalarActive)
+  else:
+    false
+
+proc carryLineContext(
+    language: SourceLanguage,
+    lineStates: var seq[TokenizerState],
+    bufferStr: string,
+    entering: LangState,
+) =
+  ## Fill in the context of the lines above each boundary, for a language that
+  ## resolves a construct against them. Done from the text, not in the lexer: a
+  ## token can cross many lines, but every boundary it crosses needs its own
+  ## value. `entering` holds the context entering the buffer.
+  case language
+  of SourceLanguage.langYaml:
+    var
+      above = entering.yaml
+      row = 0
+      lineStart = 0
+    for i in 0 .. bufferStr.len:
+      let atEnd = i == bufferStr.len
+      if atEnd or bufferStr[i] in {'\n', '\r'}:
+        above.noteYamlLine(bufferStr, lineStart, i)
+        lineStart = i + 1
+        if (atEnd or bufferStr[i] == '\n') and row < lineStates.len:
+          lineStates[row].lang.yaml.headerIndentAbove = above.headerIndentAbove
+          inc row
+  else:
+    discard
+
 proc initHighlightIncrementalFromStr*(
     bufferStr: string,
     startLine: int,
@@ -1399,9 +1444,14 @@ proc initHighlightIncrementalFromStr*(
             proc(x: char): bool =
               x == '\n',
           ):
-        # Save states for each newline
+        # Save states for each newline. As in `splitByNewlineWithState`, only
+        # the last one is outside the token.
         for i in 0 ..< (last - first + 1):
+          let savedState = token.state
+          if i < last - first:
+            token.state = capturedBoundaryState(token, language)
           lineStates.add(captureTokenizerState(token))
+          token.state = savedState
         currentRow += last - first + 1
         currentColumn = 0
         continue
@@ -1418,8 +1468,7 @@ proc initHighlightIncrementalFromStr*(
         # handled by the dedicated branch above.
         # gtWhitespace runs legitimately span blank lines in a neutral state:
         # resuming a fresh parse at a blank line reproduces them, so they are
-        # exempt (YAML's blank-line-after-header hazard is handled by the
-        # drivers' rewind, not by state).
+        # exempt.
         let txt = bufferStr[first .. last]
         let nl = txt.find('\n')
         if token.kind != gtWhitespace and nl >= 0 and nl < txt.high:
@@ -1476,6 +1525,9 @@ proc initHighlightIncrementalFromStr*(
     while currentRow <= endLine:
       lineStates.add(captureTokenizerState(token))
       inc currentRow
+
+  # No lexer writes this context, so `token.lang` still holds the entering value.
+  carryLineContext(language, lineStates, bufferStr, token.lang)
 
   when defined(debugHighlight):
     # The padding above only fixes the short direction; over-length would mean
@@ -1612,49 +1664,6 @@ proc segmentCutIndex*(segs: openArray[ColorSegment], row: int): int =
   segs.lowerBound(row) do(seg: ColorSegment, line: int) -> int:
     cmp(seg.firstRow, line)
 
-proc yamlLineKind(line: string): char =
-  ## First non-space character of `line`, `'\0'` for a blank line.
-  for ch in line:
-    if ch notin {' ', '\t'}:
-      return ch
-  '\0'
-
-proc yamlLineNeedsContextAbove(line: string): bool =
-  ## A YAML block scalar's extent depends on lines BELOW its header but is
-  ## resolved by scanning ABOVE it, which a saved state cannot express:
-  ##   * blank lines after a header carry plain `gtOther`, so a parse starting
-  ##     at the first indented content has nothing pointing back to the header;
-  ##   * an alone header (`|`/`>` on its own line) takes its indentation from
-  ##     the nearest non-blank line above, missing if a parse starts on the
-  ##     header.
-  # Blank line (no non-space char) or an alone block-scalar header.
-  yamlLineKind(line) in {'\0', '|', '>'}
-
-proc chunkHandoffUnsafe*(
-    language: SourceLanguage, state: TokenClass, nextLine: string
-): bool =
-  ## True when a chunked parse must not hand `state` to a fresh chunk starting
-  ## at `nextLine`. The single dispatch point for all chunked drivers (the
-  ## entry rewind and the internal handoff scan in `updateHighlightIncremental`,
-  ## the resume rewind in `continueInitialHighlight`): a language whose
-  ## constructs resolve against lines above the resume point gets an arm here,
-  ## not a new predicate wired into each driver.
-  case language
-  of SourceLanguage.langYaml:
-    # `gtLongStringLit` is mid scalar (`|`/`>` there is content, not a
-    # header); `gtCommand` (the header line) always needs context; other
-    # non-plain states only for blank / alone-header lines.
-    if state == gtCommand:
-      true
-    elif state == gtLongStringLit:
-      yamlLineKind(nextLine) == '\0'
-    elif state != gtOther:
-      yamlLineNeedsContextAbove(nextLine)
-    else:
-      yamlLineKind(nextLine) in {'|', '>'}
-  else:
-    false
-
 proc updateHighlightIncremental*(
     lineCount: int,
     getLine: proc(i: int): string,
@@ -1746,8 +1755,7 @@ proc updateHighlightIncremental*(
     # Also rewind across chunk-handoff hazards (see `chunkHandoffUnsafe`);
     # rewinding early is safe: the re-parse restarts from a cached state.
     while initialState.backend == hbBuiltin and reparseStart > 0 and (
-      initialState.state in MultiLineKinds or
-      chunkHandoffUnsafe(language, initialState.state, getLine(reparseStart))
+      initialState.state in MultiLineKinds or chunkHandoffUnsafe(language, initialState)
     )
     :
       dec reparseStart
@@ -1821,16 +1829,13 @@ proc updateHighlightIncremental*(
       budgetRemaining -= attemptedLines
 
     # `newLineStates[i]` is the state entering line `currentStart + i + 1`
-    # (padded on early tokenizer stops). A handoff to an unsafe line (YAML
-    # block scalar) moves back so the rewound lines re-parse with their
-    # context; the final chunk keeps the whole window.
+    # (padded on early tokenizer stops). An unsafe handoff (YAML block scalar
+    # header) moves back so the rewound lines re-parse with their context; the
+    # final chunk keeps the whole window.
     var handoff = chunkEnd + 1
     if currentState.backend == hbBuiltin and chunkEnd < lastLine:
       while handoff > currentStart and
-          chunkHandoffUnsafe(
-            language, newLineStates[handoff - currentStart - 1].state, getLine(handoff)
-          )
-      :
+          chunkHandoffUnsafe(language, newLineStates[handoff - currentStart - 1]):
         dec handoff
 
       if handoff == currentStart:

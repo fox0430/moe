@@ -913,11 +913,11 @@ suite "Highlight - budgeted incremental update":
     checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
 
   test "budgeted YAML re-parse across a long blank run stays within the budget":
-    # Regression: a blank-line run is a YAML handoff hazard, so a window
-    # inside it used to double geometrically and the doubled window
-    # PERSISTED across frames (the per-frame freeze the budget exists to
-    # prevent). Blank lines are resumable, so each call must accept a
-    # budget-sized chunk; without the fix `maxParsed` grows 100, 200, 400...
+    # Regression: a window inside a blank run used to double geometrically and
+    # the doubled window PERSISTED across frames (the per-frame freeze the
+    # budget exists to prevent). Each call must accept a budget-sized chunk.
+    # Counts `getLine`: a doubling window refunds `parsedLines`, so only the
+    # reads show the work.
     const BlankRun = 20000
     var buffer = @["a: 1", "b: 2"]
     for i in 0 ..< BlankRun:
@@ -926,17 +926,24 @@ suite "Highlight - budgeted incremental update":
     var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
     buffer.insert("b2: 22", 1)
 
+    var reads = 0
     let getLine = proc(i: int): string =
+      inc reads
       buffer[i]
     var maxParsed = 0
+    var maxReads = 0
     while true:
       var parsed = 0
-      if not updateHighlightIncremental(
+      reads = 0
+      let ongoing = updateHighlightIncremental(
         buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 100, 1, parsed
-      ):
+      )
+      maxReads = max(maxReads, reads)
+      if not ongoing:
         break
       maxParsed = max(maxParsed, parsed)
     check maxParsed <= 100
+    check maxReads <= 200
     check ih.pendingReparse == nil
     checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
 
@@ -946,10 +953,13 @@ suite "Highlight - budgeted incremental update":
     # hazard, the budget break leaves the flight live with an empty cache.
     # A second edit must restart from the top of the available cache (the
     # seed for the new anchor is gone), not from the new anchor's margin.
-    var buffer = @["long: |"]
-    for i in 1 .. 99:
+    # The chunk ends on a header, and the scalar before it reaches back to the
+    # chunk's first line: no handoff in the window is safe.
+    var buffer = @["  long: |"]
+    for i in 1 .. ChunkSize - 3:
       buffer.add("")
-    for i in 100 ..< 1500:
+    buffer.add("  next: |")
+    for i in ChunkSize - 1 ..< 1500:
       buffer.add("key" & $i & ": value")
     buffer.add("after: tail")
     var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
@@ -957,8 +967,8 @@ suite "Highlight - budgeted incremental update":
 
     let getLine = proc(i: int): string =
       buffer[i]
-    # First call: the window inside the blank run doubles until the budget
-    # (50) is exhausted before any chunk is accepted; the cache stays empty.
+    # First call: the window doubles until the budget (50) is exhausted before
+    # any chunk is accepted; the cache stays empty.
     check updateHighlightIncremental(
       buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 50, 1
     )
@@ -986,9 +996,13 @@ suite "Highlight - budgeted incremental update":
     # Regression (review finding): `updateHighlight`'s cache-validity gate
     # used to treat a live flight with an emptied state cache as "no cache"
     # and rebuild the whole file in one unbudgeted call.
-    var content = "long: |\n"
+    # After the insert the first chunk ends on a header (see the fixture of
+    # the test above), so the first call accepts nothing.
+    var content = "  long: |\n"
+    content.add("\n".repeat(ChunkSize - 3))
+    content.add("  next: |\n")
     for i in 0 ..< 1500:
-      content.add("\n")
+      content.add("key" & $i & ": value\n")
     content.add("after: tail\n")
     let buf = newTextBuffer(content)
     buf.language = SourceLanguage.langYaml
@@ -999,7 +1013,7 @@ suite "Highlight - budgeted incremental update":
     discard buf.beginTransaction()
     discard buf.insert(1, "")
     discard buf.commitTransaction()
-    check buf.updateHighlight(1000)
+    check buf.updateHighlight(50)
     check buf.incrementalHighlight.pendingReparse != nil
     check buf.incrementalHighlight.lineStates.states.len == 0
 
@@ -1023,10 +1037,11 @@ suite "Highlight - budgeted incremental update":
     # Regression: a rejected handoff-hazard attempt used to bump
     # `parsedLines` by the full window, draining the caller's shared budget
     # on every doubling. Refund the rejection.
-    var buffer = @["long: |"]
-    for i in 1 .. 99:
+    var buffer = @["  long: |"]
+    for i in 1 .. ChunkSize - 3:
       buffer.add("")
-    for i in 100 ..< 1500:
+    buffer.add("  next: |")
+    for i in ChunkSize - 1 ..< 1500:
       buffer.add("key" & $i & ": value")
     buffer.add("after: tail")
     var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
@@ -1072,6 +1087,41 @@ suite "Highlight - budgeted incremental update":
       inc calls
       check calls < 50 # must terminate
     check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "an edit below an alone YAML header sees the line above the blank one":
+    # Regression: the re-parse margin started on the blank line, so the alone
+    # header found no line above and took the next line as scalar content.
+    var buffer = @["a", "", ">", "b"]
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer[3] = "bb"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    updateHighlightIncremental(buffer.len, getLine, ih, 3, @[], SourceLanguage.langYaml)
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "a bare CR before an alone YAML header does not hide it":
+    # The lexer ends a line at a bare CR, so `\r>` is an alone header.
+    var buffer = @["a", "\r>", "", "b"]
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer[3] = "bb"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    updateHighlightIncremental(buffer.len, getLine, ih, 3, @[], SourceLanguage.langYaml)
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "an edit in the blank lines after an empty YAML scalar reaches the header":
+    # The scalar ended at `b`, but indenting `b` makes it content again, which
+    # only a parse from the header can see.
+    var buffer = @["a: |", "", "", "b: 1"]
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer[3] = "  b: 1"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    updateHighlightIncremental(buffer.len, getLine, ih, 3, @[], SourceLanguage.langYaml)
     checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
 
   test "a resumed YAML block scalar ends at a comment below the persisted minimum":
@@ -2372,8 +2422,8 @@ suite "Highlight - Block Comment Multiline State":
 
 proc loadProgressiveScalarFixture(filename: string, scalarLines = 1200): TextBuffer =
   ## A YAML file whose block scalar spans continueInitialHighlight's
-  ## ChunkSize=1000 chunk boundary, so the progressive load's resume rewind
-  ## fires (the stored boundary state at the chunk edge is gtLongStringLit).
+  ## ChunkSize=1000 chunk boundary, so the progressive load resumes inside it
+  ## (the stored boundary state at the chunk edge is gtLongStringLit).
   result = newTextBuffer()
   let path = getTempDir() / filename
   defer:
@@ -2492,9 +2542,9 @@ suite "Highlight - YAML internal chunk boundary handoff":
 
   test "alone block scalar header at an internal chunk boundary":
     # The alone header takes its indentation from the parent line above it.
-    # When the header becomes a chunk's first line, the parent search must
-    # not run off the chunk's top (it would force top level and swallow the
-    # following keys) — the handoff has to rewind to the parent line.
+    # When the header becomes a chunk's first line, the parent search runs off
+    # the chunk's top; the state must supply the parent, or the header would
+    # be top level and swallow the following keys.
     var buffer: seq[string]
     for i in 0 ..< 100:
       buffer.add("key" & $i & ": value" & $i)
@@ -2504,6 +2554,74 @@ suite "Highlight - YAML internal chunk boundary handoff":
     buffer.add("      folded content two")
     buffer.add("  next: outside")
     checkIncrementalMatchesFull(buffer, 4, insertLine = true)
+
+  proc paddedTo(rows: int, tail: openArray[string]): seq[string] =
+    ## `tail` placed so that its first line lands on row `rows`.
+    for i in 0 ..< rows:
+      result.add("key" & $i & ": value")
+    result.add(tail)
+
+  test "blank line and alone header on either side of the chunk boundary":
+    checkIncrementalMatchesFull(
+      paddedTo(ChunkSize - 1, ["", ">", "f: 1", "g: 2"]), 1, insertLine = true
+    )
+
+  test "alone header on the chunk boundary right after a block scalar":
+    # The chunk ends inside the scalar, which the header then ends; its parent
+    # is the scalar's last line, above the chunk.
+    checkIncrementalMatchesFull(
+      paddedTo(ChunkSize - 3, ["a: |", "  x", ">", "f: 1"]), 1, insertLine = true
+    )
+    checkIncrementalMatchesFull(
+      paddedTo(ChunkSize - 3, ["a: |", "", ">", "f: 1"]), 1, insertLine = true
+    )
+
+  test "alone header after a document marker across the chunk boundary":
+    # `---` above forces top level, so the header's scalar takes `f: 1`.
+    checkIncrementalMatchesFull(
+      paddedTo(ChunkSize - 1, ["---", ">", "f: 1"]), 1, insertLine = true
+    )
+
+  test "a chunk starting on a bare CR line stays in the block scalar":
+    checkIncrementalMatchesFull(
+      paddedTo(ChunkSize - 3, ["a: |", "  x", "\r  y", "  z", "b: 1"]),
+      1,
+      insertLine = true,
+    )
+
+  test "a block scalar ending at a header on the chunk's last line":
+    # The handoff moves back past the scalar instead of landing on the boundary
+    # the finished scalar crossed.
+    checkIncrementalMatchesFull(
+      paddedTo(ChunkSize - 3, ["  k: |", "  k: |", "  k: |", "  l: 1"]),
+      1,
+      insertLine = true,
+    )
+
+  test "an indent edit reaches an alone header across a blank run":
+    # No line count change, so the parse could stop early: the lines in between
+    # are blank and only the state says that the header's parent changed.
+    var lines = @["a: 1"]
+    for i in 0 ..< ChunkSize * 2:
+      lines.add("")
+    lines.add(">")
+    lines.add("  f: 1")
+    var ih = block:
+      let (seg, ls) = initHighlightIncremental(
+        lines, 0, lines.high, TokenizerState(), @[], SourceLanguage.langYaml
+      )
+      IncrementalHighlight(segments: seg, lineStates: LineStateCache(states: ls))
+    lines[0] = "    a: 1"
+    updateHighlightIncremental(
+      lines.len,
+      proc(i: int): string =
+        lines[i],
+      ih,
+      0,
+      @[],
+      SourceLanguage.langYaml,
+    )
+    checkMatchesFullParse(lines, ih, SourceLanguage.langYaml)
 
   test "blank line inside a block scalar at the chunk boundary":
     # A chunk cut at a blank line inside the scalar must not end the scalar:
@@ -2518,10 +2636,9 @@ suite "Highlight - YAML internal chunk boundary handoff":
     checkIncrementalMatchesFull(buffer, 1)
 
   test "progressive initial load resumes a block scalar across chunks":
-    # continueInitialHighlight (ChunkSize=1000) must rewind its resume point
-    # when the stored boundary state sits inside a block scalar: opening a
-    # large YAML file must highlight it exactly as a full parse, no edits
-    # required.
+    # continueInitialHighlight (ChunkSize=1000) must resume when the stored
+    # boundary state sits inside a block scalar: opening a large YAML file
+    # must highlight it exactly as a full parse, no edits required.
     var buf = loadProgressiveScalarFixture("moe_test_yaml_progressive_scalar.yaml")
 
     while buf.continueInitialHighlight():
@@ -2555,28 +2672,66 @@ suite "Highlight - YAML internal chunk boundary handoff":
     check ticks == 10
     check maxLines <= 1000
 
+  test "budgeted progressive load crosses a long blank run in budget-sized steps":
+    # Regression: each tick rewound over every blank line, so the load was
+    # quadratic in the run's length and overran the tick's budget.
+    const Budget = 1000
+    let path = getTempDir() / "moe_test_yaml_progressive_blank_run.yaml"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 1500:
+      content.add("key" & $i & ": value\n")
+    content.add("\n".repeat(20_000))
+    content.add("after: tail\n")
+    writeFile(path, content)
+    var buf = newTextBuffer()
+    discard buf.loadFile(path)
+
+    var parsed = 0
+    var maxParsed = 0
+    while buf.continueInitialHighlight(Budget, parsed):
+      maxParsed = max(maxParsed, parsed)
+    check maxParsed <= Budget
+    check buf.incrementalHighlight.parsedUpTo == buf.len - 1
+
+    var lines = newSeq[string](buf.len)
+    for i in 0 ..< buf.len:
+      lines[i] = buf.getLine(i)
+    checkMatchesFullParse(lines, buf.incrementalHighlight, SourceLanguage.langYaml)
+
   test "budgeted progressive load completes across a deep rewind":
     # Regression: a rewind deeper than 4x the budget used to cap the window
     # at the old frontier, stalling the load forever. The cap is floored at
     # the rewind depth + one budget.
+    #
+    # Each load window ends on a block scalar header and the scalars before it
+    # reach back to the first line, so every tick rewinds to the top. The third
+    # rewind (4000 lines) is the one as deep as 4x the budget.
+    const
+      Budget = 1000
+      WindowEnds = [Budget - 1, 2 * Budget - 1, 4 * Budget - 1]
     var buf = newTextBuffer()
     let path = getTempDir() / "moe_test_yaml_progressive_deep_rewind.yaml"
     defer:
       removeFile(path)
-    var content = "scalar: |\n"
-    for i in 0 ..< 5000:
-      content.add("\n")
+    var content = "  scalar: |\n"
+    for row in 1 .. 5 * Budget:
+      content.add(if row in WindowEnds: "  next: |\n" else: "\n")
     content.add("after: tail\n")
     writeFile(path, content)
     discard buf.loadFile(path)
 
     var consumed = 0
+    var maxConsumed = 0
     var ticks = 0
     # The tick bound keeps a pre-fix stall a bounded failure, not a hang.
-    while buf.continueInitialHighlight(1000, consumed) and ticks < 100:
+    while buf.continueInitialHighlight(Budget, consumed) and ticks < 100:
       inc ticks
+      maxConsumed = max(maxConsumed, consumed)
     check buf.incrementalHighlight.parsedUpTo == buf.len - 1
     check ticks < 100
+    check maxConsumed > 4 * Budget
 
     var lines = newSeq[string](buf.len)
     for i in 0 ..< buf.len:
