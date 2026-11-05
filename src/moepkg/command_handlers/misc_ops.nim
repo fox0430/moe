@@ -56,7 +56,7 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
     e.processJobsResult(r)
     return true
   of hrClearSearchHighlight:
-    e.state.input.search.hlsearch = false
+    e.state.hideSearchMatches()
     return true
   of hrStripWhitespace:
     let count = r.strippedLineCount

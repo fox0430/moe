@@ -100,11 +100,13 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
         # Pattern-only state: restore buffer (in case a replacement preview was
         # previously applied) but keep the preview active for cursor tracking.
         e.restoreFromPreview()
-      let found = e.jumpToFirstSubstituteMatch(parsed.pattern, firstLine, lastLine)
       # Vim's cursor stays put unless 'incsearch' takes it to the end of the
       # match, and comes back once the pattern is followed by more.
+      let found =
+        e.state.input.search.incsearch and
+        e.jumpToFirstSubstituteMatch(parsed.pattern, firstLine, lastLine)
       e.state.input.line.wordAt = some(
-        if found and e.state.input.search.incsearch and not parsed.hasReplacement:
+        if found and not parsed.hasReplacement:
           BufferPosition(
             line: e.cursor.line, column: e.cursor.column + parsed.pattern.charLen
           )

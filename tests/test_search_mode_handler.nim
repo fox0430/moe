@@ -30,6 +30,7 @@ import
   ]
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
 import ../src/moepkg/command_handlers/result_processor
+import ../src/moepkg/editor_render_window {.all.}
 
 proc setSearchText(e: Editor, text: string) =
   ## Test helper: set search text and position cursor at the end,
@@ -1268,3 +1269,184 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     check finalizeSearch(e)
 
     check e.cursor == BufferPosition(line: 2, column: 0)
+
+suite "Search highlight after :noh":
+  const
+    Esc = KeyCombo(isSpecial: true, special: skEscape)
+    Enter = KeyCombo(isSpecial: true, special: skEnter)
+
+  proc matchesOnFirstLine(e: Editor): int =
+    let ctx = RenderContext(windowMode: EditorMode.Normal)
+    e.newLineStyleContext(e.activeBuffer, 0, e.activeBuffer.getLine(0), ctx).searchRanges.len
+
+  proc openSearch(e: Editor, typed = "") =
+    e.state.enterSearchOverlay(Forward)
+    for ch in typed:
+      e.typeInSearch($ch)
+
+  proc run(e: Editor, typed: string) =
+    e.openSearch(typed)
+    discard e.handleSearchModeKeyCombo(Enter)
+
+  template nohAfterSearch(content = "foo bar foo"): Editor =
+    let
+      text = content
+      noh = createTestEditorWithBuffer(text)
+    noh.state.keyTyped = true
+    noh.state.input.search.hlsearch = true
+    noh.state.input.search.incsearch = true
+    noh.run("foo")
+    check noh.matchesOnFirstLine == text.toLowerAscii.count("foo")
+    check noh.executeCommandOverlay(":noh") == roContinue
+    check noh.matchesOnFirstLine == 0
+    noh
+
+  test "The next search shows matches again":
+    let e = nohAfterSearch()
+    e.run("bar")
+    check e.matchesOnFirstLine == 1
+
+  test "Repeating the search with an empty prompt shows them again":
+    let e = nohAfterSearch()
+    e.run("")
+    check e.matchesOnFirstLine == 2
+
+  test "An empty prompt keeps them hidden, and so does leaving it":
+    let e = nohAfterSearch()
+    e.openSearch()
+    check e.matchesOnFirstLine == 0
+    discard e.handleSearchModeKeyCombo(Esc)
+    check e.matchesOnFirstLine == 0
+
+  test "Typed text shows its matches, and leaving hides them again":
+    let e = nohAfterSearch()
+    e.openSearch("fo")
+    check e.matchesOnFirstLine == 2
+    discard e.handleSearchModeKeyCombo(Esc)
+    check e.matchesOnFirstLine == 0
+
+  test "A search an operator cancels stays hidden":
+    let e = nohAfterSearch()
+    e.state.pendingInput.pendingOperator = some(PendingOperator())
+    e.openSearch("fo")
+    discard e.handleSearchModeKeyCombo(Esc)
+    check e.state.pendingInput.pendingOperator.isNone
+    check e.matchesOnFirstLine == 0
+
+  test ":set hlsearch shows them again":
+    let e = nohAfterSearch()
+    check e.executeCommandOverlay(":set hlsearch") == roContinue
+    check e.matchesOnFirstLine == 2
+
+  test ":noh with 'hlsearch' off does not outlast turning it on":
+    let e = nohAfterSearch()
+    check e.executeCommandOverlay(":set nohlsearch") == roContinue
+    check e.executeCommandOverlay(":noh") == roContinue
+    check e.executeCommandOverlay(":set hlsearch") == roContinue
+    check e.matchesOnFirstLine == 2
+
+  test "A :s being typed shows its pattern, and leaving hides it again":
+    let e = nohAfterSearch()
+    e.state.enterCommandOverlay()
+    e.state.input.line.text = "s/bar"
+    check e.matchesOnFirstLine == 1
+    e.state.exitOverlay()
+    check e.matchesOnFirstLine == 0
+
+  test "Without 'incsearch' a pattern typed after :noh stays hidden":
+    let e = nohAfterSearch()
+    e.state.input.search.incsearch = false
+    e.openSearch("fo")
+    check e.matchesOnFirstLine == 0
+    discard e.handleSearchModeKeyCombo(Esc)
+
+    e.state.enterCommandOverlay()
+    e.state.input.line.text = "s/fo"
+    check e.matchesOnFirstLine == 0
+
+  test "A :s being typed highlights the plain string it replaces":
+    let e = nohAfterSearch("foo abc a.c foo(")
+    e.state.enterCommandOverlay()
+    e.state.input.line.text = "s/a.c"
+    check e.matchesOnFirstLine == 1
+    e.state.input.line.text = "s/foo("
+    check e.matchesOnFirstLine == 1
+
+  test "'smartcase' holds for the :s being typed":
+    let e = nohAfterSearch("Foo foo")
+    e.state.input.search.ignorecase = true
+    e.state.input.search.smartcase = true
+    e.state.enterCommandOverlay()
+    e.state.input.line.text = "s/Foo"
+    check e.matchesOnFirstLine == 1
+    e.state.input.line.text = "s/foo"
+    check e.matchesOnFirstLine == 2
+
+  test "An executed :s ends :noh and shows the matches it made the last search":
+    let e = nohAfterSearch()
+    check e.executeCommandOverlay(":s/foo/X/") == roContinue
+    check not e.state.input.search.hlsearchTempDisabled
+    check e.state.input.search.last ==
+      SearchSpec(pattern: "foo", match: smPlain, direction: Forward)
+    check e.matchesOnFirstLine == 1
+
+  test "An executed :s replaces the last search, not just ends the hide":
+    let e = nohAfterSearch()
+    check e.executeCommandOverlay(":s/bar/baz/") == roContinue
+    check e.state.input.search.last.pattern == "bar"
+    check e.state.input.search.last.match == smPlain
+    check e.matchesOnFirstLine == 0
+
+  test "A :s that finds nothing still ends :noh, as Vim does":
+    let e = nohAfterSearch()
+    check e.executeCommandOverlay(":s/zzz/x/") == roAbort
+    check not e.state.input.search.hlsearchTempDisabled
+    check e.state.input.search.last.pattern == "zzz"
+    check e.state.input.search.history[0] == "zzz"
+
+  test "An executed :s goes into the search history":
+    let e = nohAfterSearch()
+    check e.executeCommandOverlay(":s/bar/baz/") == roContinue
+    check e.state.input.search.history[0] == "bar"
+
+  test "A :s refused for its range leaves the last search and :noh":
+    let e = nohAfterSearch()
+    check e.executeCommandOverlay(":999s/bar/x/") == roAbort
+    check e.state.input.search.last.pattern == "foo"
+    check e.state.input.search.history[0] == "foo"
+    check e.state.input.search.hlsearchTempDisabled
+
+  test "A :s refused for a read-only buffer leaves the last search and :noh":
+    let e = nohAfterSearch()
+    e.activeBuffer.readOnly = true
+    check e.executeCommandOverlay(":s/bar/x/") == roAbort
+    check e.state.input.search.last.pattern == "foo"
+    check e.state.input.search.hlsearchTempDisabled
+
+  test "An escaped delimiter in a :s is the character itself":
+    let e = nohAfterSearch("foo a/b")
+    e.state.enterCommandOverlay()
+    e.state.input.line.text = "s/a\\/b"
+    check e.matchesOnFirstLine == 1
+    e.state.exitOverlay()
+    check e.executeCommandOverlay(":s/a\\/b/x/") == roContinue
+    check e.activeBuffer.getLine(0) == "foo x"
+    check e.state.input.search.last.pattern == "a/b"
+
+  test "An escaped backslash in a :s is the character itself":
+    let e = nohAfterSearch("foo C:\\")
+    check e.executeCommandOverlay(":s/C:\\\\/x/") == roContinue
+    check e.activeBuffer.getLine(0) == "foo x"
+    check e.state.input.search.last.pattern == "C:\\"
+
+  test "Without 'incsearch' a typed pattern leaves the last search drawn":
+    let e = nohAfterSearch()
+    check e.executeCommandOverlay(":set hlsearch") == roContinue
+    e.state.input.search.incsearch = false
+    e.openSearch("bar")
+    check e.matchesOnFirstLine == 2
+    discard e.handleSearchModeKeyCombo(Esc)
+
+    e.state.enterCommandOverlay()
+    e.state.input.line.text = "s/bar"
+    check e.matchesOnFirstLine == 2

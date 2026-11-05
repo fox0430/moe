@@ -35,6 +35,7 @@ type
     cmrEnterSearch # Enter search mode (forward)
     cmrEnterSearchBackward # Enter search mode (backward)
     cmrRepeatSearch # Jumped to next/prev match (re-enable highlight)
+    cmrSearchNotFound # Repeated a search that found nothing (re-enable highlight)
     cmrClearSearchHighlight # Clear search highlight (double-Escape)
     cmrSaveConfig # Save configuration to file
     cmrUnhandled # Command was not handled
@@ -42,7 +43,7 @@ type
 
   ConfigModeResult* = object
     case kind*: ConfigModeResultKind
-    of cmrError:
+    of cmrError, cmrSearchNotFound:
       errorMessage*: string
     else:
       discard
@@ -258,13 +259,14 @@ proc handleConfigModeKey*(
     of "n", "N":
       # Jump to the match the way the search went, N the other way.
       let found = configState.repeatSearch(reverse = keyCombo.char == "N")
-      # Re-enable highlight (like Vim's n) only when there is a match to jump
-      # to; an empty query must not touch the gate.
+      # Re-enable highlight whether found or not, like Vim's n; an empty query
+      # must not touch the gate.
       if found.isSome:
         return ConfigModeResult(kind: cmrRepeatSearch)
       if configState.hasSearchQuery:
         return ConfigModeResult(
-          kind: cmrError, errorMessage: "Pattern not found: " & configState.searchQuery
+          kind: cmrSearchNotFound,
+          errorMessage: "Pattern not found: " & configState.searchQuery,
         )
       return ConfigModeResult(kind: cmrHandled)
     of "j":

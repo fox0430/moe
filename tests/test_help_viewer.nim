@@ -491,7 +491,9 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     # code-span markers before the TUI sees the line, so the rendered
     # prose has no `` ` `` glyphs.
     check state.items.contains("theme themeName - Change color theme; e.g. theme dark")
-    check state.items.contains("noh             - Turn off search highlights")
+    check state.items.contains(
+      "noh             - Hide search highlights until the next search"
+    )
     check state.items.contains("stripwhitespace - Delete trailing spaces")
 
   test "bool set options block is aligned to the widest entry":

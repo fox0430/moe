@@ -312,7 +312,7 @@ type
     ## an empty `/` and the highlighter all replay this value, so they cannot
     ## disagree about what counts as a match.
     pattern*: string
-    match*: SearchMatch # As a regex (/ and ?) or as it is (* and #)
+    match*: SearchMatch # As a regex (/ and ?) or as it is (*, # and :s)
     direction*: SearchDirection # The way it went, which n goes too
 
   PromptWait* = enum
@@ -361,7 +361,7 @@ type
     smartcase*: bool # Override ignorecase if pattern contains uppercase
     incsearch*: bool # Show search matches as you type
     hlsearch*: bool # Highlight all search matches in the buffer
-    hlsearchTempDisabled*: bool # Temporarily disable highlight (like :nohlsearch)
+    hlsearchTempDisabled*: bool # Matches hidden until the next search (:nohlsearch)
 
   CommandState* = object ## Command mode (ex-mode) state grouped together
     history*: seq[string] # Command history (most recent first)
@@ -1796,6 +1796,10 @@ proc searchLine*(state: EditorState): string =
   ## The pattern typed at the open search prompt, or "" with none open.
   if state.isSearchOverlay: state.input.line.text else: ""
 
+proc incrementalSearchLine*(state: EditorState): string =
+  ## The pattern at the search prompt that 'incsearch' shows as it is typed.
+  if state.input.search.incsearch: state.searchLine else: ""
+
 proc enterCommandOverlay*(state: EditorState) =
   ## Enter command mode overlay
   ## The base mode (Normal, Filer, etc.) is preserved; Visual ends first, as
@@ -1814,6 +1818,19 @@ proc noteSearchStart*(state: EditorState) =
     else:
       some(state.activeWindow.viewport.viewState)
 
+proc showSearchMatches*(state: EditorState) =
+  ## End what :nohlsearch began, as Vim's set_no_hlsearch(FALSE).
+  state.input.search.hlsearchTempDisabled = false
+
+proc hideSearchMatches*(state: EditorState) =
+  ## Hide the matches until the next search, 'hlsearch' staying on.
+  state.input.search.hlsearchTempDisabled = true
+
+proc setLastSearch*(state: EditorState, spec: SearchSpec) =
+  ## Make `spec` the last search, which shows its matches.
+  state.input.search.last = spec
+  state.showSearchMatches()
+
 proc enterSearchOverlay*(
     state: EditorState, direction: SearchDirection, count = 1, countGiven = false
 ) =
@@ -1827,8 +1844,6 @@ proc enterSearchOverlay*(
   state.noteSearchStart()
   # The prompt takes the message line, as Vim's command line does.
   state.statusMessage = ""
-  # Re-enable search highlight so incremental search results are visible
-  state.input.search.hlsearchTempDisabled = false
 
 proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
   ## Enter rename mode overlay

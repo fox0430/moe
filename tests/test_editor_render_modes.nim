@@ -162,7 +162,7 @@ suite "renderConfig - search highlight gating":
     check highlighted < buffer.area.width
     check highlighted mod cfg.searchQuery.len == 0
 
-  test "hlsearchTempDisabled hides matches (double-Escape / cross-mode clear)":
+  test "hlsearchTempDisabled hides matches (:noh, double-Escape, cross-mode clear)":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     discard e.setupMatchingConfig()
@@ -172,7 +172,7 @@ suite "renderConfig - search highlight gating":
     e.renderConfig(buffer, e.activeWindow, true, 0)
     check countSearchHighlightCells(buffer) == 0
 
-  test "hlsearch=false hides matches (:noh)":
+  test "hlsearch=false hides matches (:set nohlsearch)":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     discard e.setupMatchingConfig()
@@ -181,6 +181,63 @@ suite "renderConfig - search highlight gating":
 
     e.renderConfig(buffer, e.activeWindow, true, 0)
     check countSearchHighlightCells(buffer) == 0
+
+  test "A search cancelled after :noh leaves the matches hidden":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let cfg = e.setupMatchingConfig()
+    e.state.input.search.hlsearch = true
+    e.state.input.search.incsearch = true
+    e.state.hideSearchMatches()
+
+    e.state.enterSearchOverlay(Forward)
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+    check countSearchHighlightCells(buffer) == 0
+
+    e.state.input.line.text = cfg.searchQuery
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+    check countSearchHighlightCells(buffer) > 0
+
+    e.state.exitOverlay()
+    buffer = createTestBuffer()
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+    check countSearchHighlightCells(buffer) == 0
+
+  test "Without 'incsearch' a query typed after :noh stays hidden":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let cfg = e.setupMatchingConfig()
+    e.state.input.search.hlsearch = true
+    e.state.input.search.incsearch = false
+    e.state.hideSearchMatches()
+
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.line.text = cfg.searchQuery
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+    check countSearchHighlightCells(buffer) == 0
+
+  test "An empty prompt keeps the committed query drawn":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    discard e.setupMatchingConfig()
+    e.state.input.search.hlsearch = true
+    e.state.input.search.incsearch = true
+
+    e.state.enterSearchOverlay(Forward)
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+    check countSearchHighlightCells(buffer) > 0
+
+  test "Without 'incsearch' a typed query leaves the committed one drawn":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    discard e.setupMatchingConfig()
+    e.state.input.search.hlsearch = true
+    e.state.input.search.incsearch = false
+
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.line.text = "zzzzNoSuchItem"
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+    check countSearchHighlightCells(buffer) > 0
 
 suite "renderConfig - enum popup border":
   let

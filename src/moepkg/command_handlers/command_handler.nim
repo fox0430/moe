@@ -447,6 +447,17 @@ proc executeFilter*(
     hrFilterVersion: buffer.contentVersion,
   )
 
+proc substituteLines*(
+    buffer: TextBuffer, range: ExLineRange, currentLine: int
+): Result[tuple[first, last: int], string] =
+  ## The lines :s runs on, or why it refuses before looking at its pattern.
+  if buffer.readOnly:
+    return err("Buffer is read-only")
+  # Raw buffer: pattern may land inside code unit.
+  if not buffer.allowsTextTransforms:
+    return err(rawBytesRejection("substitute"))
+  buffer.resolveExRange(range, currentLine)
+
 proc executeSubstitute*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
@@ -457,11 +468,8 @@ proc executeSubstitute*(
     currentLine: int = 0,
 ): HandlerResult =
   ## Execute substitute command (:s, :%s/pattern/replacement/flags)
-  if buffer.readOnly:
-    return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
-  # Raw buffer: pattern may land inside code unit.
-  if not buffer.allowsTextTransforms:
-    return HandlerResult(kind: hrError, errorMessage: rawBytesRejection("substitute"))
+  let (rangeStart, rangeEnd) = buffer.substituteLines(range, currentLine).valueOr:
+    return HandlerResult(kind: hrError, errorMessage: error)
   if pattern.len == 0:
     return HandlerResult(kind: hrError, errorMessage: "Pattern required")
 
@@ -469,11 +477,6 @@ proc executeSubstitute*(
   var replaceCount = 0
 
   let processedReplacement = processEscapeSequences(replacement)
-
-  let resolved = buffer.resolveExRange(range, currentLine)
-  if resolved.isErr:
-    return HandlerResult(kind: hrError, errorMessage: resolved.error)
-  let (rangeStart, rangeEnd) = resolved.get
 
   let txr =
     try:

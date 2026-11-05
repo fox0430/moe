@@ -123,22 +123,19 @@ proc resolveLineBg(
 
 proc effectiveSearchSpec(state: EditorState): SearchSpec =
   ## Resolve the search the hlsearch highlight draws, based on overlay state.
-  ## - Search overlay: live text being typed, a substring search like / and ?
-  ##   An empty prompt means "repeat the last search", so it keeps showing the
-  ##   last search's highlights instead of blanking them.
-  ## - Command overlay: substitute pattern if present, else last search
-  ## - Otherwise: last search
-  if state.isSearchOverlay:
-    if state.input.line.text.len > 0:
-      SearchSpec(pattern: state.input.line.text)
+  ## - Command overlay: substitute pattern if present, with 'incsearch'
+  ## - Search overlay: live text being typed, with 'incsearch'
+  ## - Otherwise: last search, also on an empty search prompt ("repeat the last
+  ##   search"), unless :nohlsearch hid it
+  let typed =
+    if state.isCommandOverlay and state.input.search.incsearch:
+      SearchSpec(pattern: extractSubstitutePattern(state.commandLine), match: smPlain)
     else:
-      state.input.search.last
-  elif state.isCommandOverlay:
-    let subPattern = extractSubstitutePattern(state.commandLine)
-    if subPattern.len > 0:
-      SearchSpec(pattern: subPattern)
-    else:
-      state.input.search.last
+      SearchSpec(pattern: state.incrementalSearchLine)
+  if typed.pattern.len > 0:
+    typed
+  elif state.input.search.hlsearchTempDisabled:
+    SearchSpec()
   else:
     state.input.search.last
 
@@ -208,8 +205,7 @@ proc newLineStyleContext*(
       else:
         scanLineForColorCodes(fullLine)
 
-  if textBuffer != nil and e.state.input.search.hlsearch and
-      not e.state.input.search.hlsearchTempDisabled:
+  if textBuffer != nil and e.state.input.search.hlsearch:
     let spec = e.state.effectiveSearchSpec()
     if spec.pattern.len > 0:
       result.searchRanges = textBuffer.findSearchMatchRanges(

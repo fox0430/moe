@@ -327,6 +327,15 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
       hvrRepeatSearch
     check helpState.selectedIndex == second.get
 
+  test "n reports a query that matches nothing, which re-enables the highlight":
+    let helpState = newHelpViewerState()
+    helpState.setSearchQuery("zzzzNoSuchHelpText", Forward)
+
+    let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("n"))
+
+    check result.kind == hvrSearchNotFound
+    check result.errorMessage == "Pattern not found: zzzzNoSuchHelpText"
+
   test "n with no search query does not crash":
     let helpState = newHelpViewerState()
     # No search query set

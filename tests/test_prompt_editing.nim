@@ -420,6 +420,19 @@ suite "prompt: Ctrl-R Ctrl-W with 'incsearch'":
     e.press(":", "s", "/", "f", "o", "C-r", "C-w")
     check e.line == "s/fothree"
 
+suite "prompt: where :s leaves the cursor as it is typed":
+  const Lines = @["one", "two", "foo"]
+
+  test "without 'incsearch' it stays":
+    let e = createEditor(Lines)
+    e.press(":", "%", "s", "/", "f", "o", "o")
+    check e.cursor == BufferPosition(line: 0, column: 0)
+
+  test "with 'incsearch' it goes to the match":
+    let e = createEditor(Lines, incsearch = true)
+    e.press(":", "%", "s", "/", "f", "o", "o")
+    check e.cursor == BufferPosition(line: 2, column: 0)
+
 suite "prompt: Ctrl-V":
   test "a key goes in as it is":
     for (key, text) in [
@@ -625,7 +638,7 @@ suite "prompt: what follows the line":
     check e.activeWindow.cursor == BufferPosition(line: 0, column: 0)
 
   test "the substitute preview follows Ctrl-R":
-    let e = createEditor(@["aa", "foo"])
+    let e = createEditor(@["aa", "foo"], incsearch = true)
     e.setReg('a', "foo")
     e.press(":", "%", "s", "/", "C-r", "a")
     check e.activeWindow.cursor == BufferPosition(line: 1, column: 0)
