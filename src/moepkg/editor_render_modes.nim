@@ -41,10 +41,9 @@ proc renderConfig*(
   if window.modeState.kind != mskConfig:
     return
 
-  # Calculate reserved lines at bottom for bottom windows only.
   # Steady value: a transiently grown command-line area overdraws the view,
   # exactly like multi-line status messages do.
-  let reservedBottom = steadyReservedBottom(isBottomWindow)
+  let reservedBottom = e.steadyReservedLines(isBottomWindow)
 
   let
     configState = window.modeState.config
@@ -276,7 +275,7 @@ when not defined(moe.embedded):
       startY = window.viewport.y + tabLineOffset
       # Same formula as the PTY sizing in calculateTerminalAreaDimensions, so
       # the rendered grid and the PTY size cannot diverge.
-      maxRows = terminalContentRows(window, isBottomWindow, tabLineOffset)
+      maxRows = e.terminalContentRows(window, isBottomWindow, tabLineOffset)
       maxCols = window.viewport.width
 
     # Render live terminal grid directly to celina buffer

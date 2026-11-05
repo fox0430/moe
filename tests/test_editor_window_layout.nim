@@ -37,11 +37,11 @@ suite "calculateTerminalAreaDimensions":
     e.state.showStatusLine = true
     e.state.showTabLine = false
     let win = e.activeWindow
-    # Default viewport: width=80, height=20
+    # Default viewport: width=80, height=19 (a 20-row screen less the command row)
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
-    # height(20) - steadyBottomAreaHeight()(1) - tabLineOffset(0)
-    check rows == 19
+    # height(19) - StatusLineReserve(1) - tabLineOffset(0)
+    check rows == 18
 
   test "single window, status line disabled":
     let e = createTestEditor()
@@ -50,7 +50,7 @@ suite "calculateTerminalAreaDimensions":
     let win = e.activeWindow
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
-    # height(20) - steadyBottomAreaHeight()(1) - tabLineOffset(0)
+    # No status line: the whole height(19)
     check rows == 19
 
   test "single window, with tab line":
@@ -60,8 +60,8 @@ suite "calculateTerminalAreaDimensions":
     let win = e.activeWindow
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
-    # height(20) - steadyBottomAreaHeight()(1) - TabLineHeight(1)
-    check rows == 18
+    # height(19) - StatusLineReserve(1) - TabLineHeight(1)
+    check rows == 17
 
   test "hsplit, top window (non-bottom)":
     let e = createTestEditor()
@@ -73,8 +73,8 @@ suite "calculateTerminalAreaDimensions":
     let topWin = e.windowManager.windows[0]
     let (cols, rows) = e.calculateTerminalAreaDimensions(topWin)
     check cols == topWin.viewport.width
-    # Non-bottom window: no reserved lines, no tab line
-    check rows == topWin.viewport.height
+    # Its own status line, no tab line
+    check rows == topWin.viewport.height - StatusLineReserve
 
   test "hsplit, bottom window":
     let e = createTestEditor()
@@ -86,7 +86,7 @@ suite "calculateTerminalAreaDimensions":
     let bottomWin = e.windowManager.windows[1]
     let (cols, rows) = e.calculateTerminalAreaDimensions(bottomWin)
     check cols == bottomWin.viewport.width
-    # Bottom window: height - steadyBottomAreaHeight()(1)
+    # Bottom window: height - StatusLineReserve(1)
     check rows == bottomWin.viewport.height - 1
 
   test "minimum rows is 1":
@@ -98,7 +98,7 @@ suite "calculateTerminalAreaDimensions":
     win.viewport = ViewPort(topLine: 0, leftCell: 0, width: 80, height: 2, x: 0, y: 0)
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
-    # height(2) - steadyBottomAreaHeight()(1) - TabLineHeight(1) = 0, clamped to 1
+    # height(2) - StatusLineReserve(1) - TabLineHeight(1) = 0, clamped to 1
     check rows == 1
 
 suite "minimumTerminalAreaDimensions":
@@ -141,8 +141,8 @@ suite "minimumTerminalAreaDimensions":
     let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
     require dimensions.isSome
     check dimensions.get == e.calculateTerminalAreaDimensions(win)
-    # The default 80x20 window is the bottom one: 20 - steady(1).
-    check dimensions.get == (cols: 80, rows: 19)
+    # The default 80x19 window is the bottom one: 19 - steady(1).
+    check dimensions.get == (cols: 80, rows: 18)
 
   test "columns and rows are each minimized across windows":
     let e = createTestEditor()
@@ -199,9 +199,9 @@ suite "minimumTerminalAreaDimensions":
 
     let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
     require dimensions.isSome
-    # `win` is pushed off the bottom (20 rows); the other tab's 10 columns
-    # must not shrink it.
-    check dimensions.get == (cols: 80, rows: 20)
+    # `win` is pushed off the bottom (19 rows less its status line); the other
+    # tab's 10 columns must not shrink it.
+    check dimensions.get == (cols: 80, rows: 18)
     # The other session answers for its own window.
     check e.minimumTerminalAreaDimensions(otherId).get == (cols: 10, rows: 3)
 
@@ -225,7 +225,7 @@ suite "minimumTerminalAreaDimensions":
     require dimensions.isSome
     # The covered window still takes layout space, but its 10 columns
     # must not vote.
-    check dimensions.get == (cols: 80, rows: 20)
+    check dimensions.get == (cols: 80, rows: 18)
 
   test "a browsing window votes, so Ctrl-\\ Ctrl-N does not resize the PTY":
     let e = createTestEditor()
@@ -253,7 +253,7 @@ suite "calculateReservedLines":
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
     let reserved = e.calculateReservedLines(isBottomWindow = true)
-    # steadyBottomAreaHeight() = 1 (status line and command line share the last row)
+    # StatusLineReserve = 1
     check reserved == 1
 
   test "status line enabled, multi status line, non-bottom window":
@@ -269,7 +269,7 @@ suite "calculateReservedLines":
     e.state.showStatusLine = true
     e.state.multiStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = true)
-    # steadyBottomAreaHeight() = 1 (status line and command line share the last row)
+    # StatusLineReserve = 1
     check reserved == 1
 
   test "status line enabled, single status line, non-bottom window":
@@ -284,8 +284,15 @@ suite "calculateReservedLines":
     let e = createTestEditor()
     e.state.showStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = true)
-    # steadyBottomAreaHeight() = 1
-    check reserved == 1
+    check reserved == 0
+
+  test "merged status line: only the bottom windows give it a row":
+    let e = createTestEditor()
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
+    e.config.statusLine.merge = true
+    check e.steadyReservedLines(isBottomWindow = false) == 0
+    check e.steadyReservedLines(isBottomWindow = true) == 1
 
   test "status line disabled, non-bottom window":
     let e = createTestEditor()
@@ -299,8 +306,8 @@ suite "calculateReservedLines":
     e.state.showStatusLine = true
     e.state.multiStatusLine = false
     e.state.setStatusQuiet("a\nb\nc")
-    # 3 message rows + pushed-up status line row
-    check e.calculateReservedLines(isBottomWindow = true) == 4
+    # Status line + the 2 rows the area grew over the window
+    check e.calculateReservedLines(isBottomWindow = true) == 3
     # Non-bottom windows are unaffected
     check e.calculateReservedLines(isBottomWindow = false) == 0
 
@@ -309,17 +316,17 @@ suite "calculateReservedLines":
     e.screenSize.width = 80
     e.state.showStatusLine = false
     e.state.setStatusQuiet("a\nb\nc")
-    check e.calculateReservedLines(isBottomWindow = true) == 3
+    check e.calculateReservedLines(isBottomWindow = true) == 2
 
   test "wrapped command overlay grows the bottom reserve":
     let e = createTestEditor()
     e.screenSize.width = 80
     e.state.showStatusLine = true
     e.state.enterCommandOverlay()
-    # ":" + 100 chars = 101 columns -> 2 rows at width 80, + status line row
+    # ":" + 100 chars = 101 columns -> 2 rows at width 80: status line + 1
     e.state.input.line.text = "a".repeat(100)
     e.state.input.line.cursor = 0
-    check e.calculateReservedLines(isBottomWindow = true) == 3
+    check e.calculateReservedLines(isBottomWindow = true) == 2
 
   test "terminal dimensions stay steady under a multi-line message":
     let e = createTestEditor()
@@ -329,8 +336,8 @@ suite "calculateReservedLines":
     e.state.setStatusQuiet("a\nb\nc")
     let win = e.activeWindow
     let (_, rows) = e.calculateTerminalAreaDimensions(win)
-    # PTY size must not flap on transient messages: height(20) - steady(1)
-    check rows == 19
+    # PTY size must not flap on transient messages: height(19) - steady(1)
+    check rows == 18
 
 suite "calculateSidebarWidth":
   test "sidebar enabled in file edit mode":
@@ -476,11 +483,7 @@ suite "calculateWindowCursor":
     let cursor = BufferPosition(line: 0, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 4 # gutterWidth
     check pos.y == 0
@@ -527,11 +530,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 0, column: 5)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 9 # gutterWidth + 5
     check pos.y == 0
@@ -550,7 +549,7 @@ suite "calculateSidebarWidth - modeState gating":
         viewport,
         cursor,
         gutterWidth = 4,
-        reservedLines = steadyBottomAreaHeight(),
+        reservedLines = StatusLineReserve,
         onTabEnd = onTabEnd,
       )
       check pos.x == x
@@ -563,11 +562,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 1, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 4 # gutterWidth
     check pos.y == 1 # second line
@@ -582,11 +577,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 7, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     # Visible rows above the cursor are lines 0, 1 (marker) and 6 -> y == 3,
     # not the raw line distance of 7.
@@ -602,11 +593,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 7, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     # Each short line is one wrapped row; the folded interior contributes 0 and
     # the marker 1, so visible rows above the cursor (0, 1, 6) give y == 3.
@@ -620,11 +607,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 0, column: 0) # Above visible area
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 0
     check pos.y == 0
@@ -637,11 +620,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 0, column: 10)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 9 # gutterWidth + (10 - 5) = 4 + 5 = 9
     check pos.y == 0
@@ -655,11 +634,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 0, column: 1)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 8 # gutterWidth + tab expanded to 4 cells
     check pos.y == 0
@@ -674,11 +649,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 0, column: 3) # 'c'
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 6 # gutterWidth + 'c' at cell 4 less 2 scrolled = 4 + 2
     check pos.y == 0
@@ -692,11 +663,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 0, column: 3) # え
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 8 # gutterWidth + え at cell 6 less 2 scrolled = 4 + 4
     check pos.y == 0
@@ -710,11 +677,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 0, column: 2)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 4
     check pos.y == 0
@@ -727,11 +690,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 10, column: 0) # Beyond buffer
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 0
     check pos.y == 0
@@ -744,11 +703,7 @@ suite "calculateSidebarWidth - modeState gating":
     let cursor = BufferPosition(line: 0, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 4
     check pos.y == 0
@@ -767,7 +722,7 @@ suite "calculateSidebarWidth - modeState gating":
       viewport,
       cursor,
       gutterWidth = 0,
-      reservedLines = steadyBottomAreaHeight(),
+      reservedLines = StatusLineReserve,
       scrollbarWidth = 1,
     )
     # maxWidth = 10 - 0 - 1 = 9
@@ -789,7 +744,7 @@ suite "calculateSidebarWidth - modeState gating":
       viewport,
       cursor,
       gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      reservedLines = StatusLineReserve,
       scrollbarWidth = 1,
     )
     check pos.x == 9 # gutterWidth + 5
@@ -809,7 +764,7 @@ suite "calculateSidebarWidth - modeState gating":
       viewport,
       cursor,
       gutterWidth = 0,
-      reservedLines = steadyBottomAreaHeight(),
+      reservedLines = StatusLineReserve,
       scrollbarWidth = 2,
     )
     # maxWidth = 10 - 0 - 2 = 8
@@ -831,7 +786,7 @@ suite "calculateSidebarWidth - modeState gating":
       viewport,
       cursor,
       gutterWidth = 0,
-      reservedLines = steadyBottomAreaHeight(),
+      reservedLines = StatusLineReserve,
       scrollbarWidth = 0,
     )
     check pos.x == 0
@@ -851,7 +806,7 @@ suite "calculateSidebarWidth - modeState gating":
       viewport,
       cursor,
       gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      reservedLines = StatusLineReserve,
       scrollbarWidth = 1,
     )
     # segment 1, display col = 1, x = viewport.x + gutterWidth + 1 = 0 + 4 + 1
@@ -874,7 +829,7 @@ suite "calculateSidebarWidth - modeState gating":
       viewport,
       cursor,
       gutterWidth = 0,
-      reservedLines = steadyBottomAreaHeight(),
+      reservedLines = StatusLineReserve,
       scrollbarWidth = 1,
     )
     check pos.x == 2
@@ -897,7 +852,7 @@ suite "calculateSidebarWidth - modeState gating":
       viewport,
       cursor,
       gutterWidth = 0,
-      reservedLines = steadyBottomAreaHeight(),
+      reservedLines = StatusLineReserve,
       scrollbarWidth = 1,
     )
     check pos.x == 2
@@ -919,7 +874,7 @@ suite "calculateSidebarWidth - modeState gating":
       viewport,
       cursor,
       gutterWidth = 0,
-      reservedLines = steadyBottomAreaHeight(),
+      reservedLines = StatusLineReserve,
       scrollbarWidth = 1,
     )
     check pos.x == 0
@@ -934,11 +889,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: 2, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 4
     check pos.y == 2 # Line 0, empty line 1, Line 2
@@ -954,11 +905,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: 1, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 4
     # Line 0 wraps to multiple screen lines, then Line 2
@@ -975,11 +922,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: 0, column: 15)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     # Should be on wrapped line (y=1) at column 5 (15 - 10 = 5)
     check pos.y == 1
@@ -993,11 +936,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: -1, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 0
     check pos.y == 0
@@ -1011,11 +950,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: 4, column: 0) # Beyond visible area
 
     let pos = e.calculateWindowCursor(
-      buffer,
-      viewport,
-      cursor,
-      gutterWidth = 4,
-      reservedLines = steadyBottomAreaHeight(),
+      buffer, viewport, cursor, gutterWidth = 4, reservedLines = StatusLineReserve
     )
     check pos.x == 0
     check pos.y == 0

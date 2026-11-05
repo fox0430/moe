@@ -532,9 +532,7 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
       # current cursor position. This prevents the popup from shifting when
       # cycling through candidates of different lengths.
       let anchorX = e.state.screenCursor.x - displayWidth(completionMgr.menu.prefix)
-      # Stay above the (possibly grown) command-line area, plus one padding
-      # row — matches the steady-state default of 2
-      let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
+      let bottomReserve = e.state.bottomAreaHeight(buffer.area.width)
       let popupPos = calculatePopupPosition(
         anchorX, e.state.screenCursor.y, buffer.area.width, buffer.area.height,
         completionMgr.menu.entries, completionMgr.menu.maxVisible,
@@ -586,7 +584,7 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
             max(0, trigger.cellX),
             caret.cellX,
           )
-      let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
+      let bottomReserve = e.state.bottomAreaHeight(buffer.area.width)
       let popupPos = calculateSignatureHelpPosition(
         anchorX, e.state.screenCursor.y, buffer.area.width, buffer.area.height,
         sigHelpMgr.display.signature.len, bottomReserve,
@@ -599,7 +597,7 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
   # Render hover popup (Normal mode)
   if e.state.lspCache.hoverPopup.isActive():
     let hoverMgr = e.state.lspCache.hoverPopup
-    let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
+    let bottomReserve = e.state.bottomAreaHeight(buffer.area.width)
     let popupPos = calculateHoverPopupPosition(
       e.state.screenCursor.x, e.state.screenCursor.y, buffer.area.width,
       buffer.area.height, hoverMgr, bottomReserve,
@@ -607,10 +605,9 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
     renderHoverPopup(buffer, hoverMgr, popupPos, true)
 
   # Render notification popups: float above the (possibly grown)
-  # command-line area, plus one padding row when the status line is shown
+  # command-line area and the status line
   if e.state.notificationPopup.hasActiveNotifications():
-    let bottomReserve =
-      e.state.bottomAreaHeight(buffer.area.width) + (if e.showStatusLine: 1 else: 0)
+    let bottomReserve = e.state.bottomAreaHeight(buffer.area.width)
     let rects = e.state.notificationPopup.calculateNotificationPositions(
       buffer.area.width, buffer.area.height, bottomReserve
     )

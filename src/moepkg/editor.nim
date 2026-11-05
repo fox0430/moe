@@ -24,6 +24,7 @@ import pkg/[results, chronos]
 import
   types/editor_types,
   editor_window,
+  editor_window_layout,
   editor_file,
   editor_lsp,
   editor_codelens,
@@ -160,8 +161,9 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # below; the editor has no separate buffer/viewport field, so keep local
   # handles for the setup wiring.
   let initialBuffer = newTextBuffer()
-  let initialViewport =
-    ViewPort(topLine: 0, leftCell: 0, width: 80, height: 20, x: 0, y: 0)
+  let initialViewport = ViewPort(
+    topLine: 0, leftCell: 0, width: 80, height: windowAreaHeight(20), x: 0, y: 0
+  )
 
   result = Editor(
     lsp: lspIntegration,
@@ -169,9 +171,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       # activeWindow will be set after window creation below
       cursorVisible: true,
       config: editorConfig,
-      windowDisplay: WindowDisplayState(
-        viewportReservedLines: steadyBottomAreaHeight() # Status+command share same row
-      ),
       # Timing state (grouped in TimingState)
       timing: TimingState(
         gitDiffUpdateInterval: editorConfig.git.updateInterval,
@@ -321,6 +320,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Route the initial config push through the reload path so the two lists
   # can't drift.
   result.applyConfigSettings(editorConfig)
+  result.updateViewportReservedLines()
 
   # Initialize config file modification time for liveReloadOfConf
   let configPath = getConfigPath()

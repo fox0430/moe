@@ -38,9 +38,9 @@ when not defined(moe.embedded):
 
 import
   ../[
-    types, buffer, modes, key_bindings, keybind_config, filer, filetree, diff_viewer,
-    recent_file_mode, command_line, visual_selection, insert_record, wanted_column,
-    visual_block,
+    render_utils, types, buffer, modes, key_bindings, keybind_config, filer, filetree,
+    diff_viewer, recent_file_mode, command_line, visual_selection, insert_record,
+    wanted_column, visual_block,
   ]
 
 when not defined(moe.embedded):
@@ -498,7 +498,9 @@ proc handleFilerMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Filer mode input
-  let r = handleFilerModeKey(filerState, viewportHeight, keyCombo)
+  let r = handleFilerModeKey(
+    filerState, viewportHeight, keyCombo, state.motionReservedLines()
+  )
   case r.kind
   of frHandled:
     return HandlerResult(

@@ -32,7 +32,6 @@ export window_manager_types
 const
   WindowSeparatorWidth* = 1 ## Width of separator between vertically split windows
   WindowSeparatorHeight* = 1 ## Height of separator between horizontally split windows
-  StatusLineHeight* = 1 ## Height of a status line
 
 proc newEditorWindowManager*(): EditorWindowManager =
   ## Create a new window manager
@@ -529,12 +528,16 @@ proc equalizeAllHorizontalGroups*(wm: EditorWindowManager) =
         startX = firstWindow.viewport.x
       wm.equalizeWidthsInGroup(sortedGroup, totalWidth, startX)
 
+func windowSeparatorRows*(status: WindowStatus): int =
+  ## Rows between stacked windows: none when each ends in its own status line.
+  if status == wsEveryWindow: 0 else: WindowSeparatorHeight
+
 proc equalizeHeightsInGroup*(
     wm: EditorWindowManager,
     group: seq[int],
     totalHeight: int,
     startY: int,
-    multiStatusLine: bool,
+    status: WindowStatus,
 ) =
   ## Equalize heights of windows in a vertical group
   if group.len <= 1:
@@ -547,34 +550,30 @@ proc equalizeHeightsInGroup*(
   )
 
   let
-    numSeparators =
-      if multiStatusLine:
-        0
-      else:
-        (sortedGroup.len - 1) * WindowSeparatorHeight
+    lowest = wm.windows[sortedGroup[^1]].viewport
+    noWindowBelow = wm.windows.firstRowBelow(lowest, startY + totalHeight - 1).isNone
+    lastStatusRows = windowStatusRows(status, noWindowBelow)
+    numSeparators = (sortedGroup.len - 1) * windowSeparatorRows(status)
     numStatusLines =
-      if multiStatusLine:
-        sortedGroup.len * StatusLineHeight
-      else:
-        StatusLineHeight
-    totalContentHeight =
-      totalHeight - numSeparators - numStatusLines - steadyBottomAreaHeight()
+      (sortedGroup.len - 1) * windowStatusRows(status, false) + lastStatusRows
+    totalContentHeight = totalHeight - numSeparators - numStatusLines
     # Clamp positive: a tiny totalHeight used to give non-last windows height 0.
     windowContentHeight = max(1, totalContentHeight div sortedGroup.len)
-    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
+    separatorOffset = windowSeparatorRows(status)
 
-  # Draw a separator only while the last window's 1-row floor still fits
-  # below it; otherwise it would push the last window past the box end.
-  let separatorBudget =
-    max(0, totalHeight - 1 - (sortedGroup.len - 1) * windowContentHeight)
+  # Draw a separator only while the last window's text row still fits below
+  # it; otherwise it would push the last window past the box end.
+  let separatorBudget = max(
+    0, totalHeight - 1 - lastStatusRows - (sortedGroup.len - 1) * windowContentHeight
+  )
   var separatorsDrawn = 0
 
   var currentY = startY
   for i, idx in sortedGroup:
     wm.windows[idx].viewport.y = currentY
     if i == sortedGroup.len - 1:
-      # Last window: remaining height incl. status/command line, clamped
-      # positive (warn-log).
+      # Last window: remaining height incl. status line, clamped positive
+      # (warn-log).
       let remaining = (startY + totalHeight) - currentY
       if remaining < 1:
         logWarn(
@@ -585,127 +584,60 @@ proc equalizeHeightsInGroup*(
       wm.windows[idx].viewport.height = max(1, remaining)
     else:
       # Non-last windows
-      if multiStatusLine:
-        # Each window has its own status line: cap the height so the last
-        # window's 1-row floor still fits below.
-        let maxFit = max(1, (totalHeight - 1) div (sortedGroup.len - 1))
-        wm.windows[idx].viewport.height =
-          min(windowContentHeight + StatusLineHeight, maxFit)
-      else:
-        # No status line for non-last windows
-        wm.windows[idx].viewport.height = windowContentHeight
+      # Cap the height so the last window's 1-row floor still fits below.
+      let maxFit = max(1, (totalHeight - 1) div (sortedGroup.len - 1))
+      wm.windows[idx].viewport.height =
+        min(windowContentHeight + windowStatusRows(status, false), maxFit)
       currentY += wm.windows[idx].viewport.height
       if separatorOffset > 0 and separatorsDrawn < separatorBudget:
         currentY += separatorOffset
         inc separatorsDrawn
 
-proc equalizeHeightsForResize*(
-    wm: EditorWindowManager, group: seq[int], newHeight: int, multiStatusLine: bool
-) =
-  ## Equalize heights during window resize (handles single window case and bottom detection)
-  if group.len == 1:
-    let
-      idx = group[0]
-      window = wm.windows[idx]
-      minY = window.viewport.y
-    # A single-element vertical group is not necessarily the only window in
-    # its column: a gap wider than the adjacency tolerance (or a zero-height
-    # neighbor) can leave another window below. Stop the fill there instead
-    # of covering it with the full column height.
-    var bottomLimit = newHeight
-    for i in 0 ..< wm.windows.len:
-      if i == idx:
-        continue
-      let other = wm.windows[i]
-      if other.viewport.y > minY and other.viewport.y < bottomLimit and
-          window.viewport.x < other.viewport.x + other.viewport.width and
-          other.viewport.x < window.viewport.x + window.viewport.width:
-        bottomLimit = other.viewport.y
-    let
-      # Check if this is the bottom window
-      isBottomWindow = (window.viewport.y + window.viewport.height >= newHeight - 1)
-      # Reserve line for command line if this is the bottom window
-      commandLineReserve = steadyReservedBottom(isBottomWindow)
-    wm.windows[idx].viewport.height = max(1, bottomLimit - minY - commandLineReserve)
-    return
+proc columnBottomLimit(
+    wm: EditorWindowManager, lowest: ViewPort, areaHeight, separator: int
+): int =
+  ## Where a vertical group whose lowest window is `lowest` ends: the bottom of
+  ## the window area, or above the nearest window below it. A group is not
+  ## necessarily alone in its column: a wider window, or a gap past the
+  ## adjacency tolerance, can leave another window below.
+  let below = wm.windows.firstRowBelow(lowest, lowest.y)
+  if below.isSome:
+    min(areaHeight, below.get - separator)
+  else:
+    areaHeight
 
+proc equalizeHeightsForResize*(
+    wm: EditorWindowManager, group: seq[int], newHeight: int, status: WindowStatus
+) =
+  ## Fill the column of `group` down to where it ends.
   var sortedGroup = group
   sortedGroup.sort(
     proc(a, b: int): int =
       cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
   )
-
   let
-    firstWindow = wm.windows[sortedGroup[0]]
-    lastWindowIdx = sortedGroup[^1]
-    lastWindow = wm.windows[lastWindowIdx]
-    minY = firstWindow.viewport.y
-    # Check if this is the bottom group (last window reaches screen bottom)
-    isBottomGroup =
-      (lastWindow.viewport.y + lastWindow.viewport.height >= newHeight - 1)
-    # Reserve line for command line if this is the bottom group
-    commandLineReserve = steadyReservedBottom(isBottomGroup)
-    availableHeight = newHeight - minY - commandLineReserve
-    numSeparators =
-      if multiStatusLine:
-        0
-      else:
-        (sortedGroup.len - 1) * WindowSeparatorHeight
-    # Calculate total content height (excluding status lines)
-    numStatusLines =
-      if multiStatusLine:
-        sortedGroup.len * StatusLineHeight
-      else:
-        StatusLineHeight
-    totalContentHeight = availableHeight - numSeparators - numStatusLines
-    # Clamp positive: a tiny availableHeight used to give non-last windows height 0.
-    windowContentHeight = max(1, totalContentHeight div sortedGroup.len)
-    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
-
-  # Draw a separator only while the last window's 1-row floor still fits
-  # below it; otherwise it would push the last window past the box end.
-  let separatorBudget =
-    max(0, availableHeight - 1 - (sortedGroup.len - 1) * windowContentHeight)
-  var separatorsDrawn = 0
-
-  var currentY = minY
-  for i, idx in sortedGroup:
-    wm.windows[idx].viewport.y = currentY
-    if i == sortedGroup.len - 1:
-      # Last window: remaining height incl. status line, clamped positive (warn-log).
-      let remaining = (minY + availableHeight) - currentY
-      if remaining < 1:
-        logWarn(
-          "window_manager",
-          "last window does not fit in the group: availableHeight=" & $availableHeight &
-            " minY=" & $minY & " currentY=" & $currentY,
-        )
-      wm.windows[idx].viewport.height = max(1, remaining)
-    else:
-      # Non-last windows
-      if multiStatusLine:
-        # Each window has its own status line: cap the height so the last
-        # window's 1-row floor still fits below.
-        let maxFit = max(1, (availableHeight - 1) div (sortedGroup.len - 1))
-        wm.windows[idx].viewport.height =
-          min(windowContentHeight + StatusLineHeight, maxFit)
-      else:
-        # No status line for non-last windows
-        wm.windows[idx].viewport.height = windowContentHeight
-      currentY += wm.windows[idx].viewport.height
-      if separatorOffset > 0 and separatorsDrawn < separatorBudget:
-        currentY += separatorOffset
-        inc separatorsDrawn
+    startY = wm.windows[sortedGroup[0]].viewport.y
+    bottomLimit = wm.columnBottomLimit(
+      wm.windows[sortedGroup[^1]].viewport,
+      windowAreaHeight(newHeight),
+      windowSeparatorRows(status),
+    )
+  if sortedGroup.len == 1:
+    wm.windows[sortedGroup[0]].viewport.height = max(1, bottomLimit - startY)
+  else:
+    wm.equalizeHeightsInGroup(sortedGroup, bottomLimit - startY, startY, status)
 
 proc validateViewportInvariants*(
     wm: EditorWindowManager, screenWidth: int = -1, screenHeight: int = -1
 ) =
   ## Check viewport invariants: positive dimensions, no pairwise overlap,
-  ## and placement within the screen. Violations assert in non-release
+  ## and placement within the window area (the screen without the command
+  ## row). Violations assert in non-release
   ## builds and are warn-logged (logWarn only writes when file logging is
   ## enabled).
   ## The within-screen check is a warning only: a fixed-width sidebar may
   ## exceed a narrower screen.
+  let areaHeight = windowAreaHeight(screenHeight)
   for i in 0 ..< wm.windows.len:
     let v = wm.windows[i].viewport
     if v.width <= 0 or v.height <= 0:
@@ -736,16 +668,16 @@ proc validateViewportInvariants*(
         "window " & $i & " is outside the screen width: x=" & $v.x & " width=" & $v.width &
           " screenWidth=" & $screenWidth,
       )
-    if screenHeight > 0 and (v.y < 0 or v.y + v.height > screenHeight):
+    if screenHeight > 0 and (v.y < 0 or v.y + v.height > areaHeight):
       logWarn(
         "window_manager",
-        "window " & $i & " is outside the screen height: y=" & $v.y & " height=" &
+        "window " & $i & " is outside the window area: y=" & $v.y & " height=" &
           $v.height & " screenHeight=" & $screenHeight,
       )
 
 proc closeWindow*(
     wm: EditorWindowManager,
-    multiStatusLine: bool,
+    status: WindowStatus,
     screenWidth: int = -1,
     screenHeight: int = -1,
 ): bool =
@@ -807,7 +739,7 @@ proc closeWindow*(
         max(lastWin.viewport.y + lastWin.viewport.height, closedY + closedHeight)
       totalHeight = lastEnd - firstY
     if sortedGroup.len > 1:
-      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, firstY, multiStatusLine)
+      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, firstY, status)
     else:
       # Single remaining window: expand to cover the closed window's space
       wm.windows[sortedGroup[0]].viewport.y = firstY
@@ -865,7 +797,7 @@ proc closeWindow*(
         for idx in columns[0]:
           wm.windows[idx].viewport.x = boxX
           wm.windows[idx].viewport.width = boxWidth
-        wm.equalizeHeightsInGroup(columns[0], boxHeight, boxY, multiStatusLine)
+        wm.equalizeHeightsInGroup(columns[0], boxHeight, boxY, status)
       else:
         # A single row (all share y and height): expand to the box height
         # and re-equalize widths.
@@ -883,7 +815,7 @@ proc closeWindow*(
           for idx in allIdx:
             wm.windows[idx].viewport.x = boxX
             wm.windows[idx].viewport.width = boxWidth
-          wm.equalizeHeightsInGroup(allIdx, boxHeight, boxY, multiStatusLine)
+          wm.equalizeHeightsInGroup(allIdx, boxHeight, boxY, status)
 
   # Activate the new active window
   if wm.windows.len > 0:
@@ -917,7 +849,7 @@ proc onlyWindow*(wm: EditorWindowManager, screenWidth: int, screenHeight: int) =
   activeWin.viewport.x = 0
   activeWin.viewport.y = 0
   activeWin.viewport.width = screenWidth
-  activeWin.viewport.height = screenHeight - steadyBottomAreaHeight()
+  activeWin.viewport.height = windowAreaHeight(screenHeight)
 
 proc vsplit*(
     wm: EditorWindowManager,
@@ -1081,145 +1013,51 @@ proc vsplitWithBuffer*(
 
   return ok(newBuffer)
 
-proc hsplit*(
-    wm: EditorWindowManager,
-    currentBuffer: TextBuffer,
-    currentViewport: ViewPort,
-    cursorPosition: BufferPosition,
-    multiStatusLine: bool,
-): Result[TextBuffer, string] =
-  ## Create a horizontal split window (top and bottom) showing the current
-  ## buffer. Returns the buffer the new window shows.
-  ##
-  ## Opening a *file* in a split goes through `hsplitWithBuffer`; see `vsplit`.
-  let newBuffer = currentBuffer
+func minWindowHeight(status: WindowStatus, isBottomWindow, showTabLine: bool): int =
+  ## One content row plus whatever chrome the window carries: its own tab line
+  ## and its status line.
+  result = 1 + windowStatusRows(status, isBottomWindow)
+  if showTabLine:
+    result += TabLineHeight
 
-  let
-    # Save original viewport dimensions before modification (ViewPort is ref object)
-    origWidth = wm.windows[wm.activeWindowIndex].viewport.width
-    origHeight = wm.windows[wm.activeWindowIndex].viewport.height
-    origX = wm.windows[wm.activeWindowIndex].viewport.x
-    origY = wm.windows[wm.activeWindowIndex].viewport.y
-
-    # Separator offset (WindowSeparatorHeight for single status line, 0 for multi status line)
-    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
-
-    # Calculate available content height:
-    # origHeight includes command line for bottom window
-    # - Subtract status lines (2 for multi, 1 for single) + command line (1)
-    # - Subtract separator if needed
-    numReservedLines =
-      if multiStatusLine:
-        2 * StatusLineHeight + steadyBottomAreaHeight()
-      else:
-        StatusLineHeight + steadyBottomAreaHeight()
-    availableContentHeight = max(0, origHeight - numReservedLines - separatorOffset)
-
-    # Split content area: favor top window (round up) to preserve scroll position
-    topContentHeight = (availableContentHeight + 1) div 2 # round up
-    bottomContentHeight = availableContentHeight - topContentHeight
-
-  # Move the active window to the bottom half
-  # Bottom window has status line + command line
-  wm.windows[wm.activeWindowIndex].viewport.height =
-    bottomContentHeight + StatusLineHeight + steadyBottomAreaHeight()
-  wm.windows[wm.activeWindowIndex].viewport.y =
-    origY + topContentHeight + (if multiStatusLine: StatusLineHeight else: 0) +
-    separatorOffset
-  wm.deactivateAllWindows()
-
-  # When opening the same buffer, inherit cursor position and viewport scroll
-  let isSameBuffer = newBuffer == currentBuffer
-  let newCursor =
-    if isSameBuffer:
-      cursorPosition
-    else:
-      BufferPosition(line: 0, column: 0)
-  let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
-  let newLeftCell = if isSameBuffer: currentViewport.leftCell else: 0
-
-  # Create new window for top half
-  # In multi status line mode, top window gets its own status line
-  # In single status line mode, top window has no status line
-  let newWindow = EditorWindow(
-    viewBuffer: newBuffer,
-    tabBufferId: newBuffer.id,
-    bufferIds: @[newBuffer.id], # Per-window tabs start with the split buffer only
-    viewport: ViewPort(
-      topLine: newTopLine,
-      leftCell: newLeftCell,
-      width: origWidth,
-      height: topContentHeight + (if multiStatusLine: StatusLineHeight else: 0),
-      x: origX,
-      y: origY,
-    ),
-    cursor: newCursor,
-    active: true,
-    mode: EditorMode.Normal, # New windows start in Normal mode
-    wrapCountCache: WrapCountCache(),
-  )
-
-  # Insert new window before the active window (top position)
-  wm.previousWindow = wm.windows[wm.activeWindowIndex]
-  wm.windows.insert(newWindow, wm.activeWindowIndex)
-
-  # Equalize heights of all windows at the same horizontal position
-  let windowGroups = wm.groupWindowsByXAndWidth()
-  for group in windowGroups:
-    if group.len > 1:
-      var sortedGroup = group
-      sortedGroup.sort(
-        proc(a, b: int): int =
-          cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
-      )
-      let
-        firstWindow = wm.windows[sortedGroup[0]]
-        lastWindow = wm.windows[sortedGroup[^1]]
-        totalHeight =
-          (lastWindow.viewport.y + lastWindow.viewport.height) - firstWindow.viewport.y
-        startY = firstWindow.viewport.y
-      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, multiStatusLine)
-
-  return ok(newBuffer)
+proc roomForHsplit*(
+    wm: EditorWindowManager, status: WindowStatus, showTabLine: bool
+): Result[(), string] =
+  ## E36 unless the active window's column still fits one more window, each at
+  ## its minimum height. Separators give way on a tiny column.
+  for group in wm.groupWindowsByXAndWidth():
+    if wm.activeWindowIndex notin group:
+      continue
+    var
+      top = high(int)
+      bottom = 0
+      bottomWindow = wm.windows[group[0]]
+    for idx in group:
+      let v = wm.windows[idx].viewport
+      top = min(top, v.y)
+      if v.y + v.height > bottom:
+        bottom = v.y + v.height
+        bottomWindow = wm.windows[idx]
+    let needed =
+      group.len * minWindowHeight(status, false, showTabLine) +
+      minWindowHeight(status, wm.windows.reachesBottom(bottomWindow), showTabLine)
+    if bottom - top < needed:
+      return err("E36: Not enough room")
+  ok(())
 
 proc hsplitWithBuffer*(
     wm: EditorWindowManager,
     currentBuffer: TextBuffer,
     currentViewport: ViewPort,
     cursorPosition: BufferPosition,
-    multiStatusLine: bool,
     newBuffer: TextBuffer,
+    status: WindowStatus,
 ): Result[TextBuffer, string] =
   ## Create a horizontal split window with a specific buffer
   ## Returns the new buffer that should be used
 
-  let
-    # Save original viewport dimensions before modification (ViewPort is ref object)
-    origWidth = wm.windows[wm.activeWindowIndex].viewport.width
-    origHeight = wm.windows[wm.activeWindowIndex].viewport.height
-    origX = wm.windows[wm.activeWindowIndex].viewport.x
-    origY = wm.windows[wm.activeWindowIndex].viewport.y
+  let active = wm.windows[wm.activeWindowIndex]
 
-    # Separator offset (WindowSeparatorHeight for single status line, 0 for multi status line)
-    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
-
-    numReservedLines =
-      if multiStatusLine:
-        2 * StatusLineHeight + steadyBottomAreaHeight()
-      else:
-        StatusLineHeight + steadyBottomAreaHeight()
-    availableContentHeight = max(0, origHeight - numReservedLines - separatorOffset)
-
-    # Split content area: favor top window (round up) to preserve scroll position
-    topContentHeight = (availableContentHeight + 1) div 2 # round up
-    bottomContentHeight = availableContentHeight - topContentHeight
-
-  # Move the active window to the bottom half
-  wm.windows[wm.activeWindowIndex].viewport.height =
-    bottomContentHeight + StatusLineHeight + steadyBottomAreaHeight()
-  wm.windows[wm.activeWindowIndex].viewport.y =
-    origY + topContentHeight + (if multiStatusLine: StatusLineHeight else: 0) +
-    separatorOffset
   wm.deactivateAllWindows()
 
   # When opening the same buffer, inherit cursor position and viewport scroll
@@ -1232,7 +1070,8 @@ proc hsplitWithBuffer*(
   let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
   let newLeftCell = if isSameBuffer: currentViewport.leftCell else: 0
 
-  # Create new window for top half with the provided buffer
+  # The new window takes the active window's place: re-tiling the column below
+  # gives each its rows, and sorts the new window first.
   let newWindow = EditorWindow(
     viewBuffer: newBuffer,
     tabBufferId: newBuffer.id,
@@ -1240,10 +1079,10 @@ proc hsplitWithBuffer*(
     viewport: ViewPort(
       topLine: newTopLine,
       leftCell: newLeftCell,
-      width: origWidth,
-      height: topContentHeight + (if multiStatusLine: StatusLineHeight else: 0),
-      x: origX,
-      y: origY,
+      width: active.viewport.width,
+      height: active.viewport.height,
+      x: active.viewport.x,
+      y: active.viewport.y,
     ),
     cursor: newCursor,
     active: true,
@@ -1270,9 +1109,24 @@ proc hsplitWithBuffer*(
         totalHeight =
           (lastWindow.viewport.y + lastWindow.viewport.height) - firstWindow.viewport.y
         startY = firstWindow.viewport.y
-      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, multiStatusLine)
+      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, status)
 
   return ok(newBuffer)
+
+proc hsplit*(
+    wm: EditorWindowManager,
+    currentBuffer: TextBuffer,
+    currentViewport: ViewPort,
+    cursorPosition: BufferPosition,
+    status: WindowStatus,
+): Result[TextBuffer, string] =
+  ## Create a horizontal split window (top and bottom) showing the current
+  ## buffer. Returns the buffer the new window shows.
+  ##
+  ## Opening a *file* in a split goes through `hsplitWithBuffer`; see `vsplit`.
+  wm.hsplitWithBuffer(
+    currentBuffer, currentViewport, cursorPosition, currentBuffer, status
+  )
 
 proc syncFixedWidth(wm: EditorWindowManager, indexes: varargs[int]) =
   ## Keep fixedWidth in sync after a manual resize so relayouts do not revert it.
@@ -1411,7 +1265,21 @@ proc decreaseWindowWidth*(wm: EditorWindowManager, delta: int = 1) =
 
   wm.syncFixedWidth(activeIdx, neighborIdx)
 
-proc increaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
+proc canGiveRows(
+    wm: EditorWindowManager,
+    idx: int,
+    status: WindowStatus,
+    showTabLine: bool,
+    delta: int,
+): bool =
+  ## Whether the window at `idx` keeps its minimum height after losing `delta`.
+  let window = wm.windows[idx]
+  window.viewport.height - delta >=
+    minWindowHeight(status, wm.windows.reachesBottom(window), showTabLine)
+
+proc increaseWindowHeight*(
+    wm: EditorWindowManager, status: WindowStatus, showTabLine: bool, delta: int = 1
+) =
   ## Increase active window height by delta, shrinking adjacent window
   if wm.windows.len <= 1:
     return
@@ -1459,7 +1327,7 @@ proc increaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
   let neighborIdx = sortedGroup[neighborPos]
 
   # Check minimum height constraint
-  if wm.windows[neighborIdx].viewport.height <= delta:
+  if not wm.canGiveRows(neighborIdx, status, showTabLine, delta):
     return
 
   # Adjust heights
@@ -1474,16 +1342,17 @@ proc increaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
     # Neighbor is above, shift active up
     wm.windows[activeIdx].viewport.y -= delta
 
-proc decreaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
+proc decreaseWindowHeight*(
+    wm: EditorWindowManager, status: WindowStatus, showTabLine: bool, delta: int = 1
+) =
   ## Decrease active window height by delta, expanding adjacent window
   if wm.windows.len <= 1:
     return
 
   let activeIdx = wm.activeWindowIndex
-  let activeWin = wm.windows[activeIdx]
 
   # Check minimum height constraint for active window
-  if activeWin.viewport.height <= delta:
+  if not wm.canGiveRows(activeIdx, status, showTabLine, delta):
     return
 
   # Find vertical group (same x and width, stacked vertically)
@@ -1539,10 +1408,7 @@ proc decreaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
     wm.windows[activeIdx].viewport.y += delta
 
 proc maximizeWindowHeight*(
-    wm: EditorWindowManager,
-    multiStatusLine: bool,
-    showTabLine: bool,
-    showStatusLine: bool = true,
+    wm: EditorWindowManager, status: WindowStatus, showTabLine: bool
 ) =
   ## Give the active window as much height as its vertical group allows,
   ## shrinking the other windows in the group to their minimum (Ctrl-w _).
@@ -1570,39 +1436,26 @@ proc maximizeWindowHeight*(
       cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
   )
 
-  proc minHeight(isBottomWindow: bool): int =
-    ## One content row plus whatever chrome the window carries: its own tab
-    ## line, its status line (always in multi status line mode, otherwise only
-    ## the bottom window) and the command line area below the bottom window.
-    result = 1
-    if showTabLine:
-      result += TabLineHeight
-    if showStatusLine and (multiStatusLine or isBottomWindow):
-      result += StatusLineHeight
-    if isBottomWindow:
-      result += steadyBottomAreaHeight()
-
   let
     firstWindow = wm.windows[sortedGroup[0]]
     lastWindow = wm.windows[sortedGroup[^1]]
     startY = firstWindow.viewport.y
     totalHeight = (lastWindow.viewport.y + lastWindow.viewport.height) - startY
-    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
+    separatorOffset = windowSeparatorRows(status)
 
   # The last window of a vertical group only carries the bottom chrome when the
   # group actually reaches the bottom of the screen (side-by-side splits don't).
-  let
-    maxBottomY = findMaxBottomY(wm.windows)
-    groupReachesBottom =
-      lastWindow.viewport.y + lastWindow.viewport.height == maxBottomY
+  let groupReachesBottom = wm.windows.reachesBottom(lastWindow)
 
-  proc isBottom(i: int): bool =
-    groupReachesBottom and i == sortedGroup.len - 1
+  proc minHeight(i: int): int =
+    minWindowHeight(
+      status, groupReachesBottom and i == sortedGroup.len - 1, showTabLine
+    )
 
   var othersHeight = (sortedGroup.len - 1) * separatorOffset
   for i, idx in sortedGroup:
     if idx != activeIdx:
-      othersHeight += minHeight(isBottom(i))
+      othersHeight += minHeight(i)
 
   let activeHeight = totalHeight - othersHeight
   var activePos = -1
@@ -1611,7 +1464,7 @@ proc maximizeWindowHeight*(
       activePos = i
       break
 
-  if activeHeight < minHeight(isBottom(activePos)):
+  if activeHeight < minHeight(activePos):
     # No room to grow without pushing a window out of the group.
     return
 
@@ -1622,7 +1475,7 @@ proc maximizeWindowHeight*(
       if idx == activeIdx:
         activeHeight
       else:
-        minHeight(isBottom(i))
+        minHeight(i)
     currentY += wm.windows[idx].viewport.height + separatorOffset
 
 proc swapWindows*(wm: EditorWindowManager) =
@@ -1661,7 +1514,7 @@ proc swapWindows*(wm: EditorWindowManager) =
   # Update active index to follow the active window
   wm.activeWindowIndex = nextIdx
 
-proc equalizeAllWindows*(wm: EditorWindowManager, multiStatusLine: bool) =
+proc equalizeAllWindows*(wm: EditorWindowManager, status: WindowStatus) =
   ## Equalize all window sizes
   if wm.windows.len <= 1:
     return
@@ -1682,7 +1535,7 @@ proc equalizeAllWindows*(wm: EditorWindowManager, multiStatusLine: bool) =
         totalHeight =
           (lastWindow.viewport.y + lastWindow.viewport.height) - firstWindow.viewport.y
         startY = firstWindow.viewport.y
-      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, multiStatusLine)
+      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, status)
 
   # Equalize widths in horizontal groups
   let hGroups = wm.groupWindowsByY()
@@ -1707,7 +1560,7 @@ proc resizeWindows*(
     newHeight: int,
     oldWidth: int,
     oldHeight: int,
-    multiStatusLine: bool,
+    status: WindowStatus,
 ) =
   ## Adjust all window viewports when terminal is resized
 
@@ -1725,7 +1578,10 @@ proc resizeWindows*(
 
   let
     widthRatio = newWidth.float / oldWidth.float
-    heightRatio = newHeight.float / oldHeight.float
+    # The windows tile the area above the command row, not the screen.
+    heightRatio =
+      max(1, windowAreaHeight(newHeight)).float /
+      max(1, windowAreaHeight(oldHeight)).float
 
   # Scale all windows proportionally
   for window in wm.windows.mitems:
@@ -1767,34 +1623,22 @@ proc resizeWindows*(
 
   # Vertical groups (same x and width, vertically adjacent)
   for group in verticalGroups:
-    wm.equalizeHeightsForResize(group, newHeight, multiStatusLine)
+    wm.equalizeHeightsForResize(group, newHeight, status)
 
   # After all resize operations, adjust viewport to keep cursor visible
   # This must be done AFTER equalizeHeightsForResize since that changes viewport.height
 
-  # Find max bottom Y to determine which windows are bottom windows
-  var maxBottomY = 0
-  for window in wm.windows:
-    let bottomY = window.viewport.y + window.viewport.height
-    if bottomY > maxBottomY:
-      maxBottomY = bottomY
-
+  let maxBottomY = findMaxBottomY(wm.windows)
   for window in wm.windows.mitems:
     # Determine if this is a bottom window
     let
       windowBottomY = window.viewport.y + window.viewport.height
       isBottomWindow = (windowBottomY == maxBottomY)
 
-    # Calculate reserved lines based on window position and status line mode.
-    # Status line and command line share the same row.
     # Deliberately steady: transient command-line growth (wrapped input,
     # multi-line messages) is excluded from persistent geometry, matching
     # the steady reserve adjustViewportForCursor scrolls with.
-    let reservedLines =
-      if isBottomWindow:
-        steadyBottomAreaHeight() # Status + command share same row
-      else:
-        if multiStatusLine: StatusLineHeight else: 0
+    let reservedLines = windowStatusRows(status, isBottomWindow)
 
     let visibleHeight = max(1, window.viewport.height - reservedLines)
 

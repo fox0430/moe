@@ -313,7 +313,7 @@ suite "EditorWindowManager - maximizeWindowHeight":
   test "maximizeWindowHeight with single window does nothing":
     let wm = createSingleWindowManager()
 
-    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+    wm.maximizeWindowHeight(wsBottomWindows, showTabLine = false)
 
     check wm.windows[0].viewport.height == 24
 
@@ -321,13 +321,12 @@ suite "EditorWindowManager - maximizeWindowHeight":
     let wm = createColumnManager()
     let bottomEdge = wm.windows[^1].viewport.y + wm.windows[^1].viewport.height
 
-    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+    wm.maximizeWindowHeight(wsBottomWindows, showTabLine = false)
 
     # Non-active windows keep only their minimum (one content row plus the
-    # status line / command line the bottom window carries).
+    # status line the bottom window carries).
     check wm.windows[1].viewport.height == 1
-    check wm.windows[2].viewport.height ==
-      1 + StatusLineHeight + steadyBottomAreaHeight()
+    check wm.windows[2].viewport.height == 1 + StatusLineReserve
     check wm.windows[0].viewport.height > 7
     check wm.windows[0].viewport.y == 0
     check wm.windows[^1].viewport.y + wm.windows[^1].viewport.height == bottomEdge
@@ -336,11 +335,10 @@ suite "EditorWindowManager - maximizeWindowHeight":
   test "maximizeWindowHeight keeps a content row under the tab line":
     let wm = createColumnManager()
 
-    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = true)
+    wm.maximizeWindowHeight(wsBottomWindows, showTabLine = true)
 
     check wm.windows[1].viewport.height == 1 + TabLineHeight
-    check wm.windows[2].viewport.height ==
-      1 + TabLineHeight + StatusLineHeight + steadyBottomAreaHeight()
+    check wm.windows[2].viewport.height == 1 + TabLineHeight + StatusLineReserve
     checkNoOverlappingWindows(wm)
 
   test "maximizeWindowHeight works for the bottom window":
@@ -348,7 +346,7 @@ suite "EditorWindowManager - maximizeWindowHeight":
     wm.activateWindow(2)
     let bottomEdge = wm.windows[^1].viewport.y + wm.windows[^1].viewport.height
 
-    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+    wm.maximizeWindowHeight(wsBottomWindows, showTabLine = false)
 
     check wm.windows[0].viewport.height == 1
     check wm.windows[1].viewport.height == 1
@@ -366,7 +364,7 @@ suite "EditorWindowManager - maximizeWindowHeight":
     wm.activeWindowIndex = 0
     let bottomEdge = wm.windows[1].viewport.y + wm.windows[1].viewport.height
 
-    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+    wm.maximizeWindowHeight(wsBottomWindows, showTabLine = false)
 
     check wm.windows[1].viewport.height == 1
     check wm.windows[0].viewport.height == bottomEdge - 1 - WindowSeparatorHeight
@@ -376,12 +374,10 @@ suite "EditorWindowManager - maximizeWindowHeight":
   test "maximizeWindowHeight reserves no status line when it is hidden":
     let wm = createColumnManager()
 
-    wm.maximizeWindowHeight(
-      multiStatusLine = true, showTabLine = false, showStatusLine = false
-    )
+    wm.maximizeWindowHeight(wsNone, showTabLine = false)
 
     check wm.windows[1].viewport.height == 1
-    check wm.windows[2].viewport.height == 1 + steadyBottomAreaHeight()
+    check wm.windows[2].viewport.height == 1
     checkNoOverlappingWindows(wm)
 
   test "maximizeWindowHeight ignores windows outside the vertical group":
@@ -391,7 +387,7 @@ suite "EditorWindowManager - maximizeWindowHeight":
     wm.windows.add(createTestWindow(41, 0, 39, 24))
     wm.activeWindowIndex = 0
 
-    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+    wm.maximizeWindowHeight(wsBottomWindows, showTabLine = false)
 
     check wm.windows[0].viewport.height == 24
     check wm.windows[1].viewport.height == 24
@@ -400,7 +396,7 @@ suite "EditorWindowManager - closeWindow":
   test "closeWindow returns true for last window":
     let wm = createSingleWindowManager()
 
-    let shouldQuit = wm.closeWindow(multiStatusLine = false)
+    let shouldQuit = wm.closeWindow(wsBottomWindows)
 
     check shouldQuit == true
     check wm.windows.len == 1 # Window is NOT removed
@@ -411,7 +407,7 @@ suite "EditorWindowManager - closeWindow":
     wm.windows.add(createTestWindow(41, 0, 39, 24, active = false))
     wm.activeWindowIndex = 0
 
-    let shouldQuit = wm.closeWindow(multiStatusLine = false)
+    let shouldQuit = wm.closeWindow(wsBottomWindows)
 
     check shouldQuit == false
     check wm.windows.len == 1
@@ -422,7 +418,7 @@ suite "EditorWindowManager - closeWindow":
     wm.windows.add(createTestWindow(41, 0, 39, 24, active = true))
     wm.activeWindowIndex = 1
 
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
 
     check wm.activeWindowIndex == 0
 
@@ -432,7 +428,7 @@ suite "EditorWindowManager - closeWindow":
     wm.windows.add(createTestWindow(41, 0, 39, 24, active = false))
     wm.activeWindowIndex = 0
 
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
 
     check wm.windows.len == 1
     check wm.windows[0].active == true
@@ -513,7 +509,7 @@ suite "EditorWindowManager - Equalize":
     let wm = newEditorWindowManager()
     wm.windows.add(createTestWindow(0, 0, 80, 24))
 
-    wm.equalizeHeightsInGroup(@[0], 24, 0, multiStatusLine = false)
+    wm.equalizeHeightsInGroup(@[0], 24, 0, wsBottomWindows)
 
     check wm.windows[0].viewport.height == 24
 
@@ -522,7 +518,7 @@ suite "EditorWindowManager - Equalize":
     wm.windows.add(createTestWindow(0, 0, 80, 10))
     wm.windows.add(createTestWindow(0, 11, 80, 13))
 
-    wm.equalizeHeightsInGroup(@[0, 1], 24, 0, multiStatusLine = false)
+    wm.equalizeHeightsInGroup(@[0, 1], 24, 0, wsBottomWindows)
 
     # Heights should be roughly equal after equalization
     check wm.windows[0].viewport.y == 0
@@ -575,7 +571,7 @@ suite "EditorWindowManager - Horizontal Split":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
 
     check result.isOk
@@ -594,7 +590,7 @@ suite "EditorWindowManager - Horizontal Split":
       originalBuffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
 
     check result.isOk
@@ -608,7 +604,7 @@ suite "EditorWindowManager - Horizontal Split":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
 
     check wm.windows[0].active == true # New window (top) is active
@@ -621,7 +617,7 @@ suite "EditorWindowManager - Horizontal Split":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = true,
+      wsEveryWindow,
     )
 
     check result.isOk
@@ -633,7 +629,7 @@ suite "EditorWindowManager - Horizontal Split":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
     check result.isOk
     check wm.windows.len == 2
@@ -646,7 +642,7 @@ suite "EditorWindowManager - Horizontal Split":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = true,
+      wsEveryWindow,
     )
     check result.isOk
     check wm.windows.len == 2
@@ -670,6 +666,107 @@ suite "EditorWindowManager - vsplitWithBuffer":
     check result.get == newBuf
     check wm.windows[0].buffer == newBuf
 
+suite "EditorWindowManager - rows between stacked windows":
+  proc splitGap(status: WindowStatus): int =
+    let wm = createSingleWindowManager(80, 23)
+    check wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      status,
+    ).isOk
+    let top = wm.windows[0].viewport
+    wm.windows[1].viewport.y - (top.y + top.height)
+
+  test "a separator row without a status line per window":
+    check splitGap(wsBottomWindows) == WindowSeparatorHeight
+    check splitGap(wsNone) == WindowSeparatorHeight
+
+  test "no separator when each window ends in its own status line":
+    check splitGap(wsEveryWindow) == 0
+
+  test "resize evens a group that stops above a wider window":
+    # Neither window of the group has a status row: only C reaches the bottom.
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 40, 10))
+    wm.windows.add(createTestWindow(0, 11, 40, 10))
+    wm.windows.add(createTestWindow(41, 0, 39, 21))
+    wm.windows.add(createTestWindow(0, 22, 80, 1))
+    wm.equalizeHeightsForResize(@[0, 1], 24, wsBottomWindows)
+    check wm.windows[0].viewport.height == wm.windows[1].viewport.height
+
+suite "EditorWindowManager - resizeWindows scales the window area":
+  test "a window at the end of the area stays off the command row":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 80, 21))
+    wm.windows.add(createTestWindow(0, 22, 80, 1))
+    wm.resizeWindows(80, 12, 80, 24, wsBottomWindows)
+    for window in wm.windows:
+      check window.viewport.y + window.viewport.height <= windowAreaHeight(12)
+
+  test "a window narrower than the group below it keeps out of the command row":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 40, 21))
+    wm.windows.add(createTestWindow(41, 0, 39, 21))
+    wm.windows.add(createTestWindow(0, 22, 80, 1))
+    wm.resizeWindows(80, 12, 80, 24, wsBottomWindows)
+    for window in wm.windows:
+      check window.viewport.y + window.viewport.height <= windowAreaHeight(12)
+
+suite "EditorWindowManager - a split stays in its column":
+  proc splitActive(wm: EditorWindowManager, status: WindowStatus) =
+    let active = wm.windows[wm.activeWindowIndex]
+    check wm.hsplit(active.buffer, active.viewport, active.cursor, status).isOk
+
+  for status in [wsBottomWindows, wsEveryWindow]:
+    test "splitting a one-row window keeps off the command row, " & $status:
+      let wm = newEditorWindowManager()
+      wm.windows.add(createTestWindow(0, 0, 80, 22))
+      wm.windows.add(createTestWindow(0, 22, 80, 1, active = true))
+      wm.activeWindowIndex = 1
+      wm.splitActive(status)
+      check findMaxBottomY(wm.windows) == 23
+
+  test "room for a split counts each window's status line":
+    let wm = createSingleWindowManager(80, 3)
+    check wm.roomForHsplit(wsEveryWindow, showTabLine = false).isErr
+    check wm.roomForHsplit(wsBottomWindows, showTabLine = false).isOk
+    wm.windows[0].viewport.height = 4
+    check wm.roomForHsplit(wsEveryWindow, showTabLine = false).isOk
+    check wm.roomForHsplit(wsEveryWindow, showTabLine = true).isErr
+
+  test "room for a split counts the windows already in the column":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 80, 2))
+    wm.windows.add(createTestWindow(0, 2, 80, 2, active = true))
+    wm.activeWindowIndex = 1
+    check wm.roomForHsplit(wsEveryWindow, showTabLine = false).isErr
+    wm.windows[1].viewport.height = 4
+    check wm.roomForHsplit(wsEveryWindow, showTabLine = false).isOk
+
+  test "the separator gives way to the bottom window's text row":
+    let wm = createSingleWindowManager(80, 3)
+    wm.splitActive(wsBottomWindows)
+    check wm.windows[0].viewport.height == 1
+    check wm.windows[1].viewport.y == 1
+    check wm.windows[1].viewport.height == 2
+
+suite "EditorWindowManager - height changes keep a text row":
+  proc stacked(topHeight, bottomHeight: int): EditorWindowManager =
+    result = newEditorWindowManager()
+    result.windows.add(createTestWindow(0, 0, 80, topHeight, active = true))
+    result.windows.add(createTestWindow(0, topHeight, 80, bottomHeight))
+
+  test "growing stops at the neighbour's status row":
+    let wm = stacked(21, 2)
+    wm.increaseWindowHeight(wsEveryWindow, showTabLine = false)
+    check wm.windows[1].viewport.height == 2
+
+  test "shrinking stops at the active window's status row":
+    let wm = stacked(2, 21)
+    wm.decreaseWindowHeight(wsEveryWindow, showTabLine = false)
+    check wm.windows[0].viewport.height == 2
+
 suite "EditorWindowManager - hsplitWithBuffer":
   test "hsplitWithBuffer uses provided buffer":
     let wm = createSingleWindowManager()
@@ -680,8 +777,8 @@ suite "EditorWindowManager - hsplitWithBuffer":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
       newBuf,
+      wsBottomWindows,
     )
 
     check result.isOk
@@ -695,8 +792,8 @@ suite "EditorWindowManager - hsplitWithBuffer":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
       newBuf,
+      wsBottomWindows,
     )
     check result.isOk
     check wm.windows.len == 2
@@ -710,8 +807,8 @@ suite "EditorWindowManager - hsplitWithBuffer":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = true,
       newBuf,
+      wsEveryWindow,
     )
     check result.isOk
     check wm.windows.len == 2
@@ -723,14 +820,14 @@ suite "EditorWindowManager - resizeWindows":
     let wm = createSingleWindowManager(80, 24)
     let originalWidth = wm.windows[0].viewport.width
 
-    wm.resizeWindows(0, 0, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(0, 0, 80, 24, wsBottomWindows)
 
     check wm.windows[0].viewport.width == originalWidth
 
   test "resizeWindows scales single window":
     let wm = createSingleWindowManager(80, 24)
 
-    wm.resizeWindows(160, 48, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(160, 48, 80, 24, wsBottomWindows)
 
     # Window should be scaled proportionally
     check wm.windows[0].viewport.width > 80
@@ -739,7 +836,7 @@ suite "EditorWindowManager - resizeWindows":
   test "resizeWindows shrinks windows":
     let wm = createSingleWindowManager(80, 24)
 
-    wm.resizeWindows(40, 12, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(40, 12, 80, 24, wsBottomWindows)
 
     # Window should be scaled down
     check wm.windows[0].viewport.width <= 80
@@ -750,7 +847,7 @@ suite "EditorWindowManager - resizeWindows":
     wm.windows.add(createTestWindow(0, 0, 40, 24, active = true))
     wm.windows.add(createTestWindow(41, 0, 39, 24, active = false))
 
-    wm.resizeWindows(160, 48, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(160, 48, 80, 24, wsBottomWindows)
 
     # Both windows should be resized
     check wm.windows[0].viewport.width > 0
@@ -760,7 +857,7 @@ suite "EditorWindowManager - resizeWindows":
     let wm = createSingleWindowManager(80, 24)
     wm.windows[0].viewport.topLine = 100 # Beyond buffer size
 
-    wm.resizeWindows(80, 24, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(80, 24, 80, 24, wsBottomWindows)
 
     check wm.windows[0].viewport.topLine < wm.windows[0].buffer.len
 
@@ -776,7 +873,7 @@ suite "EditorWindowManager - resizeWindows":
     wm.windows.add(createTestWindow(40, 0, 40, 20, active = true))
     wm.activeWindowIndex = 1
 
-    wm.resizeWindows(180, 45, 80, 20, multiStatusLine = false)
+    wm.resizeWindows(180, 45, 80, 20, wsBottomWindows)
 
     let
       left = wm.windows[0]
@@ -790,7 +887,7 @@ suite "EditorWindowManager - resizeWindows":
     # Both span the full height above the command line
     for win in [left, right]:
       check win.viewport.y == 0
-      check win.viewport.height == 45 - steadyBottomAreaHeight()
+      check win.viewport.height == 45 - StatusLineReserve
 
   test "hsplit layout survives large upscale without overlap":
     let wm = newEditorWindowManager()
@@ -799,7 +896,7 @@ suite "EditorWindowManager - resizeWindows":
     wm.windows.add(createTestWindow(0, 10, 80, 10))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(180, 45, 80, 20, multiStatusLine = false)
+    wm.resizeWindows(180, 45, 80, 20, wsBottomWindows)
 
     let
       top = wm.windows[0]
@@ -807,7 +904,7 @@ suite "EditorWindowManager - resizeWindows":
     # No overlap and full-height tiling above the command line row
     check top.viewport.y == 0
     check bottom.viewport.y >= top.viewport.y + top.viewport.height
-    check bottom.viewport.y + bottom.viewport.height == 45 - steadyBottomAreaHeight()
+    check bottom.viewport.y + bottom.viewport.height == 45 - StatusLineReserve
     # Both span the full width
     for win in [top, bottom]:
       check win.viewport.x == 0
@@ -820,7 +917,7 @@ suite "EditorWindowManager - resizeWindows":
     wm.windows.add(createTestWindow(90, 0, 90, 44, active = true))
     wm.activeWindowIndex = 1
 
-    wm.resizeWindows(100, 30, 180, 45, multiStatusLine = false)
+    wm.resizeWindows(100, 30, 180, 45, wsBottomWindows)
 
     let
       left = wm.windows[0]
@@ -830,7 +927,7 @@ suite "EditorWindowManager - resizeWindows":
     check right.viewport.x + right.viewport.width == 100
     for win in [left, right]:
       check win.viewport.y == 0
-      check win.viewport.height == 30 - steadyBottomAreaHeight()
+      check win.viewport.height == 30 - StatusLineReserve
 
   test "tall-left + stacked-right upscale keeps neighbors visible":
     # Regression: equalizeWidthsForResize used to stretch single-element
@@ -841,7 +938,7 @@ suite "EditorWindowManager - resizeWindows":
     wm.windows.add(createTestWindow(41, 11, 39, 9))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(180, 45, 80, 20, multiStatusLine = false)
+    wm.resizeWindows(180, 45, 80, 20, wsBottomWindows)
 
     let
       tall = wm.windows[0]
@@ -889,7 +986,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(31, 13, 49, 11))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(60, 24, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(60, 24, 80, 24, wsBottomWindows)
 
     # The fixed window keeps its width; both flex windows move right of it
     check wm.windows[0].viewport.width == 30
@@ -912,7 +1009,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(57, 0, 23, 12))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(60, 24, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(60, 24, 80, 24, wsBottomWindows)
 
     check wm.windows[1].viewport.x >= 31
     check wm.windows[2].viewport.x >= 31
@@ -932,7 +1029,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(54, 5, 26, 7))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(60, 12, 80, 12, multiStatusLine = false)
+    wm.resizeWindows(60, 12, 80, 12, wsBottomWindows)
 
     for win in wm.windows:
       check win.viewport.width >= 1
@@ -950,7 +1047,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(51, 13, 49, 11))
     wm.activeWindowIndex = 0
 
-    discard wm.closeWindow(multiStatusLine = true)
+    discard wm.closeWindow(wsEveryWindow)
 
     check wm.windows.len == 2
     for win in wm.windows:
@@ -967,25 +1064,24 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.activeWindowIndex = 0
 
     # 2 rows on a 2-row screen: total content must not go negative
-    wm.equalizeHeightsForResize(@[0, 1], 2, multiStatusLine = false)
+    wm.equalizeHeightsForResize(@[0, 1], 2, wsBottomWindows)
 
     for win in wm.windows:
       check win.viewport.height >= 1
 
   test "equalizeHeightsForResize stops a single window at a lower neighbor":
     # A single-element vertical group (gap exceeds the ±1 tolerance) must
-    # stop at the lower neighbor's top instead of the screen bottom.
+    # stop at the lower neighbor instead of the screen bottom.
     let wm = newEditorWindowManager()
     wm.windows.add(createTestWindow(0, 0, 80, 10, active = true))
     wm.windows.add(createTestWindow(0, 12, 80, 10))
     wm.activeWindowIndex = 0
 
-    wm.equalizeHeightsForResize(@[0], 24, multiStatusLine = false)
+    wm.equalizeHeightsForResize(@[0], 24, wsBottomWindows)
 
-    # Stops at the lower neighbor: 12 (neighbor top) - 0 (minY) - 0, not 24 - 0
-    check wm.windows[0].viewport.height == 12
-    check wm.windows[0].viewport.y + wm.windows[0].viewport.height <=
-      wm.windows[1].viewport.y
+    # Stops above the separator over the lower neighbor, not at the window area's
+    # bottom: 12 (neighbor top) - 1 (separator)
+    check wm.windows[0].viewport.height == 11
 
   test "closing a unique-dimension column re-tiles the rest (nested layout)":
     # :vsplit → right :split → left :q: the full-height left column matches
@@ -996,7 +1092,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(51, 13, 49, 11))
     wm.activeWindowIndex = 0
 
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
 
     check wm.windows.len == 2
     # Remaining windows span the full width: no dead space on the left
@@ -1017,7 +1113,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(51, 13, 49, 11))
     wm.activeWindowIndex = 0
 
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
 
     check wm.windows.len == 2
     # Remaining windows span the full height: no dead space on top
@@ -1088,7 +1184,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
       oldWidth = 80
       oldHeight = 20
     for newHeight in countdown(19, 3):
-      wm.resizeWindows(60, newHeight, oldWidth, oldHeight, multiStatusLine = false)
+      wm.resizeWindows(60, newHeight, oldWidth, oldHeight, wsBottomWindows)
       oldWidth = 60
       oldHeight = newHeight
       for win in wm.windows:
@@ -1106,7 +1202,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(0, 18, 77, 1, active = true))
     wm.activeWindowIndex = 3
 
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
 
     check wm.windows.len == 3
     # All windows stacked over the full bounding box (0,0)-(77,19)
@@ -1176,7 +1272,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(31, 0, 49, 24))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(80, 3, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(80, 3, 80, 24, wsBottomWindows)
 
     # Windows 0..1 fit in rows 0..2 without a separator instead of shoving
     # window 1 into the band below at y == 2
@@ -1194,7 +1290,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(0, 11, 80, 10))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(80, 3, 80, 24, multiStatusLine = true)
+    wm.resizeWindows(80, 3, 80, 24, wsEveryWindow)
 
     check wm.windows[1].viewport.y + wm.windows[1].viewport.height <= 3
     for win in wm.windows:
@@ -1214,7 +1310,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(61, 13, 30, 11))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(47, 24, 90, 24, multiStatusLine = false)
+    wm.resizeWindows(47, 24, 90, 24, wsBottomWindows)
 
     for win in wm.windows:
       check win.viewport.width >= 1
@@ -1235,7 +1331,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(61, 0, 30, 24))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(47, 24, 90, 24, multiStatusLine = false)
+    wm.resizeWindows(47, 24, 90, 24, wsBottomWindows)
 
     for win in wm.windows:
       check win.viewport.width >= 1
@@ -1255,7 +1351,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(61, 13, 30, 11))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(30, 24, 90, 24, multiStatusLine = false)
+    wm.resizeWindows(30, 24, 90, 24, wsBottomWindows)
 
     for win in wm.windows:
       check win.viewport.width >= 1
@@ -1273,7 +1369,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(51, 1, 49, 1))
     wm.activeWindowIndex = 0
 
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
 
     check wm.windows.len == 2
     for win in wm.windows:
@@ -1294,7 +1390,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(51, 1, 49, 1))
     wm.activeWindowIndex = 0
 
-    discard wm.closeWindow(multiStatusLine = true)
+    discard wm.closeWindow(wsEveryWindow)
 
     check wm.windows.len == 2
     for win in wm.windows:
@@ -1319,7 +1415,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(61, 13, 19, 11))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(100, 24, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(100, 24, 80, 24, wsBottomWindows)
 
     for win in wm.windows:
       check win.viewport.width >= 1
@@ -1339,7 +1435,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(0, 25, 80, 24))
     wm.activeWindowIndex = 0
 
-    wm.equalizeHeightsInGroup(@[0, 1], 2, 0, multiStatusLine = true)
+    wm.equalizeHeightsInGroup(@[0, 1], 2, 0, wsEveryWindow)
 
     for win in wm.windows:
       check win.viewport.height >= 1
@@ -1352,7 +1448,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(0, 11, 80, 10))
     wm.activeWindowIndex = 0
 
-    wm.equalizeHeightsForResize(@[0, 1], 2, multiStatusLine = true)
+    wm.equalizeHeightsForResize(@[0, 1], 2, wsEveryWindow)
 
     for win in wm.windows:
       check win.viewport.height >= 1
@@ -1365,7 +1461,7 @@ suite "EditorWindowManager - Layout invariants (S10)":
     wm.windows.add(createTestWindow(0, 11, 80, 10))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(80, 2, 80, 24, multiStatusLine = true)
+    wm.resizeWindows(80, 2, 80, 24, wsEveryWindow)
 
     for win in wm.windows:
       check win.viewport.width >= 1
@@ -1396,7 +1492,7 @@ suite "EditorWindowManager - Integration":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
 
     check wm.windows.len == 2
@@ -1415,14 +1511,14 @@ suite "EditorWindowManager - Integration":
     check wm.windows.len == 3
 
     # Close windows until one remains
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
     check wm.windows.len == 2
 
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
     check wm.windows.len == 1
 
     # Last window should return true (quit)
-    let shouldQuit = wm.closeWindow(multiStatusLine = false)
+    let shouldQuit = wm.closeWindow(wsBottomWindows)
     check shouldQuit == true
     check wm.windows.len == 1 # Still 1, not removed
 
@@ -1434,20 +1530,20 @@ suite "EditorWindowManager - Integration":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
     discard wm.hsplit(
       wm.windows[1].buffer,
       wm.windows[1].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
     check wm.windows.len == 3
 
     # Close the middle window
     wm.deactivateAllWindows()
     wm.activateWindow(1)
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
     check wm.windows.len == 2
 
     # Verify no overlapping: window 0's bottom should not exceed window 1's top
@@ -1475,7 +1571,7 @@ suite "EditorWindowManager - Integration":
     # Close the middle window
     wm.deactivateAllWindows()
     wm.activateWindow(1)
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
     check wm.windows.len == 2
 
     # Verify no overlapping
@@ -1528,7 +1624,7 @@ suite "EditorWindowManager - bufferIds in splits":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
 
     check splitResult.isOk
@@ -1565,8 +1661,8 @@ suite "EditorWindowManager - bufferIds in splits":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
       newBuffer,
+      wsBottomWindows,
     )
 
     check splitResult.isOk
@@ -1636,16 +1732,16 @@ suite "EditorWindowManager - Split Size Proportions":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
 
     check wm.windows.len == 2
-    # totalContent = 24 - 1(sep) - 1(status) - 1(cmd) = 21, each = 21 div 2 = 10
-    # Window 0: height=10 (content only), Window 1: height = 24 - 11 = 13
+    # totalContent = 24 - 1(sep) - 1(status) = 22, each = 11
+    # Window 0: height=11 (content only), Window 1: height = 24 - 12 = 12
     check wm.windows[0].viewport.y == 0
-    check wm.windows[0].viewport.height == 10
-    check wm.windows[1].viewport.y == 11
-    check wm.windows[1].viewport.height == 13
+    check wm.windows[0].viewport.height == 11
+    check wm.windows[1].viewport.y == 12
+    check wm.windows[1].viewport.height == 12
     check wm.windows[0].viewport.height + WindowSeparatorHeight +
       wm.windows[1].viewport.height == 24
 
@@ -1656,24 +1752,24 @@ suite "EditorWindowManager - Split Size Proportions":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
     discard wm.hsplit(
       wm.windows[1].buffer,
       wm.windows[1].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
 
     check wm.windows.len == 3
-    # totalContent = 24 - 2(sep) - 1(status) - 1(cmd) = 20, each = 20 div 3 = 6
-    # W0: h=6, W1: h=6, W2: h = 24 - 14 = 10
+    # totalContent = 24 - 2(sep) - 1(status) = 21, each = 7
+    # W0: h=7, W1: h=7, W2: h = 24 - 16 = 8
     check wm.windows[0].viewport.y == 0
-    check wm.windows[0].viewport.height == 6
-    check wm.windows[1].viewport.y == 7
-    check wm.windows[1].viewport.height == 6
-    check wm.windows[2].viewport.y == 14
-    check wm.windows[2].viewport.height == 10
+    check wm.windows[0].viewport.height == 7
+    check wm.windows[1].viewport.y == 8
+    check wm.windows[1].viewport.height == 7
+    check wm.windows[2].viewport.y == 16
+    check wm.windows[2].viewport.height == 8
     check wm.windows[0].viewport.height + WindowSeparatorHeight +
       wm.windows[1].viewport.height + WindowSeparatorHeight +
       wm.windows[2].viewport.height == 24
@@ -1687,16 +1783,16 @@ suite "EditorWindowManager - Split Size Proportions":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = true,
+      wsEveryWindow,
     )
 
     check wm.windows.len == 2
-    # totalContent = 24 - 0(sep) - 2(status) - 1(cmd) = 21, each = 21 div 2 = 10
-    # W0: h = 10 + 1(status) = 11, W1: h = 24 - 11 = 13
+    # totalContent = 24 - 0(sep) - 2(status) = 22, each = 11
+    # W0: h = 11 + 1(status) = 12, W1: h = 24 - 12 = 12
     check wm.windows[0].viewport.y == 0
-    check wm.windows[0].viewport.height == 11
-    check wm.windows[1].viewport.y == 11
-    check wm.windows[1].viewport.height == 13
+    check wm.windows[0].viewport.height == 12
+    check wm.windows[1].viewport.y == 12
+    check wm.windows[1].viewport.height == 12
     check wm.windows[0].viewport.height + wm.windows[1].viewport.height == 24
 
   test "3 hsplits produce correct heights (multi status line)":
@@ -1706,24 +1802,24 @@ suite "EditorWindowManager - Split Size Proportions":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = true,
+      wsEveryWindow,
     )
     discard wm.hsplit(
       wm.windows[1].buffer,
       wm.windows[1].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = true,
+      wsEveryWindow,
     )
 
     check wm.windows.len == 3
-    # totalContent = 24 - 0(sep) - 3(status) - 1(cmd) = 20, each = 20 div 3 = 6
-    # W0: h = 6 + 1 = 7, W1: h = 6 + 1 = 7, W2: h = 24 - 14 = 10
+    # totalContent = 24 - 0(sep) - 3(status) = 21, each = 7
+    # W0: h = 7 + 1 = 8, W1: h = 7 + 1 = 8, W2: h = 24 - 16 = 8
     check wm.windows[0].viewport.y == 0
-    check wm.windows[0].viewport.height == 7
-    check wm.windows[1].viewport.y == 7
-    check wm.windows[1].viewport.height == 7
-    check wm.windows[2].viewport.y == 14
-    check wm.windows[2].viewport.height == 10
+    check wm.windows[0].viewport.height == 8
+    check wm.windows[1].viewport.y == 8
+    check wm.windows[1].viewport.height == 8
+    check wm.windows[2].viewport.y == 16
+    check wm.windows[2].viewport.height == 8
     check wm.windows[0].viewport.height + wm.windows[1].viewport.height +
       wm.windows[2].viewport.height == 24
 
@@ -1742,7 +1838,7 @@ suite "EditorWindowManager - Split Size Proportions":
 
     wm.deactivateAllWindows()
     wm.activateWindow(1)
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
     check wm.windows.len == 2
 
     # Should match a fresh 2-vsplit layout
@@ -1758,26 +1854,26 @@ suite "EditorWindowManager - Split Size Proportions":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
     discard wm.hsplit(
       wm.windows[1].buffer,
       wm.windows[1].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
     check wm.windows.len == 3
 
     wm.deactivateAllWindows()
     wm.activateWindow(1)
-    discard wm.closeWindow(multiStatusLine = false)
+    discard wm.closeWindow(wsBottomWindows)
     check wm.windows.len == 2
 
     # Should match a fresh 2-hsplit layout
     check wm.windows[0].viewport.y == 0
-    check wm.windows[0].viewport.height == 10
-    check wm.windows[1].viewport.y == 11
-    check wm.windows[1].viewport.height == 13
+    check wm.windows[0].viewport.height == 11
+    check wm.windows[1].viewport.y == 12
+    check wm.windows[1].viewport.height == 12
 
 suite "EditorWindowManager - Split inherits cursor position for same buffer":
   test "vsplit same buffer inherits cursor position":
@@ -1828,7 +1924,7 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 5, column: 10),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
 
     check result.isOk
@@ -1850,8 +1946,8 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 5, column: 10),
-      multiStatusLine = false,
       newBuf,
+      wsBottomWindows,
     )
 
     check result.isOk
@@ -1891,8 +1987,8 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
       originalBuffer,
       wm.windows[0].viewport,
       BufferPosition(line: 5, column: 10),
-      multiStatusLine = false,
       originalBuffer,
+      wsBottomWindows,
     )
 
     check result.isOk
@@ -1917,13 +2013,13 @@ suite "EditorWindowManager - Window Resize":
   test "increaseWindowHeight with single window does nothing":
     let wm = createSingleWindowManager(80, 24)
     let origHeight = wm.windows[0].viewport.height
-    wm.increaseWindowHeight()
+    wm.increaseWindowHeight(wsBottomWindows, showTabLine = false)
     check wm.windows[0].viewport.height == origHeight
 
   test "decreaseWindowHeight with single window does nothing":
     let wm = createSingleWindowManager(80, 24)
     let origHeight = wm.windows[0].viewport.height
-    wm.decreaseWindowHeight()
+    wm.decreaseWindowHeight(wsBottomWindows, showTabLine = false)
     check wm.windows[0].viewport.height == origHeight
 
   test "increaseWindowWidth with two horizontal windows":
@@ -1962,7 +2058,7 @@ suite "EditorWindowManager - Window Resize":
     wm.windows.add(createTestWindow(0, 12, 80, 12, active = false))
     wm.activeWindowIndex = 0
 
-    wm.increaseWindowHeight()
+    wm.increaseWindowHeight(wsBottomWindows, showTabLine = false)
 
     check wm.windows[0].viewport.height == 12
     check wm.windows[1].viewport.height == 11
@@ -1976,7 +2072,7 @@ suite "EditorWindowManager - Window Resize":
     wm.windows.add(createTestWindow(0, 12, 80, 12, active = false))
     wm.activeWindowIndex = 0
 
-    wm.decreaseWindowHeight()
+    wm.decreaseWindowHeight(wsBottomWindows, showTabLine = false)
 
     check wm.windows[0].viewport.height == 10
     check wm.windows[1].viewport.height == 13
@@ -2011,7 +2107,7 @@ suite "EditorWindowManager - Window Resize":
     wm.activeWindowIndex = 0
 
     # Neighbor has height 1, cannot shrink further
-    wm.increaseWindowHeight()
+    wm.increaseWindowHeight(wsBottomWindows, showTabLine = false)
     check wm.windows[0].viewport.height == 22
     check wm.windows[1].viewport.height == 1
 
@@ -2022,7 +2118,7 @@ suite "EditorWindowManager - Window Resize":
     wm.activeWindowIndex = 0
 
     # Active window has height 1, cannot shrink further
-    wm.decreaseWindowHeight()
+    wm.decreaseWindowHeight(wsBottomWindows, showTabLine = false)
     check wm.windows[0].viewport.height == 1
     check wm.windows[1].viewport.height == 22
 
@@ -2032,7 +2128,7 @@ suite "EditorWindowManager - Window Resize":
     wm.windows.add(createTestWindow(21, 0, 59, 24, active = false))
     wm.activeWindowIndex = 0
 
-    wm.equalizeAllWindows(multiStatusLine = false)
+    wm.equalizeAllWindows(wsBottomWindows)
 
     # Both windows should have roughly equal widths
     # Total width = 80, separator = 1, available = 79, each = 39 or 40
@@ -2051,11 +2147,11 @@ suite "EditorWindowManager - Window Resize":
       result.activeWindowIndex = 0
 
     let baseline = grid()
-    baseline.equalizeAllWindows(multiStatusLine = false)
+    baseline.equalizeAllWindows(wsBottomWindows)
 
     let wm = grid()
-    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
-    wm.equalizeAllWindows(multiStatusLine = false)
+    wm.maximizeWindowHeight(wsBottomWindows, showTabLine = false)
+    wm.equalizeAllWindows(wsBottomWindows)
 
     for i in 0 ..< wm.windows.len:
       check wm.windows[i].viewport == baseline.windows[i].viewport
@@ -2104,7 +2200,7 @@ suite "EditorWindowManager - Only Window":
     check wm.windows[0].viewport.x == 0
     check wm.windows[0].viewport.y == 0
     check wm.windows[0].viewport.width == 80
-    check wm.windows[0].viewport.height == 23 # screenHeight - steadyBottomAreaHeight()
+    check wm.windows[0].viewport.height == 23 # screenHeight - StatusLineReserve
 
   test "onlyWindow closes all other windows after hsplit":
     let wm = createSingleWindowManager(80, 24)
@@ -2112,7 +2208,7 @@ suite "EditorWindowManager - Only Window":
       wm.windows[0].buffer,
       wm.windows[0].viewport,
       BufferPosition(line: 0, column: 0),
-      multiStatusLine = false,
+      wsBottomWindows,
     )
     check wm.windows.len == 2
 
@@ -2121,7 +2217,7 @@ suite "EditorWindowManager - Only Window":
     check wm.windows.len == 1
     check wm.activeWindowIndex == 0
     check wm.windows[0].viewport.width == 80
-    check wm.windows[0].viewport.height == 23 # screenHeight - steadyBottomAreaHeight()
+    check wm.windows[0].viewport.height == 23 # screenHeight - StatusLineReserve
 
   test "onlyWindow keeps the active window":
     let wm = createSingleWindowManager(80, 24)
@@ -2157,13 +2253,13 @@ suite "EditorWindowManager - Only Window":
     check wm.windows[0].viewport.x == 0
     check wm.windows[0].viewport.y == 0
     check wm.windows[0].viewport.width == 80
-    check wm.windows[0].viewport.height == 23 # screenHeight - steadyBottomAreaHeight()
+    check wm.windows[0].viewport.height == 23 # screenHeight - StatusLineReserve
 
   test "equalizeAllWindows with single window does nothing":
     let wm = createSingleWindowManager(80, 24)
     let origWidth = wm.windows[0].viewport.width
     let origHeight = wm.windows[0].viewport.height
-    wm.equalizeAllWindows(multiStatusLine = false)
+    wm.equalizeAllWindows(wsBottomWindows)
     check wm.windows[0].viewport.width == origWidth
     check wm.windows[0].viewport.height == origHeight
 
@@ -2412,21 +2508,21 @@ suite "EditorWindowManager - Layout invariants (tiny-resize roundtrip)":
     # Regression: shrink to 3 rows and grow back used to overlap the right
     # column's bottom window with the left column.
     let wm = createVsplitHsplit()
-    wm.resizeWindows(5, 3, 80, 24, multiStatusLine = true)
-    wm.resizeWindows(80, 24, 5, 3, multiStatusLine = true)
+    wm.resizeWindows(5, 3, 80, 24, wsEveryWindow)
+    wm.resizeWindows(80, 24, 5, 3, wsEveryWindow)
     checkWindowManagerInvariants(wm)
 
   test "vsplit+hsplit roundtrip through a 3-row terminal to another size":
     let wm = createVsplitHsplit()
-    wm.resizeWindows(5, 3, 80, 24, multiStatusLine = true)
-    wm.resizeWindows(60, 18, 5, 3, multiStatusLine = true)
+    wm.resizeWindows(5, 3, 80, 24, wsEveryWindow)
+    wm.resizeWindows(60, 18, 5, 3, wsEveryWindow)
     checkWindowManagerInvariants(wm)
 
   test "vsplit+hsplit roundtrips at odd widths on a 3-row terminal":
     for w in [3, 7, 21, 39]:
       let wm = createVsplitHsplit()
-      wm.resizeWindows(w, 3, 80, 24, multiStatusLine = true)
-      wm.resizeWindows(80, 24, w, 3, multiStatusLine = true)
+      wm.resizeWindows(w, 3, 80, 24, wsEveryWindow)
+      wm.resizeWindows(80, 24, w, 3, wsEveryWindow)
       checkWindowManagerInvariants(wm)
 
   test "hsplit+vsplit roundtrip through a 2-row terminal":
@@ -2438,8 +2534,8 @@ suite "EditorWindowManager - Layout invariants (tiny-resize roundtrip)":
     wm.windows.add(createTestWindow(41, 13, 39, 11))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(4, 2, 80, 24, multiStatusLine = true)
-    wm.resizeWindows(58, 27, 4, 2, multiStatusLine = true)
+    wm.resizeWindows(4, 2, 80, 24, wsEveryWindow)
+    wm.resizeWindows(58, 27, 4, 2, wsEveryWindow)
     checkWindowManagerInvariants(wm)
 
   test "vsplit+hsplit multi-step chain with single status line":
@@ -2448,9 +2544,7 @@ suite "EditorWindowManager - Layout invariants (tiny-resize roundtrip)":
       oldWidth = 80
       oldHeight = 24
     for (newWidth, newHeight) in [(10, 4), (64, 13), (8, 2), (38, 15)]:
-      wm.resizeWindows(
-        newWidth, newHeight, oldWidth, oldHeight, multiStatusLine = false
-      )
+      wm.resizeWindows(newWidth, newHeight, oldWidth, oldHeight, wsBottomWindows)
       oldWidth = newWidth
       oldHeight = newHeight
     checkWindowManagerInvariants(wm)
@@ -2462,8 +2556,8 @@ suite "EditorWindowManager - Layout invariants (tiny-resize roundtrip)":
     wm.windows.add(createTestWindow(41, 13, 39, 11))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(4, 2, 80, 24, multiStatusLine = false)
-    wm.resizeWindows(62, 19, 4, 2, multiStatusLine = false)
+    wm.resizeWindows(4, 2, 80, 24, wsBottomWindows)
+    wm.resizeWindows(62, 19, 4, 2, wsBottomWindows)
     checkWindowManagerInvariants(wm)
 
   test "FileTree column stays clear of the fixed-width sidebar":
@@ -2482,7 +2576,7 @@ suite "EditorWindowManager - Layout invariants (tiny-resize roundtrip)":
     for (newWidth, newHeight) in [
       (68, 29), (8, 2), (34, 19), (6, 4), (44, 25), (4, 2), (30, 15)
     ]:
-      wm.resizeWindows(newWidth, newHeight, oldWidth, oldHeight, multiStatusLine = true)
+      wm.resizeWindows(newWidth, newHeight, oldWidth, oldHeight, wsEveryWindow)
       oldWidth = newWidth
       oldHeight = newHeight
     # 30 columns cannot fit the sidebar next to the right column: 1-cell
@@ -2497,8 +2591,8 @@ suite "EditorWindowManager - Layout invariants (tiny-resize roundtrip)":
     wm.windows.add(createTestWindow(41, 13, 39, 11))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(3, 5, 80, 24, multiStatusLine = true)
-    wm.resizeWindows(80, 24, 3, 5, multiStatusLine = true)
+    wm.resizeWindows(3, 5, 80, 24, wsEveryWindow)
+    wm.resizeWindows(80, 24, 3, 5, wsEveryWindow)
     checkWindowManagerInvariants(wm)
 
   test "zero-height right neighbor still bounds the left window":
@@ -2509,7 +2603,7 @@ suite "EditorWindowManager - Layout invariants (tiny-resize roundtrip)":
     wm.windows.add(createTestWindow(10, 3, 9, 2))
     wm.activeWindowIndex = 0
 
-    wm.resizeWindows(20, 6, 20, 6, multiStatusLine = false)
+    wm.resizeWindows(20, 6, 20, 6, wsBottomWindows)
     # A 20x6 end size can squeeze a window to 1 cell: expected degradation.
     checkWindowManagerInvariants(wm, allowTiny = true)
 
@@ -2565,7 +2659,7 @@ suite "EditorWindowManager - Layout invariant diagnostics":
     withCapturedWindowManagerLog(
       proc(logPath: string) =
         # Three windows need at least 3 rows (1+1+1) plus separators/status
-        wm.equalizeHeightsInGroup(@[0, 1, 2], 2, 0, multiStatusLine = false)
+        wm.equalizeHeightsInGroup(@[0, 1, 2], 2, 0, wsBottomWindows)
         check readFile(logPath).contains("last window does not fit")
     )
 
@@ -2577,7 +2671,7 @@ suite "EditorWindowManager - Layout invariant diagnostics":
     withCapturedWindowManagerLog(
       proc(logPath: string) =
         # Command-line reserve leaves a 1-row box for three windows
-        wm.equalizeHeightsForResize(@[0, 1, 2], 2, multiStatusLine = false)
+        wm.equalizeHeightsForResize(@[0, 1, 2], 2, wsBottomWindows)
         check readFile(logPath).contains("last window does not fit")
     )
 
@@ -2588,7 +2682,7 @@ suite "EditorWindowManager - Layout invariant diagnostics":
     wm.windows.add(createTestWindow(31, 13, 49, 11))
     # A 2-column terminal cannot tile three windows side by side; the
     # endpoint must still normalize sizes and leave no overlaps.
-    wm.resizeWindows(2, 24, 80, 24, multiStatusLine = false)
+    wm.resizeWindows(2, 24, 80, 24, wsBottomWindows)
     for win in wm.windows:
       check win.viewport.width >= 1
       check win.viewport.height >= 1
@@ -2604,8 +2698,17 @@ suite "EditorWindowManager - Layout invariant diagnostics":
       proc(logPath: string) =
         # The sidebar legitimately exceeds the 20-column screen; the
         # end-point check must receive the screen dims and warn about it.
-        wm.resizeWindows(20, 24, 80, 24, multiStatusLine = false)
+        wm.resizeWindows(20, 24, 80, 24, wsBottomWindows)
         check readFile(logPath).contains("outside the screen")
+    )
+
+  test "validateViewportInvariants warns on a window over the command row":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 80, 24))
+    withCapturedWindowManagerLog(
+      proc(logPath: string) =
+        wm.validateViewportInvariants(80, 24)
+        check readFile(logPath).contains("outside the window area")
     )
 
   test "closeWindow passes screen dimensions to the invariant check":
@@ -2619,7 +2722,73 @@ suite "EditorWindowManager - Layout invariant diagnostics":
       proc(logPath: string) =
         # Re-tiling after the close overflows the 20-column screen; the
         # end-point check must receive the screen dims to flag it.
-        discard
-          wm.closeWindow(multiStatusLine = false, screenWidth = 20, screenHeight = 24)
+        discard wm.closeWindow(wsBottomWindows, screenWidth = 20, screenHeight = 24)
         check readFile(logPath).contains("outside the screen")
     )
+
+suite "EditorWindowManager - resizeWindows keeps the command row free":
+  proc bottomAfter(wm: EditorWindowManager, fromH, toH: int): int =
+    wm.resizeWindows(80, toH, 80, fromH, wsEveryWindow)
+    findMaxBottomY(wm.windows)
+
+  test "growing a single window":
+    let wm = newEditorWindowManager()
+    wm.windows.add createTestWindow(0, 0, 80, 23, active = true)
+    check wm.bottomAfter(24, 40) == 39
+
+  test "shrinking a single window":
+    let wm = newEditorWindowManager()
+    wm.windows.add createTestWindow(0, 0, 80, 23, active = true)
+    check wm.bottomAfter(24, 20) == 19
+
+  test "growing stacked windows":
+    let wm = newEditorWindowManager()
+    wm.windows.add createTestWindow(0, 0, 80, 12, active = true)
+    wm.windows.add createTestWindow(0, 12, 80, 11)
+    check wm.bottomAfter(24, 40) == 39
+
+  test "growing side-by-side windows":
+    let wm = newEditorWindowManager()
+    wm.windows.add createTestWindow(0, 0, 40, 23, active = true)
+    wm.windows.add createTestWindow(40, 0, 40, 23)
+    check wm.bottomAfter(24, 40) == 39
+    check wm.windows[0].viewport.height == wm.windows[1].viewport.height
+
+  test "a group keeps the separator above a wider window":
+    let wm = newEditorWindowManager()
+    wm.windows.add createTestWindow(0, 0, 40, 5, active = true)
+    wm.windows.add createTestWindow(0, 6, 40, 5)
+    wm.windows.add createTestWindow(41, 0, 39, 11)
+    wm.windows.add createTestWindow(0, 12, 80, 11)
+    wm.resizeWindows(80, 48, 80, 24, wsBottomWindows)
+    let upper = wm.windows[1].viewport
+    check upper.y + upper.height + WindowSeparatorHeight == wm.windows[3].viewport.y
+
+  test "a hidden status line takes no row from the last window":
+    let wm = newEditorWindowManager()
+    wm.windows.add createTestWindow(0, 0, 80, 23, active = true)
+    discard wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      wsNone,
+    )
+    check wm.windows[0].viewport.height == 11
+    check wm.windows[1].viewport.height == 11
+
+  test "a hidden status line takes no row from the scroll":
+    let wm = newEditorWindowManager()
+    wm.windows.add createTestWindow(0, 0, 80, 23, active = true)
+    wm.windows[0].cursor = BufferPosition(line: 22, column: 0)
+    wm.resizeWindows(100, 24, 80, 24, wsNone)
+    check wm.windows[0].viewport.topLine == 0
+
+  test "a group above a wider window stops at that window":
+    let wm = newEditorWindowManager()
+    wm.windows.add createTestWindow(0, 0, 40, 6, active = true)
+    wm.windows.add createTestWindow(0, 6, 40, 6)
+    wm.windows.add createTestWindow(40, 0, 40, 12)
+    wm.windows.add createTestWindow(0, 12, 80, 11)
+    check wm.bottomAfter(24, 40) == 39
+    let upper = wm.windows[1].viewport
+    check upper.y + upper.height <= wm.windows[3].viewport.y

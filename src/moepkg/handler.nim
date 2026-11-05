@@ -160,8 +160,9 @@ proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
 proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in Recent File mode.
   # Get viewport height for the recent file list
-  # Reserve: status/command line (shared row) + 1 line for title
-  let viewportHeight = max(0, e.viewport.height - steadyBottomAreaHeight() - 1)
+  # Reserve: status line + 1 line for title
+  let viewportHeight =
+    max(0, e.viewport.height - e.steadyReservedLines(e.activeWindow) - 1)
 
   let activeWin = e.activeWindow
   if activeWin.modeState.kind != mskRecentFile:
@@ -241,8 +242,9 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
 proc handleDebugModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in Debug mode.
   # Get viewport height for the debug viewer
-  # Reserve: status/command line (shared row) + 1 line for title
-  let viewportHeight = max(0, e.viewport.height - steadyBottomAreaHeight() - 1)
+  # Reserve: status line + 1 line for title
+  let viewportHeight =
+    max(0, e.viewport.height - e.steadyReservedLines(e.activeWindow) - 1)
 
   let activeWin = e.activeWindow
   if activeWin.modeState.kind != mskDebug:
@@ -459,10 +461,9 @@ proc scrollRegion(e: Editor, window: EditorWindow): GridRegion =
   ## rows are deliberately excluded so a GUI bridge can leave them stationary.
   let
     vp = window.viewport
-    maxBottomY = findMaxBottomY(e.windowManager.windows)
-    isBottomWindow = vp.y + vp.height == maxBottomY
     tabLineOffset = if e.showTabLine: TabLineHeight else: 0
-    reservedLines = e.calculateReservedLines(isBottomWindow)
+    reservedLines =
+      e.calculateReservedLines(e.windowManager.windows.reachesBottom(window))
   initGridRegion(
     vp.y + tabLineOffset, vp.x, vp.height - tabLineOffset - reservedLines, vp.width
   )
@@ -620,30 +621,15 @@ proc pointerPositionInWindow(
 
   # The tab line is part of the window's rows, and `screenToBufferPosition`
   # bounds the row against `vp.height - reservedLines`, so the offset comes off
-  # the reserve as well as off the row — otherwise the status/command row is
+  # the reserve as well as off the row — otherwise the status row is
   # accepted and clamped onto the last buffer line.
   let
     tabLineOffset = if e.showTabLine: TabLineHeight else: 0
     adjustedRow = input.row - tabLineOffset
 
-  if e.windowManager.windows.len > 1:
-    if input.row < vp.y or input.row >= vp.y + vp.height:
-      return none(BufferPosition)
-    let
-      maxBottomY = findMaxBottomY(e.windowManager.windows)
-      reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
-    return screenToBufferPosition(
-      vp,
-      window.buffer,
-      input.column,
-      adjustedRow,
-      e.gutterWidth(window),
-      reservedLines + tabLineOffset,
-      e.lineWrap,
-      e.tabStop,
-      e.wrapWidth(window),
-      window.wrapCountCache,
-    )
+  if e.windowManager.windows.len > 1 and
+      (input.row < vp.y or input.row >= vp.y + vp.height):
+    return none(BufferPosition)
 
   screenToBufferPosition(
     vp,
@@ -651,7 +637,7 @@ proc pointerPositionInWindow(
     input.column,
     adjustedRow,
     e.gutterWidth(window),
-    steadyBottomAreaHeight() + tabLineOffset,
+    e.steadyReservedLines(window) + tabLineOffset,
     e.lineWrap,
     e.tabStop,
     e.wrapWidth(window),
@@ -674,13 +660,12 @@ proc windowIndexAtCell(e: Editor, row, col: int): int =
     tabLineOffset = if e.showTabLine: TabLineHeight else: 0
     maxBottomY = findMaxBottomY(e.windowManager.windows)
   for i, window in e.windowManager.windows:
-    let
-      vp = window.viewport
-      # Same text area as pointerPositionInWindow: the bottom rows are the
-      # status/command area, not the window's text.
-      reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
+    let vp = window.viewport
     if col < vp.x or col >= vp.x + vp.width:
       continue
+    # Same text area as pointerPositionInWindow: the status line is not the
+    # window's text.
+    let reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
     if row < vp.y + tabLineOffset or row >= vp.y + vp.height - reservedLines:
       continue
     return i
@@ -1000,11 +985,10 @@ proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
       vp = e.activeWindow.viewport
       tabLineOffset = if e.showTabLine: TabLineHeight else: 0
       # Same reserve the renderer uses, so the hit test maps to the drawn row.
-      maxBottomY = findMaxBottomY(e.windowManager.windows)
-      reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
+      reservedLines = e.steadyReservedLines(e.activeWindow)
       screenY = input.row - vp.y - tabLineOffset
 
-    # Ignore clicks on tab line or status/command line area
+    # Ignore clicks on tab line or status line
     if screenY >= 0 and screenY < vp.height - tabLineOffset - reservedLines:
       let clickedIndex = vp.topLine + screenY
       if clickedIndex >= 0 and clickedIndex < filerState.entries.len:
@@ -1270,32 +1254,6 @@ proc handleSpecialModeWindowCommandKeyCombo(
     return some(true)
 
   return e.handleWindowCommand(keyCombo)
-
-proc updateViewportReservedLines(e: Editor) =
-  ## Recompute `state.windowDisplay.viewportReservedLines` from current
-  ## status/tab line configuration and window layout. Status line and
-  ## command line share the same row (command overlays status).
-  let hasWindows =
-    e.windowManager.windows.len > 0 and
-    e.windowManager.activeWindowIndex < e.windowManager.windows.len
-
-  let isBottomWindow =
-    if hasWindows:
-      # A window is a bottom window if its bottom edge is at the maximum bottom Y
-      let
-        maxBottomY = findMaxBottomY(e.windowManager.windows)
-        windowBottomY = e.activeWindow.viewport.y + e.activeWindow.viewport.height
-      windowBottomY == maxBottomY
-    else:
-      true
-
-  # Steady reserve: motion scrolling is persistent geometry and must match the
-  # scroll authority and screen cursor, not flap with a transient status message.
-  e.state.windowDisplay.viewportReservedLines = e.steadyReservedLines(isBottomWindow)
-
-  # Add tab line height if shown
-  if e.showTabLine:
-    e.state.windowDisplay.viewportReservedLines += TabLineHeight
 
 proc syncCompletionOtherBuffers(e: Editor, activeBuffer: TextBuffer) =
   ## Populate completion manager's `otherBuffers` with all FileEditMode

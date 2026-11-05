@@ -56,7 +56,10 @@ type
       discard
 
 proc handleFilerModeKey*(
-    filerState: FilerState, viewportHeight: int, keyCombo: KeyCombo
+    filerState: FilerState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
+    reservedLines: int = 1,
 ): FilerResult =
   ## Handle a key press in Filer mode
   ##
@@ -100,12 +103,12 @@ proc handleFilerModeKey*(
     # Character keys
     # Check for Ctrl+d (half page down)
     if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
-      filerState.halfPageDown(viewportHeight)
+      filerState.halfPageDown(viewportHeight, reservedLines)
       return FilerResult(kind: frHandled)
 
     # Check for Ctrl+u (half page up)
     if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
-      filerState.halfPageUp(viewportHeight)
+      filerState.halfPageUp(viewportHeight, reservedLines)
       return FilerResult(kind: frHandled)
 
     case keyCombo.char

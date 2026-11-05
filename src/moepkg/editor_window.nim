@@ -79,22 +79,13 @@ proc syncActiveWindow*(e: Editor) =
 proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   ## Calculate and set screen cursor position for the active window
 
-  # Determine if this window is at the bottom of the screen
-  var maxBottomY = 0
-  for w in e.windowManager.windows:
-    let bottomY = w.viewport.y + w.viewport.height
-    if bottomY > maxBottomY:
-      maxBottomY = bottomY
-
   # Calculate tab line offset
   let tabLineOffset = if e.showTabLine: TabLineHeight else: 0
 
   let
-    windowBottomY = window.viewport.y + window.viewport.height
-    isBottomWindow = (windowBottomY == maxBottomY)
     scrollbarWidth = e.calculateScrollbarWidth(window)
     # Steady reserve so the clamp agrees with the scroll (see steadyReservedLines).
-    reservedLines = e.steadyReservedLines(isBottomWindow)
+    reservedLines = e.steadyReservedLines(window)
 
   var cursorPos = e.calculateWindowCursor(
     window.buffer,
@@ -118,14 +109,13 @@ proc applyStartUpScreenSize*(e: Editor, termWidth, termHeight: int) =
   if e.windowManager.windows.len > 1:
     # Rescale the whole split layout, same as a runtime terminal resize.
     e.windowManager.resizeWindows(
-      termWidth, termHeight, e.screenSize.width, e.screenSize.height, e.multiStatusLine
+      termWidth, termHeight, e.screenSize.width, e.screenSize.height, e.windowStatus
     )
   else:
-    # Set viewport to real terminal size with the command line row reserved
-    # (status line and command line share it).
+    # The window takes the whole terminal but the command row.
     let win = e.activeWindow
     win.viewport.width = termWidth
-    win.viewport.height = termHeight - steadyBottomAreaHeight()
+    win.viewport.height = windowAreaHeight(termHeight)
 
   # Sync screenSize so the subsequent render does NOT trigger resizeWindows,
   # which would ratio-scale from the initial default size and break the layout.
@@ -182,7 +172,9 @@ proc registerSplitBuffer(
   logDebug("editor", context & ": buffer added, buffers.len: " & $e.buffers.len)
 
 proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string]
-proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer, focus = true): Result[(), string]
+proc hsplitWithBuffer*(
+  e: Editor, buffer: TextBuffer, focus = true, checkRoom = true
+): Result[(), string]
 
 proc loadSplitBuffer(e: Editor, path: string): Result[TextBuffer, string] =
   ## Buffer for a split on `path`: reuse the holder if open, else load a new one.
@@ -381,14 +373,26 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
 
   ok(())
 
-proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
+proc roomForHsplit*(e: Editor): Result[(), string] =
+  ## E36 unless the active window's column fits one more window.
+  e.windowManager.roomForHsplit(e.windowStatus, e.showTabLine)
+
+proc hsplit*(
+    e: Editor, filename: Option[string] = none(string), checkRoom = true
+): Result[(), string] =
   ## Create a horizontal split window (top and bottom), showing `filename` when
-  ## one is given and the current buffer otherwise.
+  ## one is given and the current buffer otherwise. Without `checkRoom` the
+  ## split is made whatever the height: startup files open before the real
+  ## terminal size is known.
+  # Check the room first so a refused open registers nothing.
+  if checkRoom:
+    discard ?e.roomForHsplit()
+
   if filename.isSome:
     let loaded = e.loadSplitBuffer(filename.get)
     if loaded.isErr:
       return err(loaded.error)
-    return e.hsplitWithBuffer(loaded.get)
+    return e.hsplitWithBuffer(loaded.get, checkRoom = false)
 
   # Save current window state before splitting
   e.saveActiveWindowState()
@@ -398,7 +402,7 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
     origin = e.splitOrigin()
     originWindow = e.activeWindow
   let bufferResult = e.windowManager.hsplit(
-    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, e.multiStatusLine
+    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, e.windowStatus
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -413,10 +417,13 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   ok(())
 
 proc hsplitWithBuffer*(
-    e: Editor, buffer: TextBuffer, focus = true
+    e: Editor, buffer: TextBuffer, focus = true, checkRoom = true
 ): Result[(), string] =
   ## Create a horizontal split window with a specific buffer. Without `focus`
   ## the active window keeps the focus and its mode.
+  if checkRoom:
+    discard ?e.roomForHsplit()
+
   # Save current window state before splitting
   e.saveActiveWindowState()
 
@@ -425,11 +432,7 @@ proc hsplitWithBuffer*(
     originWindow = e.activeWindow
     previousWindow = e.windowManager.previousWindow
   let bufferResult = e.windowManager.hsplitWithBuffer(
-    e.tabBuffer(e.activeWindow),
-    origin.viewport,
-    origin.cursor,
-    e.multiStatusLine,
-    buffer,
+    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, buffer, e.windowStatus
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -564,24 +567,22 @@ proc decreaseWindowWidth*(e: Editor) =
 
 proc increaseWindowHeight*(e: Editor) =
   ## Increase the active window's height
-  e.windowManager.increaseWindowHeight()
+  e.windowManager.increaseWindowHeight(e.windowStatus, e.showTabLine)
   e.syncActiveWindow()
 
 proc decreaseWindowHeight*(e: Editor) =
   ## Decrease the active window's height
-  e.windowManager.decreaseWindowHeight()
+  e.windowManager.decreaseWindowHeight(e.windowStatus, e.showTabLine)
   e.syncActiveWindow()
 
 proc maximizeWindowHeight*(e: Editor) =
   ## Maximize the active window's height within its vertical group
-  e.windowManager.maximizeWindowHeight(
-    e.multiStatusLine, e.showTabLine, e.showStatusLine
-  )
+  e.windowManager.maximizeWindowHeight(e.windowStatus, e.showTabLine)
   e.syncActiveWindow()
 
 proc equalizeWindowSizes*(e: Editor) =
   ## Equalize all window sizes
-  e.windowManager.equalizeAllWindows(e.multiStatusLine)
+  e.windowManager.equalizeAllWindows(e.windowStatus)
   e.syncActiveWindow()
 
 proc swapWindow*(e: Editor) =
@@ -601,9 +602,7 @@ proc closeWindow*(e: Editor): bool =
 
   # Pass screen dimensions so the post-close check can flag out-of-screen re-tiles.
   let shouldQuit = e.windowManager.closeWindow(
-    e.multiStatusLine,
-    screenWidth = e.screenSize.width,
-    screenHeight = e.screenSize.height,
+    e.windowStatus, screenWidth = e.screenSize.width, screenHeight = e.screenSize.height
   )
 
   if shouldQuit:

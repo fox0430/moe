@@ -165,7 +165,7 @@ suite "updateViewportSize - Basic behavior":
 
     # Set up vsplit so the active window has half-width viewport
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     discard e.vsplit()
     check e.windowManager.windows.len == 2
 
@@ -196,7 +196,7 @@ suite "renderSplitView - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     # Should not crash with single window
     e.renderSplitView(buffer, false)
@@ -206,7 +206,7 @@ suite "renderSplitView - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     # Test resize handling
     e.renderSplitView(buffer, true)
@@ -216,7 +216,7 @@ suite "renderSplitView - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     e.renderSplitView(buffer, false)
 
@@ -229,7 +229,7 @@ suite "renderSplitView - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showTabLine = true
 
     e.renderSplitView(buffer, false)
@@ -239,7 +239,7 @@ suite "renderSplitView - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showTabLine = false
 
     e.renderSplitView(buffer, false)
@@ -249,7 +249,7 @@ suite "renderSplitView - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.multiStatusLine = true
 
     e.renderSplitView(buffer, false)
@@ -259,7 +259,7 @@ suite "renderSplitView - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.lineWrap = true
 
     e.renderSplitView(buffer, false)
@@ -269,7 +269,7 @@ suite "renderSplitView - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.lineWrap = false
 
     e.renderSplitView(buffer, false)
@@ -294,7 +294,7 @@ suite "renderBottomLines - Normal mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "Test status message"
 
@@ -306,7 +306,7 @@ suite "renderBottomLines - Normal mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = ""
 
@@ -318,7 +318,7 @@ suite "renderBottomLines - Normal mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "Line 1\nLine 2\nLine 3"
 
@@ -331,7 +331,7 @@ suite "renderBottomLines - Command mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterCommandOverlay()
     e.state.input.line.text = "write"
     e.state.input.line.cursor = 5 # 0-based after ":", max = runeLen - 1
@@ -348,7 +348,7 @@ suite "renderBottomLines - Command mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterCommandOverlay()
     e.state.input.line.text = ""
     e.state.input.line.cursor = 0
@@ -364,7 +364,7 @@ suite "renderBottomLines - Command mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterCommandOverlay()
     e.state.input.line.text = "set tabstop=4 shiftwidth=4 expandtab"
     e.state.input.line.cursor = 36 # 0-based after ":", max = runeLen - 1
@@ -380,7 +380,7 @@ suite "renderBottomLines - Command mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterCommandOverlay()
     # "あいう" are 3 characters, each with display width 2
     e.state.input.line.text = "あいう"
@@ -398,7 +398,7 @@ suite "renderBottomLines - Command mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterCommandOverlay()
     # "eあb" = 'e'(1) + 'あ'(2) + 'b'(1) = 4 display columns
     e.state.input.line.text = "eあb"
@@ -417,7 +417,7 @@ suite "renderBottomLines - Search mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterSearchOverlay(Forward)
     e.state.input.line.text = "pattern"
     e.state.input.line.cursor = 7
@@ -434,7 +434,7 @@ suite "renderBottomLines - Search mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterSearchOverlay(Backward)
     e.state.input.line.text = "test"
     e.state.input.line.cursor = 4
@@ -451,7 +451,7 @@ suite "renderBottomLines - Search mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterSearchOverlay(Forward)
     e.state.input.line.text = ""
 
@@ -467,7 +467,7 @@ suite "renderBottomLines - Rename mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterRenameOverlay("newName", 0, 0)
 
     e.advanceLayoutForFrame(buffer, false)
@@ -482,7 +482,7 @@ suite "renderBottomLines - Rename mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterRenameOverlay("", 0, 0)
 
     e.advanceLayoutForFrame(buffer, false)
@@ -502,7 +502,7 @@ suite "renderBottomLines - Wrapped overlay input":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterCommandOverlay()
     # ":" + 80 chars = 81 columns -> 2 rows at width 80
     e.state.input.line.text = "a".repeat(80)
@@ -523,7 +523,7 @@ suite "renderBottomLines - Wrapped overlay input":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterCommandOverlay()
     # ":" + 79 chars = exactly 80 columns; the cursor cell overflows
     e.state.input.line.text = "a".repeat(79)
@@ -543,7 +543,7 @@ suite "renderBottomLines - Wrapped overlay input":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterCommandOverlay()
     # 1 + 12*80 columns -> 13 wrap rows, capped at MaxStatusMessageLines (10)
     e.state.input.line.text = "a".repeat(80 * 12)
@@ -563,7 +563,7 @@ suite "renderBottomLines - Wrapped overlay input":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.enterSearchOverlay(Forward)
     e.state.input.line.text = "x".repeat(85)
     e.state.input.line.cursor = 85
@@ -581,7 +581,7 @@ suite "renderBottomLines - Wrapped overlay input":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "Line 1\nLine 2\nLine 3"
 
@@ -598,7 +598,7 @@ suite "renderBottomLines - Status line visibility":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
 
     # Single window always renders status line
@@ -611,7 +611,7 @@ suite "renderBottomLines - Status line visibility":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
     e.state.multiStatusLine = false
 
@@ -626,7 +626,7 @@ suite "renderBottomLines - Status line visibility":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
 
     e.advanceLayoutForFrame(buffer, false)
@@ -638,21 +638,21 @@ suite "renderBottomLines - Recording label":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.multiStatusLine = false
     e.state.pendingInput.macroState.startRecording('a')
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
-    check rowText(buffer, 23, 80).count("recording @a") == 1
+    check rowText(buffer, 22, 80).count("recording @a") == 1
 
   test "Stays off the command line while a window status line holds it":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.multiStatusLine = true
     e.state.pendingInput.macroState.startRecording('a')
 
@@ -660,15 +660,15 @@ suite "renderBottomLines - Recording label":
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
-    check rowText(buffer, 23, 80).count("recording @a") == 1
-    check rowText(buffer, 23, 8) == " NORMAL "
+    check rowText(buffer, 22, 80).count("recording @a") == 1
+    check rowText(buffer, 22, 8) == " NORMAL "
 
   test "Takes the command line while the status line is hidden":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = false
     e.state.pendingInput.macroState.startRecording('a')
 
@@ -684,7 +684,7 @@ suite "renderBottomLines - Recording label":
     buffer.area = Rect(x: 0, y: 0, width: 10, height: 24)
 
     e.viewport.width = 10
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = false
     e.state.pendingInput.macroState.startRecording('a')
 
@@ -698,7 +698,7 @@ suite "renderBottomLines - Recording label":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = false
     e.state.pendingInput.macroState.startRecording('a')
     e.state.statusMessage = "written"
@@ -715,7 +715,7 @@ suite "renderTempMessages - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.ui.tempMessages = @[]
 
     # Should return early without crashing
@@ -727,7 +727,7 @@ suite "renderTempMessages - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.ui.tempMessages = @["Jump list entry 1"]
 
     e.advanceLayoutForFrame(buffer, false)
@@ -742,7 +742,7 @@ suite "renderTempMessages - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.ui.tempMessages = @[
       " jump line  col file/text", "   1    10    5 /path/to/file1.nim",
       "   2    20   10 /path/to/file2.nim", "   3    30   15 /path/to/file3.nim",
@@ -759,7 +759,7 @@ suite "renderTempMessages - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     # Create many messages
     var messages: seq[string]
@@ -777,7 +777,7 @@ suite "renderTempMessages - Basic behavior":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.ui.tempMessages =
       @["File: /home/user/file.nim", "Unicode: こんにちは", "Symbols: <>&\"'"]
 
@@ -790,7 +790,7 @@ suite "renderSplitView - Viewport adjustment":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     for i in 0 ..< 100:
       discard e.activeBuffer.insertText(
         BufferPosition(line: i, column: 0), "Line " & $i & "\n"
@@ -811,7 +811,7 @@ suite "renderSplitView - Viewport adjustment":
     e.state.lineWrap = false
     e.tabStop = 8
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     discard
       e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "\t".repeat(12))
     # The tab at cells 72-79 starts inside the text area the gutter leaves of
@@ -833,7 +833,7 @@ suite "renderSplitView - Viewport adjustment":
     var buffer = createTestBuffer()
     e.state.lineWrap = true
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     let textWidth = e.wrapWidth(e.activeWindow)
     discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "x".repeat(textWidth)
@@ -888,7 +888,7 @@ suite "renderSplitView - Viewport adjustment":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     # Add content to buffer
     for i in 0 ..< 100:
@@ -910,7 +910,7 @@ suite "renderSplitView - Viewport adjustment":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.lineWrap = false
 
     # Add long line
@@ -931,7 +931,7 @@ suite "renderSplitView - Viewport adjustment":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     for i in 0 ..< 100:
       discard e.activeBuffer.insertText(
@@ -961,7 +961,7 @@ suite "renderSplitView - Viewport adjustment":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     for i in 0 ..< 100:
       discard e.activeBuffer.insertText(
@@ -984,7 +984,7 @@ suite "renderSplitView - Viewport adjustment":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     for i in 0 ..< 100:
       discard e.activeBuffer.insertText(
@@ -1007,7 +1007,7 @@ suite "renderSplitView - Viewport adjustment":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.lineWrap = true
 
     # Add long line
@@ -1029,7 +1029,7 @@ suite "renderSplitView - Display options":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showLineNumbers = true
 
     e.renderSplitView(buffer, false)
@@ -1039,7 +1039,7 @@ suite "renderSplitView - Display options":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showLineNumbers = false
 
     e.renderSplitView(buffer, false)
@@ -1049,7 +1049,7 @@ suite "renderSplitView - Display options":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
 
     e.renderSplitView(buffer, false)
@@ -1059,7 +1059,7 @@ suite "renderSplitView - Display options":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = false
 
     e.renderSplitView(buffer, false)
@@ -1070,7 +1070,7 @@ suite "renderBottomLines - Edge cases":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "x".repeat(200)
 
@@ -1082,7 +1082,7 @@ suite "renderBottomLines - Edge cases":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
     # Create message with many lines
     var lines: seq[string]
@@ -1124,7 +1124,7 @@ suite "Integration - Full render cycle":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.showTabLine = true
     e.state.showLineNumbers = true
@@ -1142,7 +1142,7 @@ suite "Integration - Full render cycle":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     # Normal mode
     e.state.mode = EditorMode.Normal
@@ -1164,7 +1164,7 @@ suite "Integration - Full render cycle":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.mode = EditorMode.Normal
     e.state.ui.tempMessages = @["Message 1", "Message 2"]
 
@@ -1197,7 +1197,7 @@ suite "renderSplitView - Close window cleans up status line":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = false
 
@@ -1238,7 +1238,7 @@ suite "renderSplitView - Close window cleans up status line":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
 
@@ -1254,7 +1254,7 @@ suite "renderSplitView - Close window cleans up status line":
 
     # The top window has a per-window status line at its bottom edge
     let topWindow = e.windowManager.windows[0]
-    let topStatusLineY = calculateWindowStatusLineY(topWindow, isBottomWindow = false)
+    let topStatusLineY = topWindow.viewport.y + topWindow.viewport.height - 1
 
     # Verify per-window status line exists at top window's bottom before close
     check hasStatusLineStyleAt(buffer, topStatusLineY)
@@ -1280,7 +1280,7 @@ suite "renderSplitView - Close window cleans up status line":
     let e = createTestEditor()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = false
 
@@ -1292,13 +1292,13 @@ suite "renderSplitView - Close window cleans up status line":
 
     # Remaining window should cover the full viewport height
     check e.windowManager.windows[0].viewport.y == 0
-    check e.windowManager.windows[0].viewport.height == 24
+    check e.windowManager.windows[0].viewport.height == 23
 
   test "hsplit close: remaining window viewport covers full height (multi status line)":
     let e = createTestEditor()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
 
@@ -1309,14 +1309,14 @@ suite "renderSplitView - Close window cleans up status line":
     check e.windowManager.windows.len == 1
 
     check e.windowManager.windows[0].viewport.y == 0
-    check e.windowManager.windows[0].viewport.height == 24
+    check e.windowManager.windows[0].viewport.height == 23
 
   test "vsplit close: no stale separator at old boundary":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = false
 
@@ -1353,7 +1353,7 @@ suite "renderSplitView - Close window cleans up status line":
     let e = createTestEditor()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
 
     discard e.vsplit()
     check e.windowManager.windows.len == 2
@@ -1391,7 +1391,7 @@ suite "Status line count - no duplicate status lines":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = false
 
@@ -1401,16 +1401,16 @@ suite "Status line count - no duplicate status lines":
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
-    # Should have exactly 1 status line at y=22
+    # Should have exactly 1 status line at y=22, above the command row
     check positions.len == 1
-    check positions[0] == 23
+    check positions[0] == 22
 
   test "Single window, multiStatusLine=true: exactly 1 status line":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
 
@@ -1420,16 +1420,16 @@ suite "Status line count - no duplicate status lines":
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
-    # Should have exactly 1 status line at y=22
+    # Should have exactly 1 status line at y=22, above the command row
     check positions.len == 1
-    check positions[0] == 23
+    check positions[0] == 22
 
   test "2 hsplit windows, multiStatusLine=true: exactly 2 status lines":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
 
@@ -1450,7 +1450,7 @@ suite "Status line count - no duplicate status lines":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = false
 
@@ -1465,14 +1465,124 @@ suite "Status line count - no duplicate status lines":
     let positions = statusLineYPositions(buffer)
     # Single status line at the bottom
     check positions.len == 1
-    check positions[0] == 23
+    check positions[0] == 22
+
+  test "2 hsplit windows, merged status line: a separator between them":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 23
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
+    e.config.statusLine.merge = true
+
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+
+    let top = e.windowManager.windows[0].viewport
+    check e.windowManager.windows[1].viewport.y == top.y + top.height + 1
+    check buffer[0, top.y + top.height].symbol == "─"
+
+  proc hasSeparatorBelow(buffer: Buffer, window: EditorWindow): bool =
+    let v = window.viewport
+    buffer[v.x, v.y + v.height].symbol == "─"
+
+  proc hasSeparatorRightOf(buffer: Buffer, window: EditorWindow): bool =
+    let v = window.viewport
+    buffer[v.x + v.width, v.y].symbol == "│"
+
+  proc renderedSplits(e: Editor): Buffer =
+    result = createTestBuffer()
+    clearBuffer(result)
+    e.renderSplitView(result, false)
+
+  proc splitEditor(): Editor =
+    result = createTestEditor()
+    result.viewport.width = 80
+    result.viewport.height = 23
+    result.state.showStatusLine = true
+    result.state.multiStatusLine = false
+
+  test "separators of a column split into rows":
+    let e = splitEditor()
+    discard e.vsplit()
+    discard e.hsplit()
+    require e.windowManager.windows.len == 3
+
+    let
+      buffer = e.renderedSplits()
+      leftTop = e.windowManager.windows[0]
+      leftBottom = e.windowManager.windows[1]
+    check buffer.hasSeparatorBelow(leftTop)
+    check buffer.hasSeparatorRightOf(leftTop)
+    check buffer.hasSeparatorRightOf(leftBottom)
+
+  test "separators of a row split into columns":
+    let e = splitEditor()
+    discard e.hsplit()
+    discard e.vsplit()
+    require e.windowManager.windows.len == 3
+
+    let
+      buffer = e.renderedSplits()
+      topLeft = e.windowManager.windows[0]
+      topRight = e.windowManager.windows[1]
+    check buffer.hasSeparatorRightOf(topLeft)
+    check buffer.hasSeparatorBelow(topLeft)
+    check buffer.hasSeparatorBelow(topRight)
+
+  test "the separator below a window ignores the column the next window is in":
+    let e = splitEditor()
+    discard e.hsplit()
+    discard e.vsplit()
+    discard e.hsplit()
+    require e.windowManager.windows.len == 4
+
+    let
+      buffer = e.renderedSplits()
+      leftBottom = e.windowManager.windows[1]
+    require e.windowManager.windows[2].viewport.y < leftBottom.viewport.y
+    check buffer.hasSeparatorBelow(leftBottom)
+
+  test "the column separator crosses the row between windows":
+    let e = splitEditor()
+    discard e.vsplit()
+    discard e.hsplit()
+
+    let
+      buffer = e.renderedSplits()
+      v = e.windowManager.windows[0].viewport
+    check buffer[v.x + v.width, v.y + v.height].symbol == "│"
+
+  test "a status line hidden after the split draws no separator over text":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 23
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
+
+    discard e.hsplit()
+    e.state.showStatusLine = false
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+
+    let top = e.windowManager.windows[0].viewport
+    check e.windowManager.windows[1].viewport.y == top.y + top.height
+    check buffer[0, top.y + top.height].symbol != "─"
 
   test "2 vsplit windows, multiStatusLine=true: exactly 1 status line row":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
 
@@ -1487,15 +1597,15 @@ suite "Status line count - no duplicate status lines":
     let positions = statusLineYPositions(buffer)
     # Both windows' status lines are at the same Y (both are bottom windows)
     check positions.len == 1
-    check positions[0] == 23
+    check positions[0] == 22
 
-suite "Bottom area - status line and command line share last row":
-  test "Single window: status line at last row (y=height-1)":
+suite "Bottom area - status line above the command row":
+  test "Single window: status line on the window's last row":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
 
@@ -1505,16 +1615,16 @@ suite "Bottom area - status line and command line share last row":
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
-    # Status line should be at the very last row (y=23), not y=22
+    # The window ends at y=22; y=23 is the command row
     check positions.len == 1
-    check positions[0] == 23
+    check positions[0] == 22
 
-  test "Single window: no empty row below status line":
+  test "Single window: no empty row above the status line":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
 
@@ -1523,19 +1633,16 @@ suite "Bottom area - status line and command line share last row":
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
-    # Last row should be the status line (not blank)
-    let lastRowText = buffer.getRowText(23).strip()
-    check lastRowText.len > 0
-
-    # Second-to-last row (y=22) should be content area (not status line)
-    check not buffer.isStatusLineRow(22)
+    check buffer.isStatusLineRow(22)
+    # The row above it is the last of the content area
+    check not buffer.isStatusLineRow(21)
 
   test "Single window: content area is height - 2 (tab + status)":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
     e.state.showTabLine = true
@@ -1545,21 +1652,21 @@ suite "Bottom area - status line and command line share last row":
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
-    # Content area: y=1 (after tab) to y=22 (before status line) = 22 rows
-    # y=0: tab line, y=23: status line
+    # Content area: y=1 (after tab) to y=21 (before status line) = 21 rows
+    # y=0: tab line, y=22: status line
     # Line number "1" should be at y=1
     let y1text = buffer.getRowText(1).strip()
     check "1" in y1text
 
-    # y=22 should still be in content area (no status line marker)
-    check not buffer.isStatusLineRow(22)
+    # y=21 should still be in content area (no status line marker)
+    check not buffer.isStatusLineRow(21)
 
   test "Command mode: command text overlays status line at last row":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
 
@@ -1582,7 +1689,7 @@ suite "Bottom area - status line and command line share last row":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
 
@@ -1597,8 +1704,87 @@ suite "Bottom area - status line and command line share last row":
     let positions = statusLineYPositions(buffer)
     # Window 1 status line + Window 2 status line
     check positions.len == 2
-    # Bottom window's status line should be at y=23 (last row)
-    check positions[^1] == 23
+    # Bottom window's status line should be at y=22, above the command row
+    check positions[^1] == 22
+
+suite "Global status line - row follows the windows":
+  proc renderGlobal(windowHeight: int, merge = false, message = ""): celina.Buffer =
+    let e = createTestEditor()
+    e.config.statusLine.merge = merge
+    result = createTestBuffer()
+    e.viewport.width = 80
+    e.viewport.height = windowHeight
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = merge
+    e.state.statusMessage = message
+    clearBuffer(result)
+    e.renderSplitView(result, false)
+    e.advanceLayoutForFrame(result, false)
+    e.renderBottomLines(result)
+
+  test "Window above the last row: status line on its bottom row":
+    let buffer = renderGlobal(23)
+    check statusLineYPositions(buffer) == @[22]
+    check buffer.getRowText(23).strip().len == 0
+
+  test "Window above the last row: same row with merge":
+    check statusLineYPositions(renderGlobal(23, merge = true)) == @[22]
+
+  test "Window above the last row: a message leaves the status line alone":
+    let buffer = renderGlobal(23, message = "hello")
+    check statusLineYPositions(buffer) == @[22]
+    check buffer.getRowText(23).strip() == "hello"
+
+  test "Grown area: the status line sits right above it, with no blank row":
+    let buffer = renderGlobal(23, message = "one\ntwo")
+    check statusLineYPositions(buffer) == @[21]
+    check buffer.getRowText(22).strip() == "one"
+    check buffer.getRowText(23).strip() == "two"
+
+  test "The first window leaves the command row free":
+    let e = createTestEditor()
+    check e.viewport.height == windowAreaHeight(e.screenSize.height)
+
+  test "Grown area: a window's own status line takes the same row":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.viewport.width = 80
+    e.viewport.height = 23
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
+    e.state.statusMessage = "one\ntwo"
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    check statusLineYPositions(buffer) == @[21]
+
+  test "A one-row message fills the command row":
+    let buffer = renderGlobal(23, message = "hello")
+    check buffer[79, 23].style == commandStyle()
+
+  test "Grown area: the text reaches the status line":
+    let e = createTestEditor()
+    e.viewport.width = 80
+    e.viewport.height = 23
+    e.state.showStatusLine = true
+    e.state.statusMessage = "one\ntwo"
+    e.screenSize.width = 80
+    check e.calculateReservedLines(true) == 2
+
+  test "No status line: no row is held back for it":
+    let e = createTestEditor()
+    e.state.showStatusLine = false
+    e.screenSize.width = 80
+    check e.steadyReservedLines(true) == 0
+    check e.calculateReservedLines(true) == 0
+
+  test "The bottom area counts the command area and the status row above it":
+    let e = createTestEditor()
+    e.state.showStatusLine = true
+    check e.state.bottomAreaHeight(80) == 2
+    e.state.showStatusLine = false
+    check e.state.bottomAreaHeight(80) == 1
 
 suite "Status line - grown area in multiStatusLine mode":
   test "vsplit: per-window status lines shift above the grown area, no global one":
@@ -1606,7 +1792,7 @@ suite "Status line - grown area in multiStatusLine mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.screenSize.width = 80
     e.screenSize.height = 24
     e.state.showStatusLine = true
@@ -1637,7 +1823,7 @@ suite "Status line - grown area in multiStatusLine mode":
     var buffer = createTestBuffer()
 
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.screenSize.width = 80
     e.screenSize.height = 24
     e.state.showStatusLine = true
@@ -1999,7 +2185,7 @@ suite "renderCodeLensPicker":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     buffer.area = Rect(x: 0, y: 0, width: 80, height: 24)
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.screenCursor = CursorPosition(x: 10, y: 5)
     e.state.lspCache.codeLensPicker = CodeLensPicker(
       items: @[
@@ -2081,7 +2267,7 @@ suite "renderCodeLensPicker":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     buffer.area = Rect(x: 0, y: 0, width: 80, height: 24)
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.screenCursor = CursorPosition(x: 10, y: 5)
     e.state.lspCache.codeLensPicker = CodeLensPicker(
       items: @[
@@ -2250,7 +2436,7 @@ suite "editor_render_views - sanitize control characters":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.statusMessage = "Opened: /tmp/a\x1B[2J/b\x00c\x7F.nim"
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -2272,7 +2458,7 @@ suite "editor_render_views - sanitize control characters":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.statusMessage = "line1\x1B[2J\nline2\x00bad\nline3\x7Fend"
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -2288,7 +2474,7 @@ suite "editor_render_views - sanitize control characters":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.ui.tempMessages = @[
       " jump line col file", "   1   10  5 /tmp/a\x1Bfile\x00.nim",
       "   2   20 10 /tmp/b\x7Fname.nim",
@@ -2312,7 +2498,7 @@ suite "editor_render_views - sanitize control characters":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     e.viewport.width = 80
-    e.viewport.height = 24
+    e.viewport.height = 23
     e.state.statusMessage = "漢\x00字🎉\x1B test"
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)

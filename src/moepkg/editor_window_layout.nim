@@ -26,47 +26,71 @@ import std/options
 import types/editor_types, render_utils, buffer/core, visible_rows
 import diff_viewer, types/diff_viewer_types
 
-proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
-  ## Calculate number of reserved lines based on status line configuration
-  ## and the dynamic command-line area height (wrapped overlay input and
-  ## multi-line status messages grow the bottom reserve)
-  if isBottomWindow:
-    e.state.bottomAreaHeight(e.screenSize.width)
+proc windowStatus*(e: Editor): WindowStatus =
+  ## Which windows draw a status line: a merged one is the bottom windows' only.
+  if not e.showStatusLine:
+    wsNone
+  elif e.multiStatusLine and not e.config.statusLine.merge:
+    wsEveryWindow
   else:
-    if e.showStatusLine and e.multiStatusLine: StatusLineReserve else: 0
+    wsBottomWindows
 
 proc steadyReservedLines*(e: Editor, isBottomWindow: bool): int =
-  ## `calculateReservedLines` with the steady bottom-area floor, so it is stable
-  ## against transient command-line growth (wrapped input, multi-line messages).
+  ## Rows of the viewport without text, stable against transient command-line
+  ## growth (wrapped input, multi-line messages).
   ## The viewport scroll and the screen-cursor clamp must share this; clamping
   ## with the dynamic reserve instead flings a bottom-row cursor to (0, 0).
+  windowStatusRows(e.windowStatus, isBottomWindow)
+
+proc steadyReservedLines*(e: Editor, window: EditorWindow): int =
+  ## `steadyReservedLines` of `window` where it sits in the current layout.
+  e.steadyReservedLines(e.windowManager.windows.reachesBottom(window))
+
+proc updateViewportReservedLines*(e: Editor) =
+  ## Recompute the reserve motions scroll with from the current status/tab line
+  ## configuration and window layout. Steady: motion scrolling is persistent
+  ## geometry and must match the scroll authority and screen cursor, not flap
+  ## with a transient status message.
+  let
+    tabLineRows = if e.showTabLine: TabLineHeight else: 0
+    hasWindows =
+      e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len
+    reservedLines =
+      if hasWindows:
+        e.steadyReservedLines(e.activeWindow)
+      else:
+        e.steadyReservedLines(true)
+  e.state.windowDisplay.viewportReservedLines = reservedLines + tabLineRows
+
+proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
+  ## Rows of the viewport without text: `steadyReservedLines` plus, for a bottom
+  ## window, what a grown command-line area (wrapped overlay input, multi-line
+  ## status messages) overlaps.
+  result = e.steadyReservedLines(isBottomWindow)
   if isBottomWindow:
-    steadyBottomAreaHeight()
-  else:
-    e.calculateReservedLines(isBottomWindow)
+    result += e.state.commandLineAreaHeight(e.screenSize.width) - CommandRowHeight
 
 proc terminalContentRows*(
-    window: EditorWindow, isBottomWindow: bool, tabLineOffset: int
+    e: Editor, window: EditorWindow, isBottomWindow: bool, tabLineOffset: int
 ): int =
   ## Rows available for a terminal grid in a window. Shared by renderTerminal
   ## and calculateTerminalAreaDimensions so the rendered grid and the PTY size
   ## can never diverge.
   ## Deliberately steady, not dynamic: PTY resize sends SIGWINCH to the
   ## shell, so transient command-line growth must not flap the PTY size.
-  window.viewport.height - steadyReservedBottom(isBottomWindow) - tabLineOffset
+  window.viewport.height - e.steadyReservedLines(isBottomWindow) - tabLineOffset
 
 proc calculateTerminalAreaDimensions*(
     e: Editor, window: EditorWindow
 ): tuple[cols, rows: int] =
   ## Compute the correct PTY cols/rows for a terminal in the given window.
   let
-    maxBottomY = findMaxBottomY(e.windowManager.windows)
-    windowBottomY = window.viewport.y + window.viewport.height
-    isBottomWindow = (windowBottomY == maxBottomY)
+    isBottomWindow = e.windowManager.windows.reachesBottom(window)
     tabLineOffset = if e.showTabLine: TabLineHeight else: 0
   result = (
     cols: window.viewport.width,
-    rows: max(1, terminalContentRows(window, isBottomWindow, tabLineOffset)),
+    rows: max(1, e.terminalContentRows(window, isBottomWindow, tabLineOffset)),
   )
 
 proc minimumTerminalAreaDimensions*(

@@ -229,7 +229,9 @@ type
   StatusLineConfig* {.cfgSection: "StatusLine".} = object
     multipleStatusLine* {.cfg, cfgDocDescription: "Show multiple status lines".}: bool
     merge* {.
-      cfg, cfgDocDescription: "Enable merge the status line with the command line"
+      cfg,
+      cfgDocDescription:
+        "Show a single status line below the windows even with multipleStatusLine"
     .}: bool
     mode* {.cfg, cfgDocDescription: "Display the current mode".}: bool
     filename* {.cfg, cfgDocDescription: "Display the filename".}: bool

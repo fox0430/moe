@@ -939,7 +939,7 @@ proc landMotion*(
     cmd: MotionCommand,
     viewportHeight: int = 24,
     viewportTopLine: int = 0,
-    reservedLines: int = steadyBottomAreaHeight(),
+    reservedLines: int = StatusLineReserve,
     mode: EditorMode = EditorMode.Normal,
     rowLayout: RowLayout = RowLayout(),
     viewportTopWrapOffset: int = 0,
@@ -1109,7 +1109,7 @@ proc calculateNewPosition*(
     cmd: MotionCommand,
     viewportHeight: int = 24,
     viewportTopLine: int = 0,
-    reservedLines: int = steadyBottomAreaHeight(),
+    reservedLines: int = StatusLineReserve,
     mode: EditorMode = EditorMode.Normal,
     rowLayout: RowLayout = RowLayout(),
     viewportTopWrapOffset: int = 0,
@@ -1187,12 +1187,8 @@ proc updateViewport(
     clampedCursorY = max(0, min(cursorPos.y, lineCount - 1))
     clampedCursorX = max(0, cursorPos.x)
 
-    # Use the explicit parameter, or fall back to the steady bottom reserve
-    actualReservedLines =
-      if reservedLines >= 0:
-        reservedLines
-      else:
-        steadyBottomAreaHeight()
+    # Use the explicit parameter, or fall back to the status line's row
+    actualReservedLines = if reservedLines >= 0: reservedLines else: StatusLineReserve
 
   let visibleHeight = max(1, mgr.viewport.height - actualReservedLines)
   if buffer.isNil:

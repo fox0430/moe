@@ -870,7 +870,7 @@ suite "applyStartUpScreenSize":
     check win.viewport.x == 0
     check win.viewport.y == 0
     check win.viewport.width == TermWidth
-    check win.viewport.height == TermHeight - steadyBottomAreaHeight()
+    check win.viewport.height == TermHeight - StatusLineReserve
     e.checkScreenSizeSynced()
 
   test "startup vsplit windows are rescaled without overlap":
@@ -896,7 +896,7 @@ suite "applyStartUpScreenSize":
     # Side-by-side windows span the full height above the command line
     for win in wins:
       check win.viewport.y == 0
-      check win.viewport.height == TermHeight - steadyBottomAreaHeight()
+      check win.viewport.height == TermHeight - StatusLineReserve
 
     e.checkScreenSizeSynced()
 
@@ -915,8 +915,7 @@ suite "applyStartUpScreenSize":
     # Tile the full height with no overlap, reserving the command line row
     check top.viewport.y == 0
     check bottom.viewport.y >= top.viewport.y + top.viewport.height
-    check bottom.viewport.y + bottom.viewport.height ==
-      TermHeight - steadyBottomAreaHeight()
+    check bottom.viewport.y + bottom.viewport.height == TermHeight - StatusLineReserve
 
     # Stacked windows span the full width
     for win in wins:
@@ -947,7 +946,7 @@ suite "applyStartUpScreenSize":
 
     for win in wins:
       check win.viewport.y == 0
-      check win.viewport.height == TermHeight - steadyBottomAreaHeight()
+      check win.viewport.height == TermHeight - StatusLineReserve
 
     e.checkScreenSizeSynced()
 
@@ -1044,3 +1043,42 @@ suite "Visual and the focus":
 
     check e.activeWindow == origin
     check e.state.mode == EditorMode.Normal
+
+suite "Editor window - hsplit without room":
+  proc tinyEditor(): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.showStatusLine = true
+    result.state.multiStatusLine = true
+    result.state.showTabLine = false
+    result.viewport.height = 3
+
+  test "a refused :split {file} registers no buffer":
+    let
+      e = tinyEditor()
+      buffersBefore = e.buffers.len
+      path = getTempDir() / "moe_hsplit_no_room.txt"
+    writeFile(path, "text")
+    defer:
+      removeFile(path)
+
+    let split = e.hsplit(some(path))
+
+    check split.isErr
+    check split.error == "E36: Not enough room"
+    check e.buffers.len == buffersBefore
+    check e.windowManager.windows.len == 1
+
+  test "a refused :new leaves the windows alone":
+    let e = tinyEditor()
+    check e.hsplitWithBuffer(newTextBuffer()).isErr
+    check e.windowManager.windows.len == 1
+
+  test "startup files split before the real size is known":
+    let e = tinyEditor()
+    let path = getTempDir() / "moe_hsplit_startup.txt"
+    writeFile(path, "text")
+    defer:
+      removeFile(path)
+
+    check e.hsplit(some(path), checkRoom = false).isOk
+    check e.windowManager.windows.len == 2

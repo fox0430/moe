@@ -517,8 +517,7 @@ proc calculateCommandPopupPosition*(
   ## Popup appears above the whole reserved bottom area
   ## argStartPos: position where argument starts (for argument completion)
   ## bottomAreaRows: total rows reserved at the bottom — the (possibly
-  ## wrapped) command-line rows plus the status line pushed above them
-  ## when the area is grown
+  ## wrapped) command-line rows plus the status line above them
   let visibleItems = min(entries.len, maxVisible)
   let popupHeight = visibleItems + 2 # +2 for border
 

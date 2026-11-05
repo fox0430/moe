@@ -796,91 +796,65 @@ suite "renderWindow - Basic behavior":
     e.renderWindow(buffer, window, 4, false, true, 0)
 
 suite "renderWindowSeparator - Basic behavior":
-  test "Render vertical separator":
+  proc windowsAt(e: Editor, viewports: varargs[ViewPort]): seq[EditorWindow] =
+    for viewport in viewports:
+      result.add EditorWindow(
+        viewport: viewport, cursor: BufferPosition(line: 0, column: 0)
+      )
+    e.windowManager.windows = result
+
+  test "Render vertical separator in the column between windows":
     let e = createTestEditor()
     var buffer = createTestBuffer()
-
-    e.viewport.width = 80
-    e.viewport.height = 24
-
-    # Create two side-by-side windows
-    let window1 = EditorWindow(
-      viewport: ViewPort(x: 0, y: 0, width: 40, height: 24),
-      cursor: BufferPosition(line: 0, column: 0),
-      active: true,
-    )
-    let window2 = EditorWindow(
-      viewport: ViewPort(x: 40, y: 0, width: 40, height: 24),
-      cursor: BufferPosition(line: 0, column: 0),
-      active: false,
-    )
-
-    e.renderWindowSeparator(buffer, window1, window2, true)
-
-  test "Render horizontal separator when multi status line disabled":
-    let e = createTestEditor()
-    var buffer = createTestBuffer()
-
-    e.viewport.width = 80
-    e.viewport.height = 24
     e.state.multiStatusLine = false
 
-    # Create two stacked windows
-    let window1 = EditorWindow(
-      viewport: ViewPort(x: 0, y: 0, width: 80, height: 12),
-      cursor: BufferPosition(line: 0, column: 0),
-      active: true,
+    let windows = e.windowsAt(
+      ViewPort(x: 0, y: 0, width: 40, height: 23),
+      ViewPort(x: 41, y: 0, width: 39, height: 23),
     )
-    let window2 = EditorWindow(
-      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12),
-      cursor: BufferPosition(line: 0, column: 0),
-      active: false,
-    )
+    e.renderWindowSeparator(buffer, windows[0], true)
 
-    e.renderWindowSeparator(buffer, window1, window2, false)
+    check buffer[40, 0].symbol == "│"
+    check buffer[40, 21].symbol == "│"
+    # The status line's row stays free.
+    check buffer[40, 22].symbol != "│"
 
-  test "No horizontal separator when multi status line enabled":
+  test "Render horizontal separator on the row between windows":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    e.state.multiStatusLine = false
 
-    e.viewport.width = 80
-    e.viewport.height = 24
+    let windows = e.windowsAt(
+      ViewPort(x: 0, y: 0, width: 80, height: 11),
+      ViewPort(x: 0, y: 12, width: 80, height: 11),
+    )
+    e.renderWindowSeparator(buffer, windows[0], false)
+
+    check buffer[0, 11].symbol == "─"
+    check buffer[79, 11].symbol == "─"
+
+  test "No separator without a free row between windows":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
     e.state.multiStatusLine = true
 
-    # Create two stacked windows
-    let window1 = EditorWindow(
-      viewport: ViewPort(x: 0, y: 0, width: 80, height: 12),
-      cursor: BufferPosition(line: 0, column: 0),
-      active: true,
+    let windows = e.windowsAt(
+      ViewPort(x: 0, y: 0, width: 80, height: 12),
+      ViewPort(x: 0, y: 12, width: 80, height: 11),
     )
-    let window2 = EditorWindow(
-      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12),
-      cursor: BufferPosition(line: 0, column: 0),
-      active: false,
-    )
+    e.renderWindowSeparator(buffer, windows[0], false)
 
-    # Should not draw horizontal separator
-    e.renderWindowSeparator(buffer, window1, window2, false)
+    check buffer[0, 12].symbol != "─"
 
-  test "Separator at window offset":
+  test "No separator without a window next to it":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    e.viewport.width = 80
-    e.viewport.height = 24
+    let windows = e.windowsAt(ViewPort(x: 0, y: 0, width: 40, height: 12))
+    e.renderWindowSeparator(buffer, windows[0], true)
 
-    let window1 = EditorWindow(
-      viewport: ViewPort(x: 10, y: 5, width: 30, height: 15),
-      cursor: BufferPosition(line: 0, column: 0),
-      active: true,
-    )
-    let window2 = EditorWindow(
-      viewport: ViewPort(x: 40, y: 5, width: 30, height: 15),
-      cursor: BufferPosition(line: 0, column: 0),
-      active: false,
-    )
-
-    e.renderWindowSeparator(buffer, window1, window2, true)
+    check buffer[40, 0].symbol != "│"
+    check buffer[0, 12].symbol != "─"
 
 suite "renderWindow - Visual selection":
   test "Render window with visual selection":

@@ -1587,7 +1587,7 @@ suite "Editor - :set ignorecase/smartcase/incsearch survive Config-mode re-apply
 
 suite "Startup window - FileTree":
   ## These tests simulate handleStartUpWindows: viewport height is set to
-  ## termHeight - steadyBottomAreaHeight() (reserving the command line row) and
+  ## termHeight - StatusLineReserve (reserving the command line row) and
   ## screenSize is synced so no ratio-based resizeWindows runs afterward.
 
   test "FileTree opens with correct layout":
@@ -1598,7 +1598,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - steadyBottomAreaHeight()
+      viewportHeight = termHeight - StatusLineReserve
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1649,7 +1649,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - steadyBottomAreaHeight()
+      viewportHeight = termHeight - StatusLineReserve
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1671,7 +1671,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 200
       termHeight = 50
-      viewportHeight = termHeight - steadyBottomAreaHeight()
+      viewportHeight = termHeight - StatusLineReserve
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1704,7 +1704,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - steadyBottomAreaHeight()
+      viewportHeight = termHeight - StatusLineReserve
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1732,7 +1732,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 160
       termHeight = 48
-      viewportHeight = termHeight - steadyBottomAreaHeight()
+      viewportHeight = termHeight - StatusLineReserve
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1751,7 +1751,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - steadyBottomAreaHeight()
+      viewportHeight = termHeight - StatusLineReserve
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1792,7 +1792,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 160
       termHeight = 40
-      viewportHeight = termHeight - steadyBottomAreaHeight()
+      viewportHeight = termHeight - StatusLineReserve
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1839,7 +1839,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - steadyBottomAreaHeight()
+      viewportHeight = termHeight - StatusLineReserve
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1888,7 +1888,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - steadyBottomAreaHeight()
+      viewportHeight = termHeight - StatusLineReserve
 
     let win = e.activeWindow
     win.viewport.width = termWidth

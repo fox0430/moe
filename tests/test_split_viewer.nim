@@ -29,7 +29,7 @@ import pkg/[results, celina]
 import
   ../src/moepkg/[
     editor, config, config_loader, types, editor_window, editor_buffers, window_manager,
-    editor_frame,
+    editor_frame, editor_window_layout,
   ]
 import ../src/moepkg/command_handlers/[handler_result, result_processor, editor_ops]
 import ../src/moepkg/buffer/edit
@@ -660,7 +660,7 @@ proc loneSidebar(e: Editor): EditorWindow =
 
 proc resize(e: Editor, width, height: int) =
   e.windowManager.resizeWindows(
-    width, height, e.screenSize.width, e.screenSize.height, e.multiStatusLine
+    width, height, e.screenSize.width, e.screenSize.height, e.windowStatus
   )
   e.screenSize.width = width
   e.screenSize.height = height

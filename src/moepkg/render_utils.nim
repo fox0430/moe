@@ -23,7 +23,7 @@
 ## that don't depend heavily on Editor state. Extracted from editor.nim to
 ## improve modularity and prepare for additional rendering features.
 
-import std/[strutils, unicode]
+import std/[options, strutils, unicode]
 import celina_backend as celina
 
 import types, buffer/core, unicode_utils, color, modes, sidebar
@@ -35,6 +35,7 @@ const
 
   TabLineHeight* = 1 ## Height of tab line
   StatusLineReserve* = 1
+  CommandRowHeight* = 1 ## Steady height of the command line, below every window
 
   # Line number display constants
   LineNumberBase* = 1 # Convert 0-based index to 1-based display
@@ -496,11 +497,34 @@ proc findMaxBottomY*(windows: seq[EditorWindow]): int =
     if bottomY > result:
       result = bottomY
 
-proc calculateWindowStatusLineY*(window: EditorWindow, isBottomWindow: bool): int =
-  ## Calculate Y position for window status line
-  ## Status line is always at the last row of the window area (y + height - 1)
-  ## For bottom windows, the command line overlays the status line when active
-  window.viewport.y + window.viewport.height - 1
+proc reachesBottom*(windows: seq[EditorWindow], window: EditorWindow): bool =
+  ## Whether `window` ends on the last row any window ends on.
+  window.viewport.y + window.viewport.height == findMaxBottomY(windows)
+
+proc firstRowBelow*(
+    windows: seq[EditorWindow], viewport: ViewPort, fromY: int
+): Option[int] =
+  ## Top row of the nearest window past `fromY` in the columns of `viewport`.
+  for window in windows:
+    let other = window.viewport
+    if other.y > fromY and viewport.x < other.x + other.width and
+        other.x < viewport.x + viewport.width:
+      if result.isNone or other.y < result.get:
+        result = some(other.y)
+
+proc firstColumnRight*(windows: seq[EditorWindow], viewport: ViewPort): Option[int] =
+  ## Left column of the nearest window right of `viewport` in its rows.
+  for window in windows:
+    let other = window.viewport
+    if other.x >= viewport.x + viewport.width and viewport.y < other.y + other.height and
+        other.y < viewport.y + viewport.height:
+      if result.isNone or other.x < result.get:
+        result = some(other.x)
+
+func bottomStatusLineY*(windowBottomY, reservedLines: int): int =
+  ## Row of the status line of a window: right below its text, which
+  ## `reservedLines` (`calculateReservedLines`) ends.
+  windowBottomY - reservedLines
 
 # Display width calculation with tab support
 
@@ -601,24 +625,27 @@ proc cursorWrapPosition*(
 
 # Dynamic command-line area height
 
-func steadyBottomAreaHeight*(): int {.inline.} =
-  ## Height of the bottom area in the steady state: no overlay active and no
-  ## multi-line status message — the single row shared by the status line and
-  ## the command line.
-  ## This is the documented floor of `bottomAreaHeight`. All PERSISTENT window
-  ## geometry (splits, equalization, PTY sizing, scroll fallbacks) must use
-  ## this value; transient growth (wrapped input, multi-line messages) must
-  ## never be baked into persistent layout.
-  1
+type WindowStatus* = enum
+  ## Which windows give a row of their viewport to a status line.
+  wsNone
+  wsBottomWindows
+  wsEveryWindow
 
-func steadyReservedBottom*(isBottomWindow: bool): int {.inline.} =
-  ## Steady bottom reserve for a window: the shared status/command row for
-  ## bottom windows, nothing for the others. The single place encoding the
-  ## `if isBottomWindow: steadyBottomAreaHeight() else: 0` rule.
-  if isBottomWindow:
-    steadyBottomAreaHeight()
-  else:
+func windowAreaHeight*(screenHeight: int): int =
+  ## Rows the windows tile: the screen without the command row below them.
+  ## A viewport never includes the command row; a transiently grown command-line
+  ## area overlaps the bottom windows and is never baked into their geometry.
+  screenHeight - CommandRowHeight
+
+func windowStatusRows*(status: WindowStatus, isBottomWindow: bool): int =
+  ## Rows of a window's own viewport taken by a status line.
+  case status
+  of wsNone:
     0
+  of wsBottomWindows:
+    if isBottomWindow: StatusLineReserve else: 0
+  of wsEveryWindow:
+    StatusLineReserve
 
 func effectiveLineWrap*(lineWrap: bool, mode: EditorMode): bool {.inline.} =
   ## Actual wrap for a window. Utility windows never wrap.
@@ -633,7 +660,7 @@ func motionReservedLines*(state: EditorState): int {.inline.} =
   if state.windowDisplay.viewportReservedLines >= 0:
     state.windowDisplay.viewportReservedLines
   else:
-    steadyBottomAreaHeight()
+    StatusLineReserve
 
 proc shownPromptLine(line: PromptLine): tuple[text: string, cursor: int] =
   ## `line` as a prompt shows it: a control character as `^M` or `<9b>`, and at
@@ -719,7 +746,7 @@ proc commandLineAreaHeight*(state: EditorState, width: int): int =
   ## Capped at MaxStatusMessageLines, floor 1 (the bottom row always exists).
   if width <= 0:
     # Uninitialized viewport (e.g. synthetic test editors before first render)
-    return steadyBottomAreaHeight()
+    return CommandRowHeight
   if state.hasOverlay:
     let (text, cursorChar) = state.overlayInput()
     min(MaxStatusMessageLines, wrappedInputRowCount(text, cursorChar, width))
@@ -727,16 +754,9 @@ proc commandLineAreaHeight*(state: EditorState, width: int): int =
     max(1, state.statusMessageLineCount())
 
 proc bottomAreaHeight*(state: EditorState, width: int): int =
-  ## Total number of rows reserved at the bottom of the screen.
-  ## When the command-line area is a single row, the status line shares it;
-  ## when it grows, the status line is pushed up onto its own extra row.
-  let h = state.commandLineAreaHeight(width)
-  if h <= 1:
-    1
-  elif state.showStatusLine:
-    h + 1
-  else:
-    h
+  ## Rows from the bottom of the screen a popup has to stay above: the
+  ## command-line area and the status line right above it.
+  state.commandLineAreaHeight(width) + (if state.showStatusLine: 1 else: 0)
 
 proc isWhitespace(rune: Rune): bool =
   ## Check if a rune is a whitespace character (space, tab, full-width space)

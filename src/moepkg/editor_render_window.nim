@@ -1296,33 +1296,31 @@ proc renderWindow*(
     e.renderScrollbar(buffer, window, visibleHeight, tabLineOffset, lineNumOffset)
 
 proc renderWindowSeparator*(
-    e: Editor,
-    buffer: var Buffer,
-    window: EditorWindow,
-    nextWindow: EditorWindow,
-    isBottomWindow: bool,
+    e: Editor, buffer: var Buffer, window: EditorWindow, isBottomWindow: bool
 ) =
-  ## Draw separator between adjacent windows (vertical or horizontal)
-  # Check if windows are side by side (vertical split) or top/bottom (horizontal split)
-  if window.viewport.y == nextWindow.viewport.y:
-    # Vertical split - draw vertical separator at window boundary
-    let sepX = window.viewport.x + window.viewport.width
-    if sepX < buffer.area.width:
-      # Calculate separator height using helper
-      let
-        sepHeight = e.calculateReservedLines(isBottomWindow)
-        actualSepHeight = window.viewport.height - sepHeight
+  ## Draw the separators right of and below `window`, on the rows and columns
+  ## left free next to it: a tiny terminal, or a status line toggled after the
+  ## split, may leave none.
+  let
+    v = window.viewport
+    windows = e.windowManager.windows
+    sepX = v.x + v.width
+    sepY = v.y + v.height
+    rowBelow = windows.firstRowBelow(v, sepY - 1)
+    columnRight = windows.firstColumnRight(v)
+    hasRowBelow = rowBelow.isSome and sepY < rowBelow.get
+    hasColumnRight = columnRight.isSome and sepX < columnRight.get
 
-      # Draw separator for the content height of this window
-      for y in window.viewport.y ..< (window.viewport.y + actualSepHeight):
-        if y < buffer.area.height:
-          buffer.setString(sepX, y, "│", separatorStyle())
-  elif not e.multiStatusLine:
-    # Horizontal split - draw horizontal separator at window boundary
-    # ONLY when using a single status line
-    let sepY = window.viewport.y + window.viewport.height
-    if sepY < buffer.area.height:
-      # Draw separator for the width of this window
-      for x in window.viewport.x ..< (window.viewport.x + window.viewport.width):
-        if x < buffer.area.width:
-          buffer.setString(x, sepY, "─", separatorStyle())
+  if hasRowBelow and sepY < buffer.area.height:
+    for x in v.x ..< min(sepX, buffer.area.width):
+      buffer.setString(x, sepY, "─", separatorStyle())
+
+  if hasColumnRight and sepX < buffer.area.width:
+    # Down the window's text, and across the row below it to the next window.
+    let endY =
+      if hasRowBelow:
+        sepY + 1
+      else:
+        sepY - e.calculateReservedLines(isBottomWindow)
+    for y in v.y ..< min(endY, buffer.area.height):
+      buffer.setString(sepX, y, "│", separatorStyle())
