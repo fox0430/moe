@@ -178,6 +178,31 @@ suite "syntax_html - htmlNextToken attributes":
     check g.kind == gtOperator
     check g.length == 1
 
+suite "syntax_html - htmlNextToken string escapes":
+  proc firstString(src: string): string =
+    var buf = src
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(buf)
+    while true:
+      g.htmlNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtStringLit:
+        return buf[g.start ..< g.start + g.length]
+
+  test "an escaped quote stays in a script string":
+    check firstString("<script>var s = \"a\\\"b\"; foo();") == "\"a\\\"b\""
+    check firstString("<script>var s = 'it\\'s'; foo();") == "'it\\'s'"
+
+  test "an escaped quote stays in a style string":
+    check firstString("<style>a::before{content:\"\\\"\"}") == "\"\\\"\""
+
+  test "a backslash does not carry a string past the end of the line":
+    check firstString("<a x=\"a\\\nb\"") == "\"a\\"
+    check firstString("<a x='a\\\nb'") == "'a\\"
+    check firstString("<a x=\"a\\\r\nb\"") == "\"a\\"
+    check firstString("<a x=\"a\\") == "\"a\\"
+
 suite "syntax_html - htmlNextToken comments":
   test "HTML comment":
     var g: GeneralTokenizer

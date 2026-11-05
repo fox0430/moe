@@ -1170,6 +1170,27 @@ suite "syntaxjavascript - javaScriptNextToken JSX mode":
     g.javaScriptNextToken()
     check g.kind == gtOperator
 
+suite "syntaxjavascript - javaScriptNextToken strings in JSX mode":
+  proc lastString(src: string): string =
+    var buf = src
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(buf)
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtStringLit:
+        result = buf[g.start ..< g.start + g.length]
+
+  test "an escaped quote stays in the string":
+    check lastString("for (i=0;i<n;i++) s = \"\\\"\"; foo(i);") == "\"\\\"\""
+
+  test "a string after a JSX element keeps its escape":
+    check lastString("const x = <div/>;\nconst s = \"a\\\"b\"; foo();") == "\"a\\\"b\""
+
+  test "a backslash does not carry a string past the end of the line":
+    check lastString("const x = <a y=\"b\\\nc") == "\"b\\"
+
 suite "syntaxjavascript - javaScriptNextToken template literal advanced":
   test "template literal with dollar sign not interpolation":
     var g: GeneralTokenizer

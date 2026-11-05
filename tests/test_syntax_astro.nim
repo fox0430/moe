@@ -391,3 +391,21 @@ suite "syntaxastro - JavaScript in frontmatter":
 
     check gtDirective in tokens
     check gtLongComment in tokens
+
+suite "syntaxastro - string escapes":
+  proc strings(src: string): seq[string] =
+    var buf = src
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(buf)
+    while true:
+      g.astroNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtStringLit:
+        result.add buf[g.start ..< g.start + g.length]
+
+  test "an escaped quote stays in a script string":
+    check strings("<script>var s = \"a\\\"b\"; foo();") == @["\"a\\\"b\""]
+
+  test "a backslash does not carry a string past the end of the line":
+    check strings("<a x=\"a\\\nb") == @["\"a\\"]
