@@ -125,9 +125,7 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
     g.kind = gtStringLit
     while true:
       case g.buf[pos]
-      of '\0':
-        break
-      of '\r', '\n':
+      of '\0', '\r', '\n':
         break
       of '\"', '\'':
         if g.buf[pos] == quote:
@@ -137,9 +135,7 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
           inc(pos)
       of '\\':
         inc(pos)
-        if g.buf[pos] == '\0':
-          break
-        inc(pos)
+        g.skipEscapedChar(pos)
       else:
         inc(pos)
   of '=':
