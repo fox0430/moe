@@ -24,7 +24,7 @@ import std/[tables, options]
 
 import pkg/results
 
-import range_parser
+import range_parser, substitute_parser
 export range_parser
 
 type
@@ -138,6 +138,8 @@ type
     aliasDescriptions*: Table[string, string] ## Custom descriptions for aliases
     shellCommands*: Table[string, ShellCommandEntry] ## Shell command definitions
     validators*: Table[CommandLineAction, proc(args: seq[string]): Result[void, string]]
+    optionsIgnoreCase*: proc(pattern: string): bool
+      ## What 'ignorecase' and 'smartcase' make of a pattern, nil without them
 
   CommandLineResult* = object
     case kind*: CommandLineAction
@@ -168,7 +170,7 @@ type
     of claSubstitute:
       pattern*: string
       replacement*: string
-      substituteFlags*: string
+      substituteFlags*: SubstituteFlags
       substituteRange*: ExLineRange
     of claDeleteLines:
       deleteRange*: ExLineRange

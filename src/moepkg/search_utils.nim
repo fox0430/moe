@@ -26,13 +26,12 @@ import std/[strutils, os, appdirs, paths, strformat]
 
 import pkg/results
 
-import logger
+import char_case, logger, unicode_utils
 
 proc hasUpperCase*(s: string): bool =
-  ## Check if string contains any uppercase ASCII characters
-  ## Used for smartcase logic
-  for c in s:
-    if c >= 'A' and c <= 'Z':
+  ## Whether `s` has an upper case letter, for 'smartcase'.
+  for (r, _) in s.chars:
+    if r.utfIsUpper:
       return true
   false
 

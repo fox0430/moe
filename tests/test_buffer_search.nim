@@ -1119,14 +1119,15 @@ suite "Buffer search - whole word":
       @[ColumnRange(startCol: 11, endCol: 14)]
 
   test "a literal match does not split a character from its composing ones":
-    # `cafe` followed by U+0301 is `café`: Vim matches neither `cafe` in it nor
-    # a match that starts on the U+0301.
+    # `cafe` followed by U+0301 is `café`: Vim does not match `cafe` in it, and
+    # U+0301 alone finds the whole `é`.
     let buf = newTextBuffer("café cafe")
     check buf.findSearchMatchRanges(0, "cafe", match = smLiteral) ==
       @[ColumnRange(startCol: 6, endCol: 10)]
     check buf.findSearchMatchRanges(0, "café", match = smWord) ==
       @[ColumnRange(startCol: 0, endCol: 5)]
-    check buf.findSearchMatchRanges(0, "́", match = smLiteral).len == 0
+    check buf.findSearchMatchRanges(0, "\u0301", match = smLiteral) ==
+      @[ColumnRange(startCol: 3, endCol: 5)]
 
   test "a literal match ignores the case of any letter, as Vim's utf_fold":
     let buf = newTextBuffer("Ärger ärger ÄRGER")
@@ -1235,3 +1236,44 @@ suite "matchEndCol":
     check b.matchEndCol(BufferPosition(line: 0, column: 3), "foo") == some(6)
     check b.matchEndCol(BufferPosition(line: 0, column: 3), "foo", match = smWord) ==
       some(6)
+
+suite "substitutePlain":
+  # Expectations are Vim 9.2's substitute() with `\\V`.
+  const
+    Acute = "\u0301"
+    Circumflex = "\u0302"
+
+  proc replaced(line, pattern: string, ignorecase = false): string =
+    let (text, count) = line.substitutePlain(pattern, "#", ignorecase, true)
+    if count > 0: text else: line
+
+  test "No match leaves nothing to build":
+    check "abc".substitutePlain("x", "#", false, true) == ("", 0)
+
+  test "Only the first match unless told":
+    check "aXa".substitutePlain("a", "#", false, false) == ("#Xa", 1)
+
+  test "A bare character is not one that holds a composing character":
+    check replaced("e" & Acute & "x", "e") == "e" & Acute & "x"
+
+  test "A composing character alone finds the character that holds it":
+    check replaced("e" & Acute & "x", Acute) == "#x"
+
+  test "A composing character at the start of a line holds nothing":
+    check replaced(Acute & "x", Acute) == Acute & "x"
+
+  test "A match takes the composing characters it did not ask for":
+    check replaced("e" & Acute & Circumflex & "x", "e" & Acute) == "#x"
+
+  test "Composing characters match in any order":
+    check replaced("e" & Circumflex & Acute & "x", "e" & Acute) == "#x"
+
+  test "A composing character the text lacks is no match":
+    check replaced("e" & Circumflex, "e" & Acute) == "e" & Circumflex
+
+  test "A character with composing characters does not fold":
+    check replaced("e" & Acute, "E" & Acute, ignorecase = true) == "e" & Acute
+
+  test "Case folds as Vim's utf_fold does":
+    check replaced("\u03c2 \u03c3 \u03a3", "\u03c3", ignorecase = true) == "# # #"
+    check replaced("\u0130 i I", "i", ignorecase = true) == "\u0130 # #"

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, strutils]
+import std/[unittest, options, sequtils, strutils]
 import ../src/moepkg/[help_viewer, buffer, primitives]
 
 suite "HelpViewer - State creation":
@@ -466,9 +466,7 @@ suite "HelpViewer - Command mode rendering (snapshot)":
 
   test "head group 3 (:delete family) is aligned to width 21":
     let state = newHelpViewerState()
-    check state.items.contains(
-      "%s/keyword1/keyword2/ - Replace text (normal mode only)"
-    )
+    check state.items.anyIt(it.startsWith("%s/keyword1/keyword2/ - Replace plain text"))
     check state.items.contains(
       "delete                - Delete current line and copy to register"
     )

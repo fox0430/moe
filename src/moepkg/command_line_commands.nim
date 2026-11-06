@@ -1305,7 +1305,11 @@ const CommandLineSpecialHelp*:
       "either side may be an address, e.g. `:%!sort`",
   ),
   substitute: HelpEntry(
-    syntax: "%s/keyword1/keyword2/", description: "Replace text (normal mode only)"
+    syntax: "%s/keyword1/keyword2/",
+    description:
+      "Replace plain text, case as in a search or by flag `i`/`I` (normal mode only); " &
+      "a :s that can run makes keyword1 the last search; " &
+      "flag `n` only counts the matches, and `c` is refused",
   ),
   deleteAll:
     HelpEntry(syntax: "%d", description: "Delete all lines and copy to register"),

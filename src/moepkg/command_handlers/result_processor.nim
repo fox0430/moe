@@ -1080,7 +1080,8 @@ proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
       # ends :noh, found or not.
       if cmdResult.kind == claSubstitute and
           activeBuffer.substituteLines(
-            cmdResult.substituteRange, e.activeWindow.cursor.line
+            cmdResult.substituteRange, e.activeWindow.cursor.line,
+            cmdResult.substituteFlags.countOnly,
           ).isOk:
         e.state.addSearchHistory(cmdResult.pattern)
         e.state.setLastSearch(

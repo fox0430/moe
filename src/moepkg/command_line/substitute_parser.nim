@@ -25,6 +25,51 @@ import pkg/results
 
 import range_parser
 
+type SubstituteFlags* = object
+  global*: bool
+  countOnly*: bool # The `n` flag: report the matches, replace nothing
+  confirm*: bool # The `c` flag
+  ignoreCase*: bool
+  trailing*: string # What follows the flags, which Vim refuses (E488)
+
+proc parseSubstituteFlags*(text: string, optionsIgnoreCase = false): SubstituteFlags =
+  ## `text` as do_sub reads it: an `&` may start it, flags follow up to the
+  ## first character that is no flag, and a `"` ends the command. `g` and `c`
+  ## toggle, and the last of `i` and `I` decides the case for this :s alone,
+  ## `optionsIgnoreCase` being what it is without them.
+  const IgnoredFlags = {'e', 'p', '#', 'l', 'r'}
+  result.ignoreCase = optionsIgnoreCase
+  var i = if text.len > 0 and text[0] == '&': 1 else: 0
+  while i < text.len:
+    case text[i]
+    of 'g':
+      result.global = not result.global
+    of 'c':
+      result.confirm = not result.confirm
+    of 'n':
+      result.countOnly = true
+    of 'i':
+      result.ignoreCase = true
+    of 'I':
+      result.ignoreCase = false
+    of IgnoredFlags:
+      discard
+    else:
+      break
+    i.inc
+  let rest = text[i ..^ 1].strip
+  if not rest.startsWith('"'):
+    result.trailing = rest
+
+proc refusal*(flags: SubstituteFlags): string =
+  ## Why a :s with `flags` does not run, empty when it does.
+  if flags.trailing.len > 0:
+    "E488: Trailing characters: " & flags.trailing
+  elif flags.confirm and not flags.countOnly:
+    "The `c` flag of :s is not supported"
+  else:
+    ""
+
 proc processEscapeSequences*(s: string): string =
   ## Process escape sequences in a string
   ## Converts \n to newline, \t to tab, \\ to backslash, \/ to slash
@@ -117,7 +162,6 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
   type ParseState = enum
     psPattern
     psReplacement
-    psFlags
 
   var state = psPattern
   var escaped = false
@@ -138,8 +182,6 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
       of psReplacement:
         result.replacement.add('\\')
         result.replacement.add(c)
-      of psFlags:
-        result.flags.add(c)
       escaped = false
       i += 1
       continue
@@ -156,9 +198,8 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
         state = psReplacement
         result.hasReplacement = true
       of psReplacement:
-        state = psFlags
-      of psFlags:
-        discard # Ignore extra slashes in flags
+        result.flags = cmd[i + 1 ..^ 1]
+        break
       i += 1
       continue
 
@@ -168,8 +209,6 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
       result.pattern.add(c)
     of psReplacement:
       result.replacement.add(c)
-    of psFlags:
-      result.flags.add(c)
     i += 1
 
   # Handle trailing backslash
@@ -179,8 +218,6 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
       result.pattern.add('\\')
     of psReplacement:
       result.replacement.add('\\')
-    of psFlags:
-      result.flags.add('\\')
 
 proc extractSubstitutePattern*(commandText: string): string =
   ## Extract the search pattern from a substitute command

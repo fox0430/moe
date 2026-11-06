@@ -820,7 +820,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `theme themeName` | Change color theme; e.g. `theme dark` |
 | `noh` | Hide search highlights until the next search |
 | `stripwhitespace` | Delete trailing spaces |
-| `%s/keyword1/keyword2/` | Replace text (normal mode only) |
+| `%s/keyword1/keyword2/` | Replace plain text, case as in a search or by flag `i`/`I` (normal mode only); a :s that can run makes keyword1 the last search; flag `n` only counts the matches, and `c` is refused |
 | `%d` | Delete all lines and copy to register |
 | `1,10d` | Delete lines in range and copy to register; either side may be an address, e.g. `:.,$d` |
 | `set number` or `set nonumber` | Show/hide line numbers (alias: `nu`, `nonu`) |

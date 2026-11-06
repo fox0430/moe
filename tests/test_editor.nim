@@ -32,6 +32,7 @@ import visual_test_helper
 import
   ../src/moepkg/command_handlers/
     [command_mode_handler, editor_ops, handler_result, result_processor]
+import ../src/moepkg/command_line/substitute_parser
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -783,7 +784,7 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo bar foo")
 
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "baz", isGlobalFlag = true)
+    e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags)
 
     check buffer.getLine(0) == "baz bar baz"
 
@@ -795,7 +796,7 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo bar foo")
 
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "baz", isGlobalFlag = false)
+    e.updateSubstitutePreview("foo", "baz", "".parseSubstituteFlags)
 
     # Only first occurrence replaced
     check buffer.getLine(0) == "baz bar foo"
@@ -843,18 +844,18 @@ suite "Editor - Substitute preview":
 
   test "findFirstSubstituteMatch finds first occurrence across lines":
     let lines = @["aaa", "bbb foo", "ccc foo ddd"]
-    let match = findFirstSubstituteMatch(lines, "foo")
+    let match = findFirstSubstituteMatch(lines, "foo", false)
     check match.isSome
     check match.get == BufferPosition(line: 1, column: 4)
 
   test "findFirstSubstituteMatch returns none when pattern absent":
     let lines = @["aaa", "bbb", "ccc"]
-    let match = findFirstSubstituteMatch(lines, "zzz")
+    let match = findFirstSubstituteMatch(lines, "zzz", false)
     check match.isNone
 
   test "findFirstSubstituteMatch returns none for empty pattern":
     let lines = @["aaa", "bbb"]
-    let match = findFirstSubstituteMatch(lines, "")
+    let match = findFirstSubstituteMatch(lines, "", false)
     check match.isNone
 
   test "jumpToFirstSubstituteMatch moves cursor to first match":
@@ -869,7 +870,7 @@ suite "Editor - Substitute preview":
     e.cursor = BufferPosition(line: 0, column: 0)
     e.startSubstitutePreview()
 
-    check e.jumpToFirstSubstituteMatch("foo")
+    check e.jumpToFirstSubstituteMatch("foo", false)
 
     check e.cursor == BufferPosition(line: 2, column: 7)
 
@@ -880,7 +881,7 @@ suite "Editor - Substitute preview":
       e.motionController.bindToWindow(e.activeWindow)
       e.startSubstitutePreview()
       for pattern in patterns:
-        check e.jumpToFirstSubstituteMatch(pattern)
+        check e.jumpToFirstSubstituteMatch(pattern, false)
       check e.cursor.line == 112
       e.activeWindow.viewport.topLine
 
@@ -902,17 +903,16 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo bar")
 
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "baz", isGlobalFlag = true)
+    e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags)
     check buffer.getLine(0) == "baz bar"
 
     e.restoreFromPreview()
     check buffer.getLine(0) == "foo bar"
-    # lastPattern/lastReplacement must be cleared so the same preview can be
+    # The key must be cleared so the same preview can be
     # re-applied after a restore.
-    check e.state.ui.substitutePreview.lastPattern == ""
-    check e.state.ui.substitutePreview.lastReplacement == ""
+    check e.state.ui.substitutePreview.applied == SubstitutePreviewKey()
 
-    e.updateSubstitutePreview("foo", "baz", isGlobalFlag = true)
+    e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags)
     check buffer.getLine(0) == "baz bar"
 
   test "jumpToFirstSubstituteMatch restores cursor when no match":
@@ -933,7 +933,7 @@ suite "Editor - Substitute preview":
     e.activeWindow.viewport.topWrapOffset = 0
     e.activeWindow.viewport.leftCell = 0
 
-    check not e.jumpToFirstSubstituteMatch("zzz")
+    check not e.jumpToFirstSubstituteMatch("zzz", false)
 
     check e.cursor == BufferPosition(line: 0, column: 4)
     check e.activeWindow.viewport.topLine == 3

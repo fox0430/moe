@@ -26,7 +26,7 @@ import ../src/moepkg/celina_backend
 import
   ../src/moepkg/[
     buffer, types, modes, editor, config, config_mode, help_viewer, editor_reload,
-    search_utils, key_bindings, unicode_utils,
+    search_ops, search_utils, key_bindings, unicode_utils,
   ]
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
 import ../src/moepkg/command_handlers/result_processor
@@ -1345,6 +1345,16 @@ suite "Search highlight after :noh":
     check e.executeCommandOverlay(":set hlsearch") == roContinue
     check e.matchesOnFirstLine == 2
 
+  test "n after :s keeps going the way the last search went":
+    let e = createTestEditorWithBuffer("bar\nx\nbar\nx\nbar\nx")
+    e.cursor = BufferPosition(line: 3, column: 0)
+    e.state.enterSearchOverlay(Backward)
+    e.setSearchText("bar")
+    discard e.handleSearchModeKeyCombo(Enter)
+    check e.cursor.line == 2
+    check e.executeCommandOverlay(":s/bar/x/") == roContinue
+    check e.state.searchLast(e.activeBuffer, e.cursor, false, 1).get.line == 0
+
   test "A :s being typed shows its pattern, and leaving hides it again":
     let e = nohAfterSearch()
     e.state.enterCommandOverlay()
@@ -1450,3 +1460,56 @@ suite "Search highlight after :noh":
     e.state.enterCommandOverlay()
     e.state.input.line.text = "s/bar"
     check e.matchesOnFirstLine == 2
+
+  test ":s replaces what the last search it leaves shows":
+    let e = nohAfterSearch("Foo Foo foo")
+    check e.executeCommandOverlay(":s/foo/x/") == roContinue
+    check e.activeBuffer.getLine(0) == "x Foo foo"
+    check e.matchesOnFirstLine == 2
+
+  test "An upper case letter in :s makes it and its last search exact":
+    let e = nohAfterSearch("foo Foo Foo")
+    check e.executeCommandOverlay(":s/Foo/x/") == roContinue
+    check e.activeBuffer.getLine(0) == "foo x Foo"
+    check e.matchesOnFirstLine == 1
+
+  test "The last of the `i` and `I` flags decides for the :s alone":
+    let e = nohAfterSearch("foo Foo Foo")
+    check e.executeCommandOverlay(":s/Foo/x/i") == roContinue
+    check e.activeBuffer.getLine(0) == "x Foo Foo"
+    check e.matchesOnFirstLine == 2
+    check e.executeCommandOverlay(":s/Foo/y/iI") == roContinue
+    check e.activeBuffer.getLine(0) == "x y Foo"
+    check e.executeCommandOverlay(":s/foo/z/I") == roAbort
+    check e.activeBuffer.getLine(0) == "x y Foo"
+
+  test "A capital beyond ASCII makes :s exact":
+    let e = nohAfterSearch("foo \u00c9a \u00e9a")
+    check e.executeCommandOverlay(":s/\u00c9a/Y/g") == roContinue
+    check e.activeBuffer.getLine(0) == "foo Y \u00e9a"
+
+  test "A :s refused for its trailing characters leaves the last search":
+    let e = nohAfterSearch("foo Foo")
+    check e.executeCommandOverlay(":s/Foo/Y/gxi") == roAbort
+    check e.activeBuffer.getLine(0) == "foo Foo"
+    check e.state.input.search.last.pattern == "foo"
+
+  test ":s with `n` counts, and makes its pattern the last search":
+    let e = nohAfterSearch("foo Foo")
+    check e.executeCommandOverlay(":%s/foo/x/gn") == roContinue
+    check e.state.statusMessage == "2 matches on 1 line"
+    check e.activeBuffer.getLine(0) == "foo Foo"
+    check e.state.input.search.last.pattern == "foo"
+    check e.matchesOnFirstLine == 2
+
+  test ":s with `n` keeps the last search it can run on a read-only buffer":
+    let e = nohAfterSearch("foo bar")
+    e.activeBuffer.readOnly = true
+    check e.executeCommandOverlay(":s/bar/x/n") == roContinue
+    check e.state.input.search.last.pattern == "bar"
+
+  test "A :s refused for `c` leaves the buffer and the last search":
+    let e = nohAfterSearch("foo foo")
+    check e.executeCommandOverlay(":s/oo/x/gc") == roAbort
+    check e.activeBuffer.getLine(0) == "foo foo"
+    check e.state.input.search.last.pattern == "foo"

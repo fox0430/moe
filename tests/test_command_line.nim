@@ -625,7 +625,7 @@ suite "CommandLine - execute":
     check result.kind == claSubstitute
     check result.pattern == "foo"
     check result.replacement == "bar"
-    check result.substituteFlags == ""
+    check result.substituteFlags == parseSubstituteFlags("")
     check result.substituteRange.kind != erkAll
 
   test "Execute global substitute :%s/foo/bar/g":
@@ -633,7 +633,7 @@ suite "CommandLine - execute":
     check result.kind == claSubstitute
     check result.pattern == "foo"
     check result.replacement == "bar"
-    check result.substituteFlags == "g"
+    check result.substituteFlags.global
     check result.substituteRange.kind == erkAll
 
   test "Execute range substitute :1,10s/foo/bar/":
@@ -1291,3 +1291,69 @@ suite "CommandLine - execute delete commands":
     check result.kind == claDeleteLines
     check result.deleteRange.kind != erkAll
     check result.deleteRange.kind != erkAddresses
+
+suite "CommandLine - parseSubstituteFlags":
+  # Expectations are Vim 9.2's.
+  test "The last of i and I wins":
+    check parseSubstituteFlags("gi").ignoreCase
+    check not parseSubstituteFlags("iI").ignoreCase
+    check parseSubstituteFlags("Ii").ignoreCase
+
+  test "Without i and I the options decide":
+    check not parseSubstituteFlags("g").ignoreCase
+    check parseSubstituteFlags("g", optionsIgnoreCase = true).ignoreCase
+    check not parseSubstituteFlags("I", optionsIgnoreCase = true).ignoreCase
+
+  test "`g` toggles":
+    check parseSubstituteFlags("g").global
+    check not parseSubstituteFlags("gg").global
+
+  test "Reading stops at what is no flag":
+    let flags = parseSubstituteFlags("gxi")
+    check flags.global
+    check not flags.ignoreCase
+    check flags.trailing == "xi"
+
+  test "`&` only starts the flags":
+    check parseSubstituteFlags("&g").trailing == ""
+    check parseSubstituteFlags("g&").trailing == "&"
+
+  test "A comment ends the flags":
+    check parseSubstituteFlags("g\"note").trailing == ""
+    check parseSubstituteFlags("g \"note").trailing == ""
+
+  test "Spaces after the flags are no trailing characters":
+    check parseSubstituteFlags("g  ").trailing == ""
+
+  test "`c` is refused unless `n` makes it count":
+    check parseSubstituteFlags("gc").refusal != ""
+    check parseSubstituteFlags("cc").refusal == ""
+    check parseSubstituteFlags("cn").refusal == ""
+
+  test "Trailing characters refuse the :s":
+    let parser = newCommandLineParser()
+    for command in [
+      ":s/Foo/Y/gxi", ":s/Foo/Y/ i", ":s/a/x/c/g", ":s/a/x/g/", ":s/a/x/\\g",
+      ":s/a/x/g&",
+    ]:
+      let result = parser.parseAndExecute(command)
+      check result.kind == claUnknown
+      check result.errorMessage.startsWith("E488")
+
+  test "`c` refuses the :s":
+    let result = newCommandLineParser().parseAndExecute(":%s/a/b/gc")
+    check result.kind == claUnknown
+
+  test "`i` and `I` hold on a parser without the options":
+    let parser = newCommandLineParser()
+    check parser.parseAndExecute(":s/Foo/x/i").substituteFlags.ignoreCase
+    check not parser.parseAndExecute(":s/foo/x/I").substituteFlags.ignoreCase
+    check not parser.parseAndExecute(":s/foo/x/").substituteFlags.ignoreCase
+
+  test "Without a flag the parser asks the options":
+    let parser = newCommandLineParser()
+    parser.optionsIgnoreCase = proc(pattern: string): bool =
+      pattern == "foo"
+    check parser.parseAndExecute(":s/foo/x/").substituteFlags.ignoreCase
+    check not parser.parseAndExecute(":s/Foo/x/").substituteFlags.ignoreCase
+    check not parser.parseAndExecute(":s/foo/x/I").substituteFlags.ignoreCase
