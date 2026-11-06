@@ -21,7 +21,7 @@
 ## tab lists, buffer switching (:b/:bnext/:bprev/...), deletion, terminal
 ## teardown, and file opening into buffers (:e and friends).
 
-import std/[strutils, strformat, options, os]
+import std/[math, strutils, strformat, options, os]
 
 when not defined(moe.embedded):
   import std/tables
@@ -147,15 +147,6 @@ proc currentBufferIndex*(e: Editor): int =
   ## Returns -1 if not found.
   e.bufferIndexById(e.activeBuffer().id)
 
-proc windowBufferIndex*(e: Editor): int =
-  ## Index of the active buffer inside the active window's tab list.
-  ## Returns -1 if the active buffer is not registered with this window.
-  let id = e.activeWindow.tabBufferId
-  for i, bid in e.activeWindow.bufferIds:
-    if bid == id:
-      return i
-  return -1
-
 proc refuseTabSwitch(e: Editor): bool =
   ## True when the active window keeps its own tab, leaving the reason in the
   ## status message.
@@ -164,6 +155,13 @@ proc refuseTabSwitch(e: Editor): bool =
     e.state.statusMessage = switchable.error
     return true
   false
+
+proc switchToDrawnTab*(e: Editor, tab: TextBuffer) =
+  ## Switch the active window to a tab from `drawnTabs`. The tab line falls
+  ## back to the window's view, which may be no buffer of the editor.
+  if e.bufferById(tab.id).isNone or e.refuseTabSwitch():
+    return
+  discard e.activateBufferInWindow(tab)
 
 proc switchToWindowBuffer*(e: Editor, windowIndex: int): bool =
   ## Switch to a buffer in the active window's tab list by tab position.
@@ -276,75 +274,130 @@ when not defined(moe.embedded):
       termState.cleanup()
     e.terminalStates.clear()
 
-proc switchToNextBuffer*(e: Editor) =
-  ## Switch to the next buffer in the active window's tab list (:bnext).
-  if e.refuseTabSwitch():
+type
+  BufferStop = tuple[window: int, tab: BufferId, focusOnly: bool]
+    ## `focusOnly`: the stop takes the focus and turns no tab.
+
+  CycleScope = enum
+    csActiveWindow ## The active window's tabs (gt).
+    csConfigured ## What `bufferCycleAcrossWindows` says (:bnext).
+
+proc crossesWindows(e: Editor, scope: CycleScope): bool =
+  ## Whether the cycle has a file window to cross to: a second one, or any one
+  ## from the sidebar.
+  if scope != csConfigured or not e.config.standard.bufferCycleAcrossWindows:
+    return false
+  let fileWindows = e.mainWindowCount()
+  fileWindows > 1 or (fileWindows == 1 and e.activeWindow.isSidebar)
+
+proc bufferStops(e: Editor, scope: CycleScope): seq[BufferStop] =
+  ## The stops of a cycle, window by window. Only the active window's tabs can
+  ## turn; any other window is one stop on what it shows, as is a window
+  ## under a viewer when crossing.
+  let
+    crossing = e.crossesWindows(scope)
+    activeIndex = e.windowManager.activeWindowIndex
+  for i, win in e.windowManager.windows:
+    if i == activeIndex and (not crossing or e.isShowingTab(win, win.tabBufferId)):
+      for id in win.bufferIds:
+        if e.bufferById(id).isSome:
+          result.add (i, id, false)
+      if win.tabBufferId notin win.bufferIds and e.bufferById(win.tabBufferId).isSome:
+        result.add (i, win.tabBufferId, false)
+    elif crossing and not win.isSidebar:
+      result.add (i, win.tabBufferId, true)
+
+proc currentStop(e: Editor, stops: seq[BufferStop]): int =
+  ## Position of the active window's stop in `stops`, or -1.
+  for i, stop in stops:
+    if stop.window == e.windowManager.activeWindowIndex and
+        (stop.focusOnly or stop.tab == e.activeWindow.tabBufferId):
+      return i
+  -1
+
+proc isOnStop(e: Editor, stop: BufferStop): bool =
+  stop.window == e.windowManager.activeWindowIndex and
+    (stop.focusOnly or e.isShowingTab(e.activeWindow, stop.tab))
+
+proc isOnlyStop(e: Editor, stops: seq[BufferStop]): bool =
+  ## True when no stop leads anywhere but the active window.
+  stops.len == 0 or
+    (stops.len == 1 and stops[0].window == e.windowManager.activeWindowIndex)
+
+proc landOnStop(e: Editor, stop: BufferStop) =
+  e.state.statusMessage = ""
+  if stop.focusOnly:
+    e.focusWindow(stop.window)
+  else:
+    discard e.activateBufferInWindow(e.bufferById(stop.tab).get)
+
+proc refuseCycle(e: Editor, scope: CycleScope): bool =
+  ## Crossing takes the focus away and turns no tab of the active window, so
+  ## only a cycle inside it can be refused.
+  not e.crossesWindows(scope) and e.refuseTabSwitch()
+
+proc cycleStops(e: Editor, scope: CycleScope, step: int) =
+  ## Land `step` (1 or -1) stops on, wrapping around.
+  if e.refuseCycle(scope):
     return
-  if e.activeWindow.bufferIds.len <= 1:
+  let stops = e.bufferStops(scope)
+  if e.isOnlyStop(stops):
     e.state.statusMessage = "E88: There is only one buffer"
     return
 
-  # If the active buffer isn't registered in this window's tab list (-1),
-  # treat "next" as a jump to the first tab. Mirrors prev's wrap behavior for
-  # the orphan (curIdx<0) case — prev wraps to last, next wraps to first.
-  let curIdx = e.windowBufferIndex()
-  let nextIdx =
-    if curIdx < 0:
-      0
-    else:
-      (curIdx + 1) mod e.activeWindow.bufferIds.len
-  if e.switchToWindowBuffer(nextIdx):
-    e.state.statusMessage = ""
+  let curIdx = e.currentStop(stops)
+  # An unknown tab reads as "outside the list", so either way wraps to its end.
+  e.landOnStop(
+    stops[
+      if curIdx < 0:
+        (if step > 0: 0 else: stops.high)
+      else:
+        floorMod(curIdx + step, stops.len)
+    ]
+  )
+
+proc landOnEndStop(e: Editor, last: bool) =
+  if e.refuseCycle(csConfigured):
+    return
+  let stops = e.bufferStops(csConfigured)
+  if not e.isOnlyStop(stops):
+    let stop =
+      if last:
+        stops[^1]
+      else:
+        stops[0]
+    if not e.isOnStop(stop):
+      e.landOnStop(stop)
+      return
+  e.state.statusMessage = "Already at " & (if last: "last" else: "first") & " buffer"
+
+proc switchToNextBuffer*(e: Editor) =
+  ## Move to the next tab (:bnext). With `bufferCycleAcrossWindows`, the focus
+  ## goes on from a window's last tab to what the next window shows.
+  e.cycleStops(csConfigured, 1)
 
 proc switchToPrevBuffer*(e: Editor) =
-  ## Switch to the previous buffer in the active window's tab list (:bprev).
-  if e.refuseTabSwitch():
-    return
-  if e.activeWindow.bufferIds.len <= 1:
-    e.state.statusMessage = "E88: There is only one buffer"
-    return
-
-  # curIdx < 0 (active buffer not in tab list) also falls into this branch and
-  # wraps to the last tab — symmetric with switchToNextBuffer's curIdx<0 path.
-  let curIdx = e.windowBufferIndex()
-  let prevIdx =
-    if curIdx <= 0:
-      e.activeWindow.bufferIds.len - 1
-    else:
-      curIdx - 1
-  if e.switchToWindowBuffer(prevIdx):
-    e.state.statusMessage = ""
+  ## Move to the previous tab (:bprev). With `bufferCycleAcrossWindows`, the
+  ## focus goes back from a window's first tab to what the previous window shows.
+  e.cycleStops(csConfigured, -1)
 
 proc switchToFirstBuffer*(e: Editor) =
-  ## Switch to the first buffer in the active window's tab list (:bfirst).
-  if e.refuseTabSwitch():
-    return
-  if e.activeWindow.bufferIds.len <= 1:
-    e.state.statusMessage = "Already at first buffer"
-    return
-
-  if e.isShowingTab(e.activeWindow, e.activeWindow.bufferIds[0]):
-    e.state.statusMessage = "Already at first buffer"
-    return
-
-  if e.switchToWindowBuffer(0):
-    e.state.statusMessage = ""
+  ## Move to the first stop (:bfirst): the first window with
+  ## `bufferCycleAcrossWindows`, else the active window's first tab.
+  e.landOnEndStop(last = false)
 
 proc switchToLastBuffer*(e: Editor) =
-  ## Switch to the last buffer in the active window's tab list (:blast).
-  if e.refuseTabSwitch():
-    return
-  if e.activeWindow.bufferIds.len <= 1:
-    e.state.statusMessage = "Already at last buffer"
-    return
+  ## Move to the last stop (:blast): the last window with
+  ## `bufferCycleAcrossWindows`, else the active window's last tab.
+  e.landOnEndStop(last = true)
 
-  let lastIdx = e.activeWindow.bufferIds.len - 1
-  if e.isShowingTab(e.activeWindow, e.activeWindow.bufferIds[lastIdx]):
-    e.state.statusMessage = "Already at last buffer"
-    return
+proc switchToNextTab*(e: Editor) =
+  ## Switch to the next tab in the active window's tab list (gt).
+  e.cycleStops(csActiveWindow, 1)
 
-  if e.switchToWindowBuffer(lastIdx):
-    e.state.statusMessage = ""
+proc switchToPrevTab*(e: Editor) =
+  ## Switch to the previous tab in the active window's tab list (gT).
+  e.cycleStops(csActiveWindow, -1)
 
 proc resolveBufferArg*(e: Editor, arg: string): Result[BufferId, string] =
   ## Resolve a `:b`-style argument — a stable buffer number (`BufferId`, as

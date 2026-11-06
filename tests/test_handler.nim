@@ -32,6 +32,7 @@ import ../src/moepkg/celina_backend
 import pkg/celina/core/mouse_logic
 
 import config_test_helper
+import ../src/moepkg/tab_line
 import visual_test_helper, clipboard_test_helper
 
 import
@@ -4388,6 +4389,71 @@ suite "handlePasteEvent":
 
     check e.state.input.line.text == "wor"
 
+suite "handleKeyCombo - :bnext crossing a window under forceInsertMode":
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  test "the window left behind ends its session":
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    let e = newEditor(config)
+    e.state.registers = initRegisters()
+    e.syncActiveWindow()
+    e.enforceModePolicy()
+    let start = e.activeWindow
+    check e.vsplitWithBuffer(newTextBuffer("second")).isOk
+    let target = e.activeWindow
+    e.focusWindow(e.windowManager.windows.find(start))
+    require e.state.mode == EditorMode.Insert
+    let startBuffer = start.buffer
+
+    # Forced Insert opens the command line straight from Ctrl-o.
+    e.press("x", "C-o")
+    for ch in "bnext":
+      e.press($ch)
+    e.press("Enter")
+
+    check e.activeWindow == target
+    check not startBuffer.inTransaction
+    check start.mode != EditorMode.Insert
+    check e.state.mode == EditorMode.Insert
+    check target.buffer.inTransaction
+
+    e.press("y")
+    check $target.buffer.getLine(0) == "ysecond"
+    check $startBuffer.getLine(0) == "x"
+
+suite "handleKeyCombo - gt and gT stay in the window":
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc twoTabsBesideOne(): tuple[e: Editor, lone, tabs: EditorWindow] =
+    ## `tabs`, active on its last tab, has two tabs; `lone` has one.
+    let e = newEditor(newEditorConfig())
+    e.state.registers = initRegisters()
+    e.syncActiveWindow()
+    let lone = e.activeWindow
+    check e.vsplitWithBuffer(newTextBuffer("second")).isOk
+    check e.enew().isOk
+    require e.activeWindow.bufferIds.len == 2
+    (e, lone, e.activeWindow)
+
+  for across in [true, false]:
+    test "with bufferCycleAcrossWindows = " & $across:
+      let (e, lone, tabs) = twoTabsBesideOne()
+      e.config.standard.bufferCycleAcrossWindows = across
+
+      e.press("g", "t")
+      check e.activeWindow == tabs
+      check tabs.tabBufferId == tabs.bufferIds[0]
+
+      e.press("g", "T")
+      check e.activeWindow == tabs
+      check tabs.tabBufferId == tabs.bufferIds[^1]
+      check lone.bufferIds.len == 1
+
 suite "handleKeyCombo - Insert resumes after the Ctrl-o command":
   # Vim 9.2 resumes Insert once the command ends, whether it succeeded, failed
   # or was cancelled (restart_edit). Each case types `x` afterwards.
@@ -4407,6 +4473,27 @@ suite "handleKeyCombo - Insert resumes after the Ctrl-o command":
   proc press(e: Editor, keys: varargs[string]) =
     for key in keys:
       check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  test ":bnext crossing a window resumes Insert in the window landed on":
+    let e = newEditor(newEditorConfig())
+    e.state.registers = initRegisters()
+    e.syncActiveWindow()
+    let start = e.activeWindow
+    check e.vsplitWithBuffer(newTextBuffer("second")).isOk
+    let target = e.activeWindow
+    e.focusWindow(e.windowManager.windows.find(start))
+
+    e.press("i", "C-o", ":")
+    for ch in "bnext":
+      e.press($ch)
+    e.press("Enter")
+
+    check e.activeWindow == target
+    check e.state.mode == EditorMode.Insert
+    check not start.buffer.inTransaction
+    e.press("x")
+    check $target.buffer.getLine(0) == "xsecond"
+    check $start.buffer.getLine(0) == ""
 
   for (name, content, keys, typed) in [
     ("a motion", "abc def", @["w"], "abc xdef"),
@@ -6572,6 +6659,67 @@ proc addSecondWindow(e: Editor, buf2: TextBuffer, vpx: int = 40) =
   e.windowManager.windows.add(win2)
 
 suite "handleMouseEvent - Cross-window jump finalizes stale state":
+  test "Forced Insert starts at the click, not at the window's old cursor":
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.config.standard.forceInsertMode = true
+    e.state.config.standard.forceInsertMode = true
+    e.enforceModePolicy()
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("xxx\nyyy\nzzz")
+    e.addSecondWindow(buf2)
+    let target = e.windowManager.windows[1]
+    let vp = target.viewport
+
+    check e.handleMouseEvent(makeLeftClickEvent(vp.x + 6, 1))
+
+    check e.activeWindow == target
+    require target.cursor.line == 1
+    check e.state.mode == EditorMode.Insert
+    check target.insertStart.at == target.cursor
+
+  test "A click on a tab drawn from the window's view is handled and changes nothing":
+    let e = createTestEditorWithBuffer("aaa")
+    e.state.showTabLine = true
+    let tab = e.activeWindow.tabBufferId
+    e.activeWindow.bufferIds = @[]
+
+    check e.handleMouseEvent(makeLeftClickEvent(1, 0))
+
+    check e.activeWindow.tabBufferId == tab
+
+  test "A Ctrl-w waiting for its second key does not follow the click":
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    e.addSecondWindow(newTextBuffer("xxx\nyyy\nzzz"))
+    e.state.pendingInput.pendingCommand = PendingWindowCmd
+
+    check e.handleMouseEvent(makeLeftClickEvent(50, 1))
+
+    check e.windowManager.activeWindowIndex == 1
+    check e.state.pendingInput.pendingCommand == PendingNone
+
+  test "A tab click past a deleted tab opens the tab drawn there":
+    let e = createTestEditorWithBuffer("aaa")
+    e.state.showTabLine = true
+    let first = newTextBuffer("www")
+    let second = newTextBuffer("xxx")
+    e.addBuffer(first)
+    e.addBuffer(second)
+    e.activeWindow.bufferIds = @[BufferId(999_999), first.id, second.id]
+    var column = -1
+    let width = e.activeWindow.viewport.width
+    for c in 0 ..< width:
+      if hitTestTabLine(@[first, second], e.activeWindow.mode, 0, width, c) == 1:
+        column = c
+        break
+    require column >= 0
+
+    check e.handleMouseEvent(makeLeftClickEvent(column, 0))
+
+    check e.activeWindow.tabBufferId == second.id
+
   test "Forced Insert mode survives a jump to a Normal-mode window":
     let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
     e.config.standard.forceInsertMode = true

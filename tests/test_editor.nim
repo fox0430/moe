@@ -39,6 +39,9 @@ proc createTestEditor(): Editor =
   let vr = newValidationResult()
   result = newEditor(config, vr)
 
+proc windowBufferIndex(e: Editor): int =
+  e.activeWindow.bufferIds.find(e.activeWindow.tabBufferId)
+
 suite "Editor - git cache refresh gating":
   ## The tick must not run a git lookup for a readout the user turned off:
   ## a diff spawns a subprocess and a branch lookup blocks on `git rev-parse`.
@@ -1004,21 +1007,6 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
     check e.activeWindow.bufferIds.len == 2
     check e.activeWindow.bufferIds[1] == e.activeWindow.buffer.id
-
-  test "windowBufferIndex returns correct index":
-    let e = createTestEditor()
-    let testFile = getTempDir() / "moe_test_window_index.txt"
-
-    writeFile(testFile, "test content")
-    defer:
-      removeFile(testFile)
-
-    discard e.editFile(testFile)
-
-    check e.windowBufferIndex() == 1
-
-    check e.switchToWindowBuffer(0)
-    check e.windowBufferIndex() == 0
 
   test "switchToWindowBuffer switches within window's bufferIds":
     let e = createTestEditor()
@@ -4021,3 +4009,398 @@ suite "processResult - viewer split window teardown":
     check e.state.mode == EditorMode.Normal
     check e.activeWindow.modeState.kind == mskNone
     check e.activeWindow.buffer == origBuffer
+
+suite "Editor - :bnext walks the tabs of every window":
+  type WindowSnapshot = tuple[tabs: seq[BufferId], width: int]
+
+  proc snapshot(e: Editor): seq[WindowSnapshot] =
+    for win in e.windowManager.windows:
+      result.add (win.bufferIds, win.viewport.width)
+
+  proc splitFiles(name: string): tuple[e: Editor, paths: seq[string]] =
+    ## One window has tabs a and b; the active one, split from it, has tab c.
+    result.e = createTestEditor()
+    for file in ["a", "b", "c"]:
+      let path = getTempDir() / (name & "_" & file & ".txt")
+      writeFile(path, file & "\n")
+      result.paths.add path
+    check result.e.editFile(result.paths[0]).isOk
+    check result.e.editFile(result.paths[1]).isOk
+    check result.e.vsplit(some(result.paths[2])).isOk
+    require result.e.windowManager.windows.len == 2
+
+  proc remove(paths: seq[string]) =
+    for path in paths:
+      removeFile(path)
+
+  test "crossing shows every window as it was, and only the active one turns":
+    let (e, paths) = splitFiles("moe_bnext_cross")
+    defer:
+      paths.remove()
+    let before = e.snapshot()
+    let lone = e.activeWindow
+    let tabs = e.windowManager.previousWindow
+    require tabs.tabBufferId == tabs.bufferIds[^1]
+    let shown = tabs.tabBufferId
+    tabs.cursor = BufferPosition(line: 0, column: 1)
+
+    e.switchToNextBuffer()
+    check e.activeWindow == tabs
+    check tabs.tabBufferId == shown
+    check tabs.cursor == BufferPosition(line: 0, column: 1)
+
+    # Off the last tab: on to the next window, wrapping.
+    e.switchToNextBuffer()
+    check e.activeWindow == lone
+    check tabs.tabBufferId == shown
+    check tabs.cursor == BufferPosition(line: 0, column: 1)
+
+    e.switchToPrevBuffer()
+    check e.activeWindow == tabs
+    check tabs.tabBufferId == shown
+
+    # Only the active window turns.
+    let lonesTab = lone.tabBufferId
+    e.switchToPrevBuffer()
+    check e.activeWindow == tabs
+    check tabs.tabBufferId == tabs.bufferIds[^2]
+    check lone.tabBufferId == lonesTab
+    check e.snapshot() == before
+    check e.state.statusMessage == ""
+
+  test "two windows on one tab each: the windows only swap focus":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_bnext_two_windows.txt"
+    writeFile(path, "a\n")
+    defer:
+      removeFile(path)
+    check e.editFile(path).isOk
+    e.activeWindow.bufferIds = @[e.activeBuffer().id]
+    check e.vsplit().isOk
+    let wm = e.windowManager
+    let start = wm.activeWindowIndex
+    wm.windows[0].cursor = BufferPosition(line: 0, column: 0)
+    let before = e.snapshot()
+
+    e.switchToNextBuffer()
+    check wm.activeWindowIndex == 1 - start
+    e.switchToPrevBuffer()
+    check wm.activeWindowIndex == start
+    check e.snapshot() == before
+
+  test "landing on the shown tab keeps that window's cursor":
+    let (e, paths) = splitFiles("moe_bnext_cursor")
+    defer:
+      paths.remove()
+    let start = e.windowManager.activeWindowIndex
+    let win = e.activeWindow
+    win.cursor = BufferPosition(line: 0, column: 1)
+    win.bufferIds = @[win.tabBufferId]
+    let other = e.windowManager.windows[1 - start]
+    other.bufferIds = @[other.tabBufferId]
+
+    e.switchToNextBuffer()
+    check e.activeWindow == other
+    e.switchToNextBuffer()
+    check e.activeWindow == win
+    check win.cursor == BufferPosition(line: 0, column: 1)
+
+  test "tabs before the shown one are reached with :bprev":
+    let (e, paths) = splitFiles("moe_bnext_turn")
+    defer:
+      paths.remove()
+    let tabs = e.windowManager.previousWindow
+    e.focusWindow(e.windowManager.windows.find(tabs))
+    require tabs.tabBufferId == tabs.bufferIds[^1]
+    let list = tabs.bufferIds
+
+    for i in countdown(list.high - 1, 0):
+      e.switchToPrevBuffer()
+      check e.activeWindow == tabs
+      check tabs.tabBufferId == list[i]
+    check tabs.bufferIds == list
+
+  test ":bfirst and :blast reach the outer windows":
+    let (e, paths) = splitFiles("moe_bnext_ends")
+    defer:
+      paths.remove()
+    let before = e.snapshot()
+    let wm = e.windowManager
+    let lone = wm.windows[0]
+    let tabs = wm.windows[^1]
+    let shown = tabs.tabBufferId
+    e.focusWindow(wm.windows.find(tabs))
+
+    e.switchToFirstBuffer()
+    check e.activeWindow == lone
+    e.switchToFirstBuffer()
+    check e.state.statusMessage == "Already at first buffer"
+
+    e.switchToLastBuffer()
+    check e.activeWindow == tabs
+    check tabs.tabBufferId == shown
+
+    e.switchToFirstBuffer()
+    e.switchToLastBuffer()
+    check tabs.tabBufferId == shown
+    check e.state.statusMessage == ""
+    check e.snapshot() == before
+
+  proc openViewer(e: Editor) =
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
+    require e.activeWindow.viewerEntry.isSome
+
+  test "a window under a viewer is one stop, kept open both ways":
+    let (e, paths) = splitFiles("moe_bnext_viewer")
+    defer:
+      paths.remove()
+    let lone = e.activeWindow
+    lone.bufferIds = @[lone.tabBufferId]
+    let covered = e.windowManager.previousWindow
+    e.focusWindow(e.windowManager.windows.find(covered))
+    e.openViewer()
+    let listing = covered.buffer
+    let before = e.snapshot()
+    e.focusWindow(e.windowManager.windows.find(lone))
+
+    e.switchToNextBuffer()
+    check e.activeWindow == covered
+    check covered.viewerEntry.isSome
+    check covered.buffer == listing
+
+    e.switchToNextBuffer()
+    check e.activeWindow == lone
+    check covered.viewerEntry.isSome
+
+    e.switchToPrevBuffer()
+    check e.activeWindow == covered
+    e.switchToFirstBuffer()
+    e.switchToLastBuffer()
+    check covered.viewerEntry.isSome
+    check e.snapshot() == before
+
+  test "a lone window keeps leaving its viewer for the next tab":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_bnext_lone_viewer.txt"
+    writeFile(path, "a\n")
+    defer:
+      removeFile(path)
+    check e.editFile(path).isOk
+    require e.activeWindow.bufferIds.len >= 2
+    e.openViewer()
+
+    e.switchToNextBuffer()
+
+    check e.activeWindow.viewerEntry.isNone
+
+  test "gt from a window under a viewer stays and leaves the viewer":
+    let (e, paths) = splitFiles("moe_bnext_gt_viewer")
+    defer:
+      paths.remove()
+    let tabs = e.windowManager.previousWindow
+    e.focusWindow(e.windowManager.windows.find(tabs))
+    e.openViewer()
+
+    e.switchToNextTab()
+
+    check e.activeWindow == tabs
+    check tabs.viewerEntry.isNone
+
+  test "an unknown tab on another window is no stop":
+    let (e, paths) = splitFiles("moe_bnext_dead_tab")
+    defer:
+      paths.remove()
+    let lone = e.activeWindow
+    let other = e.windowManager.previousWindow
+    let tabs = other.bufferIds
+    let dead = newTextBuffer("dead")
+    other.setTab(dead)
+    other.bufferIds = tabs
+    e.focusWindow(e.windowManager.windows.find(other))
+    require other.bufferIds.len >= 1
+    e.focusWindow(e.windowManager.windows.find(lone))
+
+    for _ in 0 .. tabs.len:
+      e.state.statusMessage = "stale"
+      e.switchToNextBuffer()
+      check e.state.statusMessage == ""
+
+  test "a buffer in no window is not a stop":
+    let (e, paths) = splitFiles("moe_bnext_hidden")
+    defer:
+      paths.remove()
+    let hidden = getTempDir() / "moe_bnext_hidden_d.txt"
+    writeFile(hidden, "d\n")
+    defer:
+      removeFile(hidden)
+    let buffer = e.loadOrCreateBuffer(hidden)
+    require buffer.isOk
+    let before = e.snapshot()
+
+    for _ in 0 .. e.buffers.len:
+      e.switchToNextBuffer()
+      check e.activeBuffer() != buffer.get
+    check e.snapshot() == before
+
+  test "bufferCycleAcrossWindows off keeps every cycle in the window":
+    let (e, paths) = splitFiles("moe_bnext_off")
+    defer:
+      paths.remove()
+    e.config.standard.bufferCycleAcrossWindows = false
+    let lone = e.activeWindow
+    let before = e.snapshot()
+
+    e.switchToNextBuffer()
+    check e.state.statusMessage == "E88: There is only one buffer"
+    e.switchToPrevBuffer()
+    check e.state.statusMessage == "E88: There is only one buffer"
+    e.switchToFirstBuffer()
+    e.switchToLastBuffer()
+    check e.activeWindow == lone
+
+    let tabs = e.windowManager.previousWindow
+    e.focusWindow(e.windowManager.windows.find(tabs))
+    let start = tabs.tabBufferId
+    var visited: seq[BufferId]
+    for _ in 0 ..< tabs.bufferIds.len:
+      e.switchToNextBuffer()
+      check e.activeWindow == tabs
+      visited.add tabs.tabBufferId
+    check visited[^1] == start
+    check e.snapshot() == before
+
+  test "each kind takes its own walk through processResult":
+    let (e, paths) = splitFiles("moe_bnext_result")
+    defer:
+      paths.remove()
+    let lone = e.activeWindow
+    let tabs = e.windowManager.previousWindow
+    require e.windowManager.windows == @[lone, tabs]
+    require tabs.bufferIds.len >= 2
+    require tabs.tabBufferId == tabs.bufferIds[^1]
+
+    proc run(kind: HandlerResultKind) =
+      discard e.processResult(HandlerResult(kind: kind), e.activeBuffer())
+
+    run(hrBufferNext)
+    check e.activeWindow == tabs
+    check tabs.tabBufferId == tabs.bufferIds[^1]
+
+    # The window's last tab: :bnext would cross to `lone` here.
+    run(hrBufferNextTab)
+    check e.activeWindow == tabs
+    check tabs.tabBufferId == tabs.bufferIds[0]
+
+    # The window's first tab: :bprev would cross to `lone` here.
+    run(hrBufferPrevTab)
+    check e.activeWindow == tabs
+    check tabs.tabBufferId == tabs.bufferIds[^1]
+
+    run(hrBufferFirst)
+    check e.activeWindow == lone
+
+    run(hrBufferLast)
+    check e.activeWindow == tabs
+
+    run(hrBufferNext)
+    check e.activeWindow == lone
+
+    run(hrBufferPrev)
+    check e.activeWindow == tabs
+
+  test "a crossing leaves the editor's view of the focus consistent":
+    let (e, paths) = splitFiles("moe_bnext_focus_state")
+    defer:
+      paths.remove()
+    let start = e.activeWindow
+    let target = e.windowManager.previousWindow
+    start.cursor = BufferPosition(line: 0, column: 2)
+
+    e.switchToNextBuffer()
+
+    check e.activeWindow == target
+    check target.active
+    check not start.active
+    check e.windowManager.previousWindow == start
+    check e.state.windowDisplay.currentBufferId == target.tabBufferId
+    check e.activeBuffer() == target.buffer
+    check start.cursor == BufferPosition(line: 0, column: 2)
+
+    e.switchToPrevWindow()
+    check e.activeWindow == start
+
+  test "crossing out of a viewer leaves the viewer open":
+    let (e, paths) = splitFiles("moe_bnext_leave_viewer")
+    defer:
+      paths.remove()
+    let viewerWin = e.activeWindow
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
+    require viewerWin.viewerEntry.isSome
+    let before = e.snapshot()
+
+    e.switchToNextBuffer()
+
+    check e.activeWindow != viewerWin
+    check viewerWin.viewerEntry.isSome
+    check e.snapshot() == before
+
+  test "a deleted tab is passed over and stays in the list":
+    let (e, paths) = splitFiles("moe_bnext_stale")
+    defer:
+      paths.remove()
+    let lone = e.activeWindow
+    let stale = BufferId(999_999)
+    lone.bufferIds.add stale
+
+    e.switchToNextBuffer()
+
+    check e.activeWindow.tabBufferId != stale
+    check e.state.statusMessage == ""
+    check stale in lone.bufferIds
+
+  test "a tab missing from the window's list is still a stop":
+    let (e, paths) = splitFiles("moe_bnext_orphan")
+    defer:
+      paths.remove()
+    let lone = e.activeWindow
+    let tab = lone.tabBufferId
+    lone.bufferIds = @[]
+    let target = e.windowManager.previousWindow
+
+    e.switchToNextBuffer()
+    check e.activeWindow == target
+
+    e.switchToNextBuffer()
+    check e.activeWindow == lone
+    check lone.tabBufferId == tab
+    check lone.bufferIds.len == 0
+
+  test "gt stays in the window":
+    let (e, paths) = splitFiles("moe_bnext_gt")
+    defer:
+      paths.remove()
+    let index = e.windowManager.windows.find(e.windowManager.previousWindow)
+    let win = e.windowManager.windows[index]
+    e.focusWindow(index)
+    require win.bufferIds.len >= 2
+    let before = win.tabBufferId
+
+    for _ in 0 ..< win.bufferIds.len:
+      e.switchToNextTab()
+      check e.activeWindow == win
+
+    check win.tabBufferId == before

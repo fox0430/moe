@@ -24,6 +24,7 @@ import std/[options, strutils, unicode]
 import celina_backend as celina
 
 import
+  editor_window_tab,
   types/editor_types,
   editor_window,
   editor_window_layout,
@@ -365,13 +366,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
     # Resolve the window's per-window tab list (BufferIds) to TextBuffer refs.
     # Stale ids (deleted buffers) are skipped silently.
     if e.showTabLine:
-      var buffersToShow: seq[TextBuffer] = @[]
-      for id in window.bufferIds:
-        let bufOpt = e.bufferById(id)
-        if bufOpt.isSome:
-          buffersToShow.add(bufOpt.get)
-      if buffersToShow.len == 0:
-        buffersToShow = @[window.buffer]
+      let buffersToShow = e.drawnTabs(window)
       # A swapped-in view (Terminal-Normal's snapshot) is unregistered, so the
       # tab to mark current is not `window.buffer`. A viewer's window shows no
       # tab at all, so none is current.

@@ -128,6 +128,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | lineWrap | bool | true | Enable line wrapping |
 | timeoutlen | integer | 1000 | Key mapping timeout in milliseconds (0 = no timeout) |
 | bracketSplit | string (enum: disable, noIndent, indent) | disable | Behavior when pressing Enter between matching bracket pairs (disable/noIndent/indent) |
+| bufferCycleAcrossWindows | bool | true | Let :bnext, :bprev, :bfirst and :blast go on past the ends of a window to what the other windows show, moving only the focus. Other windows keep their tab, so tabs before the shown one take :bprev or gt. false keeps them in the active window |
 <!-- AUTO-GEN:end Standard -->
 
 
@@ -925,10 +926,10 @@ modified-buffer guard for `:bdelete` / `:quit` apply automatically.
 
 | Alias | Description |
 |:----|:----|
-| bn / bnext | Switch to next buffer |
-| bp / bprev / bprevious | Switch to previous buffer |
-| bf / bfirst | Switch to first buffer |
-| bl / blast | Switch to last buffer |
+| bn / bnext | Move to next tab, then to next window by default |
+| bp / bprev / bprevious | Move to previous tab, then to previous window by default |
+| bf / bfirst | Move to first window by default, or to this window's first tab |
+| bl / blast | Move to last window by default, or to this window's last tab |
 | bd / bdelete | Delete current buffer |
 | q / quit | Quit |
 | qa / quitall | Quit all |
@@ -1345,10 +1346,10 @@ Available command names:
 | hsplit | Horizontal split |
 | new | New buffer in horizontal split |
 | vnew | New buffer in vertical split |
-| buffernext | Next buffer |
-| bufferprev | Previous buffer |
-| bufferfirst | First buffer |
-| bufferlast | Last buffer |
+| buffernext | Next tab, then next window by default |
+| bufferprev | Previous tab, then previous window by default |
+| bufferfirst | First window by default, or this window's first tab |
+| bufferlast | Last window by default, or this window's last tab |
 | bufferdelete | Delete buffer |
 | buffer | Switch to buffer |
 | stripwhitespace | Strip trailing whitespace |

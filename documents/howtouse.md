@@ -243,8 +243,8 @@
 | <kbd>**z**</kbd> <kbd>**D**</kbd> | Delete all folding lines |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd> | Selection Range (LSP) |
 | <kbd>**Space**</kbd> <kbd>**o**</kbd> | Document Symbol (LSP) |
-| <kbd>**g**</kbd> <kbd>**t**</kbd> | Switch to the next buffer |
-| <kbd>**g**</kbd> <kbd>**T**</kbd> | Switch to the previous buffer |
+| <kbd>**g**</kbd> <kbd>**t**</kbd> | Switch to the next buffer tab |
+| <kbd>**g**</kbd> <kbd>**T**</kbd> | Switch to the previous buffer tab |
 | <kbd>**Ctrl**</kbd> <kbd>**o**</kbd> | Jump Back (Jumplist) |
 | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd> | Jump Forward (Jumplist) |
 | <kbd>**m**</kbd> <kbd>**a**</kbd> | Set buffer-local mark a (a-z) |
@@ -806,10 +806,10 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `redo` | Redo the last undone change |
 | `delete` | Delete current line and copy to register |
 | `ls` | Display all buffers |
-| `bprev` | Switch to the previous buffer |
-| `bnext` | Switch to the next buffer |
-| `bfirst` | Switch to the first buffer |
-| `blast` | Switch to the last buffer |
+| `bprev` | Move to the previous tab, then back to the previous window by default |
+| `bnext` | Move to the next tab, then on to the next window by default |
+| `bfirst` | Move to the first window by default, or to this window's first tab |
+| `blast` | Move to the last window by default, or to this window's last tab |
 | `bd [number|name]` | Delete buffer |
 | `bd! [number|name]` | Delete buffer, discarding unsaved changes |
 | `vs` | Vertical split window |
@@ -894,6 +894,8 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `conflictnext` | Jump to next git merge conflict block |
 | `conflictprev` | Jump to previous git merge conflict block |
 <!-- AUTO-GEN:end CommandMode -->
+
+`bnext`, `bprev`, `bfirst` and `blast` turn only the active window's tabs. Past the window's ends they move the focus to what the other windows show, leaving those windows as they are, so `bnext` alone does not reach a tab before the one shown: use `bprev` or `gt`. Set `Standard.bufferCycleAcrossWindows` to false to keep them in the active window.
 
 </details>
 

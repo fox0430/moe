@@ -205,8 +205,9 @@ let Invariants = @[
       # Handing the focus back to a reused command-output split.
       ("moepkg/editor_command_output.nim", 1),
       # Off a lone FileTree sidebar onto the window that replaces it, and back
-      # off a split opened without the focus (no session there yet).
-      ("moepkg/editor_window.nim", 2),
+      # off a split opened without the focus (no session there yet), and
+      # focusWindow, which ends the session first.
+      ("moepkg/editor_window.nim", 3),
       ("moepkg/command_handlers/editor_ops.nim", 2),
       ("moepkg/command_handlers/file_ops.nim", 1),
     ],
@@ -221,7 +222,6 @@ let Invariants = @[
     allow: @[
       ("moepkg/editor.nim", 1), # Initial window setup.
       ("moepkg/editor_window.nim", 1), # The window opened beside a lone sidebar.
-      ("moepkg/handler.nim", 1), # Mouse jump to the clicked window.
       ("moepkg/command_handlers/editor_ops.nim", 1), # File tree index fixup.
     ],
   ),
@@ -235,7 +235,8 @@ let Invariants = @[
     allow: @[
       # The shared tab transition.
       ("moepkg/editor_window_tab.nim", 1),
-      ("moepkg/handler.nim", 1),
+      # The focus handoff.
+      ("moepkg/editor_mode.nim", 1),
     ],
   ),
   Invariant(

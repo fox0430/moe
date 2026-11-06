@@ -27,6 +27,7 @@ import types/editor_types, buffer, logger, insert_record
 import command_handlers/mode_dispatchers
 import command_handlers/insert_commands
 from command_handlers/insert_handler import closeInsertPopups
+from pending_input import cancelAll
 
 func forceInsertMode(e: Editor): bool =
   not e.isNil and not e.config.isNil and e.config.standard.forceInsertMode
@@ -80,6 +81,31 @@ proc finalizeInsertSessionForBufferSwitch*(e: Editor, oldBuffer: TextBuffer) =
 
   e.state.previousMode = e.state.mode
   e.state.mode = EditorMode.Normal
+
+proc finalizeModeForFocusMove*(e: Editor) =
+  ## Exit the current mode before the focus is handed to another window.
+  ## pendingOperator carries no buffer identity and an open transaction is
+  ## per-buffer, so either would misfire on the new buffer. Visual ends as in Vim.
+  let activeBuffer = e.activeBuffer()
+  let wasInInsert = e.state.mode in {EditorMode.Insert, EditorMode.Replace}
+
+  # Share the buffer-switch finalizer so the two exits cannot drift apart.
+  e.finalizeInsertSessionForBufferSwitch(activeBuffer)
+
+  if wasInInsert:
+    # The finalizer leaves the cursor alone; Insert/Replace parks it one left.
+    e.activeWindow.adjustCursorAfterInsertExit()
+
+  e.state.leaveVisual()
+
+  e.state.pendingInput.cancelAll(e.keyRouter.registry)
+
+  # state.mode aliases activeWindow.mode; the subsequent swap re-aliases to
+  # the target window's own saved mode. Only an edit mode is rewound: Normal
+  # in a Terminal or viewer window would disagree with its modeState.
+  e.state.previousMode = e.state.mode
+  if e.state.mode.isFileEditMode:
+    e.state.mode = EditorMode.Normal
 
 proc enforceModePolicy*(e: Editor) =
   ## Keep an editable window in a valid Insert session when Normal mode is disabled.

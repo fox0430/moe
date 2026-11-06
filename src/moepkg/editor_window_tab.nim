@@ -120,6 +120,15 @@ proc isShowingTab*(e: Editor, win: EditorWindow, tabId: BufferId): bool =
   of wvTabView, wvTabSnapshot: true
   of wvViewer, wvForeignMode: false
 
+proc drawnTabs*(e: Editor, win: EditorWindow): seq[TextBuffer] =
+  ## The tabs the tab line draws for `win`: its live tabs, or else its view.
+  for id in win.bufferIds:
+    let buffer = e.bufferById(id)
+    if buffer.isSome:
+      result.add buffer.get
+  if result.len == 0:
+    result = @[win.buffer]
+
 proc checkTabSwitch*(win: EditorWindow): Result[void, string] =
   ## Whether `win` may show another tab. The FileTree sidebar keeps its
   ## listing, as Vim's 'winfixbuf' window keeps its buffer. Commands check it

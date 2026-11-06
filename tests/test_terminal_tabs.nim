@@ -44,6 +44,9 @@ proc createTestEditor(): Editor =
   result = newEditor(config)
   result.syncActiveWindow()
 
+proc windowBufferIndex(e: Editor): int =
+  e.activeWindow.bufferIds.find(e.activeWindow.tabBufferId)
+
 proc fakeTerminalState(): TerminalState =
   ## Build a TerminalState whose PTY is pre-closed so cleanup() is a no-op.
   ## Lets tests drive the tab/state lifecycle without spawning a real shell.
@@ -170,6 +173,46 @@ suite "Terminal tabs - moveWindowToTab":
 
     check e.activeWindow.mode == EditorMode.Normal
     check e.activeWindow.modeState.kind == mskNone
+
+suite "Terminal tabs - :bnext across windows":
+  proc textAndTerminalWindows(): tuple[e: Editor, text, term: EditorWindow] =
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    require e.tryActivateBuffer(textBuf.id).isOk
+    e.activeWindow.bufferIds = @[textBuf.id]
+    require e.vsplit().isOk
+    e.activeWindow.bufferIds = @[termBuf.id]
+    require e.tryActivateBuffer(termBuf.id).isOk
+    e.activeWindow.bufferIds = @[termBuf.id]
+    let term = e.activeWindow
+    e.focusWindow(e.windowManager.previousWindow)
+    (e, e.activeWindow, term)
+
+  test "crossing onto a Terminal window resumes the session":
+    let (e, text, term) = textAndTerminalWindows()
+
+    e.runCommand("bnext")
+
+    check e.activeWindow == term
+    checkOnSession(e, term, e.buffers[1])
+    check e.state.mode == EditorMode.Terminal
+    check text.mode == EditorMode.Normal
+
+  test "a browsing Terminal keeps its snapshot when the focus crosses back":
+    let (e, text, term) = textAndTerminalWindows()
+    e.focusWindow(term)
+    let snapshot = e.enterNormal()
+
+    e.runCommand("bnext")
+    check e.activeWindow == text
+    check term.isBrowsingTerminal
+    check term.buffer == snapshot
+
+    e.runCommand("bnext")
+    check e.activeWindow == term
+    check term.isBrowsingTerminal
+    check term.buffer == snapshot
 
 suite "Terminal tabs - closeTerminalBuffer":
   test "Closing the terminal removes its state and falls back to a sibling tab":
