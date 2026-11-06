@@ -19,15 +19,16 @@
 
 ## Tests for editor_render_views.nim
 
-import std/[unittest, strutils]
+import std/[unittest, strutils, options]
 
 import ../src/moepkg/celina_backend
 
 import
   ../src/moepkg/[
     editor, config, config_loader, config_mode, modes, types, buffer, render_utils,
-    editor_window, editor_window_layout, macro_recording,
+    editor_window, editor_window_layout, macro_recording, viewer_mode, color,
   ]
+import ../src/moepkg/types/config_mode_types
 import ../src/moepkg/editor_render_views {.all.}
 
 proc createTestEditor(): Editor =
@@ -2509,3 +2510,153 @@ suite "editor_render_views - sanitize control characters":
           if int(r) < 0x20 or int(r) == 0x7F:
             hasCtrl = true
     check not hasCtrl
+
+suite "renderSplitView - an inactive Config window leaves the cursor alone":
+  proc openConfigBeside(e: Editor): tuple[configWin, activeWin: EditorWindow] =
+    ## Open Config in a vertical split, then focus the window beside it.
+    result.activeWin = e.activeWindow
+    require e.enterViewerMode(
+      EditorMode.Config,
+      ModeState(kind: mskConfig, config: newConfigModeState(e.config)),
+      newTextBuffer(""),
+      vpVSplit,
+    ).isOk
+    result.configWin = e.activeWindow
+    e.switchToNextWindow()
+    require e.activeWindow == result.activeWin
+    require result.configWin.mode == EditorMode.Config
+
+  proc startEditing(window: EditorWindow) =
+    let configState = window.modeState.config
+    for i, item in configState.items:
+      if item.kind == cvkInt:
+        configState.selectedIndex = i
+        break
+    configState.startEdit()
+    require configState.isEditing()
+
+  test "the active Normal window keeps its cursor visible":
+    let e = createTestEditor()
+    discard e.openConfigBeside()
+
+    var buffer = createTestBuffer()
+    e.renderSplitView(buffer, false)
+
+    check e.state.cursorVisible
+
+  test "a Config window being edited does not take the screen cursor":
+    let e = createTestEditor()
+    let (configWin, activeWin) = e.openConfigBeside()
+    configWin.startEditing()
+    require configWin.viewport.x != activeWin.viewport.x
+
+    var buffer = createTestBuffer()
+    e.advanceLayoutForFrame(buffer, false)
+    let placed = e.state.screenCursor
+    e.renderSplitView(buffer)
+
+    check e.state.screenCursor == placed
+    check e.state.cursorVisible
+
+  test "a Config window being edited does not show a Filer's hidden cursor":
+    let e = createTestEditor()
+    let (configWin, activeWin) = e.openConfigBeside()
+    configWin.startEditing()
+    activeWin.mode = EditorMode.Filer
+    activeWin.modeState = ModeState(
+      kind: mskFiler, filer: FilerState(currentPath: "/tmp", showHidden: false)
+    )
+
+    var buffer = createTestBuffer()
+    e.renderSplitView(buffer, false)
+
+    check not e.state.cursorVisible
+
+  test "the active Config window still owns the cursor while editing":
+    let e = createTestEditor()
+    let (configWin, _) = e.openConfigBeside()
+    configWin.startEditing()
+    e.switchToNextWindow()
+    require e.activeWindow == configWin
+    e.state.cursorVisible = false
+
+    var buffer = createTestBuffer()
+    e.renderSplitView(buffer, false)
+
+    let
+      configState = configWin.modeState.config
+      viewport = configWin.viewport
+      item = configState.items[configState.selectedIndex]
+      prefix = item.itemNamePrefix(calcMaxNameWidth(configState.items, viewport.width))
+      editBg = getThemeStyle(EditorColorPairIndex.configModeEditMode).bg
+      cursor = e.state.screenCursor
+
+    check e.state.cursorVisible
+    check cursor.x == viewport.x + prefix.len + configState.getEditInfo().cursor
+    check buffer[cursor.x, cursor.y].style.bg == editBg
+
+  proc focusAway(e: Editor, activeWin: EditorWindow) =
+    e.focusWindow(e.windowManager.windows.find(activeWin))
+    require e.activeWindow == activeWin
+
+  test "leaving a Config window discards its edit":
+    let e = createTestEditor()
+    let (configWin, activeWin) = e.openConfigBeside()
+    configWin.startEditing()
+    let configState = configWin.modeState.config
+    let
+      item = configState.items[configState.selectedIndex]
+      original = item.formatItemForDisplay(configState.config, 40)
+    e.focusWindow(e.windowManager.windows.find(configWin))
+    require configState.isEditing()
+    configState.editBuffer = "12345"
+
+    e.focusAway(activeWin)
+
+    check not configState.isEditing()
+    check configState.getEditInfo().buffer == ""
+    check item.formatItemForDisplay(configState.config, 40) == original
+
+  test "leaving a Config window closes its enum popup":
+    let e = createTestEditor()
+    let (configWin, activeWin) = e.openConfigBeside()
+    let configState = configWin.modeState.config
+    for i, item in configState.items:
+      if item.kind == cvkEnum:
+        configState.selectedIndex = i
+        break
+    configState.openEnumPopup()
+    require configState.isEnumPopupOpen()
+    e.focusWindow(e.windowManager.windows.find(configWin))
+
+    e.focusAway(activeWin)
+
+    check not configState.isEnumPopupOpen()
+
+  test "an inactive Config window keeps its query during a live search":
+    let e = createTestEditor()
+    let (configWin, _) = e.openConfigBeside()
+    let configState = configWin.modeState.config
+    var name = ""
+    for item in configState.items:
+      if item.kind != cvkSection:
+        name = item.displayName
+        break
+    configState.setSearchQuery(name, Forward)
+    configState.selectedIndex = 0
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
+    e.state.input.search.incsearch = true
+    e.state.overlay = some(okSearch)
+    e.state.input.line.text = "no such setting"
+
+    var buffer = createTestBuffer()
+    e.renderSplitView(buffer, false)
+
+    let hlBg = searchHighlightStyle().bg
+    var highlighted = 0
+    for y in 0 ..< buffer.area.height:
+      for x in configWin.viewport.x ..< configWin.viewport.x + configWin.viewport.width:
+        if buffer[x, y].style.bg == hlBg:
+          inc highlighted
+    check highlighted > 0

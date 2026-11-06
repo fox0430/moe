@@ -57,7 +57,7 @@ suite "renderConfig - Basic behavior":
       mskNone
 
     # Should not crash
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
   test "Render with config state":
     let e = createTestEditor()
@@ -69,7 +69,7 @@ suite "renderConfig - Basic behavior":
       ModeState(kind: mskConfig, config: configState)
 
     # Should not crash
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
   test "Render config with selection":
     let e = createTestEditor()
@@ -80,7 +80,7 @@ suite "renderConfig - Basic behavior":
     e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
       ModeState(kind: mskConfig, config: configState)
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
   test "Render config with status line hidden":
     var config = newEditorConfig()
@@ -94,7 +94,7 @@ suite "renderConfig - Basic behavior":
     e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
       ModeState(kind: mskConfig, config: configState)
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
   test "Render config with status line shown":
     var config = newEditorConfig()
@@ -108,7 +108,7 @@ suite "renderConfig - Basic behavior":
     e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
       ModeState(kind: mskConfig, config: configState)
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
 suite "renderConfig - search highlight gating":
   proc countSearchHighlightCells(buffer: Buffer): int =
@@ -143,7 +143,7 @@ suite "renderConfig - search highlight gating":
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = false
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) > 0
 
   test "Only matched characters are highlighted, not the whole line":
@@ -153,7 +153,7 @@ suite "renderConfig - search highlight gating":
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = false
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     let highlighted = countSearchHighlightCells(buffer)
     # Like buffer search: only the matched substring cells are painted, far
     # fewer than the full padded line width. Each occurrence contributes
@@ -169,7 +169,7 @@ suite "renderConfig - search highlight gating":
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = true
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) == 0
 
   test "hlsearch=false hides matches (:set nohlsearch)":
@@ -179,7 +179,7 @@ suite "renderConfig - search highlight gating":
     e.state.input.search.hlsearch = false
     e.state.input.search.hlsearchTempDisabled = false
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) == 0
 
   test "A search cancelled after :noh leaves the matches hidden":
@@ -191,16 +191,16 @@ suite "renderConfig - search highlight gating":
     e.state.hideSearchMatches()
 
     e.state.enterSearchOverlay(Forward)
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) == 0
 
     e.state.input.line.text = cfg.searchQuery
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) > 0
 
     e.state.exitOverlay()
     buffer = createTestBuffer()
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) == 0
 
   test "Without 'incsearch' a query typed after :noh stays hidden":
@@ -213,7 +213,7 @@ suite "renderConfig - search highlight gating":
 
     e.state.enterSearchOverlay(Forward)
     e.state.input.line.text = cfg.searchQuery
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) == 0
 
   test "An empty prompt keeps the committed query drawn":
@@ -224,7 +224,7 @@ suite "renderConfig - search highlight gating":
     e.state.input.search.incsearch = true
 
     e.state.enterSearchOverlay(Forward)
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) > 0
 
   test "Without 'incsearch' a typed query leaves the committed one drawn":
@@ -236,7 +236,7 @@ suite "renderConfig - search highlight gating":
 
     e.state.enterSearchOverlay(Forward)
     e.state.input.line.text = "zzzzNoSuchItem"
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) > 0
 
 suite "renderConfig - enum popup border":
@@ -273,7 +273,7 @@ suite "renderConfig - enum popup border":
       skip()
     else:
       check configState.isEnumPopupOpen()
-      e.renderConfig(buffer, e.activeWindow, true, 0)
+      e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
       # Every vertical border character must use the border background, never
       # the selected-row highlight. This is the actual regression: the selected
@@ -297,7 +297,7 @@ suite "renderConfig - enum popup border":
     if configState.isNil:
       skip()
     else:
-      e.renderConfig(buffer, e.activeWindow, true, 0)
+      e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
       # The highlight itself must still be drawn (on the content cells), and it
       # must never land on a "│" border cell.
@@ -321,7 +321,7 @@ suite "renderConfig - narrow viewport / multibyte":
       ModeState(kind: mskConfig, config: configState)
     for w in [0, 1, 2, 3, 4]:
       e.activeWindow.viewport.width = w
-      e.renderConfig(buffer, e.activeWindow, true, 0)
+      e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
   test "Multibyte string value truncates without crashing":
     let e = createTestEditor()
@@ -343,7 +343,7 @@ suite "renderConfig - narrow viewport / multibyte":
         ModeState(kind: mskConfig, config: configState)
       for w in [4, 8, 12]:
         e.activeWindow.viewport.width = w
-        e.renderConfig(buffer, e.activeWindow, true, 0)
+        e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
 suite "renderConfig - search highlight with multibyte displayName":
   proc findHighlightedXs(buffer: Buffer, hlBg: ColorValue): seq[int] =
@@ -383,7 +383,7 @@ suite "renderConfig - search highlight with multibyte displayName":
       e.state.input.search.hlsearch = true
       e.state.input.search.hlsearchTempDisabled = false
 
-      e.renderConfig(buffer, e.activeWindow, true, 0)
+      e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
       let hlBg = searchHighlightStyle().bg
       let hlXs = buffer.findHighlightedXs(hlBg)
@@ -434,7 +434,7 @@ suite "renderConfig - search highlight with multibyte displayName":
       e.state.input.search.hlsearch = true
       e.state.input.search.hlsearchTempDisabled = false
 
-      e.renderConfig(buffer, e.activeWindow, true, 0)
+      e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
       let hlBg = searchHighlightStyle().bg
       let hlXs = buffer.findHighlightedXs(hlBg)
@@ -480,7 +480,7 @@ suite "renderConfig - color value highlight with multibyte displayName":
       ModeState(kind: mskConfig, config: configState)
     e.activeWindow.viewport.topLine = colorIdx
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
     let swatchBg = colorCodeStyle(parseThemeColor("#ff0000").get).bg
     var swatchXs: seq[int]
@@ -525,7 +525,7 @@ suite "renderConfig - edit cursor":
     configState.editBuffer = "12.5"
     configState.editCursor = configState.editBuffer.charLen
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
     let editBg = getThemeStyle(EditorColorPairIndex.configModeEditMode).bg
     var row = ""
@@ -545,7 +545,7 @@ suite "renderConfig - edit cursor":
     configState.editBuffer = "x".repeat(buffer.area.width * 2)
     configState.editCursor = configState.editBuffer.charLen
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
     let
       viewport = e.activeWindow.viewport
@@ -567,7 +567,7 @@ suite "renderConfig - edit cursor":
     configState.editBuffer = "head" & "x".repeat(buffer.area.width * 2) & "TAIL"
     configState.editCursor = configState.editBuffer.charLen
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
     let row = buffer.renderedRow(0)
     check "TAIL" in row
@@ -584,7 +584,7 @@ suite "renderConfig - edit cursor":
     configState.editBuffer = "head" & "x".repeat(buffer.area.width * 2) & "TAIL"
     configState.editCursor = 0
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
     let row = buffer.renderedRow(0)
     check "head" in row
@@ -599,7 +599,7 @@ suite "renderConfig - edit cursor":
     configState.editBuffer = "あ".repeat(buffer.area.width)
     configState.editCursor = configState.editBuffer.charLen
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
     let
       editBg = getThemeStyle(EditorColorPairIndex.configModeEditMode).bg
@@ -621,7 +621,7 @@ suite "renderConfig - edit cursor":
     configState.editBuffer = "abcdefghij"
     configState.editCursor = configState.editBuffer.charLen
 
-    e.renderConfig(buffer, e.activeWindow, true, 0)
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
 
     let
       viewport = e.activeWindow.viewport

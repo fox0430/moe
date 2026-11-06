@@ -292,6 +292,17 @@ proc closeEnumPopup*(state: ConfigModeState) =
   state.enumPopupOpen = false
   state.enumPopupIndex = 0
 
+proc clearKeySequence*(state: ConfigModeState) =
+  ## Forget a half-typed `gg` or double Escape.
+  state.waitingForG = false
+  state.lastKeyWasEscape = false
+
+proc endKeyInput*(state: ConfigModeState) =
+  ## Drop whatever the keys typed so far were building up.
+  state.cancelEdit()
+  state.closeEnumPopup()
+  state.clearKeySequence()
+
 proc remapRow(
     state: ConfigModeState, old: seq[ConfigItem], index: int
 ): tuple[index: int, kept: bool] =
@@ -327,8 +338,7 @@ proc refreshItems*(state: ConfigModeState, editorState: EditorState = nil): bool
   state.selectedIndex = selected.index
   if selected.kept or not (state.editMode or state.enumPopupOpen):
     return false
-  state.cancelEdit()
-  state.closeEnumPopup()
+  state.endKeyInput()
   if editorState != nil:
     editorState.statusMessage = "Setting disappeared; the edit was cancelled"
   true

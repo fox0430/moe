@@ -40,7 +40,7 @@ import
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
     render_utils, clipboard, message_log, frontend_input, pending_input, key_router,
     completion, signature_help, macro_recording, wanted_column, hover_popup,
-    editor_window_layout,
+    editor_window_layout, config_mode, viewer_mode,
   ]
 import ../src/moepkg/handler {.all.}
 from ../src/moepkg/command_completion import isActive, getSelectedCommand
@@ -12788,6 +12788,123 @@ suite "n and N go the way the last search went":
       e.typeKeys(keys)
       checkpoint(keys)
       check e.state.statusMessage == "E35: No previous regular expression"
+
+suite "handleKeyCombo - leaving a Config window ends its key input":
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc configBeside(): tuple[e: Editor, config: ConfigModeState] =
+    ## Focus on a Config window, with a Normal window beside it.
+    let e = createTestEditorWithBuffer("line0\nline1")
+    let configState = newConfigModeState(e.config)
+    require e.enterViewerMode(
+      EditorMode.Config,
+      ModeState(kind: mskConfig, config: configState),
+      newTextBuffer(""),
+      vpVSplit,
+    ).isOk
+    (e, configState)
+
+  proc selectFirst(state: ConfigModeState, kind: ConfigValueKind) =
+    for i, item in state.items:
+      if item.kind == kind:
+        state.selectedIndex = i
+        return
+    require false
+
+  for second in ["w", "p", "l"]:
+    test "Ctrl-w " & second & " discards an edit":
+      let (e, configState) = configBeside()
+      configState.selectFirst(cvkInt)
+      e.press("Enter")
+      require configState.isEditing()
+
+      e.press("C-w", second)
+
+      check e.state.mode != EditorMode.Config
+      check not configState.isEditing()
+
+    test "Ctrl-w " & second & " closes the enum popup":
+      let (e, configState) = configBeside()
+      configState.selectFirst(cvkEnum)
+      e.press("Enter")
+      require configState.isEnumPopupOpen()
+
+      e.press("C-w", second)
+
+      check e.state.mode != EditorMode.Config
+      check not configState.isEnumPopupOpen()
+
+  test "a g typed before leaving does not finish gg after coming back":
+    let (e, configState) = configBeside()
+    configState.selectedIndex = configState.items.high
+    e.press("g", "C-w", "w", "C-w", "w")
+    require e.state.mode == EditorMode.Config
+
+    e.press("g")
+
+    check configState.selectedIndex == configState.items.high
+
+  for keys in [@["C-w", "="], @["C-w", "Esc"]]:
+    test "a g before " & keys.join(" ") & " does not finish gg":
+      let (e, configState) = configBeside()
+      configState.selectedIndex = configState.items.high
+
+      e.press("g")
+      e.press(keys)
+      e.press("g")
+
+      check e.state.mode == EditorMode.Config
+      check configState.selectedIndex == configState.items.high
+
+    test "an Escape before " & keys.join(" ") & " is not the first of a double Escape":
+      let (e, _) = configBeside()
+      e.state.input.search.hlsearch = true
+      e.state.input.search.hlsearchTempDisabled = false
+
+      e.press("Esc")
+      e.press(keys)
+      e.press("Esc")
+
+      check not e.state.input.search.hlsearchTempDisabled
+
+  test "a Ctrl-w that stays in the window keeps the edit":
+    let (e, configState) = configBeside()
+    configState.selectFirst(cvkInt)
+    e.press("Enter")
+
+    e.press("C-w", "=")
+
+    check configState.isEditing()
+
+  test "leaving reports the discarded edit":
+    let (e, configState) = configBeside()
+    configState.selectFirst(cvkInt)
+    e.press("Enter")
+
+    e.press("C-w", "w")
+
+    check e.state.statusMessage == "Left the Config window; the edit was cancelled"
+
+  test "leaving without an edit reports nothing":
+    let (e, _) = configBeside()
+    e.state.statusMessage = ""
+
+    e.press("C-w", "w")
+
+    check e.state.statusMessage == ""
+
+  test "an Escape before leaving is not the first of a double Escape":
+    let (e, _) = configBeside()
+    e.state.input.search.hlsearch = true
+    e.press("Esc", "C-w", "w", "C-w", "w")
+    require e.state.mode == EditorMode.Config
+    e.state.input.search.hlsearchTempDisabled = false
+
+    e.press("Esc")
+
+    check not e.state.input.search.hlsearchTempDisabled
 
 suite "Version command":
   test ":version and its abbreviations show every line of the version information":
