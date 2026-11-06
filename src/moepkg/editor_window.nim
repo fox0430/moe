@@ -31,6 +31,7 @@ import
   highlight_config,
   editor_window_layout,
   editor_window_tab,
+  editor_mode,
   editor_window_state,
   editor_lsp,
   editor_hooks,
@@ -500,6 +501,19 @@ proc vnew*(e: Editor): Result[(), string] =
   return e.vsplitWithBuffer(newBuffer)
 
 # Window navigation procedures
+
+proc focusWindow*(e: Editor, index: int) =
+  ## Hand the focus to the window at `index`, ending the mode of the window
+  ## left behind.
+  if index == e.windowManager.activeWindowIndex or index < 0 or
+      index >= e.windowManager.windows.len:
+    return
+
+  e.finalizeModeForFocusMove()
+  e.saveActiveWindowState()
+  e.windowManager.activateWindow(index)
+  e.syncActiveWindow()
+  e.setActiveWindowScreenCursor(e.activeWindow)
 
 proc switchToNextWindow*(e: Editor) =
   ## Switch to the next window (Ctrl-w, w)

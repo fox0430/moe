@@ -92,6 +92,7 @@ suite "Config - newEditorConfig defaults":
     check config.standard.incrementalSearch == true
     check config.standard.popupWindowInExmode == true
     check config.standard.autoDeleteParen == true
+    check config.standard.bufferCycleAcrossWindows == true
     check config.standard.liveReloadOfFile == true
     check config.standard.colorMode == cm256color
     check config.standard.mouse == false

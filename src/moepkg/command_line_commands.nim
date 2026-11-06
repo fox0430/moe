@@ -499,19 +499,24 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "bn",
-    completionDescription: "Switch to the next buffer",
+    completionDescription: "Move to the next tab, then on to the next window by default",
     helpEntries: @[],
     action: some(claBufferNext),
     isCanonicalLong: false,
-    keymapBaseDescription: "Switch to next buffer",
+    keymapBaseDescription: "Move to next tab, then to next window by default",
   ),
   CommandLineCommandSpec(
     name: "bnext",
-    completionDescription: "Switch to the next buffer",
-    helpEntries: @[HelpEntry(syntax: "bnext", description: "Switch to the next buffer")],
+    completionDescription: "Move to the next tab, then on to the next window by default",
+    helpEntries: @[
+      HelpEntry(
+        syntax: "bnext",
+        description: "Move to the next tab, then on to the next window by default",
+      )
+    ],
     action: some(claBufferNext),
     isCanonicalLong: false,
-    keymapBaseDescription: "Switch to next buffer",
+    keymapBaseDescription: "Move to next tab, then to next window by default",
   ),
   CommandLineCommandSpec(
     name: "buffernext",
@@ -523,28 +528,36 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "bp",
-    completionDescription: "Switch to the previous buffer",
+    completionDescription:
+      "Move to the previous tab, then back to the previous window by default",
     helpEntries: @[],
     action: some(claBufferPrev),
     isCanonicalLong: false,
-    keymapBaseDescription: "Switch to previous buffer",
+    keymapBaseDescription: "Move to previous tab, then to previous window by default",
   ),
   CommandLineCommandSpec(
     name: "bprev",
-    completionDescription: "Switch to the previous buffer",
-    helpEntries:
-      @[HelpEntry(syntax: "bprev", description: "Switch to the previous buffer")],
+    completionDescription:
+      "Move to the previous tab, then back to the previous window by default",
+    helpEntries: @[
+      HelpEntry(
+        syntax: "bprev",
+        description:
+          "Move to the previous tab, then back to the previous window by default",
+      )
+    ],
     action: some(claBufferPrev),
     isCanonicalLong: false,
-    keymapBaseDescription: "Switch to previous buffer",
+    keymapBaseDescription: "Move to previous tab, then to previous window by default",
   ),
   CommandLineCommandSpec(
     name: "bprevious",
-    completionDescription: "Switch to the previous buffer",
+    completionDescription:
+      "Move to the previous tab, then back to the previous window by default",
     helpEntries: @[],
     action: some(claBufferPrev),
     isCanonicalLong: false,
-    keymapBaseDescription: "Switch to previous buffer",
+    keymapBaseDescription: "Move to previous tab, then to previous window by default",
   ),
   CommandLineCommandSpec(
     name: "bufferprev",
@@ -556,24 +569,34 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "bf",
-    completionDescription: "Switch to the first buffer",
+    completionDescription:
+      "Move to the first window by default, or to this window's first tab",
     helpEntries: @[],
     action: some(claBufferFirst),
     isCanonicalLong: false,
-    keymapBaseDescription: "Switch to first buffer",
+    keymapBaseDescription:
+      "Move to first window by default, or to this window's first tab",
   ),
   CommandLineCommandSpec(
     name: "bfirst",
-    completionDescription: "Switch to the first buffer",
-    helpEntries:
-      @[HelpEntry(syntax: "bfirst", description: "Switch to the first buffer")],
+    completionDescription:
+      "Move to the first window by default, or to this window's first tab",
+    helpEntries: @[
+      HelpEntry(
+        syntax: "bfirst",
+        description:
+          "Move to the first window by default, or to this window's first tab",
+      )
+    ],
     action: some(claBufferFirst),
     isCanonicalLong: false,
-    keymapBaseDescription: "Switch to first buffer",
+    keymapBaseDescription:
+      "Move to first window by default, or to this window's first tab",
   ),
   CommandLineCommandSpec(
     name: "brewind",
-    completionDescription: "Switch to the first buffer",
+    completionDescription:
+      "Move to the first window by default, or to this window's first tab",
     helpEntries: @[],
     action: some(claBufferFirst),
     isCanonicalLong: false,
@@ -588,19 +611,28 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "bl",
-    completionDescription: "Switch to the last buffer",
+    completionDescription:
+      "Move to the last window by default, or to this window's last tab",
     helpEntries: @[],
     action: some(claBufferLast),
     isCanonicalLong: false,
-    keymapBaseDescription: "Switch to last buffer",
+    keymapBaseDescription:
+      "Move to last window by default, or to this window's last tab",
   ),
   CommandLineCommandSpec(
     name: "blast",
-    completionDescription: "Switch to the last buffer",
-    helpEntries: @[HelpEntry(syntax: "blast", description: "Switch to the last buffer")],
+    completionDescription:
+      "Move to the last window by default, or to this window's last tab",
+    helpEntries: @[
+      HelpEntry(
+        syntax: "blast",
+        description: "Move to the last window by default, or to this window's last tab",
+      )
+    ],
     action: some(claBufferLast),
     isCanonicalLong: false,
-    keymapBaseDescription: "Switch to last buffer",
+    keymapBaseDescription:
+      "Move to last window by default, or to this window's last tab",
   ),
   CommandLineCommandSpec(
     name: "bufferlast",

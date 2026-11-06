@@ -56,6 +56,8 @@ autoDeleteParen = true                 # Auto-delete matching parens - Set to fa
 
 bracketSplit = "disable"               # Enter behavior between () [] {} pairs: "disable", "noIndent", "indent"
 
+bufferCycleAcrossWindows = true        # :bnext and friends cross windows - Set to false to stay in the window
+
 liveReloadOfFile = true                # Auto-reload when file changed externally
 
 colorMode = "256"                      # Color mode: "8", "16", "256", "24bit", "none"

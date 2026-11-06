@@ -39,7 +39,7 @@ import
   buffer,
   window_manager
 
-proc mainWindowCount(e: Editor): int =
+proc mainWindowCount*(e: Editor): int =
   for win in e.windowManager.windows:
     if not win.isSidebar:
       inc result

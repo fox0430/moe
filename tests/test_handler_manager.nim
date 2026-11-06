@@ -721,11 +721,17 @@ suite "HandlerManager - executeCommandDirect":
     check r.isSome
     check r.get.kind == hrSave
 
-  test "buffer.next.tab returns hrBufferNext":
+  test "buffer.next.tab returns hrBufferNextTab":
     let manager = createTestManager()
     let r = manager.executeCommandDirect("buffer-next-tab")
     check r.isSome
-    check r.get.kind == hrBufferNext
+    check r.get.kind == hrBufferNextTab
+
+  test "buffer.prev.tab returns hrBufferPrevTab":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("buffer-prev-tab")
+    check r.isSome
+    check r.get.kind == hrBufferPrevTab
 
   # New ctAction LSP commands
   test "lsp.format returns hrLspFormat":

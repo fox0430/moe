@@ -1249,11 +1249,33 @@ suite "Tab commands from the FileTree sidebar":
         check fileWin.tabBufferId == tabBefore
 
   for kind in [hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast]:
+    test $kind & " takes the focus off the sidebar when it crosses windows":
+      let name = "moe_sidebar_tab_cross_" & $kind
+      let (e, _, _) = twoFiles(name)
+      defer:
+        cleanup(name)
+      let fileWin = e.activeWindow
+      let tabs = fileWin.bufferIds
+      let shown = fileWin.tabBufferId
+      fileWin.cursor = BufferPosition(line: 0, column: 1)
+      let tree = e.openFileTree()
+      let width = tree.viewport.width
+
+      e.run(HandlerResult(kind: kind))
+
+      check e.activeWindow == fileWin
+      check e.state.statusMessage == ""
+      check fileWin.bufferIds == tabs
+      check fileWin.tabBufferId == shown
+      check fileWin.cursor == BufferPosition(line: 0, column: 1)
+      e.checkUntouched(tree, width)
+
     test $kind & " is refused on the sidebar with E1513 instead of E88":
       let name = "moe_sidebar_tab_cycle_" & $kind
       let (e, _, _) = twoFiles(name)
       defer:
         cleanup(name)
+      e.config.standard.bufferCycleAcrossWindows = false
       let fileWin = e.activeWindow
       let tabBefore = fileWin.tabBufferId
       let buffersBefore = e.buffers.len
@@ -1438,6 +1460,7 @@ suite "Tab commands from the FileTree sidebar":
     let (e, first, _) = twoFiles(name)
     defer:
       cleanup(name)
+    e.config.standard.bufferCycleAcrossWindows = false
     let fileWin = e.activeWindow
     let tabBefore = fileWin.tabBufferId
     let tree = e.openFileTree()
@@ -1451,6 +1474,25 @@ suite "Tab commands from the FileTree sidebar":
     check fileWin.tabBufferId == tabBefore
     check tree.bufferIds.len == 2
     e.checkRefused(tree, width)
+
+  test ":bnext passes over the sidebar and leaves it as it was":
+    const name = "moe_sidebar_tab_bnext_passes"
+    let (e, _, _) = twoFiles(name)
+    defer:
+      cleanup(name)
+    let fileWin = e.activeWindow
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+    e.focus(fileWin)
+    let tabs = fileWin.bufferIds
+    require tabs.len >= 2
+
+    for _ in 0 .. tabs.len:
+      e.switchToNextBuffer()
+      check e.activeWindow == fileWin
+
+    check fileWin.bufferIds == tabs
+    e.checkUntouched(tree, width)
 
   test "a location response landing while the tree has focus splits the served window":
     const name = "moe_sidebar_tab_jump_open_window"

@@ -191,6 +191,11 @@ type
         "Behavior when pressing Enter between matching bracket pairs " &
         "(disable/noIndent/indent)"
     .}: BracketSplitMode
+    bufferCycleAcrossWindows* {.
+      cfg,
+      cfgDocDescription:
+        "Let :bnext, :bprev, :bfirst and :blast go on past the ends of a window to what the other windows show, moving only the focus. Other windows keep their tab, so tabs before the shown one take :bprev or gt. false keeps them in the active window"
+    .}: bool
 
   # Buffer backend settings
   BufferBackendConfig* {.cfgSection: "BufferBackend".} = object

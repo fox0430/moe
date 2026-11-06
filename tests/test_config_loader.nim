@@ -137,6 +137,7 @@ timeoutlen = 1000
     config.standard.incrementalSearch = false
     config.standard.popupWindowInExmode = false
     config.standard.autoDeleteParen = false
+    config.standard.bufferCycleAcrossWindows = false
     config.standard.liveReloadOfFile = false
     config.standard.mouse = true
     config.standard.lineWrap = false
@@ -171,6 +172,7 @@ timeoutlen = 1000
     check loaded.standard.incrementalSearch == false
     check loaded.standard.popupWindowInExmode == false
     check loaded.standard.autoDeleteParen == false
+    check loaded.standard.bufferCycleAcrossWindows == false
     check loaded.standard.liveReloadOfFile == false
     check loaded.standard.mouse == true
     check loaded.standard.lineWrap == false

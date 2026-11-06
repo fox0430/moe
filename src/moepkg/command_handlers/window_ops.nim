@@ -66,6 +66,12 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
   of hrBufferLast:
     e.switchToLastBuffer()
     return true
+  of hrBufferNextTab:
+    e.switchToNextTab()
+    return true
+  of hrBufferPrevTab:
+    e.switchToPrevTab()
+    return true
   of hrBuffer:
     discard e.switchToBuffer(r.bufferArg)
     return true

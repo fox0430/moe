@@ -199,16 +199,16 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   of hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew, hrEnew,
       hrEdit, hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
       hrSave, hrSaveAll, hrSaveAndQuit, hrSaveAllAndQuit, hrBufferNext, hrBufferPrev,
-      hrBufferFirst, hrBufferLast, hrBuffer, hrJumpToBuffer, hrBufferDelete,
-      hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
-      hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrEnterFiler, hrLogViewerQuit,
-      hrLogViewerRefresh, hrEnterLogViewer, hrHelpViewerQuit, hrEnterHelpViewer,
-      hrQuickRun, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
-      hrBufferManagerQuit, hrEnterBufferManager, hrBookmarkManagerJump,
-      hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrEnterBookmarkManager,
-      hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
-      hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager,
-      hrRecoveryManagerRestore, hrRecoveryManagerToggleReviewed,
+      hrBufferFirst, hrBufferLast, hrBufferNextTab, hrBufferPrevTab, hrBuffer,
+      hrJumpToBuffer, hrBufferDelete, hrStripWhitespace, hrFilerOpenFile,
+      hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile, hrFilerShowInfo,
+      hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrLogViewerRefresh, hrEnterLogViewer,
+      hrHelpViewerQuit, hrEnterHelpViewer, hrQuickRun, hrBufferManagerSelectBuffer,
+      hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrEnterBufferManager,
+      hrBookmarkManagerJump, hrBookmarkManagerDelete, hrBookmarkManagerQuit,
+      hrEnterBookmarkManager, hrBackupManagerRestore, hrBackupManagerDelete,
+      hrBackupManagerOpenDiff, hrBackupManagerRefresh, hrBackupManagerQuit,
+      hrEnterBackupManager, hrRecoveryManagerRestore, hrRecoveryManagerToggleReviewed,
       hrRecoveryManagerDiscard, hrRecoveryManagerRefresh, hrRecoveryManagerQuit,
       hrEnterRecoveryManager, hrDiffViewerQuit, hrDiffViewerToggleView,
       hrDiffViewerToggleWord, hrRecentFile, hrNextWindow, hrPrevWindow,
@@ -416,33 +416,6 @@ proc screenToBufferPosition(
     )
   )
 
-proc finalizeCurrentWindowForMouseJump(e: Editor) =
-  ## Exit the current mode before a mouse click hands focus to another window.
-  ## pendingOperator carries no buffer identity and an open transaction is
-  ## per-buffer, so either would misfire on the new buffer. Visual ends as in Vim.
-  let activeBuffer = e.activeBuffer()
-  let wasInInsert = e.state.mode in {EditorMode.Insert, EditorMode.Replace}
-
-  # Share the buffer-switch finalizer so the two exits cannot drift apart.
-  e.finalizeInsertSessionForBufferSwitch(activeBuffer)
-
-  if wasInInsert:
-    # The finalizer leaves the cursor alone; Insert/Replace parks it one left.
-    e.activeWindow.adjustCursorAfterInsertExit()
-
-  e.state.leaveVisual()
-
-  e.state.pendingInput.pendingOperator = none(PendingOperator)
-  e.state.pendingInput.pendingTextObject = none(PendingTextObject)
-  discard e.keyRouter.cancel()
-
-  # state.mode aliases activeWindow.mode; the subsequent swap re-aliases to
-  # the target window's own saved mode. Only an edit mode is rewound: Normal
-  # in a Terminal or viewer window would disagree with its modeState.
-  e.state.previousMode = e.state.mode
-  if e.state.mode.isFileEditMode:
-    e.state.mode = EditorMode.Normal
-
 proc scrollTargetIndex(e: Editor, input: ScrollInput): int =
   ## Resolve the window under a cell-coordinate scroll, falling back to active.
   if e.windowManager.windows.len == 0:
@@ -555,17 +528,6 @@ type PointerTextHit = object
   windowIndex: int
   position: BufferPosition
 
-proc activatePointerWindow(e: Editor, windowIndex: int) =
-  if windowIndex == e.windowManager.activeWindowIndex:
-    return
-  e.finalizeCurrentWindowForMouseJump()
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.windowManager.previousWindow = e.activeWindow
-  e.windowManager.activeWindowIndex = windowIndex
-  for i, window in e.windowManager.windows.mpairs:
-    window.active = (i == windowIndex)
-  e.syncActiveWindow()
-
 proc pointerTabPress(e: Editor, input: PointerInput): bool =
   ## Switch a tab hit by a primary press. Drags and releases never switch tabs.
   if not e.showTabLine:
@@ -575,35 +537,22 @@ proc pointerTabPress(e: Editor, input: PointerInput): bool =
     if input.row != 0:
       return false
     let window = e.activeWindow
-    var buffersToShow: seq[TextBuffer] = @[]
-    for id in window.bufferIds:
-      let bufOpt = e.bufferById(id)
-      if bufOpt.isSome:
-        buffersToShow.add(bufOpt.get)
-    if buffersToShow.len == 0:
-      buffersToShow = @[window.buffer]
+    let tabs = e.drawnTabs(window)
     let tabIdx =
-      hitTestTabLine(buffersToShow, window.mode, 0, window.viewport.width, input.column)
+      hitTestTabLine(tabs, window.mode, 0, window.viewport.width, input.column)
     if tabIdx >= 0:
-      discard e.switchToWindowBuffer(tabIdx)
+      e.switchToDrawnTab(tabs[tabIdx])
       return true
     return false
 
   for i, window in e.windowManager.windows:
     let vp = window.viewport
     if input.row == vp.y and input.column >= vp.x and input.column < vp.x + vp.width:
-      var buffersToShow: seq[TextBuffer] = @[]
-      for id in window.bufferIds:
-        let bufOpt = e.bufferById(id)
-        if bufOpt.isSome:
-          buffersToShow.add(bufOpt.get)
-      if buffersToShow.len == 0:
-        buffersToShow = @[window.buffer]
-      let tabIdx =
-        hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, input.column)
+      let tabs = e.drawnTabs(window)
+      let tabIdx = hitTestTabLine(tabs, window.mode, vp.x, vp.width, input.column)
       if tabIdx >= 0:
-        e.activatePointerWindow(i)
-        discard e.switchToWindowBuffer(tabIdx)
+        e.focusWindow(i)
+        e.switchToDrawnTab(tabs[tabIdx])
         return true
   return false
 
@@ -720,7 +669,7 @@ proc middleClickPaste(e: Editor, row, col: int) =
     return
 
   if not overlayHasKeys:
-    e.activatePointerWindow(windowIndex)
+    e.focusWindow(windowIndex)
 
   case sink
   of psOverlay:
@@ -854,7 +803,7 @@ proc enterPointerVisualMode(e: Editor, granularity: PointerSelectionGranularity)
   if not e.state.mode.isVisualAllMode:
     let previousMode = e.state.mode
     if previousMode in {EditorMode.Insert, EditorMode.Replace}:
-      e.finalizeCurrentWindowForMouseJump()
+      e.finalizeModeForFocusMove()
       e.state.previousMode = EditorMode.Normal
     else:
       e.state.previousMode = previousMode
@@ -894,7 +843,7 @@ proc updatePointerSelection(e: Editor, position: BufferPosition) =
   e.activeWindow.viewport.detachedFromCursor = false
 
 proc beginPointerSelection(e: Editor, input: PointerInput, hit: PointerTextHit) =
-  e.activatePointerWindow(hit.windowIndex)
+  e.focusWindow(hit.windowIndex)
 
   let
     oldCursor = e.cursor

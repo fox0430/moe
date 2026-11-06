@@ -179,9 +179,10 @@ proc processResultWithHost(
   of hrGotoLine:
     e.processGotoLineResult(r, activeBuffer)
     return true # Skip the epilogue's status-line overwrite, like ops-moved kinds
-  of hrJumpToBuffer, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast, hrBuffer,
-      hrCloseWindow, hrNextWindow, hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown,
-      hrMoveWindowUp, hrMoveWindowRight, hrMaximizeWindowHeight, hrIncreaseWindowHeight,
+  of hrJumpToBuffer, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
+      hrBufferNextTab, hrBufferPrevTab, hrBuffer, hrCloseWindow, hrNextWindow,
+      hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown, hrMoveWindowUp,
+      hrMoveWindowRight, hrMaximizeWindowHeight, hrIncreaseWindowHeight,
       hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
       hrEqualizeWindows, hrSwapWindow, hrOnlyWindow, hrBufferDelete, hrTerminalQuit,
       hrFileTreeQuit:

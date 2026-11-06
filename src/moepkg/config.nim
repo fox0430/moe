@@ -114,6 +114,7 @@ proc newEditorConfig*(): EditorConfig =
       lineWrap: true,
       timeoutlen: 1000,
       bracketSplit: bsmDisable,
+      bufferCycleAcrossWindows: true,
     ),
     bufferBackend: BufferBackendConfig(kind: bbcAuto),
     clipboard:

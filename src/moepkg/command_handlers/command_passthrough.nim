@@ -59,8 +59,8 @@ type PassthroughKind* = enum
   ptNewFile
   ptEnterFiler
   # buffer.*
-  ptBufferNext
-  ptBufferPrev
+  ptBufferNextTab
+  ptBufferPrevTab
   # quickrun
   ptQuickRun
   # editor.background
@@ -129,9 +129,9 @@ proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
   of "file.open", "filer.open":
     some(ptEnterFiler)
   of "buffer.next.tab":
-    some(ptBufferNext)
+    some(ptBufferNextTab)
   of "buffer.prev.tab":
-    some(ptBufferPrev)
+    some(ptBufferPrevTab)
   of "quickrun":
     some(ptQuickRun)
   of "editor.background":
@@ -214,10 +214,10 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
     HandlerResult(kind: hrEnew)
   of ptEnterFiler:
     HandlerResult(kind: hrEnterFiler, enterFilerPath: none(string))
-  of ptBufferNext:
-    HandlerResult(kind: hrBufferNext)
-  of ptBufferPrev:
-    HandlerResult(kind: hrBufferPrev)
+  of ptBufferNextTab:
+    HandlerResult(kind: hrBufferNextTab)
+  of ptBufferPrevTab:
+    HandlerResult(kind: hrBufferPrevTab)
   of ptQuickRun:
     HandlerResult(kind: hrQuickRun)
   of ptBackground:
