@@ -27,6 +27,16 @@ import std/[options, strutils]
 import types, substitute_parser
 import ../command_line_commands
 
+proc optionsIgnoreCaseOf*(parser: CommandLineParser, pattern: string): bool =
+  ## What 'ignorecase' and 'smartcase' make of `pattern`.
+  parser.optionsIgnoreCase != nil and parser.optionsIgnoreCase(pattern)
+
+proc substituteFlags*(
+    parser: CommandLineParser, pattern, text: string
+): SubstituteFlags =
+  ## The flags `text` of a :s of `pattern`.
+  text.parseSubstituteFlags(parser.optionsIgnoreCaseOf(pattern))
+
 proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult =
   ## Execute a parsed command and return the result
   var cmd = cmd
@@ -117,11 +127,14 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         return CommandLineResult(
           kind: claUnknown, errorMessage: "Pattern required for substitute"
         )
+      let flags = parser.substituteFlags(parsed.pattern, parsed.flags)
+      if flags.refusal.len > 0:
+        return CommandLineResult(kind: claUnknown, errorMessage: flags.refusal)
       return CommandLineResult(
         kind: claSubstitute,
         pattern: parsed.pattern,
         replacement: parsed.replacement,
-        substituteFlags: parsed.flags,
+        substituteFlags: flags,
         substituteRange: cmd.range,
       )
     else:

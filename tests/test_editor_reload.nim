@@ -31,6 +31,7 @@ import
   ]
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/buffer
+import ../src/moepkg/command_line/substitute_parser
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -893,7 +894,7 @@ suite "editor_reload - state a reload cannot be run under":
       removeFile(path)
     discard e.loadFile(path)
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "bar")
+    e.updateSubstitutePreview("foo", "bar", "g".parseSubstituteFlags)
     check not e.activeBuffer.isModified
 
     sleep(50)

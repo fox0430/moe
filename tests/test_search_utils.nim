@@ -339,3 +339,7 @@ suite "loadSearchHistory and saveSearchHistory":
       # Empty entries should be filtered out on save
       for entry in loaded:
         check entry.len > 0
+
+  test "A capital beyond ASCII counts":
+    check hasUpperCase("\u00c9a")
+    check not hasUpperCase("\u00e9a")

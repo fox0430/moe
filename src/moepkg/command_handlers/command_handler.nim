@@ -29,7 +29,7 @@ import std/[options, os, strutils]
 import pkg/results
 
 import ../[modes, command_line, command_config, command_registry, config_loader]
-import ../buffer/[core, edit, fold, undo]
+import ../buffer/[core, edit, fold, search, undo]
 import ../setting_options
 import handler_types, handler_result
 export setting_options, handler_types
@@ -448,32 +448,56 @@ proc executeFilter*(
   )
 
 proc substituteLines*(
-    buffer: TextBuffer, range: ExLineRange, currentLine: int
+    buffer: TextBuffer, range: ExLineRange, currentLine: int, countOnly = false
 ): Result[tuple[first, last: int], string] =
   ## The lines :s runs on, or why it refuses before looking at its pattern.
-  if buffer.readOnly:
+  ## Counting changes nothing, so a read-only buffer allows it.
+  if buffer.readOnly and not countOnly:
     return err("Buffer is read-only")
   # Raw buffer: pattern may land inside code unit.
   if not buffer.allowsTextTransforms:
     return err(rawBytesRejection("substitute"))
   buffer.resolveExRange(range, currentLine)
 
+proc countSubstitutions(
+    buffer: TextBuffer, pattern: string, lines: Slice[int], flags: SubstituteFlags
+): HandlerResult =
+  ## What the `n` flag reports, as do_sub_msg does.
+  var matches, matchedLines = 0
+  for line in lines:
+    let count = buffer.getLine(line).countPlain(pattern, flags.ignoreCase, flags.global)
+    matches += count
+    if count > 0:
+      matchedLines.inc
+  if matches == 0:
+    return HandlerResult(kind: hrError, errorMessage: "Pattern not found: " & pattern)
+  HandlerResult(
+    kind: hrHandled,
+    statusMessage:
+      $matches & (if matches == 1: " match" else: " matches") & " on " & $matchedLines &
+      (if matchedLines == 1: " line" else: " lines"),
+  )
+
 proc executeSubstitute*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
     pattern: string,
     replacement: string,
-    flags: string,
+    flags: SubstituteFlags,
     range: ExLineRange = ExLineRange(),
     currentLine: int = 0,
 ): HandlerResult =
   ## Execute substitute command (:s, :%s/pattern/replacement/flags)
-  let (rangeStart, rangeEnd) = buffer.substituteLines(range, currentLine).valueOr:
+  let (rangeStart, rangeEnd) = buffer.substituteLines(
+    range, currentLine, flags.countOnly
+  ).valueOr:
     return HandlerResult(kind: hrError, errorMessage: error)
   if pattern.len == 0:
     return HandlerResult(kind: hrError, errorMessage: "Pattern required")
 
-  let isGlobal = "g" in flags
+  if flags.countOnly:
+    return buffer.countSubstitutions(pattern, rangeStart .. rangeEnd, flags)
+
   var replaceCount = 0
 
   let processedReplacement = processEscapeSequences(replacement)
@@ -482,31 +506,11 @@ proc executeSubstitute*(
     try:
       withTransaction(buffer, "substitute"):
         for lineIdx in rangeStart .. rangeEnd:
-          var line = buffer.getLine(lineIdx)
-          var modified = false
-          var newLine = ""
-          var searchPos = 0
-
-          while searchPos <= line.len:
-            let idx = line.find(pattern, searchPos)
-            if idx < 0:
-              newLine.add(line[searchPos ..^ 1])
-              break
-
-            if idx > searchPos:
-              newLine.add(line[searchPos ..< idx])
-
-            newLine.add(processedReplacement)
-            replaceCount.inc
-            modified = true
-
-            searchPos = idx + pattern.len
-
-            if not isGlobal:
-              newLine.add(line[searchPos ..^ 1])
-              break
-
-          if modified:
+          let (newLine, count) = buffer.getLine(lineIdx).substitutePlain(
+              pattern, processedReplacement, flags.ignoreCase, flags.global
+            )
+          if count > 0:
+            replaceCount += count
             let replaceResult = buffer.replaceLine(lineIdx, newLine)
             if replaceResult.isErr:
               return HandlerResult(kind: hrError, errorMessage: replaceResult.error)

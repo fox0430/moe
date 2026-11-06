@@ -21,11 +21,11 @@
 ## literal (* and #) / current-word match enumeration. Compiled regexes are
 ## memoised in a single private slot to avoid recompiling on every keystroke.
 
-import std/[options, strutils, unicode]
+import std/[options, sequtils, strutils, unicode]
 
 import pkg/regex
 
-import ../[primitives, unicode_utils, char_class]
+import ../[primitives, unicode_utils, char_case, char_class]
 import core
 
 type
@@ -103,23 +103,45 @@ proc toValidUtf8(line: string): string =
       result.add(line[i ..< i + sz])
       i += sz
 
-type LiteralPattern = object
-  ## Text * and # (smWord), g* and g# (smLiteral) and :s (smPlain) look for as
-  ## it is, ready to match against each line.
-  text: string
-  runes: seq[Rune] # Folded when ignoring case
-  ignorecase: bool
-  match: SearchMatch
-  boundsStart, boundsEnd: bool # Vim's `\<` and `\>`
+type
+  LiteralChar = object
+    ## A pattern's character, as Vim's regexp compiler splits a pattern.
+    base: Rune # Folded when compared ignoring case
+    floating: bool # No base: composing characters, which any character may hold
+    composing: seq[Rune]
+
+  LiteralPattern = ref object
+    ## Text * and # (smWord), g* and g# (smLiteral) and :s (smPlain) look for as
+    ## it is, ready to match against each line.
+    text: string
+    chars: seq[LiteralChar]
+    ignorecase: bool
+    match: SearchMatch
+    boundsStart, boundsEnd: bool # Vim's `\<` and `\>`
+    exact: bool # A match is `text` byte for byte
+    notFirst: set[char] # ASCII characters no match starts with
 
 var literalCache: LiteralPattern
 
-proc fold(r: Rune): Rune =
-  ## `r` as 'ignorecase' compares it, as Vim's utf_fold() does.
-  if r.int < 0x80:
-    Rune(r.int.char.toLowerAscii.ord)
-  else:
-    r.toLower
+proc literalChars(runes: openArray[Rune], ignorecase: bool): seq[LiteralChar] =
+  ## `runes` as characters. As in Vim's match_composing(), only a character
+  ## without composing characters folds, and one that starts with a composing
+  ## character has no base.
+  var i = 0
+  while i < runes.len:
+    let next = runes.nextCharColumn(i)
+    var c = LiteralChar(base: runes[i], floating: runes[i].isComposing)
+    c.composing = @(runes.toOpenArray(i + (if c.floating: 0 else: 1), next - 1))
+    if ignorecase and c.composing.len == 0:
+      c.base = c.base.utfFold
+    result.add(c)
+    i = next
+
+proc takes(want: LiteralChar, r: Rune, ignorecase: bool): bool =
+  ## Whether `want` can match a character of the line whose first rune is `r`,
+  ## its composing characters aside.
+  want.floating or
+    (if ignorecase and want.composing.len == 0: r.utfFold else: r) == want.base
 
 proc literalPattern(
     text: string, ignorecase: bool, match: SearchMatch
@@ -128,42 +150,86 @@ proc literalPattern(
   ## and one at its end its `\>`, as Vim's * puts them only there (`->` gets
   ## neither). The last one is kept, as the highlighter asks once per line.
   let c = literalCache
-  if c.text == text and c.ignorecase == ignorecase and c.match == match:
+  if c != nil and c.text == text and c.ignorecase == ignorecase and c.match == match:
     return c
+  let runes = text.toCharRunes
   result = LiteralPattern(
-    text: text, runes: text.toCharRunes, ignorecase: ignorecase, match: match
+    text: text,
+    chars: runes.literalChars(ignorecase),
+    ignorecase: ignorecase,
+    match: match,
   )
-  if result.runes.len > 0 and match == smWord:
-    let last = result.runes[result.runes.baseColumn(result.runes.high)]
-    result.boundsStart = mbClass(result.runes[0]) >= 2
-    result.boundsEnd = mbClass(last) >= 2
-  if ignorecase:
-    for r in result.runes.mitems:
-      r = r.fold
+  if runes.len > 0 and match == smWord:
+    result.boundsStart = mbClass(runes[0]) >= 2
+    result.boundsEnd = mbClass(runes[runes.baseColumn(runes.high)]) >= 2
+  result.exact = not ignorecase and runes.allIt(not it.isComposing)
+  if runes.len > 0:
+    for c in '\0' .. '\x7f':
+      if not result.chars[0].takes(Rune(c.ord), ignorecase):
+        result.notFirst.incl(c)
   literalCache = result
 
 type LiteralMatch = object
   endByte: int # The byte after the match, -1 when there is none
+  length: int # How many characters of the line it takes
   last: Rune # The match's last character
   lastBase: Rune # The character that one is part of
 
+proc holdsComposing(line: string, bytePos: int, want: openArray[Rune]): bool =
+  ## Whether the character at `bytePos` holds each of the composing characters
+  ## `want`, in any order, as in Vim's match_composing().
+  for c in want:
+    var
+      pos = bytePos
+      prev = Rune(0)
+      found = false
+    while pos < line.len and not found:
+      let (r, size) = line.charAtByte(pos)
+      if pos > bytePos:
+        if not continuesChar(prev, r):
+          break
+        found = r == c
+      prev = r
+      pos += size
+    if not found:
+      return false
+  true
+
 proc matchAt(line: string, bytePos: int, p: LiteralPattern): LiteralMatch =
-  ## The match of `p` that starts at `bytePos`, if any.
+  ## The match of `p` that starts at `bytePos`, if any. A pattern's character
+  ## with composing characters takes all the line's character holds. One
+  ## without takes only the base, which a composing character can't then follow.
   result = LiteralMatch(endByte: -1)
-  var pos = bytePos
-  for i, want in p.runes:
+  var
+    pos = bytePos
+    length = 0
+    last, lastBase: Rune
+  for want in p.chars:
     if pos >= line.len:
       return
     let (r, size) = line.charAtByte(pos)
-    if (if p.ignorecase: r.fold else: r) != want:
+    let held = want.floating or want.composing.len > 0
+    if not want.takes(r, p.ignorecase) or
+        (held and not line.holdsComposing(pos, want.composing)):
       return
-    if i == 0 or not continuesChar(result.last, r):
-      result.lastBase = r
-    result.last = r
+    lastBase = r
+    last = r
     pos += size
-  result.endByte = pos
+    length.inc
+    while held and pos < line.len:
+      let (next, nextSize) = line.charAtByte(pos)
+      if not continuesChar(last, next):
+        break
+      last = next
+      pos += nextSize
+      length.inc
+  result = LiteralMatch(endByte: pos, length: length, last: last, lastBase: lastBase)
 
-iterator literalMatchRanges(line: string, p: LiteralPattern): ColumnRange =
+type LiteralRange = object
+  startCol, endCol: int # Half-open, in characters
+  startByte, endByte: int # Half-open
+
+iterator literalMatchRanges(line: string, p: LiteralPattern): LiteralRange =
   ## Matches of `p` on `line`, left to right. Each one is looked for after the
   ## one before ends, as Vim's search does with 'cpoptions' c. A character and
   ## its composing characters are one, as in Vim: no match starts or ends
@@ -173,7 +239,7 @@ iterator literalMatchRanges(line: string, p: LiteralPattern): ColumnRange =
   ## character after it.
   ## Walks the line without materialising a folded copy or its rune seq:
   ## callers that only need the first or last match stop early.
-  if p.runes.len > 0:
+  if p.chars.len > 0 and not (p.exact and line.find(p.text) < 0):
     var
       bytePos = 0
       charIdx = 0
@@ -181,11 +247,17 @@ iterator literalMatchRanges(line: string, p: LiteralPattern): ColumnRange =
       prev = Rune(0)
       prevBase = Rune(0) # The character before
     while bytePos < line.len:
+      if line[bytePos] in p.notFirst:
+        prev = Rune(line[bytePos].ord)
+        prevBase = prev
+        inc bytePos
+        inc charIdx
+        continue
       let (r, size) = line.charAtByte(bytePos)
       if size == 0:
         break
       let composed = charIdx > 0 and continuesChar(prev, r)
-      if not composed and charIdx >= free:
+      if not composed and charIdx >= free and p.chars[0].takes(r, p.ignorecase):
         let m = line.matchAt(bytePos, p)
         var matches = m.endByte >= 0
         if matches and p.boundsStart:
@@ -200,8 +272,13 @@ iterator literalMatchRanges(line: string, p: LiteralPattern): ColumnRange =
         elif matches and p.boundsEnd:
           matches = mbClass(m.lastBase) >= 2
         if matches:
-          yield ColumnRange(startCol: charIdx, endCol: charIdx + p.runes.len)
-          free = charIdx + p.runes.len
+          yield LiteralRange(
+            startCol: charIdx,
+            endCol: charIdx + m.length,
+            startByte: bytePos,
+            endByte: m.endByte,
+          )
+          free = charIdx + m.length
       if not composed:
         prevBase = r
       prev = r
@@ -230,7 +307,7 @@ proc findSearchMatchRanges*(
 
   if match != smRegex:
     for r in literalMatchRanges(line, literalPattern(searchText, ignorecase, match)):
-      result.add(r)
+      result.add(ColumnRange(startCol: r.startCol, endCol: r.endCol))
   else:
     # Regex matching (undecodable bytes replaced for `regex` safety)
     let compiled = compileSearchRegex(searchText, ignorecase)
@@ -249,6 +326,34 @@ proc findSearchMatchRanges*(
       result.add(ColumnRange(startCol: startChar, endCol: endChar))
       # Advance past match (avoid infinite loop on zero-width)
       searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
+
+proc firstPlainMatch*(line, pattern: string, ignorecase: bool): Option[int] =
+  ## The column of the first match of the plain string `pattern` on `line`.
+  for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, smPlain)):
+    return some(r.startCol)
+
+proc countPlain*(line, pattern: string, ignorecase, everyMatch: bool): int =
+  ## How many matches of the plain string `pattern` :s would replace on `line`.
+  for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, smPlain)):
+    result.inc
+    if not everyMatch:
+      break
+
+proc substitutePlain*(
+    line, pattern, replacement: string, ignorecase, everyMatch: bool
+): tuple[text: string, count: int] =
+  ## `line` with the first match of the plain string `pattern`, or `everyMatch`,
+  ## replaced, and how many were. These are the matches a search for it shows.
+  var copied = 0
+  for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, smPlain)):
+    result.text.add(line[copied ..< r.startByte])
+    result.text.add(replacement)
+    result.count.inc
+    copied = r.endByte
+    if not everyMatch:
+      break
+  if result.count > 0:
+    result.text.add(line[copied .. line.high])
 
 proc matchEndCol*(
     b: TextBuffer,

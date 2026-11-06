@@ -23,6 +23,8 @@ import pkg/[results, chronos]
 
 import
   types/editor_types,
+  search_ops,
+  buffer/search,
   editor_window,
   editor_window_layout,
   editor_file,
@@ -275,6 +277,10 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     buffers: @[], # Will be initialized below
     config: editorConfig, # Store configuration
   )
+
+  let state = result.state
+  result.commandLineParser.optionsIgnoreCase = proc(pattern: string): bool =
+    state.input.search.ignoresCase(SearchSpec(pattern: pattern, match: smPlain))
 
   # Subscribe before the first buffer is registered; `addBuffer` installs the
   # hook on each buffer as it joins.

@@ -1004,14 +1004,18 @@ type
     bottomLine*: int # Bottom visible line when hints were requested
     isValid*: bool # Whether the cache is valid
 
+  SubstitutePreviewKey* = object ## What a substitute preview was made from
+    pattern*: string
+    replacement*: string
+    global*: bool # Whether every match in a line was replaced
+    lines*: Slice[int]
+    ignoreCase*: bool
+
   SubstitutePreview* = object
     ## State for live substitute preview (like Vim's inccommand)
     isActive*: bool # Whether preview is currently active
     originalLines*: seq[string] # Snapshot of original buffer content
-    lastPattern*: string # Last pattern used for preview
-    lastReplacement*: string # Last replacement used for preview
-    lastGlobal*: bool # Whether the last preview replaced every match in a line
-    lastLines*: Slice[int] # Lines the last preview covered
+    applied*: SubstitutePreviewKey # What the buffer shows, empty when restored
     originalCursor*: BufferPosition # Cursor position when preview started
     originalView*: ViewState # What the window showed when preview started
 

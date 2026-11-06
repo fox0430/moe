@@ -20,10 +20,8 @@
 ## Live substitute (`:s`) preview: snapshot the buffer, apply candidate
 ## replacements as the user types, and restore/commit/cancel the preview.
 
-import std/strutils
-
 import types/editor_types, command_line/substitute_parser
-import buffer/[core, edit]
+import buffer/[core, edit, search]
 
 proc startSubstitutePreview*(e: Editor) =
   ## Start substitute preview by saving the current buffer content
@@ -41,10 +39,7 @@ proc startSubstitutePreview*(e: Editor) =
   for line in buffer.lines:
     e.state.ui.substitutePreview.originalLines.add(line)
   e.state.ui.substitutePreview.isActive = true
-  e.state.ui.substitutePreview.lastPattern = ""
-  e.state.ui.substitutePreview.lastReplacement = ""
-  e.state.ui.substitutePreview.lastGlobal = false
-  e.state.ui.substitutePreview.lastLines = 0 .. -1
+  e.state.ui.substitutePreview.applied = SubstitutePreviewKey()
   e.state.ui.substitutePreview.originalCursor = e.cursor
   e.state.ui.substitutePreview.originalView = e.activeWindow.viewport.viewState
 
@@ -69,12 +64,8 @@ proc restoreFromPreview*(e: Editor) =
     )
 
   buffer.highlightNeedsUpdate = true
-  # Clear the last-applied preview key so the next updateSubstitutePreview
-  # call does not skip work when identical values are reapplied.
-  e.state.ui.substitutePreview.lastPattern = ""
-  e.state.ui.substitutePreview.lastReplacement = ""
-  e.state.ui.substitutePreview.lastGlobal = false
-  e.state.ui.substitutePreview.lastLines = 0 .. -1
+  # So that the next updateSubstitutePreview does not skip identical values.
+  e.state.ui.substitutePreview.applied = SubstitutePreviewKey()
 
 proc cancelSubstitutePreview*(e: Editor) =
   ## Cancel substitute preview and restore original content
@@ -91,40 +82,35 @@ proc commitSubstitutePreview*(e: Editor) =
   ## Commit substitute preview (discard snapshot, keep current changes)
   e.state.ui.substitutePreview.isActive = false
   e.state.ui.substitutePreview.originalLines = @[]
-  e.state.ui.substitutePreview.lastPattern = ""
-  e.state.ui.substitutePreview.lastReplacement = ""
-  e.state.ui.substitutePreview.lastGlobal = false
-  e.state.ui.substitutePreview.lastLines = 0 .. -1
+  e.state.ui.substitutePreview.applied = SubstitutePreviewKey()
 
 proc updateSubstitutePreview*(
     e: Editor,
     pattern: string,
     replacement: string,
-    isGlobalFlag: bool = true,
+    flags: SubstituteFlags,
     firstLine: int = 0,
     lastLine: int = high(int),
 ) =
   ## Update substitute preview with new pattern and replacement
-  ## isGlobalFlag: if true, replace all occurrences per line; if false, only first occurrence
   ## Only lines `firstLine .. lastLine` are replaced, as `:s` runs on its range.
   if not e.state.ui.substitutePreview.isActive:
     return
 
+  let key = SubstitutePreviewKey(
+    pattern: pattern,
+    replacement: replacement,
+    global: flags.global,
+    lines: firstLine .. lastLine,
+    ignoreCase: flags.ignoreCase,
+  )
   # Skip if nothing changed
-  if pattern == e.state.ui.substitutePreview.lastPattern and
-      replacement == e.state.ui.substitutePreview.lastReplacement and
-      isGlobalFlag == e.state.ui.substitutePreview.lastGlobal and
-      firstLine .. lastLine == e.state.ui.substitutePreview.lastLines:
+  if key == e.state.ui.substitutePreview.applied:
     return
 
-  # Restore from snapshot first (this clears lastPattern/lastReplacement, so
-  # cache the new values *after* restoring).
+  # Restoring clears the key, so it is set after.
   e.restoreFromPreview()
-
-  e.state.ui.substitutePreview.lastPattern = pattern
-  e.state.ui.substitutePreview.lastReplacement = replacement
-  e.state.ui.substitutePreview.lastGlobal = isGlobalFlag
-  e.state.ui.substitutePreview.lastLines = firstLine .. lastLine
+  e.state.ui.substitutePreview.applied = key
 
   if pattern.len == 0:
     return
@@ -135,30 +121,10 @@ proc updateSubstitutePreview*(
   # Apply substitute to buffer
   let buffer = e.activeBuffer()
   for lineIdx in max(firstLine, 0) .. min(lastLine, buffer.len - 1):
-    var line = buffer.getLine(lineIdx)
-    var newLine = ""
-    var searchPos = 0
-    var modified = false
-
-    while searchPos <= line.len:
-      let idx = line.find(pattern, searchPos)
-      if idx < 0:
-        newLine.add(line[searchPos ..^ 1])
-        break
-
-      if idx > searchPos:
-        newLine.add(line[searchPos ..< idx])
-
-      newLine.add(processedReplacement)
-      modified = true
-      searchPos = idx + pattern.len
-
-      # If not global flag, only replace first occurrence per line
-      if not isGlobalFlag:
-        newLine.add(line[searchPos ..^ 1])
-        break
-
-    if modified:
+    let (newLine, count) = buffer.getLine(lineIdx).substitutePlain(
+        pattern, processedReplacement, flags.ignoreCase, flags.global
+      )
+    if count > 0:
       buffer.replaceLineNoUndo(lineIdx, newLine)
 
   buffer.highlightNeedsUpdate = true
