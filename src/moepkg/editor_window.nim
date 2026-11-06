@@ -41,6 +41,7 @@ import
   window_manager,
   motion,
   buffer
+from config_mode import endKeyInput, isEditing
 
 # Window state management procedures
 
@@ -66,6 +67,10 @@ proc syncActiveWindow*(e: Editor) =
     # Visual lives only in the focused window, as in Vim: nothing would move
     # the anchor of a window left behind when another one edits its text.
     left.leaveVisual()
+    if left.modeState.kind == mskConfig:
+      if left.modeState.config.isEditing():
+        e.state.statusMessage = "Left the Config window; the edit was cancelled"
+      left.modeState.config.endKeyInput()
   e.state.activeWindow = e.activeWindow
   e.motionController.bindToWindow(e.activeWindow)
   # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that

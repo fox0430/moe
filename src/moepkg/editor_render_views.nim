@@ -397,7 +397,9 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
       )
     of EditorMode.Config:
       # Config supports per-window rendering
-      e.renderConfig(buffer, window, layout.isBottomWindow, tabLineOffset)
+      e.renderConfig(
+        buffer, window, layout.isBottomWindow, layout.isActiveWindow, tabLineOffset
+      )
     of EditorMode.Terminal:
       when defined(moe.embedded):
         e.renderWindow(

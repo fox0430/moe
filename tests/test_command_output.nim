@@ -24,7 +24,11 @@ import std/[unittest, options]
 
 import pkg/results
 
-import ../src/moepkg/[editor, config, editor_window, window_manager, types, buffer]
+import
+  ../src/moepkg/[
+    editor, config, config_mode, editor_window, modes, viewer_mode, window_manager,
+    types, buffer,
+  ]
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/editor_command_output
 import ../src/moepkg/command_handlers/[handler_result, result_processor]
@@ -70,6 +74,49 @@ proc coverOutputWithBufferManager(
   let listing = output.buffer
   e.focus(user)
   (user, output, listing)
+
+proc editingConfigWindow(e: Editor): ConfigModeState =
+  ## Focus a Config window with an edit in progress.
+  result = newConfigModeState(e.config)
+  require e.enterViewerMode(
+    EditorMode.Config,
+    ModeState(kind: mskConfig, config: result),
+    newTextBuffer(""),
+    vpVSplit,
+  ).isOk
+  for i, item in result.items:
+    if item.kind == cvkInt:
+      result.selectedIndex = i
+      break
+  result.startEdit()
+  require result.isEditing()
+
+suite "Background command output over a Config edit":
+  test "Opening the output window ends the edit":
+    let e = testEditor()
+    let configState = e.editingConfigWindow()
+
+    e.showCommandOutput(@["built"], keepFocus = false)
+
+    check not configState.isEditing()
+    check e.state.statusMessage == "Left the Config window; the edit was cancelled"
+
+  test "Moving to a reused output window ends the edit":
+    let e = testEditor()
+    e.showCommandOutput(@["first"], keepFocus = false)
+    let configState = e.editingConfigWindow()
+
+    e.showCommandOutput(@["second"], keepFocus = false)
+
+    check not configState.isEditing()
+
+  test "An output that keeps the focus keeps the edit":
+    let e = testEditor()
+    let configState = e.editingConfigWindow()
+
+    e.showCommandOutput(@["built"], keepFocus = true)
+
+    check configState.isEditing()
 
 suite "Background command output":
   test "A command the user did not start keeps the focus and the mode":

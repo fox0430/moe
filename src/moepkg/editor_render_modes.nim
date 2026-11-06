@@ -42,6 +42,7 @@ proc renderConfig*(
     buffer: var Buffer,
     window: EditorWindow,
     isBottomWindow: bool,
+    isActiveWindow: bool,
     tabLineOffset: int,
 ) =
   ## Render the configuration mode view within a window's viewport
@@ -72,12 +73,12 @@ proc renderConfig*(
   # Cursor column, measured off the line drawn below. -1 while no row is edited.
   var editCursorX = -1
 
-  # Effective search query: live text 'incsearch' shows at the search prompt,
-  # otherwise the committed query. Display is gated by the same global
+  # Effective search query: live text 'incsearch' shows at this window's search
+  # prompt, otherwise the committed query. Display is gated by the same global
   # hlsearch/hlsearchTempDisabled flags as buffer search, so a highlight
   # clear (double-Escape, :noh) in any window/mode hides Config matches too.
   let
-    typedQuery = e.state.incrementalSearchLine
+    typedQuery = if isActiveWindow: e.state.incrementalSearchLine else: ""
     searchQuery =
       if not e.state.input.search.hlsearch:
         ""
@@ -252,17 +253,19 @@ proc renderConfig*(
   # specialized draw, rather than in advanceLayoutForFrame. This is an idempotent
   # draw-side exception. The screen-cursor write is gated on no overlay/temp
   # message being active, since those own the cursor and are placed earlier in
-  # advanceLayoutForFrame (preserving the former draw-order precedence).
-  if isEditMode and editCursorX >= 0:
-    if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
-      e.state.screenCursor.x = editCursorX
-      e.state.screenCursor.y =
-        listStartY + (configState.selectedIndex - window.viewport.topLine)
-    e.state.cursorVisible = true
-  else:
-    # Not editing, or the edited row is outside the drawn range. An active
-    # overlay (command/search) owns the cursor instead.
-    e.state.cursorVisible = e.state.hasOverlay
+  # advanceLayoutForFrame (preserving the former draw-order precedence). Only the
+  # active window may write the global cursor state.
+  if isActiveWindow:
+    if isEditMode and editCursorX >= 0:
+      if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
+        e.state.screenCursor.x = editCursorX
+        e.state.screenCursor.y =
+          listStartY + (configState.selectedIndex - window.viewport.topLine)
+      e.state.cursorVisible = true
+    else:
+      # Not editing, or the edited row is outside the drawn range. An active
+      # overlay (command/search) owns the cursor instead.
+      e.state.cursorVisible = e.state.hasOverlay
 
 when not defined(moe.embedded):
   proc renderTerminal*(

@@ -31,7 +31,7 @@ import
     editor, config, types, modes, terminal_mode, editor_window, editor_window_tab,
     handler, key_bindings, viewer_mode, buffer_manager, window_manager,
     editor_render_views, render_utils, filetree, highlight, editor_window_layout,
-    unicode_utils, frontend_input,
+    unicode_utils, frontend_input, config_mode,
   ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/buffer/core
@@ -1489,6 +1489,34 @@ suite "Terminal tabs - cursor belongs to the active window":
     require active.mode == EditorMode.Normal
     require inactive.modeState.terminalSubMode == tsmInput
     inactive.modeState.terminal.grid.cursorVisible = false
+
+    var buffer = createTestBuffer()
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderSplitView(buffer)
+
+    check e.state.cursorVisible
+
+  test "a later-painted inactive Config window keeps the live terminal's cursor":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termWin = e.activeWindow
+    discard registerFakeTerminal(e, "bash")
+    e.switchToNextWindow()
+    let configWin = e.activeWindow
+    require configWin != termWin
+    require e.enterViewerMode(
+      EditorMode.Config,
+      ModeState(kind: mskConfig, config: newConfigModeState(e.config)),
+      newTextBuffer(""),
+      vpInPlace,
+    ).isOk
+    e.focusWindow(termWin)
+    require e.activeWindow == termWin
+    require e.windowManager.windows.find(termWin) <
+      e.windowManager.windows.find(configWin)
+
+    let grid = termWin.modeState.terminal.grid
+    grid.cursorVisible = true
 
     var buffer = createTestBuffer()
     e.advanceLayoutForFrame(buffer, false)

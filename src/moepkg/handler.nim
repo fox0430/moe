@@ -71,6 +71,7 @@ import
     command_passthrough,
   ]
 import prompt_line
+from config_mode import clearKeySequence
 export command_mode_handler, search_mode_handler, cursor_util, frontend_input
 
 proc addRunningProcess*(e: Editor, p: BackgroundProcess, label = "", path = "") =
@@ -1202,7 +1203,11 @@ proc handleSpecialModeWindowCommandKeyCombo(
     e.state.pendingInput.pendingCommand = PendingNone
     return some(true)
 
-  return e.handleWindowCommand(keyCombo)
+  let window = e.activeWindow
+  result = e.handleWindowCommand(keyCombo)
+  # These keys never reach the Config handler that clears the sequence.
+  if result.isSome and window.modeState.kind == mskConfig:
+    window.modeState.config.clearKeySequence()
 
 proc syncCompletionOtherBuffers(e: Editor, activeBuffer: TextBuffer) =
   ## Populate completion manager's `otherBuffers` with all FileEditMode
