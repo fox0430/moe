@@ -514,6 +514,7 @@ const VisualModeCommands*: HelpGroup = HelpGroup(
       syntax: "c", description: "Change (delete selection and enter insert mode)"
     ),
     HelpEntry(syntax: "y", description: "Copy text"),
+    HelpEntry(syntax: "Y", description: "Copy lines, or the block in Visual Block"),
     HelpEntry(
       syntax: "p",
       description: "Paste over the selection; the replaced text goes to the registers",

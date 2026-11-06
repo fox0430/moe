@@ -116,17 +116,29 @@ proc selectedRegister*(
   of vskChar:
     toRegister(getVisualSelectionText(buffer, selection, tabStop), false)
 
-proc visualYank*(buffer: TextBuffer, state: EditorState, register = none(char)) =
+proc visualYank*(
+    buffer: TextBuffer, state: EditorState, register = none(char), lines = false
+) =
   ## Yank (copy) visual selection to `register` (else the yank register) and
-  ## return to previous mode
-  let sel = state.operandSelection
+  ## return to previous mode. `lines` takes a character-wise selection's whole
+  ## lines, as Vim's {Visual}Y; a block stays a block.
+  var sel = state.operandSelection
   if sel.active:
+    if lines and sel.kind == vskChar:
+      sel.kind = vskLine
     state.registers.storeYanked(register, buffer.selectedRegister(sel, state.tabStop))
-    # Vim puts the cursor on the start of what it took: a block's top left.
+    # Vim puts the cursor on the start of what it took: a block's top left, a
+    # line's first column unless the cursor came up to it from a later line.
     state.cursor =
-      if sel.kind == vskBlock:
+      case sel.kind
+      of vskBlock:
         buffer.blockArea(sel, state.tabStop, measureWidest = false).topLeft
-      else:
+      of vskLine:
+        if sel.current.line < sel.start.line:
+          sel.current
+        else:
+          BufferPosition(line: sel.start.line, column: 0)
+      of vskChar:
         sel.getSelectionRange()[0]
     # Clamp column to valid range for Normal mode (last char, not past end)
     let lineLen = buffer.getLine(state.cursor.line).charLen

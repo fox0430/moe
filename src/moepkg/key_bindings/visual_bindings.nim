@@ -101,6 +101,7 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   ("d", "visual-delete"),
   ("x", "visual-delete"),
   ("y", "visual-yank"),
+  ("Y", "visual-yank-lines"),
   (">", "visual-indent"),
   ("<", "visual-dedent"),
   ("u", "visual-lowercase"),

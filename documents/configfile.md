@@ -840,6 +840,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | visual-move-paragraph-forward | Move to next paragraph in visual mode |
 | visual-move-paragraph-backward | Move to previous paragraph in visual mode |
 | visual-yank | Yank visual selection |
+| visual-yank-lines | Yank selected lines, or the block in Visual Block |
 | visual-delete | Delete visual selection |
 | visual-change | Delete selection and enter insert mode |
 | visual-paste | Delete selection and paste register content |

@@ -8739,7 +8739,7 @@ suite "executeCommand - read-only gate allowlists stay in sync":
       "scroll.page.up", "search.next", "search.prev", "search.word.backward",
       "search.word.backward.partial", "search.word.forward",
       "search.word.forward.partial", "textobject.around", "textobject.inner",
-      "visual.reselect", "visual.swap.selection", "visual.yank",
+      "visual.reselect", "visual.swap.selection", "visual.yank", "visual.yank.lines",
     ]
     for id in visualModeCommandIds():
       # EditCommandIds covers the cursor-edit ids also bound in visual modes.

@@ -195,6 +195,10 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("insert-newline", "Insert newline (insert mode)", "insert.newline"),
   ("visual-delete", "Delete visual selection", "visual.delete"),
   ("visual-yank", "Yank visual selection", "visual.yank"),
+  (
+    "visual-yank-lines", "Yank selected lines, or the block in Visual Block",
+    "visual.yank.lines",
+  ),
   ("visual-indent", "Indent visual selection", "visual.indent"),
   ("visual-dedent", "Dedent visual selection", "visual.dedent"),
   ("visual-lowercase", "Convert visual selection to lowercase", "visual.lowercase"),
