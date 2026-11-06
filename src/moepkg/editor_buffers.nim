@@ -108,7 +108,7 @@ proc addBufferToWindowList*(e: Editor, buffer: TextBuffer) =
     e.activeWindow.bufferIds.add(buffer.id)
 
 proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer): TabMove =
-  ## Point the active window at `targetBuffer`, resetting viewport/cursor.
+  ## Point the active window at `targetBuffer`, on the line it left there.
   ## No-op when already on this tab (preserves position).
   result = e.moveWindowToTab(e.activeWindow, targetBuffer)
   if result != tabMoved:

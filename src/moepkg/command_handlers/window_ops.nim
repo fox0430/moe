@@ -135,6 +135,9 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     e.swapWindow()
     return true
   of hrOnlyWindow:
+    for win in e.windowManager.windows:
+      if win != e.activeWindow:
+        e.releaseTabLines(win)
     e.windowManager.onlyWindow(e.screenSize.width, e.screenSize.height)
     e.syncActiveWindow()
     if e.windowManager.windows.len > 0:

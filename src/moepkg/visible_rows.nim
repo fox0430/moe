@@ -669,10 +669,12 @@ proc scrollViewportToCursor*(
     viewport: ViewPort,
     cursorLine, cursorColumn, visibleHeight: int,
     onTabEnd = false,
+    centered = false,
 ) =
   ## Keep the cursor in view: down and up as Vim's update_topline does
   ## (`updateTopline`), sideways as `scrollLeftCellToCursor`. Shared by input
-  ## and render paths.
+  ## and render paths. With `centered`, the line first goes to the middle of
+  ## the window, as Vim's enter_buffer puts it.
   if rl.buffer.isNil or rl.lineCount == 0:
     viewport.topLine = 0
     viewport.topWrapOffset = 0
@@ -681,6 +683,8 @@ proc scrollViewportToCursor*(
 
   let line = clamp(cursorLine, 0, rl.lineCount - 1)
   var w = rl.topWindow(viewport, visibleHeight)
+  if centered:
+    w.scrollCursorHalfway(line, preferAbove = false)
   w.followCursor(viewport, line, max(0, cursorColumn), onTabEnd)
 
 type CursorLineSpot* = enum

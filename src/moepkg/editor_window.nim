@@ -619,6 +619,7 @@ proc closeWindow*(e: Editor): bool =
       " activeWindowIndex=" & $e.windowManager.activeWindowIndex,
   )
 
+  e.releaseTabLines(e.activeWindow)
   # Pass screen dimensions so the post-close check can flag out-of-screen re-tiles.
   let shouldQuit = e.windowManager.closeWindow(
     e.windowStatus, screenWidth = e.screenSize.width, screenHeight = e.screenSize.height

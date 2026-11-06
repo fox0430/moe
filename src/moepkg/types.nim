@@ -1116,6 +1116,13 @@ type
     list*: seq[JumpPosition] # List of jump positions
     index*: int # Current position in jump list (-1 when not navigating)
 
+  TabLine* = object
+    ## The line a window last stood on in a buffer (Vim's wininfo). A closed
+    ## window's entry has no `window`.
+    window*: EditorWindow
+    bufferId*: BufferId
+    line*: int
+
   EditorState* = ref object
     activeWindow*: EditorWindow
       ## Reference to the currently active EditorWindow.
@@ -1179,6 +1186,7 @@ type
     # --- Sub-state groups (Phase 4 refactor) ---
     input*: InputState # Command-line/search input state (text, cursor, history)
     jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)
+    tabLines*: seq[TabLine] # Most recently left first
     pending*: seq[PendingAsyncOp] # Async ops drained by the main event loop
     commandEpoch*: uint64
       # Bumped when the user stops the external commands. Each command captures
@@ -1240,6 +1248,12 @@ proc moveAcross*(jumps: var JumpListState, bufferId: BufferId, move: RowMove) =
   for jump in jumps.list.mitems:
     if jump.bufferId == bufferId:
       jump.line = jump.line.moved(move)
+
+proc moveAcross*(lines: var seq[TabLine], bufferId: BufferId, move: RowMove) =
+  ## Move the lines left in `bufferId` with its text.
+  for spot in lines.mitems:
+    if spot.bufferId == bufferId:
+      spot.line = spot.line.moved(move)
 
 proc setTab*(win: EditorWindow, buf: TextBuffer) {.inline.} =
   ## Move the window to another tab: view and identity change together.
