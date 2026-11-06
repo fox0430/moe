@@ -25,10 +25,17 @@ import pkg/results
 
 import celina_backend as celina
 
-import types/editor_types, color, colorcode, render_utils, config_mode, unicode_utils
+import
+  types/editor_types,
+  color,
+  colorcode,
+  render_utils,
+  config_mode,
+  unicode_utils,
+  editor_window_layout
 
 when not defined(moe.embedded):
-  import editor_window_layout, terminal_mode, terminal/ansi_parser
+  import terminal_mode, terminal/ansi_parser
 
 proc renderConfig*(
     e: Editor,
