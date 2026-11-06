@@ -11608,6 +11608,100 @@ suite "handleKeyCombo - a count and the shape of a motion, as in Vim":
       check e.activeWindow.cursor == cursor
       check e.state.registers.getRegisterContent('"') == register
 
+  test "Y yanks lines as yy does":
+    for (line, keys, lines, cursor, register) in [
+      (0, @["Y"], @["abc", "def", "ghi"], at(0, 1), "abc\n"),
+      (0, @["2", "Y"], @["abc", "def", "ghi"], at(0, 1), "abc\ndef\n"),
+      (1, @["9", "Y"], @["abc", "def", "ghi"], at(1, 1), "def\nghi\n"),
+      # There is no line to go to from the last one.
+      (2, @["2", "Y"], @["abc", "def", "ghi"], at(2, 1), ""),
+      # Not an operand: the waiting operator is cancelled.
+      (0, @["d", "Y"], @["abc", "def", "ghi"], at(0, 1), ""),
+      (0, @["y", "Y"], @["abc", "def", "ghi"], at(0, 1), ""),
+    ]:
+      let e = createEditorForCounts("abc\ndef\nghi", line, 1)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.activeWindow.cursor == cursor
+      check e.state.registers.getRegisterContent('"') == register
+      check e.state.pendingInput.pendingOperator.isNone
+
+  test "Y yanks into the selected register":
+    let e = createEditorForCounts("abc\ndef")
+
+    e.press("\"", "a", "Y", "j", "\"", "a", "p")
+
+    check e.lines == @["abc", "def", "abc"]
+
+  test "Visual Y yanks whole lines, a block stays a block":
+    for (line, column, keys, cursor, register) in [
+      (0, 0, @["v", "Y"], at(0, 0), "abc def\n"),
+      (0, 1, @["v", "j", "Y"], at(0, 0), "abc def\nghi jkl\n"),
+      (0, 6, @["v", "h", "Y"], at(0, 0), "abc def\n"),
+      (1, 2, @["v", "k", "Y"], at(0, 2), "abc def\nghi jkl\n"),
+      (1, 6, @["v", "k", "Y"], at(0, 6), "abc def\nghi jkl\n"),
+      (1, 1, @["v", "Y"], at(1, 0), "ghi jkl\n"),
+      (0, 1, @["V", "j", "Y"], at(0, 0), "abc def\nghi jkl\n"),
+      (1, 2, @["V", "k", "Y"], at(0, 2), "abc def\nghi jkl\n"),
+      (0, 1, @["V", "j", "y"], at(0, 0), "abc def\nghi jkl\n"),
+      (1, 2, @["V", "k", "y"], at(0, 2), "abc def\nghi jkl\n"),
+      (1, 1, @["V", "y"], at(1, 0), "ghi jkl\n"),
+      (0, 1, @["C-v", "j", "l", "Y"], at(0, 1), "bc\nhi"),
+      (0, 1, @["C-v", "j", "$", "Y"], at(0, 1), "bc def\nhi jkl"),
+    ]:
+      let e = createEditorForCounts("abc def\nghi jkl\nmno pqr", line, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.state.mode == EditorMode.Normal
+      check e.lines == @["abc def", "ghi jkl", "mno pqr"]
+      check e.activeWindow.cursor == cursor
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "Visual Y goes to the selected register, and ignores a count":
+    let e = createEditorForCounts("abc\ndef\nghi")
+
+    e.press("v", "\"", "a", "Y", "\"", "a", "p")
+    check e.lines == @["abc", "abc", "def", "ghi"]
+
+    e.press("v", "2", "Y")
+    check e.state.registers.getRegisterContent('"') == "abc\n"
+
+  test "Visual Y yanks on a read-only buffer":
+    let e = createEditorForCounts("abc\ndef")
+    e.activeBuffer.readOnly = true
+
+    e.press("v", "Y")
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.registers.getRegisterContent('"') == "abc\n"
+
+  test "Visual Y takes the whole of a closed fold":
+    let e = createEditorForCounts("a\nb\nc\nd", 1)
+    check e.activeBuffer.foldState.addFold(1, 2, collapsed = true)
+
+    e.press("v", "Y")
+
+    check e.state.registers.getRegisterContent('"') == "b\nc\n"
+
+  test "j after Visual Y goes down from the first column":
+    let e = createEditorForCounts("abc def\nghi jkl\nmno pqr", 0, 1)
+
+    e.press("v", "j", "Y", "j")
+
+    check e.activeWindow.cursor == at(1, 0)
+
+  test "gv after Visual Y selects what was selected, character-wise":
+    let e = createEditorForCounts("abc def\nghi jkl\nmno pqr", 0, 1)
+
+    e.press("v", "j", "Y", "g", "v", "y")
+
+    check e.state.registers.getRegisterContent('"') == "bc def\ngh"
+
   test "gN puts the cursor at the start of the match":
     let e = createEditorForCounts("foo bar foo baz", column = 14)
     e.state.input.search.last.pattern = "baz"

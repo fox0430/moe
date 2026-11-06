@@ -748,7 +748,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
   registry.register(
     custom("yank.line"),
     "Yank Line",
-    "Yank (copy) current line(s) to clipboard",
+    "Yank (copy) current line(s) to the selected register",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       registry.operateOnLines(ctx, OpYank, parseCount(args, default = 1)),
     0,

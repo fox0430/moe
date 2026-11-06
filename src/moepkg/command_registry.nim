@@ -82,7 +82,7 @@ const VisualEditOperatorTypes = ["visual-replace", "visual-surround"]
   ## ctOperatorPending operatorTypes that modify the visual selection (`r`, `S`).
   ## Guarded the same way as EditOperatorTypes / VisualEditCommandIds.
 
-const VisualConsumeOnlyCommandIds = ["visual.yank"]
+const VisualConsumeOnlyCommandIds = ["visual.yank", "visual.yank.lines"]
   ## Command ids that end Visual by acting on the selection without editing
   ## it, outside the read-only gate.
 

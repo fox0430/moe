@@ -88,6 +88,7 @@ type
     # Visual mode operations
     bcVisualDelete = "visual.delete"
     bcVisualYank = "visual.yank"
+    bcVisualYankLines = "visual.yank.lines"
     bcVisualIndent = "visual.indent"
     bcVisualDedent = "visual.dedent"
     bcVisualLowercase = "visual.lowercase"

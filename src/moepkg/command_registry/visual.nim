@@ -50,9 +50,9 @@ proc handleVisualOperator*(
     )
   Result[(), string].ok ()
 
-proc handleVisualYank*(ctx: CommandContext): Result[(), string] =
+proc handleVisualYank*(ctx: CommandContext, lines = false): Result[(), string] =
   ## Yank (copy) visual selection
-  visualYank(ctx.buffer, ctx.state, ctx.register)
+  visualYank(ctx.buffer, ctx.state, ctx.register, lines)
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
@@ -148,6 +148,16 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Yank (copy) visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualYank(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualYankLines),
+    "Visual Yank Lines",
+    "Yank (copy) the selected lines, or the block in Visual Block",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualYank(ctx, lines = true),
     0,
     0,
   )

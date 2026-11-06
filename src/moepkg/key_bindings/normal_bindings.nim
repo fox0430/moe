@@ -177,6 +177,7 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   # Character ops
   ("D", "delete-to-end"),
   ("C", "change-to-end"),
+  ("Y", "yank-line"),
   ("x", "delete-char"),
   ("X", "delete-char-before"),
   ("s", "substitute-char"),
