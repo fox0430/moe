@@ -164,6 +164,10 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
     return true
   of hrFilerOpenFileHSplit:
     # Open file in horizontal split from filer
+    let room = e.roomForHsplit()
+    if room.isErr:
+      e.state.statusMessage = "Error: " & room.error
+      return true
     discard e.leaveViewerModeForJump(EditorMode.Filer)
     let splitResult = e.hsplit(some(r.filerFilePath))
     if splitResult.isErr:

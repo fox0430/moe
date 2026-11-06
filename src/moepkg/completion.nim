@@ -1180,7 +1180,7 @@ proc calculatePopupPosition*(
   ## Width is determined by longest word (with min/max constraints)
   ## Prefers below cursor, falls back to above if not enough space
   ## bottomReserve: rows at the bottom the popup must not cross — the
-  ## (possibly grown) command-line/status area plus one padding row
+  ## (possibly grown) command-line/status area
   let visibleItems = min(entries.len, maxVisible)
   let borderSize = if showBorder: 2 else: 0
   let popupHeight = visibleItems + borderSize
@@ -1319,7 +1319,7 @@ proc calculateDocPanelPosition*(
   ## Calculate documentation panel position relative to completion popup
   ## Prefers right side, falls back to left
   ## bottomReserve: rows at the bottom the panel must not cross — the
-  ## (possibly grown) command-line/status area plus one padding row
+  ## (possibly grown) command-line/status area
   ## selectedRowOffset: rows from the completion popup's top down to the
   ## highlighted candidate's row (border + selectedIndex - scrollOffset), so the
   ## panel tracks the selection instead of pinning to the popup's first row.

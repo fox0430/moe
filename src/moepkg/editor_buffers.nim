@@ -693,7 +693,7 @@ proc openAdditionalStartupFiles*(
         of stVertical:
           e.vsplit(some(filePath))
         of stHorizontal:
-          e.hsplit(some(filePath))
+          e.hsplit(some(filePath), checkRoom = false)
       if splitResult.isErr:
         logError("moe", fmt"Failed to split for {filePath}: {splitResult.error}")
       elif readonly:

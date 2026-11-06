@@ -498,31 +498,6 @@ suite "findMaxBottomY":
     )
     check findMaxBottomY(@[win1, win2]) == 17 # 5 + 12 = 17
 
-suite "calculateWindowStatusLineY":
-  test "bottom window":
-    var buf = newTextBuffer()
-    let win = EditorWindow(
-      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 0, height: 24)
-    )
-    # Status line at last row: y + height - 1
-    check calculateWindowStatusLineY(win, true) == 23
-
-  test "non-bottom window":
-    var buf = newTextBuffer()
-    let win = EditorWindow(
-      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 0, height: 12)
-    )
-    # Status line at last row: y + height - 1
-    check calculateWindowStatusLineY(win, false) == 11
-
-  test "window with offset":
-    var buf = newTextBuffer()
-    let win = EditorWindow(
-      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 10, height: 15)
-    )
-    check calculateWindowStatusLineY(win, true) == 24 # 10 + 15 - 1 = 24
-    check calculateWindowStatusLineY(win, false) == 24 # 10 + 15 - 1 = 24
-
 suite "getWrapCount":
   test "matches direct calculateWrapCount":
     let buf = newTextBuffer("aaaaaaaaaabbbbbbbbbbcccccccccc")
@@ -806,11 +781,11 @@ suite "commandLineAreaHeight":
     check state.commandLineAreaHeight(80) == MaxStatusMessageLines
 
 suite "bottomAreaHeight":
-  test "steady state shares the row with the status line":
-    check newTestState().bottomAreaHeight(80) == 1
+  test "steady state: the command row and the status line above it":
+    check newTestState().bottomAreaHeight(80) == 2
     check newTestState(showStatusLine = false).bottomAreaHeight(80) == 1
 
-  test "grown area pushes the status line onto its own row":
+  test "grown area keeps the status line right above it":
     let state = newTestState()
     state.setStatusQuiet("a\nb\nc")
     check state.bottomAreaHeight(80) == 4
@@ -819,6 +794,3 @@ suite "bottomAreaHeight":
     let state = newTestState(showStatusLine = false)
     state.setStatusQuiet("a\nb\nc")
     check state.bottomAreaHeight(80) == 3
-
-  test "steadyBottomAreaHeight is the floor":
-    check steadyBottomAreaHeight() == 1

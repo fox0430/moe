@@ -39,6 +39,7 @@ import
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
     render_utils, clipboard, message_log, frontend_input, pending_input, key_router,
     completion, signature_help, macro_recording, wanted_column, hover_popup,
+    editor_window_layout,
   ]
 import ../src/moepkg/handler {.all.}
 from ../src/moepkg/command_completion import isActive, getSelectedCommand
@@ -67,7 +68,7 @@ proc createTestState(): EditorState =
   EditorState(
     activeWindow: window,
     config: newEditorConfig(),
-    windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
+    windowDisplay: WindowDisplayState(viewportReservedLines: StatusLineReserve),
     pendingInput: PendingInputState(
       macroState: MacroState(
         registers: initTable[char, seq[string]](),
@@ -112,7 +113,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     let result = screenToBufferPosition(
       vp, buffer, 0, 0, lineNumOffset, reservedLines, lineWrap = false
@@ -127,7 +128,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 4 # Space for line numbers
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at x=5, which is x=1 in text area (5 - 4 = 1)
     let result = screenToBufferPosition(
@@ -143,7 +144,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Line 1\nLine 2\nLine 3")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     let result = screenToBufferPosition(
       vp, buffer, 3, 1, lineNumOffset, reservedLines, lineWrap = false
@@ -158,7 +159,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at y=23 is within reserved lines (height=24, reserved=2)
     let result = screenToBufferPosition(
@@ -172,7 +173,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 4
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at x=2 is within line number area
     let result = screenToBufferPosition(
@@ -190,7 +191,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
           "line10\nline11\nline12"
       )
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     let result = screenToBufferPosition(
       vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
@@ -205,7 +206,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       vp = createTestViewport(0, 0, 80, 24, 0, 5) # leftCell = 5
       buffer = newTextBuffer("Hello World this is a long line")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     let result = screenToBufferPosition(
       vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
@@ -223,7 +224,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
           "This is line 5 with some long content for horizontal scroll"
       )
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     let result = screenToBufferPosition(
       vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
@@ -241,7 +242,7 @@ suite "screenToBufferPosition - No Wrap Display Width":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("\tabc")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # tabStop=4: the tab covers columns 0..3, so 'a' is drawn at column 4
     let result = screenToBufferPosition(
@@ -257,7 +258,7 @@ suite "screenToBufferPosition - No Wrap Display Width":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("\tabc")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     let result = screenToBufferPosition(
       vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
@@ -271,7 +272,7 @@ suite "screenToBufferPosition - No Wrap Display Width":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("あいうabc")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Each wide rune takes 2 cells, so 'a' is drawn at column 6
     let result = screenToBufferPosition(
@@ -286,7 +287,7 @@ suite "screenToBufferPosition - No Wrap Display Width":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("あいうabc")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     let result = screenToBufferPosition(
       vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
@@ -300,7 +301,7 @@ suite "screenToBufferPosition - No Wrap Display Width":
       vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftCell = 2
       buffer = newTextBuffer("あいうえお")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Scrolled by 2 cells, い takes cells 0..1 and う cell 2
     let result = screenToBufferPosition(
@@ -315,7 +316,7 @@ suite "screenToBufferPosition - No Wrap Display Width":
       vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftCell = 2
       buffer = newTextBuffer("ab\tcd")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # The tab keeps cells 2..3 of the line, so 'c' at cell 4 is drawn at 2
     let result = screenToBufferPosition(
@@ -331,7 +332,7 @@ suite "screenToBufferPosition - Column Clamping":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hi") # Only 2 characters
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at x=50, but line only has 2 chars
     let result = screenToBufferPosition(
@@ -347,7 +348,7 @@ suite "screenToBufferPosition - Column Clamping":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Line 1\n\nLine 3") # Line 1 is empty
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click on empty line at x=10
     let result = screenToBufferPosition(
@@ -363,7 +364,7 @@ suite "screenToBufferPosition - Column Clamping":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("あいう") # 3 chars, 9 bytes
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at x=50, but line only has 3 characters
     let result = screenToBufferPosition(
@@ -380,7 +381,7 @@ suite "screenToBufferPosition - Line Clamping":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Only one line")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at y=10, but buffer only has 1 line
     let result = screenToBufferPosition(
@@ -395,7 +396,7 @@ suite "screenToBufferPosition - Line Clamping":
       vp = createTestViewport(0, 0, 80, 24, 5, 0) # topLine = 5
       buffer = newTextBuffer("line0\nline1\nline2\nline3\nline4\nline5\nline6")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at y=10, topLine=5, so bufferLine = 15, but only 7 lines
     let result = screenToBufferPosition(
@@ -411,7 +412,7 @@ suite "screenToBufferPosition - Viewport Position":
       vp = createTestViewport(10, 5, 60, 20, 0, 0) # Viewport at (10, 5)
       buffer = newTextBuffer("Hello World\nSecond line\nThird line")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at absolute (12, 6) which is relative (2, 1) to viewport
     let result = screenToBufferPosition(
@@ -427,7 +428,7 @@ suite "screenToBufferPosition - Viewport Position":
       vp = createTestViewport(10, 5, 60, 20, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at y=3, viewport starts at y=5
     let result = screenToBufferPosition(
@@ -442,7 +443,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 80, 24, 0, 5) # leftCell is set but ignored
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # With lineWrap=true, leftCell should be ignored
     let result = screenToBufferPosition(
@@ -467,7 +468,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 5, 24, 0, 0)
       buffer = newTextBuffer("abcdefghij")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click on screen row 1 (second wrap segment), col 2 => char 7 ('h')
     let result = screenToBufferPosition(
@@ -492,7 +493,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 10, 24, 0, 0)
       buffer = newTextBuffer("abcde\nfghij")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click on screen row 1 => line 1
     let result = screenToBufferPosition(
@@ -519,7 +520,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 15, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijklmno")
       lineNumOffset = 5
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at x=7 on row 1 => screenX = 7-5=2, segment 1, char 12 ('m')
     let result = screenToBufferPosition(
@@ -547,7 +548,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       buffer = newTextBuffer("abcdefghijklmno")
       lineNumOffset = 5
       sidebarWidth = 2
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at x=9 on row 1 => screenX = 9-2-5=2, segment 1, char 12 ('m')
     let result = screenToBufferPosition(
@@ -572,7 +573,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 6, 24, 0, 0)
       buffer = newTextBuffer("あいうえお")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click on row 1, col 0 => first char of segment 1 = char 3 ('え')
     let result = screenToBufferPosition(
@@ -598,7 +599,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 10, 24, 0, 0)
       buffer = newTextBuffer("\tabcdefgh")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click on row 1, col 1 => char 8 ('h')
     let result = screenToBufferPosition(
@@ -625,7 +626,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 5, 24, 0, 0)
       buffer = newTextBuffer("abcdefghij\nklmno")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click on row 2, col 1 => line 1, char 1 ('l')
     let result = screenToBufferPosition(
@@ -651,7 +652,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 10, 24, 0, 0)
       buffer = newTextBuffer("0123456789ABCDEFGHIJabcdefghij\ntail")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
     vp.topWrapOffset = 1
 
     # Row 0, col 2 lands on seg1 => char 12, not seg0 char 2.
@@ -696,7 +697,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 12, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijklmno")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click on row 1, col 0 => char 11 ('l')
     let result = screenToBufferPosition(
@@ -725,7 +726,7 @@ suite "screenToBufferPosition - Scrollbar":
       buffer = newTextBuffer("abcdefghijklmnopqrst")
       lineNumOffset = 5
       sidebarWidth = 2
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at x=8 on row 1 => screenX = 8-2-5=1, segment 1, char 13 ('n')
     let result = screenToBufferPosition(
@@ -753,7 +754,7 @@ suite "screenToBufferPosition - Scrollbar":
       buffer = newTextBuffer("abcdefghijklmnopqrst")
       lineNumOffset = 5
       sidebarWidth = 2
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at x=8 on row 1 => screenX = 8-2-5=1, segment 1, char 14 ('o')
     let result = screenToBufferPosition(
@@ -776,7 +777,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     let result = screenToBufferPosition(
       vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
@@ -796,7 +797,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 14, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijklmnop")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click on row 1, col 1 => char 13 ('n')
     let result = screenToBufferPosition(
@@ -821,7 +822,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 10, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijklmno")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # 15 chars at maxWidth=10: segment 0 = 0-9, segment 1 = 10-14
     # Click on row 1, col 0 => char 10 ('k')
@@ -849,7 +850,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 12, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijk\nlmnop")
       lineNumOffset = 0
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click on row 1, col 2 => line 1, char 2 ('n')
     let result = screenToBufferPosition(
@@ -876,7 +877,7 @@ suite "screenToBufferPosition - Scrollbar":
       buffer = newTextBuffer("abcdefghijklmnopqrst")
       lineNumOffset = 4
       sidebarWidth = 2
-      reservedLines = steadyBottomAreaHeight()
+      reservedLines = StatusLineReserve
 
     # Click at x=7 on row 1 => screenX = 7-2-4 = 1, segment 1, char 18 ('s')
     let result = screenToBufferPosition(
@@ -2459,9 +2460,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
     check handled == false
 
 proc createSplitEditor(multiStatusLine: bool = true): Editor =
-  ## Two windows stacked vertically. The bottom window's viewport includes the
-  ## shared status/command row (window_manager gives the last window the
-  ## remaining height), exactly as equalizeHeightsInGroup lays it out.
+  ## Two windows stacked vertically, above the command row, exactly as
+  ## equalizeHeightsInGroup lays them out.
   result = createTestEditorWithBuffer("top0\ntop1\ntop2\ntop3\ntop4\ntop5")
   result.state.showTabLine = false
   result.state.multiStatusLine = multiStatusLine
@@ -2479,7 +2479,7 @@ proc createSplitEditor(multiStatusLine: bool = true): Editor =
       viewBuffer: buf2,
       tabBufferId: buf2.id,
       bufferIds: @[buf2.id],
-      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftCell: 0),
+      viewport: ViewPort(x: 0, y: 12, width: 80, height: 11, topLine: 0, leftCell: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
       mode: EditorMode.Normal,
@@ -2488,8 +2488,7 @@ proc createSplitEditor(multiStatusLine: bool = true): Editor =
 
 suite "handleMouseEvent - Left Click Multi-Window Bottom Reserve":
   test "Click on command line row is ignored when the status line is hidden":
-    # Bottom window: y=12..23, and y=23 is the shared status/command row that
-    # the renderer always reserves — independent of showStatusLine.
+    # Bottom window: y=12..22; y=23 is the command row, below every window.
     let e = createSplitEditor()
     e.state.showStatusLine = false
 
@@ -6544,11 +6543,17 @@ suite "updateViewportReservedLines - steady reserve":
     e.state.setStatusQuiet("error 1\nerror 2\nerror 3")
     # The message grew the dynamic reserve the old code would have used...
     check e.state.statusMessageLineCount == 3
-    check e.state.bottomAreaHeight(80) > steadyBottomAreaHeight()
+    check e.state.bottomAreaHeight(80) > StatusLineReserve
 
     # ...but the motion reserve stays steady.
     e.updateViewportReservedLines()
-    check e.state.windowDisplay.viewportReservedLines == steadyBottomAreaHeight()
+    check e.state.windowDisplay.viewportReservedLines == StatusLineReserve
+
+  test "A new editor starts with the reserve of its configuration":
+    let config = newEditorConfig()
+    config.standard.statusLine = false
+    config.tabLine.enable = false
+    check newEditor(config).state.motionReservedLines == 0
 
 proc addSecondWindow(e: Editor, buf2: TextBuffer, vpx: int = 40) =
   ## Split the 80-wide viewport at `vpx` and add a right-half window.
@@ -6727,6 +6732,25 @@ proc enterRecentFileWith(e: Editor, paths: seq[string]) =
 
 suite "handleRecentFileModeKeyCombo - window cleanup":
   let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+
+  test "PageDown in a window above another pages by the rows that window has":
+    # Under a single status line only the bottom window gives up a row.
+    let e = createTestEditorWithBuffer("hello")
+    e.state.multiStatusLine = false
+    var paths: seq[string]
+    for i in 0 ..< 100:
+      paths.add "file" & $i
+    require e.hsplit().isOk
+    e.enterRecentFileWith(paths)
+    let vp = e.activeWindow.viewport
+    require vp.y + vp.height < findMaxBottomY(e.windowManager.windows)
+
+    let pageDown =
+      KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0, modifiers: {})
+    check e.handleRecentFileModeKeyCombo(pageDown) == true
+
+    # A title row above the list and one row of overlap.
+    check e.activeWindow.modeState.recentFile.selectedIndex == vp.height - 2
 
   test "Enter opens the selected file and tears down the recent file window":
     let e = createTestEditorWithBuffer("hello")
@@ -7476,8 +7500,8 @@ suite "middleClickPaste - the click picks the target":
     (e, term)
 
   proc editorWithFullScreenTerminal(): tuple[e: Editor, term: TerminalState] =
-    ## A single Terminal window over the whole screen, so the shared
-    ## status/command row is the last row of its viewport.
+    ## A single Terminal window, so the status row is the last row of its
+    ## viewport.
     let e = createTestEditorForMiddleClick("")
     let win = e.windowManager.windows[0]
     win.viewport = ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
@@ -7567,8 +7591,8 @@ suite "middleClickPaste - the click picks the target":
 
   test "a click on the status row never reaches the child":
     ## Regression: the hit test bounded the window at the bottom of its
-    ## viewport instead of subtracting the status/command reserve, so a click
-    ## on the shared bottom row resolved to the terminal and the shell ran the
+    ## viewport instead of subtracting the status reserve, so a click
+    ## on the status row resolved to the terminal and the shell ran the
     ## selection.
     let (e, term) = editorWithFullScreenTerminal()
     e.state.setStatusQuiet("")
@@ -7687,7 +7711,7 @@ suite "middleClickPaste - the click picks the target":
       e.state.mode = EditorMode.Terminal
       e.state.setStatusQuiet("")
 
-      # Inside the terminal content area (not the status/command reserve).
+      # Inside the terminal content area (not the status reserve).
       e.middleClickPaste(row = 5, col = 10)
 
       var buf = newString(64)
@@ -7727,7 +7751,7 @@ suite "pointerPositionInWindow":
     )
     e
 
-  test "the shared status/command row is not part of the window's text":
+  test "the status row is not part of the window's text":
     # Regression: the tab line came off the clicked row but not off the bottom
     # reserve, so the row below the last one drawn was still accepted and
     # clamped onto the last buffer line.
@@ -7790,7 +7814,7 @@ suite "windowIndexAtCell":
     )
     e
 
-  test "the shared status/command row belongs to no window":
+  test "the status row belongs to no window":
     let e = singleWindowEditor(showTabLine = true)
 
     check e.windowIndexAtCell(22, 10) == 0

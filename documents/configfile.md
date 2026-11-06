@@ -165,7 +165,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
 | multipleStatusLine | bool | true | Show multiple status lines |
-| merge | bool | false | Enable merge the status line with the command line |
+| merge | bool | false | Show a single status line below the windows even with multipleStatusLine |
 | mode | bool | true | Display the current mode |
 | filename | bool | true | Display the filename |
 | changedMark | bool | true | Display the buffer changed mark |

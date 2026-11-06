@@ -231,6 +231,11 @@ proc syncDiffViewerBuffer(e: Editor, window: EditorWindow) =
   else:
     dvState.renderedWidth = textWidth
 
+proc commandAreaTopY(buffer: Buffer, e: Editor): int =
+  ## Top row of the command-line area, grown or not.
+  buffer.area.y + buffer.area.height -
+    min(e.state.commandLineAreaHeight(buffer.area.width), buffer.area.height)
+
 proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
   ## Advance per-frame window-layout state so the draw pass can be a read-only
   ## projection: rebuild the layout on resize, sync selection-list cursors,
@@ -244,7 +249,7 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
       e.screenSize.width > 0 and e.screenSize.height > 0:
     e.windowManager.resizeWindows(
       e.screenSize.width, e.screenSize.height, e.screenSize.prevWidth,
-      e.screenSize.prevHeight, e.multiStatusLine,
+      e.screenSize.prevHeight, e.windowStatus,
     )
 
   let
@@ -268,7 +273,7 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
       let
         visible = max(
           1,
-          window.viewport.height - steadyReservedBottom(layout.isBottomWindow) -
+          window.viewport.height - e.steadyReservedLines(layout.isBottomWindow) -
             tabLineOffset,
         )
         selected = window.modeState.config.selectedIndex
@@ -331,9 +336,8 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
   let width = buffer.area.width
   if e.state.hasOverlay:
     let
-      screenBottomY = buffer.area.y + buffer.area.height - 1
-      areaH = min(e.state.commandLineAreaHeight(width), buffer.area.height)
-      areaTopY = screenBottomY - areaH + 1
+      areaTopY = buffer.commandAreaTopY(e)
+      areaH = buffer.area.y + buffer.area.height - areaTopY
       (text, cursorChar) = e.state.overlayInput()
       (totalRows, cRow, cCol) = wrappedInputGrid(text, cursorChar, width)
       firstRow = max(0, min(cRow, totalRows - areaH))
@@ -416,22 +420,13 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
         layout.isActiveWindow, tabLineOffset,
       )
 
-    # Render per-window status line if multi-status line mode is enabled
-    # (and merge is disabled - merge shows only one status line at bottom)
-    if e.showStatusLine and e.multiStatusLine and not e.config.statusLine.merge:
-      # Bottom windows: a grown command-line area reserves its own status row
-      # above it (bottomAreaHeight = grown rows + 1), so shift the status line
-      # up by the grown rows; steady state (reservedLines == 1) is unshifted
-      # and keeps sharing the bottom row with the command line.
-      let statusLineY =
-        if layout.isBottomWindow:
-          max(
-            window.viewport.y,
-            calculateWindowStatusLineY(window, layout.isBottomWindow) -
-              (layout.reservedLines - 1),
-          )
-        else:
-          calculateWindowStatusLineY(window, layout.isBottomWindow)
+    if e.windowStatus == wsEveryWindow:
+      let statusLineY = max(
+        window.viewport.y,
+        bottomStatusLineY(
+          window.viewport.y + window.viewport.height, layout.reservedLines
+        ),
+      )
       e.state.renderWindowStatusLine(
         window.buffer,
         buffer,
@@ -446,10 +441,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
         recording,
       )
 
-    # Draw separator between windows (except for last window)
-    if i < e.windowManager.windows.len - 1:
-      let nextWindow = e.windowManager.windows[i + 1]
-      e.renderWindowSeparator(buffer, window, nextWindow, layout.isBottomWindow)
+    e.renderWindowSeparator(buffer, window, layout.isBottomWindow)
 
 proc renderWrappedInput(
     buffer: var Buffer,
@@ -465,15 +457,6 @@ proc renderWrappedInput(
     style = commandStyle()
     (totalRows, cRow, _) = grid
     firstRow = max(0, min(cRow, totalRows - areaH))
-
-  if areaH > 1:
-    # Grown area: clear all rows (they cover window content).
-    # The steady single row keeps the overlay-styled status line beneath the
-    # input, matching the previous shared-row rendering.
-    buffer.fill(
-      Rect(x: buffer.area.x, y: areaTopY, width: buffer.area.width, height: areaH),
-      cell(" ", style),
-    )
 
   # Walk the wrap segments once and draw the visible ones. Same grid as
   # wrappedInputRowCount/wrappedInputCursor: shared boundary rule
@@ -493,47 +476,36 @@ proc renderWrappedInput(
 
 proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   ## Render status line and the command-line area at the bottom of the screen.
-  ## The area height is dynamic (commandLineAreaHeight): in the steady state
-  ## it is the single row shared by the status line and the command line
-  ## (overlays overwrite the status line). Wrapped overlay input and
-  ## multi-line status messages grow the area upward, pushing the status line
-  ## onto its own row above it.
+  ## The area sits below the windows, a single row in the steady state. Wrapped
+  ## overlay input and multi-line status messages grow it upward over the bottom
+  ## windows, pushing the status line up with it.
   let
     width = buffer.area.width
     screenBottomY = buffer.area.y + buffer.area.height - 1
-    areaH = min(e.state.commandLineAreaHeight(width), buffer.area.height)
-    areaTopY = screenBottomY - areaH + 1
-    grown = areaH > 1
+    areaTopY = buffer.commandAreaTopY(e)
+    areaH = screenBottomY - areaTopY + 1
     recording = e.state.pendingInput.macroState.recordingLabel
 
-  # Render global status line:
-  # - When multiStatusLine is disabled: single status line for all windows
-  # - When merge is enabled: merged status line at bottom
-  # When multiStatusLine is enabled (and merge is off), per-window status lines
-  # are rendered in renderSplitView instead (bottom windows shift theirs above
-  # a grown area there, so the grown branch must not add a global one on top).
-  if not e.multiStatusLine or e.config.statusLine.merge:
-    if grown:
-      # Pushed up onto its own row above the grown area
-      let statusY = areaTopY - 1
-      if statusY >= buffer.area.y:
-        e.state.renderStatusLine(
-          e.activeBuffer(),
-          buffer,
-          statusY,
-          e.config.statusLine,
-          e.owesPreservedWork(e.activeBuffer()),
-          recording,
-        )
-    else:
+  # Per-window status lines are rendered in renderSplitView instead.
+  if e.windowStatus == wsBottomWindows:
+    let statusY = bottomStatusLineY(
+      findMaxBottomY(e.windowManager.windows), e.calculateReservedLines(true)
+    )
+    if statusY >= buffer.area.y:
       e.state.renderStatusLine(
         e.activeBuffer(),
         buffer,
-        screenBottomY,
+        statusY,
         e.config.statusLine,
         e.owesPreservedWork(e.activeBuffer()),
         recording,
       )
+
+  # The whole area in one style, whatever fills it
+  buffer.fill(
+    Rect(x: buffer.area.x, y: areaTopY, width: width, height: areaH),
+    cell(" ", commandStyle()),
+  )
 
   if e.state.hasOverlay:
     let
@@ -551,8 +523,6 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
         e.state.commandCompletionManager.menu.entries,
         e.state.commandCompletionManager.menu.maxVisible,
         e.state.commandCompletionManager.argStartX,
-        # Full bottom reserve, so the popup also clears the status line
-        # pushed above a grown area
         bottomAreaRows = e.state.bottomAreaHeight(width),
       )
       renderCommandCompletionPopup(
@@ -561,7 +531,6 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   else:
     let lineCount = e.state.statusMessageLineCount()
     if lineCount == 1:
-      # Single line: overwrite the status line on the shared row
       buffer.setString(
         buffer.area.x,
         screenBottomY,
@@ -577,10 +546,6 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
             allLines[allLines.len - areaH .. ^1]
           else:
             allLines
-      buffer.fill(
-        Rect(x: buffer.area.x, y: areaTopY, width: buffer.area.width, height: lines.len),
-        cell(" ", commandStyle()),
-      )
       for i, line in lines:
         buffer.setString(
           buffer.area.x, areaTopY + i, sanitizeForDisplay(line), commandStyle()
@@ -588,10 +553,6 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     elif not e.showStatusLine and recording.len > 0 and
         charDisplayWidth(recording) <= width:
       # With no status line to carry it, it takes the command line as in Vim
-      buffer.fill(
-        Rect(x: buffer.area.x, y: screenBottomY, width: width, height: 1),
-        cell(" ", commandStyle()),
-      )
       buffer.setString(buffer.area.x, screenBottomY, recording, commandStyle())
 
 proc renderTempMessages*(e: Editor, buffer: var Buffer) =
@@ -662,9 +623,7 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
 
   let popupHeight = visibleCount + 2 # +2 for border
 
-  # Reserve rows for the (possibly grown) command-line/status area plus
-  # one padding row, matching completion/notification popup behavior.
-  let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
+  let bottomReserve = e.state.bottomAreaHeight(buffer.area.width)
 
   let popupRect = placeBelowCursor(
     e.state.screenCursor.x,

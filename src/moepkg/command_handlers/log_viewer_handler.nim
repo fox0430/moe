@@ -76,7 +76,7 @@ proc handleLogViewerModeKey*(
 
   let
     maxLine = max(0, buffer.len - 1)
-    # Calculate actual content height (viewport height minus reserved lines for status/command)
+    # Calculate actual content height (viewport height minus reserved lines)
     contentHeight = max(1, viewportHeight - state.motionReservedLines())
 
   # Handle 'gg', 'g*' and 'g#' (two key presses)
