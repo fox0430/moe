@@ -27,8 +27,8 @@ import pkg/results
 import
   ../[
     buffer, buffer_manager, bookmark_manager, editor, editor_callhierarchy,
-    editor_window_layout, help_viewer, log_viewer, logger, lsp_service, message_log,
-    types, viewer_mode,
+    editor_window_layout, editor_window_state, help_viewer, log_viewer, logger,
+    lsp_service, message_log, types, viewer_mode,
   ]
 import ../[backup, backup_manager, diff_viewer, recovery_index, recovery_manager]
 
@@ -41,6 +41,44 @@ proc freshRecoveryIndex(e: Editor): RecoveryIndex =
     return newRecoveryIndex("")
   result = e.recovery.get
   result.refresh()
+
+proc viewerQuit*(win: EditorWindow): Option[HandlerResult] =
+  ## What leaving the viewer in `win` takes, its `q`; none without a viewer.
+  if win.viewerEntry.isNone and not win.isSidebar:
+    return none(HandlerResult)
+  case win.modeState.kind
+  of mskFiler:
+    some(HandlerResult(kind: hrFilerQuit))
+  of mskFileTree:
+    some(HandlerResult(kind: hrFileTreeQuit))
+  of mskLogViewer:
+    some(HandlerResult(kind: hrLogViewerQuit))
+  of mskHelp:
+    some(HandlerResult(kind: hrHelpViewerQuit))
+  of mskBufferManager:
+    some(HandlerResult(kind: hrBufferManagerQuit))
+  of mskBookmarkManager:
+    some(HandlerResult(kind: hrBookmarkManagerQuit))
+  of mskBackupManager:
+    some(HandlerResult(kind: hrBackupManagerQuit))
+  of mskRecoveryManager:
+    some(HandlerResult(kind: hrRecoveryManagerQuit))
+  of mskDiffViewer:
+    some(HandlerResult(kind: hrDiffViewerQuit))
+  of mskDebug:
+    some(HandlerResult(kind: hrDebugViewerQuit))
+  of mskConfig:
+    some(HandlerResult(kind: hrConfigQuit))
+  of mskReferences:
+    some(HandlerResult(kind: hrReferencesQuit))
+  of mskDocumentSymbol:
+    some(HandlerResult(kind: hrDocumentSymbolQuit))
+  of mskCallHierarchy:
+    some(HandlerResult(kind: hrCallHierarchyQuit))
+  of mskRecentFile:
+    some(HandlerResult(kind: hrRecentFileQuit))
+  of mskNone, mskTerminal:
+    none(HandlerResult)
 
 proc processViewerResult*(e: Editor, r: HandlerResult): bool =
   ## Handle viewer quit / jump / refresh kinds. Returns true to continue.
@@ -110,7 +148,6 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
       discard e.openFileAndJumpTo(filePath, r.symbolLine, r.symbolColumn)
     return true
   of hrCallHierarchyQuit:
-    cancelAllCallHierarchy(e)
     e.leaveViewerMode(EditorMode.CallHierarchy)
     return true
   of hrCallHierarchyJumpTo:
@@ -121,7 +158,6 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
       e.state.statusMessage = "Cannot jump to non-file location: " & pathRes.error
       return true
     let path = pathRes.get
-    cancelAllCallHierarchy(e)
     discard e.leaveViewerModeForJump(EditorMode.CallHierarchy)
     discard
       e.openFileAndJumpTo(path, r.callHierarchyJumpLine, r.callHierarchyJumpColumn)
@@ -154,16 +190,6 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
         let deleteResult = e.closeBuffer(deleteId)
         if deleteResult.isErr:
           e.state.statusMessage = deleteResult.error
-        else:
-          # Update buffer manager entries and regenerate TextBuffer
-          let activeWin = e.activeWindow
-          if activeWin.modeState.kind == mskBufferManager:
-            let bmState = activeWin.modeState.bufferManager
-            bmState.updateEntries(e.getBufferInfos())
-            activeWin.setView(bmState.createBufferManagerTextBuffer())
-            activeWin.cursor.line =
-              min(bmState.selectedIndex + 1, activeWin.buffer.len - 1)
-            activeWin.cursor.column = 0
     else:
       # Cannot delete the only buffer
       e.state.statusMessage = "Cannot delete the last buffer"
@@ -190,15 +216,16 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     if activeWin.modeState.kind == mskBookmarkManager:
       let bmState = activeWin.modeState.bookmarkManager
       bmState.deleteSelectedBookmark(e.buffers)
-      activeWin.setView(bmState.createBookmarkManagerTextBuffer())
-      activeWin.cursor.line = min(bmState.selectedIndex + 1, activeWin.buffer.len - 1)
-      activeWin.cursor.column = 0
     return true
   of hrBackupManagerQuit:
     e.leaveViewerMode(EditorMode.BackupManager)
     return true
   of hrRecoveryManagerQuit:
     e.leaveViewerMode(EditorMode.RecoveryManager)
+    return true
+  of hrRecentFileQuit:
+    e.leaveViewerMode(EditorMode.RecentFile)
+    e.state.statusMessage = ""
     return true
   of hrDiffViewerQuit:
     # Resume the backup manager the diff came from; syncSelectionCursor
@@ -332,7 +359,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     return true
   of hrEnterBufferManager:
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     let entered = e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),

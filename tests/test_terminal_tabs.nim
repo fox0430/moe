@@ -21,7 +21,7 @@
 ## closeTerminalBuffer keep `e.terminalStates`, `bufferIds`, and the
 ## active window's mode in sync as Terminal buffers come and go.
 
-import std/[unittest, options, os, posix, tables]
+import std/[unittest, options, os, posix, sequtils, tables]
 
 import pkg/results
 import pkg/celina
@@ -1013,7 +1013,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     let termBuf = registerFakeTerminal(e, "bash", termState)
     let termId = termBuf.id
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -1054,7 +1054,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     let termBuf = registerFakeTerminal(e, "bash", termState)
     let termId = termBuf.id
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -1131,7 +1131,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     let termBuf = registerFakeTerminal(e, "bash")
     require e.tryActivateBuffer(textBuf.id).isOk
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -1153,7 +1153,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -1333,6 +1333,20 @@ suite "Terminal tabs - the window's mode follows its tab":
     checkOnSession(e, e.activeWindow, termBuf)
     check e.activeWindow.buffer == termBuf
 
+  test "closing a session takes it off a Buffer Manager":
+    let e = createTestEditor()
+    let termBuf = e.registerFakeTerminal()
+    discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
+    let win = e.activeWindow
+    require win.modeState.kind == mskBufferManager
+
+    require termBuf.id.int in win.modeState.bufferManager.items.mapIt(it.number)
+
+    e.closeTerminalBuffer(termBuf.id)
+    e.syncBufferListings()
+
+    check termBuf.id.int notin win.modeState.bufferManager.items.mapIt(it.number)
+
   test ":bd in a split viewer over a session closes it and keeps the session":
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")
@@ -1343,7 +1357,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     require helpWin.viewerEntry.isSome
     require helpWin.tabBufferId == termBuf.id
 
-    check e.deleteCurrentBuffer().isOk
+    discard e.processResult(HandlerResult(kind: hrBufferDelete), e.activeBuffer)
 
     check helpWin notin e.windowManager.windows
     check e.windowManager.windows.len == windowCount
@@ -1358,7 +1372,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     discard e.processResult(HandlerResult(kind: hrOnlyWindow), e.activeBuffer)
     require e.windowManager.windows.len == 1
 
-    check e.deleteCurrentBuffer().isOk
+    discard e.processResult(HandlerResult(kind: hrBufferDelete), e.activeBuffer)
 
     check e.activeWindow == helpWin
     check helpWin.viewerEntry.isNone
@@ -1673,7 +1687,7 @@ suite "Terminal tabs - display integration":
     require e.activeWindow.modeState.terminalSubMode == tsmNormal
     require e.activeBuffer() != termBuf
 
-    let infos = e.getBufferInfos()
+    let infos = e.getBufferInfos(e.commandTab().id)
     require infos.len == 2
     let termIdx = e.bufferIndexById(termBuf.id)
     require termIdx >= 0
@@ -1767,7 +1781,7 @@ suite "Terminal tabs - display integration":
     discard e.enterNormal()
     require e.activeWindow.modeState.terminalSubMode == tsmNormal
 
-    let infos = e.getBufferInfos()
+    let infos = e.getBufferInfos(e.commandTab().id)
     require infos.len == 2
     var activeCount = 0
     for info in infos:
@@ -1783,7 +1797,7 @@ suite "Terminal tabs - display integration":
     let textBuf = e.buffers[0]
     textBuf.filePath = some("/tmp/viewer_covered.txt")
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -1802,7 +1816,7 @@ suite "Terminal tabs - display integration":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -1823,7 +1837,7 @@ suite "Terminal tabs - display integration":
     require e.tryActivateBuffer(textBuf.id).isOk
     require e.activeWindow.tabBufferId == textBuf.id
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -1855,7 +1869,7 @@ suite "WindowView - what a window draws":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -1872,7 +1886,7 @@ suite "WindowView - what a window draws":
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -1932,7 +1946,7 @@ suite "WindowView - what a window draws":
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),

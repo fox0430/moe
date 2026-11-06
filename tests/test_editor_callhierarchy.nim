@@ -21,9 +21,12 @@
 
 import std/[unittest, os, strutils, options, json, importutils, tables]
 
-import ../src/moepkg/[editor, config, config_loader, types, lsp_service]
+import pkg/results
+
+import ../src/moepkg/[editor, config, config_loader, types, lsp_service, viewer_mode]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/callhierarchy_viewer
+import ../src/moepkg/command_handlers/[handler_result, result_processor]
 import ../src/moepkg/editor_callhierarchy {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
@@ -382,6 +385,97 @@ suite "editor_callhierarchy - mode-hijack guard":
 
     check e.state.mode == EditorMode.Insert
     check not e.state.lspCache.pending.hasKey(lrfCallHierarchyIncoming)
+
+  test ":bd in the viewer drops the answer to its request":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let seedItems = @[makeCallHierarchyItem("seed", "file:///seed.nim", 0, 0)]
+    e.enterCallHierarchyMode(seedItems, chvkOutgoing)
+    let reqId = 8383
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
+    # As pressing `i` in the viewer stores it.
+    e.state.lspCache.pending[lrfCallHierarchyIncoming].isItemDriven = true
+    e.state.lspCache.pending[lrfCallHierarchyIncoming].viewerWindow = e.activeWindow
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    discard e.processResult(HandlerResult(kind: hrBufferDelete), e.activeBuffer())
+    require e.state.mode == EditorMode.Normal
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == EditorMode.Normal
+    check not e.state.lspCache.pending.hasKey(lrfCallHierarchyIncoming)
+
+  test "a response to a closed viewer does not land on another copy":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let seedItems = @[makeCallHierarchyItem("seed", "file:///seed.nim", 0, 0)]
+    e.enterCallHierarchyMode(seedItems, chvkOutgoing)
+    let origin = e.activeWindow
+    require e.splitViewer(vpVSplit).isOk
+    let reqId = 8484
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
+    e.state.lspCache.pending[lrfCallHierarchyIncoming].viewerWindow = e.activeWindow
+    let items = @[
+      makeCallHierarchyItem("a", "file:///a.nim", 1, 0),
+      makeCallHierarchyItem("b", "file:///b.nim", 2, 0),
+    ]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    discard e.processResult(HandlerResult(kind: hrCloseWindow), e.activeBuffer())
+    require e.activeWindow == origin
+    e.pollLspCallHierarchy()
+
+    check origin.modeState.callHierarchy.items.len == 1
+
+  test "a response after :b left the viewer stays out of the new buffer":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let other = newTextBuffer("other")
+    e.addBuffer(other)
+    let seedItems = @[makeCallHierarchyItem("seed", "file:///seed.nim", 0, 0)]
+    e.enterCallHierarchyMode(seedItems, chvkOutgoing)
+    let reqId = 8888
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
+    e.state.lspCache.pending[lrfCallHierarchyIncoming].isItemDriven = true
+    e.state.lspCache.pending[lrfCallHierarchyIncoming].viewerWindow = e.activeWindow
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    discard e.processResult(
+      HandlerResult(kind: hrBuffer, bufferArg: $other.id.int), e.activeBuffer()
+    )
+    require e.activeBuffer() == other
+    require e.state.mode == EditorMode.Normal
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.viewerEntry.isNone
+
+  test "a response while the viewer has no focus is dropped and says so":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let seedItems = @[makeCallHierarchyItem("seed", "file:///seed.nim", 0, 0)]
+    e.enterCallHierarchyMode(seedItems, chvkOutgoing)
+    let viewer = e.activeWindow
+    require e.splitViewer(vpVSplit).isOk
+    let reqId = 8686
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
+    e.state.lspCache.pending[lrfCallHierarchyIncoming].isItemDriven = true
+    e.state.lspCache.pending[lrfCallHierarchyIncoming].viewerWindow = viewer
+    let items = @[makeCallHierarchyItem("a", "file:///a.nim", 1, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    check e.state.statusMessage == "Call hierarchy result dropped: viewer lost focus"
+
+  test "a request for an item from a text window is not tied to a viewer":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.storeItemDrivenPending(lrfCallHierarchyIncoming, 8787)
+
+    check e.state.lspCache.pending[lrfCallHierarchyIncoming].viewerWindow.isNil
 
   test "Incoming response arriving during CallHierarchy re-entry is applied":
     # Toggling Incoming <-> Outgoing from inside the viewer must still work:

@@ -139,9 +139,20 @@ proc handlePrepareResponse(
     e.state.statusMessage = "LSP call hierarchy failed: " & ctxRes.error
 
 proc handleCallsResponse(
-    e: Editor, feature: LspRequestFeature, resultOpt: Option[JsonNode]
+    e: Editor, ctx: LspRequestContext, resultOpt: Option[JsonNode]
 ) =
   ## Incoming/outgoing completed: convert items and enter CallHierarchy mode.
+  let feature = ctx.feature
+  # A request from a viewer answers that viewer. However it ended, the answer
+  # would land on whatever the window shows now.
+  if ctx.viewerWindow != nil and (
+    e.activeWindow != ctx.viewerWindow or
+    ctx.viewerWindow.modeState.kind != mskCallHierarchy
+  ):
+    if ctx.viewerWindow.modeState.kind == mskCallHierarchy:
+      e.state.statusMessage = "Call hierarchy result dropped: viewer lost focus"
+    return
+
   # CallHierarchy re-entry (viewer toggling between Incoming and Outgoing) is
   # not covered by validModes because CallHierarchy mode itself is a valid
   # target; keep the manual guard.
@@ -190,7 +201,7 @@ proc pollLspCallHierarchy*(e: Editor) =
     if feature in {lrfCallHierarchyPrepareIncoming, lrfCallHierarchyPrepareOutgoing}:
       handlePrepareResponse(e, feature, resultOpt)
     else:
-      handleCallsResponse(e, feature, resultOpt)
+      handleCallsResponse(e, ctx, resultOpt)
 
 proc requestLspCallHierarchyIncoming*(e: Editor): bool =
   ## Request LSP incoming calls at current cursor position (async)
@@ -206,10 +217,12 @@ proc storeItemDrivenPending(e: Editor, feature: LspRequestFeature, requestId: in
   ## Populate pending[feature] for a request that targets item.uri rather than
   ## the active buffer. The active buffer here is often the synthetic viewer
   ## buffer (no path), so classifyResponse's buffer/version guard doesn't
-  ## apply; the mode-hijack check inside handleCallsResponse is sufficient.
+  ## apply; handleCallsResponse guards it by the viewer window instead.
   storeContextualRequest(
     e.state.lspCache, feature, e.activeBuffer, requestId, isItemDriven = true
   )
+  if e.activeWindow.modeState.kind == mskCallHierarchy:
+    e.state.lspCache.pending[feature].viewerWindow = e.activeWindow
 
 proc requestCallHierarchyIncomingForItem*(
     e: Editor, item: lspTypes.CallHierarchyItem

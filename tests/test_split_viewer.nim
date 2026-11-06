@@ -29,9 +29,11 @@ import pkg/[results, celina]
 import
   ../src/moepkg/[
     editor, config, config_loader, types, editor_window, editor_buffers, window_manager,
-    editor_frame, editor_window_layout,
+    editor_frame, editor_window_layout, viewer_mode,
   ]
-import ../src/moepkg/command_handlers/[handler_result, result_processor, editor_ops]
+import
+  ../src/moepkg/command_handlers/
+    [handler_result, result_processor, editor_ops, viewer_ops]
 import ../src/moepkg/buffer/edit
 import ../src/moepkg/lsp/protocol/types as lspTypes
 from ../src/moepkg/command_registry/core import recordJump
@@ -96,7 +98,7 @@ suite "Split viewer - covers a split of the active tab":
     let (_, listing) = e.openHelp()
     e.focus(origWin)
 
-    for info in e.getBufferInfos():
+    for info in e.getBufferInfos(e.commandTab().id):
       check info.number != listing.id.int
     check not e.switchToBuffer($listing.id.int)
     check e.tryActivateBuffer(listing.id).isErr
@@ -382,6 +384,335 @@ suite "Split viewer - ending it":
     check helpWin.tabBufferId == origWin.tabBufferId
     check e.bufferById(helpWin.tabBufferId).isSome
 
+suite "In-place viewer - :bd":
+  proc editorOnTwoFiles(
+      name: string
+  ): tuple[e: Editor, paths: array[2, string], first, second: TextBuffer] =
+    let (e, firstPath) = editorOnFile(name & "_a.txt")
+    let secondPath = getTempDir() / (name & "_b.txt")
+    writeFile(secondPath, "other\n")
+    let first = e.activeBuffer()
+    check e.editFile(secondPath).isOk
+    (e, [firstPath, secondPath], first, e.activeBuffer())
+
+  proc openBufferManager(e: Editor): EditorWindow =
+    e.run(HandlerResult(kind: hrEnterBufferManager))
+    require e.activeWindow.modeState.kind == mskBufferManager
+    e.activeWindow
+
+  proc listedIds(win: EditorWindow): seq[int] =
+    for item in win.modeState.bufferManager.items:
+      result.add item.number
+
+  test "closes the Buffer Manager and keeps the covered buffer":
+    let (e, paths, first, second) = editorOnTwoFiles("moe_bd_bm")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let win = e.openBufferManager()
+
+    e.run(HandlerResult(kind: hrBufferDelete))
+
+    e.checkOnTab(win, second)
+    check e.bufferById(first.id).isSome
+
+  test "closes the Filer and keeps the covered buffer":
+    let (e, paths, first, second) = editorOnTwoFiles("moe_bd_filer")
+    defer:
+      for path in paths:
+        removeFile(path)
+    e.run(HandlerResult(kind: hrEnterFiler))
+    let win = e.activeWindow
+    require win.modeState.kind == mskFiler
+
+    e.run(HandlerResult(kind: hrBufferDelete))
+
+    e.checkOnTab(win, second)
+    check e.bufferById(first.id).isSome
+
+  test "keeps every buffer":
+    let (e, path) = editorOnFile("moe_bd_filer_keeps.txt")
+    defer:
+      removeFile(path)
+    let buffer = e.activeBuffer()
+    let buffersBefore = e.buffers.len
+    e.run(HandlerResult(kind: hrEnterFiler))
+    let win = e.activeWindow
+
+    e.run(HandlerResult(kind: hrBufferDelete))
+
+    e.checkOnTab(win, buffer)
+    check e.buffers.len == buffersBefore
+
+  test ":bd! does not discard the changes of the covered buffer":
+    let (e, path) = editorOnFile("moe_bd_force.txt")
+    defer:
+      removeFile(path)
+    let buffer = e.activeBuffer()
+    check buffer.insert(0, "x").isOk
+    require buffer.isModified
+    let win = e.openBufferManager()
+
+    e.run(HandlerResult(kind: hrBufferDelete, forceBufferDelete: true))
+
+    e.checkOnTab(win, buffer)
+    check buffer.isModified
+
+  test ":bd {number} takes the buffer off the listing":
+    let (e, paths, first, second) = editorOnTwoFiles("moe_bd_bm_arg")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let win = e.openBufferManager()
+    require first.id.int in win.listedIds
+
+    e.run(HandlerResult(kind: hrBufferDelete, deleteBufferArg: $first.id.int))
+
+    check e.bufferById(first.id).isNone
+    check win.modeState.kind == mskBufferManager
+    check first.id.int notin win.listedIds
+    check second.id.int in win.listedIds
+    check win.buffer.len == win.listedIds.len + 1
+    check not win.buffer.getTextString.contains("_a.txt")
+
+  test ":bd {number} of the covered buffer keeps the listing over its successor":
+    let (e, paths, _, second) = editorOnTwoFiles("moe_bd_bm_covered")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let win = e.openBufferManager()
+
+    e.run(HandlerResult(kind: hrBufferDelete, deleteBufferArg: $second.id.int))
+
+    check win.viewerEntry.isSome
+    check second.id.int notin win.listedIds
+    let successor = e.tabBuffer(win)
+    for item in win.modeState.bufferManager.items:
+      check item.active == (item.number == successor.id.int)
+    e.run(HandlerResult(kind: hrBufferManagerQuit))
+    e.checkOnTab(win, successor)
+
+  test ":bd {number} keeps the selection on its buffer":
+    let (e, paths, first, second) = editorOnTwoFiles("moe_bd_bm_selection")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let lastPath = getTempDir() / "moe_bd_bm_selection_c.txt"
+    writeFile(lastPath, "last\n")
+    defer:
+      removeFile(lastPath)
+    check e.editFile(lastPath).isOk
+    let win = e.openBufferManager()
+    let state = win.modeState.bufferManager
+    state.selectedIndex = win.listedIds.find(second.id.int)
+    require state.selectedIndex in 1 ..< win.listedIds.high
+
+    e.run(HandlerResult(kind: hrBufferDelete, deleteBufferArg: $first.id.int))
+
+    check state.items[state.selectedIndex].number == second.id.int
+
+  test ":bd {number} rebinds the active window to the new listing":
+    let (e, paths, first, _) = editorOnTwoFiles("moe_bd_bm_sync")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let win = e.openBufferManager()
+
+    e.run(HandlerResult(kind: hrBufferDelete, deleteBufferArg: $first.id.int))
+
+    check e.state.windowDisplay.currentBufferId == win.buffer.id
+
+  test ":bd {number} takes its bookmarks off a Bookmark Manager":
+    let (e, paths, first, second) = editorOnTwoFiles("moe_bd_bkm")
+    defer:
+      for path in paths:
+        removeFile(path)
+    first.toggleBookmark(0)
+    second.toggleBookmark(0)
+    e.run(HandlerResult(kind: hrEnterBookmarkManager))
+    let win = e.activeWindow
+    require win.modeState.kind == mskBookmarkManager
+    let state = win.modeState.bookmarkManager
+    require state.items.len == 2
+    state.selectedIndex = 1
+
+    e.run(HandlerResult(kind: hrBufferDelete, deleteBufferArg: $first.id.int))
+
+    check state.items.len == 1
+    check state.items[state.selectedIndex].bufferId == second.id
+    check not win.buffer.getTextString.contains("_a.txt")
+
+  test ":bd of the last row leaves the cursor on the shorter listing":
+    let (e, paths, _, second) = editorOnTwoFiles("moe_bd_bm_last_row")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let win = e.openBufferManager()
+    let state = win.modeState.bufferManager
+    state.selectedIndex = state.items.high
+
+    e.run(HandlerResult(kind: hrBufferDelete, deleteBufferArg: $second.id.int))
+
+    check state.selectedIndex == state.items.high
+    check win.cursor.line == state.selectedIndex + 1
+    check win.cursor.line < win.buffer.len
+
+  test "D in a Bookmark Manager reaches its split copy":
+    let (e, paths, first, second) = editorOnTwoFiles("moe_bd_bkm_copy")
+    defer:
+      for path in paths:
+        removeFile(path)
+    first.toggleBookmark(0)
+    second.toggleBookmark(0)
+    e.run(HandlerResult(kind: hrEnterBookmarkManager))
+    let win = e.activeWindow
+    require e.splitViewer(vpVSplit).isOk
+    let copy = e.activeWindow
+    require copy != win
+
+    e.run(HandlerResult(kind: hrBookmarkManagerDelete))
+
+    check copy.modeState.bookmarkManager.items.len == 1
+    check win.modeState.bookmarkManager.items.len == 1
+    check win.cursor.line < win.buffer.len
+
+  test "a buffer dropped or added without :bd reaches the listing on the next frame":
+    let (e, paths, first, _) = editorOnTwoFiles("moe_bd_bm_frame")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let win = e.openBufferManager()
+    let state = win.modeState.bufferManager
+    let added = newTextBuffer("added")
+
+    # What `:!cmd` does to its stale output buffer.
+    let stale = e.removeBufferAt(e.bufferIndexById(first.id))
+    e.addBuffer(added)
+    e.syncBufferListings()
+
+    var numbers: seq[int]
+    for entry in state.items:
+      numbers.add(entry.number)
+    check stale.id.int notin numbers
+    check added.id.int in numbers
+
+  test "a frame with nothing changed keeps the listing's view":
+    let (e, paths, _, _) = editorOnTwoFiles("moe_bd_bm_keep")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let win = e.openBufferManager()
+    let listing = win.buffer
+
+    e.syncBufferListings()
+
+    check win.buffer == listing
+
+  test "deleteCurrentBuffer under a listing closes it and keeps the buffer":
+    let (e, paths, _, second) = editorOnTwoFiles("moe_bd_api")
+    defer:
+      for path in paths:
+        removeFile(path)
+    require e.activeWindow.tabBufferId == second.id
+    check second.insert(0, "x").isOk
+    let win = e.openBufferManager()
+
+    check e.deleteCurrentBuffer(force = true).isOk
+
+    check e.bufferById(second.id).isSome
+    check second.isModified
+    check win.modeState.kind == mskNone
+
+  test "the active listing keeps the motion controller on its new view":
+    let (e, paths, first, _) = editorOnTwoFiles("moe_bd_bm_rebind")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let win = e.openBufferManager()
+    discard e.removeBufferAt(e.bufferIndexById(first.id))
+
+    e.syncBufferListings()
+
+    check e.state.windowDisplay.currentBufferId == win.buffer.id
+
+  test "leaving Config without its quit still applies a pending edit":
+    let (e, path) = editorOnFile("moe_bd_config_api.txt")
+    defer:
+      removeFile(path)
+    e.run(HandlerResult(kind: hrConfig))
+    let ignorecase = not e.state.input.search.ignorecase
+    e.config.standard.ignorecase = ignorecase
+    e.activeWindow.modeState.config.pendingApply = true
+
+    check e.deleteCurrentBuffer().isOk
+
+    check e.state.input.search.ignorecase == ignorecase
+
+  test "a host owning results sees the quit of :bd in a listing":
+    let (e, paths, _, second) = editorOnTwoFiles("moe_bd_host")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let win = e.openBufferManager()
+    e.hostResultFilter = proc(e: Editor, r: HandlerResult): bool =
+      r.kind in {hrBufferDelete, hrBufferManagerQuit}
+
+    e.run(HandlerResult(kind: hrBufferDelete))
+
+    let request = e.takeHostResultRequest()
+    require request.isSome
+    check request.get.kind == hrBufferManagerQuit
+    check e.bufferById(second.id).isSome
+    check win.modeState.kind == mskBufferManager
+
+  test ":bd in Config applies an edit no frame has flushed yet":
+    let (e, path) = editorOnFile("moe_bd_config.txt")
+    defer:
+      removeFile(path)
+    e.run(HandlerResult(kind: hrConfig))
+    let win = e.activeWindow
+    require win.modeState.kind == mskConfig
+    let ignorecase = not e.state.input.search.ignorecase
+    e.config.standard.ignorecase = ignorecase
+    win.modeState.config.pendingApply = true
+
+    e.run(HandlerResult(kind: hrBufferDelete))
+
+    check e.currentMode != EditorMode.Config
+    check e.state.input.search.ignorecase == ignorecase
+
+  test "closing a listing leaves other listings alone":
+    let (e, paths, _, _) = editorOnTwoFiles("moe_bd_bm_unchanged")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let origWin = e.activeWindow
+    e.run(HandlerResult(kind: hrVSplit))
+    let listingWin = e.openBufferManager()
+    let listing = listingWin.buffer
+    e.focus(origWin)
+    e.run(HandlerResult(kind: hrEnterFiler))
+
+    e.run(HandlerResult(kind: hrBufferDelete))
+
+    check listingWin.buffer == listing
+
+  test ":bd from another window updates a listing there":
+    let (e, paths, first, second) = editorOnTwoFiles("moe_bd_bm_other")
+    defer:
+      for path in paths:
+        removeFile(path)
+    let origWin = e.activeWindow
+    e.run(HandlerResult(kind: hrVSplit))
+    let listingWin = e.openBufferManager()
+    e.focus(origWin)
+
+    e.run(HandlerResult(kind: hrBufferDelete, deleteBufferArg: $first.id.int))
+
+    check first.id.int notin listingWin.listedIds
+    for item in listingWin.modeState.bufferManager.items:
+      check item.active == (item.number == second.id.int)
+
 suite "Split viewer - what is taken from inside it":
   test ":backup from inside the listing is about the covered file":
     let (e, path) = editorOnFile("moe_sv_backup_source.txt")
@@ -516,7 +847,7 @@ suite "Split viewer - with a DiffViewer over it":
     e.checkOnTab(win, fileBuf)
     win.checkNoModeState()
 
-  test ":bd from the diff, as the only window, ends both":
+  test ":bd from the diff goes back to the backup manager, as q does":
     let (e, path) = editorOnFile("moe_sv_diff_bd.txt")
     defer:
       removeFile(path)
@@ -524,6 +855,11 @@ suite "Split viewer - with a DiffViewer over it":
     let win = e.openBackupDiff()
     e.run(HandlerResult(kind: hrOnlyWindow))
     require e.windowManager.windows.len == 1
+
+    e.run(HandlerResult(kind: hrBufferDelete))
+
+    check win.mode == EditorMode.BackupManager
+    check win.modeState.kind == mskBackupManager
 
     e.run(HandlerResult(kind: hrBufferDelete))
 
@@ -1668,3 +2004,76 @@ suite "Tab commands from the FileTree sidebar":
       check e.windowManager.windows.len == windowsBefore
       check e.buffers.len == buffersBefore
       e.checkRefused(tree, width)
+
+suite ":bd in every viewer":
+  # `:bd` goes through the quit: without it `deleteCurrentBuffer` still closes
+  # the viewer, but none of the quit's own work runs.
+  for (entry, mode, quit) in [
+    (hrEnterFiler, EditorMode.Filer, hrFilerQuit),
+    (hrEnterHelpViewer, EditorMode.Help, hrHelpViewerQuit),
+    (hrEnterLogViewer, EditorMode.LogViewer, hrLogViewerQuit),
+    (hrEnterBufferManager, EditorMode.BufferManager, hrBufferManagerQuit),
+    (hrEnterBookmarkManager, EditorMode.BookmarkManager, hrBookmarkManagerQuit),
+    (hrEnterBackupManager, EditorMode.BackupManager, hrBackupManagerQuit),
+    (hrEnterRecoveryManager, EditorMode.RecoveryManager, hrRecoveryManagerQuit),
+    (hrRecentFile, EditorMode.RecentFile, hrRecentFileQuit),
+    (hrDebug, EditorMode.Debug, hrDebugViewerQuit),
+    (hrConfig, EditorMode.Config, hrConfigQuit),
+  ]:
+    test "closes " & $mode & " and keeps the buffer it covers":
+      let (e, path) = editorOnFile("moe_bd_every_viewer.txt")
+      defer:
+        removeFile(path)
+      let buffer = e.activeBuffer()
+      let buffersBefore = e.buffers.len
+      e.run(HandlerResult(kind: entry))
+      require e.activeWindow.modeState.kind == modeStateKind(mode)
+      check e.activeWindow.viewerQuit().get.kind == quit
+
+      e.run(HandlerResult(kind: hrBufferDelete, forceBufferDelete: true))
+
+      check e.activeWindow.modeState.kind == mskNone
+      check e.activeWindow.viewerEntry.isNone
+      check e.activeBuffer() == buffer
+      check e.currentMode == EditorMode.Normal
+      check e.buffers.len == buffersBefore
+
+  for (mode, quit) in [
+    (EditorMode.References, hrReferencesQuit),
+    (EditorMode.DocumentSymbol, hrDocumentSymbolQuit),
+  ]:
+    test "closes " & $mode & " and keeps the buffer it covers":
+      let (e, path) = editorOnFile("moe_bd_every_lsp_viewer.txt")
+      defer:
+        removeFile(path)
+      let buffer = e.activeBuffer()
+      let state =
+        if mode == EditorMode.References:
+          ModeState(kind: mskReferences)
+        else:
+          ModeState(kind: mskDocumentSymbol)
+      require e.enterViewerMode(mode, state, newTextBuffer("x"), vpInPlace).isOk
+      check e.activeWindow.viewerQuit().get.kind == quit
+
+      e.run(HandlerResult(kind: hrBufferDelete))
+
+      check e.activeWindow.modeState.kind == mskNone
+      check e.activeBuffer() == buffer
+
+suite "listings on the frame":
+  test "a frame brings a listing up to the buffers":
+    let (e, path) = editorOnFile("moe_listing_frame.txt")
+    defer:
+      removeFile(path)
+    e.run(HandlerResult(kind: hrEnterBufferManager))
+    let state = e.activeWindow.modeState.bufferManager
+    let added = newTextBuffer("added")
+    e.addBuffer(added)
+    var screen = newBuffer(120, 40)
+
+    e.render(screen)
+
+    var numbers: seq[int]
+    for entry in state.items:
+      numbers.add(entry.number)
+    check added.id.int in numbers

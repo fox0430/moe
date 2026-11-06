@@ -31,9 +31,8 @@ export list_viewer
 proc newBookmarkManagerState*(): BookmarkManagerState =
   BookmarkManagerState(items: @[], selectedIndex: 0)
 
-proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
-  ## Update the bookmark manager entries by scanning all buffers for bookmarks
-  state.items = @[]
+proc bookmarkEntries*(buffers: seq[TextBuffer]): seq[BookmarkEntry] =
+  ## One entry for each bookmark in `buffers`.
   for buf in buffers:
     let filePath = if buf.filePath.isSome: buf.filePath.get else: "No Name"
     for bline in buf.bookmarks:
@@ -42,15 +41,32 @@ proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
           buf.getLine(bline).truncateToCharsWithSuffix(50)
         else:
           ""
-      state.items.add(
+      result.add(
         BookmarkEntry(bufferId: buf.id, filePath: filePath, line: bline, text: text)
       )
 
-  # Clamp selectedIndex to valid range
-  if state.items.len == 0:
-    state.selectedIndex = 0
-  elif state.selectedIndex >= state.items.len:
-    state.selectedIndex = max(0, state.items.len - 1)
+proc setEntries*(state: BookmarkManagerState, entries: seq[BookmarkEntry]) =
+  ## Replace the entries. The selection stays on its bookmark, found as the nth
+  ## of its buffer since edits move lines; if that is gone, on its row.
+  let selected = state.getSelectedItem
+  var nth = 0
+  if selected.isSome:
+    for item in state.items[0 ..< state.selectedIndex]:
+      if item.bufferId == selected.get.bufferId:
+        inc nth
+  state.items = entries
+  state.keepSelection(
+    selected,
+    proc(a, b: BookmarkEntry): bool =
+      if a.bufferId != b.bufferId:
+        return false
+      dec nth
+      nth < 0,
+  )
+
+proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
+  ## Update the entries by scanning all buffers for bookmarks.
+  state.setEntries(bookmarkEntries(buffers))
 
 proc formatLine*(entry: BookmarkEntry): string =
   ## Format a bookmark entry for display
@@ -64,7 +80,7 @@ proc createBookmarkManagerTextBuffer*(state: BookmarkManagerState): TextBuffer =
   )
 
 proc deleteSelectedBookmark*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
-  ## Delete the currently selected bookmark and refresh entries.
+  ## Delete the currently selected bookmark; the listing follows the buffers.
   ## Resolves the buffer by BufferId to survive re-indexing of `buffers`.
   let entry = state.getSelectedItem()
   if entry.isSome:
@@ -75,4 +91,3 @@ proc deleteSelectedBookmark*(state: BookmarkManagerState, buffers: seq[TextBuffe
         if buf.hasBookmark(e.line):
           buf.toggleBookmark(e.line)
         break
-    state.updateEntries(buffers)

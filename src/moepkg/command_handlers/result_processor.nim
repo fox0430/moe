@@ -161,6 +161,18 @@ proc processResultWithHost(
   ## Apply the editor-level side effects implied by `r`. Returns true to
   ## continue the main loop, false to quit.
 
+  # A viewer is what the window shows, so `:bd` ends it and leaves the tab it
+  # covers alone. A host owning results sees the quit, not a delete of a buffer
+  # nobody is looking at.
+  if r.kind == hrBufferDelete and r.deleteBufferArg.len == 0:
+    let quit = e.activeWindow.viewerQuit()
+    if quit.isSome:
+      return e.processResultWithHost(quit.get, activeBuffer, hostHandled)
+
+  # A mapping's next key runs with no frame in between.
+  defer:
+    e.syncBufferListings()
+
   if e.interceptHostResult(r):
     hostHandled = true
     return true
@@ -202,7 +214,7 @@ proc processResultWithHost(
       hrBufferManagerDeleteBuffer, hrBookmarkManagerQuit, hrBookmarkManagerJump,
       hrBookmarkManagerDelete, hrBackupManagerQuit, hrRecoveryManagerQuit,
       hrDiffViewerQuit, hrDiffViewerToggleView, hrDiffViewerToggleWord, hrFilerQuit,
-      hrLspLog:
+      hrRecentFileQuit, hrLspLog:
     return e.processViewerResult(r)
   of hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile:
     return e.processConfigResult(r)
@@ -258,7 +270,7 @@ proc processResultWithHost(
     return e.processConflictJumpResult(r)
   of hrDebugViewerQuit:
     return e.processDebugResult(r)
-  of hrRecentFileOpenFile, hrRecentFileQuit:
+  of hrRecentFileOpenFile:
     logWarn(
       "result_processor",
       "unreachable kind reached processResult: " & $r.kind &
@@ -1103,7 +1115,7 @@ proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
       if r.kind == hrError and jumpsBefore.isSome:
         e.state.jumpList = jumpsBefore.get
   if commandMode == EditorMode.Config and r.kind == hrCloseWindow:
-    r = HandlerResult(kind: hrConfigQuit)
+    r = e.activeWindow.viewerQuit().get(r)
   if commandText.len > 1:
     e.addCommandToHistory(commandText[1 ..^ 1])
 

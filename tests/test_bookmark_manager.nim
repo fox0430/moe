@@ -332,6 +332,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     check buffers[0].hasBookmark(1) == true
 
     state.deleteSelectedBookmark(buffers)
+    state.updateEntries(buffers)
 
     # Bookmark should be removed from buffer
     check buffers[0].hasBookmark(1) == false
@@ -347,6 +348,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     state.selectedIndex = 0
 
     state.deleteSelectedBookmark(buffers)
+    state.updateEntries(buffers)
 
     check state.items.len == 0
     check state.selectedIndex == 0
@@ -358,6 +360,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     let buffers = @[buf]
 
     state.deleteSelectedBookmark(buffers)
+    state.updateEntries(buffers)
 
     check state.items.len == 0
 
@@ -378,6 +381,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     state.selectedIndex = 1 # buf1 line 2
 
     state.deleteSelectedBookmark(buffers)
+    state.updateEntries(buffers)
 
     check state.items.len == 2
     # Remaining: buf1 line 0, buf2 line 1
@@ -399,16 +403,19 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     # Delete first
     state.selectedIndex = 0
     state.deleteSelectedBookmark(buffers)
+    state.updateEntries(buffers)
     check state.items.len == 2
 
     # Delete first again (was second)
     state.selectedIndex = 0
     state.deleteSelectedBookmark(buffers)
+    state.updateEntries(buffers)
     check state.items.len == 1
 
     # Delete last
     state.selectedIndex = 0
     state.deleteSelectedBookmark(buffers)
+    state.updateEntries(buffers)
     check state.items.len == 0
     check buf.bookmarks.len == 0
 
@@ -429,6 +436,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     let shifted = @[buf2]
     state.selectedIndex = 0
     state.deleteSelectedBookmark(shifted)
+    state.updateEntries(shifted)
 
     # Must delete from buf2 (matched by id), not buf2's old position 1.
     check buf2.hasBookmark(1) == false
@@ -444,6 +452,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     # Target buffer no longer in the seq — delete must not touch anything.
     let empty: seq[TextBuffer] = @[]
     state.deleteSelectedBookmark(empty)
+    state.updateEntries(empty)
     check buf.hasBookmark(0) == true
 
   test "Delete clamps selectedIndex":
@@ -456,6 +465,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     state.selectedIndex = 1 # Last entry
 
     state.deleteSelectedBookmark(buffers)
+    state.updateEntries(buffers)
 
     # After deleting line 1 bookmark, only line 0 bookmark remains
     check state.items.len == 1
@@ -485,6 +495,7 @@ suite "BookmarkManagerState - Integration":
 
     # Delete the selected bookmark
     state.deleteSelectedBookmark(buffers)
+    state.updateEntries(buffers)
     check state.items.len == 2
     # file1.nim line 1 + file2.nim line 0
     check state.items[0].line == 1
@@ -526,3 +537,22 @@ suite "BookmarkManagerState - Integration":
     check state.items[1].line == 2
     check state.items[2].bufferId == buf2.id
     check state.items[2].line == 1
+
+suite "BookmarkManagerState - selection across rebuilds":
+  test "stays on its bookmark when an edit moves the lines":
+    let state = newBookmarkManagerState()
+    let buf = newTextBuffer("a\nb\nc\nd\ne\nf\ng")
+    buf.toggleBookmark(5)
+    buf.toggleBookmark(6)
+    state.updateEntries(@[buf])
+    state.selectedIndex = 0
+
+    # A line deleted above both.
+    state.setEntries(
+      @[
+        BookmarkEntry(bufferId: buf.id, line: 4),
+        BookmarkEntry(bufferId: buf.id, line: 5),
+      ]
+    )
+
+    check state.selectedIndex == 0

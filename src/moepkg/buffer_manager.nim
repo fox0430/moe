@@ -20,6 +20,8 @@
 ## Buffer Manager module
 ## Provides a UI for viewing and switching between open buffers
 
+import std/options
+
 import buffer/core, list_viewer, unicode_utils
 import types/buffer_manager_types
 
@@ -57,12 +59,20 @@ proc initBufferManagerEntries*(bufferInfos: seq[BufferInfo]): seq[BufferEntry] =
   if result.len == 0:
     result.add(BufferEntry(number: 0, name: "No Name", modified: false, active: true))
 
+proc setEntries*(state: BufferManagerState, entries: seq[BufferEntry]) =
+  ## Replace the entries. The selection stays on its buffer; if that is gone, on
+  ## its row.
+  let selected = state.getSelectedItem
+  state.items = entries
+  state.keepSelection(
+    selected,
+    proc(a, b: BufferEntry): bool =
+      a.number == b.number,
+  )
+
 proc updateEntries*(state: BufferManagerState, bufferInfos: seq[BufferInfo]) =
-  ## Update the buffer manager entries from buffer information
-  state.items = initBufferManagerEntries(bufferInfos)
-  # Clamp selectedIndex to valid range
-  if state.selectedIndex >= state.items.len:
-    state.selectedIndex = max(0, state.items.len - 1)
+  ## Update the entries from buffer information.
+  state.setEntries(initBufferManagerEntries(bufferInfos))
 
 proc formatLine*(entry: BufferEntry): string =
   ## Format a buffer entry for display, with the name sanitized.

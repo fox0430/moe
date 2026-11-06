@@ -175,6 +175,25 @@ suite "Host result interception":
       require request.isSome
       check request.get.kind == kind
 
+  test "a host-owned quit of :bd is host-owned for the command line too":
+    let e = testEditor()
+    defer:
+      e.releaseExternalResources()
+    discard e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    let win = e.activeWindow
+    require win.mode == EditorMode.Help
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      r.kind == hrHelpViewerQuit
+
+    check e.executeCommandOverlay(":bd") != roQuit
+
+    let request = e.takeHostResultRequest()
+    require request.isSome
+    check request.get.kind == hrHelpViewerQuit
+    check not e.state.isCommandOverlay
+    check win.mode == EditorMode.Help
+    check win.modeState.kind == mskHelp
+
   test "command hooks can still handle custom commands before the result hook":
     let e = testEditor()
     defer:

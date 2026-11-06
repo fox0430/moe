@@ -29,6 +29,7 @@ import
     window_manager, backup_manager, diff_viewer,
   ]
 import ../src/moepkg/types/editor_types
+import ../src/moepkg/command_handlers/[handler_result, result_processor]
 import ../src/moepkg/buffer
 import ../src/moepkg/command_handlers/editor_ops
 import visual_test_helper
@@ -212,7 +213,7 @@ suite "viewer_mode - enterViewerMode (vpVSplit)":
       EditorMode.Help, makeHelpModeState(), newTextBuffer("help line 1"), vpVSplit
     )
 
-    check e.deleteCurrentBuffer().isOk
+    discard e.processResult(HandlerResult(kind: hrBufferDelete), e.activeBuffer)
 
     check e.windowManager.windows.len == windowCount
     check e.activeWindow == origWin
@@ -232,7 +233,7 @@ suite "viewer_mode - enterViewerMode (vpVSplit)":
     e.syncActiveWindow()
     require e.windowManager.windows.len == 1
 
-    check e.deleteCurrentBuffer().isOk
+    discard e.processResult(HandlerResult(kind: hrBufferDelete), e.activeBuffer)
 
     check e.activeWindow == win
     check win.viewerEntry.isNone

@@ -469,6 +469,9 @@ type
       # Applying the response takes over the screen (popup, mode switch, jump),
       # so an open overlay (Command/Search/Rename) must drop it. False for
       # background caches, which only feed the buffer painted under the overlay.
+    viewerWindow*: EditorWindow
+      # The viewer window a request sent from inside a viewer answers; nil for
+      # one sent from a text window.
 
   LspResponseState* = enum
     lrsFresh # buffer/version/mode all match

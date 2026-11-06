@@ -37,6 +37,7 @@ import
   macro_recording,
   tab_line,
   buffer/core,
+  buffer_listings,
   unicode_utils,
   command_completion,
   diff_viewer,
@@ -252,6 +253,8 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
       e.screenSize.width, e.screenSize.height, e.screenSize.prevWidth,
       e.screenSize.prevHeight, e.windowStatus,
     )
+
+  e.syncBufferListings()
 
   let
     maxBottomY = findMaxBottomY(e.windowManager.windows)

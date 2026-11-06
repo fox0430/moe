@@ -47,12 +47,6 @@ proc processConfigResult*(e: Editor, r: HandlerResult): bool =
       e.state.statusMessage = "Failed to open config: " & enterResult.error
     return true
   of hrConfigQuit:
-    # Close config mode and return to previous mode
-    let activeWin = e.activeWindow
-    # Flush pending apply before exiting; the outer pendingApply check runs
-    # after processResult and would otherwise lose the change.
-    if activeWin.modeState.kind == mskConfig and activeWin.modeState.config.pendingApply:
-      e.applyConfigSettings(e.config)
     e.leaveViewerMode(EditorMode.Config)
     return true
   of hrConfigSaveConfig:
