@@ -274,6 +274,32 @@ suite "dispatchSubStateMode - Config search highlight clear":
     check not editor.state.input.search.hlsearchTempDisabled
     check r.statusMessage == "Found: " & configState.items[idx].displayName
 
+  test "Config 'n' that finds nothing still ends the clear":
+    let (manager, editor, _) = setupDispatchTest(EditorMode.Config)
+    let configState = newConfigModeState(newEditorConfig())
+    configState.setSearchQuery("zzzzNoSuchItem", Forward)
+    editor.activeWindow.modeState = ModeState(kind: mskConfig, config: configState)
+    editor.state.input.search.hlsearchTempDisabled = true
+
+    let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    let r = manager.dispatchSubStateMode(editor, n)
+    check r.kind == hrError
+    check r.errorMessage == "Pattern not found: zzzzNoSuchItem"
+    check not editor.state.input.search.hlsearchTempDisabled
+
+  test "Help 'n' that finds nothing still ends the clear":
+    let (manager, editor, _) = setupDispatchTest(EditorMode.Help)
+    let helpState = newHelpViewerState()
+    helpState.setSearchQuery("zzzzNoSuchHelpText", Forward)
+    editor.activeWindow.modeState = ModeState(kind: mskHelp, help: helpState)
+    editor.state.input.search.hlsearchTempDisabled = true
+
+    let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    let r = manager.dispatchSubStateMode(editor, n)
+    check r.kind == hrError
+    check r.errorMessage == "Pattern not found: zzzzNoSuchHelpText"
+    check not editor.state.input.search.hlsearchTempDisabled
+
 suite "dispatchSubStateMode - FileTree search highlight clear":
   test "FileTree double-Escape clears the search via the dispatcher":
     # FileTree search is self-contained (its own match list, not the global

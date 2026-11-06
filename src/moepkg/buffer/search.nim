@@ -33,6 +33,7 @@ type
     ## How a search pattern matches.
     smRegex ## As a regex (/ and ?)
     smLiteral ## As it is (g* and g#)
+    smPlain ## As it is, typed, so 'smartcase' holds (:s)
     smWord
       ## As it is, a word character at either end starting or ending a word, as
       ## the `\<` and `\>` Vim's * and # put around a keyword
@@ -103,8 +104,8 @@ proc toValidUtf8(line: string): string =
       i += sz
 
 type LiteralPattern = object
-  ## Text * and # (smWord), g* and g# (smLiteral) look for as it is, ready to
-  ## match against each line.
+  ## Text * and # (smWord), g* and g# (smLiteral) and :s (smPlain) look for as
+  ## it is, ready to match against each line.
   text: string
   runes: seq[Rune] # Folded when ignoring case
   ignorecase: bool

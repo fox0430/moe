@@ -113,7 +113,7 @@ suite "CommandLine - parseSubstituteCommand with escapes":
   test "Escaped slash in pattern :s/foo\\/bar/baz/":
     let result = parseSubstituteCommand(":s/foo\\/bar/baz/")
     check result.isValid == true
-    check result.pattern == "foo\\/bar"
+    check result.pattern == "foo/bar"
     check result.replacement == "baz"
 
   test "Escaped slash in replacement :s/foo/bar\\/baz/":
@@ -125,14 +125,17 @@ suite "CommandLine - parseSubstituteCommand with escapes":
   test "Escaped backslash before slash :s/foo\\\\/bar/":
     let result = parseSubstituteCommand(":s/foo\\\\/bar/")
     check result.isValid == true
-    check result.pattern == "foo\\\\"
+    check result.pattern == "foo\\"
     check result.replacement == "bar"
 
+  test "A backslash before an escaped slash :s/a\\\\\\/b/x/":
+    check parseSubstituteCommand(":s/a\\\\\\/b/x/").pattern == "a\\/b"
+
   test "Escaped slash in pattern parses correctly :s/foo\\/bar/":
-    # In :s/foo\/bar/, the \/ is an escaped slash, so pattern is "foo\/bar"
+    # In :s/foo\/bar/, the \/ is an escaped slash, so pattern is "foo/bar"
     let result = parseSubstituteCommand(":s/foo\\/bar/")
     check result.isValid == true
-    check result.pattern == "foo\\/bar"
+    check result.pattern == "foo/bar"
     check result.replacement == ""
 
 suite "CommandLine - parseSubstituteCommand skips the range":

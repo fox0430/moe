@@ -767,13 +767,13 @@ proc handleHelpViewerMode*(
   of hvrRepeatSearch:
     # n/N jumped to a match: re-enable the global hlsearch gate (like Vim's n
     # after :noh) so the highlight comes back across all windows/modes.
-    state.input.search.hlsearchTempDisabled = false
+    state.showSearchMatches()
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of hvrClearSearchHighlight:
     # Double-Escape: clear search highlight in help viewer
-    state.input.search.hlsearchTempDisabled = true
+    state.hideSearchMatches()
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
@@ -781,6 +781,9 @@ proc handleHelpViewerMode*(
     return HandlerResult(kind: hrHelpViewerQuit)
   of hvrUnhandled:
     return HandlerResult(kind: hrUnhandled)
+  of hvrSearchNotFound:
+    state.showSearchMatches()
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
   of hvrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -995,7 +998,7 @@ proc handleConfigMode*(
   of cmrRepeatSearch:
     # n/N jumped to a match: re-enable the global hlsearch gate (like Vim's n
     # after :noh) so the highlight comes back across all windows/modes.
-    state.input.search.hlsearchTempDisabled = false
+    state.showSearchMatches()
     return HandlerResult(
       kind: hrHandled,
       modeTransition: none(EditorMode),
@@ -1004,7 +1007,7 @@ proc handleConfigMode*(
   of cmrClearSearchHighlight:
     # Double-Escape: clear search highlight. Disable the global hlsearch gate
     # so every window/mode (buffers, Help, other Config windows) hides matches.
-    state.input.search.hlsearchTempDisabled = true
+    state.hideSearchMatches()
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
@@ -1012,6 +1015,9 @@ proc handleConfigMode*(
     return HandlerResult(kind: hrConfigSaveConfig)
   of cmrUnhandled:
     return HandlerResult(kind: hrUnhandled)
+  of cmrSearchNotFound:
+    state.showSearchMatches()
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 

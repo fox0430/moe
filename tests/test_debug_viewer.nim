@@ -177,6 +177,7 @@ suite "debug_viewer - generateSearchInfo":
       smartcase = false,
       incsearch = true,
       hlsearch = true,
+      hlsearchTempDisabled = true,
     )
     check lines.len > 0
     var foundSection = false
@@ -185,6 +186,8 @@ suite "debug_viewer - generateSearchInfo":
         foundSection = true
         break
     check foundSection
+    check lines[^1].contains("hlsearchTempDisabled")
+    check lines[^1].contains(formatBool(true))
 
 suite "debug_viewer - generateWindowInfo":
   test "generates window section":

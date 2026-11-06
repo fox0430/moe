@@ -1572,5 +1572,5 @@ suite "config_handler: Search":
     configState.setSearchQuery("zzzzNoSuchItem", Forward)
     let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
     let result = handleConfigModeKey(configState, editorState, 24, n)
-    check result.kind == cmrError
+    check result.kind == cmrSearchNotFound
     check result.errorMessage == "Pattern not found: zzzzNoSuchItem"

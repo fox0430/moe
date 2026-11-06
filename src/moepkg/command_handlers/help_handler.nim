@@ -35,6 +35,7 @@ type
     hvrEnterSearch # Enter search mode (forward)
     hvrEnterSearchBackward # Enter search mode (backward)
     hvrRepeatSearch # Jumped to next/prev match (re-enable highlight)
+    hvrSearchNotFound # Repeated a search that found nothing (re-enable highlight)
     hvrClearSearchHighlight # Clear search highlight (double-Escape)
     hvrQuit # Close help viewer and return to previous mode
     hvrUnhandled # Command was not handled
@@ -42,7 +43,7 @@ type
 
   HelpViewerResult* = object
     case kind*: HelpViewerResultKind
-    of hvrError:
+    of hvrError, hvrSearchNotFound:
       errorMessage*: string
     else:
       discard
@@ -89,10 +90,15 @@ proc handleHelpViewerModeKey*(
     return HelpViewerResult(kind: hvrEnterSearchBackward)
   of "n", "N":
     let found = helpState.repeatSearch(reverse = keyCombo.char == "N")
-    # Re-enable highlight (like Vim's n) only when there is a match to jump to;
-    # an empty query must not touch the gate.
+    # Re-enable highlight whether found or not, like Vim's n; an empty query must
+    # not touch the gate.
     if found.isSome:
       return HelpViewerResult(kind: hvrRepeatSearch)
+    if helpState.hasSearchQuery:
+      return HelpViewerResult(
+        kind: hvrSearchNotFound,
+        errorMessage: "Pattern not found: " & helpState.searchQuery,
+      )
     return HelpViewerResult(kind: hvrHandled)
   of "}":
     helpState.moveToNextSection()

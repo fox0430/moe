@@ -112,6 +112,7 @@ proc processSetOptionResult*(e: Editor, r: HandlerResult): bool =
       e.state.statusMessage = "incsearch = " & $val
     of bsoHlSearch:
       e.state.input.search.hlsearch = val
+      e.state.showSearchMatches()
       e.state.statusMessage = "hlsearch = " & $val
     of bsoBuildOnSave:
       e.config.buildOnSave.enable = val

@@ -305,6 +305,7 @@ proc generateSearchInfo*(
     smartcase: bool,
     incsearch: bool,
     hlsearch: bool,
+    hlsearchTempDisabled: bool,
     enabled: bool = true,
 ) =
   ## Generate debug info for search state
@@ -319,6 +320,7 @@ proc generateSearchInfo*(
   lines.addField("smartcase", formatBool(smartcase))
   lines.addField("incsearch", formatBool(incsearch))
   lines.addField("hlsearch", formatBool(hlsearch))
+  lines.addField("hlsearchTempDisabled", formatBool(hlsearchTempDisabled))
 
 proc generateDisplayInfo*(
     lines: var seq[string],

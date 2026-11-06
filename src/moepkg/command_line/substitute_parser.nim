@@ -130,7 +130,10 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
       # Previous char was backslash - add this char literally (except for special sequences)
       case state
       of psPattern:
-        result.pattern.add('\\')
+        # The pattern is a plain string, in which `\/` and `\\` stand for the
+        # character itself.
+        if c notin {'/', '\\'}:
+          result.pattern.add('\\')
         result.pattern.add(c)
       of psReplacement:
         result.replacement.add('\\')
@@ -185,7 +188,6 @@ proc extractSubstitutePattern*(commandText: string): string =
   ## Returns empty string if not a substitute command or pattern is incomplete
   let parsed = parseSubstituteCommand(commandText)
   if parsed.isValid:
-    # Return raw pattern without escape processing (for display/matching)
     return parsed.pattern
   return ""
 

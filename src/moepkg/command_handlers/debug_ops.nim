@@ -81,6 +81,7 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
       e.state.input.search.smartcase,
       e.state.input.search.incsearch,
       e.state.input.search.hlsearch,
+      e.state.input.search.hlsearchTempDisabled,
       debugConfig.search.enable,
     )
     generateDisplayInfo(

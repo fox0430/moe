@@ -33,7 +33,9 @@ proc ignoresCase*(search: SearchState, spec: SearchSpec): bool =
   ## upper case letter in a typed pattern. Like Vim's no_scs, * and # leave
   ## 'smartcase' out.
   shouldIgnoreCase(
-    spec.pattern, search.ignorecase, search.smartcase and spec.match == smRegex
+    spec.pattern,
+    search.ignorecase,
+    search.smartcase and spec.match in {smRegex, smPlain},
   )
 
 proc findMatch*(
@@ -125,12 +127,16 @@ proc submitSearch*(
   if isRepeat and state.input.search.last.pattern.len == 0:
     state.statusMessage = "E35: No previous regular expression"
     return none(SearchSpec)
-  state.input.search.hlsearchTempDisabled = false
+  var spec =
+    if isRepeat:
+      state.input.search.last
+    else:
+      SearchSpec(pattern: typed)
+  spec.direction = direction
+  state.setLastSearch(spec)
   if not isRepeat:
-    state.input.search.last = SearchSpec(pattern: typed)
     state.addSearchHistory(typed)
-  state.input.search.last.direction = direction
-  some(state.input.search.last)
+  some(spec)
 
 proc searchSubmitted*(
     state: EditorState, b: TextBuffer, spec: SearchSpec, pos: BufferPosition, count: int
@@ -138,7 +144,7 @@ proc searchSubmitted*(
   ## The `count`-th match of `spec` from `pos`, as Enter after / or ? finds
   ## it, with the message it leaves.
   result = state.findCounted(b, spec, pos, count)
-  # * and # match literally.
+  # Only / and ? are regexes.
   state.statusMessage =
     if result.isSome:
       "Found: " & spec.pattern
@@ -171,8 +177,7 @@ proc searchIdent*(
       match: if bounded: smWord else: smLiteral,
       direction: if forward: Forward else: Backward,
     )
-  state.input.search.last = spec
-  state.input.search.hlsearchTempDisabled = false
+  state.setLastSearch(spec)
 
   let match = state.findCounted(
     b, spec, BufferPosition(line: pos.line, column: ident.startCol), count
@@ -195,10 +200,10 @@ proc searchLast*(
     state.statusMessage = "E35: No previous regular expression"
     return err(state.statusMessage)
 
-  state.input.search.hlsearchTempDisabled = false
+  state.showSearchMatches()
 
   let ignoreCase = state.input.search.ignoresCase(spec)
-  # * and # match literally
+  # Only / and ? are regexes
   if spec.match == smRegex and compileSearchRegex(spec.pattern, ignoreCase).isNone:
     state.statusMessage = "Invalid regex: " & spec.pattern
     return err("Invalid regex")

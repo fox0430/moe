@@ -72,19 +72,21 @@ proc renderConfig*(
   # Cursor column, measured off the line drawn below. -1 while no row is edited.
   var editCursorX = -1
 
-  # Effective search query: live text while the search overlay is open,
+  # Effective search query: live text 'incsearch' shows at the search prompt,
   # otherwise the committed query. Display is gated by the same global
   # hlsearch/hlsearchTempDisabled flags as buffer search, so a highlight
   # clear (double-Escape, :noh) in any window/mode hides Config matches too.
-  let searchHighlightOn =
-    e.state.input.search.hlsearch and not e.state.input.search.hlsearchTempDisabled
-  let searchQuery =
-    if not searchHighlightOn:
-      ""
-    elif e.state.isSearchOverlay():
-      e.state.input.line.text
-    else:
-      configState.searchQuery
+  let
+    typedQuery = e.state.incrementalSearchLine
+    searchQuery =
+      if not e.state.input.search.hlsearch:
+        ""
+      elif typedQuery.len > 0:
+        typedQuery
+      elif e.state.input.search.hlsearchTempDisabled:
+        ""
+      else:
+        configState.searchQuery
 
   for i in window.viewport.topLine ..< configState.items.len:
     if screenY >= listEndY:

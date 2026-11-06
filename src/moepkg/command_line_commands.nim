@@ -701,8 +701,12 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "noh",
-    completionDescription: "Turn off search highlights",
-    helpEntries: @[HelpEntry(syntax: "noh", description: "Turn off search highlights")],
+    completionDescription: "Hide search highlights until the next search",
+    helpEntries: @[
+      HelpEntry(
+        syntax: "noh", description: "Hide search highlights until the next search"
+      )
+    ],
     action: some(claClearSearchHighlight),
     isCanonicalLong: true,
   ),

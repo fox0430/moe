@@ -197,12 +197,12 @@ suite "Overlay - enterSearchOverlay":
     check state.input.search.startPos == BufferPosition(line: 3, column: 7)
     check state.input.line.entry.isNone
 
-  test "Resets hlsearchTempDisabled":
+  test "Leaves hlsearchTempDisabled, as only a search ends :noh":
     let state = createTestState()
     state.input.search.hlsearchTempDisabled = true
     state.enterSearchOverlay(Forward)
 
-    check state.input.search.hlsearchTempDisabled == false
+    check state.input.search.hlsearchTempDisabled
 
   test "Preserves LogViewer as base mode":
     let state = createTestState()

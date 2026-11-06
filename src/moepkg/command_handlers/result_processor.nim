@@ -30,7 +30,7 @@ import
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
     syntax_checker, quick_run_utils, command_completion, key_bindings, key_router,
     lsp_integration, command_registry, command_line, editor_window_state, pending_input,
-    macro_recording, insert_record, wanted_column,
+    macro_recording, insert_record, wanted_column, search_ops,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -1076,6 +1076,20 @@ proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
       r = HandlerResult(kind: hrHandled)
     else:
       let cmdResult = e.commandLineParser.execute(parsed)
+      # As Vim's do_sub, a :s that can run makes its pattern the last search and
+      # ends :noh, found or not.
+      if cmdResult.kind == claSubstitute and
+          activeBuffer.substituteLines(
+            cmdResult.substituteRange, e.activeWindow.cursor.line
+          ).isOk:
+        e.state.addSearchHistory(cmdResult.pattern)
+        e.state.setLastSearch(
+          SearchSpec(
+            pattern: cmdResult.pattern,
+            match: smPlain,
+            direction: e.state.input.search.last.direction,
+          )
+        )
       # As Vim's setpcmark, where the command starts is a jump, which its edit
       # then moves. A command that fails takes it back.
       var jumpsBefore = none(JumpListState)

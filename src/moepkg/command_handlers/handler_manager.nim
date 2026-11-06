@@ -267,7 +267,7 @@ proc handleNormalMode*(
     if state.cancelPendingCommand(editor.keyRouter.registry) or state.resumesInsert:
       state.lastKeyWasEscape = false
     elif state.lastKeyWasEscape:
-      state.input.search.hlsearchTempDisabled = true
+      state.hideSearchMatches()
       state.lastKeyWasEscape = false
     else:
       state.lastKeyWasEscape = true

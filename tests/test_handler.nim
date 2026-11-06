@@ -6943,6 +6943,16 @@ suite "handleRecentFileModeKeyCombo - window cleanup":
     check e.state.mode == EditorMode.RecentFile
     check e.state.statusMessage == "File not found: " & missing
 
+suite "processMiscResult - hrClearSearchHighlight":
+  test ":noh hides the matches until the next search, leaving 'hlsearch' on":
+    let e = createTestEditorWithBuffer("foo")
+    e.state.input.search.hlsearch = true
+    check e.processMiscResult(
+      HandlerResult(kind: hrClearSearchHighlight), e.activeBuffer()
+    )
+    check e.state.input.search.hlsearch
+    check e.state.input.search.hlsearchTempDisabled
+
 suite "processMiscResult - hrDeleteLines":
   test "the cursor lands on the first deleted line, not on its old one":
     # An Ex range widened by a closed fold deletes above the cursor, so following

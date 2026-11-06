@@ -128,7 +128,7 @@ proc findGnMatch*(
   if searchText.len == 0:
     return err("E35: No previous regular expression")
   let ignoreCase = state.input.search.ignoresCase(spec)
-  state.input.search.hlsearchTempDisabled = false
+  state.showSearchMatches()
 
   # gn goes forward and gN backward, as in Vim: not the way the last search went
   let direction = if forward: Forward else: Backward

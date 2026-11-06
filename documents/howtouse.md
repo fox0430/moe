@@ -818,7 +818,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `sp filename` | Open in a horizontal split window |
 | `only` | Close all other windows |
 | `theme themeName` | Change color theme; e.g. `theme dark` |
-| `noh` | Turn off search highlights |
+| `noh` | Hide search highlights until the next search |
 | `stripwhitespace` | Delete trailing spaces |
 | `%s/keyword1/keyword2/` | Replace text (normal mode only) |
 | `%d` | Delete all lines and copy to register |

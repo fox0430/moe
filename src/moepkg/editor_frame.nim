@@ -128,6 +128,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     e.state.input.search.smartcase,
     e.state.input.search.incsearch,
     e.state.input.search.hlsearch,
+    e.state.input.search.hlsearchTempDisabled,
     debugConfig.search.enable,
   )
 
