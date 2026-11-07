@@ -20,34 +20,7 @@
 import std/[unittest, options, tables, strutils]
 
 import ../src/moepkg/command_line
-
-suite "CommandLine - processEscapeSequences":
-  test "Convert \\n to newline":
-    check processEscapeSequences("hello\\nworld") == "hello\nworld"
-
-  test "Convert \\t to tab":
-    check processEscapeSequences("hello\\tworld") == "hello\tworld"
-
-  test "Convert \\\\ to backslash":
-    check processEscapeSequences("hello\\\\world") == "hello\\world"
-
-  test "Convert \\/ to slash":
-    check processEscapeSequences("hello\\/world") == "hello/world"
-
-  test "Multiple escape sequences":
-    check processEscapeSequences("a\\nb\\tc\\\\d\\/e") == "a\nb\tc\\d/e"
-
-  test "Unknown escape sequence keeps backslash":
-    check processEscapeSequences("hello\\xworld") == "hello\\xworld"
-
-  test "Trailing backslash":
-    check processEscapeSequences("hello\\") == "hello\\"
-
-  test "Empty string":
-    check processEscapeSequences("") == ""
-
-  test "No escape sequences":
-    check processEscapeSequences("hello world") == "hello world"
+import ../src/moepkg/buffer/search
 
 suite "CommandLine - parseSubstituteCommand basic":
   test "Simple substitute command :s/foo/bar/":
@@ -121,6 +94,9 @@ suite "CommandLine - parseSubstituteCommand with escapes":
     check result.isValid == true
     check result.pattern == "foo"
     check result.replacement == "bar\\/baz"
+    let (text, count) =
+      "foo".substituteMatches("foo", parseReplacement(result.replacement), false, false)
+    check (text, count) == ("bar/baz", 1)
 
   test "Escaped backslash before slash :s/foo\\\\/bar/":
     let result = parseSubstituteCommand(":s/foo\\\\/bar/")

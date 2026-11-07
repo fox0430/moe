@@ -117,14 +117,13 @@ proc updateSubstitutePreview*(
   if pattern.len == 0:
     return
 
-  # Process escape sequences in replacement using common utility
-  let processedReplacement = processEscapeSequences(replacement)
+  let parsed = parseReplacement(replacement)
 
   # Apply substitute to buffer
   let buffer = e.activeBuffer()
   for lineIdx in max(firstLine, 0) .. min(lastLine, buffer.len - 1):
     let (newLine, count) = buffer.getLine(lineIdx).substituteMatches(
-        pattern, processedReplacement, flags.ignoreCase, flags.global, match
+        pattern, parsed, flags.ignoreCase, flags.global, match
       )
     if count > 0:
       buffer.replaceLineNoUndo(lineIdx, newLine)

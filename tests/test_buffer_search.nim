@@ -1244,14 +1244,17 @@ suite "substituteMatches":
     Circumflex = "\u0302"
 
   proc replaced(line, pattern: string, ignorecase = false): string =
-    let (text, count) = line.substituteMatches(pattern, "#", ignorecase, true)
+    let (text, count) =
+      line.substituteMatches(pattern, parseReplacement("#"), ignorecase, true)
     if count > 0: text else: line
 
   test "No match leaves nothing to build":
-    check "abc".substituteMatches("x", "#", false, true) == ("", 0)
+    check "abc".substituteMatches("x", parseReplacement("#"), false, true) == ("", 0)
 
   test "Only the first match unless told":
-    check "aXa".substituteMatches("a", "#", false, false) == ("#Xa", 1)
+    check "aXa".substituteMatches("a", parseReplacement("#"), false, false) == (
+      "#Xa", 1
+    )
 
   test "A bare character is not one that holds a composing character":
     check replaced("e" & Acute & "x", "e") == "e" & Acute & "x"
@@ -1278,10 +1281,90 @@ suite "substituteMatches":
     check replaced("\u03c2 \u03c3 \u03a3", "\u03c3", ignorecase = true) == "# # #"
     check replaced("\u0130 i I", "i", ignorecase = true) == "\u0130 # #"
 
+suite "substituteMatches with Vim's replacement specials":
+  # Expectations are Vim 9.2's :s, groups written as nim-regex writes them.
+  proc replaced(line, pattern, replacement: string, match = smRegex): string =
+    let (text, count) =
+      line.substituteMatches(pattern, parseReplacement(replacement), false, true, match)
+    if count > 0: text else: line
+
+  test "& and \\0 are the match, \\& an ampersand":
+    check replaced("abc", "b", "[&]") == "a[b]c"
+    check replaced("abc", "b", "[\\0]") == "a[b]c"
+    check replaced("abc", "b", "[\\&]") == "a[&]c"
+
+  test "The match of a pattern matched as it is":
+    check replaced("a.c", ".", "[&]", smPlain) == "a[.]c"
+
+  test "\\1 to \\9 are the groups":
+    check replaced("abc", "(b)(c)", "[\\2\\1]") == "a[cb]"
+    check replaced("foo bar", "(fo+)", "[\\1]") == "[foo] bar"
+
+  test "A group that is unset or missing is empty":
+    check replaced("abc", "(x)?b", "[\\1]") == "a[]c"
+    check replaced("abc", "b", "[\\1]") == "a[]c"
+    check replaced("abc", "b", "[\\9]") == "a[]c"
+
+  test "A backslash takes any other character as it is":
+    check replaced("abc", "b", "[\\x]") == "a[x]c"
+    check replaced("abc", "b", "[\\\\]") == "a[\\]c"
+    check replaced("abc", "b", "[\\~]") == "a[~]c"
+    check replaced("abc", "b", "[\\t]") == "a[\t]c"
+
+  test "\\u and \\l change the next character":
+    check replaced("abc", "b", "\\uxy") == "aXyc"
+    check replaced("abc", "abc", "\\u&") == "Abc"
+    check replaced("ABC", "ABC", "\\l&") == "aBC"
+    check replaced("éb", "é", "\\u&") == "Éb"
+
+  test "\\u waits past an empty group":
+    check replaced("abc", "(x)?b", "\\u\\1z") == "aZc"
+
+  test "\\U and \\L last until \\E or \\e":
+    check replaced("abc", "abc", "\\Uab\\Ecd") == "ABcd"
+    check replaced("abc", "abc", "\\Uab\\ecd") == "ABcd"
+
+  test "A change of one character wins over one of all":
+    check replaced("ABC", "ABC", "\\u\\L&") == "Abc"
+    check replaced("ABC", "ABC", "\\L\\u&") == "Abc"
+    check replaced("ABC", "ABC", "\\l\\U&") == "aBC"
+    check replaced("abc", "abc", "\\Ux\\lYw") == "XyW"
+
+  test "\\E also drops a change of one character":
+    check replaced("abc", "abc", "\\u\\Ex") == "x"
+
+  test "\\r stays as typed and uses up a change of one character":
+    check replaced("ab", "b", "\\U\\r") == "a\\r"
+    check replaced("ab", "b", "\\u\\rx") == "a\\rx"
+
+  test "\\n is a line break inside the line":
+    # Vim 9.2 inserts a NUL instead.
+    check replaced("abc", "b", "x\\nx") == "ax\nxc"
+
+  test "\\b is Ctrl-H":
+    check replaced("x", "x", "a\\bc") == "a\x08c"
+
+  test "Groups after undecodable bytes land on their own bytes":
+    check replaced("\xffab\xfeab", "(a)(b)", "\\2\\1") == "\xffba\xfeba"
+    check ("\xff" & "x\xfea").firstSubstituteMatch("a", false, smRegex) == some(3)
+
+  test "A group of an undecodable line keeps its bytes":
+    check replaced("\xff" & "foo", "(o+)", "[\\1]") == "\xff" & "f[oo]"
+
+  test "A case change keeps the bytes of an undecodable line":
+    check replaced("a\xffb\xc3", ".+", "\\U&") == "A\xffB\xc3"
+    check replaced("a\xffb", ".+", "\\L&") == "a\xffb"
+
+  test "An undecodable byte uses up a change of one character":
+    # Vim 9.2 also makes the byte Latin-1 and changes it (0xFF to U+0178);
+    # moe keeps the byte.
+    check replaced("\xff" & "ab", ".+", "\\u&") == "\xff" & "ab"
+
 suite "substituteMatches as the last search matched":
   # Expectations are Vim 9.2's :s with that search's pattern.
   proc replaced(line, pattern: string, match: SearchMatch): string =
-    let (text, count) = line.substituteMatches(pattern, "#", false, true, match)
+    let (text, count) =
+      line.substituteMatches(pattern, parseReplacement("#"), false, true, match)
     if count > 0: text else: line
 
   test "A word match leaves the word inside another":
@@ -1308,4 +1391,5 @@ suite "substituteMatches as the last search matched":
     check replaced("\xff" & "foo", "o+", smRegex) == "\xff" & "f#"
 
   test "Only the first match unless told":
-    check "abab".substituteMatches("b", "#", false, false, smRegex) == ("a#ab", 1)
+    check "abab".substituteMatches("b", parseReplacement("#"), false, false, smRegex) ==
+      ("a#ab", 1)
