@@ -233,11 +233,6 @@ type
   # Status line settings
   StatusLineConfig* {.cfgSection: "StatusLine".} = object
     multipleStatusLine* {.cfg, cfgDocDescription: "Show multiple status lines".}: bool
-    merge* {.
-      cfg,
-      cfgDocDescription:
-        "Show a single status line below the windows even with multipleStatusLine"
-    .}: bool
     mode* {.cfg, cfgDocDescription: "Display the current mode".}: bool
     filename* {.cfg, cfgDocDescription: "Display the filename".}: bool
     changedMark* {.cfg, cfgDocDescription: "Display the buffer changed mark".}: bool

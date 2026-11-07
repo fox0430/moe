@@ -599,9 +599,6 @@ proc renderWindowStatusLine*(
 ) =
   ## Render a status line for a specific window. Only the active window shows
   ## `recordingLabel`.
-  if not state.showStatusLine or not state.multiStatusLine:
-    return
-
   state.drawStatusLine(
     textBuffer,
     windowCursor,

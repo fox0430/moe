@@ -619,20 +619,6 @@ suite "renderBottomLines - Status line visibility":
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
-  test "Render with status line merge enabled":
-    var config = newEditorConfig()
-    config.statusLine.merge = true
-    let vr = newValidationResult()
-    let e = newEditor(config, vr)
-    var buffer = createTestBuffer()
-
-    e.viewport.width = 80
-    e.viewport.height = 23
-    e.state.mode = EditorMode.Normal
-
-    e.advanceLayoutForFrame(buffer, false)
-    e.renderBottomLines(buffer)
-
 suite "renderBottomLines - Recording label":
   test "Stays on the status line while it is shown":
     let e = createTestEditor()
@@ -1468,22 +1454,7 @@ suite "Status line count - no duplicate status lines":
     check positions.len == 1
     check positions[0] == 22
 
-  test "2 hsplit windows, merged status line: a separator between them":
-    let e = createTestEditor()
-    var buffer = createTestBuffer()
-
-    e.viewport.width = 80
-    e.viewport.height = 23
-    e.state.showStatusLine = true
-    e.state.multiStatusLine = true
-    e.config.statusLine.merge = true
-
-    discard e.hsplit()
-    check e.windowManager.windows.len == 2
-
-    clearBuffer(buffer)
-    e.renderSplitView(buffer, false)
-
+    # A separator takes the top window's status line row
     let top = e.windowManager.windows[0].viewport
     check e.windowManager.windows[1].viewport.y == top.y + top.height + 1
     check buffer[0, top.y + top.height].symbol == "─"
@@ -1709,14 +1680,13 @@ suite "Bottom area - status line above the command row":
     check positions[^1] == 22
 
 suite "Global status line - row follows the windows":
-  proc renderGlobal(windowHeight: int, merge = false, message = ""): celina.Buffer =
+  proc renderGlobal(windowHeight: int, message = ""): celina.Buffer =
     let e = createTestEditor()
-    e.config.statusLine.merge = merge
     result = createTestBuffer()
     e.viewport.width = 80
     e.viewport.height = windowHeight
     e.state.showStatusLine = true
-    e.state.multiStatusLine = merge
+    e.state.multiStatusLine = false
     e.state.statusMessage = message
     clearBuffer(result)
     e.renderSplitView(result, false)
@@ -1727,9 +1697,6 @@ suite "Global status line - row follows the windows":
     let buffer = renderGlobal(23)
     check statusLineYPositions(buffer) == @[22]
     check buffer.getRowText(23).strip().len == 0
-
-  test "Window above the last row: same row with merge":
-    check statusLineYPositions(renderGlobal(23, merge = true)) == @[22]
 
   test "Window above the last row: a message leaves the status line alone":
     let buffer = renderGlobal(23, message = "hello")
@@ -1798,7 +1765,6 @@ suite "Status line - grown area in multiStatusLine mode":
     e.screenSize.height = 24
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
-    e.config.statusLine.merge = false
 
     discard e.vsplit()
     check e.windowManager.windows.len == 2
@@ -1829,7 +1795,6 @@ suite "Status line - grown area in multiStatusLine mode":
     e.screenSize.height = 24
     e.state.showStatusLine = true
     e.state.multiStatusLine = true
-    e.config.statusLine.merge = false
 
     discard e.hsplit()
     check e.windowManager.windows.len == 2

@@ -128,7 +128,6 @@ suite "Config - newEditorConfig defaults":
     let config = newEditorConfig()
 
     check config.statusLine.multipleStatusLine == true
-    check config.statusLine.merge == false
     check config.statusLine.mode == true
     check config.statusLine.filename == true
     check config.statusLine.changedMark == true

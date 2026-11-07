@@ -1102,11 +1102,57 @@ timeout = -5
     check config.buildOnSave.timeout == 300 # Default value
 
 suite "Config Validation - StatusLine section":
-  test "Valid StatusLine config passes validation":
+  test "A saved merge = true is read as multipleStatusLine = false":
+    let tomlStr = """
+[StatusLine]
+multipleStatusLine = true
+merge = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check vr.errors.len == 1
+    check vr.errors[0].kind == sikDeprecated
+    check vr.errors[0].name == "StatusLine.merge"
+    check vr.errors[0].expected == "use multipleStatusLine = false instead"
+    check config.statusLine.multipleStatusLine == false
+
+  test "A saved merge = true alone also gives one status line":
+    let tomlStr = """
+[StatusLine]
+merge = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.statusLine.multipleStatusLine == false
+
+  test "A saved merge = false passes silently":
     let tomlStr = """
 [StatusLine]
 multipleStatusLine = true
 merge = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.len == 0
+    check config.statusLine.multipleStatusLine == true
+
+  test "A merge that is not a bool is an error":
+    let tomlStr = """
+[StatusLine]
+merge = 1
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check vr.errors.len == 1
+    check vr.errors[0].kind == sikInvalidValue
+    check vr.errors[0].name == "StatusLine.merge"
+    check vr.errors[0].val == "1"
+    check vr.errors[0].expected == "boolean (true/false)"
+    check config.statusLine.multipleStatusLine == true
+
+  test "Valid StatusLine config passes validation":
+    let tomlStr = """
+[StatusLine]
+multipleStatusLine = true
 mode = true
 filename = true
 changedMark = true
@@ -1120,7 +1166,6 @@ setupText = "{lineNumber}/{totalLines}"
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
     check config.statusLine.multipleStatusLine == true
-    check config.statusLine.merge == false
     check config.statusLine.mode == true
     check config.statusLine.setupText == "{lineNumber}/{totalLines}"
 

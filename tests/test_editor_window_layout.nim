@@ -286,14 +286,6 @@ suite "calculateReservedLines":
     let reserved = e.calculateReservedLines(isBottomWindow = true)
     check reserved == 0
 
-  test "merged status line: only the bottom windows give it a row":
-    let e = createTestEditor()
-    e.state.showStatusLine = true
-    e.state.multiStatusLine = true
-    e.config.statusLine.merge = true
-    check e.steadyReservedLines(isBottomWindow = false) == 0
-    check e.steadyReservedLines(isBottomWindow = true) == 1
-
   test "status line disabled, non-bottom window":
     let e = createTestEditor()
     e.state.showStatusLine = false

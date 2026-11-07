@@ -27,10 +27,10 @@ import types/editor_types, render_utils, buffer/core, visible_rows
 import diff_viewer, types/diff_viewer_types
 
 proc windowStatus*(e: Editor): WindowStatus =
-  ## Which windows draw a status line: a merged one is the bottom windows' only.
+  ## Which windows draw a status line.
   if not e.showStatusLine:
     wsNone
-  elif e.multiStatusLine and not e.config.statusLine.merge:
+  elif e.multiStatusLine:
     wsEveryWindow
   else:
     wsBottomWindows
