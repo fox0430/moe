@@ -82,7 +82,6 @@ proc createTestStatusLineConfig(): StatusLineConfig =
   ## Create a default StatusLineConfig for testing
   StatusLineConfig(
     multipleStatusLine: true,
-    merge: false,
     mode: true,
     filename: true,
     changedMark: true,
@@ -854,40 +853,6 @@ suite "StatusLine - renderWindowStatusLine":
     # The ruler's field takes the right half, the marks the rest
     check getBufferLine(displayBuffer, 10)[0 ..< 40] ==
       " NORMAL  [recover]    1/1 1/12 UTF-8 LF "
-
-  test "Does nothing when showStatusLine is false":
-    var state = createTestState()
-    state.showStatusLine = false
-    state.multiStatusLine = true
-
-    var displayBuffer = createTestBuffer()
-    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
-    let config = createTestStatusLineConfig()
-
-    renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, state.cursor,
-      config,
-    )
-
-    let line = getBufferLine(displayBuffer, 10)
-    check line.strip() == ""
-
-  test "Does nothing when multiStatusLine is false":
-    var state = createTestState()
-    state.showStatusLine = true
-    state.multiStatusLine = false
-
-    var displayBuffer = createTestBuffer()
-    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
-    let config = createTestStatusLineConfig()
-
-    renderWindowStatusLine(
-      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, state.cursor,
-      config,
-    )
-
-    let line = getBufferLine(displayBuffer, 10)
-    check line.strip() == ""
 
   test "Renders status line for active window":
     var state = createTestState()

@@ -108,6 +108,18 @@ when defined(moe.matter) or defined(features.moe.matter):
           )
     config.matterGrammarSet = newMatterGrammarSet(sources)
 
+proc takeStatusLineMerge(toml: TomlValueRef, vr: var ValidationResult): bool =
+  ## Drop the removed `[StatusLine] merge` key and return whether it was true.
+  ## `false` was the default `:putConfigFile` wrote, so it passes silently.
+  if not toml.getTable().hasKey("StatusLine") or
+      toml["StatusLine"].kind != TomlValueKind.Table:
+    return false
+  let table = toml["StatusLine"].getTable()
+  loadBool(table, "merge", result, vr, "StatusLine")
+  table.del("merge")
+  if result:
+    vr.addDeprecated("StatusLine.merge", "use multipleStatusLine = false instead")
+
 proc loadConfigFromToml*(
     path: string
 ): Result[(EditorConfig, ValidationResult), string] =
@@ -133,6 +145,7 @@ proc loadConfigFromToml*(
   var vr = newValidationResult()
 
   checkUnknownKeys(toml.getTable(), KnownTopLevelSections, "", vr)
+  let mergeStatusLine = takeStatusLineMerge(toml, vr)
 
   # Load each top-level {.cfgSection.} section (validation integrated into
   # loading). This single macro call expands to the per-section
@@ -142,6 +155,9 @@ proc loadConfigFromToml*(
   # DisabledCommandAliases) and the nested [StartUp.*] sections are handled by
   # hand below.
   generateSectionLoaders(toml, config, vr, EditorConfig)
+  if mergeStatusLine:
+    # A merged status line was the bottom windows' only one.
+    config.statusLine.multipleStatusLine = false
 
   when defined(moe.matter) or defined(features.moe.matter):
     loadMatterGrammarFiles(path, config.highlight, vr)

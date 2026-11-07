@@ -97,8 +97,6 @@ enable = true                          # Enable tab line
 
 multipleStatusLine = true              # Show status line per window
 
-merge = false                          # Merge status lines - single bottom status line in multi-window mode
-
 mode = true                            # Show mode in status line
 
 filename = true                        # Show filename in status line

@@ -128,7 +128,6 @@ proc newEditorConfig*(): EditorConfig =
     tabLine: TabLineConfig(enable: true),
     statusLine: StatusLineConfig(
       multipleStatusLine: true,
-      merge: false,
       mode: true,
       filename: true,
       changedMark: true,
