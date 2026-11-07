@@ -138,7 +138,8 @@ const MaxRecordedFiles* = 100
 
 type RecordParser[T] = proc(node: JsonNode): Option[T] {.nimcall, raises: [].}
 
-proc cacheFilePath(name: string): Result[Path, string] =
+proc cacheFilePath*(name: string): Result[Path, string] =
+  ## `name` in moe's cache directory.
   let cacheDir = appdirs.getCacheDir()
   if len(cacheDir.string) == 0:
     return Result[Path, string].err "Failed to get cache directory"

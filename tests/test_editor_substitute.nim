@@ -187,9 +187,10 @@ suite "editor_substitute":
     check e.activeBuffer.getLine(0) == "x x"
 
 suite ":s as it is typed":
-  proc typing(content, command: string): Editor =
+  proc typing(content, command: string, last = SearchSpec()): Editor =
     let e = createTestEditor()
     setBufferContent(e, content)
+    e.state.input.search.last = last
     e.state.input.search.ignorecase = true
     e.state.input.search.smartcase = true
     e.state.input.search.incsearch = true
@@ -235,3 +236,17 @@ suite ":s as it is typed":
     check e.cursor == BufferPosition(line: 0, column: 0)
     check e.activeBuffer.getLine(0) == "Foo"
     check e.activeBuffer.getLine(1) == "x"
+
+  test "An empty pattern previews the last search, as :s will run it":
+    let e = typing("foobar foo", "%s//X/g", SearchSpec(pattern: "foo", match: smWord))
+    check e.state.ui.substitutePreview.isActive
+    check e.activeBuffer.getLine(0) == "foobar X"
+
+  test "An empty pattern jumps to the last search's first match":
+    let e = typing("xx\nfzo", "%s//", SearchSpec(pattern: "f.o", match: smRegex))
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+  test "An empty pattern waits for its delimiter":
+    let e = typing("xx\nfoo", "%s/", SearchSpec(pattern: "foo", match: smPlain))
+    check not e.state.ui.substitutePreview.isActive
+    check e.cursor == BufferPosition(line: 0, column: 0)

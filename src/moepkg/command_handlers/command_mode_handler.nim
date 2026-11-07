@@ -41,12 +41,13 @@ proc findFirstSubstituteMatch*(
     ignoreCase: bool,
     firstLine: int = 0,
     lastLine: int = high(int),
+    match = smPlain,
 ): Option[BufferPosition] =
   ## The first match `:s` would replace in lines `firstLine .. lastLine`.
   if pattern.len == 0:
     return none(BufferPosition)
   for lineIdx in max(firstLine, 0) .. min(lastLine, lines.len - 1):
-    let col = lines[lineIdx].firstPlainMatch(pattern, ignoreCase)
+    let col = lines[lineIdx].firstSubstituteMatch(pattern, ignoreCase, match)
     if col.isSome:
       return some(BufferPosition(line: lineIdx, column: col.get))
   return none(BufferPosition)
@@ -57,16 +58,18 @@ proc jumpToFirstSubstituteMatch*(
     ignoreCase: bool,
     firstLine: int = 0,
     lastLine: int = high(int),
+    match = smPlain,
 ): bool =
   ## Move cursor/viewport to the first pattern match in lines
   ## `firstLine .. lastLine` (incsearch-like behavior), scrolling from what the
   ## window showed as the preview began. If no match is found, restore cursor
   ## and view to those at preview start. Returns whether one was.
-  let match = findFirstSubstituteMatch(
-    e.state.ui.substitutePreview.originalLines, pattern, ignoreCase, firstLine, lastLine
+  let found = findFirstSubstituteMatch(
+    e.state.ui.substitutePreview.originalLines, pattern, ignoreCase, firstLine,
+    lastLine, match,
   )
-  if match.isSome:
-    let pos = match.get
+  if found.isSome:
+    let pos = found.get
     e.cursor = pos
     e.showFromView(e.state.ui.substitutePreview.originalView, pos)
     true
@@ -87,7 +90,8 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
   let commandText = normalizeSubstituteLongForm(e.state.commandLine)
   if commandText.contains("s/"):
     let parsed = parseSubstituteCommand(commandText)
-    if parsed.pattern.len > 0:
+    let target = e.commandLineParser.typedSubstitutePattern(parsed)
+    if target.pattern.len > 0:
       if not e.state.ui.substitutePreview.isActive:
         e.startSubstitutePreview()
         if not e.state.ui.substitutePreview.isActive:
@@ -97,13 +101,14 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
       let (firstLine, lastLine) = e.activeBuffer
         .resolveExRange(parsed.range, e.state.ui.substitutePreview.originalCursor.line)
         .valueOr((0, -1))
-      let flags = e.commandLineParser.substituteFlags(parsed.pattern, parsed.flags)
+      let flags =
+        e.commandLineParser.substituteFlags(target.pattern, parsed.flags, target.match)
       # What would change is all a preview shows, so a :s that changes nothing
       # previews nothing.
       if parsed.hasReplacement and e.config.highlight.replaceText and
           flags.refusal.len == 0 and not flags.countOnly:
         e.updateSubstitutePreview(
-          parsed.pattern, parsed.replacement, flags, firstLine, lastLine
+          target.pattern, parsed.replacement, flags, firstLine, lastLine, target.match
         )
       else:
         # Pattern-only state: restore buffer (in case a replacement preview was
@@ -112,16 +117,16 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
       # Vim's cursor stays put unless 'incsearch' takes it to the end of the
       # match, and comes back once the pattern is followed by more. 'incsearch'
       # goes by the options, as the highlight does: it reads no flags.
+      let ignoreCase =
+        e.commandLineParser.optionsIgnoreCaseOf(target.pattern, target.match)
       let found =
         e.state.input.search.incsearch and
         e.jumpToFirstSubstituteMatch(
-          parsed.pattern,
-          e.commandLineParser.optionsIgnoreCaseOf(parsed.pattern),
-          firstLine,
-          lastLine,
+          target.pattern, ignoreCase, firstLine, lastLine, target.match
         )
       e.state.input.line.wordAt = some(
         if found and not parsed.hasReplacement:
+          # Without the replacement's delimiter the pattern is the typed one.
           BufferPosition(
             line: e.cursor.line, column: e.cursor.column + parsed.pattern.charLen
           )

@@ -1237,21 +1237,21 @@ suite "matchEndCol":
     check b.matchEndCol(BufferPosition(line: 0, column: 3), "foo", match = smWord) ==
       some(6)
 
-suite "substitutePlain":
+suite "substituteMatches":
   # Expectations are Vim 9.2's substitute() with `\\V`.
   const
     Acute = "\u0301"
     Circumflex = "\u0302"
 
   proc replaced(line, pattern: string, ignorecase = false): string =
-    let (text, count) = line.substitutePlain(pattern, "#", ignorecase, true)
+    let (text, count) = line.substituteMatches(pattern, "#", ignorecase, true)
     if count > 0: text else: line
 
   test "No match leaves nothing to build":
-    check "abc".substitutePlain("x", "#", false, true) == ("", 0)
+    check "abc".substituteMatches("x", "#", false, true) == ("", 0)
 
   test "Only the first match unless told":
-    check "aXa".substitutePlain("a", "#", false, false) == ("#Xa", 1)
+    check "aXa".substituteMatches("a", "#", false, false) == ("#Xa", 1)
 
   test "A bare character is not one that holds a composing character":
     check replaced("e" & Acute & "x", "e") == "e" & Acute & "x"
@@ -1277,3 +1277,35 @@ suite "substitutePlain":
   test "Case folds as Vim's utf_fold does":
     check replaced("\u03c2 \u03c3 \u03a3", "\u03c3", ignorecase = true) == "# # #"
     check replaced("\u0130 i I", "i", ignorecase = true) == "\u0130 # #"
+
+suite "substituteMatches as the last search matched":
+  # Expectations are Vim 9.2's :s with that search's pattern.
+  proc replaced(line, pattern: string, match: SearchMatch): string =
+    let (text, count) = line.substituteMatches(pattern, "#", false, true, match)
+    if count > 0: text else: line
+
+  test "A word match leaves the word inside another":
+    check replaced("foobar foo", "foo", smWord) == "foobar #"
+
+  test "A regex match goes by the regex":
+    check replaced("fao f.o fzo", "f.o", smRegex) == "# # #"
+    check replaced("日本語", "本.", smRegex) == "日#"
+
+  test "A regex anchors to the start of the line only":
+    check replaced("aaa", "^a", smRegex) == "#aa"
+
+  test "An empty match where the one before ended is skipped":
+    check replaced("abc", "b*", smRegex) == "#a#c"
+    check replaced("ab", "c*", smRegex) == "#a#b"
+
+  test "The line is done once a match reaches its end":
+    check replaced("ab", "b*", smRegex) == "#a#"
+    check replaced("aaa", "a*", smRegex) == "#"
+    check replaced("abc", "$", smRegex) == "abc#"
+    check replaced("", "x*", smRegex) == "#"
+
+  test "An undecodable byte keeps its place":
+    check replaced("\xff" & "foo", "o+", smRegex) == "\xff" & "f#"
+
+  test "Only the first match unless told":
+    check "abab".substituteMatches("b", "#", false, false, smRegex) == ("a#ab", 1)

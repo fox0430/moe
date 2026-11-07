@@ -30,7 +30,7 @@ import
     editor, editor_window_layout, handler, modes, logger, cmdline, lsp_integration,
     config, config_loader, deadly_signals, emergency, key_router, terminal_mode,
     recovery_format, recovery_index, recovery_notice, signal_watcher, terminal_command,
-    editor_file_jobs,
+    editor_file_jobs, editor_persist,
   ]
 import moepkg/command_handlers/command_mode_handler
 
@@ -447,8 +447,10 @@ proc main() {.used.} =
 
   # Create editor with loaded configuration and validation result
   var editor = newEditor(editorConfig, validationResult)
-  # Not in newEditor: tests construct editors and must not read the user's
-  # cache. Pruned first so the index never lists what is about to go.
+  # The last search comes back as Vim's viminfo brings `@/` back. Not in
+  # newEditor: tests construct editors and must not read the user's cache.
+  editor.restoreLastSearch()
+  # Pruned first so the index never lists what is about to go.
   for dir in newRecoveryStore(getCrashRecoveryBaseDir()).pruneSettledSessions():
     logInfo("moe", "Pruned settled recovery session " & dir.lastPathPart)
   editor.recovery = some(newRecoveryIndex(getCrashRecoveryBaseDir()))

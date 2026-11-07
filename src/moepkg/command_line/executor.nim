@@ -27,15 +27,40 @@ import std/[options, strutils]
 import types, substitute_parser
 import ../command_line_commands
 
-proc optionsIgnoreCaseOf*(parser: CommandLineParser, pattern: string): bool =
+proc optionsIgnoreCaseOf*(
+    parser: CommandLineParser, pattern: string, match = smPlain
+): bool =
   ## What 'ignorecase' and 'smartcase' make of `pattern`.
-  parser.optionsIgnoreCase != nil and parser.optionsIgnoreCase(pattern)
+  parser.optionsIgnoreCase != nil and parser.optionsIgnoreCase(pattern, match)
 
 proc substituteFlags*(
-    parser: CommandLineParser, pattern, text: string
+    parser: CommandLineParser, pattern, text: string, match = smPlain
 ): SubstituteFlags =
   ## The flags `text` of a :s of `pattern`.
-  text.parseSubstituteFlags(parser.optionsIgnoreCaseOf(pattern))
+  text.parseSubstituteFlags(parser.optionsIgnoreCaseOf(pattern, match))
+
+proc substitutePattern*(parser: CommandLineParser, typed: string): SubstitutePattern =
+  ## What a :s given `typed` looks for. An empty one is the last search, matched
+  ## as that search did, as Vim's do_sub. Empty when there is none.
+  if typed.len > 0:
+    SubstitutePattern(pattern: typed, match: smPlain)
+  elif parser.lastSearch != nil:
+    var last = parser.lastSearch()
+    last.reused = true
+    last
+  else:
+    SubstitutePattern(match: smPlain)
+
+proc typedSubstitutePattern*(
+    parser: CommandLineParser, parsed: SubstituteParseResult
+): SubstitutePattern =
+  ## What a :s being typed as `parsed` looks for so far. An empty pattern is the
+  ## last search once its delimiter ends it, as Vim's incsearch uses the last
+  ## pattern. Empty when it looks for nothing yet.
+  if parsed.isValid and (parsed.pattern.len > 0 or parsed.hasReplacement):
+    parser.substitutePattern(parsed.pattern)
+  else:
+    SubstitutePattern()
 
 proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult =
   ## Execute a parsed command and return the result
@@ -123,16 +148,21 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
           errorMessage:
             "Invalid substitute command format. Usage: :s/pattern/replacement/flags",
         )
-      if parsed.pattern.len == 0:
+      # Flags that refuse the :s do so before its pattern is looked for.
+      let refusal = parsed.flags.parseSubstituteFlags.refusal
+      if refusal.len > 0:
+        return CommandLineResult(kind: claUnknown, errorMessage: refusal)
+      let target = parser.substitutePattern(parsed.pattern)
+      if target.pattern.len == 0:
         return CommandLineResult(
-          kind: claUnknown, errorMessage: "Pattern required for substitute"
+          kind: claUnknown, errorMessage: "E35: No previous regular expression"
         )
-      let flags = parser.substituteFlags(parsed.pattern, parsed.flags)
-      if flags.refusal.len > 0:
-        return CommandLineResult(kind: claUnknown, errorMessage: flags.refusal)
+      let flags = parser.substituteFlags(target.pattern, parsed.flags, target.match)
       return CommandLineResult(
         kind: claSubstitute,
-        pattern: parsed.pattern,
+        pattern: target.pattern,
+        match: target.match,
+        reusedPattern: target.reused,
         replacement: parsed.replacement,
         substituteFlags: flags,
         substituteRange: cmd.range,

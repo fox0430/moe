@@ -284,7 +284,7 @@ commandHistory = true                  # Persist Command mode command history
 
 commandHistoryLimit = 1000             # History limit
 
-search = true                          # Persist search history
+search = true                          # Persist search history and the last search pattern
 
 searchHistoryLimit = 1000              # Search history limit
 

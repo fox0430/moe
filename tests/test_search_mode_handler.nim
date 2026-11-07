@@ -1363,6 +1363,15 @@ suite "Search highlight after :noh":
     e.state.exitOverlay()
     check e.matchesOnFirstLine == 0
 
+  test "A :s being typed with an empty pattern shows the last search":
+    let e = nohAfterSearch()
+    e.state.enterCommandOverlay()
+    e.state.input.line.text = "s/"
+    check e.matchesOnFirstLine == 0
+    # As its cursor jump does, once the delimiter ends the empty pattern.
+    e.state.input.line.text = "s//"
+    check e.matchesOnFirstLine == 2
+
   test "Without 'incsearch' a pattern typed after :noh stays hidden":
     let e = nohAfterSearch()
     e.state.input.search.incsearch = false
@@ -1513,3 +1522,57 @@ suite "Search highlight after :noh":
     check e.executeCommandOverlay(":s/oo/x/gc") == roAbort
     check e.activeBuffer.getLine(0) == "foo foo"
     check e.state.input.search.last.pattern == "foo"
+
+  test "An empty :s pattern is the last search's":
+    let e = nohAfterSearch("foo bar foo")
+    check e.executeCommandOverlay(":s//X/") == roContinue
+    check e.activeBuffer.getLine(0) == "X bar foo"
+    check e.state.input.search.last.pattern == "foo"
+    check e.state.input.search.last.match == smRegex
+
+  test "An empty :%s pattern replaces every match of the last search":
+    let e = nohAfterSearch("foo bar foo")
+    check e.executeCommandOverlay(":%s//X/g") == roContinue
+    check e.activeBuffer.getLine(0) == "X bar X"
+
+  test "'smartcase' holds on the reused :s pattern":
+    let e = createTestEditorWithBuffer("Foo foo FOO")
+    e.state.keyTyped = true
+    e.state.input.search.ignorecase = true
+    e.state.input.search.smartcase = true
+    e.state.setLastSearch(SearchSpec(pattern: "Foo", match: smPlain))
+    check e.executeCommandOverlay(":%s//X/g") == roContinue
+    check e.activeBuffer.getLine(0) == "X foo FOO"
+
+  test "An empty :s pattern matches as the last search did":
+    let e = createTestEditorWithBuffer("foobar foo")
+    e.state.keyTyped = true
+    e.state.setLastSearch(SearchSpec(pattern: "foo", match: smWord))
+    check e.executeCommandOverlay(":%s//X/g") == roContinue
+    check e.activeBuffer.getLine(0) == "foobar X"
+    # `n` after it still finds words, as Vim keeps the pattern it reused.
+    check e.state.input.search.last.match == smWord
+
+  test "Only a typed :s pattern goes into the search history":
+    let e = createTestEditorWithBuffer("foo bar")
+    e.state.keyTyped = true
+    e.state.input.search.history = @["older", "foo"]
+    e.state.setLastSearch(SearchSpec(pattern: "foo", match: smWord))
+    check e.executeCommandOverlay(":s//X/") == roContinue
+    check e.state.input.search.history == @["older", "foo"]
+    check e.executeCommandOverlay(":s/bar/Y/") == roContinue
+    check e.state.input.search.history[0] == "bar"
+
+  test "An empty :s pattern runs a regex the last search ran":
+    let e = createTestEditorWithBuffer("fao f.o fzo")
+    e.state.keyTyped = true
+    e.state.setLastSearch(SearchSpec(pattern: "f.o", match: smRegex))
+    check e.executeCommandOverlay(":s//X/g") == roContinue
+    check e.activeBuffer.getLine(0) == "X X X"
+
+  test "An empty :s pattern with no last search is E35":
+    let e = createTestEditorWithBuffer("foo")
+    e.state.keyTyped = true
+    check e.executeCommandOverlay(":s//X/") == roAbort
+    check e.activeBuffer.getLine(0) == "foo"
+    check e.state.statusMessage == "E35: No previous regular expression"

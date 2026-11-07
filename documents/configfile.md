@@ -318,7 +318,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 |:---|:---|:---|:---|
 | commandHistory | bool | true | Saving Command mode command history |
 | commandHistoryLimit | integer | 1000 | The maximum entries of Command mode command history to save |
-| search | bool | true | Saving search history |
+| search | bool | true | Saving search history and the last search pattern |
 | searchHistoryLimit | integer | 1000 | The maximum entries of search history to save |
 | cursorPosition | bool | true | Saving last cursor position |
 | bookmarks | bool | true | Saving bookmarks |

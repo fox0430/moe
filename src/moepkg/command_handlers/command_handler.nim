@@ -460,12 +460,18 @@ proc substituteLines*(
   buffer.resolveExRange(range, currentLine)
 
 proc countSubstitutions(
-    buffer: TextBuffer, pattern: string, lines: Slice[int], flags: SubstituteFlags
+    buffer: TextBuffer,
+    pattern: string,
+    match: SearchMatch,
+    lines: Slice[int],
+    flags: SubstituteFlags,
 ): HandlerResult =
   ## What the `n` flag reports, as do_sub_msg does.
   var matches, matchedLines = 0
   for line in lines:
-    let count = buffer.getLine(line).countPlain(pattern, flags.ignoreCase, flags.global)
+    let count = buffer.getLine(line).countSubstituteMatches(
+        pattern, flags.ignoreCase, flags.global, match
+      )
     matches += count
     if count > 0:
       matchedLines.inc
@@ -486,8 +492,10 @@ proc executeSubstitute*(
     flags: SubstituteFlags,
     range: ExLineRange = ExLineRange(),
     currentLine: int = 0,
+    match = smPlain,
 ): HandlerResult =
-  ## Execute substitute command (:s, :%s/pattern/replacement/flags)
+  ## Execute substitute command (:s, :%s/pattern/replacement/flags), matching
+  ## `pattern` as `match` says.
   let (rangeStart, rangeEnd) = buffer.substituteLines(
     range, currentLine, flags.countOnly
   ).valueOr:
@@ -496,7 +504,7 @@ proc executeSubstitute*(
     return HandlerResult(kind: hrError, errorMessage: "Pattern required")
 
   if flags.countOnly:
-    return buffer.countSubstitutions(pattern, rangeStart .. rangeEnd, flags)
+    return buffer.countSubstitutions(pattern, match, rangeStart .. rangeEnd, flags)
 
   var replaceCount = 0
 
@@ -506,8 +514,8 @@ proc executeSubstitute*(
     try:
       withTransaction(buffer, "substitute"):
         for lineIdx in rangeStart .. rangeEnd:
-          let (newLine, count) = buffer.getLine(lineIdx).substitutePlain(
-              pattern, processedReplacement, flags.ignoreCase, flags.global
+          let (newLine, count) = buffer.getLine(lineIdx).substituteMatches(
+              pattern, processedReplacement, flags.ignoreCase, flags.global, match
             )
           if count > 0:
             replaceCount += count
@@ -717,7 +725,7 @@ proc handleCommandModeInput*(
   of claSubstitute:
     handler.executeSubstitute(
       buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,
-      cmdResult.substituteRange, currentLine,
+      cmdResult.substituteRange, currentLine, cmdResult.match,
     )
   of claFilter:
     handler.executeFilter(

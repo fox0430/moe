@@ -121,15 +121,20 @@ proc resolveLineBg(
   else:
     none(ColorValue)
 
-proc effectiveSearchSpec(state: EditorState): SearchSpec =
+proc effectiveSearchSpec(e: Editor): SearchSpec =
   ## Resolve the search the hlsearch highlight draws, based on overlay state.
-  ## - Command overlay: substitute pattern if present, with 'incsearch'
+  ## - Command overlay: what the :s being typed looks for, as its preview and
+  ##   cursor jump do, with 'incsearch'
   ## - Search overlay: live text being typed, with 'incsearch'
   ## - Otherwise: last search, also on an empty search prompt ("repeat the last
   ##   search"), unless :nohlsearch hid it
+  let state = e.state
   let typed =
     if state.isCommandOverlay and state.input.search.incsearch:
-      SearchSpec(pattern: extractSubstitutePattern(state.commandLine), match: smPlain)
+      let target = e.commandLineParser.typedSubstitutePattern(
+        parseSubstituteCommand(state.commandLine)
+      )
+      SearchSpec(pattern: target.pattern, match: target.match)
     else:
       SearchSpec(pattern: state.incrementalSearchLine)
   if typed.pattern.len > 0:
@@ -206,7 +211,7 @@ proc newLineStyleContext*(
         scanLineForColorCodes(fullLine)
 
   if textBuffer != nil and e.state.input.search.hlsearch:
-    let spec = e.state.effectiveSearchSpec()
+    let spec = e.effectiveSearchSpec()
     if spec.pattern.len > 0:
       result.searchRanges = textBuffer.findSearchMatchRanges(
         lineIndex, spec.pattern, e.state.input.search.ignoresCase(spec), spec.match

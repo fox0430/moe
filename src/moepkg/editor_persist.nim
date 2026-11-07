@@ -30,7 +30,8 @@ import
   logger,
   editor_notify,
   editor_window_tab,
-  syntax/tokenizer
+  syntax/tokenizer,
+  search_utils
 
 proc reportUnreadable[T](
     e: Editor, records: var PersistedRecords[T], what, error: string
@@ -111,3 +112,28 @@ proc rememberBookmarks*(e: Editor, buffer: TextBuffer) =
   if not e.config.persist.bookmarks or buffer.filePath.isNone:
     return
   e.persistedBookmarks.record(pathKey(buffer.filePath.get), buffer.bookmarks)
+
+proc restoreLastSearch*(e: Editor) =
+  ## Bring back the last search the previous session left, as Vim's viminfo
+  ## brings `@/` back, so `n`, an empty `/` and an empty :s pattern replay it.
+  ## Only the application calls this: tests must not read the user's cache.
+  if not e.config.persist.search:
+    return
+  let saved = loadLastSearch()
+  if saved.isSome:
+    # As Vim's viminfo, a new session searches forward.
+    e.state.input.search.last =
+      SearchSpec(pattern: saved.get.pattern, match: saved.get.match, direction: Forward)
+    # A restored pattern waits for the next search command: the first screen
+    # stays clean, as after :noh, and `n`, an empty `/` and a :s show it again.
+    e.state.hideSearchMatches()
+
+proc rememberLastSearch*(e: Editor) =
+  ## Keep this session's last search for the next one. Saving goes by
+  ## 'persist.search', which the caller has checked.
+  let last = e.state.input.search.last
+  if last.pattern.len == 0:
+    return
+  let r = saveLastSearch(LastSearch(pattern: last.pattern, match: last.match))
+  if r.isErr:
+    logError("persist", "Failed to save the last search: " & r.error)

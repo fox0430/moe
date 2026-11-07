@@ -91,6 +91,7 @@ proc updateSubstitutePreview*(
     flags: SubstituteFlags,
     firstLine: int = 0,
     lastLine: int = high(int),
+    match = smPlain,
 ) =
   ## Update substitute preview with new pattern and replacement
   ## Only lines `firstLine .. lastLine` are replaced, as `:s` runs on its range.
@@ -103,6 +104,7 @@ proc updateSubstitutePreview*(
     global: flags.global,
     lines: firstLine .. lastLine,
     ignoreCase: flags.ignoreCase,
+    match: match,
   )
   # Skip if nothing changed
   if key == e.state.ui.substitutePreview.applied:
@@ -121,8 +123,8 @@ proc updateSubstitutePreview*(
   # Apply substitute to buffer
   let buffer = e.activeBuffer()
   for lineIdx in max(firstLine, 0) .. min(lastLine, buffer.len - 1):
-    let (newLine, count) = buffer.getLine(lineIdx).substitutePlain(
-        pattern, processedReplacement, flags.ignoreCase, flags.global
+    let (newLine, count) = buffer.getLine(lineIdx).substituteMatches(
+        pattern, processedReplacement, flags.ignoreCase, flags.global, match
       )
     if count > 0:
       buffer.replaceLineNoUndo(lineIdx, newLine)
