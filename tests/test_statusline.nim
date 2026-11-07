@@ -116,6 +116,31 @@ proc activeRuler(
     state.git, textBuffer, state.cursor, state.windowModeText(mode, true), mode, config
   )
 
+template withHomes(dirs: openArray[string], body: untyped) =
+  ## Runs `body` with `dirs` as the home prefixes, whatever `$HOME` is.
+  let savedDirs = homeDirs
+  homeDirs = some(@dirs)
+  try:
+    body
+  finally:
+    homeDirs = savedDirs
+
+template withHomeEnv(value: string, body: untyped) =
+  ## Runs `body` with `$HOME` set to `value` and the prefixes not yet read.
+  let hadHome = existsEnv("HOME")
+  let savedHome = getEnv("HOME")
+  let savedDirs = homeDirs
+  putEnv("HOME", value)
+  homeDirs = none(seq[string])
+  try:
+    body
+  finally:
+    homeDirs = savedDirs
+    if hadHome:
+      putEnv("HOME", savedHome)
+    else:
+      delEnv("HOME")
+
 proc joined(items: openArray[StatusItem]): string =
   ## The parts' text as one line shows them with room for all.
   for item in items:
@@ -333,9 +358,9 @@ suite "StatusLine - buildFileDisplay":
     let textBuffer = createTestTextBuffer(absPath)
     let config = createTestStatusLineConfig()
 
-    let result = buildFileDisplay(textBuffer, EditorMode.Filer, config).joined
-
-    check result == " " & absPath & "/"
+    withHomes([]):
+      let result = buildFileDisplay(textBuffer, EditorMode.Filer, config).joined
+      check result == " " & absPath & "/"
 
   test "Display empty string in Filer mode with no path":
     let textBuffer = createTestTextBuffer()
@@ -1221,6 +1246,147 @@ suite "StatusLine - cutFromLeft":
   test "Shows nothing narrower than MinCutWidth":
     check cutFromLeft(" file.nim", MinCutWidth) == " <m"
     check cutFromLeft(" file.nim", MinCutWidth - 1) == ""
+
+suite "StatusLine - homeReplace":
+  let home = getTempDir() / "moe_statusline_home"
+  setup:
+    removeDir(home)
+    createDir(home)
+  teardown:
+    removeDir(home)
+
+  test "The home itself":
+    check homeReplace("/home/u", ["/home/u"]) == "~"
+
+  test "A path under the home":
+    check homeReplace("/home/u/.config/moe", ["/home/u"]) == "~/.config/moe"
+
+  test "Another user's path that shares the prefix":
+    check homeReplace("/home/u2/file.nim", ["/home/u"]) == "/home/u2/file.nim"
+
+  test "Relative paths and other absolute paths stay":
+    check homeReplace("src/file.nim", ["/home/u"]) == "src/file.nim"
+    check homeReplace("/etc/hosts", ["/home/u"]) == "/etc/hosts"
+
+  test "Either the home as written or its real path":
+    let homes = ["/home/u", "/var/home/u"]
+    check homeReplace("/home/u/a.nim", homes) == "~/a.nim"
+    check homeReplace("/var/home/u/a.nim", homes) == "~/a.nim"
+
+  test "The prefixes are $HOME and the path its link resolves to":
+    let real = home / "real"
+    let link = home / "link"
+    createDir(real)
+    createSymlink(real, link)
+    withHomeEnv(link):
+      check homePrefixes() == @[link, expandFilename(real)]
+
+  test "A plain $HOME is one prefix without its trailing separator":
+    let plain = expandFilename(home)
+    withHomeEnv(plain & DirSep):
+      check homePrefixes() == @[plain]
+
+  test "A $HOME that does not exist is kept as written":
+    let missing = home / "missing"
+    withHomeEnv(missing):
+      check homePrefixes() == @[missing]
+
+  test "A root home replaces the root alone":
+    withHomeEnv("/"):
+      check homePrefixes() == @["/"]
+      check homeReplace("/") == "~"
+      check homeReplace("/etc/hosts") == "/etc/hosts"
+
+  test "An empty $HOME gives no prefix":
+    withHomeEnv(""):
+      check homePrefixes().len == 0
+      check homeReplace("/") == "/"
+
+  test "The file name with the directory shown":
+    withHomes([home]):
+      let tb = createTestTextBuffer(home / "a" / "file.nim")
+      var cfg = createTestStatusLineConfig()
+      cfg.directory = true
+      check buildFileDisplay(tb, EditorMode.Normal, cfg).joined == " ~/a/file.nim"
+
+  test "The file name alone":
+    withHomes([home]):
+      let tb = createTestTextBuffer(home / "a" / "file.nim")
+      var cfg = createTestStatusLineConfig()
+      cfg.directory = false
+      check buildFileDisplay(tb, EditorMode.Normal, cfg).joined == " file.nim"
+
+  test "The file name alone keeps the home's own name":
+    withHomes([home]):
+      let tb = createTestTextBuffer(home)
+      var cfg = createTestStatusLineConfig()
+      cfg.directory = false
+      check buildFileDisplay(tb, EditorMode.Normal, cfg).joined == " moe_statusline_home"
+
+  test "Filer shows the root as / and not //":
+    withHomes([home]):
+      let tb = createTestTextBuffer("/")
+      let cfg = createTestStatusLineConfig()
+      check buildFileDisplay(tb, EditorMode.Filer, cfg).joined == " /"
+
+  test "Filer adds no second separator to a stored trailing one":
+    withHomes([home]):
+      createDir(home / "a")
+      let tb = createTestTextBuffer(home / "a" & DirSep)
+      let cfg = createTestStatusLineConfig()
+      check buildFileDisplay(tb, EditorMode.Filer, cfg).joined == " ~/a/"
+
+  test "The home itself with the directory shown":
+    withHomes([home]):
+      let tb = createTestTextBuffer(home)
+      var cfg = createTestStatusLineConfig()
+      cfg.directory = true
+      check buildFileDisplay(tb, EditorMode.Normal, cfg).joined == " ~"
+
+  test "Filer shows the home directory as ~/":
+    withHomes([home]):
+      let tb = createTestTextBuffer(home)
+      let cfg = createTestStatusLineConfig()
+      check buildFileDisplay(tb, EditorMode.Filer, cfg).joined == " ~/"
+
+  test "A cut keeps the last component of a replaced path":
+    withHomes([home]):
+      let tb = createTestTextBuffer(home / "a" / "b" / "file.nim")
+      var cfg = createTestStatusLineConfig()
+      cfg.directory = true
+      let left = buildFileDisplay(tb, EditorMode.Normal, cfg)
+      check left.joined == " ~/a/b/file.nim"
+      check layoutStatusLine(left, Ruler(), 10).left == @[" <file.nim"]
+
+  test "The default status line shows a file under the home with ~":
+    withHomes([home]):
+      var state = createTestState()
+      state.showStatusLine = true
+      var displayBuffer = createTestBuffer()
+      let tb = createTestTextBuffer(home / "a" / "file.nim", false, "x")
+      let cfg = newEditorConfig().statusLine
+      renderStatusLine(state, tb, displayBuffer, 23, cfg)
+      let line = getBufferLine(displayBuffer, 23)
+      check " ~/a/file.nim " in line
+      check home notin line
+
+  test "setupText placeholders":
+    withHomes([home]):
+      var state = createTestState()
+      let tb = createTestTextBuffer(home / "a" / "file.nim", false, "x")
+      check activeSetupText(state, tb, "{filePath}") == "~/a/file.nim"
+      check activeSetupText(state, tb, "{directory}") == "~/a"
+      check activeSetupText(state, tb, "{filename}") == "file.nim"
+      let direct = createTestTextBuffer(home / "file.nim", false, "x")
+      check activeSetupText(state, direct, "{directory}") == "~"
+
+  test "setupText placeholders for the home itself":
+    withHomes([home]):
+      var state = createTestState()
+      let tb = createTestTextBuffer(home, false, "x")
+      check activeSetupText(state, tb, "{filePath}") == "~"
+      check activeSetupText(state, tb, "{filename}") == "moe_statusline_home"
+      check activeSetupText(state, tb, "{directory}") == home.parentDir
 
 suite "StatusLine - parseSetupText additional placeholders":
   test "Parse totalColumns placeholder":

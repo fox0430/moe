@@ -124,8 +124,8 @@ showModeInactive = false               # Show mode in inactive windows
 #   {percentage}    - Line percentage (e.g., "50%")
 #   {mode}          - Current editor mode
 #   {filename}      - Filename only
-#   {directory}     - Directory path
-#   {filePath}      - Full file path
+#   {directory}     - Directory path, with the home shown as `~`
+#   {filePath}      - Full file path, with the home shown as `~`
 #   {gitBranch}     - Git branch name
 #   {lineEnding}    - Line ending (LF, CRLF, CR, or RAW for undecoded bytes)
 #   {gitChanges}    - Git changes (+N ~N -N)
