@@ -508,14 +508,14 @@ proc executeSubstitute*(
 
   var replaceCount = 0
 
-  let processedReplacement = processEscapeSequences(replacement)
+  let parsed = parseReplacement(replacement)
 
   let txr =
     try:
       withTransaction(buffer, "substitute"):
         for lineIdx in rangeStart .. rangeEnd:
           let (newLine, count) = buffer.getLine(lineIdx).substituteMatches(
-              pattern, processedReplacement, flags.ignoreCase, flags.global, match
+              pattern, parsed, flags.ignoreCase, flags.global, match
             )
           if count > 0:
             replaceCount += count

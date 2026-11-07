@@ -12247,6 +12247,13 @@ suite "handleKeyCombo - the :s preview covers the lines :s runs on, as Vim's inc
     check e.lines == @["foo", "x"]
     check e.cursor == BufferPosition(line: 1, column: 0)
 
+  test "the preview expands & in the replacement":
+    let e = createEditorForPreview("foo", 0)
+
+    e.typeKeys(":s/o/[&]")
+
+    check e.lines == @["f[o]o"]
+
   test "a range :s would refuse previews nothing":
     let e = createEditorForPreview("foo\nfoo", 0)
 

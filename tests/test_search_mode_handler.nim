@@ -1570,6 +1570,19 @@ suite "Search highlight after :noh":
     check e.executeCommandOverlay(":s//X/g") == roContinue
     check e.activeBuffer.getLine(0) == "X X X"
 
+  test "The replacement takes the groups of the regex the last search ran":
+    let e = createTestEditorWithBuffer("foo bar")
+    e.state.keyTyped = true
+    e.state.setLastSearch(SearchSpec(pattern: "(fo+)", match: smRegex))
+    check e.executeCommandOverlay(":%s//[\\1]/") == roContinue
+    check e.activeBuffer.getLine(0) == "[foo] bar"
+
+  test "& in a typed :s replacement is the match":
+    let e = createTestEditorWithBuffer("foo bar")
+    e.state.keyTyped = true
+    check e.executeCommandOverlay(":s/bar/<\\u&>/") == roContinue
+    check e.activeBuffer.getLine(0) == "foo <Bar>"
+
   test "An empty :s pattern with no last search is E35":
     let e = createTestEditorWithBuffer("foo")
     e.state.keyTyped = true

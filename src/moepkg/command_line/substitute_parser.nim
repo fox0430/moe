@@ -70,32 +70,6 @@ proc refusal*(flags: SubstituteFlags): string =
   else:
     ""
 
-proc processEscapeSequences*(s: string): string =
-  ## Process escape sequences in a string
-  ## Converts \n to newline, \t to tab, \\ to backslash, \/ to slash
-  var i = 0
-  while i < s.len:
-    if s[i] == '\\' and i + 1 < s.len:
-      case s[i + 1]
-      of 'n':
-        result.add('\n')
-        i += 2
-      of 't':
-        result.add('\t')
-        i += 2
-      of '\\':
-        result.add('\\')
-        i += 2
-      of '/':
-        result.add('/')
-        i += 2
-      else:
-        result.add(s[i])
-        i += 1
-    else:
-      result.add(s[i])
-      i += 1
-
 proc normalizeSubstituteLongForm*(commandText: string): string =
   ## Rewrite the `:substitute/...` long form, or any unambiguous prefix of it
   ## (`:su/`, `:subs/`, ...), to `:s/...`, with or without the leading `:`,

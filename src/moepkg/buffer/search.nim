@@ -68,18 +68,24 @@ proc compileSearchRegex*(pattern: string, ignorecase: bool): Option[Regex2] =
   except RegexError:
     return none(Regex2)
 
+proc validUtf8Step(line: string, i: int): tuple[lineBytes, validBytes: int] =
+  ## The character of `line` at byte `i` as `toValidUtf8` writes it: its bytes
+  ## in `line` and in the result. An undecodable byte becomes U+FFFD.
+  let size = max(line.runeSizeAt(i), 1)
+  if size == 1 and line[i].uint8 >= 0x80'u8:
+    (1, "\uFFFD".len)
+  else:
+    (size, size)
+
 proc hasInvalidUtf8*(line: string): bool =
   ## Check if `line` has invalid UTF-8 per `runeSizeAt`/`charLen` model.
   ## Invalid lines must not be passed to `regex` (asserts in debug, UB in release).
   var i = 0
   while i < line.len:
-    let sz = line.runeSizeAt(i)
-    if sz == 0:
-      # Defensive: unreachable while `i < line.len`.
+    let step = line.validUtf8Step(i)
+    if step.lineBytes != step.validBytes:
       return true
-    if sz == 1 and line[i].uint8 >= 0x80'u8:
-      return true
-    i += sz
+    i += step.lineBytes
   false
 
 proc toValidUtf8(line: string): string =
@@ -92,16 +98,12 @@ proc toValidUtf8(line: string): string =
   result = newStringOfCap(line.len)
   var i = 0
   while i < line.len:
-    let sz = line.runeSizeAt(i)
-    if sz == 0:
-      # Defensive: a zero step would loop forever.
-      break
-    if sz == 1 and line[i].uint8 >= 0x80'u8:
-      result.add("\uFFFD")
-      inc i
+    let step = line.validUtf8Step(i)
+    if step.lineBytes == step.validBytes:
+      result.add(line[i ..< i + step.lineBytes])
     else:
-      result.add(line[i ..< i + sz])
-      i += sz
+      result.add("\uFFFD")
+    i += step.lineBytes
 
 type
   LiteralChar = object
@@ -228,6 +230,7 @@ proc matchAt(line: string, bytePos: int, p: LiteralPattern): LiteralMatch =
 type LiteralRange = object
   startCol, endCol: int # Half-open, in characters
   startByte, endByte: int # Half-open
+  groups: seq[Slice[int]] # A regex match's groups, bytes in the line; empty when unset
 
 iterator literalMatchRanges(line: string, p: LiteralPattern): LiteralRange =
   ## Matches of `p` on `line`, left to right. Each one is looked for after the
@@ -327,12 +330,25 @@ proc findSearchMatchRanges*(
       # Advance past match (avoid infinite loop on zero-width)
       searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
 
+type LineWalk = object ## A place reached walking `line` and its `toValidUtf8` together.
+  valid, pos, col: int # Bytes in the valid text and in `line`, and the column
+
+proc walkTo(w: var LineWalk, line: string, valid: int) =
+  ## `w` moved forward to the character starting at byte `valid` of the valid
+  ## text.
+  while w.valid < valid and w.pos < line.len:
+    let step = line.validUtf8Step(w.pos)
+    w.valid += step.validBytes
+    w.pos += step.lineBytes
+    w.col.inc
+
 iterator substituteRanges(
-    line, pattern: string, ignorecase: bool, match: SearchMatch
+    line, pattern: string, ignorecase: bool, match: SearchMatch, withGroups = false
 ): LiteralRange =
   ## The matches of `pattern` :s replaces on `line`, left to right, matching as
-  ## `match` says. As in Vim's do_sub, an empty regex match where the one before
-  ## ended is skipped, and the line is done once the search reaches its end.
+  ## `match` says, with their groups when `withGroups`. As in Vim's do_sub, an
+  ## empty regex match where the one before ended is skipped, and the line is
+  ## done once the search reaches its end.
   if match != smRegex:
     for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, match)):
       yield r
@@ -342,11 +358,11 @@ iterator substituteRanges(
       let
         re = compiled.get
         searchable = line.toValidUtf8
-        sameBytes = searchable.len == line.len
       var
         start = 0
         lastEnd = -1
         m = RegexMatch2()
+        at = LineWalk()
       while (start == 0 or start < searchable.len) and find(searchable, re, m, start):
         let
           a = m.boundaries.a
@@ -356,23 +372,35 @@ iterator substituteRanges(
             break
           start = a + max(searchable.runeSizeAt(a), 1)
           continue
-        let
-          startCol = byteToCharPos(searchable, a)
-          endCol = byteToCharPos(searchable, b)
+        at.walkTo(line, a)
+        var to = at
+        to.walkTo(line, b)
+        var groups: seq[Slice[int]]
+        if withGroups:
+          groups = newSeqOfCap[Slice[int]](m.groupsCount)
+          for g in 0 ..< m.groupsCount:
+            let s = m.group(g)
+            if s.a < 0 or s.a > s.b:
+              groups.add(1 .. 0)
+            else:
+              # A group inside a lookbehind may start before the match.
+              var first =
+                if s.a >= a:
+                  at
+                else:
+                  LineWalk()
+              first.walkTo(line, s.a)
+              var last = first
+              last.walkTo(line, s.b + 1)
+              groups.add(first.pos .. last.pos - 1)
         yield LiteralRange(
-          startCol: startCol,
-          endCol: endCol,
-          startByte:
-            if sameBytes:
-              a
-            else:
-              charToBytePos(line, startCol),
-          endByte:
-            if sameBytes:
-              b
-            else:
-              charToBytePos(line, endCol),
+          startCol: at.col,
+          endCol: to.col,
+          startByte: at.pos,
+          endByte: to.pos,
+          groups: groups,
         )
+        at = to
         lastEnd = b
         if b >= searchable.len:
           break
@@ -394,15 +422,156 @@ proc countSubstituteMatches*(
     if not everyMatch:
       break
 
+type
+  LetterCase = enum
+    lcKeep
+    lcUpper
+    lcLower
+
+  ReplacementPieceKind = enum
+    rpText
+    rpGroup ## & and \0 to \9
+    rpCase ## \u \l \U \L \e \E
+
+  ReplacementPiece = object
+    case kind: ReplacementPieceKind
+    of rpText:
+      text: string
+      asTyped: bool # No case change touches it, though it uses one of one up
+    of rpGroup:
+      group: int
+    of rpCase:
+      oneChar: bool # \u and \l
+      to: LetterCase # lcKeep for \e and \E, which end both
+
+  Replacement* = object ## The replacement of :s, as Vim's regsub() reads it
+    pieces: seq[ReplacementPiece]
+    usesGroups: bool # Has \1 to \9
+
+proc parseReplacement*(s: string): Replacement =
+  ## `s` as Vim reads a :s replacement with 'magic': `&` and `\0` are the
+  ## match, `\1` to `\9` its groups, `\u` `\l` `\U` `\L` `\e` `\E` change
+  ## the case, `\t` and `\b` are Tab and Ctrl-H, and a backslash before any
+  ## other character takes it as it is. Unlike Vim, `~` is not the previous
+  ## replacement, `\=` is a plain `=`, `\n` is a line break that doesn't
+  ## split the line, and `\r` stays as typed, as moe can't split a line here.
+  var text = ""
+  template flush() =
+    if text.len > 0:
+      result.pieces.add(ReplacementPiece(kind: rpText, text: text))
+      text = ""
+
+  template add(piece: ReplacementPiece) =
+    flush()
+    result.pieces.add(piece)
+
+  template caseChange(one: bool, letterCase: LetterCase) =
+    add(ReplacementPiece(kind: rpCase, oneChar: one, to: letterCase))
+
+  var i = 0
+  while i < s.len:
+    let c = s[i]
+    if c == '&':
+      add(ReplacementPiece(kind: rpGroup, group: 0))
+    elif c == '\\' and i + 1 < s.len:
+      i.inc
+      case s[i]
+      of '0' .. '9':
+        add(ReplacementPiece(kind: rpGroup, group: s[i].ord - '0'.ord))
+        if s[i] != '0':
+          result.usesGroups = true
+      of 'u':
+        caseChange(true, lcUpper)
+      of 'l':
+        caseChange(true, lcLower)
+      of 'U':
+        caseChange(false, lcUpper)
+      of 'L':
+        caseChange(false, lcLower)
+      of 'e', 'E':
+        caseChange(false, lcKeep)
+      of 'n':
+        text.add('\n')
+      of 't':
+        text.add('\t')
+      of 'b':
+        text.add('\b')
+      of 'r':
+        add(ReplacementPiece(kind: rpText, text: "\\r", asTyped: true))
+      else:
+        text.add(s[i])
+    else:
+      text.add(c)
+    i.inc
+  flush()
+
+proc emit(res: var string, s: string, one: var LetterCase, all: LetterCase) =
+  ## `s` added to `res` with the pending case changes applied. A byte that is
+  ## not a character uses up a change of one, as in Vim, but stays as it is.
+  if one == lcKeep and all == lcKeep:
+    res.add(s)
+    return
+  var i = 0
+  while i < s.len:
+    let
+      (rune, size) = s.charAtByte(i)
+      change = if one != lcKeep: one else: all
+    one = lcKeep
+    if rune.isInvalidByteRune:
+      res.add(s[i])
+    else:
+      case change
+      of lcKeep:
+        res.add(s[i ..< i + size])
+      of lcUpper:
+        res.add($rune.toUpper)
+      of lcLower:
+        res.add($rune.toLower)
+    i += size
+
+proc expand(r: Replacement, line: string, m: LiteralRange): string =
+  ## `r` for the match `m` on `line`. A case change of one character waits for
+  ## the next character, wherever it comes from, and wins over one of all.
+  var one, all = lcKeep
+  for piece in r.pieces:
+    case piece.kind
+    of rpText:
+      if piece.asTyped:
+        result.add(piece.text)
+        one = lcKeep
+      else:
+        result.emit(piece.text, one, all)
+    of rpGroup:
+      let span =
+        if piece.group == 0:
+          m.startByte ..< m.endByte
+        elif piece.group <= m.groups.len:
+          m.groups[piece.group - 1]
+        else:
+          1 .. 0
+      if span.a <= span.b:
+        result.emit(line[span], one, all)
+    of rpCase:
+      if piece.oneChar:
+        one = piece.to
+      else:
+        all = piece.to
+        if piece.to == lcKeep:
+          one = lcKeep
+
 proc substituteMatches*(
-    line, pattern, replacement: string, ignorecase, everyMatch: bool, match = smPlain
+    line, pattern: string,
+    replacement: Replacement,
+    ignorecase, everyMatch: bool,
+    match = smPlain,
 ): tuple[text: string, count: int] =
   ## `line` with the first match of `pattern`, or `everyMatch`, replaced, and
   ## how many were.
   var copied = 0
-  for r in line.substituteRanges(pattern, ignorecase, match):
+  let withGroups = replacement.usesGroups
+  for r in line.substituteRanges(pattern, ignorecase, match, withGroups):
     result.text.add(line[copied ..< r.startByte])
-    result.text.add(replacement)
+    result.text.add(replacement.expand(line, r))
     result.count.inc
     copied = r.endByte
     if not everyMatch:
