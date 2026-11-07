@@ -25,6 +25,9 @@ import std/[tables, options]
 import pkg/results
 
 import range_parser, substitute_parser
+import ../buffer/search
+
+export SearchMatch
 export range_parser
 
 type
@@ -133,13 +136,23 @@ type
     command*: string ## The shell command to execute
     description*: string ## Optional description for completion
 
+  SubstitutePattern* = object
+    ## What a :s looks for: the pattern it was given, matched as it is, or the
+    ## last search's, matched as that search did.
+    pattern*: string
+    match*: SearchMatch
+    reused*: bool # The last search's, which the history already has
+
   CommandLineParser* = ref object
     aliases*: Table[string, CommandLineAction]
     aliasDescriptions*: Table[string, string] ## Custom descriptions for aliases
     shellCommands*: Table[string, ShellCommandEntry] ## Shell command definitions
     validators*: Table[CommandLineAction, proc(args: seq[string]): Result[void, string]]
-    optionsIgnoreCase*: proc(pattern: string): bool
+    optionsIgnoreCase*: proc(pattern: string, match: SearchMatch): bool
       ## What 'ignorecase' and 'smartcase' make of a pattern, nil without them
+    lastSearch*: proc(): SubstitutePattern
+      ## The last search, which a :s with an empty pattern reuses as Vim's
+      ## do_sub does, nil without one
 
   CommandLineResult* = object
     case kind*: CommandLineAction
@@ -169,6 +182,8 @@ type
       value*: Option[string]
     of claSubstitute:
       pattern*: string
+      match*: SearchMatch # smPlain for a typed pattern, the last search's for none
+      reusedPattern*: bool # No pattern was typed, so the last search's runs
       replacement*: string
       substituteFlags*: SubstituteFlags
       substituteRange*: ExLineRange

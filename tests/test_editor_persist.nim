@@ -27,6 +27,9 @@ import pkg/results
 import ../src/moepkg/[editor, config, config_loader, persist]
 import ../src/moepkg/[editor_buffers, editor_file, editor_navigation, editor_window]
 import ../src/moepkg/[filer, viewer_mode, window_manager]
+import ../src/moepkg/[editor_persist, search_utils, primitives]
+import ../src/moepkg/buffer/search
+import ../src/moepkg/command_handlers/result_processor
 
 let cacheHome = getTempDir() / "moe_test_editor_persist"
 putEnv("XDG_CACHE_HOME", cacheHome)
@@ -632,3 +635,95 @@ suite "cursor position persistence":
     check e.editFile(path).isOk
 
     check e.cursorIs(3, 2)
+
+proc createSearchTestEditor(): Editor =
+  ## An editor that persists the search state, as the application runs.
+  var config = newEditorConfig()
+  config.persist.bookmarks = false
+  config.persist.search = true
+  config.persist.commandHistory = false
+  config.persist.cursorPosition = false
+  result = newEditor(config, newValidationResult())
+  result.state.showGitDiff = false
+
+suite "last search persistence":
+  setup:
+    removeDir(cacheHome)
+    createDir(cacheHome)
+
+  teardown:
+    removeDir(cacheHome)
+
+  test "Saving keeps the last search":
+    let e = createSearchTestEditor()
+    e.state.input.search.last =
+      SearchSpec(pattern: "Foo", match: smPlain, direction: Backward)
+
+    e.savePersistData()
+
+    let saved = loadLastSearch()
+    check saved.isSome
+    check saved.get.pattern == "Foo"
+    check saved.get.match == smPlain
+
+  test "Restoring brings back the last search":
+    let e = createSearchTestEditor()
+    e.state.input.search.last =
+      SearchSpec(pattern: "Foo", match: smPlain, direction: Backward)
+    e.savePersistData()
+
+    let restored = createSearchTestEditor()
+    check restored.state.input.search.last.pattern == ""
+    restored.restoreLastSearch()
+    # As Vim's viminfo, a new session searches forward whichever way it went.
+    check restored.state.input.search.last ==
+      SearchSpec(pattern: "Foo", match: smPlain, direction: Forward)
+    # The first screen draws no matches, as Vim starts with 'hlsearch' off.
+    check restored.state.input.search.hlsearchTempDisabled
+
+  test "A restored search runs an empty :s pattern":
+    let e = createSearchTestEditor()
+    e.state.input.search.last =
+      SearchSpec(pattern: "foo", match: smPlain, direction: Forward)
+    e.savePersistData()
+
+    let path = cacheHome / "restored.txt"
+    writeFile(path, "foo bar\nfoo baz\n")
+    let restored = createSearchTestEditor()
+    restored.restoreLastSearch()
+    check restored.openFileInActiveWindow(path).isOk
+    restored.state.keyTyped = true
+
+    check restored.executeCommandOverlay(":%s//new/g") == roContinue
+    check restored.activeBuffer().getLine(0) == "new bar"
+    check restored.activeBuffer().getLine(1) == "new baz"
+    # An executed :s shows its matches again, as it does in a session.
+    check not restored.state.input.search.hlsearchTempDisabled
+
+  test "The history alone restores no last search":
+    # It also holds :s patterns and searches given up, which never ran.
+    let e = createSearchTestEditor()
+    e.state.input.search.history = @["newest", "older"]
+
+    e.restoreLastSearch()
+
+    check e.state.input.search.last.pattern == ""
+    check not e.state.input.search.hlsearchTempDisabled
+
+  test "'persist.search' off neither saves nor restores":
+    var config = newEditorConfig()
+    config.persist.bookmarks = false
+    config.persist.search = false
+    config.persist.commandHistory = false
+    config.persist.cursorPosition = false
+    let e = newEditor(config, newValidationResult())
+    e.state.showGitDiff = false
+    e.state.input.search.last = SearchSpec(pattern: "Foo", match: smPlain)
+
+    e.savePersistData()
+
+    check loadLastSearch().isNone
+    e.state.input.search.last = SearchSpec()
+    e.state.input.search.history = @["foo"]
+    e.restoreLastSearch()
+    check e.state.input.search.last.pattern == ""

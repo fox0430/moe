@@ -1095,11 +1095,13 @@ proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
             cmdResult.substituteRange, e.activeWindow.cursor.line,
             cmdResult.substituteFlags.countOnly,
           ).isOk:
-        e.state.addSearchHistory(cmdResult.pattern)
+        # As Vim's search_regcomp, only a typed pattern goes into the history.
+        if not cmdResult.reusedPattern:
+          e.state.addSearchHistory(cmdResult.pattern)
         e.state.setLastSearch(
           SearchSpec(
             pattern: cmdResult.pattern,
-            match: smPlain,
+            match: cmdResult.match,
             direction: e.state.input.search.last.direction,
           )
         )

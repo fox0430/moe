@@ -20,13 +20,13 @@
 ## Search utility functions for common search operations
 ##
 ## Provides helper functions for case-sensitive/insensitive matching,
-## smartcase logic, and search history persistence
+## smartcase logic, and search history / last search persistence
 
-import std/[strutils, os, appdirs, paths, strformat]
+import std/[strutils, os, appdirs, paths, strformat, options, json]
 
 import pkg/results
 
-import char_case, logger, unicode_utils
+import char_case, logger, unicode_utils, persist, buffer/[search, atomic_write]
 
 proc hasUpperCase*(s: string): bool =
   ## Whether `s` has an upper case letter, for 'smartcase'.
@@ -50,6 +50,88 @@ proc shouldIgnoreCase*(searchText: string, ignorecase: bool, smartcase: bool): b
 # Search history persistence
 
 const DefaultSearchHistoryLimit* = 1000
+
+# Last search persistence
+
+type LastSearch* = object
+  ## The last search, kept for the next session as Vim's viminfo keeps `@/`.
+  ## Its direction is not kept: as in Vim, a new session searches forward.
+  pattern*: string
+  match*: SearchMatch
+
+proc getLastSearchPath*(): Result[Path, string] =
+  ## Returns: ~/$XDG_CACHE_HOME/moe/last_search
+  cacheFilePath("last_search")
+
+proc parseMatch(s: string): SearchMatch =
+  ## What `s` names for a match, `smRegex` for anything else.
+  try:
+    parseEnum[SearchMatch](s)
+  except ValueError:
+    smRegex
+
+proc loadLastSearch*(): Option[LastSearch] =
+  ## The last search the previous session saved, if any.
+  let path = getLastSearchPath()
+  if path.isErr:
+    logError("search_utils", path.error)
+    return none(LastSearch)
+
+  let file = path.get.string
+  if not fileExists(file):
+    return none(LastSearch)
+
+  try:
+    let node = parseFile(file)
+    if node.kind != JObject:
+      return none(LastSearch)
+    let pattern =
+      if node.hasKey("pattern"):
+        node["pattern"].getStr
+      else:
+        ""
+    if pattern.len == 0:
+      return none(LastSearch)
+    some(
+      LastSearch(
+        pattern: pattern,
+        match: parseMatch(
+          if node.hasKey("match"):
+            node["match"].getStr
+          else:
+            ""
+        ),
+      )
+    )
+  except CatchableError as e:
+    logError("search_utils", "Failed to load the last search: " & e.msg)
+    none(LastSearch)
+
+proc saveLastSearch*(last: LastSearch): Result[void, string] =
+  ## Save `last` for the next session.
+  let path = getLastSearchPath()
+  if path.isErr:
+    return err(path.error)
+
+  let pathStr = path.get.string
+  let dir = pathStr.parentDir
+  try:
+    createDir(dir)
+  except CatchableError as e:
+    return err(fmt"Failed to create dir: {e.msg}: {dir}")
+
+  try:
+    # `copyFileWithPermissions` in the hardlink path is declared to raise
+    # `Exception`; it raises only OS and I/O errors.
+    {.cast(raises: [CatchableError]).}:
+      let w = writeAtomic(
+        pathStr, $(%*{"pattern": last.pattern, "match": $last.match}), wpForce
+      )
+      if w.isErr:
+        return err(fmt"{pathStr}: {w.error}")
+  except CatchableError as e:
+    return err(fmt"{pathStr}: {e.msg}")
+  ok()
 
 proc getSearchHistoryPath*(): Result[Path, string] =
   ## Get the path to the search history file

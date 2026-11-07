@@ -177,16 +177,6 @@ suite "CommandLine - parseSubstituteCommand invalid":
   test ":0s/foo/bar/ parses; the line it names is resolution's business":
     check parseSubstituteCommand(":0s/foo/bar/").isValid == true
 
-suite "CommandLine - extractSubstitutePattern":
-  test "Extract pattern from :%s/foo/bar/g":
-    check extractSubstitutePattern(":%s/foo/bar/g") == "foo"
-
-  test "Extract pattern from :s/hello world/bye/":
-    check extractSubstitutePattern(":s/hello world/bye/") == "hello world"
-
-  test "Returns empty for invalid command":
-    check extractSubstitutePattern(":q") == ""
-
 suite "CommandLine - extractSubstituteReplacement":
   test "Extract replacement from :%s/foo/bar/g":
     let (replacement, hasReplacement) = extractSubstituteReplacement(":%s/foo/bar/g")
@@ -643,9 +633,10 @@ suite "CommandLine - execute":
     check result.substituteRange.first == exLine(1)
     check result.substituteRange.last == exLine(10)
 
-  test "Execute substitute with empty pattern returns error":
+  test "Execute substitute with empty pattern and no last search is E35":
     let result = parser.parseAndExecute(":s//bar/")
     check result.kind == claUnknown
+    check result.errorMessage == "E35: No previous regular expression"
 
   test "Execute :help":
     let result = parser.parseAndExecute(":help")
@@ -1352,8 +1343,46 @@ suite "CommandLine - parseSubstituteFlags":
 
   test "Without a flag the parser asks the options":
     let parser = newCommandLineParser()
-    parser.optionsIgnoreCase = proc(pattern: string): bool =
+    parser.optionsIgnoreCase = proc(pattern: string, match: SearchMatch): bool =
       pattern == "foo"
     check parser.parseAndExecute(":s/foo/x/").substituteFlags.ignoreCase
     check not parser.parseAndExecute(":s/Foo/x/").substituteFlags.ignoreCase
     check not parser.parseAndExecute(":s/foo/x/I").substituteFlags.ignoreCase
+
+  test "An empty :s pattern is the last search's":
+    let parser = newCommandLineParser()
+    parser.lastSearch = proc(): SubstitutePattern =
+      SubstitutePattern(pattern: "foo", match: smWord)
+    let result = parser.parseAndExecute(":%s//bar/g")
+    check result.kind == claSubstitute
+    check result.pattern == "foo"
+    check result.match == smWord
+    check result.replacement == "bar"
+    check result.substituteFlags.global
+    check result.substituteRange.kind == erkAll
+
+  test "Vim's do_sub asks the options about the reused :s pattern":
+    let parser = newCommandLineParser()
+    parser.lastSearch = proc(): SubstitutePattern =
+      SubstitutePattern(pattern: "Foo", match: smWord)
+    var asked = SubstitutePattern()
+    parser.optionsIgnoreCase = proc(pattern: string, match: SearchMatch): bool =
+      asked = SubstitutePattern(pattern: pattern, match: match)
+      true
+    check parser.parseAndExecute(":s//x/").substituteFlags.ignoreCase
+    # As Vim's spats keep no_scs, * leaves 'smartcase' out of the reused one.
+    check asked == SubstitutePattern(pattern: "Foo", match: smWord)
+
+  test "A typed :s pattern matches as it is":
+    let parser = newCommandLineParser()
+    parser.lastSearch = proc(): SubstitutePattern =
+      SubstitutePattern(pattern: "f.o", match: smRegex)
+    let result = parser.parseAndExecute(":s/a.b/x/")
+    check result.pattern == "a.b"
+    check result.match == smPlain
+
+  test "Trailing characters still refuse an empty :s pattern first, as Vim":
+    let parser = newCommandLineParser()
+    let result = parser.parseAndExecute(":s//x/gxi")
+    check result.kind == claUnknown
+    check result.errorMessage.startsWith("E488")
