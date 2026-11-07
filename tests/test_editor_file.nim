@@ -21,7 +21,9 @@
 
 import std/[unittest, os, options, monotimes, times, posix, strutils, tables]
 import pkg/results
-import ../src/moepkg/[editor, buffer, config, config_loader, highlight, path_key]
+import
+  ../src/moepkg/
+    [editor, buffer, config, config_loader, highlight, path_key, editor_persist]
 import ../src/moepkg/command_handlers/editor_ops
 import ../src/moepkg/command_handlers/handler_result
 

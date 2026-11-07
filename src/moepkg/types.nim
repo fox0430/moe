@@ -1117,11 +1117,15 @@ type
     index*: int # Current position in jump list (-1 when not navigating)
 
   TabLine* = object
-    ## The line a window last stood on in a buffer (Vim's wininfo). A closed
-    ## window's entry has no `window`.
+    ## Where a window last stood in a buffer (Vim's wininfo). A closed window's
+    ## entry has no `window`, nor does one `saved` by the last session. A
+    ## returning window takes only the line; the column is for the next session,
+    ## and comes back from a saved entry.
     window*: EditorWindow
     bufferId*: BufferId
     line*: int
+    column*: int
+    saved*: bool
 
   EditorState* = ref object
     activeWindow*: EditorWindow

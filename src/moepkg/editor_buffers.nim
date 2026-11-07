@@ -549,6 +549,7 @@ proc deleteBufferById*(e: Editor, id: BufferId): Result[(), string] =
   if bufferIndex < 0:
     return err("Buffer does not exist")
   e.rememberBookmarks(e.buffers[bufferIndex])
+  e.saveBufferCursorPosition(e.buffers[bufferIndex])
   let deletedBuffer = e.removeBufferAt(bufferIndex)
 
   let newBuf =

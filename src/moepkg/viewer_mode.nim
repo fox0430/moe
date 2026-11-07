@@ -102,7 +102,8 @@ proc resumeCoveredMode(
     e.setMode(EditorMode.Normal)
     e.deriveTabMode(win)
     e.syncTabView(win)
-    win.resetViewerViewport()
+    e.placeInTab(win, e.tabBuffer(win))
+    e.centerCursorLine(win)
     return
 
   win.modeState = entry.returnState
