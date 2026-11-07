@@ -46,6 +46,11 @@ proc steadyReservedLines*(e: Editor, window: EditorWindow): int =
   ## `steadyReservedLines` of `window` where it sits in the current layout.
   e.steadyReservedLines(e.windowManager.windows.reachesBottom(window))
 
+proc textRows*(e: Editor, window: EditorWindow): int =
+  ## Rows `window` scrolls its text in, stable as `steadyReservedLines` is.
+  let tabLineRows = if e.showTabLine: TabLineHeight else: 0
+  max(1, window.viewport.height - e.steadyReservedLines(window) - tabLineRows)
+
 proc updateViewportReservedLines*(e: Editor) =
   ## Recompute the reserve motions scroll with from the current status/tab line
   ## configuration and window layout. Steady: motion scrolling is persistent

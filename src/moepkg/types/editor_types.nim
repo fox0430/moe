@@ -20,7 +20,7 @@
 ## Editor type definitions
 ## This module contains the core Editor type and related types used across editor modules.
 
-import std/[options, tables]
+import std/[options, sequtils, tables]
 
 import
   ../[
@@ -198,6 +198,7 @@ proc addBuffer*(e: Editor, buf: TextBuffer) =
   buf.setRowsMovedHook(
     proc(b: TextBuffer, move: RowMove) =
       editor.state.jumpList.moveAcross(b.id, move)
+      editor.state.tabLines.moveAcross(b.id, move)
   )
   if e.onBufferContentReplaced != nil:
     buf.setContentReplacedHook(
@@ -224,6 +225,7 @@ proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   # Unsubscribe: an untracked buffer must not keep reaching back into the
   # editor, which the hook also keeps alive.
   buf.setRowsMovedHook(nil)
+  e.state.tabLines.keepItIf(it.bufferId != id)
   buf.setContentReplacedHook(nil)
   buf.setFileReadHook(nil)
   forgetSyncReport(id)

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, tables]
+import std/[unittest, options, os, sequtils, strutils, tables]
 
 import pkg/results
 
@@ -28,6 +28,8 @@ import
     signature_help,
   ]
 import ../src/moepkg/editor_window {.all.}
+import ../src/moepkg/editor_render_views
+from pkg/celina import newBuffer
 import visual_test_helper
 
 # Helper to create a minimal Editor for testing
@@ -1082,3 +1084,172 @@ suite "Editor window - hsplit without room":
 
     check e.hsplit(some(path), checkRoom = false).isOk
     check e.windowManager.windows.len == 2
+
+suite "moveWindowToTab - the line a window left":
+  proc tabs(e: Editor): tuple[first, second: TextBuffer] =
+    ## Two tabs of 100 lines, the first one active.
+    let first = e.activeBuffer
+    let second = newTextBuffer("other")
+    e.addBuffer(second)
+    for buffer in [first, second]:
+      discard buffer.insertText(BufferPosition(line: 0, column: 0), "  x\n".repeat(99))
+    (first, second)
+
+  test "a window comes back to its line, in the first column":
+    let e = createTestEditor()
+    let (first, second) = e.tabs()
+    e.cursor = BufferPosition(line: 60, column: 2)
+
+    check e.moveWindowToTab(e.activeWindow, second) == tabMoved
+    check e.cursor == BufferPosition(line: 0, column: 0)
+    e.cursor = BufferPosition(line: 30, column: 2)
+    check e.moveWindowToTab(e.activeWindow, first) == tabMoved
+    check e.cursor == BufferPosition(line: 60, column: 0)
+    check e.moveWindowToTab(e.activeWindow, second) == tabMoved
+    check e.cursor == BufferPosition(line: 30, column: 0)
+
+  test "each window keeps its own line":
+    let e = createTestEditor()
+    let (first, second) = e.tabs()
+    e.cursor = BufferPosition(line: 60, column: 0)
+    let left = e.activeWindow
+    discard e.moveWindowToTab(left, second)
+    discard e.vsplit()
+    let right = e.activeWindow
+    require right != left
+    discard e.moveWindowToTab(right, first)
+    e.cursor = BufferPosition(line: 70, column: 0)
+    discard e.moveWindowToTab(right, second)
+    discard e.moveWindowToTab(left, first)
+
+    check left.cursor.line == 60
+    discard e.moveWindowToTab(right, first)
+    check right.cursor.line == 70
+
+  test "a window new to a buffer takes the line last left there":
+    let e = createTestEditor()
+    let (first, second) = e.tabs()
+    e.cursor = BufferPosition(line: 60, column: 0)
+    discard e.moveWindowToTab(e.activeWindow, second)
+    discard e.vsplit()
+
+    discard e.moveWindowToTab(e.activeWindow, first)
+
+    check e.cursor.line == 60
+
+  test "a closed window leaves its line behind":
+    let e = createTestEditor()
+    let (_, second) = e.tabs()
+    let left = e.activeWindow
+    discard e.vsplit()
+    discard e.moveWindowToTab(e.activeWindow, second)
+    e.cursor = BufferPosition(line: 70, column: 0)
+    check not e.closeWindow()
+
+    require e.activeWindow == left
+    discard e.moveWindowToTab(left, second)
+
+    check e.cursor.line == 70
+    for spot in e.state.tabLines:
+      check spot.window.isNil or spot.window == left
+
+  test "the line follows edits made while the window is away":
+    let e = createTestEditor()
+    let (first, second) = e.tabs()
+    e.cursor = BufferPosition(line: 60, column: 0)
+    discard e.moveWindowToTab(e.activeWindow, second)
+    discard first.deleteRange(
+      BufferPosition(line: 10, column: 0), BufferPosition(line: 19, column: 2)
+    )
+
+    discard e.moveWindowToTab(e.activeWindow, first)
+
+    # Line 10 stays, emptied; nine lines go.
+    check e.cursor.line == 51
+
+  test "a line past the end lands on the last line":
+    let e = createTestEditor()
+    let (first, second) = e.tabs()
+    e.cursor = BufferPosition(line: 99, column: 0)
+    discard e.moveWindowToTab(e.activeWindow, second)
+    discard first.deleteRange(
+      BufferPosition(line: 50, column: 0), BufferPosition(line: 99, column: 0)
+    )
+
+    discard e.moveWindowToTab(e.activeWindow, first)
+
+    check e.cursor.line == first.len - 1
+
+  test "a deleted buffer leaves nothing behind":
+    let e = createTestEditor()
+    let (first, second) = e.tabs()
+    e.cursor = BufferPosition(line: 60, column: 0)
+    discard e.moveWindowToTab(e.activeWindow, second)
+
+    check e.deleteBufferById(first.id).isOk
+
+    check e.state.tabLines.allIt(it.bufferId != first.id)
+
+  test "coming back centers the line before any frame":
+    let e = createTestEditor()
+    e.activeWindow.viewport.height = 24
+    let frame = newBuffer(80, 24)
+    let (first, second) = e.tabs()
+    e.cursor = BufferPosition(line: 19, column: 0)
+    discard e.moveWindowToTab(e.activeWindow, second)
+    discard e.moveWindowToTab(e.activeWindow, first)
+
+    let centered = e.activeWindow.viewport.topLine
+    check 19 - centered in 8 .. 12
+
+    # The frame keeps it, and the window then scrolls as usual.
+    e.advanceLayoutForFrame(frame, false)
+    check e.activeWindow.viewport.topLine == centered
+    e.cursor = BufferPosition(line: centered + 1, column: 0)
+    e.advanceLayoutForFrame(frame, false)
+    check e.activeWindow.viewport.topLine == centered
+
+  test "a view placed after coming back stays":
+    let e = createTestEditor()
+    e.activeWindow.viewport.height = 24
+    let frame = newBuffer(80, 24)
+    let (first, second) = e.tabs()
+    e.cursor = BufferPosition(line: 60, column: 0)
+    discard e.moveWindowToTab(e.activeWindow, second)
+    discard e.moveWindowToTab(e.activeWindow, first)
+
+    e.cursor = BufferPosition(line: 80, column: 0)
+    e.activeWindow.viewport.resetViewportTop(75)
+    e.advanceLayoutForFrame(frame, false)
+
+    check e.activeWindow.viewport.topLine == 75
+
+  test "deleting the buffer a window shows leaves nothing behind":
+    let e = createTestEditor()
+    let (first, _) = e.tabs()
+    e.cursor = BufferPosition(line: 60, column: 0)
+
+    check e.deleteBufferById(first.id).isOk
+
+    check e.state.tabLines.allIt(it.bufferId != first.id)
+
+  test "a closed window replaces the line an older one left":
+    let e = createTestEditor()
+    let (first, _) = e.tabs()
+    for line in [60, 70, 80]:
+      discard e.vsplit()
+      e.cursor = BufferPosition(line: line, column: 0)
+      discard e.closeWindow()
+
+    let left = e.state.tabLines.filterIt(it.bufferId == first.id and it.window.isNil)
+    check left.len == 1
+    check left[0].line == 80
+
+  test "a buffer never left starts at its top":
+    let e = createTestEditor()
+    let (_, second) = e.tabs()
+
+    discard e.moveWindowToTab(e.activeWindow, second)
+
+    check e.cursor == BufferPosition(line: 0, column: 0)
+    check e.activeWindow.viewport.topLine == 0

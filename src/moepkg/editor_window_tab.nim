@@ -23,13 +23,21 @@
 ## tab and rebuilds the mode state the old tab owned. `deriveTabMode` rebuilds
 ## only the mode, for a window whose tab is already in place: a new split, or a
 ## viewer resuming after its tab moved underneath it. `syncTabView` derives what
-## the window then shows.
+## the window then shows. A window comes back to the line it left a tab on.
 
-import std/options
+import std/[options, sequtils]
 
 import pkg/results
 
-import types/editor_types, editor_mode, editor_window_state, logger, modes
+import
+  types/editor_types,
+  editor_mode,
+  editor_window_layout,
+  editor_window_state,
+  logger,
+  modes,
+  render_utils,
+  visible_rows
 
 when not defined(moe.embedded):
   import std/tables
@@ -143,6 +151,64 @@ type TabMove* = enum
   tabAlreadyShown ## It already did; nothing changed.
   tabSwitchRefused ## The window keeps its own tab; nothing changed.
 
+proc leaveTabLine(e: Editor, win: EditorWindow, covered: Option[ViewerEntry]) =
+  ## Remember the line `win` stands on in its tab; `covered` is the viewer over
+  ## that tab, if any. Other views hold no line of the tab, and a deleted tab
+  ## has no line left to come back to.
+  if e.bufferIndexById(win.tabBufferId) < 0:
+    return
+  var line = win.cursor.line
+  if covered.isSome and covered.get.returnTab == win.tabBufferId:
+    line = covered.get.originCursor.line
+  elif win.buffer.id != win.tabBufferId:
+    return
+  let bufferId = win.tabBufferId
+  e.state.tabLines.keepItIf(not (it.window == win and it.bufferId == bufferId))
+  e.state.tabLines.insert(TabLine(window: win, bufferId: bufferId, line: line), 0)
+
+proc tabLineFor(e: Editor, win: EditorWindow, buf: TextBuffer): int =
+  ## The line `win` left `buf` on, else the line any window last did (Vim's
+  ## find_wininfo), kept inside `buf`.
+  var found = -1
+  for spot in e.state.tabLines:
+    if spot.bufferId == buf.id:
+      if spot.window == win:
+        found = spot.line
+        break
+      if found < 0:
+        found = spot.line
+  clamp(found, 0, max(0, buf.len - 1))
+
+proc releaseTabLines*(e: Editor, win: EditorWindow) =
+  ## `win` closes: its lines stay for the other windows, as Vim's close_buffer
+  ## leaves the buffer's wininfo. They replace older lines of closed windows,
+  ## which nothing would read again (Vim's win_free).
+  e.leaveTabLine(win, win.viewerEntry)
+  let left = e.state.tabLines.filterIt(it.window == win).mapIt(it.bufferId)
+  e.state.tabLines.keepItIf(not (it.window.isNil and it.bufferId in left))
+  for spot in e.state.tabLines.mitems:
+    if spot.window == win:
+      spot.window = nil
+
+proc centerCursorLine(e: Editor, win: EditorWindow) =
+  ## Put the line `win` came back to in the middle of the window, as Vim's
+  ## enter_buffer does.
+  initRowLayout(
+    win.buffer,
+    win.wrapCountCache,
+    effectiveLineWrap(e.lineWrap, win.mode),
+    e.textAreaWidth(win),
+    e.tabStop,
+  )
+    .scrollViewportToCursor(
+      win.viewport,
+      win.cursor.line,
+      win.cursor.column,
+      e.textRows(win),
+      win.cursorOnTabEnd,
+      centered = true,
+    )
+
 proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
   ## Move `win` onto `buf`'s tab and rebuild state owned by the old tab
   ## (Insert session, buffer-swap modes, view position, derived mode).
@@ -166,7 +232,7 @@ proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
     win.previousMode = EditorMode.Normal
 
   # Terminal state stays in `e.terminalStates`; never `cleanup()` it here.
-  discard win.takeViewerEntry()
+  e.leaveTabLine(win, win.takeViewerEntry())
   let wasSpecialMode =
     when defined(moe.embedded):
       win.modeState.kind != mskNone
@@ -176,7 +242,8 @@ proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
     win.dropModeState()
 
   win.setTab(buf)
-  win.cursor = BufferPosition(line: 0, column: 0)
+  # The column does not come back, as with Vim's 'startofline'.
+  win.cursor = BufferPosition(line: e.tabLineFor(win, buf), column: 0)
   win.viewport.resetViewportTop()
   win.viewport.leftCell = 0
 
@@ -189,6 +256,9 @@ proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
   # Re-apply forceInsertMode for the active window only.
   if isActiveWindow:
     e.enforceModePolicy()
+
+  if win.cursor.line > 0:
+    e.centerCursorLine(win)
 
   tabMoved
 
