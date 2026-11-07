@@ -184,7 +184,9 @@ let Invariants = @[
       ("moepkg/command_handlers/recovery_ops.nim", 1),
       # One of these re-scopes an open recovery list (read-only viewer); one is
       # the diff viewer's quit back to its backup manager.
-      ("moepkg/command_handlers/viewer_ops.nim", 6),
+      ("moepkg/command_handlers/viewer_ops.nim", 4),
+      # Buffer and bookmark listing rebuilds (read-only viewers).
+      ("moepkg/buffer_listings.nim", 1),
       # Filer / FileTree listing rebuilds. These were invisible to the old
       # line-based `.buffer =` matcher because the RHS sat on the next line.
       ("moepkg/command_handlers/result_processor.nim", 2),

@@ -46,6 +46,18 @@ proc getItem*[T](v: ListViewer[T], index: int): Option[T] =
 proc getSelectedItem*[T](v: ListViewer[T]): Option[T] =
   v.getItem(v.selectedIndex)
 
+proc keepSelection*[T](
+    v: ListViewer[T], selected: Option[T], same: proc(a, b: T): bool
+) =
+  ## After `items` is rebuilt: stay on the `selected` item, or on its row when
+  ## that item is gone.
+  if selected.isSome:
+    for i, item in v.items:
+      if same(item, selected.get):
+        v.selectedIndex = i
+        return
+  v.selectedIndex = clamp(v.selectedIndex, 0, max(0, v.items.high))
+
 proc moveUp*[T](v: ListViewer[T]) =
   pickerMoveUp(v.selectedIndex)
 

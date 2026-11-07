@@ -450,20 +450,30 @@ suite "BufferManagerState - Integration":
 
     # Initial buffers
     let bufferInfos1 = @[
-      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-      BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
-      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
+      BufferInfo(
+        number: 1, filePath: some("/file1.nim"), isModified: false, isActive: true
+      ),
+      BufferInfo(
+        number: 2, filePath: some("/file2.nim"), isModified: false, isActive: false
+      ),
+      BufferInfo(
+        number: 3, filePath: some("/file3.nim"), isModified: false, isActive: false
+      ),
     ]
     state.updateEntries(bufferInfos1)
     state.selectedIndex = 2
 
     # Remove a buffer (simulate closing)
     let bufferInfos2 = @[
-      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
+      BufferInfo(
+        number: 1, filePath: some("/file1.nim"), isModified: false, isActive: true
+      ),
+      BufferInfo(
+        number: 3, filePath: some("/file3.nim"), isModified: false, isActive: false
+      ),
     ]
     state.updateEntries(bufferInfos2)
 
-    # selectedIndex should be clamped
+    # The selection stays on its buffer
     check state.items.len == 2
     check state.selectedIndex == 1

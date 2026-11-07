@@ -385,7 +385,7 @@ suite "Editor - switchToBuffer":
       writeFile(f, "content")
       discard e.editFile(f)
 
-    let infos = e.getBufferInfos()
+    let infos = e.getBufferInfos(e.commandTab().id)
     check infos.len == e.buffers.len
 
     for i, info in infos:
@@ -411,7 +411,7 @@ suite "Editor - switchToBuffer":
       writeFile(f, "content")
       discard e.editFile(f)
 
-    let infos = e.getBufferInfos()
+    let infos = e.getBufferInfos(e.commandTab().id)
     let doomed = infos[1]
     let survivor = infos[2]
     check e.deleteBufferById(e.buffers[1].id).isOk
@@ -2409,7 +2409,7 @@ suite "Editor - BufferManager delete refuses a modified buffer":
     let f1Buf = e.activeBuffer()
     discard f1Buf.insertText(BufferPosition(line: 0, column: 1), "x")
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -4148,7 +4148,7 @@ suite "Editor - :bnext walks the tabs of every window":
 
   proc openViewer(e: Editor) =
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),
@@ -4342,7 +4342,7 @@ suite "Editor - :bnext walks the tabs of every window":
       paths.remove()
     let viewerWin = e.activeWindow
     let bmState = newBufferManagerState()
-    bmState.updateEntries(e.getBufferInfos())
+    bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
     discard e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),

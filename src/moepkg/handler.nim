@@ -175,9 +175,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
 
   case r.kind
   of hrRecentFileQuit:
-    e.leaveViewerMode(EditorMode.RecentFile)
-    e.state.statusMessage = ""
-    return true
+    return e.processResult(r, e.activeBuffer())
   of hrRecentFileOpenFile:
     let filePath = r.recentFilePath
     if not fileExists(filePath):

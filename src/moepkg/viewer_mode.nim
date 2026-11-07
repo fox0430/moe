@@ -36,6 +36,7 @@ import
   editor_window,
   editor_window_state,
   editor_window_tab,
+  editor_config_reload,
   buffer,
   window_manager
 
@@ -121,6 +122,9 @@ proc undoViewer(
   ## opened unless it is the last one; the covered mode resumes only if the
   ## window survived — a closed split leaves a neighbour that was never in the
   ## viewer mode.
+  # An edit a mapping made has had no key loop to apply it yet.
+  if win.modeState.kind == mskConfig and win.modeState.config.pendingApply:
+    e.applyConfigSettings(e.config)
   # The window's state is the viewer's while its entry is live, the DiffViewer
   # opened over it included.
   win.dropModeState()

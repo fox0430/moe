@@ -1147,10 +1147,10 @@ suite "Viewer round-trip - tab identity":
     check win.tabBufferId == origBuf.id
 
   test "deleting the tab under a live viewer moves the tab, not the view":
-    # `:bd` typed from inside a viewer deletes the buffer the window is parked
-    # on while the listing stays up. The window has to end up on the successor
-    # tab, and the viewer's exit has to restore that buffer rather than the
-    # deleted one.
+    # `:bd {number}` typed from inside a viewer can delete the buffer the window
+    # is parked on while the listing stays up. The window has to end up on the
+    # successor tab, and the viewer's exit has to restore that buffer rather
+    # than the deleted one.
     let (e, pathA) = editorOnFile("moe_rt_tab_identity_bd_a.txt")
     let pathB = getTempDir() / "moe_rt_tab_identity_bd_b.txt"
     writeFile(pathB, TestLines)
@@ -1170,7 +1170,7 @@ suite "Viewer round-trip - tab identity":
     let listing = win.buffer
     check win.tabBufferId == bufA.id
 
-    check e.deleteCurrentBuffer().isOk
+    check e.deleteBufferByArg($bufA.id.int).isOk
 
     check e.bufferById(bufA.id).isNone
     check win.buffer == listing # the viewer is untouched

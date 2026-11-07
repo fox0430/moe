@@ -37,6 +37,7 @@ import
   editor_window_state,
   editor_window_tab,
   viewer_mode,
+  buffer_listings,
   git_cache,
   editorconfig_helper,
   highlight,
@@ -48,6 +49,8 @@ import
 
 when not defined(moe.embedded):
   import terminal_mode
+
+export buffer_listings
 
 type OpenBufferInfo* = object
   ## Frontend-neutral information about a buffer in the active window.
@@ -619,24 +622,20 @@ proc moveBuffer*(e: Editor, id: BufferId, destination: Natural): bool =
   true
 
 proc deleteCurrentBuffer*(e: Editor, force: bool = false): Result[(), string] =
-  ## Delete the buffer the active window is parked on (Vim `:bd` semantics).
+  ## `:bd`: end the active window's viewer or FileTree if it shows one, else
+  ## delete the buffer it is parked on. `ok` therefore does not always mean a
+  ## buffer went; a host closing a tab by id uses `closeBuffer`.
   ## Every window that was showing it switches to another buffer — windows
   ## themselves stay open. If this was the only buffer, a fresh empty
   ## `[No Name]` buffer takes its place.
   ##
   ## The target is the window's tab, not `activeBuffer()` — they differ in
-  ## Terminal-Normal and the viewer modes. `force` skips the modified check as
-  ## `:bd!` does.
+  ## Terminal-Normal. `force` skips the modified check as `:bd!` does.
   ##
   ## Refusals come back as `err`, not a status message, so an embedding caller
   ## can tell a refusal from a deletion.
-  ##
-  ## A split viewer's window exists for its listing, so there the listing goes
-  ## and the window with it, as Vim closes the windows on a deleted buffer; the
-  ## last window instead goes back to the tab it covered. The FileTree
-  ## sidebar's window too: the tree closes, as its `q` does.
   let win = e.activeWindow
-  if win.viewerEntry.isSome and win.viewerEntry.get.placement != vpInPlace:
+  if win.viewerEntry.isSome:
     e.closeLiveViewer()
     return ok(())
   if win.isSidebar:

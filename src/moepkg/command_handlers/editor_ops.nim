@@ -31,7 +31,7 @@ import
   ../[
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     config_loader, window_manager, log_viewer, syntax_checker, motion, viewer_mode,
-    editor_build_jobs, buffer_manager,
+    editor_build_jobs,
   ]
 
 when not defined(moe.embedded):
@@ -52,14 +52,6 @@ proc trySaveLogViewerBuffer*(e: Editor): string =
   if writeRes.isOk:
     return "Log saved: " & path
   return "Log save failed: " & writeRes.error
-
-proc getBufferInfos*(e: Editor): seq[BufferInfo] =
-  ## Extract buffer information from the buffer list for BufferManager.
-  ## Active means the window's tab, not what an overlay viewer shows.
-  result = @[]
-  let activeTabId = e.commandTab().id
-  for buf in e.buffers:
-    result.add(buf.toBufferInfo(buf.id == activeTabId))
 
 proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
   ## Update viewport to follow cursor position
