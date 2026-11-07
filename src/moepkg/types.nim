@@ -1013,6 +1013,7 @@ type
     global*: bool # Whether every match in a line was replaced
     lines*: Slice[int]
     ignoreCase*: bool
+    match*: SearchMatch
 
   SubstitutePreview* = object
     ## State for live substitute preview (like Vim's inccommand)

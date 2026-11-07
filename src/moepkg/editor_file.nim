@@ -144,6 +144,7 @@ proc savePersistData*(e: Editor) {.raises: [].} =
     )
     if r.isErr:
       logError("editor", "Failed to save search history: " & r.error)
+    e.rememberLastSearch()
 
   if e.config.persist.commandHistory:
     # Save command history

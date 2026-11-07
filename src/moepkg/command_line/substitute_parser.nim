@@ -219,15 +219,6 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
     of psReplacement:
       result.replacement.add('\\')
 
-proc extractSubstitutePattern*(commandText: string): string =
-  ## Extract the search pattern from a substitute command
-  ## Supports formats like :%s/pattern/replacement/flags or :s/pattern/...
-  ## Returns empty string if not a substitute command or pattern is incomplete
-  let parsed = parseSubstituteCommand(commandText)
-  if parsed.isValid:
-    return parsed.pattern
-  return ""
-
 proc extractSubstituteReplacement*(
     commandText: string
 ): tuple[replacement: string, hasReplacement: bool] =

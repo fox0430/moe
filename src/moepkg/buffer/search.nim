@@ -327,25 +327,80 @@ proc findSearchMatchRanges*(
       # Advance past match (avoid infinite loop on zero-width)
       searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
 
-proc firstPlainMatch*(line, pattern: string, ignorecase: bool): Option[int] =
-  ## The column of the first match of the plain string `pattern` on `line`.
-  for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, smPlain)):
+iterator substituteRanges(
+    line, pattern: string, ignorecase: bool, match: SearchMatch
+): LiteralRange =
+  ## The matches of `pattern` :s replaces on `line`, left to right, matching as
+  ## `match` says. As in Vim's do_sub, an empty regex match where the one before
+  ## ended is skipped, and the line is done once the search reaches its end.
+  if match != smRegex:
+    for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, match)):
+      yield r
+  else:
+    let compiled = compileSearchRegex(pattern, ignorecase)
+    if compiled.isSome:
+      let
+        re = compiled.get
+        searchable = line.toValidUtf8
+        sameBytes = searchable.len == line.len
+      var
+        start = 0
+        lastEnd = -1
+        m = RegexMatch2()
+      while (start == 0 or start < searchable.len) and find(searchable, re, m, start):
+        let
+          a = m.boundaries.a
+          b = m.boundaries.b + 1
+        if a == b and a == lastEnd:
+          if a >= searchable.len:
+            break
+          start = a + max(searchable.runeSizeAt(a), 1)
+          continue
+        let
+          startCol = byteToCharPos(searchable, a)
+          endCol = byteToCharPos(searchable, b)
+        yield LiteralRange(
+          startCol: startCol,
+          endCol: endCol,
+          startByte:
+            if sameBytes:
+              a
+            else:
+              charToBytePos(line, startCol),
+          endByte:
+            if sameBytes:
+              b
+            else:
+              charToBytePos(line, endCol),
+        )
+        lastEnd = b
+        if b >= searchable.len:
+          break
+        start = b
+
+proc firstSubstituteMatch*(
+    line, pattern: string, ignorecase: bool, match = smPlain
+): Option[int] =
+  ## The column of the first match of `pattern` :s would replace on `line`.
+  for r in line.substituteRanges(pattern, ignorecase, match):
     return some(r.startCol)
 
-proc countPlain*(line, pattern: string, ignorecase, everyMatch: bool): int =
-  ## How many matches of the plain string `pattern` :s would replace on `line`.
-  for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, smPlain)):
+proc countSubstituteMatches*(
+    line, pattern: string, ignorecase, everyMatch: bool, match = smPlain
+): int =
+  ## How many matches of `pattern` :s would replace on `line`.
+  for r in line.substituteRanges(pattern, ignorecase, match):
     result.inc
     if not everyMatch:
       break
 
-proc substitutePlain*(
-    line, pattern, replacement: string, ignorecase, everyMatch: bool
+proc substituteMatches*(
+    line, pattern, replacement: string, ignorecase, everyMatch: bool, match = smPlain
 ): tuple[text: string, count: int] =
-  ## `line` with the first match of the plain string `pattern`, or `everyMatch`,
-  ## replaced, and how many were. These are the matches a search for it shows.
+  ## `line` with the first match of `pattern`, or `everyMatch`, replaced, and
+  ## how many were.
   var copied = 0
-  for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, smPlain)):
+  for r in line.substituteRanges(pattern, ignorecase, match):
     result.text.add(line[copied ..< r.startByte])
     result.text.add(replacement)
     result.count.inc

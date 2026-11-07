@@ -509,7 +509,9 @@ type
       cfgMin: 1,
       cfgDocDescription: "The maximum entries of Command mode command history to save"
     .}: int
-    search* {.cfg, cfgDocDescription: "Saving search history".}: bool
+    search* {.
+      cfg, cfgDocDescription: "Saving search history and the last search pattern"
+    .}: bool
     searchHistoryLimit* {.
       cfg, cfgMin: 1, cfgDocDescription: "The maximum entries of search history to save"
     .}: int

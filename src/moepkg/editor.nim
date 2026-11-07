@@ -279,8 +279,13 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   )
 
   let state = result.state
-  result.commandLineParser.optionsIgnoreCase = proc(pattern: string): bool =
-    state.input.search.ignoresCase(SearchSpec(pattern: pattern, match: smPlain))
+  result.commandLineParser.optionsIgnoreCase = proc(
+      pattern: string, match: SearchMatch
+  ): bool =
+    state.input.search.ignoresCase(SearchSpec(pattern: pattern, match: match))
+  result.commandLineParser.lastSearch = proc(): SubstitutePattern =
+    let last = state.input.search.last
+    SubstitutePattern(pattern: last.pattern, match: last.match)
 
   # Subscribe before the first buffer is registered; `addBuffer` installs the
   # hook on each buffer as it joins.
