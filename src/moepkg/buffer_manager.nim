@@ -74,6 +74,13 @@ proc updateEntries*(state: BufferManagerState, bufferInfos: seq[BufferInfo]) =
   ## Update the entries from buffer information.
   state.setEntries(initBufferManagerEntries(bufferInfos))
 
+proc selectActive*(state: BufferManagerState) =
+  ## Select the current buffer's entry.
+  for i, entry in state.items:
+    if entry.active:
+      state.selectedIndex = i
+      return
+
 proc formatLine*(entry: BufferEntry): string =
   ## Format a buffer entry for display, with the name sanitized.
   let

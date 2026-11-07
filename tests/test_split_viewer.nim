@@ -2077,3 +2077,28 @@ suite "listings on the frame":
     for entry in state.items:
       numbers.add(entry.number)
     check added.id.int in numbers
+
+suite "Lone sidebar - the line a closed window left":
+  proc onLine60(e: Editor) =
+    discard
+      e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "x\n".repeat(99))
+    e.cursor = BufferPosition(line: 60, column: 0)
+
+  test "the window that replaces the sidebar takes it":
+    let e = createTestEditor()
+    e.onLine60()
+    discard e.loneSidebar()
+
+    e.closeFileTree()
+
+    check e.activeWindow.cursor.line == 60
+
+  test "the window opened beside the sidebar takes it":
+    let e = createTestEditor()
+    e.onLine60()
+    let buf = e.activeBuffer()
+    discard e.loneSidebar()
+
+    check e.openWindowBesideSidebar(buf).isOk
+
+    check e.activeWindow.cursor.line == 60

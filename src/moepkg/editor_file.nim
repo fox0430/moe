@@ -19,7 +19,7 @@
 
 ## File operation procedures (load, save, auto-save, auto-backup)
 
-import std/[options, strformat, os, monotimes, times, tables, strutils, sequtils]
+import std/[options, os, monotimes, times, tables, strutils, sequtils]
 
 import pkg/results
 
@@ -40,6 +40,7 @@ import
   highlight_config,
   persist,
   editor_persist,
+  editor_window_tab,
   buffer,
   lsp_integration,
   quick_run_utils,
@@ -74,9 +75,6 @@ proc refreshGitDiff*(e: Editor) =
   if e.showGitDiff:
     e.state.git.requestGitRefresh(e.activeBuffer())
 
-template isPersistCursorPositionFile(lang: SourceLanguage): bool =
-  lang notin {SourceLanguage.langGitRebaseTodo, SourceLanguage.langCommitEditMsg}
-
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file
   logDebug("editor", "Loading file: " & path)
@@ -96,39 +94,10 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   # Apply EditorConfig settings if enabled
   applyEditorConfigToBuffer(e.activeBuffer, e.config)
 
-  # Restore cursor position if persisted, otherwise reset to file start
-  # Don't restore for temporary git files
-  let persistCursor =
-    e.config.persist.cursorPosition and
-    isPersistCursorPositionFile(e.activeBuffer.language)
-  let savedPos =
-    if persistCursor:
-      e.savedCursorPosition(pathKey(path))
-    else:
-      none(CursorPositionEntry)
-  if savedPos.isSome:
-    let pos = savedPos.get
-    # Ensure cursor position is within buffer bounds
-    let line = min(pos.line, max(0, e.activeBuffer.len - 1))
-    let col =
-      if line < e.activeBuffer.len:
-        min(pos.column, max(0, e.activeBuffer.getLine(line).charLen - 1))
-      else:
-        0
-    e.cursor = BufferPosition(line: line, column: col)
-    logDebug("editor", fmt"Restored cursor position for {path}: line={line}, col={col}")
-  else:
-    e.cursor = BufferPosition(line: 0, column: 0)
-  if persistCursor:
-    e.persistedCursorPositions.markRestored(
-      pathKey(path), CursorPositionEntry(line: e.cursor.line, column: e.cursor.column)
-    )
+  e.restoreCursorPosition(e.activeBuffer)
+  e.placeInTab(e.activeWindow, e.activeBuffer)
 
   e.restoreBookmarks(e.activeBuffer)
-
-  # Reset viewport to start (will be adjusted by motion controller)
-  e.viewport.resetViewportTop()
-  e.viewport.leftCell = 0
 
   if e.showGitDiff:
     e.state.git.requestGitRefresh(e.activeBuffer)
@@ -147,20 +116,6 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   e.noteBufferRead(e.activeBuffer, roUser)
 
   ok(())
-
-proc saveBufferCursorPosition*(e: Editor, buffer: TextBuffer) =
-  ## Record the cursor position in `buffer` for the next save if
-  ## persist.cursorPosition is enabled
-  if not e.config.persist.cursorPosition:
-    return
-  if buffer.filePath.isNone:
-    return
-  if not isPersistCursorPositionFile(buffer.language):
-    return
-  e.persistedCursorPositions.record(
-    pathKey(buffer.filePath.get),
-    CursorPositionEntry(line: e.cursor.line, column: e.cursor.column),
-  )
 
 proc addCommandToHistory*(e: Editor, command: string) =
   ## Add a command to the command history
@@ -199,10 +154,8 @@ proc savePersistData*(e: Editor) {.raises: [].} =
       logError("editor", "Failed to save command history: " & r.error)
 
   if e.config.persist.cursorPosition:
-    # Save cursor positions
-    # Save current buffer's cursor position first
-    let activeBuffer = e.activeBuffer()
-    e.saveBufferCursorPosition(activeBuffer)
+    for buf in e.buffers:
+      e.saveBufferCursorPosition(buf)
     let r = updateCursorPositions(
       e.persistedCursorPositions.changes, e.persistedCursorPositions.restored.keys.toSeq
     )

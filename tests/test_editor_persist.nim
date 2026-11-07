@@ -25,17 +25,18 @@ import std/[unittest, json, options, os, strutils, tables]
 import pkg/results
 
 import ../src/moepkg/[editor, config, config_loader, persist]
-import ../src/moepkg/[editor_buffers, editor_file, editor_navigation]
+import ../src/moepkg/[editor_buffers, editor_file, editor_navigation, editor_window]
+import ../src/moepkg/[filer, viewer_mode, window_manager]
 
 let cacheHome = getTempDir() / "moe_test_editor_persist"
 putEnv("XDG_CACHE_HOME", cacheHome)
 
-proc createTestEditor(bookmarks = true): Editor =
+proc createTestEditor(bookmarks = true, cursorPosition = false): Editor =
   var config = newEditorConfig()
   config.persist.bookmarks = bookmarks
   config.persist.search = false
   config.persist.commandHistory = false
-  config.persist.cursorPosition = false
+  config.persist.cursorPosition = cursorPosition
   result = newEditor(config, newValidationResult())
   result.state.showGitDiff = false
 
@@ -344,3 +345,290 @@ suite "persistence across sessions":
     check saved.getOrDefault(path) == @[2]
     check "/old/0.nim" in saved
     check "/old/" & $(MaxRecordedFiles + 19) & ".nim" notin saved
+
+proc cursorEditor(): Editor =
+  createTestEditor(bookmarks = false, cursorPosition = true)
+
+proc writeLines(name: string): string =
+  result = cacheHome / name
+  writeFile(result, "alpha\nbravo\ncharlie\ndelta\necho\n")
+
+proc savedCursor(path: string): CursorPositionEntry =
+  let loaded = loadCursorPositions()
+  check loaded.isOk
+  check path in loaded.get
+  loaded.get.getOrDefault(path)
+
+proc saveCursor(path: string, line, column: int) =
+  check updateCursorPositions(
+    {path: CursorPositionEntry(line: line, column: column)}.toTable
+  ).isOk
+
+proc cursorIs(e: Editor, line, column: int): bool =
+  e.cursor == BufferPosition(line: line, column: column)
+
+proc focus(e: Editor, win: EditorWindow) =
+  for i, candidate in e.windowManager.windows:
+    if candidate == win:
+      e.windowManager.activateWindow(i)
+      e.syncActiveWindow()
+
+proc splitFiler(e: Editor): bool =
+  let filerState = newFilerState(cacheHome)
+  e.enterViewerMode(
+    EditorMode.Filer,
+    ModeState(kind: mskFiler, filer: filerState),
+    filerState.createFilerTextBuffer(false),
+    vpVSplit,
+  ).isOk
+
+suite "cursor position persistence":
+  setup:
+    removeDir(cacheHome)
+    createDir(cacheHome)
+
+  teardown:
+    removeDir(cacheHome)
+
+  test "Saving records every file a window left, not only the active one":
+    let e = cursorEditor()
+    let first = writeLines("first.txt")
+    let second = writeLines("second.txt")
+    check e.editFile(first).isOk
+    e.cursor = BufferPosition(line: 3, column: 2)
+    check e.editFile(second).isOk
+    e.cursor = BufferPosition(line: 1, column: 1)
+
+    e.savePersistData()
+
+    check savedCursor(first) == CursorPositionEntry(line: 3, column: 2)
+    check savedCursor(second) == CursorPositionEntry(line: 1, column: 1)
+
+  test "Saving under a viewer records the file below it":
+    let e = cursorEditor()
+    let path = writeLines("covered.txt")
+    check e.editFile(path).isOk
+    e.cursor = BufferPosition(line: 2, column: 3)
+    let filerState = newFilerState(cacheHome)
+    check e.enterViewerMode(
+      EditorMode.Filer,
+      ModeState(kind: mskFiler, filer: filerState),
+      filerState.createFilerTextBuffer(false),
+      vpInPlace,
+    ).isOk
+
+    e.savePersistData()
+
+    check savedCursor(path) == CursorPositionEntry(line: 2, column: 3)
+
+  test "A file opened in the background keeps its record":
+    let path = writeLines("background.txt")
+    saveCursor(path, 4, 1)
+    let e = cursorEditor()
+    check e.openFileInBackground(path).isOk
+
+    e.savePersistData()
+
+    check savedCursor(path) == CursorPositionEntry(line: 4, column: 1)
+
+  test "A file opened and left alone keeps its record":
+    let path = writeLines("untouched.txt")
+    let other = writeLines("other.txt")
+    saveCursor(path, 4, 1)
+    let e = cursorEditor()
+    check e.editFile(path).isOk
+    check e.editFile(other).isOk
+
+    e.savePersistData()
+
+    check savedCursor(path) == CursorPositionEntry(line: 4, column: 1)
+
+  test "A file read in the background opens where the last session left it":
+    let path = writeLines("read_first.txt")
+    saveCursor(path, 3, 2)
+    let e = cursorEditor()
+    check e.openFileInBackground(path).isOk
+
+    check e.editFile(path).isOk
+
+    check e.cursorIs(3, 2)
+
+  test "Showing one file leaves the position of another":
+    let first = writeLines("shown_first.txt")
+    let second = writeLines("shown_second.txt")
+    saveCursor(first, 3, 2)
+    saveCursor(second, 2, 1)
+    let e = cursorEditor()
+    check e.openFileInBackground(first).isOk
+    check e.openFileInBackground(second).isOk
+    check e.editFile(first).isOk
+
+    check e.editFile(second).isOk
+
+    check e.cursorIs(2, 1)
+
+  test "A split viewer outlasting its window saves where that window left":
+    let e = cursorEditor()
+    let path = writeLines("outlasted.txt")
+    check e.editFile(path).isOk
+    e.cursor = BufferPosition(line: 1, column: 0)
+    let origin = e.activeWindow
+    check e.splitFiler()
+    let viewer = e.activeWindow
+    e.focus(origin)
+    e.cursor = BufferPosition(line: 4, column: 0)
+    check not e.closeWindow()
+    e.focus(viewer)
+
+    e.savePersistData()
+
+    check savedCursor(path).line == 4
+
+  test "Closing a split viewer does not bury where its window left":
+    let e = cursorEditor()
+    let path = writeLines("buried.txt")
+    let other = writeLines("buried_other.txt")
+    check e.editFile(path).isOk
+    e.cursor = BufferPosition(line: 1, column: 0)
+    let origin = e.activeWindow
+    check e.splitFiler()
+    let viewer = e.activeWindow
+    e.focus(origin)
+    e.cursor = BufferPosition(line: 4, column: 0)
+    check e.editFile(other).isOk
+    e.focus(viewer)
+    check not e.closeWindow()
+
+    e.savePersistData()
+
+    check savedCursor(path).line == 4
+
+  test "Saving from a split viewer records the window it split from":
+    let e = cursorEditor()
+    let path = writeLines("split_viewer.txt")
+    check e.editFile(path).isOk
+    e.cursor = BufferPosition(line: 1, column: 0)
+    let origin = e.activeWindow
+    check e.splitFiler()
+    let viewer = e.activeWindow
+    e.focus(origin)
+    e.cursor = BufferPosition(line: 4, column: 0)
+    e.focus(viewer)
+
+    e.savePersistData()
+
+    check savedCursor(path).line == 4
+
+  test "Closing a window keeps the newer line a closed window left":
+    let e = cursorEditor()
+    let path = writeLines("closed.txt")
+    let other = writeLines("other.txt")
+    check e.editFile(path).isOk
+    let first = e.activeWindow
+    check e.vsplit().isOk
+    let older = e.activeWindow
+    check e.vsplit().isOk
+    let newer = e.activeWindow
+    e.focus(first)
+    check e.editFile(other).isOk
+    e.focus(older)
+    e.cursor = BufferPosition(line: 1, column: 0)
+    check e.editFile(other).isOk
+    e.focus(newer)
+    e.cursor = BufferPosition(line: 4, column: 0)
+    check e.editFile(other).isOk
+    check not e.closeWindow()
+    e.focus(older)
+    check not e.closeWindow()
+
+    e.savePersistData()
+
+    check savedCursor(path).line == 4
+
+  test "Only the first window takes the position of the last session":
+    let path = writeLines("taken.txt")
+    let other = writeLines("taken_other.txt")
+    saveCursor(path, 3, 2)
+    let e = cursorEditor()
+    check e.editFile(path).isOk
+    e.cursor = BufferPosition(line: 1, column: 0)
+    check e.vsplit(some(other)).isOk
+
+    check e.editFile(path).isOk
+
+    check e.cursorIs(0, 0)
+
+  test "The startup file is the first window as any other":
+    let path = writeLines("startup.txt")
+    let other = writeLines("startup_other.txt")
+    saveCursor(path, 3, 2)
+    let e = cursorEditor()
+    check e.loadFile(path).isOk
+    check e.cursorIs(3, 2)
+    e.cursor = BufferPosition(line: 1, column: 0)
+    check e.vsplit(some(other)).isOk
+
+    check e.editFile(path).isOk
+
+    check e.cursorIs(0, 0)
+
+  test ":e opens a file where the last session left it":
+    let path = writeLines("reopened.txt")
+    saveCursor(path, 3, 2)
+    let e = cursorEditor()
+
+    check e.editFile(path).isOk
+
+    check e.cursorIs(3, 2)
+
+  test "A split opens a file where the last session left it":
+    let path = writeLines("split.txt")
+    saveCursor(path, 2, 4)
+    let e = cursorEditor()
+
+    check e.vsplit(some(path)).isOk
+
+    check e.cursorIs(2, 4)
+
+  test "A recorded position past the end lands on the last line":
+    let path = writeLines("shrunk.txt")
+    saveCursor(path, 40, 40)
+    let e = cursorEditor()
+
+    check e.editFile(path).isOk
+
+    check e.cursorIs(4, 3)
+
+  test "persist.cursorPosition off opens at the top":
+    let path = writeLines("disabled.txt")
+    saveCursor(path, 3, 2)
+    let e = createTestEditor(bookmarks = false, cursorPosition = false)
+
+    check e.editFile(path).isOk
+
+    check e.cursorIs(0, 0)
+
+  test "Coming back within a session keeps the line, not the column":
+    let path = writeLines("back.txt")
+    let other = writeLines("away.txt")
+    saveCursor(path, 3, 2)
+    let e = cursorEditor()
+    check e.editFile(path).isOk
+    check e.editFile(other).isOk
+
+    check e.editFile(path).isOk
+
+    check e.cursorIs(3, 0)
+
+  test "A closed file opens again where it was":
+    let path = writeLines("closed.txt")
+    let other = writeLines("stays.txt")
+    let e = cursorEditor()
+    check e.editFile(other).isOk
+    check e.editFile(path).isOk
+    e.cursor = BufferPosition(line: 3, column: 2)
+
+    check e.deleteBufferByArg(path).isOk
+    check e.editFile(path).isOk
+
+    check e.cursorIs(3, 2)

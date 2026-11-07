@@ -360,6 +360,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
   of hrEnterBufferManager:
     let bmState = newBufferManagerState()
     bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
+    bmState.selectActive()
     let entered = e.enterViewerMode(
       EditorMode.BufferManager,
       ModeState(kind: mskBufferManager, bufferManager: bmState),

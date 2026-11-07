@@ -31,7 +31,7 @@ import
   ../[
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     config_loader, window_manager, log_viewer, syntax_checker, motion, viewer_mode,
-    editor_build_jobs,
+    editor_build_jobs, path_key,
   ]
 
 when not defined(moe.embedded):
@@ -314,7 +314,13 @@ proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffe
     e.updateViewportForCursor(e.cursor)
 
 proc enterFilerInActiveWindow*(e: Editor, path: string) =
+  ## Open the filer on `path`, starting on the current file when it is there.
   let filerState = newFilerState(path)
+  let current = e.commandTab().filePath
+  if current.isSome:
+    let file = pathKey(current.get)
+    if file.parentDir == filerState.currentPath:
+      filerState.selectEntry(file.extractFilename)
   let entered = e.enterViewerMode(
     EditorMode.Filer,
     ModeState(kind: mskFiler, filer: filerState),

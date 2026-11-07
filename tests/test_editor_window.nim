@@ -1137,6 +1137,18 @@ suite "moveWindowToTab - the line a window left":
 
     check e.cursor.line == 60
 
+  test "a split onto a buffer left comes back centered":
+    let e = createTestEditor()
+    e.activeWindow.viewport.height = 24
+    let (first, second) = e.tabs()
+    e.cursor = BufferPosition(line: 60, column: 0)
+    discard e.moveWindowToTab(e.activeWindow, second)
+
+    check e.vsplitWithBuffer(first).isOk
+
+    check e.cursor.line == 60
+    check 60 - e.activeWindow.viewport.topLine in 8 .. 12
+
   test "a closed window leaves its line behind":
     let e = createTestEditor()
     let (_, second) = e.tabs()

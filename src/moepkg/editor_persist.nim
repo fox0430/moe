@@ -23,7 +23,14 @@ import std/[options, sequtils]
 
 import pkg/results
 
-import types/editor_types, path_key, persist, logger, editor_notify
+import
+  types/editor_types,
+  path_key,
+  persist,
+  logger,
+  editor_notify,
+  editor_window_tab,
+  syntax/tokenizer
 
 proc reportUnreadable[T](
     e: Editor, records: var PersistedRecords[T], what, error: string
@@ -45,6 +52,44 @@ proc savedCursorPosition*(e: Editor, key: string): Option[CursorPositionEntry] =
     e.reportUnreadable(e.persistedCursorPositions, "cursor positions", saved.error)
     return none(CursorPositionEntry)
   saved.get
+
+proc keepsCursorPosition*(language: SourceLanguage): bool =
+  ## Temporary git files are not reopened to continue work.
+  language notin {SourceLanguage.langGitRebaseTodo, SourceLanguage.langCommitEditMsg}
+
+proc saveBufferCursorPosition*(e: Editor, buffer: TextBuffer) =
+  ## Record where the cursor stands in `buffer` for the next save, if
+  ## persist.cursorPosition is enabled and a window has shown it.
+  if not e.config.persist.cursorPosition or buffer.filePath.isNone or
+      not buffer.language.keepsCursorPosition:
+    return
+  let position = e.lastCursorIn(buffer)
+  if position.isSome:
+    e.persistedCursorPositions.record(
+      pathKey(buffer.filePath.get),
+      CursorPositionEntry(line: position.get.line, column: position.get.column),
+    )
+
+proc restoreCursorPosition*(e: Editor, buffer: TextBuffer) =
+  ## Leave the position recorded for a freshly read `buffer` to the first window
+  ## that shows it.
+  if not e.config.persist.cursorPosition or buffer.filePath.isNone or
+      not buffer.language.keepsCursorPosition:
+    return
+  let key = pathKey(buffer.filePath.get)
+  let saved = e.savedCursorPosition(key)
+  var position = BufferPosition(line: 0, column: 0)
+  if saved.isSome:
+    position =
+      BufferPosition(line: saved.get.line, column: saved.get.column).keptInside(buffer)
+    e.state.tabLines.add(
+      TabLine(
+        bufferId: buffer.id, line: position.line, column: position.column, saved: true
+      )
+    )
+  e.persistedCursorPositions.markRestored(
+    key, CursorPositionEntry(line: position.line, column: position.column)
+  )
 
 proc restoreBookmarks*(e: Editor, buffer: TextBuffer) =
   ## Give a freshly read `buffer` the bookmarks recorded for its file, minus

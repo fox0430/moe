@@ -27,6 +27,7 @@ import
     render_utils, lsp_service, lsp_integration, setting_options, editor_init,
     command_config, command_registry, logger, modes, types, viewer_mode, buffer_manager,
   ]
+import ../src/moepkg/filer
 import ../src/moepkg/buffer_backends/gap_buffer
 import visual_test_helper
 import
@@ -4404,3 +4405,75 @@ suite "Editor - :bnext walks the tabs of every window":
       check e.activeWindow == win
 
     check win.tabBufferId == before
+
+suite "Editor - listings start on the current file":
+  test "The filer starts on the current file":
+    let e = createTestEditor()
+    let dir = getTempDir() / "moe_test_filer_current"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    for name in ["a.txt", "b.txt", "c.txt"]:
+      writeFile(dir / name, "x\n")
+    check e.editFile(dir / "b.txt").isOk
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+
+    let selected = e.activeWindow.modeState.filer.getSelectedEntry()
+    check selected.isSome
+    check selected.get.name == "b.txt"
+
+  test "The filer starts on a current file named relative to the directory":
+    let e = createTestEditor()
+    let dir = getTempDir() / "moe_test_filer_relative"
+    createDir(dir)
+    let before = getCurrentDir()
+    setCurrentDir(dir)
+    defer:
+      setCurrentDir(before)
+      removeDir(dir)
+    for name in ["a.txt", "b.txt", "c.txt"]:
+      writeFile(name, "x\n")
+    check e.editFile("b.txt").isOk
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+
+    let selected = e.activeWindow.modeState.filer.getSelectedEntry()
+    check selected.isSome
+    check selected.get.name == "b.txt"
+
+  test "A filer on another directory starts at the top":
+    let e = createTestEditor()
+    let dir = getTempDir() / "moe_test_filer_other"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    writeFile(dir / "here.txt", "x\n")
+    check e.editFile(dir / "here.txt").isOk
+
+    discard e.processResult(
+      HandlerResult(kind: hrEnterFiler, enterFilerPath: some(getTempDir())),
+      e.activeBuffer(),
+    )
+
+    check e.activeWindow.modeState.filer.selectedIndex == 0
+
+  test "The buffer manager starts on the current buffer":
+    let e = createTestEditor()
+    let dir = getTempDir() / "moe_test_bufmgr_current"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    for name in ["a.txt", "b.txt", "c.txt"]:
+      writeFile(dir / name, "x\n")
+      check e.editFile(dir / name).isOk
+    let current = e.activeBuffer()
+    check e.switchToBuffer(dir / "b.txt")
+    check e.activeBuffer() != current
+    let shown = e.activeBuffer()
+
+    discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
+
+    let selected = e.activeWindow.modeState.bufferManager.getSelectedItem()
+    check selected.isSome
+    check selected.get.number == shown.id.int

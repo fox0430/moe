@@ -75,6 +75,13 @@ proc newFilerState*(path: string): FilerState =
   )
   result.refresh()
 
+proc selectEntry*(state: FilerState, name: string) =
+  ## Select the entry called `name`; the selection stays if there is none.
+  for i, entry in state.entries:
+    if entry.name == name:
+      state.selectedIndex = i
+      return
+
 proc getSelectedEntry*(state: FilerState): Option[FileEntry] =
   ## Get the currently selected entry
   if state.selectedIndex >= 0 and state.selectedIndex < state.entries.len:

@@ -139,12 +139,12 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer, origin: ReadOrigin) =
   ## startup go through `registerSplitBuffer`. Restore persisted bookmarks, seed
   ## the git-diff gutter, scan conflict markers and announce the document to the
   ## language server so a file looks identical whichever path reaches it.
-  ## Cursor restore is intentionally omitted: it is handled per window (the
-  ## window manager seeds the split cursor, loadFile restores the first file's).
+  ## The first window to show the file takes its recorded cursor position.
   ## `origin` says why the file was read; `noteBufferRead` decides what that
   ## means for `BufReadPost`. An LSP rename's background copy, for one, is
   ## read for the editor rather than the user.
   e.restoreBookmarks(buf)
+  e.restoreCursorPosition(buf)
   if buf.filePath.isSome and e.showGitDiff:
     e.state.git.requestGitRefresh(buf)
   # Scan conflict markers regardless of the highlight config (like loadFile) so
@@ -241,9 +241,14 @@ proc startSplitWindow(e: Editor, newWindow, origin: EditorWindow) =
   ## win_init copies curswant.
   if newWindow.buffer == origin.buffer:
     newWindow.takeWantedColumn(origin)
+  let anotherTab = newWindow.tabBufferId != origin.tabBufferId
+  if anotherTab:
+    e.placeInTab(newWindow, e.tabBuffer(newWindow))
   e.syncActiveWindow()
   e.deriveTabMode(newWindow)
   newWindow.previousMode = EditorMode.Normal
+  if anotherTab:
+    e.centerCursorLine(newWindow)
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
     e.setActiveWindowScreenCursor(e.activeWindow)
@@ -320,8 +325,10 @@ proc openWindowBesideSidebar*(e: Editor, buf: TextBuffer): Result[void, string] 
   e.windowManager.windows.insert(win, sideIndex + 1)
   e.windowManager.activeWindowIndex = sideIndex + 1
 
+  e.placeInTab(win, buf)
   e.syncActiveWindow()
   e.deriveTabMode(win)
+  e.centerCursorLine(win)
   e.state.previousMode = EditorMode.Normal
   e.setActiveWindowScreenCursor(win)
   ok()
@@ -656,6 +663,8 @@ proc closeFileTree*(e: Editor) =
   e.windowManager.windows.add(win)
   e.windowManager.activateWindow(e.windowManager.windows.high)
   e.windowManager.onlyWindow(e.screenSize.width, e.screenSize.height)
+  e.placeInTab(win, buf)
   e.syncActiveWindow()
   e.deriveTabMode(win)
+  e.centerCursorLine(win)
   e.setActiveWindowScreenCursor(win)

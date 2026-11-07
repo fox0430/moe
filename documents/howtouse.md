@@ -470,6 +470,9 @@ no open file behind them are counted once at startup.
 <details open>
   <summary>File Manager</summary>
 
+The filer opens on the current file's entry when the file is in the listed
+directory.
+
 <!-- AUTO-GEN:start FilerMode -->
 | Keys | Description |
 |:---|:---|
@@ -542,8 +545,8 @@ Open the fileTree sidebar with `:filetree` command. If already open, it will clo
 <details open>
   <summary>Buffer Manager</summary>
 
-Open the buffer manager with `:ls` command. Lists every open buffer and lets you
-switch, close, or delete them. The number in front of each entry is the buffer
+Open the buffer manager with `:ls` command. Lists every open buffer, starting on
+the current one, and lets you switch, close, or delete them. The number in front of each entry is the buffer
 number taken by `:b number`; it stays with the buffer for its whole life, so
 deleting a buffer never renumbers the others.
 

@@ -19,7 +19,7 @@
 
 ## Tests for viewer_mode.nim
 
-import std/[unittest, options, os]
+import std/[unittest, options, os, strutils]
 
 import pkg/results
 
@@ -28,7 +28,7 @@ import
     editor, config, config_loader, viewer_mode, help_viewer, editor_buffers,
     window_manager, backup_manager, diff_viewer,
   ]
-import ../src/moepkg/types/editor_types
+import ../src/moepkg/[editor_window_tab, types/editor_types]
 import ../src/moepkg/command_handlers/[handler_result, result_processor]
 import ../src/moepkg/buffer
 import ../src/moepkg/command_handlers/editor_ops
@@ -423,3 +423,23 @@ suite "viewer_mode - splitting from an in-place viewer":
 
       check e.activeWindow.buffer == fileBuffer
       check e.activeWindow.cursor == BufferPosition(line: 2, column: 1)
+
+suite "viewer_mode - the tab moved under the viewer":
+  test "it resumes on the line left in the new tab":
+    let e = createTestEditor()
+    let first = e.activeBuffer()
+    let second = newTextBuffer("other")
+    e.addBuffer(second)
+    discard first.insertText(BufferPosition(line: 0, column: 0), "x\n".repeat(99))
+    e.cursor = BufferPosition(line: 60, column: 0)
+    let win = e.activeWindow
+    discard e.moveWindowToTab(win, second)
+    require e.enterViewerMode(
+      EditorMode.Help, makeHelpModeState(), newTextBuffer("help"), vpInPlace
+    ).isOk
+
+    e.moveTabUnder(win, first)
+    e.leaveViewerMode(EditorMode.Help)
+
+    check win.tabBufferId == first.id
+    check win.cursor == BufferPosition(line: 60, column: 0)
