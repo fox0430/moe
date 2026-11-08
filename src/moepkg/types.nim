@@ -836,7 +836,7 @@ type
     of lecJoinLines:
       joinLinesCount*: int # Number of lines to join
     of lecAddToNumber:
-      addDelta*: int # Added to the number, the count with its sign
+      addDelta*: int # Added to the number: count times the amount, with its sign
 
   VisualSelection* = object
     ## A window's Visual selection, derived from its anchor, cursor and mode.

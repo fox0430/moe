@@ -584,6 +584,14 @@ suite "KeyBindingRegistry - numeric prefix":
     registry.sequenceState.numericPrefix = "99999999"
     check registry.getNumericPrefix() == MaxNumericPrefix
 
+  test "countTimes caps the product without overflowing":
+    check countTimes(2, 3) == 6
+    check countTimes(0, MaxNumericPrefix) == 0
+    check countTimes(999, 1001) == 999_999
+    check countTimes(1000, 1000) == MaxNumericPrefix
+    check countTimes(1001, 1000) == MaxNumericPrefix
+    check countTimes(high(int), 2) == MaxNumericPrefix
+
   test "getNumericPrefix returns 1 on parseInt overflow":
     let registry = newKeyBindingRegistry()
     registry.sequenceState.numericPrefix = "9".repeat(30)

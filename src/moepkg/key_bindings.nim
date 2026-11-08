@@ -43,6 +43,15 @@ const MaxNumericPrefix* = 1_000_000
   ## Cap on the count prefix. Iterative motions loop `count` times even when
   ## the cursor is stuck, so an unbounded value (e.g. `99999999w`) locks up.
 
+proc countTimes*(a, b: int): int =
+  ## `a` times `b`, two counts that are not negative, capped at
+  ## `MaxNumericPrefix` before the product can overflow (`2d3w` deletes six
+  ## words)
+  if a > 0 and b > MaxNumericPrefix div a:
+    MaxNumericPrefix
+  else:
+    a * b
+
 const RegisterSelect = "register-select"
 
 proc unbindKey*(registry: KeyBindingRegistry, mode: EditorMode, combo: KeyCombo) =
@@ -477,7 +486,7 @@ proc applyCountToCommand*(registry: KeyBindingRegistry, cmd: Command): Command =
   result.hasCount = registry.sequenceState.numericPrefix.len > 0 or countBefore > 0
   result.count =
     if countBefore > 0:
-      min(countBefore * registry.getNumericPrefix(), MaxNumericPrefix)
+      countTimes(countBefore, registry.getNumericPrefix())
     else:
       registry.getNumericPrefix()
   result.register = registry.sequenceState.register
@@ -494,7 +503,7 @@ proc holdRegister(registry: KeyBindingRegistry, name: char) =
     let before = registry.sequenceState.registerCount
     registry.sequenceState.registerCount =
       if before > 0:
-        min(before * count, MaxNumericPrefix)
+        countTimes(before, count)
       else:
         count
   registry.sequenceState.register = some(name)

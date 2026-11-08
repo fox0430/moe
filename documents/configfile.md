@@ -602,6 +602,18 @@ A bare string value (`"jj" = "Escape"`) is shorthand: it is bound to a registere
 "C-p" = { command = "quickrun", args = ["build release"] }
 ```
 
+#### A count before a command with arguments
+
+A count typed before a key bound to a command with arguments is ignored, as the arguments already say what the command does. `increment-number`, `decrement-number` and the four `visual-increment-*` / `visual-decrement-*` commands are the exception: they take the argument as the amount to add and multiply it by the count, up to 1000000. `visual-increment-progressive` and `visual-decrement-progressive` add that product to the first line, twice it to the second and so on, so later lines can get more than 1000000.
+
+```toml
+[KeyMapping.Normal]
+# 3X adds 30, . after it adds 30 again, and 2. adds 2.
+"X" = "increment-number 10"
+```
+
+Vim has no mapping with arguments; this matches the usual `<expr>` mapping that adds `v:count1 * 10`. As in Vim, a count given to `.` replaces the whole amount.
+
 #### Available commands
 
 Commands are grouped by category below. Any command name listed here can be used as the right-hand side of a `[KeyMapping]` entry.
@@ -741,8 +753,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | repeat-last-change | Repeat last change |
 | end-command | End the command being built |
 | join-lines | Join count lines, at least two |
-| increment-number | Increment the number at or after cursor by count |
-| decrement-number | Decrement the number at or after cursor by count |
+| increment-number | Increment the number at or after cursor by count times the argument (1 if none) |
+| decrement-number | Decrement the number at or after cursor by count times the argument (1 if none) |
 
 ##### Operators (require a motion or text object)
 
@@ -856,10 +868,10 @@ Commands are grouped by category below. Any command name listed here can be used
 | visual-surround-char | Surround visual selection with character |
 | visual-swap-selection | Swap cursor to other end of selection |
 | visual-reselect | Reselect the previous visual area |
-| visual-increment-number | Increment the first number on each selected line |
-| visual-decrement-number | Decrement the first number on each selected line |
-| visual-increment-progressive | Increment the numbers on the selected lines by count, 2*count, ... |
-| visual-decrement-progressive | Decrement the numbers on the selected lines by count, 2*count, ... |
+| visual-increment-number | Increment the first number on each selected line by count times the argument (1 if none) |
+| visual-decrement-number | Decrement the first number on each selected line by count times the argument (1 if none) |
+| visual-increment-progressive | Increment the numbers on the selected lines by N, 2*N, ..., N being count times the argument (1 if none) |
+| visual-decrement-progressive | Decrement the numbers on the selected lines by N, 2*N, ..., N being count times the argument (1 if none) |
 | visual-to-insert | Enter insert mode from visual selection |
 | visual-block-append | Append after visual block selection |
 

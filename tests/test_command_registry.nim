@@ -126,6 +126,7 @@ suite "CommandRegistry - register":
     check cmd.get.description == "A custom command"
     check cmd.get.minArgs == 1
     check cmd.get.maxArgs == 2
+    check not cmd.get.countFromContext
 
   test "register overwrites existing command":
     let registry = newCommandRegistry()
@@ -570,6 +571,83 @@ suite "CommandRegistry - Command execution with context":
     # Handler updates ctx.state.cursor, not ctx.cursor
     check ctx.state.cursor.column == 5 # After 'o' in "hello"
     check ctx.state.mode == EditorMode.Insert
+
+  type CountProbe = ref object
+    args: seq[string]
+    count: int
+    count1: int
+
+  proc registerCountProbe(
+      registry: CommandRegistry, countFromContext: bool
+  ): CountProbe =
+    let probe = CountProbe()
+    registry.register(
+      custom("count.probe"),
+      "CountProbe",
+      "Records what it is given",
+      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+        probe.args = args
+        probe.count = ctx.count
+        probe.count1 = ctx.count1
+        ok(()),
+      0,
+      1,
+      countFromContext = countFromContext,
+    )
+    probe
+
+  proc countProbeKey(count: int, hasCount: bool, args: seq[string] = @[]): Command =
+    Command(
+      kind: ctCustom,
+      commandId: "count.probe",
+      count: count,
+      hasCount: hasCount,
+      args: args,
+    )
+
+  test "a command reading the count from the context gets none in its args":
+    let ctx = createTestContext(newTextBuffer("hello"))
+    let registry = newCommandRegistry()
+    let probe = registry.registerCountProbe(countFromContext = true)
+
+    check registry.executeCommand(ctx, countProbeKey(3, true)).isOk
+    check probe.args.len == 0
+    check probe.count == 3
+
+  test "a mapping's own args stay as they are under a count":
+    let ctx = createTestContext(newTextBuffer("hello"))
+    let registry = newCommandRegistry()
+    let probe = registry.registerCountProbe(countFromContext = true)
+
+    check registry.executeCommand(ctx, countProbeKey(3, true, @["10"])).isOk
+    check probe.args == @["10"]
+    check probe.count == 3
+
+  test "no count is 0 in the context, and 1 by count1":
+    let ctx = createTestContext(newTextBuffer("hello"))
+    let registry = newCommandRegistry()
+    let probe = registry.registerCountProbe(countFromContext = true)
+
+    check registry.executeCommand(ctx, countProbeKey(1, false)).isOk
+    check probe.count == 0
+    check probe.count1 == 1
+
+  test "a typed count of 1 is a count":
+    let ctx = createTestContext(newTextBuffer("hello"))
+    let registry = newCommandRegistry()
+    let probe = registry.registerCountProbe(countFromContext = true)
+
+    check registry.executeCommand(ctx, countProbeKey(1, true)).isOk
+    check probe.count == 1
+
+  test "a command not reading the context still gets the count before its args":
+    let ctx = createTestContext(newTextBuffer("hello"))
+    let registry = newCommandRegistry()
+    let probe = registry.registerCountProbe(countFromContext = false)
+
+    check registry.executeCommand(ctx, countProbeKey(3, true)).isOk
+    check probe.args == @["3"]
+    check probe.count == 3
 
 suite "CommandRegistry - Edge cases":
   test "execute with exact min args":

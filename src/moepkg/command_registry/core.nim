@@ -140,6 +140,7 @@ type
     keyBindingRegistry*: key_bindings.KeyBindingRegistry
     register*: Option[char]
       ## Register named by `"x` for this command, or for the operator it ends
+    count*: int ## The count typed before the command, 0 when none (Vim's count0)
 
   ## Function signature for command handlers
   CommandHandler* =
@@ -173,6 +174,9 @@ type
     handler*: CommandHandler
     minArgs*: int
     maxArgs*: int
+    countFromContext*: bool
+      ## Reads the count from `CommandContext.count`, so a typed count does not
+      ## go before the args, which are a mapping's own
 
   ## Central command registry
   CommandRegistry* = ref object
@@ -208,6 +212,10 @@ proc recordChange*(ctx: CommandContext, change: LastEditCommand) =
   var change = change
   change.register = ctx.register
   ctx.state.editState.lastEditCommand = some(change)
+
+proc count1*(ctx: CommandContext): int {.inline.} =
+  ## The count typed before the command, 1 when none (Vim's count1)
+  max(1, ctx.count)
 
 proc cursor*(ctx: CommandContext): var BufferPosition {.inline.} =
   ## Cursor position forwarded to EditorState (which delegates to activeWindow)
@@ -283,6 +291,7 @@ proc register*(
     handler: CommandHandler,
     minArgs = 0,
     maxArgs = 100,
+    countFromContext = false,
 ) =
   ## Register a new command
   let cmd = RegisteredCommand(
@@ -292,6 +301,7 @@ proc register*(
     handler: handler,
     minArgs: minArgs,
     maxArgs: maxArgs,
+    countFromContext: countFromContext,
   )
 
   # Store in appropriate location
@@ -405,11 +415,12 @@ proc findAllCharPositions*(
 
 # Helper function to parse count from arguments safely
 proc parseCount*(
-    args: seq[string], default: int = 1, minVal: int = 1, maxVal: int = 999999
+    args: seq[string], default: int = 1, minVal: int = 1, maxVal: int = MaxNumericPrefix
 ): int =
   ## Parse count from arguments with validation
   ## - Returns default if no args or parsing fails
-  ## - Clamps value to [minVal, maxVal] range
+  ## - Clamps value to [minVal, maxVal] range, the largest count typing allows
+  ##   by default
   ## - Ensures positive counts for motions
   logDebug("parse", "parseCount called with args.len=" & $args.len & ", args=" & $args)
   if args.len > 0 and args[0].len > 0:
@@ -431,6 +442,11 @@ proc parseCount*(
   else:
     logDebug("parse", "parseCount returning default (no args): " & $default)
     return default
+
+proc amountTimesCount*(ctx: CommandContext, args: seq[string]): int =
+  ## A mapping's own amount (`args[0]`, 1 if none) times the count typed
+  ## before the command
+  countTimes(parseCount(args), ctx.count1)
 
 # Helper function to parse boolean argument
 proc parseBoolArg*(

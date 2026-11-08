@@ -341,7 +341,7 @@ proc endsOperator*(registry: CommandRegistry, cmd: Command): bool =
 proc operandCount*(op: PendingOperator, count: int): int =
   ## The operator's and the motion's counts multiplied as Vim's normal_cmd
   ## does (`2d3w` deletes six words), capped as a typed count is.
-  min(op.operatorCount * max(1, count), MaxNumericPrefix)
+  countTimes(op.operatorCount, max(1, count))
 
 proc operandFor*(op: PendingOperator, cmd: Command): Operand =
   ## The operand a motion command gives the waiting operator `op`. `cmd` must

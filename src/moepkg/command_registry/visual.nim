@@ -297,41 +297,45 @@ proc registerVisualCommands*(registry: CommandRegistry) =
   registry.register(
     builtin(bcVisualIncrementNumber),
     "Visual Increment Number",
-    "Add [count] to the first number on each selected line (Ctrl-A)",
+    "Add [count] times the argument (1 if none) to the first number on each selected line (Ctrl-A)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualOperator(ctx, voIncrement, parseCount(args, default = 1)),
+      handleVisualOperator(ctx, voIncrement, ctx.amountTimesCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
     builtin(bcVisualDecrementNumber),
     "Visual Decrement Number",
-    "Subtract [count] from the first number on each selected line (Ctrl-X)",
+    "Subtract [count] times the argument (1 if none) from the first number on each selected line (Ctrl-X)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualOperator(ctx, voDecrement, parseCount(args, default = 1)),
+      handleVisualOperator(ctx, voDecrement, ctx.amountTimesCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
     builtin(bcVisualIncrementProgressive),
     "Visual Increment Progressive",
-    "Add [count], 2*[count], ... to the numbers on the selected lines (g Ctrl-A)",
+    "Add N, 2*N, ... to the numbers on the selected lines, N being [count] times the argument (1 if none) (g Ctrl-A)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualOperator(ctx, voIncrementProgressive, parseCount(args, default = 1)),
+      handleVisualOperator(ctx, voIncrementProgressive, ctx.amountTimesCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
     builtin(bcVisualDecrementProgressive),
     "Visual Decrement Progressive",
-    "Subtract [count], 2*[count], ... from the numbers on the selected lines (g Ctrl-X)",
+    "Subtract N, 2*N, ... from the numbers on the selected lines, N being [count] times the argument (1 if none) (g Ctrl-X)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleVisualOperator(ctx, voDecrementProgressive, parseCount(args, default = 1)),
+      handleVisualOperator(ctx, voDecrementProgressive, ctx.amountTimesCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
