@@ -111,6 +111,7 @@ proc executeCommand*(
     registry: CommandRegistry, ctx: CommandContext, cmd: key_bindings.Command
 ): Result[(), string] =
   ## Execute a keybinding command
+  ctx.count = if cmd.count > 1 or (cmd.hasCount and cmd.count > 0): cmd.count else: 0
 
   # Clear f/F/t/T match highlight when executing a non-find/till command
   if cmd.kind != ctOperatorPending or cmd.operatorType notin ["find", "till"]:
@@ -341,11 +342,7 @@ proc executeCommand*(
       return Result[(), string].err "Unknown operator type: " & cmd.operatorType
   of ctAction, ctTextObject, ctOperator, ctCustom:
     # Execute through registry - convert string to CommandId
-    # Get count from command object
-    let count = cmd.count
-
-    # Debug: log the count
-    logDebug("command", "Executing " & cmd.commandId & " with count=" & $count)
+    logDebug("command", "Executing " & cmd.commandId & " with count=" & $ctx.count)
 
     # First try as alias, then as custom command
     let cmdResult = registry.findCommand(cmd.commandId)
@@ -355,12 +352,13 @@ proc executeCommand*(
     # Only prepend for handlers that accept an argument (maxArgs >= 1);
     # maxArgs=0 handlers (e.g. visual.yank, scroll.cursor.*) reject the
     # prefixed count with "Too many arguments". A mapping that carries its own
-    # args already fixed them, so a count would only shift them.
+    # args already fixed them, so a count would only shift them. A handler
+    # that reads `ctx.count` takes none.
     var finalArgs = cmd.args
-    if cmd.args.len == 0 and cmdResult.isSome and cmdResult.get.maxArgs >= 1 and
-        (count > 1 or (cmd.hasCount and count > 0)):
-      finalArgs = @[$count] & cmd.args
-    logDebug("command", "finalArgs (count=" & $count & "): " & $finalArgs)
+    if cmd.args.len == 0 and cmdResult.isSome and not cmdResult.get.countFromContext and
+        cmdResult.get.maxArgs >= 1 and ctx.count > 0:
+      finalArgs = @[$ctx.count] & cmd.args
+    logDebug("command", "finalArgs (count=" & $ctx.count & "): " & $finalArgs)
 
     if cmdResult.isSome:
       # Found via alias or existing command

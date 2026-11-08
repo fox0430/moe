@@ -19,9 +19,11 @@
 
 ## Tests for Ctrl-A / Ctrl-X in the Visual modes.
 
-import std/[unittest, options, tables]
+import std/[unittest, options]
 
-import ../src/moepkg/[buffer, types, modes, editor, config, key_bindings, handler]
+import
+  ../src/moepkg/
+    [buffer, types, modes, editor, config, key_bindings, handler, keybind_config]
 import visual_test_helper
 
 proc pos(line, column: int): BufferPosition =
@@ -44,6 +46,9 @@ proc press(e: Editor, keys: varargs[string]) =
 proc lines(e: Editor): seq[string] =
   for i in 0 ..< e.activeBuffer.len:
     result.add e.activeBuffer.getLine(i)
+
+proc map(e: Editor, mode: EditorMode, lhs, rhs: string) =
+  check e.keyBindingRegistry.addRuntimeMappingExpanded(mode, lhs, rhs) == ""
 
 suite "Visual Ctrl-A / Ctrl-X":
   test "leaves Visual so a shorter number does not join lines":
@@ -83,6 +88,22 @@ suite "Visual Ctrl-A / Ctrl-X":
     e.press("V", "j", "3", "C-x")
 
     check e.lines == @["7", "17"]
+
+  test "the largest count typing allows is added whole":
+    let e = newTestEditor("0")
+    e.press("V", "1", "0", "0", "0", "0", "0", "0", "C-a")
+
+    check e.lines == @["1000000"]
+
+  test "a mapping's own amount is multiplied by the count":
+    let e = newTestEditor("1\n1")
+    e.map(EditorMode.VisualLine, "X", "visual-increment-number 10")
+    e.map(EditorMode.VisualLine, "Y", "visual-decrement-progressive 10")
+    e.press("V", "j", "3", "X")
+    check e.lines == @["31", "31"]
+
+    e.press("V", "j", "2", "Y")
+    check e.lines == @["11", "-9"]
 
   test "charwise uses only the selected digits":
     let e = newTestEditor("a 123 b")
@@ -215,16 +236,26 @@ suite "Visual increment on a read-only buffer":
       check e.state.mode == EditorMode.Normal
 
 suite "Normal Ctrl-A / Ctrl-X keys":
-  test "a mapping with its own amount keeps it under a count":
+  test "a mapping's own amount is multiplied by the count":
     let e = newTestEditor("1 1")
-    var cmd = e.keyBindingRegistry.commandRegistry["increment-number"]
-    cmd.args = @["10"]
-    check e.keyBindingRegistry.setRuntimeCommandMapping(
-      EditorMode.Normal, "X", "increment-number 10", cmd
-    ) == ""
+    e.map(EditorMode.Normal, "X", "increment-number 10")
     e.press("3", "X")
+    check e.lines == @["31 1"]
 
-    check e.lines == @["11 1"]
+    e.press("X")
+    check e.lines == @["41 1"]
+
+    let e2 = newTestEditor("100")
+    e2.map(EditorMode.Normal, "X", "decrement-number 10")
+    e2.press("2", "X")
+    check e2.lines == @["80"]
+
+  test "a mapping's amount times the count stops at the largest count":
+    let e = newTestEditor("0")
+    e.map(EditorMode.Normal, "X", "increment-number 1000")
+    e.press("5", "0", "0", "0", "X")
+
+    check e.lines == @["1000000"]
 
   test "count reaches the command":
     let e = newTestEditor("1 1")
@@ -233,6 +264,14 @@ suite "Normal Ctrl-A / Ctrl-X keys":
 
     e.press("3", "C-x")
     check e.lines == @["3 1"]
+
+  test "the largest count typing allows is added whole, by . too":
+    let e = newTestEditor("0")
+    e.press("1", "0", "0", "0", "0", "0", "0", "C-a")
+    check e.lines == @["1000000"]
+
+    e.press("1", "0", "0", "0", "0", "0", "0", ".")
+    check e.lines == @["2000000"]
 
   test "undo puts the cursor back where Ctrl-A was typed":
     let e = newTestEditor("x 9 y")
@@ -264,6 +303,18 @@ suite "Repeating Ctrl-A / Ctrl-X with .":
 
     check e.lines == @["b", "xy 2"]
 
+  test "repeat-last-change with its own count uses it over a typed one":
+    let e = newTestEditor("0")
+    e.map(EditorMode.Normal, "Q", "repeat-last-change 3")
+    e.press("C-a", "Q")
+    check e.lines == @["4"]
+
+    e.press("5", "Q")
+    check e.lines == @["7"]
+
+    e.press(".")
+    check e.lines == @["10"]
+
   test "a count given to . replaces the amount, and the next . keeps it":
     let e = newTestEditor("1 1")
     e.press("5", "C-a", "2", ".")
@@ -275,6 +326,23 @@ suite "Repeating Ctrl-A / Ctrl-X with .":
     let e2 = newTestEditor("1 1")
     e2.press("5", "C-x", "2", ".")
     check e2.lines == @["-6 1"]
+
+  test "a count given to . replaces a mapping's amount times its count":
+    let e = newTestEditor("0")
+    e.map(EditorMode.Normal, "X", "increment-number 10")
+    e.press("3", "X", ".")
+    check e.lines == @["60"]
+
+    e.press("2", ".")
+    check e.lines == @["62"]
+
+    e.press(".")
+    check e.lines == @["64"]
+
+    let e2 = newTestEditor("100")
+    e2.map(EditorMode.Normal, "X", "decrement-number 10")
+    e2.press("X", "3", ".")
+    check e2.lines == @["87"]
 
   test "linewise repeats over as many lines from the cursor":
     let e = newTestEditor("1\n1\n1\n1")

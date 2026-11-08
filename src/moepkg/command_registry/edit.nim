@@ -626,14 +626,16 @@ proc addToNumberAtCursor(ctx: CommandContext, delta: int): Result[(), string] =
 proc handleIncrementNumber*(
     ctx: CommandContext, args: seq[string]
 ): Result[(), string] =
-  ## Add [count] to the number at or after cursor (Ctrl-A command)
-  addToNumberAtCursor(ctx, parseCount(args, default = 1))
+  ## Add [count] to the number at or after cursor (Ctrl-A command), times a
+  ## mapping's own amount
+  addToNumberAtCursor(ctx, ctx.amountTimesCount(args))
 
 proc handleDecrementNumber*(
     ctx: CommandContext, args: seq[string]
 ): Result[(), string] =
-  ## Subtract [count] from the number at or after cursor (Ctrl-X command)
-  addToNumberAtCursor(ctx, -parseCount(args, default = 1))
+  ## Subtract [count] from the number at or after cursor (Ctrl-X command),
+  ## times a mapping's own amount
+  addToNumberAtCursor(ctx, -ctx.amountTimesCount(args))
 
 proc repeatedArea(
     ctx: CommandContext, shape: VisualShape
@@ -968,19 +970,21 @@ proc registerEditCommands*(registry: CommandRegistry) =
   registry.register(
     builtin(bcEditIncrementNumber),
     "Increment Number",
-    "Add [count] to the number at or after cursor (Ctrl-A)",
+    "Add [count] times the argument (1 if none) to the number at or after cursor (Ctrl-A)",
     handleIncrementNumber,
     0,
-    1, # Accept optional count argument
+    1, # A mapping's own amount
+    countFromContext = true,
   )
 
   registry.register(
     builtin(bcEditDecrementNumber),
     "Decrement Number",
-    "Subtract [count] from the number at or after cursor (Ctrl-X)",
+    "Subtract [count] times the argument (1 if none) from the number at or after cursor (Ctrl-X)",
     handleDecrementNumber,
     0,
-    1, # Accept optional count argument
+    1, # A mapping's own amount
+    countFromContext = true,
   )
 
   registry.register(
@@ -1018,29 +1022,35 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx.register = some(name)
       lastCmd.register = ctx.register
       # A count given to `.` replaces the change's own, and the next `.` keeps
-      # it: `dw` then `3.` is `3dw`. An Insert change takes it below.
-      if args.len > 0:
-        let count = parseCount(args)
+      # it: `dw` then `3.` is `3dw`. A mapping's own count
+      # (`repeat-last-change 3`) is used over a typed one. An Insert change
+      # takes it below.
+      let givenCount =
+        if args.len > 0:
+          parseCount(args)
+        else:
+          ctx.count
+      if givenCount > 0:
         case lastCmd.kind
         of lecOperatorMotion:
-          lastCmd.operand.count = count
+          lastCmd.operand.count = givenCount
           lastCmd.operand.countGiven = true
         of lecReplaceChar:
-          lastCmd.replaceCount = count
+          lastCmd.replaceCount = givenCount
         of lecDeleteChar:
-          lastCmd.deleteCount = count
+          lastCmd.deleteCount = givenCount
         of lecPaste:
-          lastCmd.pasteCount = count
+          lastCmd.pasteCount = givenCount
         of lecToggleCase:
-          lastCmd.toggleCaseCount = count
+          lastCmd.toggleCaseCount = givenCount
         of lecJoinLines:
-          lastCmd.joinLinesCount = count
+          lastCmd.joinLinesCount = givenCount
         of lecAddToNumber:
           lastCmd.addDelta =
             if lastCmd.addDelta < 0:
-              -count
+              -givenCount
             else:
-              count
+              givenCount
         of lecInsert, lecVisualReplace, lecVisualOperator:
           discard
       ctx.state.editState.lastEditCommand = some(lastCmd)
@@ -1070,11 +1080,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         # The command that entered Insert runs again, with the count given to
         # `.`, and the caller types the record after it.
         let record = ctx.state.editState.insertRecord
-        let count =
-          if args.len > 0:
-            parseCount(args)
-          else:
-            record.count
+        let count = if givenCount > 0: givenCount else: record.count
         case record.entry.kind
         of ieInsert, ieAppend, ieAppendEnd, ieInsertNonBlank, ieOpenBelow, ieOpenAbove:
           return ctx.handleInsertAt(record.entry.kind, count)
@@ -1082,7 +1088,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
           return handleSubstituteChar(registry, ctx, count)
         of ieChange:
           var operand = record.entry.operand
-          if args.len > 0:
+          if givenCount > 0:
             operand.count = count
             operand.countGiven = true
           ctx.startOperator(OpChange)
@@ -1112,7 +1118,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
       of lecAddToNumber:
         return addToNumberAtCursor(ctx, lastCmd.addDelta),
     0,
-    1,
+    1, # A mapping's own count
+    countFromContext = true,
   )
 
   # Operator commands (d, c, y) - these wait for motion/text object

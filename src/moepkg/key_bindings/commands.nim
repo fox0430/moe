@@ -144,11 +144,13 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("undo", "Undo last change", "edit.undo"),
   ("redo", "Redo last undone change", "edit.redo"),
   (
-    "increment-number", "Increment the number at or after cursor by count",
+    "increment-number",
+    "Increment the number at or after cursor by count times the argument (1 if none)",
     "edit.increment",
   ),
   (
-    "decrement-number", "Decrement the number at or after cursor by count",
+    "decrement-number",
+    "Decrement the number at or after cursor by count times the argument (1 if none)",
     "edit.decrement",
   ),
   ("jump-back", "Jump to previous position in jump list", "jump.back"),
@@ -228,21 +230,23 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ),
   ("visual-reselect", "Reselect the previous visual area", "visual.reselect"),
   (
-    "visual-increment-number", "Increment the first number on each selected line",
+    "visual-increment-number",
+    "Increment the first number on each selected line by count times the argument (1 if none)",
     "visual.increment",
   ),
   (
-    "visual-decrement-number", "Decrement the first number on each selected line",
+    "visual-decrement-number",
+    "Decrement the first number on each selected line by count times the argument (1 if none)",
     "visual.decrement",
   ),
   (
     "visual-increment-progressive",
-    "Increment the numbers on the selected lines by count, 2*count, ...",
+    "Increment the numbers on the selected lines by N, 2*N, ..., N being count times the argument (1 if none)",
     "visual.increment.progressive",
   ),
   (
     "visual-decrement-progressive",
-    "Decrement the numbers on the selected lines by count, 2*count, ...",
+    "Decrement the numbers on the selected lines by N, 2*N, ..., N being count times the argument (1 if none)",
     "visual.decrement.progressive",
   ),
 ].withWindowCommands()
