@@ -312,7 +312,7 @@ type
     ## an empty `/` and the highlighter all replay this value, so they cannot
     ## disagree about what counts as a match.
     pattern*: string
-    match*: SearchMatch # As a regex (/ and ?) or as it is (*, # and :s)
+    match*: SearchMatch # As a regex (/, ? and a typed :s) or as it is (*, #, g*, g#)
     direction*: SearchDirection # The way it went, which n goes too
 
   PromptWait* = enum

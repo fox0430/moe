@@ -127,6 +127,9 @@ proc findGnMatch*(
   let searchText = spec.pattern
   if searchText.len == 0:
     return err("E35: No previous regular expression")
+  let invalid = state.input.search.invalidRegex(spec)
+  if invalid.len > 0:
+    return err(invalid)
   let ignoreCase = state.input.search.ignoresCase(spec)
   state.showSearchMatches()
 

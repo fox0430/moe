@@ -657,19 +657,19 @@ suite "last search persistence":
   test "Saving keeps the last search":
     let e = createSearchTestEditor()
     e.state.input.search.last =
-      SearchSpec(pattern: "Foo", match: smPlain, direction: Backward)
+      SearchSpec(pattern: "Foo", match: smLiteral, direction: Backward)
 
     e.savePersistData()
 
     let saved = loadLastSearch()
     check saved.isSome
     check saved.get.pattern == "Foo"
-    check saved.get.match == smPlain
+    check saved.get.match == smLiteral
 
   test "Restoring brings back the last search":
     let e = createSearchTestEditor()
     e.state.input.search.last =
-      SearchSpec(pattern: "Foo", match: smPlain, direction: Backward)
+      SearchSpec(pattern: "Foo", match: smLiteral, direction: Backward)
     e.savePersistData()
 
     let restored = createSearchTestEditor()
@@ -677,14 +677,14 @@ suite "last search persistence":
     restored.restoreLastSearch()
     # As Vim's viminfo, a new session searches forward whichever way it went.
     check restored.state.input.search.last ==
-      SearchSpec(pattern: "Foo", match: smPlain, direction: Forward)
+      SearchSpec(pattern: "Foo", match: smLiteral, direction: Forward)
     # The first screen draws no matches, as Vim starts with 'hlsearch' off.
     check restored.state.input.search.hlsearchTempDisabled
 
   test "A restored search runs an empty :s pattern":
     let e = createSearchTestEditor()
     e.state.input.search.last =
-      SearchSpec(pattern: "foo", match: smPlain, direction: Forward)
+      SearchSpec(pattern: "foo", match: smLiteral, direction: Forward)
     e.savePersistData()
 
     let path = cacheHome / "restored.txt"
@@ -718,7 +718,7 @@ suite "last search persistence":
     config.persist.cursorPosition = false
     let e = newEditor(config, newValidationResult())
     e.state.showGitDiff = false
-    e.state.input.search.last = SearchSpec(pattern: "Foo", match: smPlain)
+    e.state.input.search.last = SearchSpec(pattern: "Foo", match: smLiteral)
 
     e.savePersistData()
 

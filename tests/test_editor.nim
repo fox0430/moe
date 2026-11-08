@@ -785,7 +785,7 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo bar foo")
 
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags, smRegex)
 
     check buffer.getLine(0) == "baz bar baz"
 
@@ -797,7 +797,7 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo bar foo")
 
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "baz", "".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "baz", "".parseSubstituteFlags, smRegex)
 
     # Only first occurrence replaced
     check buffer.getLine(0) == "baz bar foo"
@@ -845,19 +845,24 @@ suite "Editor - Substitute preview":
 
   test "findFirstSubstituteMatch finds first occurrence across lines":
     let lines = @["aaa", "bbb foo", "ccc foo ddd"]
-    let match = findFirstSubstituteMatch(lines, "foo", false)
+    let match = findFirstSubstituteMatch(lines, "foo", false, smRegex)
     check match.isSome
-    check match.get == BufferPosition(line: 1, column: 4)
+    check match.get == (line: 1, cols: ColumnRange(startCol: 4, endCol: 7))
 
   test "findFirstSubstituteMatch returns none when pattern absent":
     let lines = @["aaa", "bbb", "ccc"]
-    let match = findFirstSubstituteMatch(lines, "zzz", false)
+    let match = findFirstSubstituteMatch(lines, "zzz", false, smRegex)
     check match.isNone
 
   test "findFirstSubstituteMatch returns none for empty pattern":
     let lines = @["aaa", "bbb"]
-    let match = findFirstSubstituteMatch(lines, "", false)
+    let match = findFirstSubstituteMatch(lines, "", false, smRegex)
     check match.isNone
+
+  test "findFirstSubstituteMatch returns none for a pattern that does not compile":
+    let lines = @["foo(", "foo"]
+    check findFirstSubstituteMatch(lines, "foo(", false, smRegex).isNone
+    check findFirstSubstituteMatch(lines, "foo(", false, smLiteral).isSome
 
   test "jumpToFirstSubstituteMatch moves cursor to first match":
     let e = createTestEditor()
@@ -871,7 +876,7 @@ suite "Editor - Substitute preview":
     e.cursor = BufferPosition(line: 0, column: 0)
     e.startSubstitutePreview()
 
-    check e.jumpToFirstSubstituteMatch("foo", false)
+    check e.jumpToFirstSubstituteMatch("foo", false, smRegex).isSome
 
     check e.cursor == BufferPosition(line: 2, column: 7)
 
@@ -882,7 +887,7 @@ suite "Editor - Substitute preview":
       e.motionController.bindToWindow(e.activeWindow)
       e.startSubstitutePreview()
       for pattern in patterns:
-        check e.jumpToFirstSubstituteMatch(pattern, false)
+        check e.jumpToFirstSubstituteMatch(pattern, false, smRegex).isSome
       check e.cursor.line == 112
       e.activeWindow.viewport.topLine
 
@@ -904,7 +909,7 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo bar")
 
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags, smRegex)
     check buffer.getLine(0) == "baz bar"
 
     e.restoreFromPreview()
@@ -913,7 +918,7 @@ suite "Editor - Substitute preview":
     # re-applied after a restore.
     check e.state.ui.substitutePreview.applied == SubstitutePreviewKey()
 
-    e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags, smRegex)
     check buffer.getLine(0) == "baz bar"
 
   test "jumpToFirstSubstituteMatch restores cursor when no match":
@@ -934,7 +939,7 @@ suite "Editor - Substitute preview":
     e.activeWindow.viewport.topWrapOffset = 0
     e.activeWindow.viewport.leftCell = 0
 
-    check not e.jumpToFirstSubstituteMatch("zzz", false)
+    check e.jumpToFirstSubstituteMatch("zzz", false, smRegex).isNone
 
     check e.cursor == BufferPosition(line: 0, column: 4)
     check e.activeWindow.viewport.topLine == 3

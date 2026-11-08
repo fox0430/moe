@@ -490,9 +490,9 @@ proc executeSubstitute*(
     pattern: string,
     replacement: string,
     flags: SubstituteFlags,
+    match: SearchMatch,
     range: ExLineRange = ExLineRange(),
     currentLine: int = 0,
-    match = smPlain,
 ): HandlerResult =
   ## Execute substitute command (:s, :%s/pattern/replacement/flags), matching
   ## `pattern` as `match` says.
@@ -502,6 +502,9 @@ proc executeSubstitute*(
     return HandlerResult(kind: hrError, errorMessage: error)
   if pattern.len == 0:
     return HandlerResult(kind: hrError, errorMessage: "Pattern required")
+  let invalid = invalidRegex(pattern, flags.ignoreCase, match)
+  if invalid.len > 0:
+    return HandlerResult(kind: hrError, errorMessage: invalid)
 
   if flags.countOnly:
     return buffer.countSubstitutions(pattern, match, rangeStart .. rangeEnd, flags)
@@ -725,7 +728,7 @@ proc handleCommandModeInput*(
   of claSubstitute:
     handler.executeSubstitute(
       buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,
-      cmdResult.substituteRange, currentLine, cmdResult.match,
+      cmdResult.match, cmdResult.substituteRange, currentLine,
     )
   of claFilter:
     handler.executeFilter(

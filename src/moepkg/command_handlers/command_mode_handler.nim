@@ -35,48 +35,50 @@ import editor_ops, result_processor
 from command_handler import resolveExRange
 export editor_ops
 
+type SubstituteMatch* = tuple[line: int, cols: ColumnRange]
+  ## A match `:s` would replace: its line and the columns on it.
+
 proc findFirstSubstituteMatch*(
     lines: seq[string],
     pattern: string,
     ignoreCase: bool,
+    match: SearchMatch,
     firstLine: int = 0,
     lastLine: int = high(int),
-    match = smPlain,
-): Option[BufferPosition] =
+): Option[SubstituteMatch] =
   ## The first match `:s` would replace in lines `firstLine .. lastLine`.
-  if pattern.len == 0:
-    return none(BufferPosition)
+  ## A pattern that does not compile has none, and no line is scanned for it.
+  if pattern.len == 0 or invalidRegex(pattern, ignoreCase, match).len > 0:
+    return none(SubstituteMatch)
   for lineIdx in max(firstLine, 0) .. min(lastLine, lines.len - 1):
-    let col = lines[lineIdx].firstSubstituteMatch(pattern, ignoreCase, match)
-    if col.isSome:
-      return some(BufferPosition(line: lineIdx, column: col.get))
-  return none(BufferPosition)
+    let cols = lines[lineIdx].firstSubstituteMatch(pattern, ignoreCase, match)
+    if cols.isSome:
+      return some((line: lineIdx, cols: cols.get))
+  return none(SubstituteMatch)
 
 proc jumpToFirstSubstituteMatch*(
     e: Editor,
     pattern: string,
     ignoreCase: bool,
+    match: SearchMatch,
     firstLine: int = 0,
     lastLine: int = high(int),
-    match = smPlain,
-): bool =
+): Option[SubstituteMatch] =
   ## Move cursor/viewport to the first pattern match in lines
   ## `firstLine .. lastLine` (incsearch-like behavior), scrolling from what the
   ## window showed as the preview began. If no match is found, restore cursor
-  ## and view to those at preview start. Returns whether one was.
-  let found = findFirstSubstituteMatch(
-    e.state.ui.substitutePreview.originalLines, pattern, ignoreCase, firstLine,
-    lastLine, match,
+  ## and view to those at preview start. Returns the match, if any.
+  result = findFirstSubstituteMatch(
+    e.state.ui.substitutePreview.originalLines, pattern, ignoreCase, match, firstLine,
+    lastLine,
   )
-  if found.isSome:
-    let pos = found.get
+  if result.isSome:
+    let pos = BufferPosition(line: result.get.line, column: result.get.cols.startCol)
     e.cursor = pos
     e.showFromView(e.state.ui.substitutePreview.originalView, pos)
-    true
   else:
     e.cursor = e.state.ui.substitutePreview.originalCursor
     e.activeWindow.viewport.restoreViewState(e.state.ui.substitutePreview.originalView)
-    false
 
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## Update or cancel the live substitute preview based on the current command
@@ -108,7 +110,7 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
       if parsed.hasReplacement and e.config.highlight.replaceText and
           flags.refusal.len == 0 and not flags.countOnly:
         e.updateSubstitutePreview(
-          target.pattern, parsed.replacement, flags, firstLine, lastLine, target.match
+          target.pattern, parsed.replacement, flags, target.match, firstLine, lastLine
         )
       else:
         # Pattern-only state: restore buffer (in case a replacement preview was
@@ -120,16 +122,15 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
       let ignoreCase =
         e.commandLineParser.optionsIgnoreCaseOf(target.pattern, target.match)
       let found =
-        e.state.input.search.incsearch and
-        e.jumpToFirstSubstituteMatch(
-          target.pattern, ignoreCase, firstLine, lastLine, target.match
-        )
-      e.state.input.line.wordAt = some(
-        if found and not parsed.hasReplacement:
-          # Without the replacement's delimiter the pattern is the typed one.
-          BufferPosition(
-            line: e.cursor.line, column: e.cursor.column + parsed.pattern.charLen
+        if e.state.input.search.incsearch:
+          e.jumpToFirstSubstituteMatch(
+            target.pattern, ignoreCase, target.match, firstLine, lastLine
           )
+        else:
+          none(SubstituteMatch)
+      e.state.input.line.wordAt = some(
+        if found.isSome and not parsed.hasReplacement:
+          BufferPosition(line: found.get.line, column: found.get.cols.endCol)
         else:
           e.state.ui.substitutePreview.originalCursor
       )

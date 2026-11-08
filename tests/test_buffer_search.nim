@@ -17,9 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options]
+import std/[unittest, options, importutils]
 
 import ../src/moepkg/buffer {.all.}
+import ../src/moepkg/buffer/search {.all.}
 import ../src/moepkg/unicode_utils
 
 suite "Buffer Search - Basic findNext":
@@ -609,6 +610,23 @@ suite "Buffer Search - compileSearchRegex":
     let r2 = compileSearchRegex("test", true)
     check r1.isSome
     check r2.isSome
+
+  test "compileSearchRegex caches a pattern that does not compile":
+    # Matched line by line, a pattern still being typed would otherwise be
+    # parsed again for every line.
+    privateAccess(CachedRegex)
+    check compileSearchRegex("foo(", false).isNone
+    check regexCache.isSome
+    check regexCache.get.pattern == "foo("
+    check regexCache.get.compiled.isNone
+    check compileSearchRegex("foo(", false).isNone
+
+  test "compileSearchRegex compiles a valid pattern after a cached failure":
+    privateAccess(CachedRegex)
+    check compileSearchRegex("foo(", false).isNone
+    check compileSearchRegex("foo(", true).isNone
+    check compileSearchRegex("foo", true).isSome
+    check regexCache.get.compiled.isSome
 
 suite "Buffer Search - Regex findNext":
   test "findNext with character class":
@@ -1244,17 +1262,18 @@ suite "substituteMatches":
     Circumflex = "\u0302"
 
   proc replaced(line, pattern: string, ignorecase = false): string =
-    let (text, count) =
-      line.substituteMatches(pattern, parseReplacement("#"), ignorecase, true)
+    let (text, count) = line.substituteMatches(
+      pattern, parseReplacement("#"), ignorecase, true, smLiteral
+    )
     if count > 0: text else: line
 
   test "No match leaves nothing to build":
-    check "abc".substituteMatches("x", parseReplacement("#"), false, true) == ("", 0)
+    check "abc".substituteMatches("x", parseReplacement("#"), false, true, smRegex) ==
+      ("", 0)
 
   test "Only the first match unless told":
-    check "aXa".substituteMatches("a", parseReplacement("#"), false, false) == (
-      "#Xa", 1
-    )
+    check "aXa".substituteMatches("a", parseReplacement("#"), false, false, smRegex) ==
+      ("#Xa", 1)
 
   test "A bare character is not one that holds a composing character":
     check replaced("e" & Acute & "x", "e") == "e" & Acute & "x"
@@ -1294,7 +1313,11 @@ suite "substituteMatches with Vim's replacement specials":
     check replaced("abc", "b", "[\\&]") == "a[&]c"
 
   test "The match of a pattern matched as it is":
-    check replaced("a.c", ".", "[&]", smPlain) == "a[.]c"
+    check replaced("a.c", ".", "[&]", smLiteral) == "a[.]c"
+
+  test "A group is PCRE's `(...)`; Vim's `\\(` finds a `(`, as the help says":
+    check replaced("call (arg)", "(arg)", "[\\1]") == "call ([arg])"
+    check replaced("call (arg)", "\\(arg\\)", "x") == "call x"
 
   test "\\1 to \\9 are the groups":
     check replaced("abc", "(b)(c)", "[\\2\\1]") == "a[cb]"
@@ -1346,7 +1369,8 @@ suite "substituteMatches with Vim's replacement specials":
 
   test "Groups after undecodable bytes land on their own bytes":
     check replaced("\xffab\xfeab", "(a)(b)", "\\2\\1") == "\xffba\xfeba"
-    check ("\xff" & "x\xfea").firstSubstituteMatch("a", false, smRegex) == some(3)
+    check ("\xff" & "x\xfea").firstSubstituteMatch("a", false, smRegex) ==
+      some(ColumnRange(startCol: 3, endCol: 4))
 
   test "A group of an undecodable line keeps its bytes":
     check replaced("\xff" & "foo", "(o+)", "[\\1]") == "\xff" & "f[oo]"

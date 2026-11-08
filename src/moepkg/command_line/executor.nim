@@ -28,13 +28,13 @@ import types, substitute_parser
 import ../command_line_commands
 
 proc optionsIgnoreCaseOf*(
-    parser: CommandLineParser, pattern: string, match = smPlain
+    parser: CommandLineParser, pattern: string, match: SearchMatch
 ): bool =
   ## What 'ignorecase' and 'smartcase' make of `pattern`.
   parser.optionsIgnoreCase != nil and parser.optionsIgnoreCase(pattern, match)
 
 proc substituteFlags*(
-    parser: CommandLineParser, pattern, text: string, match = smPlain
+    parser: CommandLineParser, pattern, text: string, match: SearchMatch
 ): SubstituteFlags =
   ## The flags `text` of a :s of `pattern`.
   text.parseSubstituteFlags(parser.optionsIgnoreCaseOf(pattern, match))
@@ -43,13 +43,13 @@ proc substitutePattern*(parser: CommandLineParser, typed: string): SubstitutePat
   ## What a :s given `typed` looks for. An empty one is the last search, matched
   ## as that search did, as Vim's do_sub. Empty when there is none.
   if typed.len > 0:
-    SubstitutePattern(pattern: typed, match: smPlain)
+    SubstitutePattern(pattern: typed, match: smRegex)
   elif parser.lastSearch != nil:
     var last = parser.lastSearch()
     last.reused = true
     last
   else:
-    SubstitutePattern(match: smPlain)
+    SubstitutePattern(match: smRegex)
 
 proc typedSubstitutePattern*(
     parser: CommandLineParser, parsed: SubstituteParseResult

@@ -137,7 +137,7 @@ type
     description*: string ## Optional description for completion
 
   SubstitutePattern* = object
-    ## What a :s looks for: the pattern it was given, matched as it is, or the
+    ## What a :s looks for: the pattern it was given, matched as a regex, or the
     ## last search's, matched as that search did.
     pattern*: string
     match*: SearchMatch
@@ -182,7 +182,7 @@ type
       value*: Option[string]
     of claSubstitute:
       pattern*: string
-      match*: SearchMatch # smPlain for a typed pattern, the last search's for none
+      match*: SearchMatch # smRegex for a typed pattern, the last search's for none
       reusedPattern*: bool # No pattern was typed, so the last search's runs
       replacement*: string
       substituteFlags*: SubstituteFlags

@@ -2299,6 +2299,18 @@ suite "NormalModeHandler - gn (search next select)":
     let result = pressGn(handler, buf, state, viewport)
     check result.kind == nmrError
 
+  test "gn with an invalid regex reports it":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo foo(")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.input.search.last.pattern = "foo("
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrError
+    check result.errorMessage == "Invalid regex: foo("
+
   test "gn selects match on different line":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa\nbbb\nccc")

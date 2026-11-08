@@ -466,7 +466,9 @@ suite "HelpViewer - Command mode rendering (snapshot)":
 
   test "head group 3 (:delete family) is aligned to width 21":
     let state = newHelpViewerState()
-    check state.items.anyIt(it.startsWith("%s/keyword1/keyword2/ - Replace plain text"))
+    check state.items.anyIt(
+      it.startsWith("%s/keyword1/keyword2/ - Replace regex matches")
+    )
     check state.items.contains(
       "delete                - Delete current line and copy to register"
     )

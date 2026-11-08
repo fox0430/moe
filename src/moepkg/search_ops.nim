@@ -33,10 +33,13 @@ proc ignoresCase*(search: SearchState, spec: SearchSpec): bool =
   ## upper case letter in a typed pattern. Like Vim's no_scs, * and # leave
   ## 'smartcase' out.
   shouldIgnoreCase(
-    spec.pattern,
-    search.ignorecase,
-    search.smartcase and spec.match in {smRegex, smPlain},
+    spec.pattern, search.ignorecase, search.smartcase and spec.match == smRegex
   )
+
+proc invalidRegex*(search: SearchState, spec: SearchSpec): string =
+  ## "Invalid regex: ..." when `spec` is a regex that does not compile, empty
+  ## otherwise.
+  invalidRegex(spec.pattern, search.ignoresCase(spec), spec.match)
 
 proc findMatch*(
     b: TextBuffer,
@@ -144,15 +147,15 @@ proc searchSubmitted*(
   ## The `count`-th match of `spec` from `pos`, as Enter after / or ? finds
   ## it, with the message it leaves.
   result = state.findCounted(b, spec, pos, count)
-  # Only / and ? are regexes.
   state.statusMessage =
     if result.isSome:
       "Found: " & spec.pattern
-    elif spec.match != smRegex or
-      compileSearchRegex(spec.pattern, state.input.search.ignoresCase(spec)).isSome:
-      "Pattern not found: " & spec.pattern
     else:
-      "Invalid regex: " & spec.pattern
+      let invalid = state.input.search.invalidRegex(spec)
+      if invalid.len > 0:
+        invalid
+      else:
+        "Pattern not found: " & spec.pattern
 
 proc searchIdent*(
     state: EditorState,
@@ -202,10 +205,9 @@ proc searchLast*(
 
   state.showSearchMatches()
 
-  let ignoreCase = state.input.search.ignoresCase(spec)
-  # Only / and ? are regexes
-  if spec.match == smRegex and compileSearchRegex(spec.pattern, ignoreCase).isNone:
-    state.statusMessage = "Invalid regex: " & spec.pattern
+  let invalid = state.input.search.invalidRegex(spec)
+  if invalid.len > 0:
+    state.statusMessage = invalid
     return err("Invalid regex")
 
   let found =

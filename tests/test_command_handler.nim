@@ -1147,7 +1147,8 @@ suite "CommandModeHandler - raw buffer gates":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "Hello")
     buffer.keepRaw = true
 
-    let result = handler.executeSubstitute(buffer, "l", "L", "g".parseSubstituteFlags)
+    let result =
+      handler.executeSubstitute(buffer, "l", "L", "g".parseSubstituteFlags, smRegex)
 
     check result.kind == hrError
     check "raw undecodable bytes" in result.errorMessage
@@ -1200,7 +1201,7 @@ suite "CommandModeHandler - executeSubstitute":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let result = handler.executeSubstitute(
-      buffer, "hello", "hi", "".parseSubstituteFlags, currentLine = 0
+      buffer, "hello", "hi", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 1
@@ -1212,7 +1213,7 @@ suite "CommandModeHandler - executeSubstitute":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello hello hello")
 
     let result = handler.executeSubstitute(
-      buffer, "hello", "hi", "g".parseSubstituteFlags, currentLine = 0
+      buffer, "hello", "hi", "g".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 3
@@ -1224,7 +1225,7 @@ suite "CommandModeHandler - executeSubstitute":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello hello hello")
 
     let result = handler.executeSubstitute(
-      buffer, "hello", "hi", "".parseSubstituteFlags, currentLine = 0
+      buffer, "hello", "hi", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 1
@@ -1242,6 +1243,7 @@ suite "CommandModeHandler - executeSubstitute":
       "foo",
       "bar",
       "".parseSubstituteFlags,
+      smRegex,
       range = ExLineRange(kind: erkAll),
       currentLine = 0,
     )
@@ -1264,6 +1266,7 @@ suite "CommandModeHandler - executeSubstitute":
       "foo",
       "bar",
       "".parseSubstituteFlags,
+      smRegex,
       range = exAddresses(exLine(2), exLine(3)),
       currentLine = 0,
     )
@@ -1279,7 +1282,7 @@ suite "CommandModeHandler - executeSubstitute":
     let buffer = newTextBuffer("a a\nb\na")
     buffer.readOnly = true
     let result = handler.executeSubstitute(
-      buffer, "a", "x", "gn".parseSubstituteFlags, ExLineRange(kind: erkAll)
+      buffer, "a", "x", "gn".parseSubstituteFlags, smRegex, ExLineRange(kind: erkAll)
     )
     check result.kind == hrHandled
     check result.statusMessage == "3 matches on 2 lines"
@@ -1288,20 +1291,22 @@ suite "CommandModeHandler - executeSubstitute":
   test "`n` without `g` counts one match a line":
     let handler = setupHandler()
     let buffer = newTextBuffer("a a")
-    let result = handler.executeSubstitute(buffer, "a", "x", "n".parseSubstituteFlags)
+    let result =
+      handler.executeSubstitute(buffer, "a", "x", "n".parseSubstituteFlags, smRegex)
     check result.statusMessage == "1 match on 1 line"
 
   test "`n` reports a pattern it does not find":
     let handler = setupHandler()
     let buffer = newTextBuffer("a")
-    let result = handler.executeSubstitute(buffer, "z", "x", "n".parseSubstituteFlags)
+    let result =
+      handler.executeSubstitute(buffer, "z", "x", "n".parseSubstituteFlags, smRegex)
     check result.kind == hrError
 
   test "Substitute ignores case when told to":
     let handler = setupHandler()
     let buffer = newTextBuffer("Foo foo FOO")
     let result =
-      handler.executeSubstitute(buffer, "foo", "x", "gi".parseSubstituteFlags)
+      handler.executeSubstitute(buffer, "foo", "x", "gi".parseSubstituteFlags, smRegex)
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 3
     check buffer.getLine(0) == "x x x"
@@ -1309,7 +1314,8 @@ suite "CommandModeHandler - executeSubstitute":
   test "Substitute keeps multi-byte text around a case-folded match":
     let handler = setupHandler()
     let buffer = newTextBuffer("あÉaい éa")
-    let result = handler.executeSubstitute(buffer, "éa", "x", "i".parseSubstituteFlags)
+    let result =
+      handler.executeSubstitute(buffer, "éa", "x", "i".parseSubstituteFlags, smRegex)
     check result.kind == hrSubstitute
     check buffer.getLine(0) == "あxい éa"
 
@@ -1318,7 +1324,7 @@ suite "CommandModeHandler - executeSubstitute":
     let buffer = setupBuffer(@["hello"])
 
     let result = handler.executeSubstitute(
-      buffer, "", "replacement", "".parseSubstituteFlags, currentLine = 0
+      buffer, "", "replacement", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrError
     check result.errorMessage == "Pattern required"
@@ -1328,7 +1334,7 @@ suite "CommandModeHandler - executeSubstitute":
     let buffer = setupBuffer(@["hello world"])
 
     let result = handler.executeSubstitute(
-      buffer, "xyz", "replacement", "".parseSubstituteFlags, currentLine = 0
+      buffer, "xyz", "replacement", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrError
     check "Pattern not found" in result.errorMessage
@@ -1339,7 +1345,7 @@ suite "CommandModeHandler - executeSubstitute":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
 
     let result = handler.executeSubstitute(
-      buffer, "hello", "hi\\nworld", "".parseSubstituteFlags, currentLine = 0
+      buffer, "hello", "hi\\nworld", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
     check buffer.getLine(0) == "hi\nworld"
@@ -1356,6 +1362,7 @@ suite "CommandModeHandler - executeSubstitute":
       "foo",
       "replaced",
       "".parseSubstituteFlags,
+      smRegex,
       range = exAddresses(exLine(3), exLine(1)),
       currentLine = 0,
     )
@@ -1368,7 +1375,7 @@ suite "CommandModeHandler - executeSubstitute":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let result = handler.executeSubstitute(
-      buffer, "hello ", "", "".parseSubstituteFlags, currentLine = 0
+      buffer, "hello ", "", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 1
@@ -1381,7 +1388,7 @@ suite "CommandModeHandler - executeSubstitute":
     buffer.readOnly = true
 
     let result = handler.executeSubstitute(
-      buffer, "hello", "hi", "".parseSubstituteFlags, currentLine = 0
+      buffer, "hello", "hi", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrError
     check result.errorMessage == "Buffer is read-only"
@@ -2483,6 +2490,7 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
       "foo",
       "bar",
       "".parseSubstituteFlags,
+      smRegex,
       range = exAddresses(exLine(2), exLine(2)),
       currentLine = 0,
     )
@@ -2501,6 +2509,7 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
       "foo",
       "bar",
       "".parseSubstituteFlags,
+      smRegex,
       range = ExLineRange(kind: erkAll),
       currentLine = 0,
     )
@@ -2547,6 +2556,7 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
       "foo",
       "bar",
       "".parseSubstituteFlags,
+      smRegex,
       range = exAddresses(exLine(2), exLine(2)),
       currentLine = 0,
     )
