@@ -1047,13 +1047,13 @@ suite "unicode_utils - setRuneCell":
     check buf[1, 0].symbol == "日"
     check buf[2, 0].symbol == ""
 
-  test "Wide rune at exact buffer right edge skips continuation":
+  test "Wide rune at exact buffer right edge becomes a blank":
     var buf = newBuffer(3, 3)
     let style = defaultStyle()
-    # x=2 is the last valid col; x+1=3 is out of bounds - skip continuation
+    # x=2 is the last valid col; no room for the continuation cell
     let w = setRuneCell(buf, 2, 0, "日".runeAt(0), style)
     check w == 2
-    check buf[2, 0].symbol == "日"
+    check buf[2, 0].symbol == " "
 
   test "Combining mark folds into the preceding base cell, returns width 0":
     var buf = newBuffer(10, 3)

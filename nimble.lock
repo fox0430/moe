@@ -97,15 +97,15 @@
       }
     },
     "celina": {
-      "version": "0.14.0",
-      "vcsRevision": "f6f2a542b4a46f7f4d762805ac118b4f8af0d379",
+      "version": "0.15.1",
+      "vcsRevision": "dccb159a66d610aac6df6bbe4f4f9d604cb0f871",
       "url": "https://github.com/fox0430/celina",
       "downloadMethod": "git",
       "dependencies": [
         "unicodedb"
       ],
       "checksums": {
-        "sha1": "c4a4a2d2858b7d8ff5590c3b8cdc6a2afcbe2131"
+        "sha1": "9b69d3d4f49d480deb7cfd5c9a5f8fda1da05f30"
       }
     },
     "regex": {
