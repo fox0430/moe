@@ -146,6 +146,60 @@ type
       ## Columns kept for `text` wherever the cursor is, as Vim's ruler width:
       ## the file name is cut against them, not against `text`
 
+var homeDirs: Option[seq[string]]
+  ## `$HOME` and the path it resolves to, read on first use
+
+proc homePrefixes(): lent seq[string] =
+  ## The prefixes Vim's `home_replace` shows as `~`: `$HOME` as written and,
+  ## when it goes through a link, its real path.
+  if homeDirs.isNone:
+    var dirs: seq[string]
+    # Not getHomeDir: it gives "/" for an empty $HOME.
+    let raw =
+      when defined(posix):
+        getEnv("HOME")
+      else:
+        getHomeDir()
+    var home = raw.strip(leading = false, chars = {DirSep})
+    if home.len == 0 and raw.len > 0:
+      # A root home: Vim shows the root itself as `~` and nothing under it.
+      home = $DirSep
+    if home.len > 0:
+      dirs.add home
+      try:
+        let real = expandFilename(home)
+        if real != home:
+          dirs.add real
+      except OSError:
+        discard
+    homeDirs = some(dirs)
+  homeDirs.get
+
+proc homeReplace(path: string, homes: openArray[string] = homePrefixes()): string =
+  ## `path` with a leading home directory shown as `~`, as Vim's
+  ## `home_replace`: only the home itself or a path under it.
+  for home in homes:
+    if home.len > 0 and path.startsWith(home) and
+        (path.len == home.len or path[home.len] == DirSep):
+      return "~" & path[home.len .. ^1]
+  path
+
+proc shownPath(rawPath: string): string =
+  ## `rawPath` as the status line shows it, with the home as `~`.
+  sanitizeForDisplay(homeReplace(rawPath))
+
+proc shownName(rawPath: string): string =
+  ## The last component of the real path, so the home itself keeps its name.
+  sanitizeForDisplay(rawPath.extractFilename())
+
+proc shownDirectory(rawPath: string): string =
+  ## The parent of the real path with the home as `~`, so the home itself
+  ## shows its parent and not `.`.
+  if rawPath.len > 0:
+    shownPath(rawPath.parentDir())
+  else:
+    ""
+
 proc part(text: string, role: StatusRole): StatusItem =
   StatusItem(text: text, role: role)
 
@@ -162,9 +216,9 @@ proc buildFileDisplay(
   # Filer mode: show directory path
   if mode == EditorMode.Filer:
     if textBuffer.filePath.isSome:
-      let path = sanitizeForDisplay(textBuffer.filePath.get())
-      if dirExists(textBuffer.filePath.get()):
-        return @[part(" " & path & "/", srName)]
+      let path = shownPath(textBuffer.filePath.get())
+      if dirExists(textBuffer.filePath.get()) and not path.endsWith(DirSep):
+        return @[part(" " & path & DirSep, srName)]
       return @[part(" " & path, srName)]
     return
 
@@ -175,7 +229,7 @@ proc buildFileDisplay(
   if textBuffer.filePath.isNone:
     return @[part(" [No Name]", srName)]
 
-  let filePath = sanitizeForDisplay(textBuffer.filePath.get())
+  let rawPath = textBuffer.filePath.get()
 
   # Not behind a setting: it stands for text that exists nowhere else.
   if owesPreservedWork:
@@ -184,10 +238,9 @@ proc buildFileDisplay(
   # Show directory if enabled
   let name =
     if config.directory:
-      filePath
+      shownPath(rawPath)
     elif config.filename:
-      # Show just filename if directory is disabled
-      filePath.extractFilename()
+      shownName(rawPath)
     else:
       ""
   # Not padded: a file name's own trailing spaces are part of it.
@@ -277,8 +330,8 @@ proc parseSetupText(
   ##   {percentage}    - Line percentage (e.g., "50%")
   ##   {mode}          - Current editor mode
   ##   {filename}      - Filename only
-  ##   {directory}     - Directory path
-  ##   {filePath}      - Full file path
+  ##   {directory}     - Directory path, with the home shown as `~`
+  ##   {filePath}      - Full file path, with the home shown as `~`
   ##   {lineEnding}    - Line ending (LF, CRLF, CR, or RAW for undecoded bytes)
   ##   {gitBranch}     - Git branch name
   ##   {gitChanges}    - Git changes (+N ~N -N)
@@ -314,21 +367,10 @@ proc parseSetupText(
         ""
     encoding = encodingToString(textBuffer.encoding)
     modeStr = if widest: WidestModeText else: modeText
-    filePath =
-      if textBuffer.filePath.isSome:
-        sanitizeForDisplay(textBuffer.filePath.get())
-      else:
-        ""
-    filename =
-      if filePath.len > 0:
-        filePath.extractFilename()
-      else:
-        ""
-    directory =
-      if filePath.len > 0:
-        filePath.parentDir()
-      else:
-        ""
+    rawPath = textBuffer.filePath.get("")
+    filePath = shownPath(rawPath)
+    filename = shownName(rawPath)
+    directory = shownDirectory(rawPath)
 
   # Get git info (uses cached values to avoid per-frame subprocess spawns)
   var gitBranch = ""
