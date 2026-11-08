@@ -1383,13 +1383,14 @@ suite "Search highlight after :noh":
     e.state.input.line.text = "s/fo"
     check e.matchesOnFirstLine == 0
 
-  test "A :s being typed highlights the plain string it replaces":
+  test "A :s being typed highlights what its regex replaces":
     let e = nohAfterSearch("foo abc a.c foo(")
     e.state.enterCommandOverlay()
     e.state.input.line.text = "s/a.c"
-    check e.matchesOnFirstLine == 1
+    check e.matchesOnFirstLine == 2
+    # Not yet a regex, so nothing.
     e.state.input.line.text = "s/foo("
-    check e.matchesOnFirstLine == 1
+    check e.matchesOnFirstLine == 0
 
   test "'smartcase' holds for the :s being typed":
     let e = nohAfterSearch("Foo foo")
@@ -1406,14 +1407,14 @@ suite "Search highlight after :noh":
     check e.executeCommandOverlay(":s/foo/X/") == roContinue
     check not e.state.input.search.hlsearchTempDisabled
     check e.state.input.search.last ==
-      SearchSpec(pattern: "foo", match: smPlain, direction: Forward)
+      SearchSpec(pattern: "foo", match: smRegex, direction: Forward)
     check e.matchesOnFirstLine == 1
 
   test "An executed :s replaces the last search, not just ends the hide":
     let e = nohAfterSearch()
     check e.executeCommandOverlay(":s/bar/baz/") == roContinue
     check e.state.input.search.last.pattern == "bar"
-    check e.state.input.search.last.match == smPlain
+    check e.state.input.search.last.match == smRegex
     check e.matchesOnFirstLine == 0
 
   test "A :s that finds nothing still ends :noh, as Vim does":
@@ -1442,7 +1443,7 @@ suite "Search highlight after :noh":
     check e.state.input.search.last.pattern == "foo"
     check e.state.input.search.hlsearchTempDisabled
 
-  test "An escaped delimiter in a :s is the character itself":
+  test "An escaped delimiter in a :s finds the character, kept as typed":
     let e = nohAfterSearch("foo a/b")
     e.state.enterCommandOverlay()
     e.state.input.line.text = "s/a\\/b"
@@ -1450,13 +1451,44 @@ suite "Search highlight after :noh":
     e.state.exitOverlay()
     check e.executeCommandOverlay(":s/a\\/b/x/") == roContinue
     check e.activeBuffer.getLine(0) == "foo x"
-    check e.state.input.search.last.pattern == "a/b"
+    # As Vim saves it, so Ctrl-R / gives back what was typed.
+    check e.state.input.search.last.pattern == "a\\/b"
 
-  test "An escaped backslash in a :s is the character itself":
+  test "An escaped backslash in a :s finds a backslash, kept as typed":
     let e = nohAfterSearch("foo C:\\")
     check e.executeCommandOverlay(":s/C:\\\\/x/") == roContinue
     check e.activeBuffer.getLine(0) == "foo x"
-    check e.state.input.search.last.pattern == "C:\\"
+    check e.state.input.search.last.pattern == "C:\\\\"
+
+  test "A `/` in a class of a :s pattern is no delimiter, as in Vim":
+    let e = nohAfterSearch("a/b c/d")
+    check e.executeCommandOverlay(":s/[/]/Z/g") == roContinue
+    check e.activeBuffer.getLine(0) == "aZb cZd"
+    check e.state.input.search.last.pattern == "[/]"
+
+  test "A typed :s pattern is a regex, its groups in the replacement":
+    let e = nohAfterSearch("foo abc a.c")
+    check e.executeCommandOverlay(":s/(a).c/[\\1]/g") == roContinue
+    check e.activeBuffer.getLine(0) == "foo [a] [a]"
+    check e.state.input.search.last ==
+      SearchSpec(pattern: "(a).c", match: smRegex, direction: Forward)
+
+  test "An invalid :s pattern says so, made the last search as / does":
+    let e = nohAfterSearch("foo foo(")
+    check e.executeCommandOverlay(":s/foo(/x/") == roAbort
+    check e.activeBuffer.getLine(0) == "foo foo("
+    check e.state.statusMessage == "Invalid regex: foo("
+    check e.state.input.search.last.pattern == "foo("
+    check e.state.input.search.history[0] == "foo("
+
+  test "A :s pattern recalled into / runs as it did":
+    let e = nohAfterSearch("foo a.c abc")
+    check e.executeCommandOverlay(":s/a.c/x/") == roContinue
+    check e.activeBuffer.getLine(0) == "foo x abc"
+    e.cursor = BufferPosition(line: 0, column: 0)
+    let found = e.state.searchLast(e.activeBuffer, e.cursor, reverse = false, count = 1)
+    check found.isOk
+    check found.get == BufferPosition(line: 0, column: 6)
 
   test "Without 'incsearch' a typed pattern leaves the last search drawn":
     let e = nohAfterSearch()
@@ -1540,7 +1572,7 @@ suite "Search highlight after :noh":
     e.state.keyTyped = true
     e.state.input.search.ignorecase = true
     e.state.input.search.smartcase = true
-    e.state.setLastSearch(SearchSpec(pattern: "Foo", match: smPlain))
+    e.state.setLastSearch(SearchSpec(pattern: "Foo", match: smRegex))
     check e.executeCommandOverlay(":%s//X/g") == roContinue
     check e.activeBuffer.getLine(0) == "X foo FOO"
 

@@ -894,7 +894,7 @@ suite "editor_reload - state a reload cannot be run under":
       removeFile(path)
     discard e.loadFile(path)
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "bar", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "bar", "g".parseSubstituteFlags, smRegex)
     check not e.activeBuffer.isModified
 
     sleep(50)

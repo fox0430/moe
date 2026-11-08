@@ -97,6 +97,52 @@ type SubstituteParseResult* = object ## Result of parsing a substitute command
   hasReplacement*: bool # Whether we've reached the replacement section
   range*: ExLineRange # The lines in front of `s`, unresolved
 
+proc skipClass(s: string, start: int): int =
+  ## The index of the `]` closing the `[...]` class whose items start at
+  ## `start`, `s.len` without one, as the regex reads it: a `]` first is an
+  ## item, a backslash escapes the char after it and `[:name:]` is one item.
+  var i = start
+  if i < s.len and s[i] == '^':
+    i.inc
+  if i < s.len and s[i] == ']':
+    i.inc
+  while i < s.len and s[i] != ']':
+    if s[i] == '\\':
+      i += 2
+    elif s.continuesWith("[:", i):
+      let colon = s.find(':', i + 2)
+      i =
+        if colon >= 0 and s.continuesWith(":]", colon):
+          colon + 2
+        else:
+          i + 1
+    else:
+      i.inc
+  min(i, s.len)
+
+proc skipPattern(s: string, start: int): int =
+  ## The index of the `/` ending the :s pattern that starts at `start`, `s.len`
+  ## without one. As Vim's skip_regexp, neither a `/` after a backslash nor one
+  ## in a `[...]` class ends it, and a class left open runs to the end.
+  var i = start
+  while i < s.len and s[i] != '/':
+    if s[i] == '\\':
+      i += 2
+    elif s[i] == '[':
+      i = s.skipClass(i + 1) + 1
+    else:
+      i.inc
+  min(i, s.len)
+
+proc skipReplacement(s: string, start: int): int =
+  ## The index of the `/` ending the :s replacement that starts at `start`,
+  ## `s.len` without one. As Vim's skip_substitute, a `/` after a backslash
+  ## does not end it.
+  var i = start
+  while i < s.len and s[i] != '/':
+    i += (if s[i] == '\\': 2 else: 1)
+  min(i, s.len)
+
 proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
   ## Parse a substitute command and extract pattern, replacement, and flags
   ## Supports formats:
@@ -105,7 +151,8 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
   ##   :1,10s/pattern/replacement/flags - lines 1 to 10
   ##   :.,10s/pattern/replacement/flags - current line to line 10
   ##   :1,.s/pattern/replacement/flags - line 1 to current line
-  ## Handles escaped slashes properly (including \\/ which is backslash + end delimiter)
+  ## The pattern and the replacement are kept as typed, backslashes and all, as
+  ## Vim keeps them: the regex reads `\/` as `/`, and so does the replacement.
   result = SubstituteParseResult(isValid: false)
 
   if commandText.len < 2:
@@ -132,66 +179,16 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
   result.isValid = true
   result.range = prefix.range
 
-  # Parse using state machine to properly handle escapes
-  type ParseState = enum
-    psPattern
-    psReplacement
+  let patternEnd = cmd.skipPattern(startIdx)
+  result.pattern = cmd[startIdx ..< patternEnd]
+  if patternEnd == cmd.len:
+    return
+  result.hasReplacement = true
 
-  var state = psPattern
-  var escaped = false
-  var i = startIdx
-
-  while i < cmd.len:
-    let c = cmd[i]
-
-    if escaped:
-      # Previous char was backslash - add this char literally (except for special sequences)
-      case state
-      of psPattern:
-        # The pattern is a plain string, in which `\/` and `\\` stand for the
-        # character itself.
-        if c notin {'/', '\\'}:
-          result.pattern.add('\\')
-        result.pattern.add(c)
-      of psReplacement:
-        result.replacement.add('\\')
-        result.replacement.add(c)
-      escaped = false
-      i += 1
-      continue
-
-    if c == '\\':
-      escaped = true
-      i += 1
-      continue
-
-    if c == '/':
-      # Unescaped slash - delimiter
-      case state
-      of psPattern:
-        state = psReplacement
-        result.hasReplacement = true
-      of psReplacement:
-        result.flags = cmd[i + 1 ..^ 1]
-        break
-      i += 1
-      continue
-
-    # Regular character
-    case state
-    of psPattern:
-      result.pattern.add(c)
-    of psReplacement:
-      result.replacement.add(c)
-    i += 1
-
-  # Handle trailing backslash
-  if escaped:
-    case state
-    of psPattern:
-      result.pattern.add('\\')
-    of psReplacement:
-      result.replacement.add('\\')
+  let replacementEnd = cmd.skipReplacement(patternEnd + 1)
+  result.replacement = cmd[patternEnd + 1 ..< replacementEnd]
+  if replacementEnd < cmd.len:
+    result.flags = cmd[replacementEnd + 1 ..^ 1]
 
 proc extractSubstituteReplacement*(
     commandText: string

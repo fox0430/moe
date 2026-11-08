@@ -89,9 +89,9 @@ proc updateSubstitutePreview*(
     pattern: string,
     replacement: string,
     flags: SubstituteFlags,
+    match: SearchMatch,
     firstLine: int = 0,
     lastLine: int = high(int),
-    match = smPlain,
 ) =
   ## Update substitute preview with new pattern and replacement
   ## Only lines `firstLine .. lastLine` are replaced, as `:s` runs on its range.
@@ -114,7 +114,9 @@ proc updateSubstitutePreview*(
   e.restoreFromPreview()
   e.state.ui.substitutePreview.applied = key
 
-  if pattern.len == 0:
+  # A pattern that does not compile, as one still being typed often does,
+  # replaces nothing, so no line is scanned for it.
+  if pattern.len == 0 or invalidRegex(pattern, flags.ignoreCase, match).len > 0:
     return
 
   let parsed = parseReplacement(replacement)

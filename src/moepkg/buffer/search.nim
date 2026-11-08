@@ -31,9 +31,8 @@ import core
 type
   SearchMatch* = enum
     ## How a search pattern matches.
-    smRegex ## As a regex (/ and ?)
+    smRegex ## As a regex (/ and ? and a typed :s)
     smLiteral ## As it is (g* and g#)
-    smPlain ## As it is, typed, so 'smartcase' holds (:s)
     smWord
       ## As it is, a word character at either end starting or ending a word, as
       ## the `\<` and `\>` Vim's * and # put around a keyword
@@ -41,32 +40,43 @@ type
   CachedRegex = object
     pattern: string
     ignorecase: bool
-    compiled: Regex2
+    compiled: Option[Regex2] ## none when the pattern does not compile.
 
 var regexCache: Option[CachedRegex]
 
 proc compileSearchRegex*(pattern: string, ignorecase: bool): Option[Regex2] =
   ## Compile a search pattern as a regex.
   ## Returns none if the pattern is empty or invalid.
-  ## Results are cached for repeated searches with the same pattern.
+  ## The last result is cached, a failure too: callers compile once per line,
+  ## and a pattern still being typed often does not compile.
   if pattern.len == 0:
     return none(Regex2)
   if regexCache.isSome:
     let c = regexCache.get
     if c.pattern == pattern and c.ignorecase == ignorecase:
-      return some(c.compiled)
-  try:
-    let flags =
-      if ignorecase:
-        {regexCaseless}
-      else:
-        default(set[RegexFlag])
-    let compiled = re2(pattern, flags)
-    regexCache =
-      some(CachedRegex(pattern: pattern, ignorecase: ignorecase, compiled: compiled))
-    return some(compiled)
-  except RegexError:
-    return none(Regex2)
+      return c.compiled
+  let flags =
+    if ignorecase:
+      {regexCaseless}
+    else:
+      default(set[RegexFlag])
+  let compiled =
+    try:
+      some(re2(pattern, flags))
+    except RegexError:
+      none(Regex2)
+  regexCache =
+    some(CachedRegex(pattern: pattern, ignorecase: ignorecase, compiled: compiled))
+  compiled
+
+proc invalidRegex*(pattern: string, ignorecase: bool, match: SearchMatch): string =
+  ## "Invalid regex: `pattern`" when `match` reads `pattern` as a regex that
+  ## does not compile, empty otherwise.
+  if match == smRegex and pattern.len > 0 and
+      compileSearchRegex(pattern, ignorecase).isNone:
+    "Invalid regex: " & pattern
+  else:
+    ""
 
 proc validUtf8Step(line: string, i: int): tuple[lineBytes, validBytes: int] =
   ## The character of `line` at byte `i` as `toValidUtf8` writes it: its bytes
@@ -113,8 +123,8 @@ type
     composing: seq[Rune]
 
   LiteralPattern = ref object
-    ## Text * and # (smWord), g* and g# (smLiteral) and :s (smPlain) look for as
-    ## it is, ready to match against each line.
+    ## Text * and # (smWord) and g* and g# (smLiteral) look for as it is, ready
+    ## to match against each line.
     text: string
     chars: seq[LiteralChar]
     ignorecase: bool
@@ -407,14 +417,14 @@ iterator substituteRanges(
         start = b
 
 proc firstSubstituteMatch*(
-    line, pattern: string, ignorecase: bool, match = smPlain
-): Option[int] =
-  ## The column of the first match of `pattern` :s would replace on `line`.
+    line, pattern: string, ignorecase: bool, match: SearchMatch
+): Option[ColumnRange] =
+  ## The columns of the first match of `pattern` :s would replace on `line`.
   for r in line.substituteRanges(pattern, ignorecase, match):
-    return some(r.startCol)
+    return some(ColumnRange(startCol: r.startCol, endCol: r.endCol))
 
 proc countSubstituteMatches*(
-    line, pattern: string, ignorecase, everyMatch: bool, match = smPlain
+    line, pattern: string, ignorecase, everyMatch: bool, match: SearchMatch
 ): int =
   ## How many matches of `pattern` :s would replace on `line`.
   for r in line.substituteRanges(pattern, ignorecase, match):
@@ -563,7 +573,7 @@ proc substituteMatches*(
     line, pattern: string,
     replacement: Replacement,
     ignorecase, everyMatch: bool,
-    match = smPlain,
+    match: SearchMatch,
 ): tuple[text: string, count: int] =
   ## `line` with the first match of `pattern`, or `everyMatch`, replaced, and
   ## how many were.

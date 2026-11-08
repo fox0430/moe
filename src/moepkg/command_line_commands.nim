@@ -1307,7 +1307,9 @@ const CommandLineSpecialHelp*:
   substitute: HelpEntry(
     syntax: "%s/keyword1/keyword2/",
     description:
-      "Replace plain text, case as in a search or by flag `i`/`I` (normal mode only); " &
+      "Replace regex matches as `/` finds them (PCRE style: `(...)` is a group, " &
+      "which `\\1` puts back, and Vim's `\\(` is a literal `(`), case as in a " &
+      "search or by flag `i`/`I` (normal mode only); " &
       "a :s that can run makes keyword1 the last search, and an empty keyword1 " &
       "reuses that search as it matched (a regex after `/`, whole words after " &
       "`*`), also from the previous session (E35 without one); " &

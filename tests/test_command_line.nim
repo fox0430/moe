@@ -84,9 +84,10 @@ suite "CommandLine - parseSubstituteCommand basic":
 
 suite "CommandLine - parseSubstituteCommand with escapes":
   test "Escaped slash in pattern :s/foo\\/bar/baz/":
+    # Kept as typed, as Vim saves the pattern; the regex reads `\/` as `/`.
     let result = parseSubstituteCommand(":s/foo\\/bar/baz/")
     check result.isValid == true
-    check result.pattern == "foo/bar"
+    check result.pattern == "foo\\/bar"
     check result.replacement == "baz"
 
   test "Escaped slash in replacement :s/foo/bar\\/baz/":
@@ -94,25 +95,53 @@ suite "CommandLine - parseSubstituteCommand with escapes":
     check result.isValid == true
     check result.pattern == "foo"
     check result.replacement == "bar\\/baz"
-    let (text, count) =
-      "foo".substituteMatches("foo", parseReplacement(result.replacement), false, false)
+    let (text, count) = "foo".substituteMatches(
+      "foo", parseReplacement(result.replacement), false, false, smRegex
+    )
     check (text, count) == ("bar/baz", 1)
 
   test "Escaped backslash before slash :s/foo\\\\/bar/":
     let result = parseSubstituteCommand(":s/foo\\\\/bar/")
     check result.isValid == true
-    check result.pattern == "foo\\"
+    check result.pattern == "foo\\\\"
     check result.replacement == "bar"
 
   test "A backslash before an escaped slash :s/a\\\\\\/b/x/":
-    check parseSubstituteCommand(":s/a\\\\\\/b/x/").pattern == "a\\/b"
+    check parseSubstituteCommand(":s/a\\\\\\/b/x/").pattern == "a\\\\\\/b"
 
   test "Escaped slash in pattern parses correctly :s/foo\\/bar/":
-    # In :s/foo\/bar/, the \/ is an escaped slash, so pattern is "foo/bar"
+    # In :s/foo\/bar/, the \/ is an escaped slash, not the delimiter.
     let result = parseSubstituteCommand(":s/foo\\/bar/")
     check result.isValid == true
-    check result.pattern == "foo/bar"
+    check result.pattern == "foo\\/bar"
     check result.replacement == ""
+
+suite "CommandLine - parseSubstituteCommand reads a class as Vim's skip_regexp":
+  test "A `/` in a class does not end the pattern":
+    let result = parseSubstituteCommand(":%s/[/]/Z/g")
+    check result.pattern == "[/]"
+    check result.replacement == "Z"
+    check result.flags == "g"
+
+  test "A `]` first in a class is one of its items":
+    check parseSubstituteCommand(":%s/[]/]/Z/g").pattern == "[]/]"
+    check parseSubstituteCommand(":%s/[^]/]/Z/g").pattern == "[^]/]"
+
+  test "A `[:name:]` in a class does not close it":
+    check parseSubstituteCommand(":%s/[[:alpha:]/]/Z/g").pattern == "[[:alpha:]/]"
+
+  test "An escaped `]` in a class does not close it":
+    check parseSubstituteCommand(":%s/[\\]/]/Z/").pattern == "[\\]/]"
+
+  test "A class left open runs to the end":
+    let result = parseSubstituteCommand(":%s/x[/y/Q/")
+    check result.pattern == "x[/y/Q/"
+    check not result.hasReplacement
+
+  test "A `/` in the replacement ends it even after a `[`":
+    let result = parseSubstituteCommand(":s/a/[/g")
+    check result.replacement == "["
+    check result.flags == "g"
 
 suite "CommandLine - parseSubstituteCommand skips the range":
   ## The range is `parseCommandLine`'s to strip and the executor reads it from
@@ -1349,13 +1378,13 @@ suite "CommandLine - parseSubstituteFlags":
     # As Vim's spats keep no_scs, * leaves 'smartcase' out of the reused one.
     check asked == SubstitutePattern(pattern: "Foo", match: smWord)
 
-  test "A typed :s pattern matches as it is":
+  test "A typed :s pattern matches as a regex, as / does":
     let parser = newCommandLineParser()
     parser.lastSearch = proc(): SubstitutePattern =
       SubstitutePattern(pattern: "f.o", match: smRegex)
     let result = parser.parseAndExecute(":s/a.b/x/")
     check result.pattern == "a.b"
-    check result.match == smPlain
+    check result.match == smRegex
 
   test "Trailing characters still refuse an empty :s pattern first, as Vim":
     let parser = newCommandLineParser()

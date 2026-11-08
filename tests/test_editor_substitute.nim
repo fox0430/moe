@@ -19,7 +19,7 @@
 
 ## Tests for editor_substitute.nim
 
-import std/unittest
+import std/[options, unittest]
 
 import
   ../src/moepkg/
@@ -66,7 +66,7 @@ suite "editor_substitute":
     let e = createTestEditor()
     setBufferContent(e, "foo bar foo\nfoo baz")
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags, smRegex)
     check e.activeBuffer.getLine(0) == "qux bar qux"
     check e.activeBuffer.getLine(1) == "qux baz"
 
@@ -74,7 +74,7 @@ suite "editor_substitute":
     let e = createTestEditor()
     setBufferContent(e, "foo bar foo\nfoo baz")
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "qux", "".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "qux", "".parseSubstituteFlags, smRegex)
     check e.activeBuffer.getLine(0) == "qux bar foo"
     check e.activeBuffer.getLine(1) == "qux baz"
 
@@ -83,7 +83,7 @@ suite "editor_substitute":
     setBufferContent(e, "foo\nfoo\nfoo")
     e.startSubstitutePreview()
     e.updateSubstitutePreview(
-      "foo", "qux", "g".parseSubstituteFlags, firstLine = 1, lastLine = 1
+      "foo", "qux", "g".parseSubstituteFlags, smRegex, firstLine = 1, lastLine = 1
     )
     check e.activeBuffer.getLine(0) == "foo"
     check e.activeBuffer.getLine(1) == "qux"
@@ -93,10 +93,16 @@ suite "editor_substitute":
     let e = createTestEditor()
     setBufferContent(e, "foo foo\nfoo foo")
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "qux", "".parseSubstituteFlags, lastLine = 0)
-    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags, lastLine = 0)
+    e.updateSubstitutePreview(
+      "foo", "qux", "".parseSubstituteFlags, smRegex, lastLine = 0
+    )
+    e.updateSubstitutePreview(
+      "foo", "qux", "g".parseSubstituteFlags, smRegex, lastLine = 0
+    )
     check e.activeBuffer.getLine(0) == "qux qux"
-    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags, firstLine = 1)
+    e.updateSubstitutePreview(
+      "foo", "qux", "g".parseSubstituteFlags, smRegex, firstLine = 1
+    )
     check e.activeBuffer.getLine(0) == "foo foo"
     check e.activeBuffer.getLine(1) == "qux qux"
 
@@ -104,29 +110,29 @@ suite "editor_substitute":
     let e = createTestEditor()
     setBufferContent(e, "foo bar")
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("", "qux", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("", "qux", "g".parseSubstituteFlags, smRegex)
     check e.activeBuffer.getLine(0) == "foo bar"
 
   test "updateSubstitutePreview skips identical pattern/replacement":
     let e = createTestEditor()
     setBufferContent(e, "foo bar")
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags, smRegex)
     check e.activeBuffer.getLine(0) == "qux bar"
-    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags, smRegex)
     check e.activeBuffer.getLine(0) == "qux bar"
 
   test "updateSubstitutePreview without an active preview is a no-op":
     let e = createTestEditor()
     setBufferContent(e, "foo bar")
-    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags, smRegex)
     check e.activeBuffer.getLine(0) == "foo bar"
 
   test "cancelSubstitutePreview restores the original content":
     let e = createTestEditor()
     setBufferContent(e, "foo bar foo")
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags, smRegex)
     check e.activeBuffer.getLine(0) == "qux bar qux"
     e.cancelSubstitutePreview()
     check e.activeBuffer.getLine(0) == "foo bar foo"
@@ -159,7 +165,7 @@ suite "editor_substitute":
     let e = createTestEditor()
     setBufferContent(e, "foo bar foo")
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "qux", "g".parseSubstituteFlags, smRegex)
     e.commitSubstitutePreview()
     check e.activeBuffer.getLine(0) == "qux bar qux"
     check e.state.ui.substitutePreview.isActive == false
@@ -181,10 +187,20 @@ suite "editor_substitute":
     let e = createTestEditor()
     setBufferContent(e, "Foo foo")
     e.startSubstitutePreview()
-    e.updateSubstitutePreview("foo", "x", "g".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "x", "g".parseSubstituteFlags, smRegex)
     check e.activeBuffer.getLine(0) == "Foo x"
-    e.updateSubstitutePreview("foo", "x", "gi".parseSubstituteFlags)
+    e.updateSubstitutePreview("foo", "x", "gi".parseSubstituteFlags, smRegex)
     check e.activeBuffer.getLine(0) == "x x"
+
+  test "updateSubstitutePreview with a pattern that does not compile undoes the last one":
+    let e = createTestEditor()
+    setBufferContent(e, "foo( foo")
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview("foo", "x", "g".parseSubstituteFlags, smRegex)
+    check e.activeBuffer.getLine(0) == "x( x"
+    e.updateSubstitutePreview("foo(", "x", "g".parseSubstituteFlags, smRegex)
+    check e.activeBuffer.getLine(0) == "foo( foo"
+    check e.state.ui.substitutePreview.isActive
 
 suite ":s as it is typed":
   proc typing(content, command: string, last = SearchSpec()): Editor =
@@ -247,6 +263,19 @@ suite ":s as it is typed":
     check e.cursor == BufferPosition(line: 1, column: 0)
 
   test "An empty pattern waits for its delimiter":
-    let e = typing("xx\nfoo", "%s/", SearchSpec(pattern: "foo", match: smPlain))
+    let e = typing("xx\nfoo", "%s/", SearchSpec(pattern: "foo", match: smRegex))
     check not e.state.ui.substitutePreview.isActive
     check e.cursor == BufferPosition(line: 0, column: 0)
+
+  test "The preview end follows the regex match, not the pattern length":
+    let e = typing("foo abc a.c", "%s/(a).c")
+    check e.cursor == BufferPosition(line: 0, column: 4)
+    check e.state.input.line.wordAt == some(BufferPosition(line: 0, column: 7))
+
+  test "A pattern that stops compiling as it is typed previews and finds nothing":
+    # `%s/foo` takes the cursor to line 1; the `(` after it does not compile.
+    let e = typing("xx\nfoo(", "%s/foo(/x/")
+    check e.state.ui.substitutePreview.isActive
+    check e.activeBuffer.getLine(1) == "foo("
+    check e.cursor == BufferPosition(line: 0, column: 0)
+    check e.state.input.line.wordAt == some(BufferPosition(line: 0, column: 0))
