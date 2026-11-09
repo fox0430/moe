@@ -31,7 +31,7 @@ import
   ../[
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     config_loader, window_manager, log_viewer, syntax_checker, motion, viewer_mode,
-    editor_build_jobs, path_key,
+    editor_build_jobs, path_key, cursor_util,
   ]
 
 when not defined(moe.embedded):
@@ -305,13 +305,15 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
         )
 
 proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
-  ## Move the cursor to the specified line number.
-  let lineNum = r.lineNumber
-  if lineNum > 0:
-    # Clamp to last line if lineNum exceeds buffer length
-    e.activeWindow.cursor.line = min(lineNum, activeBuffer.len) - 1
-    e.activeWindow.cursor.column = 0
-    e.updateViewportForCursor(e.cursor)
+  ## Move the cursor to the first non-blank of the line, as Vim's
+  ## 'startofline' does.
+  if activeBuffer.len == 0:
+    return
+  let line = r.lineNumber - 1
+  e.activeWindow.cursor.line = line
+  e.activeWindow.cursor.column = firstNonBlankColumn(activeBuffer.getLine(line))
+  e.state.preferredColumn = -1
+  e.updateViewportForCursor(e.cursor)
 
 proc enterFilerInActiveWindow*(e: Editor, path: string) =
   ## Open the filer on `path`, starting on the current file when it is there.
