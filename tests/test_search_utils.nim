@@ -340,6 +340,74 @@ suite "loadSearchHistory and saveSearchHistory":
       for entry in loaded:
         check entry.len > 0
 
+suite "hasUpperCase: regex syntax":
   test "A capital beyond ASCII counts":
-    check hasUpperCase("\u00c9a")
-    check not hasUpperCase("\u00e9a")
+    check hasUpperCase("Éa")
+    check not hasUpperCase("éa")
+
+  test "An escaped class or anchor never counts, as in Vim":
+    check not hasUpperCase("\\Sfoo")
+    check not hasUpperCase("foo\\S+")
+    check not hasUpperCase("\\Bfoo\\W\\D")
+    check not hasUpperCase("[\\D]x")
+    check hasUpperCase("\\SfooA")
+    check hasUpperCase("A\\Sfoo")
+
+  test "An escaped capital the regex matches as it is counts":
+    check hasUpperCase("\\Q")
+    check hasUpperCase("\\É")
+    check hasUpperCase("[\\B]")
+    check hasUpperCase("\\x41")
+    check hasUpperCase("\\x{4A}")
+    check hasUpperCase("\\u004A")
+    check not hasUpperCase("\\x61")
+
+  test "An escape's argument never counts":
+    check not hasUpperCase("\\p{Lu}foo")
+    check not hasUpperCase("\\pLu")
+    check hasUpperCase("\\p{Lu}A")
+    check hasUpperCase("\\pLA")
+
+  test "A class counts its characters and range ends":
+    check hasUpperCase("[A-Z]")
+    check hasUpperCase("[a-zA]")
+    check hasUpperCase("[]A]")
+    check hasUpperCase("[^]A]")
+    check hasUpperCase("[A-z]")
+    check not hasUpperCase("[a-z]")
+    check not hasUpperCase("[!-~]")
+    check not hasUpperCase("[[:alpha:]]")
+    check not hasUpperCase("[[:upper:]]")
+    check hasUpperCase("[[:alpha:](?U)]")
+
+  test "Group flags and names never count":
+    check not hasUpperCase("(?U)foo")
+    check not hasUpperCase("(?U:foo)")
+    check not hasUpperCase("(?-U:foo)")
+    check not hasUpperCase("(?P<Name>foo)")
+    check hasUpperCase("(?U:fooBAR)")
+    check hasUpperCase("(?P<name>BAR)")
+    check hasUpperCase("(?:BAR)")
+    check hasUpperCase("(?=BAR)")
+    check hasUpperCase("(?<!BAR)x")
+
+  test "A comment of verbose mode never counts":
+    check not hasUpperCase("(?x)foo # Note")
+    check hasUpperCase("(?x)Foo # note")
+
+  test "A pattern that does not parse never counts":
+    check not hasUpperCase("(?P<Na")
+
+  test "An unclosed group still counts its letters":
+    check hasUpperCase("(FOO")
+
+  test "The cached answer follows the pattern":
+    check hasUpperCase("A")
+    check not hasUpperCase("a")
+    check hasUpperCase("A")
+
+  test "smartcase ignores escaped classes":
+    check shouldIgnoreCase("\\Sfoo", ignorecase = true, smartcase = true)
+    check shouldIgnoreCase("(?P<Name>foo)", ignorecase = true, smartcase = true)
+    check not shouldIgnoreCase("\\x41foo", ignorecase = true, smartcase = true)
+    check not shouldIgnoreCase("[A-Z]foo", ignorecase = true, smartcase = true)

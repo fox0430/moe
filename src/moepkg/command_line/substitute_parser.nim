@@ -23,7 +23,7 @@ import std/strutils
 
 import pkg/results
 
-import range_parser
+import range_parser, ../regex_syntax
 
 type SubstituteFlags* = object
   global*: bool
@@ -96,29 +96,6 @@ type SubstituteParseResult* = object ## Result of parsing a substitute command
   flags*: string # Flags (e.g., "g" for global within line)
   hasReplacement*: bool # Whether we've reached the replacement section
   range*: ExLineRange # The lines in front of `s`, unresolved
-
-proc skipClass(s: string, start: int): int =
-  ## The index of the `]` closing the `[...]` class whose items start at
-  ## `start`, `s.len` without one, as the regex reads it: a `]` first is an
-  ## item, a backslash escapes the char after it and `[:name:]` is one item.
-  var i = start
-  if i < s.len and s[i] == '^':
-    i.inc
-  if i < s.len and s[i] == ']':
-    i.inc
-  while i < s.len and s[i] != ']':
-    if s[i] == '\\':
-      i += 2
-    elif s.continuesWith("[:", i):
-      let colon = s.find(':', i + 2)
-      i =
-        if colon >= 0 and s.continuesWith(":]", colon):
-          colon + 2
-        else:
-          i + 1
-    else:
-      i.inc
-  min(i, s.len)
 
 proc skipPattern(s: string, start: int): int =
   ## The index of the `/` ending the :s pattern that starts at `start`, `s.len`

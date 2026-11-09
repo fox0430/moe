@@ -26,14 +26,18 @@ import std/[strutils, os, appdirs, paths, strformat, options, json]
 
 import pkg/results
 
-import char_case, logger, unicode_utils, persist, buffer/[search, atomic_write]
+import logger, persist, regex_syntax, buffer/[search, atomic_write]
+
+var upperCache: tuple[pattern: string, hasUpper: bool]
 
 proc hasUpperCase*(s: string): bool =
-  ## Whether `s` has an upper case letter, for 'smartcase'.
-  for (r, _) in s.chars:
-    if r.utfIsUpper:
-      return true
-  false
+  ## Whether regex `s` has an upper case letter, for 'smartcase'. Unlike Vim's
+  ## pat_has_uppercase, which skips every escape, an escape that nim-regex
+  ## reads as a letter counts. The last answer is kept: the renderer asks once
+  ## per line.
+  if s != upperCache.pattern:
+    upperCache = (s, s.hasUpperLiteral)
+  upperCache.hasUpper
 
 proc shouldIgnoreCase*(searchText: string, ignorecase: bool, smartcase: bool): bool =
   ## Determine if search should be case-insensitive

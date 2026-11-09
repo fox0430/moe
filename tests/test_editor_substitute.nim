@@ -228,6 +228,21 @@ suite ":s as it is typed":
     let e = typing("foo\nFoo", "%s/Foo")
     check e.cursor == BufferPosition(line: 1, column: 0)
 
+  test "An escaped atom never makes the first match exact":
+    let e = typing("FOObar\nfooX", "%s/foo\\S+")
+    check e.cursor == BufferPosition(line: 0, column: 0)
+
+  test "An escaped capital the regex matches as it is makes the first match exact":
+    check typing("q\nQ", "%s/\\Q").cursor == BufferPosition(line: 1, column: 0)
+    check typing("b\nB", "%s/[\\B]").cursor == BufferPosition(line: 1, column: 0)
+
+  test "A class with an upper case letter makes the first match exact":
+    check typing("abcd\nabcD", "%s/abc[D]").cursor == BufferPosition(line: 1, column: 0)
+
+  test "A flag-only group never makes the first match exact":
+    check typing("FOObar\nfoo", "%s/(?U)foo").cursor ==
+      BufferPosition(line: 0, column: 0)
+
   test "The replacement preview ignores case as :s will":
     let e = typing("Foo\nfoo", "%s/foo/x/")
     check e.activeBuffer.getLine(0) == "x"
