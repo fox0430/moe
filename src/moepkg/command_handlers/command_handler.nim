@@ -195,7 +195,7 @@ proc executeGotoLine*(
   ## Move to the line an address names.
   ##
   ## Unlike a range, an address past the end lands on the last line rather than
-  ## being refused, as in vim. Above the first line is still an error.
+  ## being refused, as in vim. Line 0 is the first line, and above it is E16.
   let base =
     case address.base
     of eabCurrent:
@@ -206,9 +206,9 @@ proc executeGotoLine*(
       buffer.len - 1
   # Saturating again: the offset may already be at the top.
   let line = satAdd(satAdd(base, address.offset), 1)
-  if line <= 0:
-    return HandlerResult(kind: hrError, errorMessage: "Invalid line number")
-  HandlerResult(kind: hrGotoLine, lineNumber: min(line, buffer.len))
+  if line < 0:
+    return HandlerResult(kind: hrError, errorMessage: "E16: Invalid range")
+  HandlerResult(kind: hrGotoLine, lineNumber: clamp(line, 1, buffer.len))
 
 proc parseSetIntValue(spec: SetOptionSpec, value: Option[string]): HandlerResult =
   ## Validate and dispatch an integer-typed `:set X=N` option.

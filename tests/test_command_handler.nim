@@ -346,13 +346,21 @@ suite "CommandModeHandler - executeGotoLine":
     check handler.executeGotoLine(buffer, exLine(999)).lineNumber == 2
     check handler.executeGotoLine(buffer, exCurrent(high(int))).lineNumber == 2
 
-  test "Goto line 0 returns error":
+  test "Goto line 0 lands on the first line":
     let handler = setupHandler()
-    let buffer = setupBuffer(@["Line 1"])
+    let buffer = setupBuffer(@["Line 1", "Line 2"])
 
     let result = handler.executeGotoLine(buffer, exLine(0))
+    check result.kind == hrGotoLine
+    check result.lineNumber == 1
+
+  test "Goto above the first line is E16":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Line 1", "Line 2"])
+
+    let result = handler.executeGotoLine(buffer, exCurrent(-2), currentLine = 0)
     check result.kind == hrError
-    check result.errorMessage == "Invalid line number"
+    check result.errorMessage == "E16: Invalid range"
 
   test "Goto line beyond buffer length clamps to last line":
     let handler = setupHandler()
