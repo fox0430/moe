@@ -61,6 +61,7 @@ type
     claBuffer # :b (switch to buffer by number or name)
     claStripWhitespace # :stripwhitespace, :stripws (remove trailing whitespace)
     claFiler # :filer (open file explorer)
+    claChangeDir # :cd (change the current directory)
     claLogViewer # :log (open log viewer)
     claJobs # :jobs (list running external commands), :jobs! (stop them)
     claQuickRun # :run (quick run)
@@ -210,6 +211,8 @@ type
       discard
     of claFiler:
       filerPath*: Option[string] # Optional path to open in filer
+    of claChangeDir:
+      changeDirPath*: Option[string] # None for the home directory
     of claLogViewer:
       discard
     of claJobs:
@@ -318,6 +321,7 @@ const ArgumentRequiredActions* = {
   claVSplit, # optional but user may want to specify file
   claHSplit, # optional but user may want to specify file
   claFiler, # optional but user may want to specify path
+  claChangeDir, # optional but user may want to specify path
   claTerminal, # optional but user may want to specify command
   claFileTree, # optional but user may want to specify path
   claMap, # requires lhs and rhs

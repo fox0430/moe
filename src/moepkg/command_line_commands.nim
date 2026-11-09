@@ -76,6 +76,10 @@ type
       ## When `true`, completion offers file paths when the user types
       ## `:<name> <prefix>`. Must not be set on an `isTomlOnly` spec.
       ## Derived as `command_completion.FilePathCommands`.
+    completesDirectories*: bool
+      ## When `true`, that completion lists directories only, as for `:cd`.
+      ## Implies `takesFilePath`. Derived as
+      ## `command_completion.DirectoryCommands`.
     keymapBaseDescription*: string
       ## When non-empty, this spec is a keymap RHS target. The description
       ## shown to users is built as
@@ -1041,6 +1045,29 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     action: some(claFiler),
     isCanonicalLong: true,
     takesFilePath: true,
+  ),
+  CommandLineCommandSpec(
+    name: "cd",
+    completionDescription: "Change the current directory",
+    helpEntries: @[
+      HelpEntry(syntax: "cd path", description: "Change the current directory"),
+      HelpEntry(syntax: "cd", description: "Change the current directory to home"),
+      HelpEntry(syntax: "cd -", description: "Change to the previous directory"),
+    ],
+    action: some(claChangeDir),
+    isCanonicalLong: false,
+    takesFilePath: true,
+    completesDirectories: true,
+  ),
+  CommandLineCommandSpec(
+    name: "chdir",
+    completionDescription: "Change the current directory",
+    helpEntries: @[],
+    action: some(claChangeDir),
+    isCanonicalLong: true,
+    takesFilePath: true,
+    completesDirectories: true,
+    minAbbrev: 3,
   ),
   # Shell (TOML-only canonical name; help is in CommandLineSpecialHelp)
   CommandLineCommandSpec(

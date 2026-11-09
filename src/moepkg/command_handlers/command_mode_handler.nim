@@ -22,7 +22,7 @@
 ## This module handles the command-line overlay mode (`:` commands).
 ## Extracted from handler.nim to reduce file size.
 
-import std/[options, os, strutils]
+import std/[options, strutils]
 
 import pkg/chronos
 
@@ -162,7 +162,7 @@ proc updateCompletionAfterEdit(e: Editor) =
   let mgr = e.state.commandCompletionManager
   if ' ' in e.state.input.line.text:
     # Argument mode
-    mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
+    mgr.triggerArgumentCompletion(e.state.commandLine)
   elif mgr.isActive():
     if e.state.input.line.text.len == 0 or mgr.mode != cmCommand:
       # All of it went, or the argument the completions were for.
@@ -178,10 +178,10 @@ proc updateCompletionAfterTyping(e: Editor, typed: string) =
   if typed == " ":
     # Space is a delimiter - trigger argument completion if applicable
     mgr.cancelCompletion()
-    mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
+    mgr.triggerArgumentCompletion(e.state.commandLine)
   elif ' ' in e.state.input.line.text:
     # In argument mode - always update argument completion
-    mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
+    mgr.triggerArgumentCompletion(e.state.commandLine)
   elif mgr.isActive():
     mgr.updateFilter(extractCommandPrefix(e.state.commandLine))
   else:
@@ -280,16 +280,18 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
       # Check if selected item is a directory (for file path mode)
       let isDir = mgr.mode == cmFilePath and mgr.getSelectedCommand().endsWith("/")
       let isFile = mgr.mode == cmFilePath and not isDir
+      # A directory is all :cd takes, so it runs rather than opens.
+      let isWholeArgument = isFile or (isDir and mgr.baseCommand.completesDirectories)
       # Check if it's an action that should execute immediately
       let shouldExecuteNow =
-        isFile or mgr.mode == cmSetOption or (
+        isWholeArgument or mgr.mode == cmSetOption or (
           mgr.mode == cmCommand and
           e.commandLineParser.isNoArgumentAction(mgr.getSelectedCommand())
         )
       mgr.cancelCompletion()
       # If directory was confirmed, re-trigger completion for its contents
-      if isDir:
-        mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
+      if isDir and not isWholeArgument:
+        mgr.triggerArgumentCompletion(e.state.commandLine)
         return roContinue
       # If not a no-argument command, wait for more input
       if not shouldExecuteNow:
@@ -310,7 +312,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
       e.selectCompletion(next)
     elif next:
       if ' ' in e.state.input.line.text:
-        mgr.triggerArgumentCompletion(e.state.commandLine, getCurrentDir())
+        mgr.triggerArgumentCompletion(e.state.commandLine)
       else:
         mgr.triggerCompletion(e.commandLineParser, e.state.commandLine)
     return roContinue

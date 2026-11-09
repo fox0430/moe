@@ -66,8 +66,8 @@ const
     "build", "jobs", "lspfold", "lspformat", "log", "lsplog", "lsprestart",
     "lspcallhierarchyincoming", "lspcallhierarchyoutgoing", "help", "putconfigfile",
     "moerc", "quickrun", "recent", "backup", "recover", "config", "debug", "filer",
-    "filetree", "jump", "terminal", "changes", "bookmarks", "version", "conflictnext",
-    "conflictprev",
+    "filetree", "cd", "jump", "terminal", "changes", "bookmarks", "version",
+    "conflictnext", "conflictprev",
   ]
 
   RuntimeKeyMapNames = @[
