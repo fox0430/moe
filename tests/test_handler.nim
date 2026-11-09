@@ -13030,3 +13030,233 @@ suite "Version command":
     check e.state.ui.tempMessages.len == 0
     check e.currentMode == EditorMode.Filer
     check e.activeWindow.modeState.filer.selectedIndex == 1
+
+suite "Change directory command":
+  var startDir: string
+  var tempRoot: string
+
+  setup:
+    startDir = getCurrentDir()
+    tempRoot = getTempDir() / "moe_test_cd_" & $getCurrentProcessId()
+    createDir(tempRoot / "sub")
+
+  teardown:
+    setCurrentDir(startDir)
+    removeDir(tempRoot)
+
+  test ":cd path changes the current directory and shows it":
+    let e = createTestEditorWithBuffer("hello")
+    check e.executeCommandOverlay(":cd " & tempRoot) == roContinue
+    check getCurrentDir() == tempRoot
+    check e.state.statusMessage == tempRoot
+
+    check e.executeCommandOverlay(":chd sub") == roContinue
+    check getCurrentDir() == tempRoot / "sub"
+
+  test ":cd - goes back to the previous directory":
+    let e = createTestEditorWithBuffer("hello")
+    check e.executeCommandOverlay(":cd -") == roContinue
+    check e.state.statusMessage == "E186: No previous directory"
+    check getCurrentDir() == startDir
+
+    check e.executeCommandOverlay(":cd " & tempRoot) == roContinue
+    check e.executeCommandOverlay(":cd -") == roContinue
+    check getCurrentDir() == startDir
+    check e.executeCommandOverlay(":cd -") == roContinue
+    check getCurrentDir() == tempRoot
+
+  test ":cd without a path goes home":
+    let e = createTestEditorWithBuffer("hello")
+    check e.executeCommandOverlay(":cd") == roContinue
+    check getCurrentDir() == getHomeDir().normalizedPath
+
+  test ":cd to a missing directory stays":
+    let e = createTestEditorWithBuffer("hello")
+    check e.executeCommandOverlay(":cd " & tempRoot / "missing") == roContinue
+    check e.state.statusMessage ==
+      "E344: Can't find directory \"" & tempRoot / "missing" & "\" in cdpath"
+    check getCurrentDir() == startDir
+
+  test ":cd keeps a relative buffer name on the same file":
+    let e = createTestEditorWithBuffer("hello")
+    setCurrentDir(tempRoot)
+    e.activeBuffer.filePath = some("a.txt")
+    if e.activeBuffer notin e.buffers:
+      e.buffers.add e.activeBuffer
+
+    check e.executeCommandOverlay(":cd sub") == roContinue
+    check e.activeBuffer.filePath == some(tempRoot / "a.txt")
+
+  test ":cd normalizes a relative buffer name":
+    let e = createTestEditorWithBuffer("hello")
+    setCurrentDir(tempRoot / "sub")
+    e.activeBuffer.filePath = some("../a.txt")
+    if e.activeBuffer notin e.buffers:
+      e.buffers.add e.activeBuffer
+
+    check e.executeCommandOverlay(":cd " & tempRoot) == roContinue
+    check e.activeBuffer.filePath == some(tempRoot / "a.txt")
+
+    e.activeBuffer.filePath = some("./b.txt")
+    check e.executeCommandOverlay(":cd sub") == roContinue
+    check e.activeBuffer.filePath == some(tempRoot / "b.txt")
+
+  test ":cd refuses when a relative buffer name can't be resolved":
+    let e = createTestEditorWithBuffer("hello")
+    createDir(tempRoot / "gone")
+    setCurrentDir(tempRoot / "gone")
+    removeDir(tempRoot / "gone")
+    e.activeBuffer.filePath = some("a.txt")
+    if e.activeBuffer notin e.buffers:
+      e.buffers.add e.activeBuffer
+
+    check e.executeCommandOverlay(":cd " & tempRoot / "sub") == roContinue
+    check e.state.statusMessage ==
+      "Can't change directory: the current directory is gone; " &
+      "give \"a.txt\" a full path with :saveas or close it"
+    check e.activeBuffer.filePath == some("a.txt")
+    expect OSError:
+      discard getCurrentDir()
+
+  test ":cd keeps the previous directory when the current one is gone":
+    let e = createTestEditorWithBuffer("hello")
+    createDir(tempRoot / "a")
+    createDir(tempRoot / "b")
+    check e.executeCommandOverlay(":cd " & tempRoot / "a") == roContinue
+    check e.executeCommandOverlay(":cd " & tempRoot / "b") == roContinue
+    removeDir(tempRoot / "b")
+
+    check e.executeCommandOverlay(":cd " & tempRoot / "sub") == roContinue
+    check getCurrentDir() == tempRoot / "sub"
+    check e.executeCommandOverlay(":cd -") == roContinue
+    check getCurrentDir() == tempRoot / "a"
+
+  test ":cd - names the directory it could not find":
+    let e = createTestEditorWithBuffer("hello")
+    createDir(tempRoot / "a")
+    check e.executeCommandOverlay(":cd " & tempRoot / "a") == roContinue
+    check e.executeCommandOverlay(":cd " & tempRoot / "sub") == roContinue
+    removeDir(tempRoot / "a")
+
+    check e.executeCommandOverlay(":cd -") == roContinue
+    check e.state.statusMessage ==
+      "E344: Can't find directory \"" & tempRoot / "a" & "\" in cdpath"
+    check getCurrentDir() == tempRoot / "sub"
+
+  test ":cd says why an existing directory can't be entered":
+    let e = createTestEditorWithBuffer("hello")
+    let locked = tempRoot / "locked"
+    createDir(locked)
+    setFilePermissions(locked, {})
+    defer:
+      setFilePermissions(locked, {fpUserRead, fpUserWrite, fpUserExec})
+    if geteuid() == 0:
+      skip()
+    else:
+      check e.executeCommandOverlay(":cd " & locked) == roContinue
+      check e.state.statusMessage ==
+        "Can't change directory to \"" & locked & "\": " &
+        osErrorMsg(OSErrorCode(posix.EACCES))
+      check getCurrentDir() == startDir
+
+  test ":cd rewrites only relative buffer names":
+    let e = createTestEditorWithBuffer("hello")
+    setCurrentDir(tempRoot)
+    let
+      relative = newTextBuffer("")
+      absolute = newTextBuffer("")
+      unnamed = newTextBuffer("")
+    relative.filePath = some("a.txt")
+    absolute.filePath = some("/etc/hosts")
+    unnamed.filePath = some("")
+    e.buffers.add @[relative, absolute, unnamed]
+
+    check e.executeCommandOverlay(":cd sub") == roContinue
+    check relative.filePath == some(tempRoot / "a.txt")
+    check absolute.filePath == some("/etc/hosts")
+    check unnamed.filePath == some("")
+
+  test ":cd ~ goes home":
+    let e = createTestEditorWithBuffer("hello")
+    check e.executeCommandOverlay(":cd ~") == roContinue
+    check getCurrentDir() == getHomeDir().normalizedPath
+    check e.executeCommandOverlay(":cd " & tempRoot) == roContinue
+    check e.executeCommandOverlay(":cd ~/") == roContinue
+    check getCurrentDir() == getHomeDir().normalizedPath
+
+  test "Enter on a :cd completion runs it, abbreviated or not":
+    proc press(e: Editor, keys: varargs[string]) =
+      for key in keys:
+        check e.handleKeyCombo(parseKeyCombo(key).get)
+
+    let e = createTestEditorWithBuffer("hello")
+    setCurrentDir(tempRoot)
+    writeFile(tempRoot / "file.txt", "")
+    let mgr = e.state.commandCompletionManager
+
+    e.press(":", "c", "d", "Space")
+    check mgr.isActive()
+    check mgr.menu.entries.len == 1
+
+    e.press("Tab")
+    check e.state.input.line.text == "cd sub/"
+
+    e.press("Return")
+    check not e.state.isCommandOverlay
+    check getCurrentDir() == tempRoot / "sub"
+
+    # Abbreviated, and after Tab into a directory with nothing in it.
+    createDir(tempRoot / "sub" / "deep")
+    e.press(":", "c", "h", "d", "Space", "Tab")
+    check e.state.input.line.text == "chd deep/"
+    e.press("Return")
+    check getCurrentDir() == tempRoot / "sub" / "deep"
+
+  test "Enter on a directory in :e completion opens it, as before":
+    proc press(e: Editor, keys: varargs[string]) =
+      for key in keys:
+        check e.handleKeyCombo(parseKeyCombo(key).get)
+
+    let e = createTestEditorWithBuffer("hello")
+    setCurrentDir(tempRoot)
+    writeFile(tempRoot / "sub" / "x.txt", "")
+    let mgr = e.state.commandCompletionManager
+
+    e.press(":", "e", "Space", "Tab")
+    check e.state.input.line.text == "e sub/"
+    e.press("Return")
+    check e.state.isCommandOverlay
+    check mgr.isActive()
+    check mgr.menu.entries.len == 1 and mgr.menu.entries[0].command == "x.txt"
+
+  test ":cd leaves a buffer name under ~ alone":
+    let e = createTestEditorWithBuffer("hello")
+    setCurrentDir(tempRoot)
+    e.activeBuffer.filePath = some("~/a.txt")
+    if e.activeBuffer notin e.buffers:
+      e.buffers.add e.activeBuffer
+
+    check e.executeCommandOverlay(":cd sub") == roContinue
+    check e.activeBuffer.filePath == some("~/a.txt")
+
+  test "typing :cd in a removed current directory completes and leaves it":
+    proc press(e: Editor, keys: varargs[string]) =
+      for key in keys:
+        check e.handleKeyCombo(parseKeyCombo(key).get)
+
+    let e = createTestEditorWithBuffer("hello")
+    createDir(tempRoot / "gone")
+    setCurrentDir(tempRoot / "gone")
+    removeDir(tempRoot / "gone")
+    let mgr = e.state.commandCompletionManager
+
+    e.press(":", "c", "d", "Space", "Tab")
+    check not mgr.isActive()
+
+    for c in tempRoot & "/":
+      e.press($c)
+    e.press("Tab")
+    check e.state.input.line.text == "cd " & tempRoot & "/sub/"
+
+    e.press("Return")
+    check getCurrentDir() == tempRoot / "sub"

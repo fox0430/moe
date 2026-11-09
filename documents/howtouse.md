@@ -889,6 +889,9 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `filer path` | Open file explorer at specified path (a file opens its parent directory) |
 | `filetree` | Toggle FileTree sidebar |
 | `filetree path` | Toggle FileTree sidebar with specified root path |
+| `cd path` | Change the current directory |
+| `cd` | Change the current directory to home |
+| `cd -` | Change to the previous directory |
 | `jump` | Open Jump list viewer |
 | `terminal` | Open terminal emulator (default shell) |
 | `terminal command` | Run command in terminal emulator |

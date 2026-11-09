@@ -903,6 +903,70 @@ suite "CommandCompletion - collectFilePaths":
     # Should list files in current directory
     check entries.len >= 0
 
+suite "CommandCompletion - directory completion for :cd":
+  let testDir = getTempDir() / "moe_test_cd_completion"
+
+  setup:
+    createDir(testDir / "subdir")
+    writeFile(testDir / "file.txt", "")
+
+  teardown:
+    removeDir(testDir)
+
+  test "collectFilePaths lists only directories when asked":
+    let entries = collectFilePaths(testDir, "", directoriesOnly = true)
+    check entries.mapIt(it.command) == @["subdir/"]
+    check collectFilePaths(testDir, "").len == 2
+
+  test "a symlink to a directory completes as a directory":
+    createSymlink(testDir / "subdir", testDir / "link")
+    let entries = collectFilePaths(testDir, "", directoriesOnly = true)
+    check entries.mapIt(it.command) == @["link/", "subdir/"]
+    check entries.allIt(it.description == "Directory")
+    check collectFilePaths(testDir, "").mapIt(it.command) ==
+      @["link/", "subdir/", "file.txt"]
+
+  test "a removed current directory gives no relative completions":
+    let startDir = getCurrentDir()
+    createDir(testDir / "gone")
+    setCurrentDir(testDir / "gone")
+    removeDir(testDir / "gone")
+    defer:
+      setCurrentDir(startDir)
+    check collectFilePaths("", "").len == 0
+    check collectFilePaths("", "sub").len == 0
+    check collectFilePaths("", testDir & "/").mapIt(it.command) ==
+      @["subdir/", "file.txt"]
+
+  test ":cd and :chdir complete directories only":
+    for command in [":cd ", ":chdir "]:
+      let mgr = newCommandCompletionManager()
+      mgr.triggerArgumentCompletion(command, testDir)
+      check mgr.state == ccsActive
+      check mgr.mode == cmFilePath
+      check mgr.menu.entries.mapIt(it.command) == @["subdir/"]
+
+  test ":chdir abbreviations complete directories":
+    for command in [":chd ", ":chdi "]:
+      let mgr = newCommandCompletionManager()
+      mgr.triggerArgumentCompletion(command, testDir)
+      check mgr.state == ccsActive
+      check mgr.mode == cmFilePath
+      check mgr.menu.entries.mapIt(it.command) == @["subdir/"]
+
+  test ":ch is not an abbreviation and does not trigger":
+    let mgr = newCommandCompletionManager()
+    mgr.triggerArgumentCompletion(":ch ", testDir)
+    check mgr.state == ccsIdle
+
+  test ":e still completes files":
+    let mgr = newCommandCompletionManager()
+    mgr.triggerArgumentCompletion(":e ", testDir)
+    check mgr.menu.entries.len == 2
+
+  test "DirectoryCommands holds :cd and :chdir only":
+    check DirectoryCommands == @["cd", "chdir"]
+
 suite "CommandCompletion - FilePathCommands constant":
   test "FilePathCommands contains expected commands":
     check "e" in FilePathCommands

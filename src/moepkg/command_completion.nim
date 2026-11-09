@@ -60,6 +60,16 @@ const FilePathCommands*: seq[string] = block:
       s.add(spec.name)
   s
 
+const DirectoryCommands*: seq[string] = block:
+  ## The `FilePathCommands` whose completion lists directories only.
+  var s: seq[string]
+  for spec in CommandLineCommandTable:
+    if spec.completesDirectories:
+      doAssert spec.takesFilePath,
+        spec.name & ": completesDirectories needs takesFilePath"
+      s.add(spec.name)
+  s
+
 # Set options — derived from the canonical SetOptionTable so the completion
 # popup, the help text, and the :set parser all share the same source of
 # truth. Bool toggles map both positive and negative names to the same
@@ -156,7 +166,19 @@ proc extractCommandPrefix*(commandText: string): string =
   ## Example: ":wq" -> "wq", ":set num" -> "set"
   parseCommandLine(commandText).cmd
 
-proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionEntry] =
+proc fullCommandName(cmd: string): string =
+  if cmd in CommandAbbreviations:
+    CommandAbbreviations[cmd].name
+  else:
+    cmd
+
+proc completesDirectories*(cmd: string): bool =
+  ## Whether the arguments of `cmd`, maybe abbreviated, are directories only.
+  cmd.fullCommandName in DirectoryCommands
+
+proc collectFilePaths*(
+    basePath: string, prefix: string, directoriesOnly = false
+): seq[CommandCompletionEntry] =
   ## Collect file and directory paths for completion
   result = @[]
 
@@ -164,12 +186,20 @@ proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionE
   var searchDir: string
   var filterPrefix: string
 
-  if prefix.len == 0:
-    searchDir =
-      if basePath.len > 0:
-        basePath
-      else:
+  # Empty when the current directory has been removed.
+  let base =
+    if basePath.len > 0:
+      basePath
+    else:
+      try:
         getCurrentDir()
+      except OSError:
+        ""
+
+  if prefix.len == 0:
+    if base.len == 0:
+      return @[]
+    searchDir = base
     filterPrefix = ""
   elif prefix.startsWith("/") or prefix.startsWith("~"):
     # Absolute path or home-relative path
@@ -187,11 +217,8 @@ proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionE
       filterPrefix = extractFilename(expandedPrefix)
   else:
     # Relative path
-    let base =
-      if basePath.len > 0:
-        basePath
-      else:
-        getCurrentDir()
+    if base.len == 0:
+      return @[]
     let fullPath = base / prefix
     # Only enter directory if prefix ends with /
     if prefix.endsWith("/") and dirExists(fullPath):
@@ -210,6 +237,9 @@ proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionE
 
   try:
     for kind, path in walkDir(searchDir):
+      let isDir = kind in {pcDir, pcLinkToDir}
+      if directoriesOnly and not isDir:
+        continue
       let filename = extractFilename(path)
       if filename.startsWith(".") and filterPrefix.len > 0 and
           not filterPrefix.startsWith("."):
@@ -218,16 +248,16 @@ proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionE
       if filterPrefix.len == 0 or
           filename.toLowerAscii.startsWith(filterPrefix.toLowerAscii):
         let displayName =
-          if kind == pcDir:
+          if isDir:
             filename & "/"
           else:
             filename
-        let desc = if kind == pcDir: "Directory" else: "File"
+        let desc = if isDir: "Directory" else: "File"
         result.add(
           CommandCompletionEntry(
             command: displayName,
             description: desc,
-            matchScore: if kind == pcDir: 100 else: 50, # Prefer directories
+            matchScore: if isDir: 100 else: 50, # Prefer directories
           )
         )
 
@@ -348,15 +378,17 @@ proc triggerArgumentCompletion*(
   # Base position: 1 for ":" + command length + 1 for space
   let baseArgX = 1 + cmd.charLen + 1
 
+  let name = cmd.fullCommandName
+
   # Determine completion mode based on command
   if cmd == "set":
     mgr.mode = cmSetOption
     mgr.menu.entries = collectSetOptions(arg)
     mgr.argStartX = baseArgX
     mgr.originalDirPrefix = ""
-  elif cmd in FilePathCommands:
+  elif name in FilePathCommands:
     mgr.mode = cmFilePath
-    mgr.menu.entries = collectFilePaths(basePath, arg)
+    mgr.menu.entries = collectFilePaths(basePath, arg, cmd.completesDirectories)
     # For file paths, popup appears after directory prefix
     # Save original directory prefix for use in applyCompletion
     mgr.originalDirPrefix =

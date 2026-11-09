@@ -1697,6 +1697,14 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":changes")
     check result.kind == hrChanges
 
+  test "Handle :cd command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":cd /tmp")
+    check result.kind == hrChangeDir
+    check result.changeDirPath == some("/tmp")
+
   test "Handle :version command":
     let handler = setupHandler()
     let buffer = setupBuffer()

@@ -819,6 +819,8 @@ suite "CommandLine - execute additional commands":
     parser.addAlias("bl", claBufferLast)
     parser.addAlias("sp", claHSplit)
     parser.addAlias("filer", claFiler)
+    parser.addAlias("cd", claChangeDir)
+    parser.addAlias("chdir", claChangeDir)
     parser.addAlias("log", claLogViewer)
     parser.addAlias("run", claQuickRun)
     parser.addAlias("buffers", claBufferManager)
@@ -978,6 +980,28 @@ suite "CommandLine - execute additional commands":
   test "Execute :changes":
     let result = parser.parseAndExecute(":changes")
     check result.kind == claChanges
+
+  test "Execute :cd":
+    let result = parser.parseAndExecute(":cd")
+    check result.kind == claChangeDir
+    check result.changeDirPath.isNone
+
+  test "Execute :cd path":
+    let result = parser.parseAndExecute(":cd ~/src")
+    check result.kind == claChangeDir
+    check result.changeDirPath == some("~/src")
+
+  test ":chdir abbreviations":
+    for command in [":chd -", ":chdi -", ":chdir -"]:
+      let result = parser.parseAndExecute(command)
+      check result.kind == claChangeDir
+      check result.changeDirPath == some("-")
+    check parser.parseAndExecute(":ch").kind == claUnknown
+
+  test ":cd takes one directory":
+    let result = parser.parseAndExecute(":cd a b")
+    check result.kind == claUnknown
+    check result.errorMessage == "Only one file name allowed"
 
   test "Execute :version":
     let result = parser.parseAndExecute(":version")

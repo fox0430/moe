@@ -49,6 +49,59 @@ proc processJobsResult(e: Editor, r: HandlerResult) =
     # Through the notifier so the whole list reaches `:messages`.
     e.notifyAll(running)
 
+proc hasRelativeName(buf: TextBuffer): bool =
+  buf.filePath.isSome and buf.filePath.get.len > 0 and
+    not expandTilde(buf.filePath.get).isAbsolute
+
+proc changeDirectory(e: Editor, path: Option[string]) =
+  ## `:cd`: none goes home and `-` back to the previous directory.
+  let current =
+    try:
+      getCurrentDir()
+    except OSError:
+      ""
+  var target: string
+  if path.isNone:
+    target = getHomeDir()
+  elif path.get == "-":
+    if e.state.previousDir.len == 0:
+      e.state.statusMessage = "E186: No previous directory"
+      return
+    target = e.state.previousDir
+  else:
+    target = expandTilde(path.get)
+
+  # A relative name would follow the directory to another file.
+  if current.len == 0:
+    for buf in e.buffers:
+      if buf.hasRelativeName:
+        e.state.statusMessage =
+          "Can't change directory: the current directory is gone; give \"" &
+          buf.filePath.get & "\" a full path with :saveas or close it"
+        return
+
+  try:
+    setCurrentDir(target)
+  except OSError as err:
+    e.state.statusMessage =
+      if dirExists(target):
+        "Can't change directory to \"" & target & "\": " &
+          osErrorMsg(OSErrorCode(err.errorCode))
+      else:
+        "E344: Can't find directory \"" & target & "\" in cdpath"
+    return
+
+  for buf in e.buffers:
+    if buf.hasRelativeName:
+      buf.filePath = some(normalizedPath(current / buf.filePath.get))
+  if current.len > 0:
+    e.state.previousDir = current
+  e.state.statusMessage =
+    try:
+      getCurrentDir()
+    except OSError:
+      target
+
 proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Handle misc side-effect kinds. Returns true to continue.
   case r.kind
@@ -123,6 +176,9 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
     return true
   of hrTheme:
     e.applyThemeCommand(r.hrThemeName)
+    return true
+  of hrChangeDir:
+    e.changeDirectory(r.changeDirPath)
     return true
   else:
     return true # Not a misc kind; caller misrouted (defensive)

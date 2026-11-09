@@ -145,6 +145,7 @@ type
     hrJumpList # Show jump list (:ju, :jump)
     hrChanges # Show change list (:changes)
     hrVersion # Show version information (:version)
+    hrChangeDir # Change the current directory (:cd)
     hrConflictNext # Jump to next git conflict block (:conflictnext)
     hrConflictPrev # Jump to previous git conflict block (:conflictprev)
     hrBuild # Build current buffer (:build)
@@ -376,6 +377,8 @@ type
       discard
     of hrVersion:
       discard
+    of hrChangeDir:
+      changeDirPath*: Option[string]
     of hrConflictNext:
       discard
     of hrConflictPrev:
@@ -533,10 +536,10 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
     hrgExitToNewMode
   of hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrNew, hrVnew, hrEdit,
       hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
-      hrVersion, hrShellCommand, hrMan, hrBackground, hrSave, hrSaveAll, hrSaveAndQuit,
-      hrSaveAllAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
-      hrBufferNextTab, hrBufferPrevTab, hrBuffer, hrBufferDelete, hrStripWhitespace,
-      hrOnlyWindow, hrEnterFileTree, hrJumpToBuffer, hrFilerOpenFile,
+      hrVersion, hrChangeDir, hrShellCommand, hrMan, hrBackground, hrSave, hrSaveAll,
+      hrSaveAndQuit, hrSaveAllAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst,
+      hrBufferLast, hrBufferNextTab, hrBufferPrevTab, hrBuffer, hrBufferDelete,
+      hrStripWhitespace, hrOnlyWindow, hrEnterFileTree, hrJumpToBuffer, hrFilerOpenFile,
       hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile, hrFilerShowInfo,
       hrFilerQuit, hrLogViewerRefresh, hrHelpViewerQuit, hrReferencesQuit,
       hrReferencesJumpTo, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,

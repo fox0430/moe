@@ -1185,6 +1185,7 @@ type
     notificationPopup*: NotificationPopupManager
     # Exit code (non-zero for :cq)
     exitCode*: int
+    previousDir*: string ## Where `:cd -` goes; empty before the first `:cd`.
     quitDecided*: bool
       ## Once set, a signal or crash no longer preserves buffers, and the loop
       ## only waits for the hooks the quit owes.

@@ -218,7 +218,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrLspDocumentSymbol, hrLspCodeLensExecute, hrLspCallHierarchyIncoming,
       hrLspCallHierarchyOutgoing, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
       hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrShellCommand, hrFilter,
-      hrBackground, hrJumpList, hrChanges, hrVersion, hrBuild, hrDebug,
+      hrBackground, hrJumpList, hrChanges, hrVersion, hrChangeDir, hrBuild, hrDebug,
       hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile,
       hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold, hrLspExecuteCommand,
       hrSubstitute, hrDeleteLines, hrMan, hrReferencesQuit, hrReferencesJumpTo,

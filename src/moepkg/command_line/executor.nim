@@ -235,6 +235,15 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         else:
           none(string),
     )
+  of claChangeDir:
+    return CommandLineResult(
+      kind: claChangeDir,
+      changeDirPath:
+        if cmd.args.len > 0:
+          some(cmd.args[0])
+        else:
+          none(string),
+    )
   of claLogViewer:
     return CommandLineResult(kind: claLogViewer)
   of claJobs:

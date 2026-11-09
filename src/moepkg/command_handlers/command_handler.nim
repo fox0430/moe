@@ -656,6 +656,8 @@ proc handleCommandModeInput*(
     handler.executeStripWhitespace(buffer)
   of claFiler:
     handler.executeFiler(cmdResult.filerPath)
+  of claChangeDir:
+    HandlerResult(kind: hrChangeDir, changeDirPath: cmdResult.changeDirPath)
   of claLogViewer:
     HandlerResult(kind: hrEnterLogViewer)
   of claJobs:

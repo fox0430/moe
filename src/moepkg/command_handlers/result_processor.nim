@@ -249,7 +249,7 @@ proc processResultWithHost(
   of hrUndo, hrRedo:
     return e.processHistoryResult(r, activeBuffer)
   of hrClearSearchHighlight, hrStripWhitespace, hrShellCommand, hrBackground, hrMan,
-      hrSubstitute, hrDeleteLines, hrBuild, hrFilter, hrJobs:
+      hrSubstitute, hrDeleteLines, hrBuild, hrFilter, hrJobs, hrChangeDir:
     return e.processMiscResult(r, activeBuffer)
   of hrDebug:
     return e.processDebugResult(r)
