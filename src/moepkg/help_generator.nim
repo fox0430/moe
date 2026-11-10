@@ -19,7 +19,7 @@
 
 ## Compile-time generators for sections of the help viewer text.
 ##
-## The simple key→description sections of `HelpSentences` (`# Exiting`,
+## The simple key→description sections of `HelpLines` (`# Exiting`,
 ## `# Changing modes`, `# Normal mode`, `# Register`, `# Visual mode`,
 ## `# Replace mode`, `# Insert mode`, `# Backup mode`, `# Recovery mode`,
 ## `# Diff mode`,
@@ -30,13 +30,13 @@
 ## `CommandLineSpecialHelp` (in `command_line_commands`), and the
 ## `set` options block is built from the canonical `SetOptionTable` defined
 ## in `setting_options`. Each table is the structured source of truth; help
-## text is assembled by the `renderXxxSection` `{.compileTime.}` procs and
-## the resulting strings are embedded into `const HelpSentences`, so the
-## runtime cost is zero.
+## lines are assembled by the `renderXxxSection` `{.compileTime.}` procs and
+## embedded into `const HelpLines`, so the runtime cost is zero.
 
-import std/[options, strutils]
+import std/options
 
 import setting_options, command_line_commands, help_description
+import types/help_viewer_types
 import key_bindings/window_commands
 
 descriptionFromStringConverter()
@@ -956,17 +956,14 @@ proc valueSetExample(spec: SetOptionSpec): string =
   of sokBool:
     raiseAssert "valueSetExample called with bool spec: " & spec.longName
 
-proc renderGroup(g: HelpGroup): string =
+proc renderGroup*(g: HelpGroup, indent = 0): seq[HelpLine] =
   ## Render one blank-line-separated group with per-group left-column alignment.
   var width = g.minWidth
   for e in g.entries:
     if e.syntax.len > width:
       width = e.syntax.len
   for e in g.entries:
-    result.add e.syntax.alignLeft(width)
-    result.add " - "
-    result.add toPlainText(e.description)
-    result.add '\n'
+    result.add entryLine(indent, e.syntax, width, toPlainText(e.description))
 
 proc helpEntriesFor(name: string): seq[HelpEntry] {.compileTime.} =
   ## Look up a command-line spec by name and return its `helpEntries`.
@@ -977,10 +974,10 @@ proc helpEntriesFor(name: string): seq[HelpEntry] {.compileTime.} =
   else:
     @[]
 
-proc renderEntries(entries: seq[HelpEntry]): string {.compileTime.} =
+proc renderEntries(entries: seq[HelpEntry]): seq[HelpLine] {.compileTime.} =
   renderGroup(HelpGroup(entries: entries))
 
-proc renderExitingSection*(): string {.compileTime.} =
+proc renderExitingSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Exiting" section body (`:w`, `:q`, ... — one blank-line-less
   ## group, derived from `CommandLineCommandTable` filtered by the
   ## hand-curated `ExitingHelpNames` order).
@@ -989,101 +986,101 @@ proc renderExitingSection*(): string {.compileTime.} =
     entries.add helpEntriesFor(name)
   renderEntries(entries)
 
-proc renderChangingModesSection*(): string {.compileTime.} =
+proc renderChangingModesSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Changing modes" section body.
   renderGroup(ChangingModesCommands)
 
-proc renderNormalModeSection*(): string {.compileTime.} =
+proc renderNormalModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Normal mode" section body.
   renderGroup(NormalModeCommands)
 
-proc renderBackupModeSection*(): string {.compileTime.} =
+proc renderBackupModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Backup mode" section body.
   renderGroup(BackupModeCommands)
 
-proc renderRecoveryModeSection*(): string {.compileTime.} =
+proc renderRecoveryModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Recovery mode" section body.
   renderGroup(RecoveryModeCommands)
 
-proc renderDiffModeSection*(): string {.compileTime.} =
+proc renderDiffModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Diff mode" section body.
   renderGroup(DiffModeCommands)
 
-proc renderReferencesModeSection*(): string {.compileTime.} =
+proc renderReferencesModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# References mode" section body.
   renderGroup(ReferencesModeCommands)
 
-proc renderCallHierarchyModeSection*(): string {.compileTime.} =
+proc renderCallHierarchyModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Call hierarchy viewer mode" section body.
   renderGroup(CallHierarchyModeCommands)
 
-proc renderRegisterSection*(): string {.compileTime.} =
+proc renderRegisterSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Register" section body.
   renderGroup(RegisterCommands)
 
-proc renderVisualModeSection*(): string {.compileTime.} =
+proc renderVisualModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Visual mode" section body.
   renderGroup(VisualModeCommands)
 
-proc renderReplaceModeSection*(): string {.compileTime.} =
+proc renderReplaceModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Replace mode" section body.
   renderGroup(ReplaceModeCommands)
 
-proc renderInsertModeSection*(): string {.compileTime.} =
+proc renderInsertModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Insert mode" section body.
   renderGroup(InsertModeCommands)
 
-proc renderCommandLineEditingSection*(): string {.compileTime.} =
+proc renderCommandLineEditingSection*(): seq[HelpLine] {.compileTime.} =
   ## The "## Editing the command line" section body: its intro and its keys.
-  parseDescription(CommandLineEditingIntro).toPlainText & "\n" &
+  prose(parseDescription(CommandLineEditingIntro).toPlainText) & textLine("") &
     renderGroup(CommandLineEditingCommands)
 
-proc renderTerminalInputSection*(): string {.compileTime.} =
+proc renderTerminalInputSection*(): seq[HelpLine] {.compileTime.} =
   ## The "## Terminal-Input sub-mode" body (just the key entry,
   ## not the narrative paragraph that precedes it).
   renderGroup(TerminalInputCommands)
 
-proc renderTerminalNormalSection*(): string {.compileTime.} =
+proc renderTerminalNormalSection*(): seq[HelpLine] {.compileTime.} =
   ## The "## Terminal-Normal sub-mode" body.
   renderGroup(TerminalNormalCommands)
 
-proc renderFilerModeSection*(): string {.compileTime.} =
+proc renderFilerModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Filer mode" section body.
   renderGroup(FilerModeCommands)
 
-proc renderFileTreeModeSection*(): string {.compileTime.} =
+proc renderFileTreeModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# FileTree mode" section body.
   renderGroup(FileTreeModeCommands)
 
-proc renderBufferManagerModeSection*(): string {.compileTime.} =
+proc renderBufferManagerModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Buffer manager mode" section body.
   renderGroup(BufferManagerModeCommands)
 
-proc renderBookmarkManagerModeSection*(): string {.compileTime.} =
+proc renderBookmarkManagerModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Bookmark manager mode" section body.
   renderGroup(BookmarkManagerModeCommands)
 
-proc renderDocumentSymbolModeSection*(): string {.compileTime.} =
+proc renderDocumentSymbolModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Document symbol viewer mode" section body.
   renderGroup(DocumentSymbolModeCommands)
 
-proc renderConfigModeSection*(): string {.compileTime.} =
+proc renderConfigModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Configuration mode" section body.
   renderGroup(ConfigModeCommands)
 
-proc renderLogViewerModeSection*(): string {.compileTime.} =
+proc renderLogViewerModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Log viewer mode" section body.
   renderGroup(LogViewerModeCommands)
 
-proc renderRecentFileModeSection*(): string {.compileTime.} =
+proc renderRecentFileModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Recent file mode" section body.
   renderGroup(RecentFileModeCommands)
 
-proc renderDebugModeSection*(): string {.compileTime.} =
+proc renderDebugModeSection*(): seq[HelpLine] {.compileTime.} =
   ## The "# Debug mode" section body.
   renderGroup(DebugModeCommands)
 
-proc renderCommandModeHead*(): string {.compileTime.} =
+proc renderCommandModeHead*(): seq[HelpLine] {.compileTime.} =
   ## "# Command mode" groups that appear *before* the `set` options block.
   ## Each group is built by concatenating `CommandLineSpecialHelp` entries
   ## (for non-alias special syntax like `number`, `! shell command`,
@@ -1106,10 +1103,10 @@ proc renderCommandModeHead*(): string {.compileTime.} =
   ]
   for i, entries in groups:
     if i > 0:
-      result.add '\n'
+      result.add textLine("")
     result.add renderEntries(entries)
 
-proc renderCommandModeTail*(): string {.compileTime.} =
+proc renderCommandModeTail*(): seq[HelpLine] {.compileTime.} =
   ## "# Command mode" groups that appear *after* the `set` options block.
   let groups: seq[seq[HelpEntry]] = @[
     helpEntriesFor("build") & helpEntriesFor("lspfold") & helpEntriesFor("lspformat"),
@@ -1135,10 +1132,10 @@ proc renderCommandModeTail*(): string {.compileTime.} =
   ]
   for i, entries in groups:
     if i > 0:
-      result.add '\n'
+      result.add textLine("")
     result.add renderEntries(entries)
 
-proc renderSetOptionsSection*(): string {.compileTime.} =
+proc renderSetOptionsSection*(): seq[HelpLine] {.compileTime.} =
   ## The `set X / set noX (sx/nosx) - desc` block, followed by
   ## `set X=number (sx) - desc; e.g. set X=N` value options. Both blocks
   ## are driven by the canonical `SetOptionTable` from `setting_options`.
@@ -1151,10 +1148,7 @@ proc renderSetOptionsSection*(): string {.compileTime.} =
   for spec in SetOptionTable:
     if spec.kind != sokBool:
       continue
-    result.add boolSetHead(spec).alignLeft(width)
-    result.add " - "
-    result.add toPlainText(spec.description)
-    result.add '\n'
+    result.add entryLine(0, boolSetHead(spec), width, toPlainText(spec.description))
 
   var vwidth = 0
   for spec in SetOptionTable:
@@ -1166,9 +1160,9 @@ proc renderSetOptionsSection*(): string {.compileTime.} =
   for spec in SetOptionTable:
     if spec.kind == sokBool:
       continue
-    result.add valueSetHead(spec).alignLeft(vwidth)
-    result.add " - "
-    result.add toPlainText(spec.description)
-    result.add "; e.g. "
-    result.add valueSetExample(spec)
-    result.add '\n'
+    result.add entryLine(
+      0,
+      valueSetHead(spec),
+      vwidth,
+      toPlainText(spec.description) & "; e.g. " & valueSetExample(spec),
+    )
