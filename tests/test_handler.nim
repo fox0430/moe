@@ -11702,6 +11702,193 @@ suite "handleKeyCombo - a count and the shape of a motion, as in Vim":
 
     check e.state.registers.getRegisterContent('"') == "bc def\ngh"
 
+  const VisopText = "abc def\nghij klm\nno\npqrstu vw\n  ind x\nlast"
+  const VisopRest = @["no", "pqrstu vw", "  ind x", "last"]
+
+  test "Visual D, X, C and R act on whole lines, as Vim measured by typing":
+    let lines2 = "abc def\nghij klm\n"
+    for (line, column, keys, lines, cursor, register) in [
+      (0, 1, @["v", "j", "D"], VisopRest, at(0, 0), lines2),
+      (0, 1, @["v", "j", "X"], VisopRest, at(0, 0), lines2),
+      (0, 1, @["V", "j", "D"], VisopRest, at(0, 0), lines2),
+      (0, 1, @["V", "j", "X"], VisopRest, at(0, 0), lines2),
+      (0, 1, @["v", "j", "3", "D"], VisopRest, at(0, 0), lines2),
+      (
+        0,
+        1,
+        @["v", "j", "C", "x", "y", "z", "Esc"],
+        @["xyz"] & VisopRest,
+        at(0, 2),
+        lines2,
+      ),
+      (
+        0,
+        1,
+        @["v", "j", "R", "x", "y", "z", "Esc"],
+        @["xyz"] & VisopRest,
+        at(0, 2),
+        lines2,
+      ),
+      (
+        0,
+        1,
+        @["V", "j", "C", "x", "y", "z", "Esc"],
+        @["xyz"] & VisopRest,
+        at(0, 2),
+        lines2,
+      ),
+      (
+        0,
+        1,
+        @["V", "j", "R", "x", "y", "z", "Esc"],
+        @["xyz"] & VisopRest,
+        at(0, 2),
+        lines2,
+      ),
+      # R takes the lines of a block too.
+      (
+        0,
+        1,
+        @["C-v", "j", "l", "R", "x", "y", "z", "Esc"],
+        @["xyz"] & VisopRest,
+        at(0, 2),
+        lines2,
+      ),
+    ]:
+      let e = createEditorForCounts(VisopText, line, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.state.mode == EditorMode.Normal
+      check e.lines == lines
+      check e.activeWindow.cursor == cursor
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "Visual Block D and C go to each line's end, X keeps the block":
+    let tail = @["no", "pqrstu vw", "  ind x", "last"]
+    for (line, column, keys, lines, cursor, register) in [
+      (0, 1, @["C-v", "j", "l", "D"], @["a", "g"] & tail, at(0, 0), "bc def\nhij klm"),
+      (0, 1, @["C-v", "j", "$", "D"], @["a", "g"] & tail, at(0, 0), "bc def\nhij klm"),
+      (0, 1, @["C-v", "j", "l", "X"], @["a def", "gj klm"] & tail, at(0, 1), "bc\nhi"),
+      (
+        0,
+        1,
+        @["C-v", "j", "l", "C", "x", "y", "z", "Esc"],
+        @["axyz", "gxyz"] & tail,
+        at(0, 3),
+        "bc def\nhij klm",
+      ),
+      (
+        0,
+        1,
+        @["C-v", "j", "$", "C", "x", "y", "z", "Esc"],
+        @["axyz", "gxyz"] & tail,
+        at(0, 3),
+        "bc def\nhij klm",
+      ),
+      # A line that ends before the block keeps its text, and C adds to it.
+      (
+        1,
+        4,
+        @["C-v", "j", "D"],
+        @["abc def", "gh", "no"] & tail[1 .. ^1],
+        at(1, 1),
+        "ij klm\n",
+      ),
+      (
+        1,
+        4,
+        @["C-v", "j", "C", "x", "y", "z", "Esc"],
+        @["abc def", "ghxyz", "noxyz"] & tail[1 .. ^1],
+        at(1, 4),
+        "ij klm\n",
+      ),
+      (
+        1,
+        4,
+        @["C-v", "j", "X"],
+        @["abc def", "ghklm", "no"] & tail[1 .. ^1],
+        at(1, 2),
+        "ij \n",
+      ),
+    ]:
+      let e = createEditorForCounts(VisopText, line, column)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.state.mode == EditorMode.Normal
+      check e.lines == lines
+      check e.activeWindow.cursor == cursor
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "Visual D, X and C repeat with .":
+    for (keys, lines, cursor) in [
+      (@["v", "j", "D", "j", "."], @["no", "last"], at(1, 0)),
+      (@["v", "j", "X", "j", "."], @["no", "last"], at(1, 0)),
+      (
+        @["v", "j", "C", "x", "y", "z", "Esc", "j", "."],
+        @["xyz", "xyz", "  ind x", "last"],
+        at(1, 2),
+      ),
+      (
+        @["C-v", "j", "l", "D", "j", "."],
+        @["a", "", "", "pqrstu vw", "  ind x", "last"],
+        at(1, 0),
+      ),
+      (
+        @["C-v", "j", "l", "C", "x", "y", "z", "Esc", "j", "j", "."],
+        @["axyz", "gxyz", "nxyz", "pxyz", "  ind x", "last"],
+        at(2, 3),
+      ),
+    ]:
+      let e = createEditorForCounts(VisopText, 0, 1)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == lines
+      check e.activeWindow.cursor == cursor
+
+  test "u after Visual D or C puts the cursor back":
+    for (keys, cursor) in [
+      (@["v", "j", "D", "u"], at(0, 0)),
+      (@["C-v", "j", "l", "C", "x", "y", "z", "Esc", "u"], at(0, 1)),
+    ]:
+      let e = createEditorForCounts(VisopText, 0, 1)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.lines == VisopText.split('\n')
+      check e.activeWindow.cursor == cursor
+
+  test "gv after Visual D, X or R selects what was selected":
+    for (keys, register) in [
+      (@["v", "j", "X", "u", "g", "v", "y"], "bc def\ngh"),
+      (@["C-v", "j", "l", "R", "x", "y", "z", "Esc", "u", "g", "v", "y"], "bc\nhi"),
+      # D took the block to the line ends, and so does gv.
+      (@["C-v", "j", "l", "D", "u", "g", "v", "y"], "bc def\nhij klm"),
+    ]:
+      let e = createEditorForCounts(VisopText, 0, 1)
+
+      e.press(keys)
+
+      checkpoint($keys)
+      check e.state.registers.getRegisterContent('"') == register
+
+  test "Visual D and C leave a read-only buffer as it is":
+    for key in ["D", "X", "C", "R"]:
+      let e = createEditorForCounts(VisopText)
+      e.activeBuffer.readOnly = true
+
+      e.press("v", key)
+
+      checkpoint(key)
+      check e.state.mode == EditorMode.Normal
+      check e.lines == VisopText.split('\n')
+
   test "gN puts the cursor at the start of the match":
     let e = createEditorForCounts("foo bar foo baz", column = 14)
     e.state.input.search.last.pattern = "baz"

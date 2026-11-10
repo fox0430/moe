@@ -853,7 +853,11 @@ Commands are grouped by category below. Any command name listed here can be used
 | visual-yank | Yank visual selection |
 | visual-yank-lines | Yank selected lines, or the block in Visual Block |
 | visual-delete | Delete visual selection |
+| visual-delete-lines | Delete selected lines, or the block in Visual Block |
+| visual-delete-to-end | Delete selected lines, or the block to each line's end in Visual Block |
 | visual-change | Delete selection and enter insert mode |
+| visual-change-lines | Change selected lines |
+| visual-change-to-end | Change selected lines, or the block to each line's end in Visual Block |
 | visual-paste | Delete selection and paste register content |
 | visual-paste-before | Delete selection and paste, keeping the registers |
 | visual-paste-end | Delete selection, paste, and leave cursor after pasted text |

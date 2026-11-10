@@ -116,16 +116,40 @@ proc selectedRegister*(
   of vskChar:
     toRegister(getVisualSelectionText(buffer, selection, tabStop), false)
 
+type VisopBlock* = enum
+  ## What `Y`, `D`, `X`, `C` and `R` make of a Visual block, as Vim's v_visop
+  vbKeep ## The block as it is: `Y`, `X`
+  vbToLineEnd ## The block to each line's end: `D`, `C`
+  vbLines ## Its whole lines: `R`
+
+proc forVisop*(sel: VisualSelection, inBlock: VisopBlock): VisualSelection =
+  ## `sel` taken as whole lines, and a block as `inBlock` says, as Vim's
+  ## v_visop and nv_Replace do before the operator.
+  result = sel
+  case sel.kind
+  of vskChar:
+    result.kind = vskLine
+  of vskBlock:
+    case inBlock
+    of vbKeep:
+      discard
+    of vbToLineEnd:
+      result.extendsToLineEnd = true
+    of vbLines:
+      result.kind = vskLine
+  of vskLine:
+    discard
+
 proc visualYank*(
     buffer: TextBuffer, state: EditorState, register = none(char), lines = false
 ) =
   ## Yank (copy) visual selection to `register` (else the yank register) and
-  ## return to previous mode. `lines` takes a character-wise selection's whole
-  ## lines, as Vim's {Visual}Y; a block stays a block.
+  ## return to previous mode. `lines` takes the selection's whole lines, as
+  ## Vim's {Visual}Y; a block stays a block.
   var sel = state.operandSelection
   if sel.active:
-    if lines and sel.kind == vskChar:
-      sel.kind = vskLine
+    if lines:
+      sel = sel.forVisop(vbKeep)
     state.registers.storeYanked(register, buffer.selectedRegister(sel, state.tabStop))
     # Vim puts the cursor on the start of what it took: a block's top left, a
     # line's first column unless the cursor came up to it from a later line.
@@ -155,6 +179,15 @@ proc operandArea*(
 ): tuple[sel: VisualSelection, area: BlockArea] =
   ## The selection an operator acts on, and its block when blockwise.
   result.sel = state.operandSelection
+  if result.sel.kind == vskBlock:
+    result.area = buffer.blockArea(result.sel, state.tabStop)
+
+proc operandArea*(
+    buffer: TextBuffer, state: EditorState, inBlock: VisopBlock
+): tuple[sel: VisualSelection, area: BlockArea] =
+  ## The selection's whole lines an operator acts on, and its block as
+  ## `inBlock` says when blockwise.
+  result.sel = state.operandSelection.forVisop(inBlock)
   if result.sel.kind == vskBlock:
     result.area = buffer.blockArea(result.sel, state.tabStop)
 

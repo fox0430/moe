@@ -300,7 +300,11 @@
 | Keys | Description |
 |:---|:---|
 | <kbd>**d**</kbd> OR <kbd>**x**</kbd> | Delete text |
+| <kbd>**D**</kbd> | Delete lines, or the block to each line's end in Visual Block |
+| <kbd>**X**</kbd> | Delete lines, or the block in Visual Block |
 | <kbd>**c**</kbd> | Change (delete selection and enter insert mode) |
+| <kbd>**C**</kbd> | Change lines, or the block to each line's end in Visual Block |
+| <kbd>**R**</kbd> | Change lines |
 | <kbd>**y**</kbd> | Copy text |
 | <kbd>**Y**</kbd> | Copy lines, or the block in Visual Block |
 | <kbd>**p**</kbd> | Paste over the selection; the replaced text goes to the registers |
