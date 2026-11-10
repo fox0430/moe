@@ -95,10 +95,10 @@ suite "CommandLine - parseSubstituteCommand with escapes":
     check result.isValid == true
     check result.pattern == "foo"
     check result.replacement == "bar\\/baz"
-    let (text, count) = "foo".substituteMatches(
+    let (lines, count) = "foo".substituteMatches(
       "foo", parseReplacement(result.replacement), false, false, smRegex
     )
-    check (text, count) == ("bar/baz", 1)
+    check (lines, count) == (@["bar/baz"], 1)
 
   test "Escaped backslash before slash :s/foo\\\\/bar/":
     let result = parseSubstituteCommand(":s/foo\\\\/bar/")

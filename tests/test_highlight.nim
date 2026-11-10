@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, unicode, os, strutils, json, tables]
+import std/[unittest, unicode, os, strutils, json, tables, random]
 
 import pkg/celina
 
@@ -5965,6 +5965,62 @@ suite "Highlight - Semantic overlay edit shift":
     check not b.highlight.semantic.hasKey(4)
     check b.highlight.semantic.hasKey(3) # row 4 -> row 3
 
+  test "many edits at once land where one at a time puts them":
+    # The batch shifts the overlay in one pass; it has to agree with the
+    # per-edit move for every mix of in-line edits, splits, joins and whole
+    # rows, including two edits that meet on one line.
+    var rng = initRand(20261110)
+    for iteration in 0 ..< 2000:
+      var rows: seq[(int, seq[SemanticOverlayToken])]
+      for row in 0 ..< 12:
+        if rng.rand(2) > 0:
+          var toks: seq[SemanticOverlayToken]
+          var col = rng.rand(2)
+          for _ in 0 .. rng.rand(3):
+            let len = 1 + rng.rand(3)
+            toks.add mkTok(col, len)
+            col += len + rng.rand(3)
+          rows.add (row, toks)
+      var
+        edits: seq[SpanEdit]
+        at = (0, 0)
+      for _ in 0 .. rng.rand(6):
+        let start =
+          if rng.rand(1) == 0:
+            (at[0], at[1] + rng.rand(4))
+          else:
+            (at[0] + 1 + rng.rand(2), rng.rand(6))
+        let wholeRows = rng.rand(3) == 0
+        var e: SpanEdit
+        if wholeRows:
+          e = edit(
+            (start[0], 0),
+            (start[0] + rng.rand(2), 0),
+            (start[0] + rng.rand(2), 0),
+            rowsAtStart = true,
+          )
+        else:
+          let oldEnd =
+            if rng.rand(1) == 0:
+              (start[0], start[1] + rng.rand(4))
+            else:
+              (start[0] + 1 + rng.rand(1), rng.rand(6))
+          let newEnd =
+            if rng.rand(1) == 0:
+              (start[0], start[1] + rng.rand(4))
+            else:
+              (start[0] + 1 + rng.rand(1), rng.rand(6))
+          e = edit(start, oldEnd, newEnd)
+        edits.add e
+        at = (e.newEnd.line, e.newEnd.column)
+      let
+        batch = mkH(rows)
+        each = mkH(rows)
+      batch.semanticMoveAcross(edits)
+      for e in edits:
+        each.semanticMoveAcross(e)
+      check batch.semantic == each.semantic
+
 suite "Highlight - diagnosticOverlay read path":
   # These construct a Highlight directly with only diagnosticOverlay populated
   # (no baked syntaxCheck* segments) so the read-time overlay path is exercised
@@ -6137,3 +6193,20 @@ suite "Highlight: literal colors":
 
     check hl.literalStyleAt(0, 0) == segment.style
     check hl.literalStyleAt(5, 0) == Style()
+
+suite "Highlight - a NUL in a line":
+  # The tokenizers take a NUL for the end of their input.
+  proc keywordRows(h: Highlight): seq[int] =
+    for seg in h.colorSegments:
+      if seg.color == EditorColorPairIndex.keyword:
+        result.add seg.firstRow
+
+  test "the lines after it are still highlighted":
+    let h = initHighlight(@["let a\0b = 1", "fn main"], @[], SourceLanguage.langRust)
+    check 1 in h.keywordRows
+
+  test "incremental highlighting reads past it too":
+    let (str, _) = buildBufferStrCapped(@["a\0b", "c\0"], 0, 1, 0)
+    check str == "a b\nc "
+    let (capped, _) = buildBufferStrCapped(@["a\0bcdef"], 0, 0, 3)
+    check capped == "a b"

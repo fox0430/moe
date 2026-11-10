@@ -98,10 +98,9 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckReplaceLine:
       b.backendReplaceLine(change.replaceLineIdx, change.replaceLineOldText)
     of ckReplaceLines:
-      b.backendReplaceLines(
-        change.replaceLinesIdx, change.replaceLinesNewText.len,
-        change.replaceLinesOldText,
-      )
+      for i in countdown(change.replaceLinesHunks.high, 0):
+        let hunk = change.replaceLinesHunks[i]
+        b.backendReplaceLines(hunk.start, hunk.newText.len, hunk.oldText)
     of ckTransaction:
       # Undo all changes in transaction in reverse order. If one fails partway,
       # roll forward (redo) the inner changes we already undid so the buffer
@@ -146,10 +145,7 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
 
     # A rewritten span that gave rows up dropped their folds and bookmarks and
     # the reversed events cannot bring them back, so restore them wholesale.
-    if change.kind == ckReplaceLines and (
-      not change.replaceLinesKeepRows or
-      change.replaceLinesOldText.len > change.replaceLinesNewText.len
-    ):
+    if change.givesRowsUp:
       b.foldState = change.replaceLinesSavedFolds
       b.bookmarks = change.replaceLinesSavedBookmarks
 
@@ -613,10 +609,8 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckReplaceLine:
       b.backendReplaceLine(change.replaceLineIdx, change.replaceLineNewText)
     of ckReplaceLines:
-      b.backendReplaceLines(
-        change.replaceLinesIdx, change.replaceLinesOldText.len,
-        change.replaceLinesNewText,
-      )
+      for hunk in change.replaceLinesHunks:
+        b.backendReplaceLines(hunk.start, hunk.oldText.len, hunk.newText)
     of ckTransaction:
       # Redo all changes in transaction in forward order. On partial failure,
       # roll back (undo) the inner changes we already applied so the buffer is

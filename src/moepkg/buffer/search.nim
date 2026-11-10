@@ -442,17 +442,19 @@ type
     rpText
     rpGroup ## & and \0 to \9
     rpCase ## \u \l \U \L \e \E
+    rpLineBreak ## \r and a typed CR
 
   ReplacementPiece = object
     case kind: ReplacementPieceKind
     of rpText:
       text: string
-      asTyped: bool # No case change touches it, though it uses one of one up
     of rpGroup:
       group: int
     of rpCase:
       oneChar: bool # \u and \l
       to: LetterCase # lcKeep for \e and \E, which end both
+    of rpLineBreak:
+      discard
 
   Replacement* = object ## The replacement of :s, as Vim's regsub() reads it
     pieces: seq[ReplacementPiece]
@@ -461,10 +463,10 @@ type
 proc parseReplacement*(s: string): Replacement =
   ## `s` as Vim reads a :s replacement with 'magic': `&` and `\0` are the
   ## match, `\1` to `\9` its groups, `\u` `\l` `\U` `\L` `\e` `\E` change
-  ## the case, `\t` and `\b` are Tab and Ctrl-H, and a backslash before any
+  ## the case, `\r` and a typed CR break the line, `\n` and a typed NUL are a
+  ## NUL, `\t` and `\b` are Tab and Ctrl-H, and a backslash before any
   ## other character takes it as it is. Unlike Vim, `~` is not the previous
-  ## replacement, `\=` is a plain `=`, `\n` is a line break that doesn't
-  ## split the line, and `\r` stays as typed, as moe can't split a line here.
+  ## replacement and `\=` is a plain `=`.
   var text = ""
   template flush() =
     if text.len > 0:
@@ -500,16 +502,21 @@ proc parseReplacement*(s: string): Replacement =
         caseChange(false, lcLower)
       of 'e', 'E':
         caseChange(false, lcKeep)
-      of 'n':
-        text.add('\n')
+      of 'n', '\n':
+        text.add('\0')
       of 't':
         text.add('\t')
       of 'b':
         text.add('\b')
       of 'r':
-        add(ReplacementPiece(kind: rpText, text: "\\r", asTyped: true))
+        add(ReplacementPiece(kind: rpLineBreak))
       else:
         text.add(s[i])
+    elif c == '\r':
+      add(ReplacementPiece(kind: rpLineBreak))
+    elif c == '\n':
+      # A NUL typed on the command line, which keeps one as a line feed.
+      text.add('\0')
     else:
       text.add(c)
     i.inc
@@ -539,18 +546,15 @@ proc emit(res: var string, s: string, one: var LetterCase, all: LetterCase) =
         res.add($rune.toLower)
     i += size
 
-proc expand(r: Replacement, line: string, m: LiteralRange): string =
-  ## `r` for the match `m` on `line`. A case change of one character waits for
-  ## the next character, wherever it comes from, and wins over one of all.
+proc expand(r: Replacement, line: string, m: LiteralRange, lines: var seq[string]) =
+  ## `r` for the match `m` on `line`, appended to `lines` with a line break
+  ## starting a new one. A one-character case change waits for the next
+  ## character and wins over an all-case change; a line break uses it up.
   var one, all = lcKeep
   for piece in r.pieces:
     case piece.kind
     of rpText:
-      if piece.asTyped:
-        result.add(piece.text)
-        one = lcKeep
-      else:
-        result.emit(piece.text, one, all)
+      lines[^1].emit(piece.text, one, all)
     of rpGroup:
       let span =
         if piece.group == 0:
@@ -560,7 +564,7 @@ proc expand(r: Replacement, line: string, m: LiteralRange): string =
         else:
           1 .. 0
       if span.a <= span.b:
-        result.emit(line[span], one, all)
+        lines[^1].emit(line[span], one, all)
     of rpCase:
       if piece.oneChar:
         one = piece.to
@@ -568,26 +572,48 @@ proc expand(r: Replacement, line: string, m: LiteralRange): string =
         all = piece.to
         if piece.to == lcKeep:
           one = lcKeep
+    of rpLineBreak:
+      one = lcKeep
+      lines.add("")
 
 proc substituteMatches*(
     line, pattern: string,
     replacement: Replacement,
     ignorecase, everyMatch: bool,
     match: SearchMatch,
-): tuple[text: string, count: int] =
-  ## `line` with the first match of `pattern`, or `everyMatch`, replaced, and
-  ## how many were.
+): tuple[lines: seq[string], count: int] =
+  ## The lines `line` becomes with the first match, or every match, replaced,
+  ## and how many; no lines when none.
   var copied = 0
   let withGroups = replacement.usesGroups
   for r in line.substituteRanges(pattern, ignorecase, match, withGroups):
-    result.text.add(line[copied ..< r.startByte])
-    result.text.add(replacement.expand(line, r))
+    if result.count == 0:
+      result.lines = @[""]
+    result.lines[^1].add(line[copied ..< r.startByte])
+    replacement.expand(line, r, result.lines)
     result.count.inc
     copied = r.endByte
     if not everyMatch:
       break
   if result.count > 0:
-    result.text.add(line[copied .. line.high])
+    result.lines[^1].add(line[copied .. line.high])
+
+iterator substitutions*(
+    b: TextBuffer,
+    rows: Slice[int],
+    pattern: string,
+    replacement: Replacement,
+    ignorecase, everyMatch: bool,
+    match: SearchMatch,
+): tuple[line: int, lines: seq[string], count: int] =
+  ## What :s makes of each line of `rows` it changes, top down. The buffer
+  ## must not change while it runs; the caller writes them all at once.
+  for row in max(rows.a, 0) .. min(rows.b, b.len - 1):
+    var s = b.getLine(row).substituteMatches(
+        pattern, replacement, ignorecase, everyMatch, match
+      )
+    if s.count > 0:
+      yield (line: row, lines: move s.lines, count: s.count)
 
 proc matchEndCol*(
     b: TextBuffer,

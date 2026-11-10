@@ -17,7 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, importutils]
+import std/[unittest, options, importutils, strutils]
+
+import pkg/results
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/buffer/search {.all.}
@@ -1262,18 +1264,21 @@ suite "substituteMatches":
     Circumflex = "\u0302"
 
   proc replaced(line, pattern: string, ignorecase = false): string =
-    let (text, count) = line.substituteMatches(
+    let (lines, count) = line.substituteMatches(
       pattern, parseReplacement("#"), ignorecase, true, smLiteral
     )
-    if count > 0: text else: line
+    if count > 0:
+      lines.join("\n")
+    else:
+      line
 
   test "No match leaves nothing to build":
     check "abc".substituteMatches("x", parseReplacement("#"), false, true, smRegex) ==
-      ("", 0)
+      (newSeq[string](), 0)
 
   test "Only the first match unless told":
     check "aXa".substituteMatches("a", parseReplacement("#"), false, false, smRegex) ==
-      ("#Xa", 1)
+      (@["#Xa"], 1)
 
   test "A bare character is not one that holds a composing character":
     check replaced("e" & Acute & "x", "e") == "e" & Acute & "x"
@@ -1303,9 +1308,13 @@ suite "substituteMatches":
 suite "substituteMatches with Vim's replacement specials":
   # Expectations are Vim 9.2's :s, groups written as nim-regex writes them.
   proc replaced(line, pattern, replacement: string, match = smRegex): string =
-    let (text, count) =
+    ## The lines it makes, a line break between two.
+    let (lines, count) =
       line.substituteMatches(pattern, parseReplacement(replacement), false, true, match)
-    if count > 0: text else: line
+    if count > 0:
+      lines.join("\n")
+    else:
+      line
 
   test "& and \\0 are the match, \\& an ampersand":
     check replaced("abc", "b", "[&]") == "a[b]c"
@@ -1356,13 +1365,32 @@ suite "substituteMatches with Vim's replacement specials":
   test "\\E also drops a change of one character":
     check replaced("abc", "abc", "\\u\\Ex") == "x"
 
-  test "\\r stays as typed and uses up a change of one character":
-    check replaced("ab", "b", "\\U\\r") == "a\\r"
-    check replaced("ab", "b", "\\u\\rx") == "a\\rx"
+  test "\\r and a typed CR break the line":
+    check "a,b".substituteMatches(",", parseReplacement("\\r"), false, true, smRegex) ==
+      (@["a", "b"], 1)
+    check replaced("a,b", ",", "\r") == "a\nb"
+    check replaced("ab", "b", "[&]\\r[&]") == "a[b]\n[b]"
 
-  test "\\n is a line break inside the line":
-    # Vim 9.2 inserts a NUL instead.
-    check replaced("abc", "b", "x\\nx") == "ax\nxc"
+  test "Every match may break the line, at its ends too":
+    check replaced("a,b,c", ",", "\\r") == "a\nb\nc"
+    check replaced(",a,", ",", "\\r") == "\na\n"
+    check replaced("abc", "b*", "\\r") == "\na\nc"
+
+  test "A line break uses up a change of one character, not one of all":
+    check replaced("ab", "b", "\\U\\r") == "a\n"
+    check replaced("ab", "b", "\\u\\rx") == "a\nx"
+    check replaced("xy", "x", "\\Ua\\rb") == "A\nBy"
+
+  test "A backslash keeps a typed CR from breaking the line":
+    # Vim keeps the CR in the line; moe's buffer drops it.
+    check replaced("a,b", ",", "\\\r") == "a\rb"
+
+  test "\\n is a NUL, as Vim keeps one in a line":
+    check replaced("abc", "b", "x\\nx") == "ax\0xc"
+
+  test "A NUL typed on the command line, a line feed there, is a NUL":
+    check replaced("a,b", ",", "\n") == "a\0b"
+    check replaced("a,b", ",", "\\\n") == "a\0b"
 
   test "\\b is Ctrl-H":
     check replaced("x", "x", "a\\bc") == "a\x08c"
@@ -1387,9 +1415,12 @@ suite "substituteMatches with Vim's replacement specials":
 suite "substituteMatches as the last search matched":
   # Expectations are Vim 9.2's :s with that search's pattern.
   proc replaced(line, pattern: string, match: SearchMatch): string =
-    let (text, count) =
+    let (lines, count) =
       line.substituteMatches(pattern, parseReplacement("#"), false, true, match)
-    if count > 0: text else: line
+    if count > 0:
+      lines.join("\n")
+    else:
+      line
 
   test "A word match leaves the word inside another":
     check replaced("foobar foo", "foo", smWord) == "foobar #"
@@ -1416,4 +1447,20 @@ suite "substituteMatches as the last search matched":
 
   test "Only the first match unless told":
     check "abab".substituteMatches("b", parseReplacement("#"), false, false, smRegex) ==
-      ("a#ab", 1)
+      (@["a#ab"], 1)
+
+suite "substitutions":
+  test "Each line is read below the lines the ones before it added":
+    let b = newTextBuffer("a,b\nc,d\ne")
+    var got: seq[(int, seq[string])]
+    for s in b.substitutions(0 .. 2, ",", parseReplacement("\\r"), false, true, smRegex):
+      got.add (s.line, s.lines)
+      check b.replaceLines(s.line, 1, s.lines).isOk
+    check got == @[(0, @["a", "b"]), (2, @["c", "d"])]
+
+  test "A line left as it was does not move the next one":
+    let b = newTextBuffer("a,b\nc,d")
+    var got: seq[int]
+    for s in b.substitutions(0 .. 1, ",", parseReplacement("\\r"), false, true, smRegex):
+      got.add s.line
+    check got == @[0, 1]

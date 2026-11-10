@@ -828,22 +828,22 @@ suite "CrossBackend - backendDeleteAtLineCol range":
 
 suite "CrossBackend - NoUndo Procs":
   for be in BufferBackend:
-    test "replaceLineNoUndo [" & $be & "]":
+    test "replaceLinesNoUndo swaps a line [" & $be & "]":
       let b = buf("hello\nworld", be)
-      b.replaceLineNoUndo(0, "replaced")
+      discard b.replaceLinesNoUndo(0, 1, ["replaced"])
       check b[0] == "replaced"
       check b[1] == "world"
 
-    test "deleteLineNoUndo [" & $be & "]":
+    test "replaceLinesNoUndo drops a line [" & $be & "]":
       let b = buf("line1\nline2\nline3", be)
-      b.deleteLineNoUndo(1)
+      discard b.replaceLinesNoUndo(1, 1, [])
       check b.len == 2
       check b[0] == "line1"
       check b[1] == "line3"
 
-    test "insertLineNoUndo [" & $be & "]":
+    test "replaceLinesNoUndo adds a line [" & $be & "]":
       let b = buf("line1\nline3", be)
-      b.insertLineNoUndo(1, "line2")
+      discard b.replaceLinesNoUndo(1, 0, ["line2"])
       check b.len == 3
       check b[0] == "line1"
       check b[1] == "line2"

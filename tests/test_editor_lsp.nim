@@ -28,6 +28,8 @@ import
     [editor, buffer, config, config_loader, message_log, types, completion, highlight]
 import ../src/moepkg/editor_lsp {.all.}
 import ../src/moepkg/editor_lsp_rename {.all.}
+import ../src/moepkg/editor_substitute
+import ../src/moepkg/command_line/substitute_parser
 import ../src/moepkg/lsp_integration {.all.}
 import ../src/moepkg/lsp_service
 import ../src/moepkg/lsp/protocol/types as lspTypes
@@ -1314,6 +1316,38 @@ suite "editor_lsp - applyWorkspaceEditFromServer staleness":
 
     check res.applied
     check buf.getTextString() == "xxx"
+
+  test "rejects an edit to a buffer a :s preview writes":
+    # The server holds the preview, so the buffer is in sync; the edit would
+    # move the rows the preview takes back.
+    let tmpDir = getTempDir() / "moe_test_server_edit_preview"
+    createDir(tmpDir)
+    defer:
+      removeDir(tmpDir)
+
+    let path = tmpDir / "preview.nim"
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.lsp.service.liveWorkerOverride = proc(p: string): bool =
+      true
+    e.lsp.service.workers["nim"] = newLspWorker("nim").get
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "aaa").isOk
+    e.openBufferWithLsp(buf)
+    e.markDelivered(path)
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview("a", "b", "g".parseSubstituteFlags, smRegex)
+    e.maybeUpdateLsp()
+
+    let res = e.applyWorkspaceEditFromServer(replaceFirstThree(path))
+
+    check not res.applied
+    check e.state.statusMessage == "Substitute preview showing; server edit discarded"
+    e.cancelSubstitutePreview()
+    check buf.getTextString() == "aaa"
 
   test "rejects an edit targeting a file not open in the editor":
     # Server-initiated applyEdit must not write files the user has not opened:

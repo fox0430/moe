@@ -3263,6 +3263,76 @@ suite "Buffer - CRLF Line Ending Handling":
     check buf.len == 1
     check buf[0] == "a"
 
+suite "Buffer - NoUndo swaps":
+  proc textOf(b: TextBuffer): seq[string] =
+    for line in b.lines:
+      result.add line
+
+  proc splitTwo(b: TextBuffer): NoUndoSwap =
+    ## Break "a,b" and "d,e" of "a,b\nc\nd,e" at once, as a preview does.
+    b.replaceLineSpansNoUndo(
+      [
+        LineEdit(start: 0, delete: 1, insert: @["a", "b"]),
+        LineEdit(start: 2, delete: 1, insert: @["d", "e"]),
+      ]
+    ).get
+
+  test "revertNoUndo takes all the spans of a swap back":
+    let b = newTextBuffer("a,b\nc\nd,e")
+    let changeSeq = b.changeSeq
+    let swap = b.splitTwo
+    check b.textOf == @["a", "b", "c", "d", "e"]
+    check b.revertNoUndo(swap)
+    check b.textOf == @["a,b", "c", "d,e"]
+    check b.changeSeq == changeSeq
+
+  test "lineBefore reads the text as it was before the swaps":
+    let b = newTextBuffer("a,b\nc\nd,e")
+    let swap = b.splitTwo
+    var lines: seq[string]
+    for i in -1 .. 3:
+      lines.add b.lineBefore(swap, i)
+    check lines == @["", "a,b", "c", "d,e", ""]
+
+  test "revertNoUndo writes nothing once something else changed the buffer":
+    let b = newTextBuffer("a,b\nc")
+    let swap = b.replaceLinesNoUndo(0, 1, ["a", "b"]).get
+    discard b.replaceLinesNoUndo(2, 1, ["z"])
+    check not b.revertNoUndo(swap)
+    check b.textOf == @["a", "b", "z"]
+
+  test "a NoUndo swap leaves the marks and the last Visual area where they are":
+    let b = newTextBuffer("a,b\nc")
+    b.namedMarks['k'] = some(BufferPosition(line: 1, column: 0))
+    discard b.replaceLinesNoUndo(0, 1, ["a", "b"])
+    check b.namedMarks['k'] == some(BufferPosition(line: 1, column: 0))
+
+  test "markAcross takes a position down with its row":
+    let b = newTextBuffer("aaaa,bbbb\nc")
+    let swap = b.replaceLinesNoUndo(0, 1, ["aaaa", "bbbb"]).get
+    # A rewritten line keeps its marks' columns, as Vim's :s does.
+    check b.markAcross(BufferPosition(line: 0, column: 7), swap) ==
+      some(BufferPosition(line: 0, column: 7))
+    check b.markAcross(BufferPosition(line: 1, column: 0), swap) ==
+      some(BufferPosition(line: 2, column: 0))
+
+  test "revertNoUndo puts back the semantic overlay of a swapped row":
+    let b = newTextBuffer("aa,bb\ncc")
+    if b.highlight.isNil:
+      b.highlight = Highlight(colorSegments: @[])
+    b.highlight.semantic[0] = SemanticOverlayLine(
+      tokens: @[
+        SemanticOverlayToken(firstColumn: 0, length: 2),
+        SemanticOverlayToken(firstColumn: 3, length: 2),
+      ]
+    )
+    b.highlight.semantic[1] =
+      SemanticOverlayLine(tokens: @[SemanticOverlayToken(firstColumn: 0, length: 2)])
+    let before = b.highlight.semantic
+    let swap = b.replaceLinesNoUndo(0, 1, ["aa", "bb"]).get
+    check b.revertNoUndo(swap)
+    check b.highlight.semantic == before
+
 suite "Buffer - contentVersion monotonicity":
   # contentVersion is the completion cache's invalidation key. Unlike changeSeq
   # (restored by undo, reset to 0 by reload) it must only ever increase, so a
@@ -3273,15 +3343,15 @@ suite "Buffer - contentVersion monotonicity":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "alpha\nbeta\n")
     var v = buf.contentVersion
 
-    buf.replaceLineNoUndo(0, "gamma")
+    discard buf.replaceLinesNoUndo(0, 1, ["gamma"])
     check buf.contentVersion > v
     v = buf.contentVersion
 
-    buf.insertLineNoUndo(1, "delta")
+    discard buf.replaceLinesNoUndo(1, 0, ["delta"])
     check buf.contentVersion > v
     v = buf.contentVersion
 
-    buf.deleteLineNoUndo(1)
+    discard buf.replaceLinesNoUndo(1, 1, [])
     check buf.contentVersion > v
 
   test "Undo and redo never roll contentVersion back":
@@ -3333,38 +3403,38 @@ suite "Buffer - contentVersion monotonicity":
     let cs = buf.changeSeq
     let cv = buf.contentVersion
 
-    buf.replaceLineNoUndo(0, "salut")
+    discard buf.replaceLinesNoUndo(0, 1, ["salut"])
     check buf.changeSeq == cs
     check buf.contentVersion > cv
 
-    buf.insertLineNoUndo(1, "monde")
+    discard buf.replaceLinesNoUndo(1, 0, ["monde"])
     check buf.changeSeq == cs
     check buf.contentVersion > cv
 
-    buf.deleteLineNoUndo(2)
+    discard buf.replaceLinesNoUndo(2, 1, [])
     check buf.changeSeq == cs
     check buf.contentVersion > cv
 
-  test "insertLineNoUndo shifts bookmarks":
+  test "a NoUndo swap that adds a line shifts bookmarks":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
     buf.toggleBookmark(1)
     buf.toggleBookmark(3)
 
-    buf.insertLineNoUndo(1, "inserted")
+    discard buf.replaceLinesNoUndo(1, 0, ["inserted"])
 
     check buf.hasBookmark(2)
     check buf.hasBookmark(4)
     check not buf.hasBookmark(1)
     check not buf.hasBookmark(3)
 
-  test "deleteLineNoUndo shifts bookmarks":
+  test "a NoUndo swap that drops a line shifts bookmarks":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
     buf.toggleBookmark(1)
     buf.toggleBookmark(3)
 
-    buf.deleteLineNoUndo(1)
+    discard buf.replaceLinesNoUndo(1, 1, [])
 
     check not buf.hasBookmark(1)
     check buf.hasBookmark(2)
@@ -3379,9 +3449,9 @@ suite "Buffer - contentVersion monotonicity":
     for i in 0 ..< buf.modifiedLines.len:
       buf.modifiedLines[i] = lmkUnmodified
 
-    buf.replaceLineNoUndo(0, "X")
-    buf.insertLineNoUndo(1, "Y")
-    buf.deleteLineNoUndo(2)
+    discard buf.replaceLinesNoUndo(0, 1, ["X"])
+    discard buf.replaceLinesNoUndo(1, 0, ["Y"])
+    discard buf.replaceLinesNoUndo(2, 1, [])
 
     for kind in buf.modifiedLines:
       check kind == lmkUnmodified

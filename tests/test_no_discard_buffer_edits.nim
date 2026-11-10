@@ -38,11 +38,11 @@ const
   ## Buffer-edit / transaction APIs whose Result must not be discarded.
   TargetApis = [
     "insertText", "insertTextEnd", "deleteChar", "insert", "deleteLine", "deleteRange",
-    "replaceLine", "replaceLines", "deleteAllLines", "splitLine", "joinLines",
-    "joinWithNextLine", "transformRange", "replaceWholeLines", "replaceAllLines",
-    "beginTransaction", "commitTransaction", "rollbackTransaction", "withTransaction",
-    "withTransactionForInsert", "deleteBlockSelection", "deleteLineSelection", "undo",
-    "redo", "putText",
+    "replaceLine", "replaceLines", "replaceLineSpans", "deleteAllLines", "splitLine",
+    "joinLines", "joinWithNextLine", "transformRange", "replaceWholeLines",
+    "replaceAllLines", "beginTransaction", "commitTransaction", "rollbackTransaction",
+    "withTransaction", "withTransactionForInsert", "deleteBlockSelection",
+    "deleteLineSelection", "undo", "redo", "putText",
   ].toHashSet
 
   ## Intentional discards that cannot propagate. Keyed by (path suffix,

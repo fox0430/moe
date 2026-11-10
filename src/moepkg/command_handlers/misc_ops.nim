@@ -143,6 +143,12 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
   of hrSubstitute:
     let count = r.hrSubstituteCount
     e.state.statusMessage = $count & " substitution" & (if count == 1: "" else: "s")
+    # As Vim's do_sub, on the first non-blank of the last line it changed.
+    let line = min(max(0, r.hrSubstituteLastLine), activeBuffer.len - 1)
+    e.activeWindow.cursor = BufferPosition(
+      line: line, column: firstNonBlankColumn(activeBuffer.getLine(line))
+    )
+    e.state.preferredColumn = -1
     return true
   of hrDeleteLines:
     e.state.registers.storeDeleted(none(char), r.hrDeletedText, true)

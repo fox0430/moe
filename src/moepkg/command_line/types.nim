@@ -301,8 +301,9 @@ type
     of claUnknown:
       errorMessage*: string
 
-const JumpActions* = {claDeleteLines}
-  ## Actions that mark where they start as a jump, as Vim's setpcmark.
+const JumpActions* = {claDeleteLines, claSubstitute}
+  ## Actions that mark where they start as a jump, as Vim's setpcmark. :s
+  ## marks it once it finds a match, with `n` too.
 
 # Every action is in exactly one of the two sets below (asserted at compile
 # time), because accepting a no-argument command in the completion popup runs it.

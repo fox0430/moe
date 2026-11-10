@@ -259,6 +259,16 @@ proc recoverFromFailedWorkspaceEdit*(
           e.syncBufferAfterEdit(buf)
   e.clampAllWindowCursors()
 
+proc editsPreviewedBuffer(e: Editor, edit: WorkspaceEdit): bool =
+  ## Whether `edit` writes into the buffer a live `:s` preview writes.
+  if not e.state.ui.substitutePreview.isActive:
+    return false
+  let previewed = e.state.ui.substitutePreview.buffer
+  for path in collectWorkspaceEditPaths(edit):
+    if previewed.bufferHoldsFile(path):
+      return true
+  false
+
 proc applyWorkspaceEditFromServer*(
     e: Editor, edit: WorkspaceEdit
 ): ApplyWorkspaceEditResult {.gcsafe.} =
@@ -280,6 +290,12 @@ proc applyWorkspaceEditFromServer*(
   {.cast(gcsafe).}:
     if not e.lsp.enabled:
       return (applied: false, failureReason: some("LSP is disabled"))
+
+    # A live `:s` preview takes back its lines by the rows it wrote, which an
+    # edit under it would move; discard the edit.
+    if e.editsPreviewedBuffer(edit):
+      e.state.statusMessage = "Substitute preview showing; server edit discarded"
+      return (applied: false, failureReason: some("a substitute preview is showing"))
 
     # Reject the edit if any targeted open buffer has local changes the server
     # has not seen: it positioned its edit against the text it knows, so

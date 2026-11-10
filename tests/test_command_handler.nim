@@ -1284,6 +1284,31 @@ suite "CommandModeHandler - executeSubstitute":
     check buffer.getLine(1) == "bar"
     check buffer.getLine(2) == "bar"
     check buffer.getLine(3) == "foo"
+    check result.hrSubstituteLastLine == 2
+
+  test "A line break pushes the rest of the range down":
+    let handler = setupHandler()
+    let buffer = newTextBuffer("a,b\nc,d\ne,f")
+
+    let result = handler.executeSubstitute(
+      buffer,
+      ",",
+      "\\r",
+      "".parseSubstituteFlags,
+      smRegex,
+      range = exAddresses(exLine(1), exLine(2)),
+    )
+    check result.kind == hrSubstitute
+    check result.hrSubstituteCount == 2
+    check result.hrSubstituteLastLine == 3
+    check buffer.len == 5
+    for i, line in ["a", "b", "c", "d", "e,f"]:
+      check buffer.getLine(i) == line
+
+    check buffer.undo().isOk
+    check buffer.len == 3
+    check buffer.getLine(0) == "a,b"
+    check buffer.getLine(1) == "c,d"
 
   test "`n` counts and changes nothing, even in a read-only buffer":
     let handler = setupHandler()
@@ -1347,7 +1372,7 @@ suite "CommandModeHandler - executeSubstitute":
     check result.kind == hrError
     check "Pattern not found" in result.errorMessage
 
-  test "Substitute with escape sequences":
+  test "\\n puts a NUL, as Vim keeps one in a line":
     let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
@@ -1356,7 +1381,8 @@ suite "CommandModeHandler - executeSubstitute":
       buffer, "hello", "hi\\nworld", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
-    check buffer.getLine(0) == "hi\nworld"
+    check buffer.len == 1
+    check buffer.getLine(0) == "hi\0world"
 
   test "Substitute with invalid range (start > end) returns error":
     let handler = setupHandler()

@@ -216,6 +216,11 @@ type
     olBelow ## Whole lines opened below that line, which stays as it was: `o`, `p`
     olAbove ## Whole lines opened above it: `O`, `P`
 
+  LineHunk* = object ## One span of lines a ckReplaceLines change swapped.
+    start*: int ## Its first row after the hunks above; the same row after the change.
+    oldText*: seq[string]
+    newText*: seq[string]
+
   BufferChange* = object
     savedModifiedLines*: seq[LineModificationKind]
       ## Pre-mutation modifiedLines snapshot for undo/redo (non-PieceTable, 1 byte per line)
@@ -300,17 +305,14 @@ type
       replaceLineOldText*: string
       replaceLineNewText*: string
     of ckReplaceLines:
-      replaceLinesIdx*: int
+      replaceLinesHunks*: seq[LineHunk] ## The spans swapped, top down.
       replaceLinesColumn*: int ## Where the rewrite starts on its first line
-      replaceLinesOldText*: seq[string]
-      replaceLinesNewText*: seq[string]
       replaceLinesKeepRows*: bool
         ## True when the rows both sides share keep their identity, so what is
         ## attached to them stays; false gives the old rows up with it.
       replaceLinesSavedFolds*: FoldState
-        ## Folds as they stood before the span was rewritten. A row that leaves
-        ## takes its folds with it and the reversed events only put blank rows
-        ## back, so undo restores these wholesale.
+        ## Folds before the spans were rewritten; a row that leaves takes its
+        ## folds, and undo only puts blank rows back, so restore wholesale.
       replaceLinesSavedBookmarks*: seq[int]
         ## Bookmarks before the rewrite; same reason as the folds above.
     of ckTransaction:
@@ -892,6 +894,10 @@ proc isModified*(b: TextBuffer): bool {.inline.} =
     return true
   not b.isAtSavedState
 
+proc markUnrecordedChange*(b: TextBuffer) =
+  ## Count a change undo did not record, so the buffer reads as modified.
+  b.changeSeq.inc
+
 proc markSaved*(b: TextBuffer) {.inline.} =
   b.savedSeq = b.changeSeq
   b.savedChangeId = b.currentChangeId
@@ -1179,8 +1185,11 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
   of ckReplaceLine:
     return BufferPosition(line: change.replaceLineIdx, column: 0)
   of ckReplaceLines:
-    return
-      BufferPosition(line: change.replaceLinesIdx, column: change.replaceLinesColumn)
+    let hunks = change.replaceLinesHunks
+    return BufferPosition(
+      line: (if hunks.len > 0: hunks[0].start else: 0),
+      column: change.replaceLinesColumn,
+    )
   of ckTransaction:
     # For transactions, return the saved cursor position if available,
     # otherwise fall back to the position of the first change
@@ -1193,32 +1202,54 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
   of ckSnapshot:
     return change.snapshotCursorPos
 
-iterator modifiedLinesOf(change: BufferChange): int =
-  ## The lines a change leaves marked modified in the sidebar. Every kind but
-  ## ckReplaceLines touches one line; that one marks what the insert/delete/
-  ## replace sequence it stands for would have, the rows overwritten in place
-  ## plus the row a shrinking span closed over, but leaves a row given back
-  ## its own text unmarked.
-  let pos = getChangePosition(change).line
+func givesRowsUp*(change: BufferChange): bool =
+  ## Whether `change` gives rows up, losing their folds and bookmarks for good.
   if change.kind != ckReplaceLines:
-    yield pos
+    return false
+  if not change.replaceLinesKeepRows:
+    return true
+  for hunk in change.replaceLinesHunks:
+    if hunk.oldText.len > hunk.newText.len:
+      return true
+
+iterator modifiedLinesOf(change: BufferChange): int =
+  ## The lines a change leaves marked modified in the sidebar. For
+  ## ckReplaceLines, each span marks the rows its line-by-line edits would,
+  ## but a row given back its own text stays unmarked.
+  if change.kind != ckReplaceLines:
+    yield getChangePosition(change).line
   else:
-    let
-      oldCount = change.replaceLinesOldText.len
-      newCount = change.replaceLinesNewText.len
-    if change.replaceLinesKeepRows:
-      let overlap = min(oldCount, newCount)
-      for i in 0 ..< overlap:
-        if change.replaceLinesOldText[i] != change.replaceLinesNewText[i]:
-          yield pos + i
-      if oldCount > newCount:
-        yield pos + overlap
-    elif oldCount > 0:
-      # Nothing was overwritten in place: the old rows left and the
-      # replacement arrived as fresh ones, so the only mark is the one the
-      # departing rows leave on the row below them, as deleting them line by
-      # line would.
-      yield pos + newCount
+    var marked: seq[int]
+    for hunk in change.replaceLinesHunks:
+      let
+        pos = hunk.start
+        oldCount = hunk.oldText.len
+        newCount = hunk.newText.len
+        kept = (if change.replaceLinesKeepRows: min(oldCount, newCount)
+        else: 0)
+      # A span moves the mark the one above left on the row it closed over.
+      let
+        rowsAt = pos + kept
+        dropped = oldCount - kept
+      var i = marked.high
+      while i >= 0 and marked[i] >= rowsAt:
+        if marked[i] < rowsAt + dropped:
+          marked.delete(i)
+        else:
+          marked[i] += newCount - oldCount
+        dec i
+      if change.replaceLinesKeepRows:
+        for i in 0 ..< kept:
+          if hunk.oldText[i] != hunk.newText[i]:
+            marked.add pos + i
+        if oldCount > newCount:
+          marked.add pos + kept
+      elif oldCount > 0:
+        # Nothing was overwritten in place: the departing rows leave their
+        # mark on the row below, as deleting them line by line would.
+        marked.add pos + newCount
+    for line in marked:
+      yield line
 
 proc countNewlines(s: string): int {.inline.} =
   for c in s:
@@ -1243,33 +1274,33 @@ proc applyNamedMarkChanges*(
   for change in changes:
     marks[change.name] = if useAfter: change.after else: change.before
 
-proc moveNamedMarks(b: TextBuffer, edit: SpanEdit) =
-  ## Vim's mark_adjust: drop marks on deleted rows, move the rest with the text.
+proc markAcrossEdit(
+    b: TextBuffer, pos: BufferPosition, edit: SpanEdit
+): Option[BufferPosition] =
+  ## Vim's mark_adjust: where a mark at `pos` goes across `edit`, none when
+  ## its row is deleted.
+  result = some(pos)
   if edit.inLine:
-    var lastColumn = -1
-    for mark in b.namedMarks.mitems:
-      if mark.isSome and mark.get.line == edit.start.line and
-          mark.get.column >= edit.start.column:
-        if lastColumn < 0:
-          lastColumn = max(0, b.getLine(edit.start.line).charLen - 1)
-        var pos = mark.get
-        pos.column = min(
-          max(edit.start.column, pos.column + edit.newEnd.column - edit.oldEnd.column),
-          lastColumn,
-        )
-        mark = some(pos)
+    if pos.line == edit.start.line and pos.column >= edit.start.column:
+      let lastColumn = max(0, b.getLine(edit.start.line).charLen - 1)
+      result.get.column = min(
+        max(edit.start.column, pos.column + edit.newEnd.column - edit.oldEnd.column),
+        lastColumn,
+      )
     return
   let rows = edit.rows
   if rows.isNone:
     return
+  if pos.line >= rows.get.start + rows.get.before:
+    result.get.line += rows.get.after - rows.get.before
+  elif pos.line >= rows.get.start:
+    result = none(BufferPosition)
+
+proc moveNamedMarks(b: TextBuffer, edit: SpanEdit) =
+  ## Drop marks on deleted rows, move the rest with the text.
   for mark in b.namedMarks.mitems:
     if mark.isSome:
-      var pos = mark.get
-      if pos.line >= rows.get.start + rows.get.before:
-        pos.line += rows.get.after - rows.get.before
-        mark = some(pos)
-      elif pos.line >= rows.get.start:
-        mark = none(BufferPosition)
+      mark = b.markAcrossEdit(mark.get, edit)
 
 func boxed*(area: Option[VisualArea]): ref VisualArea =
   if area.isSome:
@@ -1353,6 +1384,53 @@ template shiftPerLineArray(arr: untyped, freshValue: untyped, rows: RowSpan) =
   else:
     arr.delete(rows.start, rows.before)
     arr.insert(freshValue, rows.start, rows.after)
+
+func shiftsTopDown(rows: openArray[RowSpan], arrLen: int): bool =
+  ## Whether `rows`, taken in order, go top down and apart within `arrLen`.
+  var
+    below = 0 # First row not yet passed
+    shift = 0
+  for r in rows:
+    let at = r.start - shift
+    if at < below or at > arrLen or r.before < 0 or r.after < 0:
+      return false
+    below = at + r.before
+    shift += r.after - r.before
+  below <= arrLen
+
+proc assignShifted[T](arr: var seq[T], s: sink seq[T]) =
+  arr = s
+
+proc assignShifted[T](arr: var CowSeq[T], s: sink seq[T]) =
+  arr = initCowSeq(s)
+
+template shiftPerLineArrayAcross(
+    arr: untyped, freshValue: untyped, rows: openArray[RowSpan]
+) =
+  ## Shift a per-line side array across `rows` in one pass when they go top
+  ## down, else one by one.
+  if rows.len == 1 or not rows.shiftsTopDown(arr.len):
+    for r in rows:
+      shiftPerLineArray(arr, freshValue, r)
+  else:
+    var net = 0
+    for r in rows:
+      net += r.after - r.before
+    var
+      shifted = newSeqOfCap[typeof(freshValue)](arr.len + net)
+      src = 0 # Next row to copy
+      shift = 0
+    for r in rows:
+      let at = r.start - shift
+      for j in src ..< at:
+        shifted.add arr[j]
+      for _ in 0 ..< r.after:
+        shifted.add freshValue
+      src = at + r.before
+      shift += r.after - r.before
+    for j in src ..< arr.len:
+      shifted.add arr[j]
+    arr.assignShifted(move shifted)
 
 func span*(d: BufferDiagnostic): Span =
   Span(
@@ -1527,22 +1605,21 @@ iterator spanEdits(change: BufferChange): SpanEdit =
     if edit.isSome:
       yield edit.get
   of ckReplaceLines:
-    let
-      row = change.replaceLinesIdx
-      oldCount = change.replaceLinesOldText.len
-      newCount = change.replaceLinesNewText.len
-    if change.replaceLinesKeepRows:
-      let overlap = min(oldCount, newCount)
-      for i in 0 ..< overlap:
-        let edit = lineEdit(
-          row + i, change.replaceLinesOldText[i], change.replaceLinesNewText[i]
-        )
-        if edit.isSome:
-          yield edit.get
-      if oldCount != newCount:
-        yield rowEdit(row + overlap, oldCount - overlap, newCount - overlap)
-    elif oldCount > 0 or newCount > 0:
-      yield rowEdit(row, oldCount, newCount)
+    for hunk in change.replaceLinesHunks:
+      let
+        row = hunk.start
+        oldCount = hunk.oldText.len
+        newCount = hunk.newText.len
+      if change.replaceLinesKeepRows:
+        let overlap = min(oldCount, newCount)
+        for i in 0 ..< overlap:
+          let edit = lineEdit(row + i, hunk.oldText[i], hunk.newText[i])
+          if edit.isSome:
+            yield edit.get
+        if oldCount != newCount:
+          yield rowEdit(row + overlap, oldCount - overlap, newCount - overlap)
+      elif oldCount > 0 or newCount > 0:
+        yield rowEdit(row, oldCount, newCount)
   of ckSnapshot:
     for i in 0 ..< change.snapshotEdits.len:
       yield change.snapshotEdits[i]
@@ -1578,12 +1655,10 @@ iterator savedRows(change: BufferChange): RowSpan =
     if dropped > 0:
       yield RowSpan(start: change.deleteStartPos.line, before: dropped + 1, after: 1)
   of ckReplaceLines:
-    if change.replaceLinesOldText.len != change.replaceLinesNewText.len:
-      yield RowSpan(
-        start: change.replaceLinesIdx,
-        before: change.replaceLinesOldText.len,
-        after: change.replaceLinesNewText.len,
-      )
+    for hunk in change.replaceLinesHunks:
+      if hunk.oldText.len != hunk.newText.len:
+        yield
+          RowSpan(start: hunk.start, before: hunk.oldText.len, after: hunk.newText.len)
   of ckSnapshot:
     for i in 0 ..< change.snapshotRows.len:
       yield change.snapshotRows[i]
@@ -1665,6 +1740,49 @@ proc moveDiagnostics(b: TextBuffer, edit: SpanEdit) =
 
 const AllFollowers* = {EditFollower.low .. EditFollower.high}
 
+func takenBackInOrder(edits: openArray[SpanEdit]): seq[SpanEdit] =
+  ## The edits that take back `edits`, top down when `edits` go top down so
+  ## the followers can shift in one pass.
+  if edits.goesTopDown:
+    var shift = 0
+    for edit in edits:
+      # The edits above move this one up by what they added.
+      var back = edit.reversed
+      back.start.line -= shift
+      back.oldEnd.line -= shift
+      back.newEnd.line -= shift
+      result.add back
+      shift += edit.newEnd.line - edit.oldEnd.line
+  else:
+    for i in countdown(edits.high, 0):
+      result.add edits[i].reversed
+
+const BatchedFollowers = {efSemantic, efLineArrays}
+  ## Followers moved across all of a change's edits at once; moving them per
+  ## edit is quadratic.
+
+proc shiftLineArrays(
+    b: TextBuffer, edits: openArray[SpanEdit], fresh: LineModificationKind
+) =
+  ## Shift `lineMarkers` and `modifiedLines` across `edits`; added rows get no
+  ## marker and `fresh`.
+  var rows: seq[RowSpan]
+  for edit in edits:
+    let r = edit.rows
+    if r.isSome:
+      rows.add r.get
+  shiftPerLineArrayAcross(b.lineMarkers, none(LineMarkerKind), rows)
+  shiftPerLineArrayAcross(b.modifiedLines, fresh, rows)
+
+proc followAll(
+    b: TextBuffer, edits: openArray[SpanEdit], followers: set[EditFollower]
+) =
+  ## Move the batched ones of `followers` across `edits`, applied in order.
+  if efSemantic in followers:
+    b.highlight.semanticMoveAcross(edits)
+  if efLineArrays in followers:
+    b.shiftLineArrays(edits, lmkInserted)
+
 proc follow(
     b: TextBuffer, edit: SpanEdit, followers: set[EditFollower]
 ) {.raises: [].} =
@@ -1713,16 +1831,20 @@ proc followChange*(
   ## Move `followers` across `change` (or back when `undone`). `recording`
   ## saves replaced text for the snapshot entry. Marks the semantic overlay up
   ## to date.
+  var edits: seq[SpanEdit]
+  for edit in change.spanEdits:
+    edits.add edit
+  let each = followers - BatchedFollowers
   if undone:
-    var edits: seq[SpanEdit]
-    for edit in change.spanEdits:
-      edits.add edit
-    b.followBack(edits, followers)
+    b.followBack(edits, each)
+    if followers * BatchedFollowers != {}:
+      b.followAll(edits.takenBackInOrder, followers)
   else:
-    for edit in change.spanEdits:
-      b.follow(edit, followers)
+    for edit in edits:
+      b.follow(edit, each)
       if recording and b.pendingSnapshot.isSome:
         b.pendingSnapshotEdits.record(edit)
+    b.followAll(edits, followers)
     if recording and b.pendingSnapshot.isSome and b.wantsSnapshotRows:
       for rows in change.savedRows:
         b.pendingSnapshotRows.add rows
@@ -1732,6 +1854,19 @@ proc followChange*(
       # Its columns are stale.
       b.highlight.semantic.del(seam)
     b.highlight.semanticContentVersion = b.contentVersion
+
+proc markAcross*(
+    b: TextBuffer, pos: BufferPosition, change: BufferChange
+): Option[BufferPosition] =
+  ## Where a mark at `pos` goes across `change`; none when its row is deleted.
+  result = some(pos)
+  for edit in change.spanEdits:
+    # A change of spans edits top down, so the rest are below.
+    if change.kind == ckReplaceLines and edit.start.line > result.get.line:
+      return
+    result = b.markAcrossEdit(result.get, edit)
+    if result.isNone:
+      return
 
 var awaitedReportIds = 0
 
@@ -1874,6 +2009,14 @@ proc recordChangePosition*(b: TextBuffer, pos: BufferPosition) =
   if b.changeList.len > ChangeListMaxLen:
     b.changeList.delete(0)
     b.changeListIndex = b.changeList.len - 1
+
+proc shiftLineArraysUnmarked*(b: TextBuffer, change: BufferChange, undone = false) =
+  ## Shift `lineMarkers` and `modifiedLines` across `change` (or back when
+  ## `undone`), unmarked, for a change undo does not record.
+  var edits: seq[SpanEdit]
+  for edit in change.spanEdits:
+    edits.add edit
+  b.shiftLineArrays((if undone: edits.takenBackInOrder else: edits), lmkUnmodified)
 
 proc ensureMarkersSize*(b: TextBuffer) =
   ## Ensure lineMarkers length matches buffer length; grown slots default to none.
@@ -2047,11 +2190,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   let marksBefore = b.namedMarks
   let visualBefore = b.lastVisual
   # Dropped rows take folds/bookmarks for good, so save them with the change.
-  let needsFoldBookmarkRestore =
-    change.kind == ckReplaceLines and (
-      not change.replaceLinesKeepRows or
-      change.replaceLinesOldText.len > change.replaceLinesNewText.len
-    )
+  let needsFoldBookmarkRestore = change.givesRowsUp
   var
     foldsBefore: FoldState
     bookmarksBefore: seq[int]
