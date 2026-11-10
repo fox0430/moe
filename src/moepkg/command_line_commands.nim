@@ -1313,6 +1313,8 @@ const CommandLineSpecialHelp*:
       "a :s that can run makes keyword1 the last search, and an empty keyword1 " &
       "reuses that search as it matched (a regex after `/`, whole words after " &
       "`*`), also from the previous session (E35 without one); " &
+      "`\\r` in keyword2 breaks the line and `\\n` puts a NUL, as in Vim; " &
+      "the cursor lands on the last line changed; " &
       "flag `n` only counts the matches, and `c` is refused",
   ),
   deleteAll:

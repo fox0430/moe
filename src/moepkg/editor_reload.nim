@@ -47,10 +47,9 @@ proc isBeingEdited*(e: Editor, buf: TextBuffer): bool =
   ## session still holds a start position into text that is gone.
   if buf.inTransaction:
     return true
-  # A live `:s` preview is an edit group nothing else can see: it opens no
-  # transaction and leaves the base mode showing. Its Esc writes a whole-buffer
-  # snapshot back, undoing any reload underneath it.
-  if e.state.ui.substitutePreview.isActive and buf == e.activeBuffer():
+  # A live `:s` preview opens no transaction and leaves the base mode showing;
+  # its Esc takes back lines a reload underneath it would have replaced.
+  if e.state.ui.substitutePreview.isActive and e.state.ui.substitutePreview.buffer == buf:
     return true
   for window in e.windowManager.windows:
     if window.buffer == buf and window.mode in {EditorMode.Insert, EditorMode.Replace}:
@@ -67,6 +66,17 @@ proc invalidatePositionStateForBuffer*(e: Editor, buf: TextBuffer) =
   ## living on the buffer (undo, folds, bookmarks, diagnostics) are reset by
   ## `loadFile`; position-keyed state outside it belongs here.
   let isActive = buf == e.activeBuffer()
+
+  # The preview's swap describes the replaced text; taking it back would write
+  # into the new one. Put the cursor and view back where the preview began.
+  template preview(): untyped =
+    e.state.ui.substitutePreview
+
+  if preview.isActive and preview.buffer == buf:
+    if isActive:
+      e.cursor = preview.originalCursor
+      e.activeWindow.viewport.restoreViewState(preview.originalView)
+    preview = SubstitutePreview()
 
   for window in e.windowManager.windows:
     if window.buffer != buf:
@@ -113,10 +123,6 @@ proc invalidatePositionStateForBuffer*(e: Editor, buf: TextBuffer) =
     # An operator waiting for its motion anchors at the position it was typed
     # on, and would build a range from text that is gone.
     e.state.pendingInput.cancelOperatorPending()
-    # The preview snapshot describes the replaced text; keeping it would write
-    # the old file back on Esc with no undo entry.
-    e.state.ui.substitutePreview.isActive = false
-    e.state.ui.substitutePreview.originalLines = @[]
 
   # The gesture anchors into the buffer it started on, whichever is active now.
   if e.state.pointerSelection.active and e.state.pointerSelection.bufferId == buf.id:

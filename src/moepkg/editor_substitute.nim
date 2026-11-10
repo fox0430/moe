@@ -17,14 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-## Live substitute (`:s`) preview: snapshot the buffer, apply candidate
-## replacements as the user types, and restore/commit/cancel the preview.
+## Live substitute (`:s`) preview: write candidate replacements as the user
+## types, recording each swap, and take them back to restore or cancel.
 
-import types/editor_types, command_line/substitute_parser
+import std/options
+
+import types/editor_types, command_line/substitute_parser, editor_notify
 import buffer/[core, edit, search]
 
 proc startSubstitutePreview*(e: Editor) =
-  ## Start substitute preview by saving the current buffer content
+  ## Start a substitute preview on the active buffer.
   if e.state.ui.substitutePreview.isActive:
     return
 
@@ -35,37 +37,87 @@ proc startSubstitutePreview*(e: Editor) =
   # byte-sliced lines the user can never commit.
   if not buffer.allowsTextTransforms:
     return
-  e.state.ui.substitutePreview.originalLines = newSeqOfCap[string](buffer.len)
-  for line in buffer.lines:
-    e.state.ui.substitutePreview.originalLines.add(line)
-  e.state.ui.substitutePreview.isActive = true
-  e.state.ui.substitutePreview.applied = SubstitutePreviewKey()
-  e.state.ui.substitutePreview.originalCursor = e.cursor
-  e.state.ui.substitutePreview.originalView = e.activeWindow.viewport.viewState
+  e.state.ui.substitutePreview = SubstitutePreview(
+    isActive: true,
+    buffer: buffer,
+    originalCursor: e.cursor,
+    originalView: e.activeWindow.viewport.viewState,
+  )
+
+proc inPreview*(e: Editor, pos: BufferPosition): BufferPosition =
+  ## Where the preview took a pre-preview cursor at `pos`: down with its line,
+  ## as a mark, and on what is left of it.
+  template preview(): untyped =
+    e.state.ui.substitutePreview
+
+  if not preview.isActive or preview.swap.isNone:
+    return pos
+  result = preview.buffer.markAcross(pos, preview.swap.get).get(pos)
+  # A guessed line edit moves no column, so keep the cursor on the line.
+  let lastColumn = max(0, preview.buffer.getLine(result.line).charLen - 1)
+  result.column = min(result.column, lastColumn)
+
+proc inPreview*(e: Editor, view: ViewState): ViewState =
+  ## `view` of the pre-preview text, with its top line where the preview took
+  ## it; a rewritten top line shows from its first screen row.
+  template preview(): untyped =
+    e.state.ui.substitutePreview
+
+  result = view
+  if preview.isActive and preview.swap.isSome:
+    let
+      swap = preview.swap.get
+      top = BufferPosition(line: view.topLine, column: 0)
+    result.topLine = preview.buffer.markAcross(top, swap).get(top).line
+    if preview.buffer.lineBefore(swap, view.topLine) !=
+        preview.buffer.getLine(result.topLine):
+      result.topWrapOffset = 0
+
+proc previewShows*(e: Editor, key: SubstitutePreviewKey): bool =
+  ## Whether the preview shows what `key` makes and the buffer is unchanged.
+  template preview(): untyped =
+    e.state.ui.substitutePreview
+
+  if not preview.isActive:
+    return false
+  var current = key
+  current.version = preview.buffer.contentVersion
+  preview.applied == current
+
+proc notePreviewShows*(e: Editor, key: SubstitutePreviewKey) =
+  ## Remember that the preview now shows what `key` makes.
+  template preview(): untyped =
+    e.state.ui.substitutePreview
+
+  preview.applied = key
+  preview.applied.version = preview.buffer.contentVersion
+
+proc takeBackSwap(e: Editor) =
+  ## Take back what the preview wrote.
+  template preview(): untyped =
+    e.state.ui.substitutePreview
+
+  if preview.swap.isNone:
+    return
+  # Undoing the swap after another change would write into moved rows. If that
+  # happened, keep the preview's lines and flag the buffer modified.
+  if preview.buffer.revertNoUndo(preview.swap.get):
+    preview.buffer.highlightNeedsUpdate = true
+  else:
+    preview.buffer.markUnrecordedChange()
+    e.notify(
+      "The buffer changed under the substitute preview, which stays in it", nlError
+    )
+  preview.swap = none(NoUndoSwap)
 
 proc restoreFromPreview*(e: Editor) =
-  ## Restore buffer content from preview snapshot without cancelling the preview.
-  ## Callers that want to cancel preview entirely should use cancelSubstitutePreview.
+  ## Take back what the preview wrote and put the cursor back, keeping the
+  ## preview open; use cancelSubstitutePreview to cancel it.
   if not e.state.ui.substitutePreview.isActive:
     return
-
-  let buffer = e.activeBuffer()
-  # Restore all lines from snapshot
-  for i in 0 ..< e.state.ui.substitutePreview.originalLines.len:
-    if i < buffer.len:
-      buffer.replaceLineNoUndo(i, e.state.ui.substitutePreview.originalLines[i])
-
-  # Handle line count differences
-  while buffer.len > e.state.ui.substitutePreview.originalLines.len:
-    buffer.deleteLineNoUndo(buffer.len - 1)
-  while buffer.len < e.state.ui.substitutePreview.originalLines.len:
-    buffer.insertLineNoUndo(
-      buffer.len, e.state.ui.substitutePreview.originalLines[buffer.len]
-    )
-
-  buffer.highlightNeedsUpdate = true
-  # So that the next updateSubstitutePreview does not skip identical values.
+  e.takeBackSwap()
   e.state.ui.substitutePreview.applied = SubstitutePreviewKey()
+  e.cursor = e.state.ui.substitutePreview.originalCursor
 
 proc cancelSubstitutePreview*(e: Editor) =
   ## Cancel substitute preview and restore original content
@@ -73,16 +125,12 @@ proc cancelSubstitutePreview*(e: Editor) =
     return
 
   e.restoreFromPreview()
-  e.cursor = e.state.ui.substitutePreview.originalCursor
   e.activeWindow.viewport.restoreViewState(e.state.ui.substitutePreview.originalView)
-  e.state.ui.substitutePreview.isActive = false
-  e.state.ui.substitutePreview.originalLines = @[]
+  e.state.ui.substitutePreview = SubstitutePreview()
 
 proc commitSubstitutePreview*(e: Editor) =
-  ## Commit substitute preview (discard snapshot, keep current changes)
-  e.state.ui.substitutePreview.isActive = false
-  e.state.ui.substitutePreview.originalLines = @[]
-  e.state.ui.substitutePreview.applied = SubstitutePreviewKey()
+  ## Commit substitute preview (forget the swap, keep current changes)
+  e.state.ui.substitutePreview = SubstitutePreview()
 
 proc updateSubstitutePreview*(
     e: Editor,
@@ -93,26 +141,12 @@ proc updateSubstitutePreview*(
     firstLine: int = 0,
     lastLine: int = high(int),
 ) =
-  ## Update substitute preview with new pattern and replacement
-  ## Only lines `firstLine .. lastLine` are replaced, as `:s` runs on its range.
+  ## Take back what the preview wrote, then write what `:s` makes of lines
+  ## `firstLine .. lastLine`, all at once. The caller puts the cursor.
   if not e.state.ui.substitutePreview.isActive:
     return
 
-  let key = SubstitutePreviewKey(
-    pattern: pattern,
-    replacement: replacement,
-    global: flags.global,
-    lines: firstLine .. lastLine,
-    ignoreCase: flags.ignoreCase,
-    match: match,
-  )
-  # Skip if nothing changed
-  if key == e.state.ui.substitutePreview.applied:
-    return
-
-  # Restoring clears the key, so it is set after.
-  e.restoreFromPreview()
-  e.state.ui.substitutePreview.applied = key
+  e.takeBackSwap()
 
   # A pattern that does not compile, as one still being typed often does,
   # replaces nothing, so no line is scanned for it.
@@ -120,14 +154,12 @@ proc updateSubstitutePreview*(
     return
 
   let parsed = parseReplacement(replacement)
-
-  # Apply substitute to buffer
-  let buffer = e.activeBuffer()
-  for lineIdx in max(firstLine, 0) .. min(lastLine, buffer.len - 1):
-    let (newLine, count) = buffer.getLine(lineIdx).substituteMatches(
-        pattern, parsed, flags.ignoreCase, flags.global, match
-      )
-    if count > 0:
-      buffer.replaceLineNoUndo(lineIdx, newLine)
-
-  buffer.highlightNeedsUpdate = true
+  let buffer = e.state.ui.substitutePreview.buffer
+  var spans: seq[LineEdit]
+  for s in buffer.substitutions(
+    firstLine .. lastLine, pattern, parsed, flags.ignoreCase, flags.global, match
+  ):
+    spans.add LineEdit(start: s.line, delete: 1, insert: s.lines)
+  e.state.ui.substitutePreview.swap = buffer.replaceLineSpansNoUndo(spans)
+  if e.state.ui.substitutePreview.swap.isSome:
+    buffer.highlightNeedsUpdate = true

@@ -28,7 +28,6 @@ import
     command_config, command_registry, logger, modes, types, viewer_mode, buffer_manager,
   ]
 import ../src/moepkg/filer
-import ../src/moepkg/buffer_backends/gap_buffer
 import visual_test_helper
 import
   ../src/moepkg/command_handlers/
@@ -741,7 +740,7 @@ suite "Editor - Substitute preview":
 
     e.startSubstitutePreview()
     check e.state.ui.substitutePreview.isActive == true
-    check e.state.ui.substitutePreview.originalLines.len >= 0
+    check e.state.ui.substitutePreview.swap.isNone
 
   test "Cancel substitute preview restores original content":
     let e = createTestEditor()
@@ -751,9 +750,8 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     e.startSubstitutePreview()
-
-    # Modify buffer (simulate preview)
-    buffer.storage.gapBuffer.replaceLine(0, "Modified")
+    e.updateSubstitutePreview("World", "There", "".parseSubstituteFlags, smRegex)
+    check buffer.getLine(0) == "Hello There"
 
     e.cancelSubstitutePreview()
 
@@ -768,14 +766,12 @@ suite "Editor - Substitute preview":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     e.startSubstitutePreview()
-
-    # Modify buffer (simulate preview)
-    buffer.storage.gapBuffer.replaceLine(0, "Modified Content")
+    e.updateSubstitutePreview("World", "There", "".parseSubstituteFlags, smRegex)
 
     e.commitSubstitutePreview()
 
     check e.state.ui.substitutePreview.isActive == false
-    check buffer.getLine(0) == "Modified Content"
+    check buffer.getLine(0) == "Hello There"
 
   test "Update substitute preview applies pattern replacement":
     let e = createTestEditor()
@@ -864,7 +860,7 @@ suite "Editor - Substitute preview":
     check findFirstSubstituteMatch(lines, "foo(", false, smRegex).isNone
     check findFirstSubstituteMatch(lines, "foo(", false, smLiteral).isSome
 
-  test "jumpToFirstSubstituteMatch moves cursor to first match":
+  test "showSubstituteMatch moves cursor to the first match":
     let e = createTestEditor()
     let buffer = e.activeBuffer()
 
@@ -876,7 +872,9 @@ suite "Editor - Substitute preview":
     e.cursor = BufferPosition(line: 0, column: 0)
     e.startSubstitutePreview()
 
-    check e.jumpToFirstSubstituteMatch("foo", false, smRegex).isSome
+    let found = findFirstSubstituteMatch(e.activeBuffer, "foo", false, smRegex)
+    check found.isSome
+    e.showSubstituteMatch(found)
 
     check e.cursor == BufferPosition(line: 2, column: 7)
 
@@ -887,7 +885,9 @@ suite "Editor - Substitute preview":
       e.motionController.bindToWindow(e.activeWindow)
       e.startSubstitutePreview()
       for pattern in patterns:
-        check e.jumpToFirstSubstituteMatch(pattern, false, smRegex).isSome
+        let found = findFirstSubstituteMatch(e.activeBuffer, pattern, false, smRegex)
+        check found.isSome
+        e.showSubstituteMatch(found)
       check e.cursor.line == 112
       e.activeWindow.viewport.topLine
 
@@ -914,14 +914,12 @@ suite "Editor - Substitute preview":
 
     e.restoreFromPreview()
     check buffer.getLine(0) == "foo bar"
-    # The key must be cleared so the same preview can be
-    # re-applied after a restore.
-    check e.state.ui.substitutePreview.applied == SubstitutePreviewKey()
+    check e.state.ui.substitutePreview.swap.isNone
 
     e.updateSubstitutePreview("foo", "baz", "g".parseSubstituteFlags, smRegex)
     check buffer.getLine(0) == "baz bar"
 
-  test "jumpToFirstSubstituteMatch restores cursor when no match":
+  test "showSubstituteMatch restores cursor when no match":
     let e = createTestEditor()
     let buffer = e.activeBuffer()
 
@@ -939,7 +937,9 @@ suite "Editor - Substitute preview":
     e.activeWindow.viewport.topWrapOffset = 0
     e.activeWindow.viewport.leftCell = 0
 
-    check e.jumpToFirstSubstituteMatch("zzz", false, smRegex).isNone
+    let found = findFirstSubstituteMatch(e.activeBuffer, "zzz", false, smRegex)
+    check found.isNone
+    e.showSubstituteMatch(found)
 
     check e.cursor == BufferPosition(line: 0, column: 4)
     check e.activeWindow.viewport.topLine == 3

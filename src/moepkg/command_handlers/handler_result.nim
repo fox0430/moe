@@ -413,6 +413,7 @@ type
       discard
     of hrSubstitute:
       hrSubstituteCount*: int
+      hrSubstituteLastLine*: int ## The last line it changed; where the cursor lands
     of hrDeleteLines:
       hrDeletedText*: string
       hrDeletedLineCount*: int

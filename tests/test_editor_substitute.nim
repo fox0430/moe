@@ -19,15 +19,21 @@
 
 ## Tests for editor_substitute.nim
 
-import std/[options, unittest]
+import std/[options, tables, unittest]
+
+import pkg/results
 
 import
-  ../src/moepkg/
-    [editor, config, config_loader, editor_substitute, key_bindings, primitives, types]
+  ../src/moepkg/[
+    editor, config, config_loader, editor_substitute, highlight, key_bindings,
+    primitives, types,
+  ]
 import ../src/moepkg/command_handlers/command_mode_handler
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/buffer
 import ../src/moepkg/command_line/substitute_parser
+import ../src/moepkg/git_conflict
+import ../src/moepkg/editor_reload
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -37,23 +43,28 @@ proc createTestEditor(): Editor =
 proc setBufferContent(e: Editor, content: string) =
   e.activeWindow.setTab(newTextBuffer(content))
 
+proc textLines(b: TextBuffer): seq[string] =
+  for line in b.lines:
+    result.add line
+
 suite "editor_substitute":
-  test "startSubstitutePreview snapshots the buffer":
+  test "startSubstitutePreview opens a preview on the active buffer":
     let e = createTestEditor()
     setBufferContent(e, "foo bar foo\nbar baz")
     e.startSubstitutePreview()
     check e.state.ui.substitutePreview.isActive
-    check e.state.ui.substitutePreview.originalLines.len == 2
-    check e.state.ui.substitutePreview.originalLines[0] == "foo bar foo"
-    check e.state.ui.substitutePreview.originalLines[1] == "bar baz"
+    check e.state.ui.substitutePreview.buffer == e.activeBuffer
+    check e.state.ui.substitutePreview.swap.isNone
 
   test "startSubstitutePreview is a no-op when already active":
     let e = createTestEditor()
     setBufferContent(e, "foo")
     e.startSubstitutePreview()
-    e.state.ui.substitutePreview.originalLines[0] = "changed"
+    e.updateSubstitutePreview("foo", "x", "".parseSubstituteFlags, smRegex)
     e.startSubstitutePreview()
-    check e.state.ui.substitutePreview.originalLines[0] == "changed"
+    check e.state.ui.substitutePreview.swap.isSome
+    e.cancelSubstitutePreview()
+    check e.activeBuffer.getLine(0) == "foo"
 
   test "startSubstitutePreview is a no-op on a read-only buffer":
     let e = createTestEditor()
@@ -169,19 +180,17 @@ suite "editor_substitute":
     e.commitSubstitutePreview()
     check e.activeBuffer.getLine(0) == "qux bar qux"
     check e.state.ui.substitutePreview.isActive == false
-    check e.state.ui.substitutePreview.originalLines.len == 0
+    check e.state.ui.substitutePreview.swap.isNone
 
-  test "restoreFromPreview restores line count differences":
+  test "restoreFromPreview takes back the lines a preview broke":
     let e = createTestEditor()
-    setBufferContent(e, "foo bar")
+    setBufferContent(e, "a,b,c\nx")
     e.startSubstitutePreview()
-    e.activeBuffer.insertLineNoUndo(1, "extra line")
-    e.activeBuffer.deleteLineNoUndo(1)
-    e.activeBuffer.insertLineNoUndo(1, "extra line")
-    check e.activeBuffer.len == 2
+    e.updateSubstitutePreview(",", "\\r", "g".parseSubstituteFlags, smRegex)
+    check e.activeBuffer.len == 4
     e.restoreFromPreview()
-    check e.activeBuffer.len == 1
-    check e.activeBuffer.getLine(0) == "foo bar"
+    check e.activeBuffer.textLines == @["a,b,c", "x"]
+    check e.state.ui.substitutePreview.swap.isNone
 
   test "updateSubstitutePreview reapplies when only the case changes":
     let e = createTestEditor()
@@ -214,6 +223,16 @@ suite ":s as it is typed":
     for ch in command:
       discard e.handleCommandModeKeyCombo(KeyCombo(isSpecial: false, char: $ch))
     e
+
+  test "Typing a pattern alone writes nothing to the buffer":
+    let e = createTestEditor()
+    setBufferContent(e, "foo\nbar")
+    let version = e.activeBuffer.contentVersion
+    e.state.enterCommandOverlay()
+    for ch in "%s/fo":
+      discard e.handleCommandModeKeyCombo(KeyCombo(isSpecial: false, char: $ch))
+    check e.state.ui.substitutePreview.isActive
+    check e.activeBuffer.contentVersion == version
 
   test "The preview finds an escaped slash as a slash":
     let e = typing("foo\nusr/bin", "%s/usr\\/bin")
@@ -294,3 +313,198 @@ suite ":s as it is typed":
     check e.activeBuffer.getLine(1) == "foo("
     check e.cursor == BufferPosition(line: 0, column: 0)
     check e.state.input.line.wordAt == some(BufferPosition(line: 0, column: 0))
+
+  proc typeKeys(e: Editor, keys: string) =
+    for ch in keys:
+      discard e.handleCommandModeKeyCombo(KeyCombo(isSpecial: false, char: $ch))
+
+  test "The closing `/` leaves the preview as it was written":
+    let e = typing("a,b\na,b", "%s/,/-")
+    check e.activeBuffer.textLines == @["a-b", "a-b"]
+    let version = e.activeBuffer.contentVersion
+    e.typeKeys("/")
+    check e.activeBuffer.contentVersion == version
+    check e.state.input.line.wordAt == some(BufferPosition(line: 0, column: 0))
+
+  test "A change made under an unchanged preview is previewed":
+    let e = typing("x", "%s/a/b")
+    check e.state.ui.substitutePreview.swap.isNone
+    check e.activeBuffer.replaceLine(0, "a").isOk
+    e.typeKeys("/")
+    check e.activeBuffer.getLine(0) == "b"
+
+  test "The view stays on the text a broken line above it moves down":
+    var content = "a,b"
+    for _ in 0 ..< 40:
+      content.add "\nx"
+    let e = createTestEditor()
+    setBufferContent(e, content)
+    e.state.input.search.incsearch = false
+    e.cursor = BufferPosition(line: 30, column: 0)
+    e.activeWindow.viewport.topLine = 20
+    e.state.enterCommandOverlay()
+    e.typeKeys("%s/,/\\r")
+    check e.activeBuffer.len == 42
+    check e.cursor == BufferPosition(line: 31, column: 0)
+    check e.activeWindow.viewport.topLine == 21
+
+suite "editor_substitute - a preview that breaks lines":
+  test "the line arrays keep the buffer's length and move with their rows":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b\nx\ny")
+    let buffer = e.activeBuffer
+    buffer.ensureMarkersSize()
+    buffer.ensureModifiedLinesSize()
+    buffer.setLineMarker(2, GitAdded)
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "\\r\\r", "".parseSubstituteFlags, smRegex)
+    check buffer.len == 5
+    check buffer.lineMarkers.len == 5
+    check buffer.modifiedLines.len == 5
+    check buffer.lineMarkers[4] == some(GitAdded)
+    # A rescan for conflict markers reads a marker for every row.
+    buffer.refreshConflicts()
+
+    e.restoreFromPreview()
+    check buffer.len == 3
+    check buffer.lineMarkers.len == 3
+    check buffer.modifiedLines.len == 3
+    check buffer.lineMarkers[2] == some(GitAdded)
+
+  test "a preview drops the CR a backslash keeps, as :s does":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b")
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "-\\\r-", "".parseSubstituteFlags, smRegex)
+    check e.activeBuffer.getLine(0) == "a--b"
+
+  test "restoring after something else changed the buffer writes into no row":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b\nx")
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "\\r", "".parseSubstituteFlags, smRegex)
+    check e.activeBuffer.len == 3
+    discard e.activeBuffer.replaceLinesNoUndo(1, 1, [])
+    check not e.activeBuffer.isModified
+    e.restoreFromPreview()
+    check e.activeBuffer.textLines == @["a", "x"]
+    check e.state.ui.substitutePreview.swap.isNone
+    # The preview's lines stay, so the buffer says it holds a change.
+    check e.activeBuffer.isModified
+
+  test "a preview writes no line a :s would refuse":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b")
+    check e.activeBuffer.replaceLinesNoUndo(0, 1, ["x\ny"]).isNone
+    check e.activeBuffer.len == 1
+    check e.activeBuffer.getLine(0) == "a,b"
+
+suite "editor_substitute - taking a preview back":
+  proc tokens(columns: varargs[int]): SemanticOverlayLine =
+    for column in columns:
+      result.tokens.add SemanticOverlayToken(firstColumn: column, length: 2)
+
+  proc spans(overlay: Table[int, SemanticOverlayLine]): seq[(int, int)] =
+    ## Each token's row and column, by row.
+    for row in 0 ..< 8:
+      overlay.withValue(row, line):
+        for token in line.tokens:
+          result.add (row, token.firstColumn)
+
+  test "the semantic overlay goes back to its rows, the broken one included":
+    let e = createTestEditor()
+    setBufferContent(e, "aa\nbb,cc\ndd\nee")
+    let buffer = e.activeBuffer
+    if buffer.highlight.isNil:
+      buffer.highlight = Highlight(colorSegments: @[])
+    buffer.highlight.semantic =
+      {0: tokens(0), 1: tokens(0, 3), 2: tokens(0), 3: tokens(1)}.toTable
+    buffer.highlight.semanticContentVersion = buffer.contentVersion
+    let before = buffer.highlight.semantic
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "\\r", "".parseSubstituteFlags, smRegex)
+    check buffer.textLines == @["aa", "bb", "cc", "dd", "ee"]
+    # While it shows, the rows below the break keep their colours.
+    check buffer.highlight.semantic.spans == @[(0, 0), (1, 0), (3, 0), (4, 1)]
+    e.cancelSubstitutePreview()
+    check buffer.highlight.semantic.spans == before.spans
+    check buffer.highlight.semanticContentVersion == buffer.contentVersion
+
+  test "a line marker that arrives while it shows stays with its row":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b\nx\ny")
+    let buffer = e.activeBuffer
+    buffer.ensureMarkersSize()
+    buffer.ensureModifiedLinesSize()
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "\\r", "".parseSubstituteFlags, smRegex)
+    buffer.setLineMarker(3, GitAdded)
+    e.cancelSubstitutePreview()
+    check buffer.lineMarkers.len == 3
+    check buffer.lineMarkers[2] == some(GitAdded)
+
+  test "folds go back to their rows":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b\nx\ny\nz")
+    let buffer = e.activeBuffer
+    check buffer.foldState.addFold(1, 2)
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "\\r\\r", "".parseSubstituteFlags, smRegex)
+    check buffer.foldState.getFoldAtStartLine(3).isSome
+    e.cancelSubstitutePreview()
+    check buffer.foldState.folds.len == 1
+    check buffer.foldState.folds[0].startLine == 1
+    check buffer.foldState.folds[0].endLine == 2
+
+  test "an edit of the replacement takes back only what the preview wrote":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b\nx,y\nz")
+    let buffer = e.activeBuffer
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "\\r", "g".parseSubstituteFlags, smRegex)
+    check buffer.textLines == @["a", "b", "x", "y", "z"]
+    e.updateSubstitutePreview(",", "-", "g".parseSubstituteFlags, smRegex)
+    check buffer.textLines == @["a-b", "x-y", "z"]
+    e.updateSubstitutePreview(
+      ",", "\\r", "".parseSubstituteFlags, smRegex, lastLine = 0
+    )
+    check buffer.textLines == @["a", "b", "x,y", "z"]
+    e.cancelSubstitutePreview()
+    check buffer.textLines == @["a,b", "x,y", "z"]
+
+suite "editor_substitute - what the preview moves":
+  test "diagnostics go down with their rows and come back":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b\nx\ny")
+    e.activeBuffer.setDiagnostics(
+      dsrcSyntaxCheck, @[BufferDiagnostic(startLine: 2, endLine: 2, severity: bdsError)]
+    )
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "\\r", "".parseSubstituteFlags, smRegex, 0, 0)
+    check e.activeBuffer.diagnosticMarker(3).isSome
+    check e.activeBuffer.diagnosticMarker(2).isNone
+    e.cancelSubstitutePreview()
+    check e.activeBuffer.diagnosticMarker(2).isSome
+    check e.activeBuffer.diagnosticMarker(3).isNone
+
+  test "the view starts a top line the preview rewrote from its first row":
+    let e = createTestEditor()
+    setBufferContent(e, "a\nb,c\nd")
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "\\r", "".parseSubstituteFlags, smRegex)
+    check e.inPreview((topLine: 1, topWrapOffset: 2, leftCell: 0)) ==
+      (topLine: 1, topWrapOffset: 0, leftCell: 0)
+    check e.inPreview((topLine: 2, topWrapOffset: 2, leftCell: 0)) ==
+      (topLine: 3, topWrapOffset: 2, leftCell: 0)
+
+  test "replacing the buffer under a preview puts the cursor back first":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b\na,b\nx")
+    e.activeWindow.cursor = BufferPosition(line: 2, column: 0)
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "\\r", "".parseSubstituteFlags, smRegex)
+    e.cursor = e.inPreview(e.state.ui.substitutePreview.originalCursor)
+    check e.cursor.line == 4
+    e.invalidatePositionStateForBuffer(e.activeBuffer)
+    check not e.state.ui.substitutePreview.isActive
+    check e.cursor.line == 2

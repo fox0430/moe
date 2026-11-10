@@ -39,7 +39,7 @@ type SubstituteMatch* = tuple[line: int, cols: ColumnRange]
   ## A match `:s` would replace: its line and the columns on it.
 
 proc findFirstSubstituteMatch*(
-    lines: seq[string],
+    lines: seq[string] | TextBuffer,
     pattern: string,
     ignoreCase: bool,
     match: SearchMatch,
@@ -56,29 +56,20 @@ proc findFirstSubstituteMatch*(
       return some((line: lineIdx, cols: cols.get))
   return none(SubstituteMatch)
 
-proc jumpToFirstSubstituteMatch*(
-    e: Editor,
-    pattern: string,
-    ignoreCase: bool,
-    match: SearchMatch,
-    firstLine: int = 0,
-    lastLine: int = high(int),
-): Option[SubstituteMatch] =
-  ## Move cursor/viewport to the first pattern match in lines
-  ## `firstLine .. lastLine` (incsearch-like behavior), scrolling from what the
-  ## window showed as the preview began. If no match is found, restore cursor
-  ## and view to those at preview start. Returns the match, if any.
-  result = findFirstSubstituteMatch(
-    e.state.ui.substitutePreview.originalLines, pattern, ignoreCase, match, firstLine,
-    lastLine,
-  )
-  if result.isSome:
-    let pos = BufferPosition(line: result.get.line, column: result.get.cols.startCol)
-    e.cursor = pos
-    e.showFromView(e.state.ui.substitutePreview.originalView, pos)
+proc showSubstituteMatch*(e: Editor, found: Option[SubstituteMatch]) =
+  ## Put the cursor on `found`, a match in the pre-preview text, where the
+  ## preview took it, and scroll from the pre-preview view (incsearch-like).
+  ## With none, restore both.
+  template preview(): untyped =
+    e.state.ui.substitutePreview
+
+  if found.isSome:
+    e.cursor =
+      e.inPreview(BufferPosition(line: found.get.line, column: found.get.cols.startCol))
+    e.showFromView(e.inPreview(preview.originalView), e.cursor)
   else:
-    e.cursor = e.state.ui.substitutePreview.originalCursor
-    e.activeWindow.viewport.restoreViewState(e.state.ui.substitutePreview.originalView)
+    e.cursor = e.inPreview(preview.originalCursor)
+    e.activeWindow.viewport.restoreViewState(e.inPreview(preview.originalView))
 
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## Update or cancel the live substitute preview based on the current command
@@ -98,24 +89,34 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
         e.startSubstitutePreview()
         if not e.state.ui.substitutePreview.isActive:
           return
+      let flags =
+        e.commandLineParser.substituteFlags(target.pattern, parsed.flags, target.match)
+      # What would change is all a preview shows, so a :s that changes nothing
+      # previews nothing.
+      let previews =
+        parsed.hasReplacement and e.config.highlight.replaceText and
+        flags.refusal.len == 0 and not flags.countOnly
+      let key = SubstitutePreviewKey(
+        range: parsed.range,
+        pattern: target.pattern,
+        replacement: parsed.replacement,
+        global: flags.global,
+        ignoreCase: flags.ignoreCase,
+        match: target.match,
+      )
+      # The closing `/`, or a flag that changes nothing, leaves buffer, cursor
+      # and view alone.
+      if previews and e.previewShows(key):
+        e.state.input.line.wordAt = some(e.state.ui.substitutePreview.originalCursor)
+        return
+      # Range, first match and cursor go by the pre-preview text, which a
+      # broken line would move.
+      e.restoreFromPreview()
       # The lines `:s` would run on, from where the cursor was before the
       # preview moved it. A range it would refuse previews nothing.
       let (firstLine, lastLine) = e.activeBuffer
         .resolveExRange(parsed.range, e.state.ui.substitutePreview.originalCursor.line)
         .valueOr((0, -1))
-      let flags =
-        e.commandLineParser.substituteFlags(target.pattern, parsed.flags, target.match)
-      # What would change is all a preview shows, so a :s that changes nothing
-      # previews nothing.
-      if parsed.hasReplacement and e.config.highlight.replaceText and
-          flags.refusal.len == 0 and not flags.countOnly:
-        e.updateSubstitutePreview(
-          target.pattern, parsed.replacement, flags, target.match, firstLine, lastLine
-        )
-      else:
-        # Pattern-only state: restore buffer (in case a replacement preview was
-        # previously applied) but keep the preview active for cursor tracking.
-        e.restoreFromPreview()
       # Vim's cursor stays put unless 'incsearch' takes it to the end of the
       # match, and comes back once the pattern is followed by more. 'incsearch'
       # goes by the options, as the highlight does: it reads no flags.
@@ -123,11 +124,20 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
         e.commandLineParser.optionsIgnoreCaseOf(target.pattern, target.match)
       let found =
         if e.state.input.search.incsearch:
-          e.jumpToFirstSubstituteMatch(
-            target.pattern, ignoreCase, target.match, firstLine, lastLine
+          findFirstSubstituteMatch(
+            e.activeBuffer, target.pattern, ignoreCase, target.match, firstLine,
+            lastLine,
           )
         else:
           none(SubstituteMatch)
+      if previews:
+        e.updateSubstitutePreview(
+          target.pattern, parsed.replacement, flags, target.match, firstLine, lastLine
+        )
+        e.notePreviewShows(key)
+      # Without 'incsearch' or a match, cursor and view stay with their text,
+      # moving down with lines broken above.
+      e.showSubstituteMatch(found)
       e.state.input.line.wordAt = some(
         if found.isSome and not parsed.hasReplacement:
           BufferPosition(line: found.get.line, column: found.get.cols.endCol)

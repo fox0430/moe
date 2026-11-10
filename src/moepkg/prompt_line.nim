@@ -520,8 +520,8 @@ proc textOfLine(state: EditorState, b: TextBuffer, index: int): string =
   template preview(): untyped =
     state.ui.substitutePreview
 
-  if preview.isActive and index < preview.originalLines.len:
-    preview.originalLines[index]
+  if preview.isActive and preview.buffer == b and preview.swap.isSome:
+    b.lineBefore(preview.swap.get, index)
   elif index < b.len:
     b.getLine(index)
   else:

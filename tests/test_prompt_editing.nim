@@ -415,6 +415,13 @@ suite "prompt: Ctrl-R Ctrl-W with 'incsearch'":
     e.press("C-u", "s", "/", "f", "o", "o", "/", "C-r", "C-l")
     check e.line == "s/foo/foobar baz"
 
+  test "a line below one a :s preview has broken is read as it was":
+    let e = createEditor(@["a,b", "foo bar"], 1, 0)
+    e.typeText(":%s/,/\\r/")
+    check e.activeBuffer.len == 3
+    e.press("C-r", "C-l")
+    check e.line == "%s/,/\\r/foo bar"
+
   test "without 'incsearch' :s reads where the cursor was":
     let e = createEditor(Lines, 1, 0)
     e.press(":", "s", "/", "f", "o", "C-r", "C-w")

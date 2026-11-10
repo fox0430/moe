@@ -1002,6 +1002,14 @@ func tokenizerLeftBuffer(first, last: int): bool =
   when defined(debugHighlight):
     doAssert not result, "tokenizer left the buffer: first=" & $first & " last=" & $last
 
+proc spaceNuls(text: var string) =
+  ## Make each NUL in `text` a space: tokenizers take NUL for end of input,
+  ## and a line may hold one (`\n` in a :s replacement does).
+  var i = text.find('\0')
+  while i >= 0:
+    text[i] = ' '
+    i = text.find('\0', i + 1)
+
 proc initHighlight*(
     lines: seq[string] = @[], color = EditorColorPairIndex.default
 ): Highlight =
@@ -1041,6 +1049,7 @@ proc initHighlight*(
     bufferStr.add lines[i]
     if i < lines.high:
       bufferStr.add '\n'
+  bufferStr.spaceNuls()
 
   var
     currentRow, currentColumn: int
@@ -1629,6 +1638,7 @@ proc buildBufferStrCapped*(
       result.str.add line
     if i < rangeEnd:
       result.str.add '\n'
+  result.str.spaceNuls()
 
 proc initHighlightIncremental*(
     lines: seq[string],
@@ -2386,6 +2396,78 @@ proc semanticMoveAcross*(h: Highlight, edit: SpanEdit) =
   else:
     put(edit.start.line, head)
     put(edit.newEnd.line, tail)
+
+proc semanticMoveAcross*(h: Highlight, edits: openArray[SpanEdit]) =
+  ## Move overlay tokens across `edits`, dropping the tokens they cut into;
+  ## one pass when the edits go top down.
+  if h.isNil or h.semantic.len == 0:
+    return
+  if edits.len <= 1 or not edits.goesTopDown:
+    for edit in edits:
+      h.semanticMoveAcross(edit)
+    return
+
+  var src = newSeqOfCap[(int, SemanticOverlayLine)](h.semantic.len)
+  for row, line in h.semantic.mpairs:
+    src.add (row, move line)
+  src.sort(
+    proc(a, b: (int, SemanticOverlayLine)): int =
+      cmp(a[0], b[0])
+  )
+  var
+    kept = newSeqOfCap[(int, SemanticOverlayLine)](src.len)
+    next = 0 # First line of `src` not yet passed
+    shift = 0 # Rows the edits so far added
+
+  template take(row: int, into: var seq[SemanticOverlayToken]) =
+    ## Take out the tokens on `row` as the edits so far left it.
+    if kept.len > 0 and kept[^1][0] == row:
+      into = move kept[^1][1].tokens
+      kept.setLen(kept.len - 1)
+    elif next < src.len and src[next][0] + shift == row:
+      into = move src[next][1].tokens
+      inc next
+
+  template put(row: int, left: seq[SemanticOverlayToken]) =
+    if left.len > 0:
+      kept.add (row, SemanticOverlayLine(tokens: left))
+
+  for edit in edits:
+    while next < src.len and src[next][0] + shift < edit.start.line:
+      kept.add (src[next][0] + shift, move src[next][1])
+      inc next
+    var head, tail, onStart, onEnd: seq[SemanticOverlayToken]
+    take(edit.start.line, onStart)
+    for tok in onStart:
+      if tok.firstColumn + tok.length <= edit.start.column:
+        head.add tok
+    if edit.oldEnd.line == edit.start.line:
+      onEnd = onStart
+    else:
+      # The rows between go with the text they held.
+      while next < src.len and src[next][0] + shift < edit.oldEnd.line:
+        inc next
+      take(edit.oldEnd.line, onEnd)
+    for tok in onEnd:
+      if tok.firstColumn >= edit.oldEnd.column:
+        var moved = tok
+        moved.firstColumn += edit.newEnd.column - edit.oldEnd.column
+        tail.add moved
+    shift += edit.newEnd.line - edit.oldEnd.line
+    if edit.newEnd.line == edit.start.line:
+      head.add tail
+      put(edit.start.line, head)
+    else:
+      put(edit.start.line, head)
+      put(edit.newEnd.line, tail)
+  while next < src.len:
+    kept.add (src[next][0] + shift, move src[next][1])
+    inc next
+
+  var moved = initTable[int, SemanticOverlayLine](kept.len)
+  for i in 0 ..< kept.len:
+    moved[kept[i][0]] = move kept[i][1]
+  h.semantic = moved
 
 proc applySemanticTokens*(
     highlight: Highlight,

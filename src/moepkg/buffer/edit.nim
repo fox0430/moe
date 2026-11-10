@@ -20,7 +20,7 @@
 ## Public editing API: insertText / deleteChar / insert / deleteLine /
 ## deleteRange / replaceLine / splitLine / NoUndo bypass procs.
 
-import std/options
+import std/[options, tables]
 
 from std/strutils import replace, contains, count, join, rfind, split, strip
 
@@ -28,49 +28,9 @@ import pkg/results
 
 import ../[primitives, unicode_utils]
 from ../encoding import sanitizeInvalidUtf8
+from ../highlight import SemanticOverlayLine
 import core, internal_mutations, line_diff, undo
 export LineEdit, LineDiff
-
-# NoUndo procs skip undo/changeSeq but move other followers, so previews
-# leave no marks or diagnostics behind.
-const NoUndoFollowers = AllFollowers - {efLineArrays, efDiagnostics}
-
-proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
-  ## Replace line content without recording undo. Used by substitute preview etc.
-  if b.readOnly:
-    return
-  let old = b.getLine(lineNumber)
-  b.backendReplaceLine(lineNumber, content)
-  b.advanceContentVersion()
-  b.followChange(
-    BufferChange(
-      kind: ckReplaceLine,
-      replaceLineIdx: lineNumber,
-      replaceLineOldText: old,
-      replaceLineNewText: content,
-    ),
-    NoUndoFollowers,
-  )
-
-proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
-  ## Delete a line without recording undo. Used by substitute preview etc.
-  if b.readOnly:
-    return
-  b.backendDeleteLine(lineNumber)
-  b.advanceContentVersion()
-  b.followChange(
-    BufferChange(kind: ckDeleteLine, deleteLineIdx: lineNumber), NoUndoFollowers
-  )
-
-proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
-  ## Insert a line without recording undo. Used by substitute preview etc.
-  if b.readOnly:
-    return
-  b.backendInsertLine(lineNumber, content)
-  b.advanceContentVersion()
-  b.followChange(
-    BufferChange(kind: ckInsertLine, insertLineIdx: lineNumber), NoUndoFollowers
-  )
 
 proc stripCarriageReturns(b: TextBuffer, content: string): string =
   ## Strip CR to avoid rendering corruption; skipped for raw buffers.
@@ -323,6 +283,88 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
 
   return ok(())
 
+proc hunksOf(b: TextBuffer, spans: openArray[LineEdit]): Result[seq[LineHunk], string] =
+  ## The hunks that swap `spans`, ascending and apart, CR stripped for decoded
+  ## buffers; empty when they change nothing, or why they are refused.
+  if b.readOnly:
+    return err("Buffer is read-only")
+  var
+    hunks = newSeqOfCap[LineHunk](spans.len)
+    lenAfter = b.len
+    shift = 0
+    below = 0
+  for span in spans:
+    if span.start < below or span.start > b.len:
+      return err(
+        "Line index out of valid range [" & $below & ".." & $b.len & "]: " & $span.start
+      )
+    if span.delete < 0 or span.start + span.delete > b.len:
+      return err("Line range out of bounds: " & $span.start & " + " & $span.delete)
+    below = span.start + span.delete
+    if span.delete == 0 and span.insert.len == 0:
+      continue
+    var hunk = LineHunk(
+      start: span.start + shift,
+      oldText: newSeqOfCap[string](span.delete),
+      newText: newSeqOfCap[string](span.insert.len),
+    )
+    for i, line in span.insert:
+      if '\n' in line:
+        return err("Line " & $i & " of the replacement contains a line separator")
+      hunk.newText.add b.stripCarriageReturns(line)
+    for j in 0 ..< span.delete:
+      hunk.oldText.add b.getLine(span.start + j)
+    shift += span.insert.len - span.delete
+    lenAfter += span.insert.len - span.delete
+    hunks.add move(hunk)
+  # A buffer always holds a line; clearing one means leaving a single empty one.
+  if hunks.len > 0 and lenAfter == 0:
+    return err("Replacing the whole buffer with nothing would leave it empty")
+  ok(hunks)
+
+proc swapSpans(
+    b: TextBuffer, spans: openArray[LineEdit], keepRows: bool, column: int
+): Result[(), string] =
+  ## Swap `spans`, top down and apart, as one change; see replaceLineSpans.
+  var hunks = ?b.hunksOf(spans)
+  if hunks.len == 0:
+    return ok(())
+
+  b.captureSnapshotIfNeeded()
+  for i, hunk in hunks:
+    let lenBefore = b.len
+    try:
+      b.backendReplaceLines(hunk.start, hunk.oldText.len, hunk.newText)
+    except CatchableError, IndexDefect:
+      # IndexDefect is internal inconsistency. A span takes several backend
+      # calls, so a failure part way leaves part of it applied; put the old
+      # text back, since nothing is recorded yet.
+      let e = getCurrentException()
+      var rolledBack = true
+      try:
+        b.backendReplaceLines(
+          hunk.start, hunk.oldText.len + (b.len - lenBefore), hunk.oldText
+        )
+        for j in countdown(i - 1, 0):
+          b.backendReplaceLines(hunks[j].start, hunks[j].newText.len, hunks[j].oldText)
+      except CatchableError, IndexDefect:
+        rolledBack = false
+      b.discardPendingSnapshot()
+      if not rolledBack:
+        return err("Failed to replace lines, buffer left partially rewritten: " & e.msg)
+      return err("Failed to replace lines: " & e.msg)
+
+  # Line arrays follow in pushUndoChange.
+  b.pushUndoChange(
+    BufferChange(
+      kind: ckReplaceLines,
+      replaceLinesHunks: move hunks,
+      replaceLinesColumn: column,
+      replaceLinesKeepRows: keepRows,
+    )
+  )
+  ok(())
+
 proc replaceLines*(
     b: TextBuffer,
     start: int,
@@ -341,62 +383,112 @@ proc replaceLines*(
   ## changelist report as the change's position.
   ##
   ## CR is stripped for decoded buffers; lines must not contain separators.
-  if b.readOnly:
-    return err("Buffer is read-only")
-  if start < 0 or start > b.len:
-    return err("Line index out of valid range [0.." & $b.len & "]: " & $start)
-  if delete < 0 or start + delete > b.len:
-    return err("Line range out of bounds: " & $start & " + " & $delete)
-
-  var normalized = newSeqOfCap[string](lines.len)
-  for i, line in lines:
-    if '\n' in line:
-      return err("Line " & $i & " of the replacement contains a line separator")
-    normalized.add b.stripCarriageReturns(line)
-  if delete == 0 and normalized.len == 0:
-    return ok(())
-  # A buffer always holds at least one line; a caller that means to clear one
-  # asks for a single empty line instead.
-  if b.len - delete + normalized.len == 0:
-    return err("Replacing the whole buffer with nothing would leave it empty")
-
-  var replaced = newSeqOfCap[string](delete)
-  for j in 0 ..< delete:
-    replaced.add b.getLine(start + j)
-
-  b.captureSnapshotIfNeeded()
-  let lenBefore = b.len
-  try:
-    b.backendReplaceLines(start, delete, normalized)
-  except CatchableError, IndexDefect:
-    # IndexDefect is included because the backends raise it on internal
-    # inconsistency. The span is rewritten by several backend calls, so a
-    # failure part way through leaves some applied; nothing is recorded yet, so
-    # putting the old span back restores the buffer.
-    let e = getCurrentException()
-    var rolledBack = true
-    try:
-      b.backendReplaceLines(start, delete + (b.len - lenBefore), replaced)
-    except CatchableError, IndexDefect:
-      rolledBack = false
-    b.discardPendingSnapshot()
-    if not rolledBack:
-      return err("Failed to replace lines, buffer left partially rewritten: " & e.msg)
-    return err("Failed to replace lines: " & e.msg)
-
-  # Line arrays follow in pushUndoChange.
-  b.pushUndoChange(
-    BufferChange(
-      kind: ckReplaceLines,
-      replaceLinesIdx: start,
-      replaceLinesColumn: column,
-      replaceLinesOldText: replaced,
-      replaceLinesNewText: normalized,
-      replaceLinesKeepRows: keepRows,
-    )
+  b.swapSpans(
+    [LineEdit(start: start, delete: delete, insert: @lines)], keepRows, column
   )
 
-  return ok(())
+proc replaceLineSpans*(
+    b: TextBuffer, spans: openArray[LineEdit], keepRows: bool = true
+): Result[(), string] =
+  ## Swap `spans`, ascending and apart, as one change: undo takes them back
+  ## together, and the side arrays and semantic overlay shift once. `keepRows`
+  ## and CR stripping are as for replaceLines.
+  b.swapSpans(spans, keepRows, column = 0)
+
+# A NoUndo swap skips undo and changeSeq and moves only what is drawn over the
+# text, which revertNoUndo moves back. Marks, the last Visual area and jumps
+# stay put; the per-line arrays shift unmarked with the rows it adds or drops.
+const NoUndoFollowers = {efSemantic, efFolds, efBookmarks, efDiagnostics}
+
+type NoUndoSwap* = object
+  ## A swap replaceLineSpansNoUndo made, for revertNoUndo to take back.
+  change: BufferChange
+  semantic: seq[seq[Option[SemanticOverlayLine]]]
+    ## The overlay on each hunk's replaced rows, which moving back across the
+    ## swap cannot rebuild: it drops the tokens an edit cuts into.
+  version: int ## The buffer's contentVersion just after the swap
+
+proc replaceLineSpansNoUndo*(
+    b: TextBuffer, spans: openArray[LineEdit]
+): Option[NoUndoSwap] =
+  ## Swap `spans` like replaceLineSpans, without recording undo, and return
+  ## the swap for revertNoUndo; none when nothing changes or it would refuse.
+  let hunks = b.hunksOf(spans).valueOr:
+    return none(NoUndoSwap)
+  if hunks.len == 0:
+    return none(NoUndoSwap)
+  var semantic: seq[seq[Option[SemanticOverlayLine]]]
+  if not b.highlight.isNil and b.highlight.semantic.len > 0:
+    semantic.setLen(hunks.len)
+    var shift = 0
+    for k, hunk in hunks:
+      let at = hunk.start - shift
+      semantic[k].setLen(hunk.oldText.len)
+      for i in 0 ..< hunk.oldText.len:
+        b.highlight.semantic.withValue(at + i, line):
+          semantic[k][i] = some(line[])
+      shift += hunk.newText.len - hunk.oldText.len
+  for hunk in hunks:
+    b.backendReplaceLines(hunk.start, hunk.oldText.len, hunk.newText)
+  b.advanceContentVersion()
+  let change = BufferChange(
+    kind: ckReplaceLines, replaceLinesHunks: hunks, replaceLinesKeepRows: true
+  )
+  b.followChange(change, NoUndoFollowers)
+  b.shiftLineArraysUnmarked(change)
+  some(NoUndoSwap(change: change, semantic: semantic, version: b.contentVersion))
+
+proc replaceLinesNoUndo*(
+    b: TextBuffer, start, delete: int, lines: openArray[string]
+): Option[NoUndoSwap] =
+  ## replaceLineSpansNoUndo of one span.
+  b.replaceLineSpansNoUndo([LineEdit(start: start, delete: delete, insert: @lines)])
+
+proc revertNoUndo*(b: TextBuffer, swap: NoUndoSwap): bool =
+  ## Take back `swap` as undo does; false when the buffer changed since, as
+  ## the swap no longer says where its rows are. Rows it dropped lose their
+  ## folds and bookmarks, though previews drop none.
+  if b.contentVersion != swap.version:
+    return false
+  let hunks = swap.change.replaceLinesHunks
+  for i in countdown(hunks.high, 0):
+    b.backendReplaceLines(hunks[i].start, hunks[i].newText.len, hunks[i].oldText)
+  b.advanceContentVersion()
+  b.followChange(swap.change, NoUndoFollowers, undone = true)
+  b.shiftLineArraysUnmarked(swap.change, undone = true)
+  if not b.highlight.isNil:
+    var shift = 0
+    for k, hunk in hunks:
+      let at = hunk.start - shift
+      for j in 0 ..< hunk.oldText.len:
+        if k < swap.semantic.len and swap.semantic[k][j].isSome:
+          b.highlight.semantic[at + j] = swap.semantic[k][j].get
+        else:
+          b.highlight.semantic.del(at + j)
+      shift += hunk.newText.len - hunk.oldText.len
+  true
+
+proc lineBefore*(b: TextBuffer, swap: NoUndoSwap, index: int): string =
+  ## Line `index` of the text as it was before `swap`; empty past its end.
+  var shift = 0
+  for hunk in swap.change.replaceLinesHunks:
+    let at = hunk.start - shift
+    if index < at:
+      break
+    if index < at + hunk.oldText.len:
+      return hunk.oldText[index - at]
+    shift += hunk.newText.len - hunk.oldText.len
+  let row = index + shift
+  if row >= 0 and row < b.len:
+    b.getLine(row)
+  else:
+    ""
+
+proc markAcross*(
+    b: TextBuffer, pos: BufferPosition, swap: NoUndoSwap
+): Option[BufferPosition] =
+  ## Where `swap` took a mark at `pos`; none when it dropped its row.
+  b.markAcross(pos, swap.change)
 
 proc deleteAllLines*(b: TextBuffer): Result[(), string] =
   ## Delete every line, leaving one empty line. The empty line is added below
@@ -774,21 +866,14 @@ proc replaceAllLines*(
   if requireExact and diff.coarse:
     return err("Replacement is too far from the buffer for a minimal edit")
 
-  # Top down, carrying what the hunks above added or removed, since `start`
-  # indexes the old text; that way the undo entry takes the top-most changed
-  # line.
+  # All hunks as one change, so the side arrays shift once for the lot.
   let txr = withTransaction(b, description):
-    var offset = 0
-    for hunk in diff.hunks:
-      # A coarse hunk puts unrelated text on the lines it covers, so what was
-      # attached to them goes with the old lines; a line-by-line script keeps
-      # the rows both sides share.
-      let r = b.replaceLines(
-        hunk.start + offset, hunk.delete, hunk.insert, keepRows = not diff.coarse
-      )
-      if r.isErr:
-        return err(r.error)
-      offset += hunk.insert.len - hunk.delete
+    # A coarse hunk puts unrelated text on the lines it covers, so what was
+    # attached to them goes with the old lines; a line-by-line script keeps the
+    # rows both sides share.
+    let r = b.replaceLineSpans(diff.hunks, keepRows = not diff.coarse)
+    if r.isErr:
+      return err(r.error)
   if txr.isErr:
     return err(txr.error)
 

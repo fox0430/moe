@@ -74,6 +74,23 @@ proc undoable(state: auto): auto =
     modified: state.modified,
   )
 
+proc decorate(b: TextBuffer, rng: var Rand) =
+  var diagnostics: seq[BufferDiagnostic]
+  for i in 0 ..< b.len:
+    case rng.rand(5)
+    of 0:
+      b.setLineMarker(i, LineMarkerKind.GitChanged)
+    of 1:
+      b.toggleBookmark(i)
+    of 2:
+      if i + 1 < b.len:
+        discard b.foldState.addFold(i, i + 1)
+    of 3:
+      diagnostics.add BufferDiagnostic(startLine: i, endLine: i, severity: bdsError)
+    else:
+      discard
+  b.setDiagnostics(dsrcSyntaxCheck, diagnostics)
+
 suite "Buffer - replaceLines":
   test "A span is swapped for a longer one":
     let buf = bufferOf("a", "b", "c", "d")
@@ -277,23 +294,6 @@ suite "Buffer - replaceLines against the per-line sequence":
       for _ in overlap ..< delete:
         check b.deleteLine(start + overlap).isOk
 
-  proc decorate(b: TextBuffer, rng: var Rand) =
-    var diagnostics: seq[BufferDiagnostic]
-    for i in 0 ..< b.len:
-      case rng.rand(5)
-      of 0:
-        b.setLineMarker(i, LineMarkerKind.GitChanged)
-      of 1:
-        b.toggleBookmark(i)
-      of 2:
-        if i + 1 < b.len:
-          discard b.foldState.addFold(i, i + 1)
-      of 3:
-        diagnostics.add BufferDiagnostic(startLine: i, endLine: i, severity: bdsError)
-      else:
-        discard
-    b.setDiagnostics(dsrcSyntaxCheck, diagnostics)
-
   test "The two agree on content and on every attachment":
     var rng = initRand(20260914)
     for iteration in 0 ..< 3000:
@@ -356,9 +356,9 @@ suite "Buffer - replaceLines against the per-line sequence":
       check (bulk.contents, bulk.markers, bulk.modifiedLines) ==
         (perLine.contents, perLine.markers, perLine.modifiedLines)
 
-suite "Buffer - replaceAllLines records one change per hunk":
-  ## The guard against the quadratic rewrite: a hunk that used to cost one
-  ## recorded change (and one side-array shift) per line now costs one.
+suite "Buffer - replaceAllLines records one change for all its hunks":
+  ## The guard against the quadratic rewrite: the hunks used to cost one
+  ## recorded change (and one side-array shift) each, and now cost one in all.
   test "A coarse whole-file rewrite is a single change":
     var lines = newSeq[string](2000)
     for i in 0 ..< lines.len:
@@ -372,8 +372,9 @@ suite "Buffer - replaceAllLines records one change per hunk":
     check not diff.get.exact
     let entry = buf.undoStack.peekLast
     check entry.kind == ckTransaction
-    check entry.transactionChanges.len == diff.get.hunks.len
-    check entry.transactionChanges.allIt(it.kind == ckReplaceLines)
+    check entry.transactionChanges.len == 1
+    check entry.transactionChanges[0].kind == ckReplaceLines
+    check entry.transactionChanges[0].replaceLinesHunks.len == diff.get.hunks.len
 
   test "Undo after a whole-file filter brings the folds and bookmarks back":
     # What `:%!filter` does: a rewrite far enough from the buffer to be coarse,
@@ -402,10 +403,158 @@ suite "Buffer - replaceAllLines records one change per hunk":
     check buf.getLineMarker(30) == some(LineMarkerKind.GitChanged)
     check buf.diagnosticMarker(30).isNone
 
-  test "An exact script is one change per hunk":
+  test "An exact script is one change holding every hunk":
     let buf = bufferOf("a", "b", "c", "d", "e")
     let diff = buf.replaceAllLines(["a", "B", "c", "D", "e"])
     check diff.get.exact
     let entry = buf.undoStack.peekLast
-    check entry.transactionChanges.len == diff.get.hunks.len
-    check entry.transactionChanges.allIt(it.kind == ckReplaceLines)
+    check entry.transactionChanges.len == 1
+    check entry.transactionChanges[0].replaceLinesHunks.len == diff.get.hunks.len
+
+suite "Buffer - replaceLineSpans":
+  proc span(start, delete: int, insert: varargs[string]): LineEdit =
+    LineEdit(start: start, delete: delete, insert: insert.toSeq)
+
+  test "Each span is swapped, indexed by the text before the change":
+    let buf = bufferOf("a", "b", "c", "d", "e")
+    check buf.replaceLineSpans([span(0, 1, "1", "2"), span(2, 2, "3"), span(5, 0, "4")]).isOk
+    check buf.contents == @["1", "2", "b", "3", "e", "4"]
+
+  test "All the spans are one undo entry":
+    let buf = bufferOf("a", "b", "c", "d")
+    check buf.replaceLineSpans([span(0, 1, "x", "y"), span(2, 1, "z", "w")]).isOk
+    check buf.undoStack.len == 1
+    check buf.undo().isOk
+    check buf.contents == @["a", "b", "c", "d"]
+    check buf.redo().isOk
+    check buf.contents == @["x", "y", "b", "z", "w", "d"]
+
+  test "Spans out of order or overlapping are refused":
+    let buf = bufferOf("a", "b", "c", "d")
+    check buf.replaceLineSpans([span(2, 1, "x"), span(0, 1, "y")]).isErr
+    check buf.replaceLineSpans([span(0, 2, "x"), span(1, 1, "y")]).isErr
+    check buf.contents == @["a", "b", "c", "d"]
+    check buf.undoStack.len == 0
+
+  test "A line separator in any span is refused before anything is written":
+    let buf = bufferOf("a", "b", "c")
+    check buf.replaceLineSpans([span(0, 1, "x"), span(2, 1, "y\nz")]).isErr
+    check buf.contents == @["a", "b", "c"]
+
+  test "Spans swapped at once agree with one replaceLines each":
+    var rng = initRand(20261110)
+    for iteration in 0 ..< 2000:
+      let backend = [GapBuffer, SqrtDecomp, Rope, PieceTable][iteration mod 4]
+      let
+        oldLen = 1 + rng.rand(12)
+        keepRows = rng.rand(3) > 0
+      var lines: seq[string]
+      for i in 0 ..< oldLen:
+        lines.add "line " & $i
+      var
+        spans: seq[LineEdit]
+        at = 0
+        newLen = oldLen
+        emptiedOnTheWay = false
+      while at <= oldLen and rng.rand(3) > 0:
+        let start = at + rng.rand(min(2, oldLen - at))
+        let delete = rng.rand(min(3, oldLen - start))
+        var insert: seq[string]
+        for _ in 0 ..< rng.rand(3):
+          insert.add "new " & $rng.rand(100)
+        spans.add LineEdit(start: start, delete: delete, insert: insert)
+        newLen += insert.len - delete
+        if newLen == 0:
+          emptiedOnTheWay = true
+        at = start + delete
+        if delete == 0:
+          # Two insertions at one row would read the same either way round.
+          inc at
+      var changes = 0
+      for s in spans:
+        if s.delete > 0 or s.insert.len > 0:
+          inc changes
+      # Neither path may empty the buffer, the reference not even on the way,
+      # and nothing to change records nothing to compare.
+      if changes == 0 or emptiedOnTheWay:
+        continue
+      # Giving the old rows up empties the buffer in the reference when a span
+      # takes all of it.
+      if not keepRows and spans.anyIt(it.delete == oldLen):
+        continue
+
+      let
+        bulk = bufferOf(backend, lines)
+        each = bufferOf(backend, lines)
+      var
+        bulkRng = initRand(iteration)
+        eachRng = initRand(iteration)
+      bulk.decorate(bulkRng)
+      each.decorate(eachRng)
+      let before = bulk.state
+
+      check bulk.replaceLineSpans(spans, keepRows).isOk
+      var offset = 0
+      for s in spans:
+        check each.replaceLines(s.start + offset, s.delete, s.insert, keepRows).isOk
+        offset += s.insert.len - s.delete
+      check bulk.state == each.state
+      check bulk.undoStack.len == 1
+      let afterEdit = bulk.state
+
+      check bulk.undo().isOk
+      while each.undoStack.len > 0:
+        check each.undo().isOk
+      check bulk.state.undoable == before.undoable
+      check each.state.undoable == before.undoable
+
+      check bulk.redo().isOk
+      while each.redoStack.len > 0:
+        check each.redo().isOk
+      check bulk.state == afterEdit
+      check each.state == afterEdit
+
+  proc markerArray(b: TextBuffer): seq[Option[LineMarkerKind]] =
+    for i in 0 ..< b.lineMarkers.len:
+      result.add b.lineMarkers[i]
+
+  test "Following a change back takes all its spans back at once":
+    # Undo restores the side arrays wholesale, but a caller moving them back
+    # across a change itself must land where taking its spans back one by one
+    # does.
+    var rng = initRand(7)
+    for iteration in 0 ..< 500:
+      var lines: seq[string]
+      for i in 0 ..< 16:
+        lines.add "line " & $i
+      var
+        spans: seq[LineEdit]
+        at = 0
+      while at < 16 and rng.rand(3) > 0:
+        let start = at + rng.rand(min(2, 16 - at))
+        let delete = rng.rand(min(3, 16 - start))
+        var insert: seq[string]
+        for _ in 0 ..< rng.rand(3):
+          insert.add "new " & $rng.rand(100)
+        spans.add LineEdit(start: start, delete: delete, insert: insert)
+        at = start + max(delete, 1)
+      let
+        bulk = bufferOf(GapBuffer, lines)
+        each = bufferOf(GapBuffer, lines)
+      for i in 0 ..< 16:
+        if rng.rand(1) == 0:
+          bulk.setLineMarker(i, LineMarkerKind.GitChanged)
+          each.setLineMarker(i, LineMarkerKind.GitChanged)
+      if bulk.replaceLineSpans(spans).isErr or bulk.undoStack.len == 0:
+        continue
+      var offset = 0
+      for s in spans:
+        check each.replaceLines(s.start + offset, s.delete, s.insert).isOk
+        offset += s.insert.len - s.delete
+      check bulk.markerArray == each.markerArray
+
+      bulk.followChange(bulk.undoStack.peekLast, {efLineArrays}, undone = true)
+      for i in countdown(each.undoStack.len - 1, 0):
+        each.followChange(each.undoStack[i], {efLineArrays}, undone = true)
+      check bulk.markerArray == each.markerArray
+      check bulk.modifiedLines == each.modifiedLines

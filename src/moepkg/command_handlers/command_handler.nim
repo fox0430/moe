@@ -509,22 +509,29 @@ proc executeSubstitute*(
   if flags.countOnly:
     return buffer.countSubstitutions(pattern, match, rangeStart .. rangeEnd, flags)
 
-  var replaceCount = 0
+  var
+    replaceCount = 0
+    lastLine = rangeStart
+    shift = 0
+    spans: seq[LineEdit]
 
   let parsed = parseReplacement(replacement)
+  for s in buffer.substitutions(
+    rangeStart .. rangeEnd, pattern, parsed, flags.ignoreCase, flags.global, match
+  ):
+    replaceCount += s.count
+    # The last line it makes, below what the lines above added.
+    lastLine = s.line + shift + s.lines.high
+    shift += s.lines.len - 1
+    spans.add LineEdit(start: s.line, delete: 1, insert: s.lines)
 
+  # All lines as one change, so the rows below shift once, not once per line.
   let txr =
     try:
       withTransaction(buffer, "substitute"):
-        for lineIdx in rangeStart .. rangeEnd:
-          let (newLine, count) = buffer.getLine(lineIdx).substituteMatches(
-              pattern, parsed, flags.ignoreCase, flags.global, match
-            )
-          if count > 0:
-            replaceCount += count
-            let replaceResult = buffer.replaceLine(lineIdx, newLine)
-            if replaceResult.isErr:
-              return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
+        let replaceResult = buffer.replaceLineSpans(spans)
+        if replaceResult.isErr:
+          return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
     except TransactionRollbackError as exc:
       # Surface a failed rollback (untrustworthy buffer) as a status message.
       return HandlerResult(
@@ -536,7 +543,9 @@ proc executeSubstitute*(
   if replaceCount == 0:
     return HandlerResult(kind: hrError, errorMessage: "Pattern not found: " & pattern)
 
-  HandlerResult(kind: hrSubstitute, hrSubstituteCount: replaceCount)
+  HandlerResult(
+    kind: hrSubstitute, hrSubstituteCount: replaceCount, hrSubstituteLastLine: lastLine
+  )
 
 proc executeDelete*(
     handler: CommandModeHandler,

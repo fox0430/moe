@@ -55,6 +55,7 @@ when not defined(moe.embedded):
   import types/terminal_mode_types
 
 from lsp/protocol/types import SemanticTokensLegend
+from command_line/range_parser import ExLineRange
 from cursor_util import clampCursorToLastChar, adjustCursorAfterInsertExit
 from unicode_utils import charLen
 
@@ -1007,18 +1008,21 @@ type
     bottomLine*: int # Bottom visible line when hints were requested
     isValid*: bool # Whether the cache is valid
 
-  SubstitutePreviewKey* = object ## What a substitute preview was made from
+  SubstitutePreviewKey* = object
+    ## What a substitute preview was made from, over its starting text.
+    range*: ExLineRange # Unresolved, as typed
     pattern*: string
     replacement*: string
     global*: bool # Whether every match in a line was replaced
-    lines*: Slice[int]
     ignoreCase*: bool
     match*: SearchMatch
+    version*: int # The buffer's contentVersion once the preview was written
 
   SubstitutePreview* = object
     ## State for live substitute preview (like Vim's inccommand)
     isActive*: bool # Whether preview is currently active
-    originalLines*: seq[string] # Snapshot of original buffer content
+    buffer*: TextBuffer # The buffer the preview writes
+    swap*: Option[NoUndoSwap] # What the preview wrote; none when restored
     applied*: SubstitutePreviewKey # What the buffer shows, empty when restored
     originalCursor*: BufferPosition # Cursor position when preview started
     originalView*: ViewState # What the window showed when preview started

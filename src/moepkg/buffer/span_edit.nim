@@ -78,6 +78,14 @@ func reversed*(edit: SpanEdit): SpanEdit =
     rowsAtStart: edit.rowsAtStart,
   )
 
+func goesTopDown*(edits: openArray[SpanEdit]): bool =
+  ## Whether `edits`, taken in order, go top down: each starts at or below
+  ## where the one before it ended.
+  for i in 1 ..< edits.len:
+    if edits[i].start < edits[i - 1].newEnd:
+      return false
+  true
+
 func isInsertion(edit: SpanEdit): bool =
   edit.oldEnd == edit.start
 

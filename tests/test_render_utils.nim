@@ -535,28 +535,28 @@ suite "getWrapCount":
     check getWrapCount(cache, buf, 0, 5, 4) != 999
     check cache.bufferContentVersion == buf.contentVersion
 
-  test "invalidates after replaceLineNoUndo (changeSeq unchanged)":
+  test "invalidates after a NoUndo swap of a line (changeSeq unchanged)":
     var buf = newTextBuffer("aaa bbb ccc")
     let cache = WrapCountCache()
     discard getWrapCount(cache, buf, 0, 5, 4)
     cache.counts[0] = 999
-    buf.replaceLineNoUndo(0, "X Y")
+    discard buf.replaceLinesNoUndo(0, 1, ["X Y"])
     check getWrapCount(cache, buf, 0, 5, 4) != 999
 
-  test "invalidates after insertLineNoUndo (changeSeq unchanged)":
+  test "invalidates after a NoUndo swap that adds a line (changeSeq unchanged)":
     var buf = newTextBuffer("aaa bbb ccc")
     let cache = WrapCountCache()
     discard getWrapCount(cache, buf, 0, 5, 4)
     cache.counts[0] = 999
-    buf.insertLineNoUndo(0, "X Y")
+    discard buf.replaceLinesNoUndo(0, 0, ["X Y"])
     check getWrapCount(cache, buf, 0, 5, 4) != 999
 
-  test "invalidates after deleteLineNoUndo (changeSeq unchanged)":
+  test "invalidates after a NoUndo swap that drops a line (changeSeq unchanged)":
     var buf = newTextBuffer("aaa bbb ccc\nXXX")
     let cache = WrapCountCache()
     discard getWrapCount(cache, buf, 0, 5, 4)
     cache.counts[0] = 999
-    buf.deleteLineNoUndo(0)
+    discard buf.replaceLinesNoUndo(0, 1, [])
     check getWrapCount(cache, buf, 0, 5, 4) != 999
 
   test "invalidates on viewportWidth change":
