@@ -22,9 +22,9 @@
 ##
 ## The companion `help_generator.nim` renders the same `HelpEntry` data into
 ## TUI-formatted plain text (consumed by `help_viewer.nim`'s
-## `HelpSentences`). This module is a parallel renderer that emits GitHub
+## `HelpLines`). This module is a parallel renderer that emits GitHub
 ## flavored markdown tables with `<kbd>` wrapping. It does not participate
-## in the TUI help text and is intentionally kept out of `HelpSentences` so
+## in the TUI help text and is intentionally kept out of `HelpLines` so
 ## that the editor binary is not pulled into doc-generation concerns.
 
 import std/[options, strutils]

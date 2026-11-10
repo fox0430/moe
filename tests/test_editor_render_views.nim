@@ -2311,7 +2311,7 @@ suite "advanceLayoutForFrame - viewer selection drives the window viewport":
 
     let helpState = HelpViewerState(selectedIndex: 35)
     for i in 0 ..< 40:
-      helpState.items.add("help" & $i)
+      helpState.items.add(textLine("help" & $i))
     e.windowManager.windows[0].modeState = ModeState(kind: mskHelp, help: helpState)
 
     e.advanceLayoutForFrame(buffer, false)

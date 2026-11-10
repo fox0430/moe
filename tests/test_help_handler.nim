@@ -364,8 +364,8 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 
     check result.kind == hvrHandled
     check helpState.selectedIndex > 0
-    check helpState.items[helpState.selectedIndex].len >= 2
-    check helpState.items[helpState.selectedIndex][0 .. 1] == "# "
+    check helpState.items[helpState.selectedIndex].text.len >= 2
+    check helpState.items[helpState.selectedIndex].text[0 .. 1] == "# "
 
   test "{ jumps to the previous top-level section":
     let helpState = newHelpViewerState()
@@ -376,8 +376,8 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 
     check result.kind == hvrHandled
     check helpState.selectedIndex < startIdx
-    check helpState.items[helpState.selectedIndex].len >= 2
-    check helpState.items[helpState.selectedIndex][0 .. 1] == "# "
+    check helpState.items[helpState.selectedIndex].text.len >= 2
+    check helpState.items[helpState.selectedIndex].text[0 .. 1] == "# "
 
   test "} at last section stays on last section":
     let helpState = newHelpViewerState()
@@ -385,7 +385,7 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
     # Find the last top-level "# " line.
     var lastSectionIdx = -1
     for i, line in helpState.items:
-      if line.len >= 2 and line[0 .. 1] == "# ":
+      if line.kind == hlkSection:
         lastSectionIdx = i
     check lastSectionIdx >= 0
 

@@ -21,14 +21,58 @@
 ##
 ## Split out from `help_viewer` so modules that only need its State type
 ## (notably `types` and its importers) do not transitively pull in
-## `help_generator` (and its large generated `HelpSentences` const) via the
+## `help_generator` (and its large generated `HelpLines` const) via the
 ## full `help_viewer` module.
+
+import std/strutils
 
 import ../primitives
 import list_viewer_types
 export list_viewer_types
 
-type HelpViewerState* = ref object of ListViewer[string] ## `items` holds the help lines.
-  searchQuery*: string # Current search query
-  searchDirection*: SearchDirection # The way the search for it went
-  lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight
+type
+  HelpLineKind* = enum
+    hlkText ## Prose, or a blank line
+    hlkSection ## "# Heading", where `[` and `]` stop
+    hlkSubsection ## "## Heading"
+    hlkEntry ## "keys - description"
+
+  HelpLine* = object
+    kind*: HelpLineKind
+    text*: string
+    keyFirst*, keyEnd*: int ## Byte range of the keys in an entry's `text`
+
+  HelpViewerState* = ref object of ListViewer[HelpLine]
+    searchQuery*: string # Current search query
+    searchDirection*: SearchDirection # The way the search for it went
+    lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight
+
+func oneRow(text: string): string =
+  ## `text`, which must not span rows: each help line is one buffer row.
+  doAssert '\n' notin text, "a help line spans rows: " & text.escape
+  text
+
+func textLine*(text: string): HelpLine =
+  HelpLine(kind: hlkText, text: text.oneRow)
+
+func section*(title: string): HelpLine =
+  HelpLine(kind: hlkSection, text: oneRow("# " & title))
+
+func subsection*(title: string): HelpLine =
+  HelpLine(kind: hlkSubsection, text: oneRow("## " & title))
+
+func entryLine*(indent: int, keys: string, width: int, description: string): HelpLine =
+  ## `keys` padded to `width`, then " - " and `description`.
+  HelpLine(
+    kind: hlkEntry,
+    text: oneRow(' '.repeat(indent) & keys.alignLeft(width) & " - " & description),
+    keyFirst: indent,
+    keyEnd: indent + keys.len,
+  )
+
+func prose*(text: string): seq[HelpLine] =
+  ## One text line per line of `text`, without the one after a final newline.
+  for line in text.splitLines:
+    result.add textLine(line)
+  if text.endsWith('\n'):
+    result.setLen(result.len - 1)

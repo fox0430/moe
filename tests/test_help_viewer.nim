@@ -17,8 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, sequtils, strutils]
-import ../src/moepkg/[help_viewer, buffer, primitives]
+import std/[unittest, options, sequtils, strutils, tables]
+from std/unicode import runeLen
+import ../src/moepkg/[help_viewer, buffer, primitives, color, highlight]
+import pkg/celina
+
+proc texts(state: HelpViewerState): seq[string] =
+  state.items.mapIt(it.text)
 
 suite "HelpViewer - State creation":
   test "newHelpViewerState creates state with lines":
@@ -48,14 +53,96 @@ suite "HelpViewer - State creation":
     let state = newHelpViewerState()
 
     check state.items.len > 0
-    check state.items[^1].len > 0
+    check state.texts[^1].len > 0
+
+  test "no help line spans rows":
+    check HelpLines.allIt('\n' notin it.text)
+
+  test "a help line with a newline in it is refused":
+    expect AssertionDefect:
+      discard textLine("a\nb")
+    expect AssertionDefect:
+      discard section("a\nb")
+    expect AssertionDefect:
+      discard subsection("a\nb")
+    expect AssertionDefect:
+      discard entryLine(0, "k", 1, "a\nb")
+
+  test "prose splits its text into one line per row":
+    check prose("a\nb\n").mapIt(it.text) == @["a", "b"]
+
+  test "withoutTrailingBlanks drops only the blanks at the end":
+    let lines = @[textLine(""), textLine("a"), textLine(""), textLine("")]
+    check lines.withoutTrailingBlanks.mapIt(it.text) == @["", "a"]
+    check @[textLine("")].withoutTrailingBlanks.len == 0
+
+suite "HelpViewer - Highlight":
+  proc colorsOf(items: seq[HelpLine]): seq[seq[EditorColorPairIndex]] =
+    ## Color of each column of each rendered line.
+    let buf = HelpViewerState(items: items).createHelpTextBuffer()
+    for row in 0 ..< buf.len:
+      var cols: seq[EditorColorPairIndex]
+      for col in 0 ..< buf.getLine(row).runeLen:
+        cols.add buf.highlight.getColorPair(row, col)
+      result.add cols
+
+  const
+    K = EditorColorPairIndex.keyword
+    D = EditorColorPairIndex.default
+    H = EditorColorPairIndex.helpViewerSectionHeader
+
+  test "a section heading is colored as a whole, after the margin":
+    check colorsOf(@[section("Exit"), subsection("Sub")]) ==
+      @[@[D] & H.repeat(6), @[D] & H.repeat(6)]
+
+  test "the key column of an entry is a keyword":
+    check colorsOf(@[entryLine(0, "gg", 2, "Top")]) ==
+      @[@[D] & K.repeat(2) & D.repeat(6)]
+
+  test "a key ending in a dash stays in the key column":
+    check colorsOf(@[entryLine(0, "Ctrl-w -", 8, "Down")]) ==
+      @[@[D] & K.repeat(8) & D.repeat(7)]
+
+  test "an indented key is colored from its first character":
+    check colorsOf(@[entryLine(2, "a, j", 4, "Keys")]) ==
+      @[D.repeat(3) & K.repeat(4) & D.repeat(7)]
+
+  test "a # key is an entry, not a heading":
+    check colorsOf(@[entryLine(0, "#", 2, "Back")]) == @[@[D, K] & D.repeat(8)]
+
+  test "prose with a dash in it stays plain":
+    check colorsOf(@[textLine("Note - see :help")]) == @[D.repeat(17)]
+
+  test "columns count characters, not bytes":
+    check colorsOf(@[entryLine(0, "é", 1, "ü")]) == @[@[D, K] & D.repeat(4)]
+
+  test "colors leave the background to the theme":
+    # A background taken from the theme now would outlive a theme change.
+    let buf = HelpViewerState(items: @[section("Exit")]).createHelpTextBuffer()
+    for seg in buf.highlight.colorSegments:
+      check seg.style.bg.kind == Default
+
+  test "segments tile every line in order":
+    # The lookup takes the last segment starting at or before a column, so a
+    # gap would take the color before it.
+    let buf = newHelpViewerState().createHelpTextBuffer()
+    var nextColumn: Table[int, int]
+    for seg in buf.highlight.colorSegments:
+      check seg.firstRow == seg.lastRow
+      check seg.firstColumn == nextColumn.getOrDefault(seg.firstRow, 0)
+      nextColumn[seg.firstRow] = seg.lastColumn + 1
+    for row in 0 ..< buf.len:
+      check nextColumn.getOrDefault(row, 0) == buf.getLine(row).runeLen
+
+  test "the help buffer has no line numbers, as Vim's help window":
+    check newHelpViewerState().createHelpTextBuffer().isUtilityBuffer
 
 suite "HelpViewer - Line access":
   test "getLine returns line at valid index":
     let state = newHelpViewerState()
 
     let line = state.getLine(0)
-    check line == state.items[0]
+    check line == state.texts[0]
 
   test "getLine returns empty string for negative index":
     let state = newHelpViewerState()
@@ -149,14 +236,14 @@ suite "HelpViewer - Half page navigation":
 suite "HelpViewer - Section navigation":
   test "moveToNextSection jumps to next '# ' header":
     let state = newHelpViewerState()
-    # state.items[0] is "# Exiting" — the first top-level section header.
-    check state.items[0].startsWith("# ")
+    # state.texts[0] is "# Exiting" — the first top-level section header.
+    check state.texts[0].startsWith("# ")
     check state.selectedIndex == 0
 
     state.moveToNextSection()
     check state.selectedIndex > 0
-    check state.items[state.selectedIndex].startsWith("# ")
-    check not state.items[state.selectedIndex].startsWith("## ")
+    check state.texts[state.selectedIndex].startsWith("# ")
+    check not state.texts[state.selectedIndex].startsWith("## ")
 
   test "moveToNextSection skips '## ' sub-section headers":
     let state = newHelpViewerState()
@@ -164,7 +251,7 @@ suite "HelpViewer - Section navigation":
     # Land on a "## " sub-section line and verify the next jump goes to a
     # top-level "# " section, not the next "## ".
     var subIdx = -1
-    for i, line in state.items:
+    for i, line in state.texts:
       if line.startsWith("## "):
         subIdx = i
         break
@@ -174,15 +261,24 @@ suite "HelpViewer - Section navigation":
     state.moveToNextSection()
 
     if state.selectedIndex != subIdx:
-      check state.items[state.selectedIndex].startsWith("# ")
-      check not state.items[state.selectedIndex].startsWith("## ")
+      check state.texts[state.selectedIndex].startsWith("# ")
+      check not state.texts[state.selectedIndex].startsWith("## ")
+
+  test "moveToNextSection does not stop at the # key of Normal mode":
+    let state = newHelpViewerState()
+    let key = state.items.findIt(it.kind == hlkEntry and it.text.startsWith("# "))
+    check key >= 0
+    state.selectedIndex = key - 1
+    state.moveToNextSection()
+    check state.selectedIndex != key
+    check state.items[state.selectedIndex].kind == hlkSection
 
   test "moveToNextSection stays put when no further section exists":
     let state = newHelpViewerState()
 
     # Find the last top-level section, then move past it.
     var lastSectionIdx = -1
-    for i, line in state.items:
+    for i, line in state.texts:
       if line.startsWith("# ") and not line.startsWith("## "):
         lastSectionIdx = i
     check lastSectionIdx >= 0
@@ -197,7 +293,7 @@ suite "HelpViewer - Section navigation":
     # Find the second top-level section and jump back from it.
     var firstIdx = -1
     var secondIdx = -1
-    for i, line in state.items:
+    for i, line in state.texts:
       if line.startsWith("# ") and not line.startsWith("## "):
         if firstIdx == -1:
           firstIdx = i
@@ -222,7 +318,7 @@ suite "HelpViewer - Section navigation":
     let state = newHelpViewerState()
 
     var subIdx = -1
-    for i, line in state.items:
+    for i, line in state.texts:
       if line.startsWith("## "):
         subIdx = i
         break
@@ -232,8 +328,8 @@ suite "HelpViewer - Section navigation":
     state.moveToPreviousSection()
 
     check state.selectedIndex < subIdx
-    check state.items[state.selectedIndex].startsWith("# ")
-    check not state.items[state.selectedIndex].startsWith("## ")
+    check state.texts[state.selectedIndex].startsWith("# ")
+    check not state.texts[state.selectedIndex].startsWith("## ")
 
 suite "HelpViewer - Search query":
   test "setSearchQuery sets the query":
@@ -274,7 +370,7 @@ suite "HelpViewer - Line matching":
 
     # Find a line containing "Normal mode"
     var foundIndex = -1
-    for i, line in state.items:
+    for i, line in state.texts:
       if "Normal mode" in line:
         foundIndex = i
         break
@@ -287,7 +383,7 @@ suite "HelpViewer - Line matching":
     state.setSearchQuery("normal MODE", Forward)
 
     var foundIndex = -1
-    for i, line in state.items:
+    for i, line in state.texts:
       if "Normal mode" in line:
         foundIndex = i
         break
@@ -327,8 +423,8 @@ suite "HelpViewer - Search forward":
     let result = state.searchForward()
     check result.isSome
     check state.selectedIndex > 0
-    check ":w" in state.items[state.selectedIndex].toLowerAscii or
-      ":W" in state.items[state.selectedIndex]
+    check ":w" in state.texts[state.selectedIndex].toLowerAscii or
+      ":W" in state.texts[state.selectedIndex]
 
   test "searchForward wraps around to beginning":
     let state = newHelpViewerState()
@@ -436,51 +532,51 @@ suite "HelpViewer - Command mode rendering (snapshot)":
 
   test "Command mode header is present":
     let state = newHelpViewerState()
-    check state.items.contains("# Command mode")
+    check state.texts.contains("# Command mode")
 
   test "head group 1 (jump/shell/bg/man) is aligned to width 18":
     let state = newHelpViewerState()
-    check state.items.contains("number             - Jump to line number; e.g. :10")
-    check state.items.contains(
+    check state.texts.contains("number             - Jump to line number; e.g. :10")
+    check state.texts.contains(
       "$ or . or +N or -N - Jump to an address: $ last line, . current line, +N / -N relative; e.g. :.+3"
     )
-    check state.items.contains("! shell command    - Shell command execution")
-    check state.items.contains(
+    check state.texts.contains("! shell command    - Shell command execution")
+    check state.texts.contains(
       "bg                 - Pause the editor and show the recent terminal output"
     )
 
   test "head group 2 (:e family) is aligned to width 16":
     let state = newHelpViewerState()
-    check state.items.contains("e filename       - Open file")
-    check state.items.contains(
+    check state.texts.contains("e filename       - Open file")
+    check state.texts.contains(
       "e                - Reload current file (error if unsaved changes)"
     )
-    check state.items.contains("e! filename      - Open file (discard unsaved changes)")
-    check state.items.contains("saveas filename  - Write to filename and edit it")
-    check state.items.contains(
+    check state.texts.contains("e! filename      - Open file (discard unsaved changes)")
+    check state.texts.contains("saveas filename  - Write to filename and edit it")
+    check state.texts.contains(
       "saveas! filename - Write to filename even if it exists, and edit it"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "w filename       - Write a copy to filename; a buffer without a name takes it"
     )
 
   test "head group 3 (:delete family) is aligned to width 21":
     let state = newHelpViewerState()
-    check state.items.anyIt(
+    check state.texts.anyIt(
       it.startsWith("%s/keyword1/keyword2/ - Replace regex matches")
     )
-    check state.items.contains(
+    check state.texts.contains(
       "delete                - Delete current line and copy to register"
     )
 
   test "head group 4 (buffers/windows) is aligned to width 17":
     let state = newHelpViewerState()
-    check state.items.contains("ls                - Display all buffers")
-    check state.items.contains("bd [number|name]  - Delete buffer")
-    check state.items.contains(
+    check state.texts.contains("ls                - Display all buffers")
+    check state.texts.contains("bd [number|name]  - Delete buffer")
+    check state.texts.contains(
       "bd! [number|name] - Delete buffer, discarding unsaved changes"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "filetree path     - Toggle FileTree sidebar with specified root path"
     )
 
@@ -490,28 +586,28 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     # segments for the howtouse.md renderer; `toPlainText` strips the
     # code-span markers before the TUI sees the line, so the rendered
     # prose has no `` ` `` glyphs.
-    check state.items.contains("theme themeName - Change color theme; e.g. theme dark")
-    check state.items.contains(
+    check state.texts.contains("theme themeName - Change color theme; e.g. theme dark")
+    check state.texts.contains(
       "noh             - Hide search highlights until the next search"
     )
-    check state.items.contains("stripwhitespace - Delete trailing spaces")
+    check state.texts.contains("stripwhitespace - Delete trailing spaces")
 
   test "bool set options block is aligned to the widest entry":
     let state = newHelpViewerState()
     # Short entry must be padded to match the longest entry
     # (`set highlightgitconflicttwocolor / set nohighlightgitconflicttwocolor (hgctc/nohgctc)`).
-    check state.items.contains(
+    check state.texts.contains(
       "set number / set nonumber (nu/nonu)                                                   - Show/hide line numbers"
     )
     # `set wrap` / `set scrollbar` have no short alias and so render without parens.
-    check state.items.contains(
+    check state.texts.contains(
       "set wrap / set nowrap                                                                 - Enable/disable line wrap"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "set scrollbar / set noscrollbar                                                       - Enable/disable scrollbar"
     )
     # Longest entry sets the width; only one space before the dash.
-    check state.items.contains(
+    check state.texts.contains(
       "set highlightgitconflicttwocolor / set nohighlightgitconflicttwocolor (hgctc/nohgctc) - Use two-color (ours/theirs) conflict scheme; disable for single-color fallback"
     )
 
@@ -520,49 +616,49 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     # Example values now come from the canonical SetOptionTable (which also
     # feeds the executeSet error messages — so they say "scrollbarwidth=1" /
     # "tabstop=4" instead of the older help-only "=2").
-    check state.items.contains(
+    check state.texts.contains(
       "set scrollbarwidth=number       - Change scrollbar width (0 = hidden); e.g. set scrollbarwidth=1"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "set tabstop=number (ts)         - Change tab stop width; e.g. set tabstop=4"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "set shiftwidth=number (sw)      - Change indent width; e.g. set shiftwidth=4"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "set softtabstop=number (sts)    - Change soft tab stop width; e.g. set softtabstop=4"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "set scrollairdrag=number (sad)  - Change smooth scroll air drag; e.g. set scrollairdrag=2.0"
     )
 
   test "trailing group (build/lspfold/lspformat) is aligned to width 9":
     let state = newHelpViewerState()
-    check state.items.contains("build     - Build the current buffer")
-    check state.items.contains("lspfold   - LSP Folding Range")
-    check state.items.contains("lspformat - LSP Document Formatting")
+    check state.texts.contains("build     - Build the current buffer")
+    check state.texts.contains("lspfold   - LSP Folding Range")
+    check state.texts.contains("lspformat - LSP Document Formatting")
 
   test "trailing group (lsprestart/lspcallhierarchy) is aligned to width 24":
     let state = newHelpViewerState()
-    check state.items.contains(
+    check state.texts.contains(
       "lsprestart               - Restart the current LSP server"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "lspcallhierarchyincoming - Show incoming calls (callers) at cursor"
     )
 
   test "trailing group (terminal) is aligned to width 16":
     let state = newHelpViewerState()
-    check state.items.contains(
+    check state.texts.contains(
       "terminal         - Open terminal emulator (default shell)"
     )
-    check state.items.contains("terminal command - Run command in terminal emulator")
+    check state.texts.contains("terminal command - Run command in terminal emulator")
 
   test "trailing single-entry groups render without padding":
     let state = newHelpViewerState()
-    check state.items.contains("help - Open this help")
-    check state.items.contains("quickrun - Quick run")
-    check state.items.contains(
+    check state.texts.contains("help - Open this help")
+    check state.texts.contains("quickrun - Quick run")
+    check state.texts.contains(
       "conflictprev - Jump to previous git merge conflict block"
     )
 
@@ -571,16 +667,16 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     # The last line of a section, a blank line, then the next subsection header
     # must appear consecutively in the rendered output.
     let idx =
-      state.items.find("conflictprev - Jump to previous git merge conflict block")
+      state.texts.find("conflictprev - Jump to previous git merge conflict block")
     check idx >= 0
-    check state.items[idx + 1] == ""
-    check state.items[idx + 2] == "## Editing the command line"
-    let last = state.items.find(
+    check state.texts[idx + 1] == ""
+    check state.texts[idx + 2] == "## Editing the command line"
+    let last = state.texts.find(
       "Ctrl-p                    - Select the previous completion, or recall the next older history entry"
     )
     check last > idx
-    check state.items[last + 1] == ""
-    check state.items[last + 2] == "## Runtime Key Mapping"
+    check state.texts[last + 1] == ""
+    check state.texts[last + 2] == "## Runtime Key Mapping"
 
 suite "HelpViewer - Mode sections (snapshot)":
   ## Snapshot assertions for the per-mode `render*Section` procs in
@@ -591,93 +687,93 @@ suite "HelpViewer - Mode sections (snapshot)":
 
   test "# Exiting section is aligned to width 10":
     let state = newHelpViewerState()
-    check state.items.contains("# Exiting")
-    check state.items.contains(":w         - Write file")
-    check state.items.contains(":q         - Quit")
-    check state.items.contains(":x or :xit - Write if modified and quit")
-    check state.items.contains(":wqa!      - Force write and quit all windows")
-    check state.items.contains(":cq        - Quit with non-zero exit code")
+    check state.texts.contains("# Exiting")
+    check state.texts.contains(":w         - Write file")
+    check state.texts.contains(":q         - Quit")
+    check state.texts.contains(":x or :xit - Write if modified and quit")
+    check state.texts.contains(":wqa!      - Force write and quit all windows")
+    check state.texts.contains(":cq        - Quit with non-zero exit code")
 
   test "# Changing modes section is aligned to width 6":
     let state = newHelpViewerState()
-    check state.items.contains("# Changing modes")
-    check state.items.contains("v      - Visual mode")
-    check state.items.contains("Ctrl-v - Visual block mode")
-    check state.items.contains("A      - Same as $a")
+    check state.texts.contains("# Changing modes")
+    check state.texts.contains("v      - Visual mode")
+    check state.texts.contains("Ctrl-v - Visual block mode")
+    check state.texts.contains("A      - Same as $a")
 
   test "# Normal mode section preserves representative entries":
     let state = newHelpViewerState()
-    check state.items.contains("# Normal mode")
-    check state.items.contains("h          - Go left")
-    check state.items.contains("gg         - Go to the first line")
-    check state.items.contains("dgN        - Delete previous search match")
-    check state.items.contains(
+    check state.texts.contains("# Normal mode")
+    check state.texts.contains("h          - Go left")
+    check state.texts.contains("gg         - Go to the first line")
+    check state.texts.contains("dgN        - Delete previous search match")
+    check state.texts.contains(
       "ca{ or ca} - Delete around curly brackets and enter insert mode"
     )
 
   test "# Visual mode section uses minWidth=9 padding":
     let state = newHelpViewerState()
-    check state.items.contains("# Visual mode")
+    check state.texts.contains("# Visual mode")
     # natural max is 8 ("gp or gP"); minWidth pads to 9
-    check state.items.contains("d or x    - Delete text")
-    check state.items.contains(
+    check state.texts.contains("d or x    - Delete text")
+    check state.texts.contains(
       "Ctrl-a    - Increase the first number on each selected line"
     )
-    check state.items.contains("Esc       - Go to Normal mode")
-    check state.items.contains(
+    check state.texts.contains("Esc       - Go to Normal mode")
+    check state.texts.contains(
       "gp or gP  - Paste over the selection and leave the cursor after the pasted text (replacing the whole buffer parks on the last pasted character)"
     )
 
   test "# Replace mode section is aligned to width 9":
     let state = newHelpViewerState()
-    check state.items.contains("# Replace mode")
-    check state.items.contains("Esc       - Go to Normal mode")
-    check state.items.contains("Backspace - Undo")
+    check state.texts.contains("# Replace mode")
+    check state.texts.contains("Esc       - Go to Normal mode")
+    check state.texts.contains("Backspace - Undo")
 
   test "# Insert mode section is aligned to widest entry":
     let state = newHelpViewerState()
-    check state.items.contains("# Insert mode")
-    check state.items.contains(
+    check state.texts.contains("# Insert mode")
+    check state.texts.contains(
       "Ctrl-e               - Insert the character which is below the cursor"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "Ctrl-h or Backspace  - Delete the character before the cursor"
     )
-    check state.items.contains("Esc                  - Go to Normal mode")
+    check state.texts.contains("Esc                  - Go to Normal mode")
 
   test "# Backup mode section is aligned to width 5":
     let state = newHelpViewerState()
-    check state.items.contains("# Backup mode")
-    check state.items.contains("j     - Go down")
-    check state.items.contains("Enter - Open diff")
-    check state.items.contains("R     - Restore backup file")
+    check state.texts.contains("# Backup mode")
+    check state.texts.contains("j     - Go down")
+    check state.texts.contains("Enter - Open diff")
+    check state.texts.contains("R     - Restore backup file")
 
   test "# Diff mode section is aligned to width 2":
     let state = newHelpViewerState()
-    check state.items.contains("# Diff mode")
-    check state.items.contains("j  - Go down")
-    check state.items.contains("gg - Go to the first line")
-    check state.items.contains("G  - Go to the last line")
+    check state.texts.contains("# Diff mode")
+    check state.texts.contains("j  - Go down")
+    check state.texts.contains("gg - Go to the first line")
+    check state.texts.contains("G  - Go to the last line")
 
   test "# References mode section is aligned to width 5":
     let state = newHelpViewerState()
-    check state.items.contains("# References mode")
-    check state.items.contains("Enter - Jump to the destination")
-    check state.items.contains("Esc   - Quit References mode")
+    check state.texts.contains("# References mode")
+    check state.texts.contains("Enter - Jump to the destination")
+    check state.texts.contains("Esc   - Quit References mode")
 
   test "# Call hierarchy viewer mode section is aligned to width 5":
     let state = newHelpViewerState()
-    check state.items.contains("# Call hierarchy viewer mode")
-    check state.items.contains("Enter - Jump to the destination")
-    check state.items.contains("i     - Incoming call")
-    check state.items.contains("o     - Outgoing call")
+    check state.texts.contains("# Call hierarchy viewer mode")
+    check state.texts.contains("Enter - Jump to the destination")
+    check state.texts.contains("i     - Incoming call")
+    check state.texts.contains("o     - Outgoing call")
 
   test "# Filer mode section is aligned to width 2":
     let state = newHelpViewerState()
-    check state.items.contains("# Filer mode")
-    check state.items.contains("j  - Go down")
-    check state.items.contains("D  - Delete file")
-    check state.items.contains("v  - Split window and open file or directory")
+    check state.texts.contains("# Filer mode")
+    check state.texts.contains("j  - Go down")
+    check state.texts.contains("D  - Delete file")
+    check state.texts.contains("v  - Split window and open file or directory")
 
   test "# Register section uses the kbd-group syntax + description form":
     # The widest entry is `" any cl or " any s` (19 chars), which sets the
@@ -685,32 +781,32 @@ suite "HelpViewer - Mode sections (snapshot)":
     # `seq[string]` to a `HelpGroup` means each row now renders as
     # `syntax  - description`, consistent with every other mode section.
     let state = newHelpViewerState()
-    check state.items.contains("# Register")
-    check state.items.contains(
+    check state.texts.contains("# Register")
+    check state.texts.contains(
       "\" any yy".alignLeft(19) & " - Yank a line to a named register"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "\" any di any".alignLeft(19) & " - Delete inside to a named register"
     )
-    check state.items.contains(
+    check state.texts.contains(
       "\" any cl or \" any s - Change a character to a named register"
     )
 
   test "# Terminal mode section has both sub-mode headers":
     let state = newHelpViewerState()
-    check state.items.contains("# Terminal mode")
-    check state.items.contains("## Terminal-Input sub-mode (default)")
-    check state.items.contains("## Terminal-Normal sub-mode")
+    check state.texts.contains("# Terminal mode")
+    check state.texts.contains("## Terminal-Input sub-mode (default)")
+    check state.texts.contains("## Terminal-Normal sub-mode")
 
   test "Terminal-Input sub-mode body lists Ctrl-\\ Ctrl-n switch":
     let state = newHelpViewerState()
-    check state.items.contains(
+    check state.texts.contains(
       "All keystrokes are forwarded to the running shell/command."
     )
-    check state.items.contains("Ctrl-\\ Ctrl-n - Switch to Terminal-Normal sub-mode")
+    check state.texts.contains("Ctrl-\\ Ctrl-n - Switch to Terminal-Normal sub-mode")
 
   test "Terminal-Normal sub-mode body uses minWidth=2":
     let state = newHelpViewerState()
-    check state.items.contains("i  - Return to Terminal-Input sub-mode")
-    check state.items.contains("a  - Return to Terminal-Input sub-mode")
-    check state.items.contains(":  - Enter command mode")
+    check state.texts.contains("i  - Return to Terminal-Input sub-mode")
+    check state.texts.contains("a  - Return to Terminal-Input sub-mode")
+    check state.texts.contains(":  - Enter command mode")
