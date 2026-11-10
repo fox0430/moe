@@ -511,8 +511,18 @@ const VisualModeCommands*: HelpGroup = HelpGroup(
   entries: @[
     HelpEntry(syntax: "d or x", description: "Delete text"),
     HelpEntry(
+      syntax: "D",
+      description: "Delete lines, or the block to each line's end in Visual Block",
+    ),
+    HelpEntry(syntax: "X", description: "Delete lines, or the block in Visual Block"),
+    HelpEntry(
       syntax: "c", description: "Change (delete selection and enter insert mode)"
     ),
+    HelpEntry(
+      syntax: "C",
+      description: "Change lines, or the block to each line's end in Visual Block",
+    ),
+    HelpEntry(syntax: "R", description: "Change lines"),
     HelpEntry(syntax: "y", description: "Copy text"),
     HelpEntry(syntax: "Y", description: "Copy lines, or the block in Visual Block"),
     HelpEntry(

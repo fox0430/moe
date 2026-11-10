@@ -87,6 +87,8 @@ type
     bcInsertFirstNonBlank = "insert.first.non.blank"
     # Visual mode operations
     bcVisualDelete = "visual.delete"
+    bcVisualDeleteLines = "visual.delete.lines"
+    bcVisualDeleteToEnd = "visual.delete.to.end"
     bcVisualYank = "visual.yank"
     bcVisualYankLines = "visual.yank.lines"
     bcVisualIndent = "visual.indent"
@@ -98,6 +100,8 @@ type
     bcVisualToInsertMode = "visual.to.insert"
     bcVisualBlockAppend = "visual.block.append"
     bcVisualChange = "visual.change"
+    bcVisualChangeLines = "visual.change.lines"
+    bcVisualChangeToEnd = "visual.change.to.end"
     bcVisualSwapSelection = "visual.swap.selection"
     bcVisualPaste = "visual.paste"
     bcVisualReselect = "visual.reselect"

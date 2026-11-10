@@ -69,9 +69,10 @@ const EditOperatorTypes = ["replace"]
   ## the read-only gate.
 
 const VisualEditCommandIds = [
-  "visual.delete", "visual.indent", "visual.dedent", "visual.lowercase",
-  "visual.uppercase", "visual.togglecase", "visual.joinlines", "visual.to.insert",
-  "visual.change", "visual.block.append", "visual.paste", "visual.paste.before",
+  "visual.delete", "visual.delete.lines", "visual.delete.to.end", "visual.indent",
+  "visual.dedent", "visual.lowercase", "visual.uppercase", "visual.togglecase",
+  "visual.joinlines", "visual.to.insert", "visual.change", "visual.change.lines",
+  "visual.change.to.end", "visual.block.append", "visual.paste", "visual.paste.before",
   "visual.paste.end", "visual.paste.before.end", "visual.increment", "visual.decrement",
   "visual.increment.progressive", "visual.decrement.progressive", "edit.cut",
 ]

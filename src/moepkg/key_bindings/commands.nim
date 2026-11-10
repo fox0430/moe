@@ -196,6 +196,15 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ),
   ("insert-newline", "Insert newline (insert mode)", "insert.newline"),
   ("visual-delete", "Delete visual selection", "visual.delete"),
+  (
+    "visual-delete-lines", "Delete selected lines, or the block in Visual Block",
+    "visual.delete.lines",
+  ),
+  (
+    "visual-delete-to-end",
+    "Delete selected lines, or the block to each line's end in Visual Block",
+    "visual.delete.to.end",
+  ),
   ("visual-yank", "Yank visual selection", "visual.yank"),
   (
     "visual-yank-lines", "Yank selected lines, or the block in Visual Block",
@@ -213,6 +222,12 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ),
   ("visual-to-insert", "Enter insert mode from visual selection", "visual.to.insert"),
   ("visual-change", "Delete selection and enter insert mode", "visual.change"),
+  ("visual-change-lines", "Change selected lines", "visual.change.lines"),
+  (
+    "visual-change-to-end",
+    "Change selected lines, or the block to each line's end in Visual Block",
+    "visual.change.to.end",
+  ),
   ("visual-block-append", "Append after visual block selection", "visual.block.append"),
   ("visual-paste", "Delete selection and paste register content", "visual.paste"),
   (

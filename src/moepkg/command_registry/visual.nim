@@ -19,22 +19,41 @@
 
 ## Visual mode command handlers and registration.
 
+import std/options
+
 import pkg/results
 
 import ../[types, modes, visual_block]
+import ../buffer/core
 import ../command_handlers/visual_commands
 
 import core, insert_entry
 
 ## Visual mode command handlers (wrappers for visual_commands functions)
 
-proc handleVisualOperator*(
-    ctx: CommandContext, op: VisualOperator, count = 1
+template keepingLineEndForGv(ctx: CommandContext, sel: VisualSelection, body) =
+  ## Run `body` with the area `gv` selects saved to the line ends when `sel`
+  ## goes to them, as after `D` or `C` in Visual Block in Vim.
+  if sel.kind == vskBlock and sel.extendsToLineEnd:
+    let
+      win = ctx.state.activeWindow
+      replaced = win.saveLastVisualAhead()
+    if ctx.buffer.lastVisual.isSome:
+      ctx.buffer.lastVisual.get.wanted = WantedColumn(cell: LineEnd)
+    try:
+      body
+    finally:
+      win.settleLastVisual(replaced)
+  else:
+    body
+
+proc operateOn(
+    ctx: CommandContext,
+    op: VisualOperator,
+    sel: VisualSelection,
+    area: BlockArea,
+    count = 1,
 ): Result[(), string] =
-  ## Act with `op` over the selection. `.` acts again over an area of the
-  ## same size at the cursor, with the same count; a refused operator leaves
-  ## what `.` repeats as it was.
-  let (sel, area) = ctx.buffer.operandArea(ctx.state)
   if not sel.active:
     return ok(())
   let shape = ctx.buffer.visualShape(sel, area, ctx.state.tabStop)
@@ -49,6 +68,24 @@ proc handleVisualOperator*(
       )
     )
   Result[(), string].ok ()
+
+proc handleVisualOperator*(
+    ctx: CommandContext, op: VisualOperator, count = 1
+): Result[(), string] =
+  ## Act with `op` over the selection. `.` acts again over an area of the
+  ## same size at the cursor, with the same count; a refused operator leaves
+  ## what `.` repeats as it was.
+  let (sel, area) = ctx.buffer.operandArea(ctx.state)
+  ctx.operateOn(op, sel, area, count)
+
+proc handleVisualOperator*(
+    ctx: CommandContext, op: VisualOperator, inBlock: VisopBlock
+): Result[(), string] =
+  ## Act with `op` over the selection's whole lines, and a block as `inBlock`
+  ## says.
+  let (sel, area) = ctx.buffer.operandArea(ctx.state, inBlock)
+  ctx.keepingLineEndForGv(sel):
+    result = ctx.operateOn(op, sel, area)
 
 proc handleVisualYank*(ctx: CommandContext, lines = false): Result[(), string] =
   ## Yank (copy) visual selection
@@ -86,16 +123,25 @@ proc handleVisualBlockAppend*(ctx: CommandContext): Result[(), string] =
   ctx.startVisualInsert(ieVisualAppend, sel, area)
   Result[(), string].ok ()
 
-proc handleVisualChange*(ctx: CommandContext): Result[(), string] =
-  ## Delete selection and enter insert mode. `.` changes an area of the same
-  ## size at the cursor.
-  let
-    (sel, area) = ctx.buffer.operandArea(ctx.state)
-    shape = ctx.buffer.visualShape(sel, area, ctx.state.tabStop)
+proc changeOver(ctx: CommandContext, sel: VisualSelection, area: BlockArea) =
+  let shape = ctx.buffer.visualShape(sel, area, ctx.state.tabStop)
   visualChange(ctx.buffer, ctx.state, sel, area, ctx.register)
   ctx.cursor = ctx.state.cursor
   if ctx.state.mode == EditorMode.Insert:
     ctx.enterInsert(InsertEntry(kind: ieVisualChange, shape: shape), 1)
+
+proc handleVisualChange*(ctx: CommandContext): Result[(), string] =
+  ## Delete selection and enter insert mode. `.` changes an area of the same
+  ## size at the cursor.
+  let (sel, area) = ctx.buffer.operandArea(ctx.state)
+  ctx.changeOver(sel, area)
+  Result[(), string].ok ()
+
+proc handleVisualChange*(ctx: CommandContext, inBlock: VisopBlock): Result[(), string] =
+  ## Change the selection's whole lines, and a block as `inBlock` says.
+  let (sel, area) = ctx.buffer.operandArea(ctx.state, inBlock)
+  ctx.keepingLineEndForGv(sel):
+    ctx.changeOver(sel, area)
   Result[(), string].ok ()
 
 proc handleVisualSwapSelection*(ctx: CommandContext): Result[(), string] =
@@ -130,7 +176,7 @@ proc handleVisualReselect*(ctx: CommandContext): Result[(), string] =
   Result[(), string].ok ()
 
 proc registerVisualCommands*(registry: CommandRegistry) =
-  ## Register all 17 visual mode commands.
+  ## Register all visual mode commands.
 
   registry.register(
     builtin(bcVisualDelete),
@@ -138,6 +184,27 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Delete visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualOperator(ctx, voDelete),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualDeleteLines),
+    "Visual Delete Lines",
+    "Delete the selected lines, or the block in Visual Block (X command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualOperator(ctx, voDelete, vbKeep),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualDeleteToEnd),
+    "Visual Delete To End",
+    "Delete the selected lines, or the block to each line's end in Visual Block " &
+      "(D command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualOperator(ctx, voDelete, vbToLineEnd),
     0,
     0,
   )
@@ -250,6 +317,27 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Delete selection and enter insert mode (c command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualChange(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualChangeLines),
+    "Visual Change Lines",
+    "Change the selected lines (R command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualChange(ctx, vbLines),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualChangeToEnd),
+    "Visual Change To End",
+    "Change the selected lines, or the block to each line's end in Visual Block " &
+      "(C command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualChange(ctx, vbToLineEnd),
     0,
     0,
   )
