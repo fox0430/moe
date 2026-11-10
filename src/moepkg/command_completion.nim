@@ -201,6 +201,14 @@ proc collectFilePaths*(
       return @[]
     searchDir = base
     filterPrefix = ""
+  elif prefix == "~":
+    # Complete the bare "~" to "~/" so selecting it continues into the home
+    # directory instead of listing the home directory's parent.
+    if dirExists(expandTilde(prefix)):
+      return @[
+        CommandCompletionEntry(command: "~/", description: "Directory", matchScore: 100)
+      ]
+    return @[]
   elif prefix.startsWith("/") or prefix.startsWith("~"):
     # Absolute path or home-relative path
     let expandedPrefix =

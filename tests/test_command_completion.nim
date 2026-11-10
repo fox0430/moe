@@ -781,6 +781,23 @@ suite "CommandCompletion - collectFilePaths":
     # Should list contents of home directory
     check entries.len >= 0
 
+  test "Bare tilde completes to ~/":
+    # A temp home keeps the test independent of the real home directory.
+    let testHome = getTempDir() / "moe_test_completion_home"
+    createDir(testHome)
+    let origHome = getEnv("HOME")
+    putEnv("HOME", testHome)
+    try:
+      let entries = collectFilePaths("", "~")
+      check entries.len == 1
+      check entries[0].command == "~/"
+    finally:
+      if origHome.len > 0:
+        putEnv("HOME", origHome)
+      else:
+        delEnv("HOME")
+      removeDir(testHome)
+
   test "Relative path with directory":
     # Create a temp directory structure for testing
     let testDir = getTempDir() / "moe_test_completion"
