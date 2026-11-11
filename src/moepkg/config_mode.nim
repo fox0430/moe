@@ -75,10 +75,6 @@ type
     of cvkSection:
       discard
 
-# Theme color entries that only have a background (no foreground).
-const ColorBgOnlyEntries* =
-  {EditorColorPairIndex.currentLineBg, EditorColorPairIndex.currentColumnBg}
-
 # Config Item Descriptors - Single source of truth for config items
 
 proc makeDescriptors(): seq[ConfigItemDescriptor] =

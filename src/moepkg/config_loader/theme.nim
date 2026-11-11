@@ -354,16 +354,14 @@ proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string] =
   lines.add ""
 
   # Write all other color pairs as inline tables: `key = { fg = "...", bg = "..." }`.
-  # currentLineBg and currentColumnBg are bg-only entities, so emit only `bg`.
-  const BgOnlyEntries =
-    {EditorColorPairIndex.currentLineBg, EditorColorPairIndex.currentColumnBg}
+  # Bg-only entries emit only `bg`.
   for index in EditorColorPairIndex:
     if index == EditorColorPairIndex.default:
       continue
 
     let key = toTomlColorKey(index)
     let bg = themeColorToTomlValue(colors[index].background)
-    if index in BgOnlyEntries:
+    if index in ColorBgOnlyEntries:
       lines.add key & " = { bg = " & bg & " }"
     else:
       let fg = themeColorToTomlValue(colors[index].foreground)
