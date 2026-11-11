@@ -249,14 +249,17 @@ proc performIncrementalSearch(e: Editor) =
   let spec = SearchSpec(
     pattern: e.state.input.line.text, direction: e.state.input.search.direction
   )
-  let searchResult = e.state.findCounted(
+  let found = e.state.findCountedMatch(
     e.activeBuffer, spec, e.state.input.search.startPos, e.state.input.search.count
   )
 
-  if searchResult.isSome:
-    let pos = searchResult.get
+  if found.isSome:
+    let
+      match = found.get
+      pos = e.state.landing(e.activeBuffer, match)
     e.cursor = pos
-    e.state.input.line.wordAt = some(e.state.matchEnd(e.activeBuffer, spec, pos))
+    e.state.input.line.wordAt =
+      some(BufferPosition(line: match.line, column: match.cols.endCol))
     e.syncHelpViewerIndex(pos.line)
 
     e.showFromSearchStart(pos)

@@ -215,6 +215,23 @@ suite "Search mode - leaving the overlay":
     check e.state.mode == EditorMode.Normal
     check not e.state.isSearchOverlay
 
+suite "Search mode - incsearch at the end of a line":
+  test "the preview puts the cursor on the last character, as Enter does":
+    let e = createTestEditorWithBuffer("abc\nde")
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    e.state.input.search.startPos = BufferPosition(line: 0, column: 0)
+    e.setSearchText("$")
+
+    performIncrementalSearch(e)
+
+    check e.cursor == BufferPosition(line: 0, column: 2)
+    # Ctrl-R Ctrl-W still reads at the end of the match.
+    check e.state.input.line.wordAt == some(BufferPosition(line: 0, column: 3))
+
+    check finalizeSearch(e)
+    check e.cursor == BufferPosition(line: 0, column: 2)
+
 suite "Search mode - Help mode incremental search sync":
   test "performIncrementalSearch syncs selectedIndex on match":
     let e = createTestEditorInHelpMode()

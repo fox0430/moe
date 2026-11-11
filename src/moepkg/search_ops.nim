@@ -26,7 +26,7 @@ import std/options
 
 import pkg/results
 
-import types, buffer, search_utils, unicode_utils
+import types, buffer, modes, search_utils, unicode_utils
 
 proc ignoresCase*(search: SearchState, spec: SearchSpec): bool =
   ## Whether `spec` ignores case: 'ignorecase', unless 'smartcase' finds an
@@ -47,29 +47,25 @@ proc findMatch*(
     pos: BufferPosition,
     ignoreCase: bool,
     direction = spec.direction,
-): Option[BufferPosition] =
+): Option[LineMatch] =
   ## The match of `spec` from `pos`, the way `direction` goes: the one `spec`
   ## went unless given.
-  if direction == Forward:
-    b.findNext(spec.pattern, pos, ignoreCase, spec.match)
-  else:
-    b.findPrev(spec.pattern, pos, ignoreCase, spec.match)
+  b.findMatchFrom(spec.pattern, pos, ignoreCase, spec.match, direction)
 
 proc stepMatches*(
-    first: BufferPosition,
-    count: int,
-    step: proc(pos: BufferPosition): Option[BufferPosition],
-): BufferPosition =
-  ## The match `count - 1` on from `first`, `step` finding each next one. The
-  ## search wraps around, so once round the matches only what is left over the
-  ## cycle matters (`999999n` does not search a million times), and a match
-  ## with no other to go to is the one found again.
+    first: LineMatch, count: int, step: proc(pos: BufferPosition): Option[LineMatch]
+): LineMatch =
+  ## The match `count - 1` on from `first`, `step` finding each next one from
+  ## where the one before starts. The search wraps around, so once round the
+  ## matches only what is left over the cycle matters (`999999n` does not
+  ## search a million times), and a match with no other to go to is the one
+  ## found again.
   result = first
   var
     left = count - 1
     taken = 0
   while left > 0:
-    let next = step(result)
+    let next = step(result.start)
     if next.isNone:
       break
     result = next.get
@@ -77,6 +73,39 @@ proc stepMatches*(
     taken += 1
     if result == first:
       left = left mod taken
+
+proc landing*(state: EditorState, b: TextBuffer, match: LineMatch): BufferPosition =
+  ## Where the cursor goes on `match`. As Vim's normal_search does with
+  ## check_cursor after `/$`, one at the end of a line puts it on the last
+  ## character, with an operator waiting too (`d/$`), but not in Visual mode
+  ## or after Ctrl-o in Insert mode (restart_edit).
+  let
+    lineLen = b.getLine(match.line).charLen
+    lastColumn =
+      if state.resumesInsert:
+        lineLen
+      else:
+        maxCursorColumn(lineLen, state.mode)
+  BufferPosition(line: match.line, column: min(match.cols.startCol, lastColumn))
+
+proc findCountedMatch*(
+    state: EditorState,
+    b: TextBuffer,
+    spec: SearchSpec,
+    pos: BufferPosition,
+    count: int,
+    direction = spec.direction,
+): Option[LineMatch] =
+  ## The `count`-th match of `spec` from `pos`, the way `direction` goes.
+  let ignoreCase = state.input.search.ignoresCase(spec)
+  proc step(pos: BufferPosition): Option[LineMatch] =
+    b.findMatch(spec, pos, ignoreCase, direction)
+
+  let first = step(pos)
+  if first.isSome:
+    some(stepMatches(first.get, count, step))
+  else:
+    none(LineMatch)
 
 proc findCounted*(
     state: EditorState,
@@ -86,25 +115,13 @@ proc findCounted*(
     count: int,
     direction = spec.direction,
 ): Option[BufferPosition] =
-  ## The `count`-th match of `spec` from `pos`, the way `direction` goes.
-  let ignoreCase = state.input.search.ignoresCase(spec)
-  proc step(pos: BufferPosition): Option[BufferPosition] =
-    b.findMatch(spec, pos, ignoreCase, direction)
-
-  let first = step(pos)
-  if first.isSome:
-    some(stepMatches(first.get, count, step))
+  ## Where the cursor goes on the `count`-th match of `spec` from `pos`, the
+  ## way `direction` goes.
+  let found = state.findCountedMatch(b, spec, pos, count, direction)
+  if found.isSome:
+    some(state.landing(b, found.get))
   else:
     none(BufferPosition)
-
-proc matchEnd*(
-    state: EditorState, b: TextBuffer, spec: SearchSpec, pos: BufferPosition
-): BufferPosition =
-  ## Just past the match of `spec` that starts at `pos`, which is `pos` when
-  ## none does.
-  let endCol =
-    b.matchEndCol(pos, spec.pattern, state.input.search.ignoresCase(spec), spec.match)
-  BufferPosition(line: pos.line, column: endCol.get(pos.column))
 
 proc addSearchHistory*(state: EditorState, pattern: string) =
   ## Push `pattern` onto the search history, most recent first, dropping an

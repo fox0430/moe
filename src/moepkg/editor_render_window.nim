@@ -161,12 +161,12 @@ proc newLineStyleContext*(
     lineIndex: int,
     fullLine: string,
     ctx: RenderContext,
-    drawsText = true,
+    showsLine = true,
 ): LineStyleContext =
   ## Compute all per-line state needed by the style pipeline in one place.
-  ## For a row that draws none of the line's characters (`drawsText` false),
-  ## their overlays (trailing spaces, color codes, search, current word) are
-  ## left empty without scanning the line.
+  ## For a row that shows none of the line (`showsLine` false), neither a
+  ## character nor the line break, the overlays (trailing spaces, color
+  ## codes, search, current word) are left empty without scanning the line.
   result = LineStyleContext(
     lineIndex: lineIndex,
     lineEnd: fullLine.charLen,
@@ -188,7 +188,7 @@ proc newLineStyleContext*(
     # A utility buffer's look is its own, also while Visual runs on it.
     undecorated: textBuffer != nil and textBuffer.isUtilityBuffer,
   )
-  if not drawsText:
+  if not showsLine:
     return
 
   # Trailing-space highlighting fires in file-edit mode when enabled (see
@@ -228,17 +228,17 @@ proc linePrecomputed(
     lineIndex: int,
     line: string,
     ctx: RenderContext,
-    drawsText = true,
+    showsLine = true,
 ): LinePrecomputed =
-  ## The values for rendering `line`. A row that draws none of its characters
-  ## (`drawsText` false) skips the scans they need.
+  ## The values for rendering `line`. A row that shows none of the line
+  ## (`showsLine` false) skips the scans they need.
   LinePrecomputed(
     indentInfo:
-      if drawsText:
+      if showsLine:
         analyzeIndentation(line)
       else:
         IndentInfo(),
-    lineCtx: e.newLineStyleContext(textBuffer, lineIndex, line, ctx, drawsText),
+    lineCtx: e.newLineStyleContext(textBuffer, lineIndex, line, ctx, showsLine),
   )
 
 # Layer predicates
@@ -507,14 +507,16 @@ proc lineFillPatch(
     lineCtx: LineStyleContext,
     displayX: int,
     cursorDisplayCol: int,
-    inVisualSelection: bool,
+    inVisualSelection, inSearchMatch: bool,
 ): StylePatch =
   ## Style of a cell past the line's text: the fill and the end-of-line
-  ## virtual text. Priority: visualSelection > gitConflict > cursorLine >
-  ## cursorColumn > lineBg > defaultFill > none. Returns `noPatch` when the cell should keep
-  ## `normalStyle()`.
+  ## virtual text. Priority: visualSelection > searchMatch > gitConflict >
+  ## cursorLine > cursorColumn > lineBg > defaultFill > none. Returns `noPatch`
+  ## when the cell should keep `normalStyle()`.
   if inVisualSelection:
     return full(visualStyle())
+  if inSearchMatch:
+    return full(searchHighlightStyle())
   if lineCtx.gitConflictApplies:
     return full(conflictStyleFor(lineCtx.lineConflict, lineCtx.useTwoColor))
   if e.cursorLineApplies(lineCtx):
@@ -563,7 +565,11 @@ proc appendEndOfLineVirtualText(
       if screenX + result + w > ctx.windowRightEdge:
         return result
       let bgPatch = e.lineFillPatch(
-        lineCtx, result, ctx.cursorDisplayCol, inVisualSelection = false
+        lineCtx,
+        result,
+        ctx.cursorDisplayCol,
+        inVisualSelection = false,
+        inSearchMatch = false,
       )
       let style =
         if bgPatch.bg.isSome:
@@ -591,7 +597,8 @@ proc renderLineSegmentWithSelection*(
   ## The row of an empty line, or one scrolled sideways past the text, has an
   ## empty `displayLine`. When `displayLine` reaches the line's end, a
   ## selection over the line break shows in the next cell, and end-of-line
-  ## virtual text (inlay hints, etc.) is drawn there before the trailing fill.
+  ## virtual text (inlay hints, etc.) is drawn there before the trailing fill,
+  ## followed by an empty search match at the line's end.
   ## `startCell` is the cell `displayLine` starts at, counted from where tabs
   ## are measured, and the row shows the cells from `leftCell` on. As Vim
   ## draws them, a character the left edge cuts shows its remaining cells, a
@@ -609,13 +616,15 @@ proc renderLineSegmentWithSelection*(
     else:
       # The highlight advancement budget is owned by `updateForFrame`; this
       # per-line path must not advance it further.
-      let p = e.linePrecomputed(
-        textBuffer,
-        lineIndex,
-        textBuffer.getLine(lineIndex),
-        ctx,
-        drawsText = displayLine.len > 0,
-      )
+      let
+        line = textBuffer.getLine(lineIndex)
+        p = e.linePrecomputed(
+          textBuffer,
+          lineIndex,
+          line,
+          ctx,
+          showsLine = displayLine.len > 0 or startColumn == line.charLen,
+        )
       (p.indentInfo, p.lineCtx)
 
   # Always render character by character to apply syntax highlighting.
@@ -791,6 +800,28 @@ proc renderLineSegmentWithSelection*(
     displayX =
       e.appendEndOfLineVirtualText(buffer, ctx, lineCtx, displayX, screenX, screenY)
 
+  # An empty search match at the line's end shows over the cell after the
+  # virtual text there, unlike the selection, as in Vim.
+  let
+    matchesLineBreak = reachesLineEnd and lineCtx.searchRanges.isColumnInRanges(col)
+    matchedEndX = if matchesLineBreak: displayX else: -1
+    lastX = ctx.windowRightEdge - 1
+
+  # With no cell left on the row, Vim shows the match over the row's last
+  # cell, but not over a selected line break, nor on the line 'cursorline'
+  # highlights outside Visual mode. The right half of a wide character shows
+  # none of it.
+  if matchesLineBreak and screenX + displayX > lastX and lastX >= screenX and
+      selectedEndX < 0 and
+      not (
+        e.cursorLineApplies(lineCtx) and
+        not (lineCtx.isActiveWindow and ctx.windowMode.isVisualAllMode)
+      ):
+    var last = buffer[lastX, screenY]
+    if not last.isShadow:
+      last.style = searchHighlightStyle()
+      buffer[lastX, screenY] = last
+
   # Fill the rest of the line to the window right edge.
   # Always fill to clear stale content (e.g. old cursor line highlight).
   while screenX + displayX < ctx.windowRightEdge:
@@ -800,6 +831,7 @@ proc renderLineSegmentWithSelection*(
           displayX,
           ctx.cursorDisplayCol,
           inVisualSelection = displayX == selectedEndX,
+          inSearchMatch = displayX == matchedEndX,
         )
       )
     buffer.setCell(screenX + displayX, screenY, " ", 1, fillStyle)
@@ -865,9 +897,7 @@ proc renderWindowLineWrapped*(
         lineIndex,
         0,
         ctx,
-        precomputed = some(
-          e.linePrecomputed(window.buffer, lineIndex, line, ctx, drawsText = false)
-        ),
+        precomputed = some(e.linePrecomputed(window.buffer, lineIndex, line, ctx)),
       )
     inc screenY
     inc lineIndex
@@ -1004,7 +1034,11 @@ proc renderWindowLineNoWrap*(
     ctx,
     precomputed = some(
       e.linePrecomputed(
-        window.buffer, lineIndex, line, ctx, drawsText = shown.startByte < line.len
+        window.buffer,
+        lineIndex,
+        line,
+        ctx,
+        showsLine = shown.startByte < line.len or shown.column == line.charLen,
       )
     ),
     startCell = shown.cell,

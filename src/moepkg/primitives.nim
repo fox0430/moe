@@ -48,6 +48,12 @@ proc `<`*(a, b: BufferPosition): bool {.inline.} =
 proc `<=`*(a, b: BufferPosition): bool {.inline.} =
   not (b < a)
 
+proc covers*(match: ColumnRange, col: int): bool =
+  ## Whether a search match is over column `col`. As Vim's hlsearch and gn
+  ## take it, an empty one is over the character after it, the line break at
+  ## the end of a line.
+  col >= match.startCol and col < max(match.endCol, match.startCol + 1)
+
 func repeatDirection*(last: SearchDirection, reverse: bool): SearchDirection =
   ## The way n goes after a search that went `last`, or N when `reverse`.
   if not reverse:

@@ -24,6 +24,7 @@ import pkg/results
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/buffer/search {.all.}
 import ../src/moepkg/unicode_utils
+import search_test_helper
 
 suite "Buffer Search - Basic findNext":
   test "findNext finds first occurrence":
@@ -226,56 +227,6 @@ suite "Buffer Search - Unicode support":
     check result2.isSome
     check result2.get.column == 0
 
-suite "Buffer Search - isPositionInSearchMatch":
-  test "isPositionInSearchMatch at match start":
-    let buf = newTextBuffer("hello world hello")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 0), "hello")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 12), "hello")
-
-  test "isPositionInSearchMatch within match":
-    let buf = newTextBuffer("hello world")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 1), "hello")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 2), "hello")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 4), "hello")
-
-  test "isPositionInSearchMatch outside match":
-    let buf = newTextBuffer("hello world")
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 5), "hello")
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 6), "hello")
-
-  test "isPositionInSearchMatch with invalid position":
-    let buf = newTextBuffer("hello world")
-    check not buf.isPositionInSearchMatch(BufferPosition(line: -1, column: 0), "hello")
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 10, column: 0), "hello")
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 100), "hello")
-
-  test "isPositionInSearchMatch with empty search pattern":
-    let buf = newTextBuffer("hello world hello again")
-    # Empty pattern should not match any position
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 0), "")
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 6), "")
-
-  test "isPositionInSearchMatch with multiple matches":
-    let buf = newTextBuffer("hello world hello again")
-    # First "hello" at column 0
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 0), "hello")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 4), "hello")
-    # "world" at column 6
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 6), "world")
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 5), "world")
-    # Second "hello" at column 12
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 12), "hello")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 16), "hello")
-
-  test "isPositionInSearchMatch with Unicode pattern":
-    let buf = newTextBuffer("日本語 世界 日本語")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 0), "日本語")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 2), "日本語")
-    check not buf.isPositionInSearchMatch(
-      BufferPosition(line: 0, column: 3), "日本語"
-    )
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 4), "世界")
-
 suite "Buffer Search - Edge cases":
   test "Single character buffer":
     let buf = newTextBuffer("a")
@@ -328,18 +279,6 @@ suite "Buffer Search - Error handling":
     let result = buf.findPrev("test", BufferPosition(line: 1, column: 1000))
     check result.isSome
     check result.get.line == 0
-
-  test "isPositionInSearchMatch with empty line":
-    let buf = newTextBuffer("hello\n\nworld")
-    # Check position in empty line
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 1, column: 0), "test")
-
-  test "isPositionInSearchMatch with very long search pattern":
-    let buf = newTextBuffer("hi")
-    # Search pattern longer than line
-    check not buf.isPositionInSearchMatch(
-      BufferPosition(line: 0, column: 0), "very long pattern that won't match"
-    )
 
   test "Search in buffer with only newlines":
     let buf = newTextBuffer("\n\n\n")
@@ -578,57 +517,55 @@ suite "Buffer Search - findWordMatchRanges":
     check ranges[0].startCol == 3
     check ranges[0].endCol == 4
 
-suite "Buffer Search - compileSearchRegex":
-  test "compileSearchRegex returns compiled regex for valid pattern":
-    let result = compileSearchRegex("hello", false)
-    check result.isSome
+suite "Buffer Search - regexPattern":
+  privateAccess(RegexPattern)
 
-  test "compileSearchRegex returns none for empty pattern":
-    let result = compileSearchRegex("", false)
-    check result.isNone
+  test "a valid pattern compiles":
+    check regexPattern("hello", false).re.isSome
+    check regexPattern("hello", true).re.isSome
 
-  test "compileSearchRegex returns none for invalid regex":
-    let result = compileSearchRegex("[invalid", false)
-    check result.isNone
+  test "an invalid pattern does not":
+    check regexPattern("[invalid", false).re.isNone
 
-  test "compileSearchRegex with case insensitive flag":
-    let result = compileSearchRegex("hello", true)
-    check result.isSome
+  test "the last one is kept and shared":
+    # Matched line by line, a pattern would otherwise be compiled, or copied
+    # out of the cache, for every line.
+    let first = regexPattern("test", false)
+    check regexPattern("test", false) == first
+    check regexPattern("test", true) != first
+    check regexPattern("bar", false) != first
 
-  test "compileSearchRegex caches repeated calls":
-    let r1 = compileSearchRegex("test", false)
-    let r2 = compileSearchRegex("test", false)
-    check r1.isSome
-    check r2.isSome
+  test "a pattern that does not compile is kept too":
+    # A pattern still being typed would otherwise be parsed again for every
+    # line.
+    let first = regexPattern("foo(", false)
+    check first.re.isNone
+    check regexCache == first
+    check regexPattern("foo(", false) == first
 
-  test "compileSearchRegex cache invalidated by different pattern":
-    let r1 = compileSearchRegex("foo", false)
-    let r2 = compileSearchRegex("bar", false)
-    check r1.isSome
-    check r2.isSome
+  test "an empty pattern matches nothing and leaves the kept one":
+    # Compiled, it would match everywhere, and cost the highlight its compiled
+    # pattern.
+    let
+      b = newTextBuffer("foo")
+      start = BufferPosition(line: 0, column: 0)
+      first = regexPattern("foo", false)
+    check b.findSearchMatchRanges(0, "").len == 0
+    check b.matchAt(start, "").isNone
+    check b.findNext("", start).isNone
+    check b.findPrev("", start).isNone
+    check firstSubstituteMatch("foo", "", false, smRegex).isNone
+    check countSubstituteMatches("foo", "", false, true, smRegex) == 0
+    let replaced =
+      substituteMatches("foo", "", parseReplacement("x"), false, true, smRegex)
+    check replaced.count == 0
+    check regexCache == first
 
-  test "compileSearchRegex cache invalidated by different ignorecase":
-    let r1 = compileSearchRegex("test", false)
-    let r2 = compileSearchRegex("test", true)
-    check r1.isSome
-    check r2.isSome
-
-  test "compileSearchRegex caches a pattern that does not compile":
-    # Matched line by line, a pattern still being typed would otherwise be
-    # parsed again for every line.
-    privateAccess(CachedRegex)
-    check compileSearchRegex("foo(", false).isNone
-    check regexCache.isSome
-    check regexCache.get.pattern == "foo("
-    check regexCache.get.compiled.isNone
-    check compileSearchRegex("foo(", false).isNone
-
-  test "compileSearchRegex compiles a valid pattern after a cached failure":
-    privateAccess(CachedRegex)
-    check compileSearchRegex("foo(", false).isNone
-    check compileSearchRegex("foo(", true).isNone
-    check compileSearchRegex("foo", true).isSome
-    check regexCache.get.compiled.isSome
+  test "a valid pattern compiles after a kept failure":
+    check regexPattern("foo(", false).re.isNone
+    check regexPattern("foo(", true).re.isNone
+    check regexPattern("foo", true).re.isSome
+    check regexCache.re.isSome
 
 suite "Buffer Search - Regex findNext":
   test "findNext with character class":
@@ -865,22 +802,6 @@ suite "Buffer Search - Regex findSearchMatchRanges":
     check ranges[0].endCol == 6
     check ranges[1].startCol == 9
     check ranges[1].endCol == 12
-
-suite "Buffer Search - Regex isPositionInSearchMatch":
-  test "isPositionInSearchMatch with regex variable length":
-    let buf = newTextBuffer("abc 12345 def")
-    # "12345" matched by \d+, occupies columns 4-8
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 4), "\\d+")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 6), "\\d+")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 8), "\\d+")
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 3), "\\d+")
-    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 9), "\\d+")
-
-  test "isPositionInSearchMatch with invalid regex":
-    let buf = newTextBuffer("hello world")
-    check not buf.isPositionInSearchMatch(
-      BufferPosition(line: 0, column: 0), "[invalid"
-    )
 
 suite "Buffer Search - Regex edge cases":
   test "Escaped special characters treated as literal":
@@ -1198,6 +1119,116 @@ suite "Buffer search - the only match":
     check buf.findPrev("foo", BufferPosition(line: 0, column: 0)) ==
       some(BufferPosition(line: 0, column: 4))
 
+suite "Buffer search - empty lines and empty matches":
+  # Vim's searchit: an empty line has its empty match, and a match at the end
+  # of a line counts as on its last character, where the cursor goes.
+  test "/^$ finds an empty line":
+    let b = newTextBuffer("foo\n\nbar\n\nbaz")
+    check b.findNext("^$", BufferPosition(line: 0, column: 1)) ==
+      some(BufferPosition(line: 1, column: 0))
+    check b.findNext("^\\s*$", BufferPosition(line: 0, column: 0)) ==
+      some(BufferPosition(line: 1, column: 0))
+
+  test "/^$ from an empty line goes on to the next one":
+    let b = newTextBuffer("foo\n\nbar\n\nbaz")
+    check b.findNext("^$", BufferPosition(line: 1, column: 0)) ==
+      some(BufferPosition(line: 3, column: 0))
+    check b.findNext("^$", BufferPosition(line: 3, column: 0)) ==
+      some(BufferPosition(line: 1, column: 0))
+
+  test "?^$ finds an empty line before":
+    let b = newTextBuffer("foo\n\nbar\n\nbaz")
+    check b.findPrev("^$", BufferPosition(line: 4, column: 2)) ==
+      some(BufferPosition(line: 3, column: 0))
+    check b.findPrev("^$", BufferPosition(line: 3, column: 0)) ==
+      some(BufferPosition(line: 1, column: 0))
+    check b.findPrev("^$", BufferPosition(line: 1, column: 0)) ==
+      some(BufferPosition(line: 3, column: 0))
+
+  test "the only empty line is found again":
+    let b = newTextBuffer("foo\n\nbar")
+    let start = BufferPosition(line: 1, column: 0)
+    check b.findNext("^$", start) == some(start)
+    check b.findPrev("^$", start) == some(start)
+
+  test "/$ moves on from the last character":
+    let b = newTextBuffer("abc\nde")
+    check b.findNext("$", BufferPosition(line: 0, column: 1)) ==
+      some(BufferPosition(line: 0, column: 3))
+    check b.findNext("$", BufferPosition(line: 0, column: 2)) ==
+      some(BufferPosition(line: 1, column: 2))
+
+  test "/$ moves on from a last character with composing characters":
+    # Vim's searchit takes the character under the cursor whole (extra_col).
+    let b = newTextBuffer("ae\u0301\u0302\nx")
+    check b.findNext("$", BufferPosition(line: 0, column: 0)) ==
+      some(BufferPosition(line: 0, column: 4))
+    for column in 1 .. 3:
+      check b.findNext("$", BufferPosition(line: 0, column: column)) ==
+        some(BufferPosition(line: 1, column: 1))
+
+  test "a search forward from a negative column finds the only match on its line":
+    let b = newTextBuffer("foo\nbar")
+    check b.findNext("foo", BufferPosition(line: 0, column: -1)) ==
+      some(BufferPosition(line: 0, column: 0))
+    check b.findNext("baz", BufferPosition(line: 0, column: -1)).isNone
+    check newTextBuffer("foo").findNext("foo", BufferPosition(line: 0, column: -1)) ==
+      some(BufferPosition(line: 0, column: 0))
+
+  test "an empty match at the end of a line leads on to an empty line":
+    let b = newTextBuffer("ab\n\ncd")
+    check b.findNext("x*", BufferPosition(line: 0, column: 1)) ==
+      some(BufferPosition(line: 1, column: 0))
+    check b.findPrev("x*", BufferPosition(line: 2, column: 0)) ==
+      some(BufferPosition(line: 1, column: 0))
+    # Backward, the end of a line is looked at only from its start.
+    check b.findPrev("x*", BufferPosition(line: 1, column: 0)) ==
+      some(BufferPosition(line: 0, column: 1))
+
+  test "an empty line has its empty match to highlight":
+    let b = newTextBuffer("foo\n\nbar")
+    check b.findSearchMatchRanges(1, "^$") == @[ColumnRange(startCol: 0, endCol: 0)]
+    check b.findSearchMatchRanges(1, "x*") == @[ColumnRange(startCol: 0, endCol: 0)]
+    check b.findSearchMatchRanges(1, "foo").len == 0
+
+  test "an empty match steps a character, not a byte":
+    check newTextBuffer("éa").findSearchMatchRanges(0, "x*") ==
+      @[
+        ColumnRange(startCol: 0, endCol: 0),
+        ColumnRange(startCol: 1, endCol: 1),
+        ColumnRange(startCol: 2, endCol: 2),
+      ]
+
+  test "the highlight looks at the end of the line after a match, a search does not":
+    # Vim's hlsearch (next_search_hl) tries the end of the line again; searchit
+    # stops there.
+    let b = newTextBuffer("abc\nabc")
+    check b.findSearchMatchRanges(0, "c|$") ==
+      @[ColumnRange(startCol: 2, endCol: 3), ColumnRange(startCol: 3, endCol: 3)]
+    check b.findNext("c|$", BufferPosition(line: 0, column: 1)) ==
+      some(BufferPosition(line: 0, column: 2))
+    check b.findNext("c|$", BufferPosition(line: 0, column: 2)) ==
+      some(BufferPosition(line: 1, column: 2))
+
+suite "Buffer search - regex matches do not overlap":
+  # Vim's searchit with 'cpoptions' c looks for each match where the one before
+  # ends, from the start of the line, the matches hlsearch highlights.
+  test "n skips a match inside the one under the cursor":
+    let b = newTextBuffer("aaaa\naaaa")
+    check b.findNext("aa", BufferPosition(line: 0, column: 0)) ==
+      some(BufferPosition(line: 0, column: 2))
+    check b.findNext("aa", BufferPosition(line: 0, column: 2)) ==
+      some(BufferPosition(line: 1, column: 0))
+
+  test "a match counts from the start of the line, not from the cursor":
+    let b = newTextBuffer("aaa\naaa")
+    check b.findNext("aa", BufferPosition(line: 0, column: 0)) ==
+      some(BufferPosition(line: 1, column: 0))
+    check b.findPrev("aa", BufferPosition(line: 1, column: 2)) ==
+      some(BufferPosition(line: 1, column: 0))
+    check b.findPrev("aa", BufferPosition(line: 1, column: 0)) ==
+      some(BufferPosition(line: 0, column: 0))
+
 suite "Buffer search - identUnderCursor":
   # Vim's find_ident_under_cursor() for * and #.
   proc ident(text: string, column: int): Option[(int, int)] =
@@ -1237,25 +1268,51 @@ suite "Buffer search - identUnderCursor":
     # On the composing character, as on the character it is part of.
     check ident("ét", 1) == some((0, 3))
 
-suite "matchEndCol":
-  test "it is the end of the match at the position, overlapping another or not":
+suite "matchAt":
+  proc at(b: TextBuffer, line, column: int, pattern: string): Option[(int, int)] =
+    let r = b.matchAt(BufferPosition(line: line, column: column), pattern)
+    if r.isSome:
+      some((r.get.startCol, r.get.endCol))
+    else:
+      none((int, int))
+
+  test "the cursor is on a match a search goes through where it stands in it":
     let b = newTextBuffer("a a a zz qq\n")
-    check b.findNext("a a ", BufferPosition(line: 0, column: 0)) ==
-      some(BufferPosition(line: 0, column: 2))
-    check b.matchEndCol(BufferPosition(line: 0, column: 2), "a a ") == some(6)
-    check b.matchEndCol(BufferPosition(line: 0, column: 0), "a a ") == some(4)
+    check b.at(0, 0, "a a ") == some((0, 4))
+    check b.at(0, 3, "a a ") == some((0, 4))
+    # The one at column 2 overlaps it, so no search goes through it.
+    check b.at(0, 4, "a a ").isNone
 
-  test "there is none where no match starts":
+  test "on an empty match where it stands":
+    let b = newTextBuffer("foo\n\nbar")
+    check b.at(1, 0, "^$") == some((0, 0))
+    check b.at(0, 0, "^") == some((0, 0))
+    check b.at(0, 1, "^").isNone
+
+  test "on one at the end of the line from the last character too":
+    # Where a search puts the cursor on it.
+    let b = newTextBuffer("abc\nde")
+    check b.at(0, 2, "$") == some((3, 3))
+    check b.at(0, 3, "$") == some((3, 3))
+    check b.at(0, 1, "$").isNone
+
+  test "on one at the end of the line from each part of the last character":
+    let b = newTextBuffer("ae\u0301\u0302\nx")
+    for column in 1 .. 3:
+      check b.at(0, column, "$") == some((4, 4))
+    check b.at(0, 0, "$").isNone
+
+  test "not on the end of the line a search does not go through":
+    # Only the highlight looks at the end of the line after a match.
+    let b = newTextBuffer("abc")
+    check b.at(0, 2, "c|$") == some((2, 3))
+    check b.at(0, 3, "c|$").isNone
+
+  test "there is none where no match is":
     let b = newTextBuffer("foo\n")
-    check b.matchEndCol(BufferPosition(line: 0, column: 1), "foo").isNone
-    check b.matchEndCol(BufferPosition(line: 3, column: 0), "foo").isNone
-    check b.matchEndCol(BufferPosition(line: 0, column: 0), "").isNone
-
-  test "a word match goes by the column and a wide character counts as one":
-    let b = newTextBuffer("日本 foo\n")
-    check b.matchEndCol(BufferPosition(line: 0, column: 3), "foo") == some(6)
-    check b.matchEndCol(BufferPosition(line: 0, column: 3), "foo", match = smWord) ==
-      some(6)
+    check b.at(0, 1, "bar").isNone
+    check b.at(3, 0, "foo").isNone
+    check b.at(0, 0, "").isNone
 
 suite "substituteMatches":
   # Expectations are Vim 9.2's substitute() with `\\V`.

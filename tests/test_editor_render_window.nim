@@ -107,6 +107,7 @@ proc lineFillPatchAt(
     lineConflict: ConflictMarkerKind,
     useTwoColor: bool,
     inVisualSelection: bool,
+    inSearchMatch = false,
 ): StylePatch =
   ## Test helper bridging the legacy explicit-args signature to the
   ## LineStyleContext-based one.
@@ -116,7 +117,7 @@ proc lineFillPatchAt(
     lineConflict: lineConflict,
     useTwoColor: useTwoColor,
   )
-  e.lineFillPatch(lineCtx, displayX, cursorDisplayCol, inVisualSelection)
+  e.lineFillPatch(lineCtx, displayX, cursorDisplayCol, inVisualSelection, inSearchMatch)
 
 proc overlayPatchSyntaxAt(
     e: Editor,
@@ -1299,6 +1300,148 @@ suite "renderWindow - Visual selection over the line break":
       wrap = false,
       leftCell = 4,
     ) == @["", "S", "SSSS"]
+
+proc matchedCells(
+    text, pattern: string,
+    wrap: bool,
+    leftCell = 0,
+    width = 40,
+    cursorLine = false,
+    visual: seq[BufferPosition] = @[],
+): seq[string] =
+  ## Each screen row as `M` for a cell hlsearch shows a match of `pattern`
+  ## over and `.` otherwise, up to the last such cell, and up to the last row
+  ## with one. The cursor is on the first line, or where Visual mode selects
+  ## from the first of `visual` to its last, and `cursorLine` turns
+  ## 'cursorline' on.
+  let e = createTestEditor()
+  var buffer = createTestBuffer()
+  e.state.lineWrap = wrap
+  e.state.showSidebar = false
+  e.state.showLineNumbers = false
+  e.state.showCursorLine = cursorLine
+  e.state.input.search.hlsearch = true
+  e.state.input.search.hlsearchTempDisabled = false
+  e.state.input.search.last = SearchSpec(pattern: pattern)
+  discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), text)
+
+  let window = e.windowManager.windows[0]
+  window.viewport.width = width
+  window.viewport.height = 24
+  window.viewport.x = 0
+  window.viewport.y = 0
+  window.viewport.leftCell = leftCell
+  window.active = true
+  if visual.len > 0:
+    e.state.selectVisual(visual[0], visual[^1])
+  else:
+    window.cursor = BufferPosition(line: 0, column: 0)
+
+  e.renderWindow(buffer, window, 0, true, true, 0)
+
+  let matchBg = searchHighlightStyle().bg
+  for y in 0 ..< window.viewport.height:
+    var row = ""
+    for x in 0 ..< width:
+      row.add(if buffer[x, y].style.bg == matchBg: 'M' else: '.')
+    result.add(row.strip(leading = false, chars = {'.'}))
+  while result.len > 0 and result[^1].len == 0:
+    result.setLen(result.len - 1)
+
+suite "renderWindow - Empty search matches":
+  # As Vim 9.2 draws them with 'hlsearch': an empty match shows over the
+  # character after it, or over the line break.
+  test "An empty line shows its empty match":
+    for wrap in [false, true]:
+      check matchedCells("abc\n\nxyz", "^$", wrap) == @["", "M"]
+
+  test "A match at the line's end shows over the line break":
+    for wrap in [false, true]:
+      check matchedCells("abc\n\nxyz", "$", wrap) == @["...M", "M", "...M"]
+
+  test "Empty matches show over every character and the line break":
+    for wrap in [false, true]:
+      check matchedCells("abc\n\nxyz", "x*", wrap) == @["MMMM", "M", "MMMM"]
+
+  test "The line's end after a match ending there shows too":
+    for wrap in [false, true]:
+      check matchedCells("abc\n\nxyz", "c|$", wrap) == @["..MM", "M", "...M"]
+
+  test "An empty match before a character shows over it":
+    for wrap in [false, true]:
+      check matchedCells("abc\n\nxyz", "^", wrap) == @["M", "M", "M"]
+      check matchedCells("abc\n\nxyz", "(?<=b)", wrap) == @["..M"]
+
+  test "Wrapped, the line break shows on the last row":
+    check matchedCells("abcdefgh", "$", wrap = true, width = 5) == @["", "...M"]
+
+  test "Scrolled sideways, only a line whose end the row shows has it":
+    # `ab` is scrolled to just its end, `a` and the empty line past it.
+    check matchedCells("abcdef\nab\na\n", "$", wrap = false, leftCell = 2) ==
+      @["....M", "M"]
+    check matchedCells("abcdef\nab\na\n", "$", wrap = false, leftCell = 1) ==
+      @[".....M", ".M", "M"]
+    check matchedCells("abcdef\nab\na\n", "^$", wrap = false, leftCell = 1).len == 0
+
+  test "The line break's match shows over the cursor line":
+    for wrap in [false, true]:
+      let e = createTestEditor()
+      var buffer = createTestBuffer()
+      e.state.lineWrap = wrap
+      e.state.showSidebar = false
+      e.state.showLineNumbers = false
+      e.state.showCursorLine = true
+      e.state.input.search.hlsearch = true
+      e.state.input.search.hlsearchTempDisabled = false
+      e.state.input.search.last = SearchSpec(pattern: "$")
+      discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "ab")
+
+      let window = e.windowManager.windows[0]
+      window.viewport.width = 10
+      window.viewport.height = 24
+      window.viewport.x = 0
+      window.viewport.y = 0
+      window.cursor = BufferPosition(line: 0, column: 0)
+      window.active = true
+
+      e.renderWindow(buffer, window, 0, true, true, 0)
+
+      check buffer[2, 0].style.bg == searchHighlightStyle().bg
+      check buffer[3, 0].style.bg == cursorLineHighlightStyle().bg
+
+  test "With no cell left on the row, the line break's match shows over the last":
+    # The right half of a wide character shows none of it, as in Vim.
+    for wrap in [false, true]:
+      check matchedCells("abcde\nab", "$", wrap, width = 5) == @["....M", "..M"]
+      check matchedCells("abcあ", "$", wrap, width = 5).len == 0
+    check matchedCells("abcdefghij", "$", wrap = true, width = 5) == @["", "....M"]
+    check matchedCells("abcdefg", "$", wrap = false, leftCell = 2, width = 5) ==
+      @["....M"]
+
+  test "The cursor line keeps its last cell outside Visual mode":
+    # Vim leaves the last cell to 'cursorline', which it does not draw in
+    # Visual mode.
+    let start = BufferPosition(line: 0, column: 0)
+    for wrap in [false, true]:
+      check matchedCells("abcde\nfghij", "$", wrap, width = 5, cursorLine = true) ==
+        @["", "....M"]
+      check matchedCells(
+        "abcde\nfghij",
+        "$",
+        wrap,
+        width = 5,
+        cursorLine = true,
+        visual = @[start, start],
+      ) == @["....M", "....M"]
+
+  test "A selected line break keeps the selection over the last cell":
+    let
+      start = BufferPosition(line: 0, column: 3)
+      current = BufferPosition(line: 1, column: 0)
+    for wrap in [false, true]:
+      check matchedCells(
+        "abcde\nfghij", "$", wrap, width = 5, visual = @[start, current]
+      ) == @["", "....M"]
 
 suite "renderWindow - Scrolling":
   test "Render window with vertical scroll":
@@ -3376,7 +3519,7 @@ suite "Terminal-Normal colors":
     let e = createTestEditor()
     e.state.showCursorLine = false
 
-    check e.lineFillPatch(LineStyleContext(defaultFill: true), 10, -1, false) ==
+    check e.lineFillPatch(LineStyleContext(defaultFill: true), 10, -1, false, false) ==
       full(Style())
 
   test "reverse video goes under an overlay background":
@@ -3715,6 +3858,35 @@ suite "lineFillPatch priority chain":
     )
     check patch == full(visualStyle())
 
+  test "visualSelection wins over searchMatch":
+    let e = createTestEditor()
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = -1,
+      displayX = 0,
+      cursorDisplayCol = -1,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      inVisualSelection = true,
+      inSearchMatch = true,
+    )
+    check patch == full(visualStyle())
+
+  test "searchMatch wins over gitConflict and cursorLine":
+    let e = createTestEditor()
+    e.state.showCursorLine = true
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = 0,
+      displayX = 0,
+      cursorDisplayCol = -1,
+      lineConflict = cmkOurs,
+      useTwoColor = true,
+      inVisualSelection = false,
+      inSearchMatch = true,
+    )
+    check patch == full(searchHighlightStyle())
+
   test "visualSelection wins over cursorLine":
     let e = createTestEditor()
     e.state.showCursorLine = true
@@ -3902,6 +4074,45 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     check buf[3, 0].symbol == ":"
     for x in 3 ..< 10:
       check buf[x, 0].style.bg != visBg
+
+  test "an empty match at the line's end shows after the virtual text":
+    # As Vim 9.2 draws `/$` with a text property `after` the line.
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.state.showSyntax = false
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
+    e.state.input.search.last = SearchSpec(pattern: "$")
+
+    let tb = newTextBuffer("abc")
+    var buf = newBuffer(80, 1)
+    let provider = stubProvider(
+      @[
+        VirtualText(
+          line: 0,
+          placement: vtpEndOfLine,
+          chunks:
+            @[VirtualTextChunk(text: ":int", color: EditorColorPairIndex.inlayHint)],
+        )
+      ]
+    )
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[provider],
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "abc", 0, 0, 0, 0, ctx)
+
+    let matchBg = searchHighlightStyle().bg
+    for x in 0 ..< 7:
+      check buf[x, 0].style.bg != matchBg
+    check buf[7, 0].style.bg == matchBg
+    check buf[8, 0].style.bg != matchBg
 
   test "C0 controls in end-of-line virtual text are substituted with a space":
     let config = newEditorConfig()
@@ -4645,7 +4856,7 @@ suite "newLineStyleContext - search highlight":
     check e.searchRangesFor("foobar foo") ==
       @[ColumnRange(startCol: 0, endCol: 3), ColumnRange(startCol: 7, endCol: 10)]
 
-  test "A row drawing none of the line's text leaves the overlays empty":
+  test "A row showing none of the line leaves the overlays empty":
     let e = createTestEditor()
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = false
@@ -4655,7 +4866,7 @@ suite "newLineStyleContext - search highlight":
 
     check e.newLineStyleContext(e.activeBuffer, 0, "foo", ctx).searchRanges.len == 1
     let lineCtx =
-      e.newLineStyleContext(e.activeBuffer, 0, "foo", ctx, drawsText = false)
+      e.newLineStyleContext(e.activeBuffer, 0, "foo", ctx, showsLine = false)
     check lineCtx.searchRanges.len == 0
     check lineCtx.lineEnd == 3
 

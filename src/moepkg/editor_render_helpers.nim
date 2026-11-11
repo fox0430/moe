@@ -29,13 +29,15 @@ proc colorIndexToStyle*(colorIdx: EditorColorPairIndex): Style =
   ## Convert EditorColorPairIndex to Celina Style using theme colors
   getThemeStyle(colorIdx)
 
-proc isColumnInRanges*(ranges: seq[ColumnRange], col: int): bool {.inline.} =
-  ## Check if a column is within any of the pre-computed ranges.
-  ## O(m) where m is the number of ranges on the line (typically small).
+proc isColumnInRanges*(ranges: seq[ColumnRange], col: int): bool =
+  ## Whether one of `ranges`, left to right, is over column `col`. An empty
+  ## one, a search match, is over the column it is at.
   for r in ranges:
-    if col >= r.startCol and col < r.endCol:
+    if r.startCol > col:
+      break
+    if r.covers(col):
       return true
-  return false
+  false
 
 proc analyzeIndentation*(lineText: string): IndentInfo =
   ## Analyze a line once to determine indentation properties
