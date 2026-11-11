@@ -1,0 +1,350 @@
+# Theme color configuration
+# Converted from VS Code's "Light (Visual Studio)" theme (light_vs.json).
+# Colors that light_vs.json does not define were taken from VS Code's built-in
+# light-theme defaults. Semi-transparent VS Code colors (#RRGGBBAA) were
+# pre-blended against the white background, since moe only takes #RRGGBB.
+#
+# Color format: "#RRGGBB" (hex) or "termDefault" (terminal default color)
+
+[Colors]
+
+foreground = "#000000"
+background = "#ffffff"
+
+lineNum = { fg = "#237893", bg = "#ffffff" }
+
+currentLineNum = { fg = "#0b216f", bg = "#ffffff" }
+
+# VS Code status bar: blue #007ACC, remote indicator green #16825D used as mode label,
+# unfocused window #1476B8
+statusLineNormalMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineNormalModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineNormalModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineInsertMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineInsertModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineInsertModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineVisualMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineVisualModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineVisualModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineReplaceMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineReplaceModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineReplaceModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineFilerMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineFilerModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineFilerModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineExMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineExModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineExModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineLogViewerMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineLogViewerModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineLogViewerModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineHelpMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineHelpModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineHelpModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineBufferManagerMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineBufferManagerModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineBufferManagerModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineBookmarkManagerMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineBookmarkManagerModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineBookmarkManagerModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineBackupManagerMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineBackupManagerModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineBackupManagerModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineRecoveryManagerMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineRecoveryManagerModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineRecoveryManagerModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineDiffViewerMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineDiffViewerModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineDiffViewerModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineRecentFileMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineRecentFileModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineRecentFileModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineDebugMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineDebugModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineDebugModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineConfigMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineConfigModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineConfigModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineReferencesMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineReferencesModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineReferencesModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineDocumentSymbolMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineDocumentSymbolModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineDocumentSymbolModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineCallHierarchyMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineCallHierarchyModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineCallHierarchyModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineTerminalMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineTerminalModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineTerminalModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineFileTreeMode = { fg = "#ffffff", bg = "#007acc" }
+statusLineFileTreeModeLabel = { fg = "#ffffff", bg = "#16825d" }
+statusLineFileTreeModeInactive = { fg = "#ffffff", bg = "#1476b8" }
+
+statusLineGitChangedLines = { fg = "#ffffff", bg = "#007acc" }
+statusLineGitBranch = { fg = "#ffffff", bg = "#007acc" }
+
+tab = { fg = "#616161", bg = "#ececec" }
+currentTab = { fg = "#333333", bg = "#ffffff" }
+
+commandLine = { fg = "#000000", bg = "#ffffff" }
+
+errorMessage = { fg = "#e51400", bg = "#ffffff" }
+
+warnMessage = { fg = "#bf8803", bg = "#ffffff" }
+
+# editor.findMatchHighlightBackground #EA5C0055
+searchResult = { fg = "#000000", bg = "#f8c9aa" }
+
+# editor.selectionBackground
+selectArea = { fg = "#000000", bg = "#add6ff" }
+
+# ---- TextMate syntax colors (tokenColors) ----
+keyword = { fg = "#0000ff" }
+functionName = { fg = "#000000" }
+typeName = { fg = "#000000" }
+boolean = { fg = "#0000ff" }
+charLit = { fg = "#a31515" }
+stringLit = { fg = "#a31515" }
+specialVar = { fg = "#0000ff" }
+builtin = { fg = "#000000" }
+binNumber = { fg = "#098658" }
+decNumber = { fg = "#098658" }
+floatNumber = { fg = "#098658" }
+hexNumber = { fg = "#098658" }
+octNumber = { fg = "#098658" }
+comment = { fg = "#008000" }
+longComment = { fg = "#008000" }
+docComment = { fg = "#008000" }
+docLongComment = { fg = "#008000" }
+whitespace = { fg = "#d6d6d6" }
+preprocessor = { fg = "#0000ff" }
+pragma = { fg = "#0000ff" }
+identifier = { fg = "#000000" }
+table = { fg = "#800000" }
+date = { fg = "#098658" }
+logError = { fg = "#e51400" }
+logWarning = { fg = "#bf8803" }
+logInfo = { fg = "#1a85ff" }
+logUuid = { fg = "#098658" }
+operator = { fg = "#000000" }
+
+markdownCodeBlock = { fg = "#800000", bg = "#f3f3f3" }
+
+# ---- LSP semantic tokens ----
+# light_vs only defines a few semantic colors; the rest inherit the
+# TextMate colors above, which in this theme means plain black.
+namespace = { fg = "#000000" }
+className = { fg = "#000000" }
+enumName = { fg = "#000000" }
+enumMember = { fg = "#098658" }
+interfaceName = { fg = "#000000" }
+typeParameter = { fg = "#000000" }
+parameter = { fg = "#000000" }
+variable = { fg = "#000000" }
+property = { fg = "#000000" }
+string = { fg = "#a31515" }
+event = { fg = "#000000" }
+function = { fg = "#000000" }
+method = { fg = "#000000" }
+macro = { fg = "#0000ff" }
+regexp = { fg = "#811f3f" }
+decorator = { fg = "#000000" }
+angle = { fg = "#000000" }
+arithmetic = { fg = "#000000" }
+attribute = { fg = "#000000" }
+attributeBracket = { fg = "#000000" }
+bitwise = { fg = "#000000" }
+brace = { fg = "#000000" }
+bracket = { fg = "#000000" }
+builtinAttribute = { fg = "#000000" }
+builtinType = { fg = "#0000ff" }
+colon = { fg = "#000000" }
+comma = { fg = "#000000" }
+comparison = { fg = "#000000" }
+constParameter = { fg = "#000000" }
+derive = { fg = "#000000" }
+deriveHelper = { fg = "#000000" }
+dot = { fg = "#000000" }
+escapeSequence = { fg = "#a31515" }
+invalidEscapeSequence = { fg = "#cd3131" }
+formatSpecifier = { fg = "#a31515" }
+generic = { fg = "#000000" }
+label = { fg = "#000000" }
+lifetime = { fg = "#0000ff" }
+logical = { fg = "#000000" }
+macroBang = { fg = "#0000ff" }
+parenthesis = { fg = "#000000" }
+punctuation = { fg = "#000000" }
+selfKeyword = { fg = "#0000ff" }
+selfTypeKeyword = { fg = "#0000ff" }
+semicolon = { fg = "#000000" }
+typeAlias = { fg = "#000000" }
+toolModule = { fg = "#000000" }
+union = { fg = "#000000" }
+unresolvedReference = { fg = "#000000" }
+
+inlayHint = { fg = "#969696" }
+codeLens = { fg = "#919191" }
+
+currentFile = { fg = "#ffffff", bg = "#0060c0" }
+file = { fg = "#000000", bg = "#ffffff" }
+dir = { fg = "#0000ff", bg = "#ffffff" }
+pcLink = { fg = "#0451a5", bg = "#ffffff" }
+
+# editorSuggestWidget
+popupWindow = { fg = "#000000", bg = "#f3f3f3" }
+popupWinCurrentLine = { fg = "#ffffff", bg = "#0060c0" }
+popupWindowBorder = { fg = "#c8c8c8", bg = "#f3f3f3" }
+popupWindowDetail = { fg = "#616161", bg = "#f3f3f3" }
+popupWindowScrollBar = { fg = "#bababa", bg = "#f3f3f3" }
+popupWindowActiveParameter = { fg = "#0066bf", bg = "#f3f3f3" }
+
+notificationPopupInfo = { fg = "#000000", bg = "#f3f3f3" }
+notificationPopupInfoBorder = { fg = "#d4d4d4", bg = "#f3f3f3" }
+notificationPopupWarning = { fg = "#000000", bg = "#f3f3f3" }
+notificationPopupWarningBorder = { fg = "#bf8803", bg = "#f3f3f3" }
+notificationPopupError = { fg = "#000000", bg = "#f3f3f3" }
+notificationPopupErrorBorder = { fg = "#e51400", bg = "#f3f3f3" }
+
+replaceText = { fg = "#000000", bg = "#d7ebab" }
+
+# editorBracketMatch.background #0064001A
+parenPair = { fg = "#000000", bg = "#e5efe5" }
+
+# editor.selectionHighlightBackground #ADD6FF80
+currentWord = { fg = "#000000", bg = "#d6eaff" }
+
+# editor.snippetTabstopHighlightBackground #0A326433
+snippetTabStop = { fg = "#000000", bg = "#ced6e0" }
+
+# editor.findMatchBackground
+findCharMatch = { fg = "#000000", bg = "#a8ac94" }
+
+highlightFullWidthSpace = { fg = "#ffffff", bg = "#e51400" }
+
+# highlightTrailingSpaces = { fg = "#ffffff", bg = "#e51400" }
+highlightTrailingSpaces = { fg = "#ffffff", bg = "#ffdcdc" }
+
+reservedWord = { fg = "#ffffff", bg = "#0000ff" }
+
+syntaxCheckInfo = { fg = "#1a85ff", bg = "#ffffff" }
+syntaxCheckHint = { fg = "#6c6c6c", bg = "#ffffff" }
+syntaxCheckWarn = { fg = "#bf8803", bg = "#ffffff" }
+syntaxCheckErr = { fg = "#e51400", bg = "#ffffff" }
+
+# VS Code merge conflict colors (merge.*), blended on white
+gitConflict = { fg = "#000000", bg = "#ffdcdc" }
+gitConflictMarker = { fg = "#000000", bg = "#a0e4d6" }
+gitConflictOurs = { fg = "#000000", bg = "#d9f4ef" }
+gitConflictBase = { fg = "#000000", bg = "#e5e5e5" }
+gitConflictTheirs = { fg = "#000000", bg = "#d9edff" }
+
+backupManagerCurrentLine = { fg = "#ffffff", bg = "#0060c0" }
+
+recoveryManagerCurrentLine = { fg = "#ffffff", bg = "#0060c0" }
+
+# diffEditor.* colors, blended on white
+diffViewerAddedLine = { fg = "#098658", bg = "#ffffff" }
+diffViewerDeletedLine = { fg = "#a31515", bg = "#ffffff" }
+diffViewerAddedWord = { bg = "#d7e8b1" }
+diffViewerDeletedWord = { bg = "#ffa3a3" }
+diffViewerAddedLineBg = { bg = "#ebf1dd" }
+diffViewerDeletedLineBg = { bg = "#ffcccc" }
+diffViewerFiller = { fg = "#808080", bg = "#f8f8f8" }
+
+configModeCurrentLine = { fg = "#ffffff", bg = "#0060c0" }
+
+# editor.lineHighlightBorder
+currentLine = { bg = "#eeeeee" }
+
+currentColumn = { bg = "#eeeeee" }
+
+# editor.foldBackground #ADD6FF4D
+foldingLine = { fg = "#808080", bg = "#e6f3ff" }
+
+# editorGutter.*
+sidebarGitAddedSign = { fg = "#2ea043", bg = "#ffffff" }
+sidebarGitDeletedSign = { fg = "#f85149", bg = "#ffffff" }
+sidebarGitChangedSign = { fg = "#1b81a8", bg = "#ffffff" }
+sidebarGitConflictSign = { fg = "#e51400", bg = "#ffffff" }
+
+sidebarSyntaxCheckInfoSign = { fg = "#1a85ff", bg = "#ffffff" }
+sidebarSyntaxCheckHintSign = { fg = "#6c6c6c", bg = "#ffffff" }
+sidebarSyntaxCheckWarnSign = { fg = "#bf8803", bg = "#ffffff" }
+sidebarSyntaxCheckErrSign = { fg = "#e51400", bg = "#ffffff" }
+sidebarSessionModifiedSign = { fg = "#bf8803", bg = "#ffffff" }
+sidebarSessionInsertedSign = { fg = "#098658", bg = "#ffffff" }
+sidebarBookmarkSign = { fg = "#0451a5", bg = "#ffffff" }
+
+# Viewer common colors
+viewerHeader = { fg = "#0000ff", bg = "#ffffff" }
+viewerSelectedLine = { fg = "#ffffff", bg = "#0060c0" }
+viewerEmptyMessage = { fg = "#767676", bg = "#ffffff" }
+
+# Filer mode specific
+filerDirectory = { fg = "#0000ff" }
+filerSymlink = { fg = "#0451a5" }
+filerSymlinkDir = { fg = "#800080" }
+filerHiddenFile = { fg = "#767676" }
+filerExecutable = { fg = "#098658" }
+
+# Buffer manager specific
+bufferManagerActive = { fg = "#098658" }
+bufferManagerModified = { fg = "#895503" }
+
+# Configuration mode specific
+configModeSection = { fg = "#0000ff", bg = "#ffffff" }
+configModeEditMode = { fg = "#000000", bg = "#add6ff" }
+configModePopup = { fg = "#000000", bg = "#f3f3f3" }
+configModePopupSelected = { fg = "#ffffff", bg = "#0060c0" }
+
+# Diff viewer specific
+diffViewerHeader = { fg = "#000080" }
+diffViewerMeta = { fg = "#0451a5" }
+
+# Other viewers
+recentFileMissing = { fg = "#767676" }
+debugViewerSectionHeader = { fg = "#0000ff" }
+referencesViewerHeader = { fg = "#0000ff" }
+documentSymbolViewerHeader = { fg = "#0000ff" }
+callHierarchyViewerHeader = { fg = "#0000ff" }
+helpViewerSectionHeader = { fg = "#0000ff" }
+
+# Indentation guide (editorIndentGuide.background1)
+indentationLine = { fg = "#d3d3d3" }
+
+# Undecodable bytes drawn as <xx> (VS Code "invalid" scope color)
+invalidByte = { fg = "#cd3131" }
+
+# Scroll bar (scrollbarSlider.background #64646466)
+scrollBarThumb = { fg = "#c1c1c1", bg = "#c1c1c1" }
+scrollBarTrack = { fg = "#f3f3f3" }
+
+# LSP document highlight (editor.wordHighlight*)
+documentHighlightText = { fg = "termDefault", bg = "#d5d5d5" }
+documentHighlightRead = { fg = "termDefault", bg = "#d5d5d5" }
+documentHighlightWrite = { fg = "termDefault", bg = "#c2d8e6" }
+
+# Temporary message area
+tempMessageBorder = { fg = "termDefault", bg = "#d4d4d4" }
