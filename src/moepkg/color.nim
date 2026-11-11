@@ -799,6 +799,10 @@ proc rgbTo16Color*(r, g, b: int16): uint8 =
   else:
     result = baseColor
 
+const ColorBgOnlyEntries* =
+  {EditorColorPairIndex.currentLineBg, EditorColorPairIndex.currentColumnBg}
+  ## Color pairs that only use their background.
+
 proc toTomlColorKey*(index: EditorColorPairIndex): string =
   ## Convert EditorColorPairIndex to its TOML key in the theme file.
   ## Names generally match the enum, with three "Bg"-stripped exceptions

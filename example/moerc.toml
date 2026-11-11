@@ -490,7 +490,10 @@ enable = true                          # Show LSP state section
 [Theme]
 
 # Theme system - supports custom color themes
-kind = "config"                        # Theme kind: "default", "config" - "vscode" not yet supported
+kind = "config"                        # Theme kind: "default", "config", "vscode" (experimental)
+
+# "vscode" reads the active VS Code theme from fixed Linux install paths.
+# Colors it can't map keep the dark defaults, so light themes come out mixed.
 
 # Path to custom theme file (used when kind = "config")
 # Sample themes available in example/themes/: dark.toml, light.toml, vivid.toml

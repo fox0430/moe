@@ -58,6 +58,10 @@ statusLineBackupManagerMode = { fg = "#000000", bg = "#ff0087" }
 statusLineBackupManagerModeLabel = { fg = "#000000", bg = "#ffffff" }
 statusLineBackupManagerModeInactive = { fg = "#ff0087", bg = "#ffffff" }
 
+statusLineRecoveryManagerMode = { fg = "#000000", bg = "#ff0087" }
+statusLineRecoveryManagerModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineRecoveryManagerModeInactive = { fg = "#ff0087", bg = "#ffffff" }
+
 statusLineDiffViewerMode = { fg = "#000000", bg = "#ff0087" }
 statusLineDiffViewerModeLabel = { fg = "#000000", bg = "#ffffff" }
 statusLineDiffViewerModeInactive = { fg = "#ff0087", bg = "#ffffff" }
@@ -242,6 +246,8 @@ gitConflictTheirs = { fg = "#ffffff", bg = "#00008b" }
 
 backupManagerCurrentLine = { fg = "#ffffff", bg = "#ff0087" }
 
+recoveryManagerCurrentLine = { fg = "#ffffff", bg = "#ff0087" }
+
 diffViewerAddedLine = { fg = "#008000", bg = "#000000" }
 diffViewerDeletedLine = { fg = "#ff0000", bg = "#000000" }
 diffViewerAddedWord = { bg = "#008000" }
@@ -307,6 +313,9 @@ helpViewerSectionHeader = { fg = "#ff0087" }
 
 # Indentation guide
 indentationLine = { fg = "#464646" }
+
+# Undecodable bytes drawn as <xx>
+invalidByte = { fg = "#ff0000" }
 
 # Scroll bar
 scrollBarThumb = { fg = "#787878", bg = "#787878" }

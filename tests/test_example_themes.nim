@@ -17,22 +17,47 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os]
+import std/[unittest, os, algorithm, sequtils]
 
-import pkg/results
+import pkg/[results, parsetoml]
 
-import ../src/moepkg/config_loader
+import ../src/moepkg/[config_loader, color, theme]
 
-const
-  ExampleThemesDir = currentSourcePath().parentDir / ".." / "example" / "themes"
-  ThemeFiles = ["dark.toml", "light.toml", "vivid.toml"]
+const ExampleThemesDir = currentSourcePath().parentDir / ".." / "example" / "themes"
+
+proc missingColors(colors: TomlTableRef): seq[string] =
+  ## Theme keys whose omission leaves a color at the bundled dark default.
+  ## Leaving out a `#000000` default bg is fine (it takes `background`), as
+  ## is leaving out the fg of a bg-only or terminal-default-fg entry.
+  for key in ["foreground", "background"]:
+    if not colors.hasKey(key):
+      result.add key
+
+  for index in EditorColorPairIndex:
+    if index == EditorColorPairIndex.default:
+      continue
+
+    let
+      key = toTomlColorKey(index)
+      default = DefaultColors[index]
+      needsFg =
+        index notin ColorBgOnlyEntries and not default.foreground.rgb.isTermDefaultColor
+      needsBg = default.background.rgb != rgb("#000000")
+
+    for (side, needed) in [("fg", needsFg), ("bg", needsBg)]:
+      let isSet =
+        colors.hasKey(key) and colors[key].kind == TomlValueKind.Table and
+        colors[key].getTable.hasKey(side)
+      if needed and not isSet:
+        result.add key & "." & side
 
 suite "example/themes/*.toml":
-  for name in ThemeFiles:
-    let path = ExampleThemesDir / name
+  test "Bundled themes exist":
+    for name in ["dark.toml", "light.toml", "vivid.toml"]:
+      check fileExists(ExampleThemesDir / name)
 
-    test name & ": File exists":
-      check fileExists(path)
+  for path in toSeq(walkFiles(ExampleThemesDir / "*.toml")).sorted:
+    let name = path.extractFilename
 
     test name & ": Parse without errors":
       var vr = newValidationResult()
@@ -50,3 +75,12 @@ suite "example/themes/*.toml":
         for e in vr.errors:
           echo "  Validation error: ", e.toMessage
       check vr.errors.len == 0
+
+    test name & ": Sets every color":
+      let toml = parseFile(path)
+      require toml.hasKey("Colors") and toml["Colors"].kind == TomlValueKind.Table
+
+      let missing = missingColors(toml["Colors"].getTable)
+      if missing.len > 0:
+        echo "  Missing: ", missing
+      check missing.len == 0
