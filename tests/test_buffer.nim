@@ -22,6 +22,7 @@ import std/[unittest, os, strutils, tables, times, options, unicode]
 import pkg/[results, celina]
 
 import ../src/moepkg/[buffer, encoding, highlight, unicode_utils]
+import search_test_helper
 
 suite "Buffer - Trailing Empty Lines":
   test "Insert text with trailing empty lines preserves them":
@@ -547,17 +548,6 @@ suite "Buffer - Search":
     let pos = buf.findPrev("World", BufferPosition(line: 0, column: 0))
     check pos.isSome
     check pos.get.column == 6
-
-  test "isPositionInSearchMatch":
-    let buf = newTextBuffer("Hello World")
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 0), "Hello") ==
-      true
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 2), "Hello") ==
-      true
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 5), "Hello") ==
-      false
-    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 6), "World") ==
-      true
 
 suite "Buffer - Word Detection":
   test "isWordChar - ASCII alphanumeric and underscore":

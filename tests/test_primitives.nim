@@ -45,3 +45,17 @@ suite "primitives - BufferPosition":
     let c = BufferPosition(line: 3, column: 4)
     check a == b
     check a != c
+
+suite "primitives - ColumnRange.covers":
+  test "a match is over its characters":
+    let m = ColumnRange(startCol: 2, endCol: 4)
+    check not m.covers(1)
+    check m.covers(2)
+    check m.covers(3)
+    check not m.covers(4)
+
+  test "an empty match is over the character after it":
+    let m = ColumnRange(startCol: 3, endCol: 3)
+    check not m.covers(2)
+    check m.covers(3)
+    check not m.covers(4)

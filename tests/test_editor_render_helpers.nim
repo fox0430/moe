@@ -296,3 +296,20 @@ suite "isColumnInRanges":
     let ranges = @[ColumnRange(startCol: 0, endCol: 1)]
     check isColumnInRanges(ranges, 0)
     check not isColumnInRanges(ranges, 1)
+
+  test "an empty search match shows over the cell after it":
+    let matches =
+      @[ColumnRange(startCol: 0, endCol: 2), ColumnRange(startCol: 5, endCol: 5)]
+    check isColumnInRanges(matches, 1)
+    check not isColumnInRanges(matches, 2)
+    check not isColumnInRanges(matches, 4)
+    check isColumnInRanges(matches, 5)
+    check not isColumnInRanges(matches, 6)
+
+  test "one empty search match for each column":
+    var matches: seq[ColumnRange]
+    for col in 0 ..< 1000:
+      matches.add ColumnRange(startCol: col, endCol: col)
+    for col in 0 ..< 1000:
+      check isColumnInRanges(matches, col)
+    check not isColumnInRanges(matches, 1000)

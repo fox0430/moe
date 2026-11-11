@@ -622,6 +622,21 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
     check result.kind == lvrHandled
     check state.cursor.line == 1 # first "test"
 
+  test "n to a match at the end of a line puts the cursor on the last character":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("abc\nde\n")
+      state = newTestEditorState()
+    state.input.search.last.pattern = "$"
+
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("n"))
+    check state.cursor == BufferPosition(line: 0, column: 2)
+
+    discard
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("n"))
+    check state.cursor == BufferPosition(line: 1, column: 1)
+
   test "N searches backward with last search text":
     let
       logState = newLogViewerState()

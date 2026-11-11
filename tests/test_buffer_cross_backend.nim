@@ -27,6 +27,7 @@ import pkg/results
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/buffer/internal_mutations
+import search_test_helper
 
 proc buf(
     content: string = "",

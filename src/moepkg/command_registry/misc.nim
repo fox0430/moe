@@ -23,8 +23,7 @@ import std/[options, strutils]
 
 import pkg/results
 
-import
-  ../[types, buffer, motion, modes, git_conflict, unicode_utils, search_ops, fold_open]
+import ../[types, buffer, motion, modes, git_conflict, search_ops, fold_open]
 import ../command_handlers/[insert_commands, normal_commands]
 
 import core, insert_entry
@@ -77,36 +76,6 @@ proc jumpCursorToLine*(ctx: CommandContext, line: int) =
   ctx.cursor = BufferPosition(line: line, column: 0)
   ctx.motionController.viewportManager.updateViewport(ctx.state, ctx.buffer, ctx.cursor)
 
-proc findMatchContainingCursor*(
-    buffer: TextBuffer,
-    searchText: string,
-    cursorPos: BufferPosition,
-    ignorecase: bool,
-    match: SearchMatch,
-): Option[BufferPosition] =
-  ## Return start position of a match that contains the cursor, if any.
-  ## Uses findSearchMatchRanges for regex-aware match detection.
-  let ranges =
-    buffer.findSearchMatchRanges(cursorPos.line, searchText, ignorecase, match)
-  for r in ranges:
-    if (cursorPos.column >= r.startCol and cursorPos.column < r.endCol) or
-        (r.startCol == r.endCol and cursorPos.column == r.startCol):
-      return some(BufferPosition(line: cursorPos.line, column: r.startCol))
-  return none(BufferPosition)
-
-proc getMatchEndCol*(
-    buffer: TextBuffer,
-    searchText: string,
-    matchStart: BufferPosition,
-    ignorecase: bool,
-    match: SearchMatch,
-): int =
-  ## Get the end column (inclusive) of a match starting at matchStart.
-  # Fallback: use search text char length
-  buffer.matchEndCol(matchStart, searchText, ignorecase, match).get(
-    matchStart.column + searchText.charLen
-  ) - 1
-
 proc gnArea*(match: (BufferPosition, BufferPosition), forward: bool): VisualArea =
   ## The Visual area gn/gN select over `match`: like Vim's current_search, the
   ## cursor ends at the end of the match for gn and at its start for gN.
@@ -135,19 +104,22 @@ proc findGnMatch*(
 
   # gn goes forward and gN backward, as in Vim: not the way the last search went
   let direction = if forward: Forward else: Backward
-  proc step(pos: BufferPosition): Option[BufferPosition] =
+  proc step(pos: BufferPosition): Option[LineMatch] =
     buffer.findMatch(spec, pos, ignoreCase, direction)
 
-  var match =
-    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, spec.match)
-  if match.isNone:
-    match = step(state.cursor)
-  if match.isNone:
+  let on = buffer.matchAt(state.cursor, searchText, ignoreCase, spec.match)
+  let first =
+    if on.isSome:
+      some(LineMatch(line: state.cursor.line, cols: on.get))
+    else:
+      step(state.cursor)
+  if first.isNone:
     return err("Pattern not found: " & searchText)
 
-  let pos = stepMatches(match.get, count, step)
-  let endCol = getMatchEndCol(buffer, searchText, pos, ignoreCase, spec.match)
-  ok((pos, BufferPosition(line: pos.line, column: max(pos.column, endCol))))
+  let
+    match = stepMatches(first.get, count, step)
+    lastColumn = max(match.cols.startCol, match.cols.endCol - 1)
+  ok((match.start, BufferPosition(line: match.line, column: lastColumn)))
 
 proc registerMiscCommands*(registry: CommandRegistry) =
   ## Register mode/insert/quickrun/search/git navigation/motion.match.bracket
@@ -297,7 +269,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     ctx.cursor = match.get
     ctx.state.openCursorFolds()
     ctx.motionController.viewportManager.updateViewport(
-      ctx.state, ctx.buffer, match.get
+      ctx.state, ctx.buffer, ctx.cursor
     )
     ok(())
 
