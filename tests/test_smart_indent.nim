@@ -87,178 +87,172 @@ suite "smart_indent - stripNimCodeOnly":
   test "Hash inside backtick is not treated as comment":
     check stripNimCodeOnly("let `a#b` = 1") == "let  xxx  = 1"
 
-suite "smart_indent - extraIndentForNewline (Nim, positive)":
+suite "smart_indent - needsExtraIndent (Nim, positive)":
   test "Standalone 'var' triggers extra indent":
-    check extraIndentForNewline("var", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("var", SourceLanguage.langNim)
 
   test "Standalone 'let' triggers":
-    check extraIndentForNewline("let", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("let", SourceLanguage.langNim)
 
   test "Standalone 'const' triggers":
-    check extraIndentForNewline("const", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("const", SourceLanguage.langNim)
 
   test "Standalone 'type' triggers":
-    check extraIndentForNewline("type", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("type", SourceLanguage.langNim)
 
   test "Indented standalone 'var' still triggers":
-    check extraIndentForNewline("    var", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("    var", SourceLanguage.langNim)
 
   test "'var' with trailing comment still triggers":
-    check extraIndentForNewline("var # group", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("var # group", SourceLanguage.langNim)
 
   test "Trailing 'or' triggers":
-    check extraIndentForNewline("if a or", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("if a or", SourceLanguage.langNim)
 
   test "Trailing 'and' triggers":
-    check extraIndentForNewline("if a and", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("if a and", SourceLanguage.langNim)
 
   test "Trailing 'object' triggers":
-    check extraIndentForNewline("type Foo = object", SourceLanguage.langNim, "  ") ==
-      "  "
+    check needsExtraIndent("type Foo = object", SourceLanguage.langNim)
 
   test "Trailing 'ref object' triggers (object at end)":
-    check extraIndentForNewline("type Foo = ref object", SourceLanguage.langNim, "  ") ==
-      "  "
+    check needsExtraIndent("type Foo = ref object", SourceLanguage.langNim)
 
   test "Trailing 'tuple' triggers":
-    check extraIndentForNewline("type T = tuple", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("type T = tuple", SourceLanguage.langNim)
 
   test "Trailing 'enum' triggers":
-    check extraIndentForNewline("type E = enum", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("type E = enum", SourceLanguage.langNim)
 
   test "Trailing '=' (proc definition) triggers":
-    check extraIndentForNewline("proc foo() =", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("proc foo() =", SourceLanguage.langNim)
 
   test "Trailing '=' with whitespace triggers":
-    check extraIndentForNewline("proc foo() =   ", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("proc foo() =   ", SourceLanguage.langNim)
 
   test "Trailing ':' on 'if' triggers":
-    check extraIndentForNewline("if x:", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("if x:", SourceLanguage.langNim)
 
   test "Trailing ':' on 'while' triggers":
-    check extraIndentForNewline("while cond:", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("while cond:", SourceLanguage.langNim)
 
   test "Trailing ':' on 'for' triggers":
-    check extraIndentForNewline("for i in 0 ..< 10:", SourceLanguage.langNim, "  ") ==
-      "  "
+    check needsExtraIndent("for i in 0 ..< 10:", SourceLanguage.langNim)
 
   test "Trailing ':' on 'else' triggers":
-    check extraIndentForNewline("else:", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("else:", SourceLanguage.langNim)
 
   test "Trailing ':' on 'of' clause triggers":
-    check extraIndentForNewline("of Foo:", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("of Foo:", SourceLanguage.langNim)
 
   test "Trailing ':' on 'try' triggers":
-    check extraIndentForNewline("try:", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("try:", SourceLanguage.langNim)
 
   test "Trailing ':' on 'block' triggers":
-    check extraIndentForNewline("block named:", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("block named:", SourceLanguage.langNim)
 
   test "Trailing ':' with whitespace triggers":
-    check extraIndentForNewline("if x:  ", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("if x:  ", SourceLanguage.langNim)
 
   test "Unclosed '(' triggers":
-    check extraIndentForNewline("echo foo(", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("echo foo(", SourceLanguage.langNim)
 
   test "Unclosed '[' triggers":
-    check extraIndentForNewline("let a = [", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("let a = [", SourceLanguage.langNim)
 
   test "Unclosed '{' triggers":
-    check extraIndentForNewline("let t = {", SourceLanguage.langNim, "  ") == "  "
+    check needsExtraIndent("let t = {", SourceLanguage.langNim)
 
-  test "Nested unclosed brackets still give exactly one step":
-    check extraIndentForNewline("foo(bar([", SourceLanguage.langNim, "  ") == "  "
-
-  test "Custom indent unit (tab) is honored":
-    check extraIndentForNewline("var", SourceLanguage.langNim, "\t") == "\t"
+  test "Nested unclosed brackets trigger":
+    check needsExtraIndent("foo(bar([", SourceLanguage.langNim)
 
   test "A carried closer right after an opener still triggers":
-    check extraIndentForNewline("foo(", SourceLanguage.langNim, "  ", ")") == "  "
+    check needsExtraIndent("foo(", SourceLanguage.langNim, ")")
 
-suite "smart_indent - extraIndentForNewline (negative)":
+suite "smart_indent - needsExtraIndent (negative)":
   test "Plain identifier ending in 'or' (coordinator) does not trigger":
-    check extraIndentForNewline("let coordinator", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("let coordinator", SourceLanguage.langNim)
 
   test "Plain identifier ending in 'and' does not trigger":
-    check extraIndentForNewline("let brand", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("let brand", SourceLanguage.langNim)
 
   test "'==' at end does not trigger":
-    check extraIndentForNewline("if a ==", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("if a ==", SourceLanguage.langNim)
 
   test "'!=' at end does not trigger":
-    check extraIndentForNewline("if a !=", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("if a !=", SourceLanguage.langNim)
 
   test "'<=' at end does not trigger":
-    check extraIndentForNewline("if a <=", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("if a <=", SourceLanguage.langNim)
 
   test "'>=' at end does not trigger":
-    check extraIndentForNewline("if a >=", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("if a >=", SourceLanguage.langNim)
 
   test "'+=' at end does not trigger":
-    check extraIndentForNewline("x +=", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("x +=", SourceLanguage.langNim)
 
   test "'-=' at end does not trigger":
-    check extraIndentForNewline("x -=", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("x -=", SourceLanguage.langNim)
 
   test "'*=' at end does not trigger":
-    check extraIndentForNewline("x *=", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("x *=", SourceLanguage.langNim)
 
   test "'/=' at end does not trigger":
-    check extraIndentForNewline("x /=", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("x /=", SourceLanguage.langNim)
 
   test "'%=' at end does not trigger":
-    check extraIndentForNewline("x %=", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("x %=", SourceLanguage.langNim)
 
   test "'&=' at end does not trigger":
-    check extraIndentForNewline("x &=", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("x &=", SourceLanguage.langNim)
 
   test "Backtick identifier 'or' does not trigger":
-    check extraIndentForNewline("let `or` = 1", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("let `or` = 1", SourceLanguage.langNim)
 
   test "Backtick identifier as last token does not trigger":
-    check extraIndentForNewline("let x = `or`", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("let x = `or`", SourceLanguage.langNim)
 
   test "'::' at end does not trigger":
-    check extraIndentForNewline("foo::", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("foo::", SourceLanguage.langNim)
 
   test "Comment ':' does not trigger":
-    check extraIndentForNewline("x = 1  # if x:", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("x = 1  # if x:", SourceLanguage.langNim)
 
   test "String ':' does not trigger":
-    check extraIndentForNewline("echo \"if x:\"", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("echo \"if x:\"", SourceLanguage.langNim)
 
   test "'var' followed by name does not trigger":
-    check extraIndentForNewline("var x: int", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("var x: int", SourceLanguage.langNim)
 
   test "String containing 'or' does not trigger":
-    check extraIndentForNewline("echo \"or\"", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("echo \"or\"", SourceLanguage.langNim)
 
   test "String 'object' does not trigger":
-    check extraIndentForNewline("let s = \"object\"", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("let s = \"object\"", SourceLanguage.langNim)
 
   test "Comment 'var' does not trigger":
-    check extraIndentForNewline("# var", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("# var", SourceLanguage.langNim)
 
   test "Trailing comment 'let' does not trigger":
-    check extraIndentForNewline("x = 1  # let", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("x = 1  # let", SourceLanguage.langNim)
 
   test "Triple-quoted line does not trigger":
-    check extraIndentForNewline("let s = \"\"\" foo", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("let s = \"\"\" foo", SourceLanguage.langNim)
 
   test "Balanced brackets do not trigger":
-    check extraIndentForNewline("foo()", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("foo()", SourceLanguage.langNim)
 
   test "A carried closer after other text does not trigger":
-    check extraIndentForNewline("foo(a", SourceLanguage.langNim, "  ", "  )") == ""
+    check not needsExtraIndent("foo(a", SourceLanguage.langNim, "  )")
 
   test "Empty line does not trigger":
-    check extraIndentForNewline("", SourceLanguage.langNim, "  ") == ""
+    check not needsExtraIndent("", SourceLanguage.langNim)
 
   test "Non-Nim language never triggers (langNone)":
-    check extraIndentForNewline("var", SourceLanguage.langNone, "  ") == ""
+    check not needsExtraIndent("var", SourceLanguage.langNone)
 
   test "Non-Nim language never triggers (langC)":
-    check extraIndentForNewline("var", SourceLanguage.langC, "  ") == ""
+    check not needsExtraIndent("var", SourceLanguage.langC)
 
 suite "Insert Commands - insertNewline smart indent (Nim)":
   test "Standalone 'var' Enter inserts indented next line":
@@ -488,6 +482,19 @@ suite "Insert Commands - insertNewline smart indent (Nim)":
     check afterText.getLine(1) == "), baz"
     check s2.cursor.column == 0
 
+  test "Enter rebuilds the indent 'shiftwidth' columns deeper, as Vim's smartindent":
+    let buf = newNimBuffer("    var")
+    let state = createSmartIndentState()
+    state.expandTab = false
+    state.tabStop = 8
+    state.shiftWidth = 4
+    state.cursor = BufferPosition(line: 0, column: 7)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(1) == "\t"
+    check state.cursor == BufferPosition(line: 1, column: 1)
+
 suite "Insert Commands - insertLineBelow smart indent (Nim)":
   test "'o' after 'var' line inserts indented line below":
     let buf = newNimBuffer("var")
@@ -520,6 +527,18 @@ suite "Insert Commands - insertLineBelow smart indent (Nim)":
 
     check buf.getLine(1) == ""
     check state.cursor.column == 0
+
+  test "o adds 'shiftwidth' columns, not a tab, as Vim's smartindent":
+    let buf = newNimBuffer("var")
+    let state = createSmartIndentState()
+    state.expandTab = false
+    state.tabStop = 8
+    state.shiftWidth = 4
+
+    check insertLineBelow(buf, state).isOk
+
+    check buf.getLine(1) == "    "
+    check state.cursor == BufferPosition(line: 1, column: 4)
 
 suite "Insert Commands - smart indent ESC cleanup":
   test "Enter then immediate ESC clears extra indent line":

@@ -19,7 +19,7 @@
 
 ## Tests for insert_commands.nim
 
-import std/[unittest, options, tables, strutils]
+import std/[unittest, options, tables, strutils, deques]
 
 import pkg/results
 
@@ -79,26 +79,49 @@ suite "Insert Commands - getLineIndent":
     let indent = getLineIndent(line)
     check indent == "    "
 
-suite "Insert Commands - getIndentString":
-  test "Get indent string with expandTab enabled":
-    let state = createTestState()
-    state.expandTab = true
-    state.tabStop = 4
-    let indentStr = getIndentString(state)
-    check indentStr == "    "
+suite "Insert Commands - rebuiltIndent":
+  test "a deeper indent gets 'shiftwidth' columns and is rebuilt, as Vim's smartindent":
+    # Each row was checked against Vim 9.2 with `vim -u NONE` and `set si`.
+    type Case = tuple[sw, ts: int, et: bool, indent, want: string]
 
-  test "Get indent string with expandTab disabled":
-    let state = createTestState()
-    state.expandTab = false
-    let indentStr = getIndentString(state)
-    check indentStr == "\t"
+    const cases: seq[Case] = @[
+      (4, 8, false, "", "    "),
+      (4, 8, false, "    ", "\t"),
+      (4, 8, false, "\t", "\t    "),
+      (4, 8, false, "  \t", "\t    "),
+      (4, 8, false, "      ", "\t  "),
+      (4, 8, true, "  ", "      "),
+      (4, 8, true, "\t", "            "),
+      (0, 2, false, "", "\t"),
+      (0, 8, true, "", "        "),
+      (2, 2, false, "  ", "\t\t"),
+    ]
+    for c in cases:
+      let state = createTestState()
+      state.shiftWidth = c.sw
+      state.tabStop = c.ts
+      state.expandTab = c.et
 
-  test "Get indent string with tabStop 2":
-    let state = createTestState()
-    state.expandTab = true
-    state.tabStop = 2
-    let indentStr = getIndentString(state)
-    check indentStr == "  "
+      checkpoint $c
+      check state.rebuiltIndent(c.indent, deeper = true) == c.want
+
+  test "an indent keeps its width and is rebuilt":
+    type Case = tuple[ts: int, et: bool, indent, want: string]
+
+    const cases: seq[Case] = @[
+      (4, false, "    ", "\t"),
+      (8, false, "    ", "    "),
+      (4, false, "  \t  ", "\t  "),
+      (4, true, "\t", "    "),
+      (4, true, "", ""),
+    ]
+    for c in cases:
+      let state = createTestState()
+      state.tabStop = c.ts
+      state.expandTab = c.et
+
+      checkpoint $c
+      check state.rebuiltIndent(c.indent) == c.want
 
 suite "Insert Commands - effectiveShiftWidth":
   test "Returns shiftWidth when set":
@@ -126,24 +149,7 @@ suite "Insert Commands - effectiveSoftTabStop":
     state.softTabStop = 0
     check effectiveSoftTabStop(state) == 8
 
-suite "Insert Commands - getIndentString with shiftWidth":
-  test "Uses shiftWidth instead of tabStop when set":
-    let state = createTestState()
-    state.expandTab = true
-    state.tabStop = 8
-    state.shiftWidth = 4
-    let indentStr = getIndentString(state)
-    check indentStr == "    "
-
-  test "Falls back to tabStop when shiftWidth is 0":
-    let state = createTestState()
-    state.expandTab = true
-    state.tabStop = 8
-    state.shiftWidth = 0
-    let indentStr = getIndentString(state)
-    check indentStr == "        "
-
-suite "Insert Commands - indentLine with shiftWidth":
+suite "Insert Commands - shiftLines with shiftWidth":
   test "Indent uses shiftWidth when set":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
@@ -151,39 +157,35 @@ suite "Insert Commands - indentLine with shiftWidth":
     state.expandTab = true
     state.tabStop = 8
     state.shiftWidth = 4
-    state.cursor = BufferPosition(line: 0, column: 0)
 
-    discard indentLine(buf, state)
+    check shiftLines(buf, state, 0, 0, left = false).isOk
 
     check buf.getLine(0) == "    hello"
-    check state.cursor.column == 4
 
 suite "Insert Commands - raw buffer gates":
-  test "indentLine refuses a raw buffer and says why":
+  test "shiftLines refuses a raw buffer and says why":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     buf.keepRaw = true
     let state = createTestState()
     state.expandTab = true
     state.shiftWidth = 4
-    state.cursor = BufferPosition(line: 0, column: 0)
 
-    let res = indentLine(buf, state)
+    let res = shiftLines(buf, state, 0, 0, left = false)
 
     check res.isErr
     check "raw undecodable bytes" in res.error
     check buf.getLine(0) == "hello"
 
-  test "dedentLine refuses a raw buffer and says why":
+  test "a left shiftLines refuses a raw buffer and says why":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     buf.keepRaw = true
     let state = createTestState()
     state.expandTab = true
     state.shiftWidth = 4
-    state.cursor = BufferPosition(line: 0, column: 0)
 
-    let res = dedentLine(buf, state)
+    let res = shiftLines(buf, state, 0, 0, left = true)
 
     check res.isErr
     check "raw undecodable bytes" in res.error
@@ -214,7 +216,7 @@ suite "Insert Commands - raw buffer gates":
     check changeIndent(buf, state, deeper = true).isErr
     check state.insertStart.at == start
 
-suite "Insert Commands - dedentLine with shiftWidth":
+suite "Insert Commands - left shiftLines with shiftWidth":
   test "Dedent uses shiftWidth when set":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
@@ -222,12 +224,10 @@ suite "Insert Commands - dedentLine with shiftWidth":
     state.expandTab = true
     state.tabStop = 8
     state.shiftWidth = 4
-    state.cursor = BufferPosition(line: 0, column: 4)
 
-    discard dedentLine(buf, state)
+    check shiftLines(buf, state, 0, 0, left = true).isOk
 
     check buf.getLine(0) == "hello"
-    check state.cursor.column == 0
 
 suite "Insert Commands - insertChar":
   test "Insert character at beginning of line":
@@ -460,6 +460,48 @@ suite "Insert Commands - insertNewline bracket split":
     check buf.len == 3
     check state.cursor.line == 1
     check state.cursor.column == 8
+
+  test "bsmIndent indents the middle line 'shiftwidth' columns deeper, rebuilding the indent":
+    let buf = newTextBuffer("    f()")
+    let state = createTestState()
+    state.autoIndent = true
+    state.expandTab = false
+    state.tabStop = 8
+    state.shiftWidth = 4
+    state.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "    f("
+    check buf.getLine(1) == "\t"
+    check buf.getLine(2) == "    )"
+    check state.cursor == BufferPosition(line: 1, column: 1)
+
+  test "bsmIndent rebuilds the closing line's indent as the middle line's":
+    # The closing line used to copy the indent while the middle line was
+    # rebuilt, mixing tabs and spaces between the two.
+    type Case = tuple[et: bool, line, middle, close: string]
+
+    const cases: seq[Case] =
+      @[(false, "    foo{}", "\t\t", "\t}"), (true, "\tfoo{}", "        ", "    }")]
+    for c in cases:
+      let buf = newTextBuffer(c.line)
+      let state = createTestState()
+      state.autoIndent = true
+      state.expandTab = c.et
+      state.tabStop = 4
+      state.shiftWidth = 4
+      state.bracketSplit = bsmIndent
+      state.cursor = BufferPosition(line: 0, column: c.line.len - 1)
+
+      insertNewline(buf, state)
+
+      checkpoint $c
+      check buf.getLine(0) == c.line[0 ..^ 2]
+      check buf.getLine(1) == c.middle
+      check buf.getLine(2) == c.close
+      check state.cursor == BufferPosition(line: 1, column: c.middle.len)
 
   test "bracket split still fires on a line with an undecodable byte":
     # The bounds check counts columns with the same model the cursor uses, so a
@@ -808,31 +850,29 @@ suite "Insert Commands - insertLineAbove":
     check state.cursor.column == 0
     check state.mode == EditorMode.Insert
 
-suite "Insert Commands - indentLine":
+suite "Insert Commands - shiftLines":
   test "Indent line with spaces (expandTab)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.cursor = BufferPosition(line: 0, column: 0)
+    state.cursor = BufferPosition(line: 0, column: 3)
 
-    discard indentLine(buf, state)
+    check shiftLines(buf, state, 0, 0, left = false).isOk
 
     check buf.getLine(0) == "  hello"
-    check state.cursor.column == 2
+    check state.cursor == BufferPosition(line: 0, column: 3)
 
   test "Indent line with tabs":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
     state.expandTab = false
-    state.cursor = BufferPosition(line: 0, column: 0)
 
-    discard indentLine(buf, state)
+    check shiftLines(buf, state, 0, 0, left = false).isOk
 
     check buf.getLine(0) == "\thello"
-    check state.cursor.column == 1
 
   test "Indent line multiple times":
     let buf = newTextBuffer()
@@ -840,26 +880,21 @@ suite "Insert Commands - indentLine":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.cursor = BufferPosition(line: 0, column: 0)
 
-    discard indentLine(buf, state, 2)
+    check shiftLines(buf, state, 0, 0, left = false, amount = 2).isOk
 
     check buf.getLine(0) == "    hello"
-    check state.cursor.column == 4
 
-suite "Insert Commands - dedentLine":
   test "Dedent line with spaces":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.cursor = BufferPosition(line: 0, column: 4)
 
-    discard dedentLine(buf, state)
+    check shiftLines(buf, state, 0, 0, left = true).isOk
 
     check buf.getLine(0) == "  hello"
-    check state.cursor.column == 2
 
   test "Dedent line with no indentation":
     let buf = newTextBuffer()
@@ -867,25 +902,100 @@ suite "Insert Commands - dedentLine":
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.cursor = BufferPosition(line: 0, column: 0)
 
-    discard dedentLine(buf, state)
+    check shiftLines(buf, state, 0, 0, left = true).isOk
 
     check buf.getLine(0) == "hello"
-    check state.cursor.column == 0
 
-  test "Dedent line cursor adjustment":
+  test "An empty line stays empty":
     let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
     let state = createTestState()
     state.expandTab = true
     state.tabStop = 2
-    state.cursor = BufferPosition(line: 0, column: 1) # Cursor in indent
 
-    discard dedentLine(buf, state)
+    check shiftLines(buf, state, 0, 0, left = false).isOk
 
-    check buf.getLine(0) == "hello"
-    check state.cursor.column == 0
+    check buf.getLine(0) == ""
+
+  test "the indent moves by columns and is rebuilt, as Vim's shift_line":
+    # Each row was checked against Vim 9.2 with `vim -u NONE`.
+    type Case =
+      tuple[sw, ts: int, et: bool, line: string, left: bool, amount: int, want: string]
+
+    const cases: seq[Case] = @[
+      (4, 8, false, "x", false, 1, "    x"),
+      (4, 8, false, "    x", false, 1, "\tx"),
+      (4, 8, false, "\t\t\t\tx", true, 1, "\t\t\t    x"),
+      (4, 8, false, "   \t)", false, 1, "\t    )"),
+      (8, 8, false, "   \t)", false, 1, "\t\t)"),
+      (4, 8, false, "  \tx", true, 1, "    x"),
+      (4, 8, false, "\t", false, 1, "\t    "),
+      (4, 8, false, "\t", true, 1, "    "),
+      (4, 8, false, "    x", true, 1, "x"),
+      (4, 8, false, "\t\tx", true, 3, "    x"),
+      (4, 8, false, "\ty", true, 3, "y"),
+      (4, 4, false, "\t  x", true, 1, "  x"),
+      (4, 4, false, "    x", false, 1, "\t\tx"),
+      (0, 4, false, "x", false, 1, "\tx"),
+      (4, 8, true, "\tx", false, 1, "            x"),
+      (4, 8, true, "  ", false, 1, "      "),
+      (4, 8, true, "      x", true, 1, "  x"),
+      (4, 8, true, "   x", true, 1, "x"),
+    ]
+    for c in cases:
+      let buf = newTextBuffer(c.line)
+      let state = createTestState()
+      state.shiftWidth = c.sw
+      state.tabStop = c.ts
+      state.expandTab = c.et
+
+      check shiftLines(buf, state, 0, 0, c.left, c.amount).isOk
+
+      checkpoint $c
+      check buf.getLine(0) == c.want
+
+  test "the lines shift as one change that one undo takes back":
+    let buf = newTextBuffer("a\n\n  b\nc")
+    let state = createTestState()
+    state.expandTab = true
+    state.tabStop = 8
+    state.shiftWidth = 4
+    let before = buf.undoStack.len
+
+    check shiftLines(buf, state, 0, 3, left = false).isOk
+
+    check buf.undoStack.len == before + 1
+    check buf.getLine(0) == "    a"
+    check buf.getLine(1) == ""
+    check buf.getLine(2) == "      b"
+    check buf.getLine(3) == "    c"
+
+    check buf.undo().isOk
+    check buf.getLine(0) == "a"
+    check buf.getLine(2) == "  b"
+    check buf.getLine(3) == "c"
+
+  test "nothing to shift records no change":
+    let buf = newTextBuffer("a\n\nb")
+    let state = createTestState()
+    let before = buf.undoStack.len
+
+    check shiftLines(buf, state, 0, 2, left = true).isOk
+
+    check buf.undoStack.len == before
+
+  test "a line starting with # shifts even with smart indent":
+    # Vim's op_shift skips it for C preprocessor lines; in Nim it is a comment.
+    let buf = newTextBuffer("# note\nx")
+    let state = createTestState()
+    state.config.standard.smartIndent = true
+    state.expandTab = true
+    state.shiftWidth = 2
+
+    check shiftLines(buf, state, 0, 1, left = false).isOk
+
+    check buf.getLine(0) == "  # note"
+    check buf.getLine(1) == "  x"
 
 suite "Insert Commands - deleteWordBackward":
   test "Delete word backward":
@@ -1434,27 +1544,27 @@ suite "Insert Commands - read-only failure keeps cursor and reports":
     check state.cursor == BufferPosition(line: 0, column: 2)
     check state.statusMessage.len > 0
 
-  test "indentLine on read-only buffer keeps cursor":
+  test "shiftLines on read-only buffer keeps cursor":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     buf.readOnly = true
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    let res = indentLine(buf, state)
+    let res = shiftLines(buf, state, 0, 0, left = false)
 
     check res.isErr
     check buf.getLine(0) == "hello"
     check state.cursor == BufferPosition(line: 0, column: 2)
 
-  test "dedentLine on read-only buffer keeps cursor":
+  test "a left shiftLines on read-only buffer keeps cursor":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     buf.readOnly = true
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 6)
 
-    let res = dedentLine(buf, state)
+    let res = shiftLines(buf, state, 0, 0, left = true)
 
     check res.isErr
     check buf.getLine(0) == "    hello"

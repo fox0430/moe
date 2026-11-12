@@ -594,9 +594,6 @@ suite "Visual Commands - raw buffer gates":
     check "raw undecodable bytes" in state.statusMessage
 
   test "a refused visualIndent leaves the cursor where it was":
-    # indentLine reads the line to act on from the cursor, so the loop walks it
-    # down the selection. The refusal must not leave it on a line it moved to
-    # for an edit that never ran.
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "one\ntwo\nthree")
     buf.keepRaw = true
@@ -631,8 +628,7 @@ suite "Visual Commands - raw buffer gates":
     check "raw undecodable bytes" in state.statusMessage
 
   test "a read-only visualIndent also leaves the cursor where it was":
-    # The restore is not raw-specific: any refusal from indentLine must undo
-    # the cursor walk.
+    # Not only raw buffers: no refusal moves the cursor.
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "one\ntwo")
     buf.readOnly = true
@@ -716,6 +712,24 @@ suite "Visual Commands - visualIndent":
 
     check buf.getLine(0) == "      hello"
 
+  test "Empty lines stay empty and blank ones shift, as Vim":
+    let buf = newTextBuffer("a\n\n  \nb")
+    let state = createTestState()
+    state.expandTab = true
+    state.tabStop = 8
+    state.shiftWidth = 4
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 3, column: 0), vskLine
+    )
+
+    visualIndent(buf, state)
+
+    check buf.getLine(0) == "    a"
+    check buf.getLine(1) == ""
+    check buf.getLine(2) == "      "
+    check buf.getLine(3) == "    b"
+    check state.cursor == BufferPosition(line: 0, column: 4)
+
 suite "Visual Commands - visualDedent":
   test "Dedent single line selection":
     let buf = newTextBuffer()
@@ -732,6 +746,21 @@ suite "Visual Commands - visualDedent":
 
     check buf.getLine(0) == "hello"
     check state.visualSelection.active == false
+
+  test "Dedent with count moves the indent by columns, as Vim's 3<":
+    let buf = newTextBuffer("\t\tx\n\ty")
+    let state = createTestState()
+    state.expandTab = false
+    state.tabStop = 8
+    state.shiftWidth = 4
+    state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0), vskLine
+    )
+
+    visualDedent(buf, state, 3)
+
+    check buf.getLine(0) == "    x"
+    check buf.getLine(1) == "y"
 
   test "Dedent line with no indentation (no-op)":
     let buf = newTextBuffer()

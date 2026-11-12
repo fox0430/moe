@@ -1026,6 +1026,72 @@ suite "NormalModeHandler - Undo/Redo":
     check state.cursor.line == 0
     check state.cursor.column == 0
 
+  test "Undo and redo after a shift put the cursor where the shifted text started, as Vim":
+    # Each row was checked against Vim 9.2 with `vim -u NONE`: `>>` goes to the
+    # first non-blank first ('startofline'), `2>>` and `>k` keep the column.
+    # Redo puts the cursor where undo did.
+    type Case =
+      tuple[
+        start: BufferPosition,
+        keys: seq[string],
+        after: seq[string],
+        want: BufferPosition,
+      ]
+
+    const
+      Before = @["line1", "    abcdefghij", "    klmnopqrst", "line4"]
+      cases: seq[Case] = @[
+        (
+          BufferPosition(line: 1, column: 8),
+          @[">", ">"],
+          @["line1", "\tabcdefghij", "    klmnopqrst", "line4"],
+          BufferPosition(line: 1, column: 4),
+        ),
+        (
+          BufferPosition(line: 1, column: 8),
+          @["2", ">", ">"],
+          @["line1", "\tabcdefghij", "\tklmnopqrst", "line4"],
+          BufferPosition(line: 1, column: 8),
+        ),
+        (
+          BufferPosition(line: 2, column: 8),
+          @[">", "k"],
+          @["line1", "\tabcdefghij", "\tklmnopqrst", "line4"],
+          BufferPosition(line: 1, column: 8),
+        ),
+        (
+          BufferPosition(line: 1, column: 8),
+          @["<", "<"],
+          @["line1", "abcdefghij", "    klmnopqrst", "line4"],
+          BufferPosition(line: 1, column: 4),
+        ),
+      ]
+    proc lines(buf: TextBuffer): seq[string] =
+      for i in 0 ..< buf.len:
+        result.add buf.getLine(i)
+
+    for c in cases:
+      checkpoint $c
+      let buf = newTextBuffer(Before.join("\n"))
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.tabStop = 8
+      state.shiftWidth = 4
+      state.expandTab = false
+      let viewport = createTestViewport()
+      state.cursor = c.start
+
+      discard handler.typeKeys(buf, state, viewport, c.keys)
+      check buf.lines == c.after
+
+      discard handler.typeKeys(buf, state, viewport, "u")
+      check buf.lines == Before
+      check state.cursor == c.want
+
+      discard handler.typeKeys(buf, state, viewport, "C-r")
+      check buf.lines == c.after
+      check state.cursor == c.want
+
 suite "NormalModeHandler - Text Object Handling":
   test "Text object word (w) with pending operator":
     let buf = newTextBuffer()

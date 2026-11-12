@@ -287,40 +287,19 @@ proc executeOperatorOnRange*(
     ctx.state.mode = EditorMode.Insert
 
     return ok(())
-  of OpIndent:
-    let (startLine, endLine) = ctx.buffer.shiftedLines(range)
+  of OpIndent, OpOutdent:
+    let
+      (startLine, endLine) = ctx.buffer.shiftedLines(range)
+      left = operatorType == OpOutdent
 
-    let txr = withTransaction(ctx.buffer, "Indent lines"):
-      let indentStr = getIndentString(ctx.state)
-      for lineNum in startLine .. endLine:
-        # Vim leaves empty lines unshifted.
-        if lineNum < ctx.buffer.len and ctx.buffer.getLine(lineNum).charLen > 0:
-          let insertPos = BufferPosition(line: lineNum, column: 0)
-          let insertResult = ctx.buffer.insertText(insertPos, indentStr)
-          if insertResult.isErr:
-            return err(insertResult.error)
-    if txr.isErr:
-      return err("Transaction failed: " & txr.error)
-
-    moveToFirstNonBlank(ctx, startLine)
-
-    return ok(())
-  of OpOutdent:
-    let (startLine, endLine) = ctx.buffer.shiftedLines(range)
-
-    let txr = withTransaction(ctx.buffer, "Dedent lines"):
-      let indentWidth = effectiveShiftWidth(ctx.state)
-      for lineNum in startLine .. endLine:
-        if lineNum < ctx.buffer.len:
-          let lineContent = ctx.buffer.getLine(lineNum)
-          let currentIndent = getLineIndent(lineContent)
-          let removeCount = min(indentWidth, currentIndent.len)
-          if removeCount > 0:
-            for i in 1 .. removeCount:
-              let deletePos = BufferPosition(line: lineNum, column: 0)
-              let deleteResult = ctx.buffer.deleteChar(deletePos)
-              if deleteResult.isErr:
-                return err(deleteResult.error)
+    # The driver put the cursor where the operated text starts, which undo
+    # brings it back to, as Vim's u_undoredo with uh_cursor.
+    let txr = withTransaction(
+      ctx.buffer, if left: "Dedent lines" else: "Indent lines", some(ctx.cursor)
+    ):
+      let shifted = ctx.buffer.shiftLines(ctx.state, startLine, endLine, left)
+      if shifted.isErr:
+        return err(shifted.error)
     if txr.isErr:
       return err("Transaction failed: " & txr.error)
 
