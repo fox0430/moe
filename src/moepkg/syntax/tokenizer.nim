@@ -215,6 +215,60 @@ type
       ## Nesting depth of an unclosed `#[` / `##[` block comment, persisted
       ## across chunk boundaries so a resume closes at the right level.
 
+  VimLineFlag* = enum
+    vlfMidCommand ## Past the command name, so `"` no longer opens a line comment.
+    vlfAfterValue ## The last token ended an operand: a spaced `"` opens a comment.
+    vlfQuoteString ## `"` always opens a string: `:echo`, `:lua`, an `<expr>` map.
+    vlfKeys ## Map or `:normal` keys, where `"x` names a register.
+    vlfMap ## A mapping: `<CR>` returns from a `:cmd` in its rhs to keys.
+    vlfExprMap ## An `<expr>` map, whose rhs after the lhs is an expression.
+    vlfMapLhs ## An `<expr>` map's lhs has started: the next word is the rhs.
+    vlfFuncDef ## A `:function` line, where `abort` and friends are attributes.
+    vlfFuncName ## The next identifier names the function being defined.
+    vlfScriptCmd ## Right after `:lua`, `:python3`, ...: a `<<` here opens a heredoc.
+    vlfAssignTarget ## Before a `:let`/`:var` assignment operator: `=<<` opens a heredoc.
+    vlfPattern ## `:g`, `:v`, `:catch`: a delimited pattern may follow.
+    vlfSubstitute ## `:s`: a delimited pattern and replacement may follow.
+    vlfSortPattern ## Among `:sort`'s flags: a delimiter opens a pattern, `"` a comment.
+    vlfHeredocHeader ## The rest of a `=<<` / `<<` line: options and marker.
+    vlfAuGroup ## `:autocmd`'s next word is a group if it is not an event.
+    vlfAuEvent ## `:autocmd`'s events come next.
+    vlfAuPattern ## `:autocmd`'s pattern comes next.
+    vlfAuOptions ## Past `:autocmd`'s pattern: `++once` and `++nested`, then a command.
+    vlfComAttrs ## `:command`'s `-nargs=1` attributes and name, then a command.
+    vlfExpr ## An expression: its Vim9 brackets span lines, a `"` after `=` is a string.
+    vlfAfterOperator ## A Vim9 expression's binary operator: the next line continues it.
+    vlfSyntax ## The next word is a `:syntax` subcommand.
+    vlfSpacedPattern
+      ## `:syntax match`, `:match`: a spaced delimiter, `"` too, opens a pattern.
+    vlfSynRegion ## `:syntax region`, whose `start=`, `skip=` and `end=` take a pattern.
+    vlfArgPattern
+      ## Right after `start=` or `:vimgrep`: a delimiter, `"` too, opens a pattern.
+    vlfAbstract ## After `abstract`: a `:def` here declares a method without a body.
+    vlfLegacy ## After `legacy`: the rest of the line is legacy script.
+    vlfFileCmd ## Right after `:write` or `:read`: a `!` opens a shell command.
+    vlfForeign ## A shell command or another language's code: it takes `"`, `#` and `|`.
+    vlfInterpolated ## The `"` string parked on an escape is a `$"` one.
+    vlfTyped ## A command line typed in keys, past `:` or `<Cmd>`: it runs later.
+
+  VimState* = object
+    heredocMarker*: string
+      ## End marker of a heredoc whose body is open or starts on the next line.
+    cmdlineIndent*: string
+      ## Indent of the line the command line starts on, which a `trim`
+      ## heredoc's end marker may take. Kept as a parse may resume below it.
+    brackets*: string
+      ## Vim9's open `(`, `[`, `{` and `<`, with `B` for a `{` block. A line
+      ## inside a bracket continues the expression; inside a block it is a command.
+    bodies*: string
+      ## Open `:def` (`d`) and `:function` (`f`) bodies. The innermost decides
+      ## the syntax: Vim9 in a `:def`, legacy in a `:function`, whatever the file.
+    inInterface*: bool ## Inside `:interface`, whose methods have no body.
+    vim9*: bool
+    line*: set[VimLineFlag]
+      ## Where on the line the lexer is. Reset at each line's first non-blank token
+      ## unless that is a `\` continuation.
+
   LangState* = object
     ## Per-language tokenizer state, captured/restored as a whole record.
     ## 8-aligned members first, then bool-only, to minimise padding.
@@ -225,6 +279,7 @@ type
     python*: PythonState
     lua*: LuaState
     nim*: NimState
+    vim*: VimState
     html*: HtmlState
     astro*: AstroState
     yaml*: YamlState
@@ -287,6 +342,7 @@ type
     langJsonc
     langTypeScript
     langTsx
+    langVim
     langXml
     langZsh
 
@@ -347,6 +403,7 @@ const
     langJsonc: "Jsonc",
     langTypeScript: "TypeScript",
     langTsx: "TypeScriptReact",
+    langVim: "Vimscript",
     langXml: "XML",
     langZsh: "Zsh",
   ]
@@ -392,6 +449,7 @@ proc getSourceLanguage*(name: string): SourceLanguage =
   of "hs": langHaskell
   of "luau": langLua
   of "tex", "latex": langLatex
+  of "vim", "viml", "vim9": langVim
   else: langNone
 
 proc defaultLangState*(): LangState =

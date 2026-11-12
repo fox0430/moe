@@ -17,6 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
+from std/strutils import toLowerAscii
 import tokenizer, syntax_latex
 
 const SubLanguageCarryStates =
@@ -386,6 +387,8 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           inc position
         let lang = getSourceLanguage(langName)
         lexer.lang.markdown.codeBlockLang = if lang == langMarkdown: langNone else: lang
+        if langName.toLowerAscii == "vim9":
+          lexer.lang.vim.vim9 = true
         lexer.state = gtNone
       elif lexer.atClosingFence(position):
         lexer.kind = gtSpecialVar

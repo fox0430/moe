@@ -3105,6 +3105,14 @@ suite "Highlight - detectLanguage":
       check detectLanguage(name) == SourceLanguage.langDockerfile
       check detectLanguage("/repo/" & name) == SourceLanguage.langDockerfile
 
+  test "detectLanguage for vimrc files":
+    for name in [
+      ".vimrc", "_vimrc", "vimrc", ".gvimrc", "_gvimrc", "gvimrc", ".exrc", "_exrc",
+      ".nvimrc",
+    ]:
+      check detectLanguage(name) == SourceLanguage.langVim
+      check detectLanguage("/home/user/" & name) == SourceLanguage.langVim
+
   # Check file extensions
   test "detectLanguage for Astro":
     check detectLanguage("page.astro") == SourceLanguage.langAstro
@@ -3236,6 +3244,9 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for Hyprland":
     check detectLanguage("config.hl") == SourceLanguage.langHyprland
 
+  test "detectLanguage for Vim script":
+    check detectLanguage("init.vim") == SourceLanguage.langVim
+
   test "detectLanguage for XML":
     check detectLanguage("config.xml") == SourceLanguage.langXml
     check detectLanguage("icon.svg") == SourceLanguage.langXml
@@ -3252,6 +3263,20 @@ suite "Highlight - detectLanguage":
 
   test "detectLanguage for no extension":
     check detectLanguage("README") == SourceLanguage.langNone
+
+  test "detectLanguage for a name containing vimrc, as Vim's *vimrc*":
+    for name in [
+      ".vimrc.local", ".vimrc.bundles", "vimrc.before", "_vimrc_local", "my_vimrc"
+    ]:
+      check detectLanguage(name) == SourceLanguage.langVim
+    check detectLanguage("vimrc.lua") == SourceLanguage.langLua
+    check detectLanguage("/home/user/vimrc.d/init.conf") == SourceLanguage.langNone
+
+  test "a compressed vimrc is not Vim script, as Vim's g:ft_ignore_pat":
+    for name in [".vimrc.gz", "vimrc.Z", ".vimrc.bz2", "vimrc.zip", ".vimrc.tgz"]:
+      check detectLanguage(name) == SourceLanguage.langNone
+    for name in [".vimrc.swp", "vimrc.txt", ".vimrc~", ".vimrc.GZ"]:
+      check detectLanguage(name) == SourceLanguage.langVim
 
 suite "Highlight - getSegmentModifiers":
   test "Empty highlight returns empty modifiers":

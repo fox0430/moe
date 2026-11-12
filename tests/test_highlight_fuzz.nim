@@ -707,6 +707,82 @@ proc goCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc vimCorpus(): seq[seq[string]] =
+  ## Vim script carries heredoc bodies (`state == gtLongStringLit` plus the
+  ## marker), `vim9script` and `:def` depth across lines. A `\` continuation, and
+  ## in Vim9 an open bracket or an operator, keeps the line flags; otherwise they
+  ## reset at each line's first token.
+  result = @[
+    @[
+      "\" comment", "set number \" trailing", "let g:x = \"a\\tb\" . 'c''d'",
+      "if exists('g:y') | finish | endif", "nnoremap <silent> <leader>w :w<CR>\"_x",
+    ],
+    @[
+      "if 1", "  let s:t =<< trim END", "    body \"quoted\"", "    \" not a comment",
+      "      END", "  END", "endif",
+    ],
+    @["lua << EOF", "print('x') -- c", "EOF", "let y = 1 \" c", "lua <<", "."],
+    @[
+      "vim9script", "# comment", "var x: list<string> = [\"a\"]  # t",
+      "def F(n: number): string", "  return $\"{n}\\t{n ?? \"x\"}\\", "  ..\"b\"",
+      "enddef",
+    ],
+    @[
+      "def G()", "  # vim9 in legacy", "  echo \"s\"", "enddef", "\" legacy again",
+      "let l = [", "      \\ \"a\",", "      \\ ]",
+    ],
+    # A trailing backslash ends the string; a heredoc whose header is broken
+    # by a later word never opens.
+    @[
+      "echo \"trailing \\", "let x = 1", "let y =<< END junk", "\" still code",
+      "%s/\"a\"/b/g", "'<,'>sort",
+    ],
+    @[
+      "nnoremap <silent> x", "      \\ :<C-u>call F(\"a\")<CR>\"_x",
+      "inoremap <expr> <C-j> \"\\<C-n>\"", "echo \"a\"", "      \\ \"b\" \" c",
+      "function! F()", "      \\ abort",
+    ],
+    @[
+      "augroup mine | au! | augroup END", "autocmd mine BufRead,BufNewFile *.vim",
+      "      \\ ++once echo \"x\" \"y\"", "command! -nargs=1 Hi echo \"hi\"",
+      "windo set nowrap \" c",
+    ],
+    @[
+      "vim9script", "var l: list<dict<string>> = [", "  # c", "  {a: 'x'},", "]",
+      "timer_start(10, (_) => {", "  echo 1", "})", "var t = a +", "  n", "  ->F()",
+      "set cinoptions=(0", "def G<T>(x: T): T", "  return F(", "enddef", "echo 1",
+    ],
+    # A comment line between continued lines keeps their flags.
+    @[
+      "nnoremap x", "      \"\\ c", "      \\ \"ayy", "syn region S start=+\"+",
+      "      \\ end=+\"+ \" c", "syn match Foo \"pat\" contained \" c", "s#a#b#g",
+      "def F", "\" still legacy",
+    ],
+    @[
+      "vim9script", "Rg foo(", "echo 1", "Tabularize /=", "e =<< END", "a", "END",
+      "nnoremap y", "  # c", "  \\ \"ayy", "g:x = 1",
+    ],
+    # A map's command line is legacy in Vim9 and splits at `\|`; `++n` starts a
+    # statement; a heredoc header may end in a comment.
+    @[
+      "vim9script", "nnoremap x :call F() \" c<CR>", "++n", "'b'", "  ->F()",
+      "var h =<< END # c", "a", "END", "nnoremap y :w \\| echo \"x\"<CR>",
+      "nnoremap s <ScriptCmd>g:r = \"a\"<CR>",
+    ],
+    @["set path+=** \" c", "let x =<< end", "# n", "lua << EOF \" c", "x", "EOF"],
+    # A trim heredoc's marker takes the indent of the line its `\` header
+    # continues.
+    @[
+      "  let x", "  \"\\ c", "        \\ =<< trim END", "    a", "        END", "  END",
+      "echo 1",
+    ],
+    # A continued line where a command is expected starts one.
+    @[
+      "command! Foo", "      \\ if 1 |", "      \\   echo \"x\" |", "      \\ endif",
+      "silent!", "      \\ call F() \" c",
+    ],
+  ]
+
 proc luaCorpus(): seq[seq[string]] =
   ## Lua long brackets are the interesting part: `[[ ]]` strings and
   ## `--[==[ ]==]` comments span lines and resume through
@@ -1249,6 +1325,9 @@ suite "Incremental Highlight Fuzz":
   test "Lua: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langLua, luaCorpus(), iters, baseSeed)
 
+  test "Vim: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langVim, vimCorpus(), iters, baseSeed)
+
   test "CommitEditMsg: incremental output matches full reparse under random edits":
     check runFuzz(
       SourceLanguage.langCommitEditMsg, commitEditMsgCorpus(), iters, baseSeed
@@ -1293,6 +1372,9 @@ suite "Incremental Highlight Fuzz (budgeted)":
     check runFuzzBudgeted(
       SourceLanguage.langYaml, yamlCorpus(), budgetedIters, baseSeed
     )
+
+  test "Vim: budgeted re-parses match full reparse under random edits":
+    check runFuzzBudgeted(SourceLanguage.langVim, vimCorpus(), budgetedIters, baseSeed)
 
 # Deterministic chunk-boundary tests
 #
@@ -1470,6 +1552,25 @@ suite "Incremental Highlight Line-Bounded Strings":
     let buf = @["local s = \"a \\", "more\"", "local n = #s", "print(n)", "return s"]
     check checkResumeEquivalence(buf, 3, "print(1)", langLua, "lua esc")
 
+  test "Vim: editing inside a heredoc body keeps the marker":
+    let buf = @["let x =<< END", "a", "b", "c", "END", "\" comment"]
+    check checkResumeEquivalence(buf, 3, "edited", langVim, "vim heredoc")
+
+  test "Vim: a trim heredoc on a continuation line keeps the :let line's indent":
+    let buf = @[
+      "    let x", "          \\ =<< trim END", "      a", "      b", "    END",
+      "echo \"x\"",
+    ]
+    check checkResumeEquivalence(buf, 3, "      c", langVim, "vim trim heredoc")
+
+  test "Vim: editing below vim9script keeps Vim9 comments":
+    let buf = @["vim9script", "# a", "# b", "\"s\"->len()", "# c"]
+    check checkResumeEquivalence(buf, 3, "# edited", langVim, "vim9script")
+
+  test "Vim: escape ending at EOL does not emit an empty token":
+    let buf = @["echo \"a \\", "more\"", "let n = 1", "\" c", "echo n"]
+    check checkResumeEquivalence(buf, 3, "let y = 1", langVim, "vim esc")
+
   test "Tcl: an unclosed ${ brace reference is line-bounded":
     # `${some_var` (no closing brace) must not swallow the newline into one
     # gtSpecialVar token; the lines below resume as code, not variable.
@@ -1541,6 +1642,7 @@ suite "Monotonic-advance guard":
       (SourceLanguage.langTcl, tclCorpus()),
       (SourceLanguage.langLua, luaCorpus()),
       (SourceLanguage.langGo, goCorpus()),
+      (SourceLanguage.langVim, vimCorpus()),
     ]
     for (lang, corpus) in corpora:
       for buf in corpus:

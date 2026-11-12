@@ -52,6 +52,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - Tcl
   - TOML
   - TypeScript/TSX
+  - Vimscript
   - XML
   - YAML
   - Others: Astro, Dockerfile, Hyprland, Log files
