@@ -212,7 +212,7 @@ proc loadKeyMappingFile*(config: var KeyMappingConfig, vr: var ValidationResult)
   try:
     toml = parseFile(path)
   except CatchableError:
-    vr.addError("keybindings", getCurrentExceptionMsg(), "valid TOML file")
+    vr.addLoadFailure("keybindings", "", getCurrentExceptionMsg())
     return
   # Top-level mode sections (no "KeyMapping" prefix) → empty error-label prefix.
   loadKeyMappingConfig(toml.getTable(), config, vr, section = "")
