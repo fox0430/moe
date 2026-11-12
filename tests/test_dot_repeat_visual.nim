@@ -161,6 +161,46 @@ suite "`.` acts again over a Visual area as big at the cursor, as in Vim":
     e.press("j0.")
     check e.lines == @["cdef", "cdef", "abcdef", "abcdef", "abcdef"]
 
+  # Measured in Vim 9.2 (`vim -u NONE`) with 'shiftwidth' 4 and 'tabstop' 8.
+  const Twelve = @["            a", "            b", "            c"]
+  for (lines, cursor, expandTab, keys, want, wantCursor) in [
+    (
+      Letters,
+      (0, 0),
+      false,
+      "Vj3>j.",
+      @["\t    a", "\t\t\tb", "\t    c", "d", "e"],
+      (1, 3),
+    ),
+    (
+      Letters,
+      (0, 0),
+      true,
+      "Vj3>j.",
+      @["            a", "                        b", "            c", "d", "e"],
+      (1, 24),
+    ),
+    (Twelve, (0, 0), false, "Vj<j.", @["\ta", "    b", "\tc"], (1, 4)),
+    (Twelve, (0, 0), true, "Vj2<j.", @["    a", "b", "    c"], (1, 0)),
+    (Letters, (0, 0), false, "Vj>u<C-r>", @["    a", "    b", "c", "d", "e"], (0, 0)),
+    (
+      Letters,
+      (2, 0),
+      false,
+      "Vk3>u<C-r>",
+      @["a", "\t    b", "\t    c", "d", "e"],
+      (1, 0),
+    ),
+  ]:
+    test keys & " with 'shiftwidth' 4" & (if expandTab: " and 'expandtab'" else: ""):
+      let e = newVimLikeEditor(
+        lines, cursor[0], cursor[1], expandTab = expandTab, shiftWidth = 4
+      )
+      e.press(keys)
+      check e.state.mode == EditorMode.Normal
+      check e.lines == want
+      check e.cursorAt == wantCursor
+
 suite "`.` replaces a Visual area as big at the cursor, as in Vim":
   # Measured in Vim 9.2 (`vim -u NONE`).
   const

@@ -201,19 +201,12 @@ proc nimNeedsExtraIndent(line, carried: string): bool =
 
   return false
 
-proc extraIndentForNewline*(
-    line: string, language: SourceLanguage, indentUnit: string, carried = ""
-): string =
-  ## Return the additional indent string to append after the base indent
-  ## when Enter is pressed on `line`, moving `carried` down. Returns `""`
-  ## when no trigger fires or the language is unsupported.
-  ##
-  ## Always returns at most one `indentUnit` regardless of how many
-  ## triggers match (e.g. nested unclosed brackets).
+proc needsExtraIndent*(line: string, language: SourceLanguage, carried = ""): bool =
+  ## Whether Enter on `line`, moving `carried` down, indents the new line one
+  ## step deeper, however many triggers match (e.g. nested unclosed brackets).
+  ## Never for an unsupported language.
   case language
   of langNim:
-    if nimNeedsExtraIndent(line, carried):
-      return indentUnit
-    return ""
+    nimNeedsExtraIndent(line, carried)
   else:
-    return ""
+    false

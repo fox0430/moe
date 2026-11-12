@@ -3596,6 +3596,30 @@ suite "Handler - Indent/Dedent":
     # Cursor lands on the first non-blank, like >>
     check ctx.cursor == BufferPosition(line: 0, column: buffer[0].len - 1)
 
+  test "<< takes off 'shiftwidth' columns and rebuilds the indent, as Vim":
+    let buffer = newTextBuffer("\t\t\t\tx")
+    let ctx = createTestContext(buffer)
+    ctx.state.expandTab = false
+    ctx.state.tabStop = 8
+    ctx.state.shiftWidth = 4
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("dedent.line")).isOk
+    check buffer[0] == "\t\t\t    x"
+    check ctx.cursor == BufferPosition(line: 0, column: 7)
+
+  test ">> adds 'shiftwidth' columns, not a tab, as Vim":
+    let buffer = newTextBuffer("x\n    y")
+    let ctx = createTestContext(buffer)
+    ctx.state.expandTab = false
+    ctx.state.tabStop = 8
+    ctx.state.shiftWidth = 4
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("indent.line"), @["2"]).isOk
+    check buffer[0] == "    x"
+    check buffer[1] == "\ty"
+
   test "dedent line count is a line count (vim's [count]<<)":
     let buffer = newTextBuffer("    a\n    b\n    c")
     let ctx = createTestContext(buffer)

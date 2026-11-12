@@ -113,13 +113,26 @@ proc effectiveSoftTabStop*(state: EditorState): int =
   ## Returns softTabStop if > 0, otherwise tabStop (Vim compatible)
   if state.softTabStop > 0: state.softTabStop else: state.tabStop
 
-proc getIndentString*(state: EditorState): string =
-  ## Get the indent string to use for auto-indentation (>>/<<)
-  ## Uses shiftWidth when set, falls back to tabStop
+proc indentSteps(state: EditorState): tuple[tabStop, shift: int] =
+  ## 'tabstop' and the effective 'shiftwidth', at least 1 each.
+  (max(1, state.tabStop), max(1, effectiveShiftWidth(state)))
+
+proc indentOfWidth(state: EditorState, width: int): string =
+  ## An indent `width` columns wide: tabs and then spaces, or only spaces with
+  ## 'expandtab', as Vim's set_indent.
   if state.expandTab:
-    return " ".repeat(effectiveShiftWidth(state))
-  else:
-    return "\t"
+    return " ".repeat(width)
+  let tabStop = state.indentSteps.tabStop
+  "\t".repeat(width div tabStop) & " ".repeat(width mod tabStop)
+
+proc rebuiltIndent*(state: EditorState, indent: string, deeper = false): string =
+  ## `indent` rebuilt from its width, as Vim's open_line without 'copyindent',
+  ## and one 'shiftwidth' wider when `deeper`, as with 'smartindent'.
+  let (tabStop, shift) = state.indentSteps
+  var width = displayWidthWithTabs(indent, tabStop)
+  if deeper:
+    width += shift
+  state.indentOfWidth(width)
 
 proc insertChar*(buffer: TextBuffer, state: EditorState, ch: char) =
   ## Insert a character at cursor position
@@ -277,12 +290,17 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
         getLineIndent(currentLineText)
       else:
         ""
+    # Both new lines are rebuilt, so they agree on tabs and spaces.
     let middleIndent =
       if indented:
-        baseIndent & getIndentString(state)
+        state.rebuiltIndent(baseIndent, deeper = true)
       else:
         ""
-    let closeIndent = if indented: baseIndent else: ""
+    let closeIndent =
+      if indented:
+        state.rebuiltIndent(baseIndent)
+      else:
+        ""
     let textToInsert = "\n" & middleIndent & "\n" & closeIndent
     let insertResult = buffer.insertText(pos, textToInsert)
     if insertResult.isErr:
@@ -307,14 +325,9 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   var last = pos.column
   if autoIndent:
     let carried = currentLineText.charSubStr(pos.column)
-    let extraIndent =
-      if state.smartIndent:
-        extraIndentForNewline(
-          leftText, buffer.language, getIndentString(state), carried
-        )
-      else:
-        ""
-    newLineIndent = getLineIndent(leftText) & extraIndent
+    newLineIndent = getLineIndent(leftText)
+    if state.smartIndent and needsExtraIndent(leftText, buffer.language, carried):
+      newLineIndent = state.rebuiltIndent(newLineIndent, deeper = true)
     last += getLineIndent(carried).len
 
   # An untouched auto-indent comes off the text Enter leaves; the new line
@@ -353,13 +366,9 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState): Result[(), string
   # Auto-indent skipped for raw buffers.
   let autoIndent = state.autoIndent and buffer.allowsTextTransforms
   if autoIndent:
-    let baseIndent = getLineIndent(lineContent)
-    let extraIndent =
-      if state.smartIndent:
-        extraIndentForNewline(lineContent, buffer.language, getIndentString(state))
-      else:
-        ""
-    newLineIndent = baseIndent & extraIndent
+    newLineIndent = getLineIndent(lineContent)
+    if state.smartIndent and needsExtraIndent(lineContent, buffer.language):
+      newLineIndent = state.rebuiltIndent(newLineIndent, deeper = true)
 
     if newLineIndent.len > 0:
       textToInsert = "\n" & newLineIndent
@@ -408,96 +417,43 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string
   state.mode = EditorMode.Insert
   ok(())
 
-proc indentLine*(
-    buffer: TextBuffer, state: EditorState, count: int = 1
+proc shiftLines*(
+    buffer: TextBuffer, state: EditorState, first, last: int, left: bool, amount = 1
 ): Result[(), string] =
-  ## Indent current line. Refusals returned for caller loop handling.
+  ## `>` or `<` on lines `first` to `last` as one change, as Vim's op_shift
+  ## with 'noshiftround': each indent moves by `amount` 'shiftwidth's and is
+  ## rebuilt with tabs, or spaces with 'expandtab'. Empty lines stay empty.
+  ## Unlike Vim with 'smartindent', lines starting with `#` move too: smart
+  ## indent here follows Nim, where `#` starts a comment. The cursor does not
+  ## move.
   if not buffer.allowsTextTransforms:
-    return err(rawBytesRejection("indent"))
-
-  let currentLine = state.cursor.line
-  if currentLine < 0 or currentLine >= buffer.len:
-    return ok(())
-
-  # Get the indent string to add
-  let indentStr = getIndentString(state)
-
-  # Build the full indentation to add (count times)
-  var fullIndent = ""
-  for i in 1 .. count:
-    fullIndent.add(indentStr)
-
-  # Insert at the beginning of the line
-  let insertPos = BufferPosition(line: currentLine, column: 0)
-  let insertResult = buffer.insertText(insertPos, fullIndent)
-  if insertResult.isErr:
-    return err(insertResult.error)
-
-  # Keep cursor at the same relative position within the line content
-  # (move cursor right by the amount of indentation added)
-  state.cursor.column += fullIndent.len
-  ok(())
-
-proc dedentLine*(
-    buffer: TextBuffer, state: EditorState, count: int = 1
-): Result[(), string] =
-  ## Dedent current line. Refusals returned for caller loop handling.
-  if not buffer.allowsTextTransforms:
-    return err(rawBytesRejection("dedent"))
-
-  let currentLine = state.cursor.line
-  if currentLine < 0 or currentLine >= buffer.len:
-    return ok(())
-
-  let lineContent = buffer.getLine(currentLine)
-  let currentIndent = getLineIndent(lineContent)
-
-  if currentIndent.len == 0:
-    return ok(()) # No indentation to remove
-
-  # Calculate how much to remove
-  let indentStr = getIndentString(state)
-  let indentWidth = indentStr.len
-  let removeCount = min(count * indentWidth, currentIndent.len)
-
-  if removeCount <= 0:
-    return ok(())
-
-  # Delete characters from the beginning of the line. Track how many were
-  # actually removed so the cursor adjustment stays correct on partial failure.
-  var deleted = 0
-  var failure = ""
-  for i in 1 .. removeCount:
-    let deletePos = BufferPosition(line: currentLine, column: 0)
-    let deleteResult = buffer.deleteChar(deletePos)
-    if deleteResult.isErr:
-      failure = deleteResult.error
-      break
-    inc deleted
-
-  if deleted == 0:
-    if failure.len > 0:
-      return err(failure)
-    return ok(())
-
-  # Adjust cursor position
-  # If cursor was in the indentation area, move it to column 0
-  # Otherwise, move it left by the amount removed
-  if state.cursor.column >= deleted:
-    state.cursor.column -= deleted
-  else:
-    state.cursor.column = 0
-
-  if failure.len > 0:
-    return err(failure)
-  ok(())
-
-proc indentFor(columns, tabStop: int, expandTab: bool): string =
-  ## An indent `columns` wide: tabs and then spaces, or only spaces with
-  ## 'expandtab', as Vim's set_indent.
-  if expandTab:
-    return " ".repeat(columns)
-  "\t".repeat(columns div tabStop) & " ".repeat(columns mod tabStop)
+    return err(rawBytesRejection(if left: "dedent" else: "indent"))
+  let
+    (tabStop, step) = state.indentSteps
+    shift = step * amount
+  var spans: seq[LineEdit]
+  for row in max(0, first) .. min(last, buffer.len - 1):
+    let text = buffer.getLine(row)
+    if text.len == 0:
+      continue
+    let
+      indent = getLineIndent(text)
+      width = displayWidthWithTabs(indent, tabStop)
+      newWidth =
+        if left:
+          max(0, width - shift)
+        else:
+          width + shift
+      newIndent = state.indentOfWidth(newWidth)
+    if newIndent == indent:
+      continue
+    let shifted = newIndent & text[indent.len .. ^1]
+    if spans.len > 0 and spans[^1].start + spans[^1].delete == row:
+      inc spans[^1].delete
+      spans[^1].insert.add shifted
+    else:
+      spans.add LineEdit(start: row, delete: 1, insert: @[shifted])
+  buffer.replaceLineSpans(spans)
 
 proc changeIndent*(
     buffer: TextBuffer, state: EditorState, deeper: bool
@@ -515,8 +471,7 @@ proc changeIndent*(
     return err(rawBytesRejection(if deeper: "indent" else: "dedent"))
 
   let
-    tabStop = max(1, state.tabStop)
-    shift = max(1, effectiveShiftWidth(state))
+    (tabStop, shift) = state.indentSteps
     autoIndented = buffer.untouchedAutoIndent(state) == some(pos.line)
     indent = getLineIndent(buffer.getLine(pos.line))
     width = displayWidthWithTabs(indent, tabStop)
@@ -530,7 +485,7 @@ proc changeIndent*(
     newWidth = shifts * shift
     offset = pos.column - indent.len
   var
-    newIndent = indentFor(newWidth, tabStop, state.expandTab)
+    newIndent = state.indentOfWidth(newWidth)
     # The cursor's column once the line has `newIndent`.
     column = newIndent.len + offset
   if offset < 0:

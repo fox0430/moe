@@ -48,15 +48,6 @@ template checkVisualEdit(state: EditorState, r: Result[(), string]) =
     else:
       return
 
-template checkVisualEditAt(
-    state: EditorState, cursorBefore: BufferPosition, r: Result[(), string]
-) =
-  ## `checkVisualEdit` that restores cursor when loop aborts mid-selection.
-  let checkVisualEditAtResult = r
-  if checkVisualEditAtResult.isErr:
-    state.cursor = cursorBefore
-  checkVisualEdit(state, checkVisualEditAtResult)
-
 proc getSelectionRange*(
     selection: VisualSelection
 ): tuple[start, endPos: BufferPosition] {.inline.} =
@@ -322,29 +313,26 @@ proc visualDelete*(
   state.leaveVisual()
   ok(())
 
-proc shiftLines(
+proc shiftSelection(
     buffer: TextBuffer,
     state: EditorState,
     sel: VisualSelection,
     area: BlockArea,
     label: string,
-    shift: proc(buffer: TextBuffer, state: EditorState, count: int): Result[(), string],
+    left: bool,
     count: int,
 ): Result[(), string] =
-  ## Shift the lines of `sel` by `count` with `shift`, which reads the line to
-  ## act on from the cursor, and return to previous mode. The cursor goes to
-  ## the first line's first non-blank, as Vim's op_shift.
+  ## Shift the lines of `sel` `count` times, left or right, and return to
+  ## previous mode. The cursor goes to the first line's first non-blank, as
+  ## Vim's op_shift.
   if not sel.active:
     return ok(())
   let
     startLine = min(sel.start.line, sel.current.line)
     endLine = max(sel.start.line, sel.current.line)
-    cursorBefore = state.cursor
 
   let txr = withTransaction(buffer, label, some(undoCursor(sel, area))):
-    for lineNum in startLine .. endLine:
-      state.cursor = BufferPosition(line: lineNum, column: 0)
-      checkVisualEditAt(state, cursorBefore, shift(buffer, state, count))
+    checkVisualEdit(state, buffer.shiftLines(state, startLine, endLine, left, count))
 
     state.cursor = BufferPosition(
       line: startLine, column: firstNonBlankColumn(buffer.getLine(startLine))
@@ -364,7 +352,7 @@ proc visualIndent*(
 ): Result[(), string] =
   ## Indent the lines of `sel`, whose block is `area` when blockwise, and
   ## return to previous mode
-  shiftLines(buffer, state, sel, area, "Visual indent", indentLine, count)
+  shiftSelection(buffer, state, sel, area, "Visual indent", left = false, count)
 
 proc visualDedent*(
     buffer: TextBuffer,
@@ -375,7 +363,7 @@ proc visualDedent*(
 ): Result[(), string] =
   ## Dedent the lines of `sel`, whose block is `area` when blockwise, and
   ## return to previous mode
-  shiftLines(buffer, state, sel, area, "Visual dedent", dedentLine, count)
+  shiftSelection(buffer, state, sel, area, "Visual dedent", left = true, count)
 
 proc applyVisualTextTransform(
     buffer: TextBuffer,
