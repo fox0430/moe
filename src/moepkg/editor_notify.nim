@@ -20,9 +20,10 @@
 ## Notification routing: popup or status line depending on config, plus the
 ## pending buffer notices, reported when a window first shows the buffer.
 
-import std/[options, strutils]
+import std/[options, strutils, sequtils]
 
-import types/editor_types, logger, message_log, notification_popup, buffer
+import
+  types/editor_types, logger, message_log, notification_popup, buffer, setting_issue
 
 proc notifyPopup*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   ## Notify via popup, always logged to message log.
@@ -120,6 +121,18 @@ proc notifyAll*(e: Editor, msgs: openArray[string], level: NotificationLevel = n
         maxRows = min(MaxNotifiedLines, screenRows),
       )
     )
+
+proc reportConfigIssues*(e: Editor, vr: ValidationResult, lead = ""): bool =
+  ## Report what loading the config left unapplied, errors first, as one
+  ## report under `lead` when given. False when there was nothing to report.
+  let issues =
+    vr.toErrorMessages.mapIt("Config error: " & it) &
+    vr.toDeprecationMessages.mapIt("Config notice: " & it)
+  if issues.len == 0:
+    return false
+  let msgs = (if lead.len > 0: @[lead] else: @[]) & issues
+  e.notifyAll(msgs, if vr.hasErrors: nlError else: nlWarning)
+  true
 
 proc render(buf: TextBuffer, notice: BufferNotice): string =
   ## The sentence for a notice, kept apart from where the notice is made.

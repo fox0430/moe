@@ -298,7 +298,7 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
         return
       let saveResult = saveThemeToToml(DefaultColors, config.theme.path)
       if saveResult.isErr:
-        vr.addError("Theme.path", config.theme.path, saveResult.error)
+        vr.addLoadFailure("Theme.path", config.theme.path, saveResult.error)
         initDefaultTheme()
         themeColorsFromFile = false
         return
@@ -310,9 +310,9 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
   else:
     case config.theme.kind
     of tkConfig:
-      vr.addError("Theme.path", config.theme.path, themeResult.error)
+      vr.addLoadFailure("Theme.path", config.theme.path, themeResult.error)
     of tkVscode:
-      vr.addError("Theme.kind", "vscode", themeResult.error)
+      vr.addLoadFailure("Theme.kind", "vscode", themeResult.error)
     of tkDefault:
       discard
     initDefaultTheme()

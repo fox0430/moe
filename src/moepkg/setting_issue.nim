@@ -34,6 +34,10 @@ type
     sikUnsupported
       ## Known key with a value that is valid but unimplemented. The `expected`
       ## field says what moe does instead.
+    sikLoadFailed
+      ## Known key with a valid value naming something that could not be
+      ## loaded (a theme file, an installed theme), or with no value, a config
+      ## file that could not be read. The `expected` field says why.
 
   SettingIssue* = object
     ## One setting that was not applied. Holds the facts only; the wording
@@ -58,6 +62,11 @@ proc newValidationResult*(): ValidationResult =
 proc addError*(vr: var ValidationResult, name, val, expected: string) =
   vr.errors.add(
     SettingIssue(kind: sikInvalidValue, name: name, val: val, expected: expected)
+  )
+
+proc addLoadFailure*(vr: var ValidationResult, name, val, reason: string) =
+  vr.errors.add(
+    SettingIssue(kind: sikLoadFailed, name: name, val: val, expected: reason)
   )
 
 proc addUnknownKey*(vr: var ValidationResult, name: string) =
@@ -99,6 +108,11 @@ proc toMessage*(item: SettingIssue): string =
   of sikUnsupported:
     "Unsupported value for '" & item.name & "': got '" & item.val.shortVal & "'" &
       (if item.expected.len > 0: ", " & item.expected else: "")
+  of sikLoadFailed:
+    if item.val.len > 0:
+      item.name & " = '" & item.val.shortVal & "': " & item.expected
+    else:
+      item.name & ": " & item.expected
   of sikDeprecated:
     if item.expected.len > 0:
       "Deprecated key '" & item.name & "': " & item.expected

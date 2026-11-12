@@ -258,11 +258,11 @@ diffViewerFiller = { fg = "#808080", bg = "#ededed" }
 
 configModeCurrentLine = { fg = "#000000", bg = "#ff0087" }
 
-currentLine = { bg = "#444444" }
+currentLine = { bg = "#eeeeee" }
 
-currentColumn = { bg = "#444444" }
+currentColumn = { bg = "#eeeeee" }
 
-foldingLine = { fg = "#808080", bg = "#3f3f3f" }
+foldingLine = { fg = "#808080", bg = "#ededed" }
 
 sidebarGitAddedSign = { fg = "#008000", bg = "#ffffff" }
 sidebarGitDeletedSign = { fg = "#ff0000", bg = "#ffffff" }

@@ -102,21 +102,21 @@ suite "theme - initDefaultTheme":
     check defaultColor.foreground.rgb.red == 218
 
 suite "theme - diff viewer tints follow the background":
-  test "A light background swaps the dark default tints":
+  test "A light background takes the light theme's tints":
     var colors = DefaultColors
     colors[EditorColorPairIndex.default].background = ThemeColor(rgb: rgb("#ffffff"))
     colors.adaptDiffTintsToBackground()
     # The diff viewer signals added/deleted lines with the background alone and
     # keeps the terminal-default foreground, so a dark tint would be unreadable.
-    check colors[EditorColorPairIndex.diffViewerAddedLineBg].background.rgb ==
-      rgb("#e6ffec")
-    check colors[EditorColorPairIndex.diffViewerDeletedLineBg].background.rgb ==
-      rgb("#ffebe9")
-    check colors[EditorColorPairIndex.diffViewerAddedWord].background.rgb ==
-      rgb("#a8f0b8")
-    check colors[EditorColorPairIndex.diffViewerDeletedWord].background.rgb ==
-      rgb("#ffc4c9")
-    check colors[EditorColorPairIndex.diffViewerFiller].background.rgb == rgb("#ededed")
+    for index in [
+      EditorColorPairIndex.diffViewerAddedLineBg,
+      EditorColorPairIndex.diffViewerDeletedLineBg,
+      EditorColorPairIndex.diffViewerAddedWord,
+      EditorColorPairIndex.diffViewerDeletedWord, EditorColorPairIndex.diffViewerFiller,
+    ]:
+      checkpoint $index
+      check colors[index] != DefaultColors[index]
+      check colors[index] == LightColors[index]
 
   test "A dark background keeps the default tints":
     var colors = DefaultColors
@@ -131,10 +131,10 @@ suite "theme - diff viewer tints follow the background":
       ThemeColor(rgb: TerminalDefaultRgb)
     colors[EditorColorPairIndex.default].foreground = ThemeColor(rgb: rgb("#000000"))
     colors.adaptDiffTintsToBackground()
-    check colors[EditorColorPairIndex.diffViewerAddedLineBg].background.rgb ==
-      rgb("#e6ffec")
-    check colors[EditorColorPairIndex.diffViewerDeletedLineBg].background.rgb ==
-      rgb("#ffebe9")
+    check colors[EditorColorPairIndex.diffViewerAddedLineBg] ==
+      LightColors[EditorColorPairIndex.diffViewerAddedLineBg]
+    check colors[EditorColorPairIndex.diffViewerDeletedLineBg] ==
+      LightColors[EditorColorPairIndex.diffViewerDeletedLineBg]
 
   test "A terminal-default foreground on a terminal-default background keeps the tints":
     var colors = DefaultColors
@@ -154,5 +154,5 @@ suite "theme - diff viewer tints follow the background":
     colors.adaptDiffTintsToBackground()
     check colors[EditorColorPairIndex.diffViewerAddedLineBg].background.rgb ==
       rgb("#123456")
-    check colors[EditorColorPairIndex.diffViewerDeletedLineBg].background.rgb ==
-      rgb("#ffebe9")
+    check colors[EditorColorPairIndex.diffViewerDeletedLineBg] ==
+      LightColors[EditorColorPairIndex.diffViewerDeletedLineBg]

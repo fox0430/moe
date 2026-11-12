@@ -19,7 +19,7 @@
 
 ## Tests for editor_config_reload.nim
 
-import std/[unittest, os, monotimes, times]
+import std/[unittest, os, monotimes, times, strutils]
 
 import pkg/results
 
@@ -227,3 +227,82 @@ suite "editor_config_reload - maybeReloadConfig":
       require e.state.statusMessage == "Configuration reloaded"
       require e.config.theme.path == themePath
       check keywordFg() == ThemeColor(rgb: rgb("#ff0000"))
+
+  test "says why the theme failed to load":
+    withTempHome(tmpDir):
+      let configDir = tmpDir / ".config" / "moe"
+      createDir(configDir)
+      # No VS Code under the temporary HOME.
+      writeFile(configDir / "moerc.toml", "[Theme]\nkind = \"vscode\"\n")
+      var config = newEditorConfig()
+      config.standard.liveReloadOfConf = true
+      config.theme.kind = tkDefault
+      let e = newEditor(config, newValidationResult())
+      e.state.timing.lastConfigCheck = pastMonoTime(3000)
+      e.state.timing.lastConfigModTime = times.Time()
+
+      e.maybeReloadConfig()
+
+      let lines = e.state.statusMessage.split('\n')
+      require lines.len == 2
+      check lines[0] == "Configuration reloaded"
+      check lines[1].startsWith("Config error: Theme.kind = 'vscode': ")
+      check "no VS Code" in lines[1]
+
+  test "reports errors in the config file itself":
+    withTempHome(tmpDir):
+      let configDir = tmpDir / ".config" / "moe"
+      createDir(configDir)
+      writeFile(configDir / "moerc.toml", "[Standard]\nnoSuchKey = true\n")
+      var config = newEditorConfig()
+      config.standard.liveReloadOfConf = true
+      let e = newEditor(config, newValidationResult())
+      e.state.timing.lastConfigCheck = pastMonoTime(3000)
+      e.state.timing.lastConfigModTime = times.Time()
+
+      e.maybeReloadConfig()
+
+      let lines = e.state.statusMessage.split('\n')
+      require lines.len == 2
+      check lines[0] == "Configuration reloaded"
+      check lines[1].startsWith("Config error: ")
+      check "noSuchKey" in lines[1]
+
+  test "says it reloaded a config that only has deprecated keys":
+    withTempHome(tmpDir):
+      let configDir = tmpDir / ".config" / "moe"
+      createDir(configDir)
+      writeFile(configDir / "moerc.toml", "[StatusLine]\nmerge = true\n")
+      var config = newEditorConfig()
+      config.standard.liveReloadOfConf = true
+      let e = newEditor(config, newValidationResult())
+      e.state.timing.lastConfigCheck = pastMonoTime(3000)
+      e.state.timing.lastConfigModTime = times.Time()
+
+      e.maybeReloadConfig()
+
+      let lines = e.state.statusMessage.split('\n')
+      require lines.len == 2
+      check lines[0] == "Configuration reloaded"
+      check lines[1].startsWith("Config notice: Deprecated key 'StatusLine.merge'")
+
+  test "reports a file it cannot parse once, not on every check":
+    withTempHome(tmpDir):
+      let configDir = tmpDir / ".config" / "moe"
+      createDir(configDir)
+      writeFile(configDir / "moerc.toml", "[Standard\n")
+      var config = newEditorConfig()
+      config.standard.liveReloadOfConf = true
+      let e = newEditor(config, newValidationResult())
+      e.state.timing.lastConfigCheck = pastMonoTime(3000)
+      e.state.timing.lastConfigModTime = times.Time()
+
+      e.maybeReloadConfig()
+
+      # Not reloaded, and where the file breaks is shown in full.
+      check e.state.statusMessage.startsWith("Config error: config: Failed to parse")
+      check "moerc.toml(" in e.state.statusMessage
+      e.state.statusMessage = ""
+      e.state.timing.lastConfigCheck = pastMonoTime(3000)
+      e.maybeReloadConfig()
+      check e.state.statusMessage == ""

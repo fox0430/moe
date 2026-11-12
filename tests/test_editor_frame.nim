@@ -25,7 +25,7 @@ import pkg/celina
 
 import std/strutils
 
-import ../src/moepkg/[types, editor, config, message_log, editor_notify]
+import ../src/moepkg/[types, editor, config, message_log, editor_notify, setting_issue]
 import ../src/moepkg/[highlight, editor_window]
 import ../src/moepkg/editor_frame {.all.}
 import ../src/moepkg/buffer {.all.}
@@ -425,6 +425,32 @@ suite "notifyAll - bounded delivery":
 
     check e.state.statusMessage == "one\ntwo"
     check getMessageLog().len == 2
+
+suite "reportConfigIssues":
+  test "errors come before deprecation notices, all logged":
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    var vr = newValidationResult()
+    vr.addDeprecated("Old.key", "use New.key")
+    vr.addUnknownKey("Bad.key")
+    clearMessageLog()
+
+    check e.reportConfigIssues(vr)
+
+    let lines = e.state.statusMessage.split('\n')
+    check lines ==
+      @[
+        "Config error: Unknown key: 'Bad.key'",
+        "Config notice: Deprecated key 'Old.key': use New.key",
+      ]
+    check getMessageLog().len == 2
+
+  test "nothing to report leaves the status line alone":
+    let e = newEditor(newEditorConfig())
+    e.state.statusMessage = "standing"
+
+    check not e.reportConfigIssues(newValidationResult())
+    check e.state.statusMessage == "standing"
 
 suite "notify - routing and logging":
   test "status line route sets the status message":

@@ -84,3 +84,13 @@ suite "example/themes/*.toml":
       if missing.len > 0:
         echo "  Missing: ", missing
       check missing.len == 0
+
+suite "example/themes/light.toml as the bundled light theme":
+  test "loads to LightColors":
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(ExampleThemesDir / "light.toml", vr)
+    require loaded.isOk
+    check vr.errors.len == 0
+    for index in EditorColorPairIndex:
+      checkpoint $index
+      check loaded.get[index] == LightColors[index]

@@ -428,7 +428,7 @@ proc main() {.used.} =
     validationResult = vr
   else:
     # Config file parse error - add to validation result and use default config
-    validationResult.addError("config", loadResult.error, "valid TOML file")
+    validationResult.addLoadFailure("config", "", loadResult.error)
     editorConfig = newEditorConfig()
 
   # Apply command-line overrides on top of the TOML-loaded config.

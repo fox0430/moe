@@ -27,6 +27,7 @@ import pkg/results
 
 import
   types/editor_types,
+  editor_notify,
   editor_lsp,
   editor_init,
   editor_mode,
@@ -208,21 +209,21 @@ proc maybeReloadConfig*(e: Editor) =
   # Config file was modified, reload it. Use loadConfig (not loadConfigFromToml)
   # so the dedicated keybindings.toml is re-merged too.
   logInfo("editor", "Config file modified, reloading: " & configPath)
+  # Reported once per change, not on every check until the file is fixed.
+  e.state.timing.lastConfigModTime = currentModTime
   let loadResult = loadConfig()
   if loadResult.isErr:
     logError("editor", "Failed to reload config: " & loadResult.error)
+    var vr = newValidationResult()
+    vr.addLoadFailure("config", "", loadResult.error)
+    discard e.reportConfigIssues(vr)
     return
 
-  let (newConfig, vr) = loadResult.get
-  if vr.hasErrors:
-    for msg in vr.toErrorMessages:
-      logWarn("editor", "Config warning: " & msg)
-  if vr.hasDeprecations:
-    for msg in vr.toDeprecationMessages:
-      logInfo("editor", "Config notice: " & msg)
+  # Collected and reported as at startup.
+  var (newConfig, vr) = loadResult.get
 
   # The theme file is not watched, so reread it with the config.
-  initTheme(newConfig)
+  initTheme(newConfig, vr)
 
   # Apply the new settings
   e.applyConfigSettings(newConfig)
@@ -231,16 +232,13 @@ proc maybeReloadConfig*(e: Editor) =
   # user mapping layer and re-apply it (this drops session `:nmap` mappings).
   # Done here (file-change-triggered) rather than in applyConfigSettings, which
   # also runs on every keystroke in Config mode.
-  var keyVr = newValidationResult()
-  e.keyBindingRegistry.reapplyKeyMappings(newConfig.keyMapping, keyVr)
-  for msg in keyVr.toErrorMessages:
-    logWarn("editor", "KeyMapping reload: " & msg)
+  e.keyBindingRegistry.reapplyKeyMappings(newConfig.keyMapping, vr)
 
   # Command aliases/shell commands are declarative too: rebuild them from the
   # reloaded config (this drops session add/removeCommandAlias changes).
   e.commandConfig.applyCommandConfig(newConfig, e.commandLineParser)
 
-  # Update last known modification time
-  e.state.timing.lastConfigModTime = currentModTime
-
-  e.state.statusMessage = "Configuration reloaded"
+  # Applied even with issues: they name only what was left out.
+  const reloaded = "Configuration reloaded"
+  if not e.reportConfigIssues(vr, lead = reloaded):
+    e.state.statusMessage = reloaded

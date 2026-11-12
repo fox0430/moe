@@ -49,14 +49,15 @@ import
   editor_hooks,
   editor_command_output,
   editor_config_reload,
+  editor_notify,
   editor_frame,
   editor_init
 
 import
   render_utils, git_conflict, logger, config_loader, search_utils, hover_popup,
-  notification_popup, command_completion, color, message_log, recent_file_mode,
-  registers, persist, command_line, command_config, key_router, config, window_manager,
-  lsp_integration, recovery_notice
+  notification_popup, command_completion, color, recent_file_mode, registers, persist,
+  command_line, command_config, key_router, config, window_manager, lsp_integration,
+  recovery_notice
 
 import command_handlers/handler_manager
 
@@ -341,23 +342,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     except OSError:
       discard
 
-  # Display validation errors in status message if any
-  if configVr.hasErrors:
-    let errorMessages = configVr.toErrorMessages
-    result.state.statusMessage = "Config error: " & errorMessages[0]
-    # Log all errors
-    for msg in errorMessages:
-      addMessageLog("Config error: " & msg)
-
-  # Deprecation notices are not errors: the loader accepted the value. Log
-  # them, and surface the first one only if no error already claimed the
-  # status message.
-  if configVr.hasDeprecations:
-    let deprecationMessages = configVr.toDeprecationMessages
-    if result.state.statusMessage.len == 0:
-      result.state.statusMessage = "Config notice: " & deprecationMessages[0]
-    for msg in deprecationMessages:
-      addMessageLog("Config notice: " & msg)
+  discard result.reportConfigIssues(configVr)
 
 proc newEditor*(editorConfig: EditorConfig): Editor =
   ## Create a new Editor with the given configuration.
@@ -373,7 +358,7 @@ proc newEditor*(): Editor =
   if loadResult.isOk:
     (editorConfig, vr) = loadResult.get
   else:
-    vr.addError("config", loadResult.error, "valid TOML file")
+    vr.addLoadFailure("config", "", loadResult.error)
     editorConfig = newEditorConfig()
 
   result = newEditor(editorConfig, vr)

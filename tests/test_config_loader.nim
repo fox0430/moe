@@ -2115,6 +2115,43 @@ suite "Config - initTheme":
     config.theme.kind = tkDefault
     initTheme(config)
 
+  test "A VS Code theme that cannot be found is a load failure of Theme.kind":
+    withTempHome(tmpHome):
+      let settings = tmpHome / ".config" / "Code" / "User" / "settings.json"
+      createDir(settings.parentDir)
+      writeFile(settings, $(%*{"workbench.colorTheme": "No Such Theme"}))
+
+      var config = newEditorConfig()
+      config.theme.kind = tkVscode
+      var vr = newValidationResult()
+      initTheme(config, vr)
+
+      require vr.errors.len == 1
+      check vr.errors[0].kind == sikLoadFailed
+      check vr.errors[0].toMessage.startsWith(
+        "Theme.kind = 'vscode': theme 'No Such Theme' not found"
+      )
+      check themeColors == DefaultColors
+
+  test "A theme file that cannot be parsed is a load failure of Theme.path":
+    inc testFileCounter
+    let themeFile = getTempDir() / "moe_test_inittheme_unparsable_" & $testFileCounter
+    writeFile(themeFile, "[Colors\n")
+    defer:
+      removeFile(themeFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+    var vr = newValidationResult()
+    initTheme(config, vr)
+
+    require vr.errors.len == 1
+    check vr.errors[0].kind == sikLoadFailed
+    check vr.errors[0].toMessage.startsWith(
+      "Theme.path = '" & themeFile & "': Failed to parse theme file"
+    )
+
   test "Bootstrap: missing tkConfig file is seeded with DefaultColors":
     withTempHome(tmpHome):
       inc testFileCounter
@@ -2781,6 +2818,17 @@ splitType = "vertical"
     let msg = item.toMessage
     check "Invalid value" in msg
     check "Standard.tabStop" in msg
+
+  test "toMessage for a load failure names the setting, not a bad value":
+    let item = SettingIssue(
+      kind: sikLoadFailed, name: "Theme.kind", val: "vscode", expected: "why"
+    )
+    check item.toMessage == "Theme.kind = 'vscode': why"
+
+  test "toMessage for a file that cannot be read keeps the whole reason":
+    let reason = "Failed to parse config file: " & "x".repeat(80) & "(5:1) bad key"
+    let item = SettingIssue(kind: sikLoadFailed, name: "config", expected: reason)
+    check item.toMessage == "config: " & reason
 
 suite "Config Validation - Hand-dispatched section types":
   test "Scalar where a hand-dispatched top-level table is expected is reported":
