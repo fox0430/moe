@@ -1024,6 +1024,27 @@ suite "BackgroundProcess - filterOutput":
     waitFor sleepAsync(1500.milliseconds)
     check not fileExists(marker)
 
+  test "A stop kills the command and what it started":
+    let marker = getTempDir() / "moe_filter_stop_marker"
+    removeFile(marker)
+    defer:
+      removeFile(marker)
+
+    proc go(marker: string): Future[FilterProcessResult] {.async.} =
+      let
+        bp = startFilter("sh", @["-c", "sleep 0.5; : > " & marker])
+        stop = JobStop()
+        running = bp.filterOutput("in\n", InfiniteDuration, Unbounded, stop)
+      await sleepAsync(100.milliseconds)
+      stop.request()
+      return await running
+
+    let r = waitFor go(marker)
+    check r.isErr
+    check r.error.kind == ffCancelled
+    waitFor sleepAsync(1000.milliseconds)
+    check not fileExists(marker)
+
   test "A cancellation landing after the transfers still kills the command":
     # The command closes its streams and keeps running, so the cancellation
     # arrives once every transfer is already done - the one path that used to

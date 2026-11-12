@@ -1487,7 +1487,7 @@ proc runFilterAsync(
       # claims no job and only has to show up in `:jobs`.
       editor.addRunningProcess(bp, "Filter")
       let filtered = await bp.filterOutput(
-        input,
+        move input,
         timeoutFromSeconds(editor.config.filter.timeout),
         editor.config.filter.maxOutputSize,
       )
