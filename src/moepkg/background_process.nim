@@ -215,7 +215,7 @@ proc addFront(s: var string, chunk: string, n: int) =
     copyMem(addr s[at], unsafeAddr chunk[0], n)
 
 proc feedStdin(
-    process: ChildProcess, data: string, failure: RunFailure
+    process: ChildProcess, data: sink string, failure: RunFailure
 ): Future[void] {.async: (raises: []).} =
   ## Hand the command its input and close the pipe so it sees EOF.
   ##
@@ -244,7 +244,11 @@ proc feedStdin(
 
   try:
     if data.len > 0:
-      await writer.write(data)
+      # The string form would copy `data` into its own frame; this frame
+      # owns it until the write is over. A cancelled write can stay queued on
+      # the transport with this pointer until `sendEof` closes it, so that
+      # close has to come before the frame ends.
+      await writer.write(addr data[0], data.len)
     await writer.finish()
   except AsyncStreamError:
     # The command stopped reading. See above: that is its business.
@@ -425,11 +429,16 @@ proc startFilterProcess*(command: BackgroundProcessCommand): StartProcessResult 
   StartProcessResult.ok BackgroundProcess(process: process)
 
 proc filterOutput*(
-    bp: BackgroundProcess, input: string, timeout: Duration, limit: int
+    bp: BackgroundProcess,
+    input: sink string,
+    timeout: Duration,
+    limit: int,
+    stop: JobStop = nil,
 ): Future[FilterProcessResult] {.async: (raises: []).} =
   ## Run the process started by `startFilterProcess` as a text filter: `input`
   ## on its standard input, its standard output returned. `limit` bounds the
   ## output in bytes; non-positive means no bound, as it does for the timeout.
+  ## `stop` kills the command as a cancellation does.
   ## Standard error is bounded separately and far more tightly: it is only a
   ## message, so a few lines of it are as much as anyone reads.
   ##
@@ -446,12 +455,12 @@ proc filterOutput*(
     failure = RunFailure()
     outSink = DrainSink(limit: limit, policy: dlpFail)
     errSink = DrainSink(limit: FilterDiagnosticsLimit, policy: dlpTruncate)
-    feeder = feedStdin(process, input, failure)
+    feeder = feedStdin(process, move input, failure)
     outReader = bp.drainBounded(process.stdoutStream(), outSink, failure)
     errReader = bp.drainBounded(process.stderrStream(), errSink, failure)
 
   let outcome = await bp.runToCompletion(
-    @[FutureBase(feeder), FutureBase(outReader), FutureBase(errReader)], timeout
+    @[FutureBase(feeder), FutureBase(outReader), FutureBase(errReader)], timeout, stop
   )
   case outcome
   of proTimedOut:
