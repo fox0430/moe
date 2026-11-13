@@ -739,7 +739,7 @@ func ctrlCharOf(ch: string): string =
   of "4": "\\"
   of "5": "]"
   of "6": "^"
-  of "7": "_"
+  of "7", "/": "_"
   else: ch
 
 proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
