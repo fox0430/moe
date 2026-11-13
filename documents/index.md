@@ -1,15 +1,15 @@
 # Document
 
-[Overview](https://github.com/fox0430/moe/blob/develop/documents/overview.md)
+[Overview](overview.md)
 
-[Features](https://github.com/fox0430/moe/blob/develop/documents/features.md)
+[Features](features.md)
 
-[How to use](https://github.com/fox0430/moe/blob/develop/documents/howtouse.md)
+[How to use](howtouse.md)
 
-[Configuration file](https://github.com/fox0430/moe/blob/develop/documents/configfile.md)
+[Configuration file](configfile.md)
 
-[Language Server Protocol](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)
+[Language Server Protocol](lsp.md)
 
-[Platform / Terminal](https://github.com/fox0430/moe/blob/develop/documents/platform_terminal.md)
+[Git updates in embedding frontends](embedding-git.md)
 
-[Developer](https://github.com/fox0430/moe/blob/develop/documents/developer.md)
+[Developer](developer.md)

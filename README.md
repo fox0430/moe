@@ -194,7 +194,7 @@ Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md
 
 [Documents (Celina base)](https://github.com/fox0430/moe/blob/develop/documents/index.md)
 
-[Documents (Ncurses base)](https://github.com/fox0430/moe/blob/v0.4.0/documents/index.md)
+[Documents (Ncurses base)](https://github.com/fox0430/moe/tree/v0.4.0/documents)
 
 ### Embedding Moe
 
