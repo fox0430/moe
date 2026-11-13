@@ -7,7 +7,7 @@ The location is
 ~/.config/moe/moerc.toml
 ```
 
-You can use the example -> https://github.com/fox0430/moe/blob/develop/example
+You can use the [example](../example/moerc.toml).
 
 ## Configuration Items
 
@@ -1283,7 +1283,7 @@ enable = false
 ```
 
 
-Please check more [details](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)
+Please check more [details](lsp.md)
 
 ### StartUp.FileOpen table
 
