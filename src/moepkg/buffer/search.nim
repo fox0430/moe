@@ -414,11 +414,7 @@ iterator matchRanges(
 ): LiteralRange =
   ## The matches of `pattern` on the whole of `line`, as the walk above finds.
   var place = MatchWalkPlace()
-  let searchable =
-    if match == smRegex:
-      line.toValidUtf8
-    else:
-      ""
+  let searchable = if match == smRegex: line.toValidUtf8 else: ""
   for r in line.matchRanges(
     searchable, pattern, ignorecase, match, walk, place, withGroups
   ):
@@ -530,8 +526,7 @@ proc countMatches*(
       c.line.hold(b, c.before.high, match)
       var walked = c.place.pos
       for r in matchRanges(
-        c.line.text, c.line.searchable, searchText, ignorecase, match, mwSearch,
-        c.place,
+        c.line.text, c.line.searchable, searchText, ignorecase, match, mwSearch, c.place
       ):
         if not r.checkpoint:
           c.lineCount.inc
@@ -560,8 +555,7 @@ proc countMatches*(
     block walking:
       var walked = c.atPlace.pos
       for r in matchRanges(
-        c.at.text, c.at.searchable, searchText, ignorecase, match, mwSearch,
-        c.atPlace,
+        c.at.text, c.at.searchable, searchText, ignorecase, match, mwSearch, c.atPlace
       ):
         if not r.checkpoint:
           c.atStarts.add r.startCol

@@ -1701,7 +1701,8 @@ suite "Buffer Search - countMatches":
     let line = repeat("a,\xff", 1000)
     for (pattern, match) in [(",", smRegex), (",", smLiteral)]:
       let
-        whole = newTextBuffer(line).countMatches(at(0, 2000), pattern, Enough, match = match)
+        whole =
+          newTextBuffer(line).countMatches(at(0, 2000), pattern, Enough, match = match)
         b = newTextBuffer(line)
       var count = b.countMatches(at(0, 2000), pattern, DurationZero, match = match)
       while not count.complete:
