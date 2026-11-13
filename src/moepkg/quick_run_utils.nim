@@ -335,7 +335,6 @@ proc prepareQuickRun*(
   when defined(moe.embedded) and defined(windows):
     discard buffer
     discard settings
-    discard save
     return Result[QuickRunPrepareResult, string].err(
       "QuickRun is unavailable in embedded mode on Windows"
     )
