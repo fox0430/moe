@@ -220,7 +220,9 @@ suite "KeyCombo - parseKeyCombo":
   test "Ctrl + symbol is invalid":
     check parseKeyCombo("C-!").isNone
     check parseKeyCombo("C-@").isNone
-    check parseKeyCombo("C-/").isNone
+
+  test "C-/ is the same key as C-_":
+    check parseKeyCombo("C-/") == parseKeyCombo("C-_")
 
   test "Parse multibyte character as one combo":
     let result = parseKeyCombo("\u3042")
