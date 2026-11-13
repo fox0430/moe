@@ -813,10 +813,22 @@ type
     visualAll*: OrderedTable[string, KeyMappingEntry]
 
   HookEvent* = enum
-    ## Editor events a hook can attach to; all of them observe without
-    ## blocking. Members carry their TOML spelling; only fired events belong here.
+    ## Editor events a hook can attach to. `BufWritePre` rewrites the buffer
+    ## and the write waits for it; the rest observe without blocking.
+    ## Members carry their TOML spelling; only fired events belong here.
+    heBufWritePre = "BufWritePre"
+      ## A buffer is about to be written; the command's output replaces it
     heBufWritePost = "BufWritePost" ## A buffer was written to disk
     heBufReadPost = "BufReadPost" ## A file was read into a buffer
+
+  HookFailAction* = enum
+    ## What a write does when its `BufWritePre` command failed: it exited
+    ## non-zero, timed out, or answered with nothing usable.
+    hfaWrite = "write"
+      ## Write the buffer as the user left it: a formatter that chokes on a
+      ## syntax error must not take the save with it.
+    hfaAbort = "abort"
+      ## Do not write, for a command whose output is the point of the write.
 
   HookEntry* {.
     cfgSkip,
@@ -824,7 +836,7 @@ type
   .} = object
     ## One `[[Hook.entries]]` table.
     # Required keys come first (also the written/completed/documented order).
-    event* {.cfg, cfgDocDescription: "Event to attach to".}: HookEvent
+    event* {.cfg, cfgDocDescription: "Event to attach to".}: HookEvent = heBufWritePost
     command* {.cfg, cfgDocDescription: "Command line to run".}: string
       ## Placeholders are expanded before exec.
     filetype* {.
@@ -846,17 +858,30 @@ type
       cfgDocDefault: DefaultHookTimeout,
       cfgDocDescription: "Seconds before the command is killed. 0 waits without a bound"
     .}: int = DefaultHookTimeout
+    onFail* {.
+      cfg,
+      cfgOnlyWhen(isWritePreHook, "the event is BufWritePre"),
+      cfgDocDescription:
+        "What a failed command does to the write: write (as the buffer is) or abort"
+    .}: HookFailAction
     showOutput* {.
-      cfg, cfgDocDescription: "Show the command output in a horizontal split"
-    .}: bool
+      cfg,
+      cfgOnlyWhen(isObserveHook, "the event is not BufWritePre"),
+      cfgDocDescription: "Show the command output in a horizontal split"
+    .}: bool ## A `BufWritePre` command's output is the new text.
 
   HookConfig* {.
     cfgGroup: "Hook", cfgDocDescription: "Commands attached to editor events"
   .} = object
     ## `[Hook]`. `entries` is filled from the `[[Hook.entries]]` array of tables.
     enable* {.cfg, cfgDocDescription: "Run hooks at all".}: bool = true
-    onAutoSave* {.cfg, cfgDocDescription: "Run BufWritePost for auto saves too".}: bool
-      ## Off: timer-driven auto save would run them mid-typing.
+    onAutoSave* {.
+      cfg,
+      cfgDocDescription:
+        "Run BufWritePost for auto saves too (BufWritePre never runs for one)"
+    .}: bool
+      ## Off: timer-driven auto save would run them mid-typing. `BufWritePre`
+      ## would rewrite the buffer under the user's typing, so it never runs.
     exitWaitTimeout* {.
       cfg,
       cfgMin: 0,
@@ -903,6 +928,20 @@ type
     commandAliases*: Table[string, UserCommandEntry] ## User-defined command aliases
     disabledCommandAliases*: seq[string] ## Built-in command aliases disabled by the user
     hooks*: HookConfig ## User commands attached to editor events
+
+proc isWritePreHook*(entry: HookEntry): bool =
+  ## Whether the write waits for the entry and takes its output.
+  entry.event == heBufWritePre
+
+proc isObserveHook*(entry: HookEntry): bool =
+  not entry.isWritePreHook
+
+const ValidHookFailActions* = block:
+  ## TOML spellings of `HookFailAction`; see `ValidHookEvents`.
+  var names: seq[string]
+  for v in HookFailAction:
+    names.add $v
+  names
 
 const ValidHookEvents* = block:
   ## TOML spellings of `HookEvent`, read off the enum. Looked up by name by

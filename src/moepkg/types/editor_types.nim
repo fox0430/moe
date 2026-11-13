@@ -56,6 +56,18 @@ type
     ## Return true to queue a dispatched result for the host instead of applying
     ## Moe's side effects. Covers commands, mappings, and viewer/window keys.
 
+  BlockingWait* = object
+    ## The frontend's part while the editor waits in place for a command, as a
+    ## `BufWritePre` hook is waited for: the event loop does not run, so the
+    ## screen is drawn and the input read here. Nil members do nothing.
+    render*: proc(): bool {.closure, gcsafe, raises: [].}
+      ## Draw a frame now; false when it could not.
+    interrupted*: proc(): bool {.closure, gcsafe, raises: [].}
+      ## Take the input that arrived; true once Ctrl-C was among it.
+    finish*: proc() {.closure, gcsafe, raises: [].}
+      ## The wait is over: give back the input taken, for the editor to read
+      ## next, or drop it after a Ctrl-C, as Vim flushes its typeahead.
+
   Editor* = ref object
     state*: EditorState
     screenSize*: ScreenSize
@@ -104,6 +116,13 @@ type
       ## An abbreviated name arrives with `action == claUnknown`, so a filter
       ## that goes by action also has to read `abbreviatedAction`.
     hostResultFilter*: HostResultFilter
+    blockingWait*: BlockingWait
+    waitingInPlace*: bool
+      ## A command is waited for where it runs, as `BufWritePre` is: frames
+      ## drawn meanwhile only draw, so no background work lands mid-write.
+    outsideEdit: bool
+      ## An edit from outside the commands is being applied: the current
+      ## window follows its rows too, as Neovim's `by_api`.
     xHostCommandRequests: seq[ParsedCommand]
     xHostResultRequests: seq[handler_result_types.HandlerResult]
     xHostResultRequestCount: int
@@ -189,10 +208,11 @@ proc bufferIndexById*(e: Editor, id: BufferId): int =
 
 iterator windowsFollowing(e: Editor, b: TextBuffer): EditorWindow =
   ## The windows whose cursor and top line follow the text of `b`: all on it
-  ## but the current one, whose cursor the command places.
+  ## but the current one, whose cursor the command places. An edit from
+  ## outside the commands moves the current one too.
   let windows = e.windowManager
   for i, window in windows.windows:
-    if i != windows.activeWindowIndex and window.buffer == b:
+    if window.buffer == b and (e.outsideEdit or i != windows.activeWindowIndex):
       yield window
 
 iterator viewersOver(e: Editor, b: TextBuffer): EditorWindow =
@@ -210,6 +230,24 @@ proc moveRowsFollowing(e: Editor, b: TextBuffer, move: RowMove) =
     window.moveAcross(move)
   for window in e.viewersOver(b):
     window.viewerEntry.get.moveAcross(move)
+
+proc enterOutsideEdit(e: Editor): bool =
+  result = e.outsideEdit
+  e.outsideEdit = true
+
+proc leaveOutsideEdit(e: Editor, was: bool) =
+  e.outsideEdit = was
+
+template asOutsideEdit*(e: Editor, body: untyped) =
+  ## Run `body`, edits from outside the commands, as Neovim applies an API
+  ## edit: the current window's cursor and top line follow the rows as well.
+  ## Its cursor may be left past a line's end.
+  bind enterOutsideEdit, leaveOutsideEdit
+  let wasOutside = enterOutsideEdit(e)
+  try:
+    body
+  finally:
+    leaveOutsideEdit(e, wasOutside)
 
 proc saveRowsFollowing(e: Editor, b: TextBuffer): BufferRowsRestore =
   ## Save what `moveRowsFollowing` moves for `b`, to put it back as it is now.

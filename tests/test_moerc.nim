@@ -98,7 +98,7 @@ suite "example/moerc.toml":
   test "The [Hook] example is a config the loader accepts":
     let toml = uncommentedHookSection()
     check "[Hook]" in toml
-    check toml.count("[[Hook.entries]]") == 2
+    check toml.count("[[Hook.entries]]") == 3
 
     let path = getTempDir() / "moe_test_moerc_hook_example.toml"
     defer:
@@ -111,5 +111,5 @@ suite "example/moerc.toml":
     for e in vr.errors:
       echo "  Validation error: ", e.toMessage
     check vr.errors.len == 0
-    # Both entries survived: a rejected one is dropped whole.
-    check config.hooks.entries.len == 2
+    # Every entry survived: a rejected one is dropped whole.
+    check config.hooks.entries.len == 3

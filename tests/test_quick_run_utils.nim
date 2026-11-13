@@ -43,6 +43,22 @@ template inDir(dir: string, body: untyped) =
     setCurrentDir(saved)
     removeDir(dir)
 
+proc bufferSave(buffer: TextBuffer, calls: ref int = nil): QuickRunSave =
+  ## The bare buffer write under the editor's `:w`, counting its calls.
+  result = proc(): Result[seq[string], string] =
+    if not calls.isNil:
+      inc calls[]
+    let saved = buffer.saveFile(buffer.filePath.get, checkExternalMod = true)
+    if saved.isErr:
+      return err(saved.error)
+    ok(newSeq[string]())
+
+proc prepareQuickRun(
+    buffer: TextBuffer, settings: EditorConfig
+): Result[QuickRunPrepareResult, string] =
+  ## Prepare with the bare write; the editor's save is tested in test_editor_file.
+  prepareQuickRun(buffer, settings, bufferSave(buffer))
+
 suite "QuickRunUtils - quickRunStartupMessage":
   test "Generate startup message":
     let msg = quickRunStartupMessage("/path/to/file.nim")
@@ -541,7 +557,8 @@ suite "QuickRunUtils - prepareQuickRun":
     var config = newEditorConfig()
     config.quickRun.saveBufferWhenQuickRun = true
 
-    let result = prepareQuickRun(buffer, config)
+    let saves = new int
+    let result = prepareQuickRun(buffer, config, bufferSave(buffer, saves))
     require result.isOk
     defer:
       removeQuickRunWorkDir(result.get.workDir)
@@ -549,8 +566,8 @@ suite "QuickRunUtils - prepareQuickRun":
     check result.get.filePath == result.get.workDir / "quickruntemp.py"
     check result.get.command.cmd == "python3"
     check result.get.command.args == @[result.get.filePath]
-    # A temp copy only: no save, nothing owed.
-    check result.get.didSave == false
+    # A temp copy only: no save.
+    check saves[] == 0
 
   test "The temp copy leaves an unsaved buffer unsaved and unnamed":
     # saveFile would bind the buffer to a path QuickRun deletes after the run.
@@ -661,12 +678,13 @@ suite "QuickRunUtils - prepareQuickRun":
     var config = newEditorConfig()
     config.quickRun.saveBufferWhenQuickRun = false
 
-    let result = prepareQuickRun(buffer, config)
+    let saves = new int
+    let result = prepareQuickRun(buffer, config, bufferSave(buffer, saves))
     check result.isOk
     check result.get.filePath == getTempDir() / "test_nosave.nim"
     check result.get.workDir == ""
-    # Saving disabled: no save, nothing owed.
-    check result.get.didSave == false
+    # Saving disabled: no save.
+    check saves[] == 0
 
   test "Prepare QuickRun refuses to overwrite an externally modified file":
     let path = getTempDir() / "test_quickrun_ext_mod.nim"
@@ -719,13 +737,13 @@ suite "QuickRunUtils - prepareQuickRun":
     discard buffer.insert(1, "echo \"edited\"")
 
     let config = newEditorConfig()
-    let result = prepareQuickRun(buffer, config)
+    let saves = new int
+    let result = prepareQuickRun(buffer, config, bufferSave(buffer, saves))
     check result.isOk
     check result.get.filePath == path
-    # The unsaved edit must have been written to disk.
+    # The unsaved edit must have been written to disk, by the save given.
     check "echo \"edited\"" in readFile(path)
-    # A real save was made, so the caller owes it what every write owes.
-    check result.get.didSave == true
+    check saves[] == 1
 
   test "Prepare QuickRun with an unrunnable language writes nothing":
     # Assembly runs before any disk write: assembly failure must leave no
@@ -796,7 +814,6 @@ suite "QuickRunUtils - startBackgroundQuickRun":
           cmd: "echo", args: @["quick", "run"], workingDir: getCurrentDir()
         ),
         filePath: "test.nim",
-        didSave: false,
       )
 
       let r = startBackgroundQuickRun(prepared)
@@ -822,7 +839,6 @@ suite "QuickRunUtils - startBackgroundQuickRun":
           cmd: "/nonexistent/command", args: @[], workingDir: getCurrentDir()
         ),
         filePath: "test.nim",
-        didSave: false,
       )
 
       let r = startBackgroundQuickRun(prepared)

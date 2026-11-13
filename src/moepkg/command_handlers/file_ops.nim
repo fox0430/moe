@@ -251,6 +251,8 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
       if e.config.notification.screenNotifications and
           e.config.notification.quickRunScreenNotify:
         e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
+      for warning in prepared.warnings:
+        e.appendStatus(warning)
     return true
   of hrVSplit:
     if r.vsplitFilename.isNone and e.activeWindow.viewerEntry.isSome:

@@ -33,7 +33,9 @@ import syntax/tokenizer
 import types/background_process_types
 import types/config_types
 
-export HookConfig, HookEntry, HookEvent, ValidHookEvents, DefaultHookTimeout
+export
+  HookConfig, HookEntry, HookEvent, HookFailAction, ValidHookEvents,
+  ValidHookFailActions, DefaultHookTimeout
 
 type HookCommand* = object
   ## One entry resolved against one file, ready to exec: tokenized, expanded,
@@ -46,12 +48,13 @@ type HookCommand* = object
   workingDir*: string
   timeout*: int
   showOutput*: bool
+  onFail*: HookFailAction
 
 proc `==`*(a, b: HookEntry): bool =
   ## Compare user-written fields; `filterRegex` is derived and `Regex2` lacks `==`.
   a.event == b.event and a.filetype == b.filetype and a.filter == b.filter and
     a.command == b.command and a.workingDir == b.workingDir and a.timeout == b.timeout and
-    a.showOutput == b.showOutput
+    a.onFail == b.onFail and a.showOutput == b.showOutput
 
 proc parseHookEvent*(s: string): HookEvent =
   ## Parse `s` as `HookEvent`. Called by name from `config_macros`' enum
@@ -61,6 +64,13 @@ proc parseHookEvent*(s: string): HookEvent =
     if $event == s:
       return event
   HookEvent.low
+
+proc parseHookFailAction*(s: string): HookFailAction =
+  ## Parse `s` as `HookFailAction`; see `parseHookEvent`.
+  for action in HookFailAction:
+    if $action == s:
+      return action
+  HookFailAction.low
 
 proc filetypeName*(language: SourceLanguage): string =
   ## The `${filetype}` spelling of a language.

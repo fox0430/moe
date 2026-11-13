@@ -1096,6 +1096,9 @@ type
     substitutePreview*: SubstitutePreview
       # Live substitute preview (like Vim's inccommand)
     tempMessages*: seq[string] # Lines to display temporarily in command area
+    waitNotice*: string
+      ## What the editor is waiting for in place, in the command row over an
+      ## open command line; empty when it waits for nothing.
     lspProgressText*: string # Current LSP progress text for status line
     findCharMatches*: seq[int] # f/F/t/T match columns on the cursor line
     findCharMatchLine*: int # Line number of the matches

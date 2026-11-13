@@ -361,8 +361,9 @@ proc tick*(e: Editor) =
   ##
   ## Only notifications run once the user quit: the frames left show the
   ## wait for the hooks the quit owes, and auto save must not write what `:q!`
-  ## threw away.
-  if e.state.quitDecided:
+  ## threw away. Nor while a write waits for its `BufWritePre` command: a
+  ## reload, an LSP edit or an auto save would land in the middle of it.
+  if e.state.quitDecided or e.waitingInPlace:
     e.tickNotifications()
     return
   e.tickLsp()
