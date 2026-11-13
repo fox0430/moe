@@ -507,7 +507,15 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     cell(" ", commandStyle()),
   )
 
-  if e.state.hasOverlay:
+  if e.state.ui.waitNotice.len > 0:
+    # Over the `:w` that started the wait, which stays open while it runs.
+    buffer.setString(
+      buffer.area.x,
+      screenBottomY,
+      sanitizeForDisplay(e.state.ui.waitNotice),
+      commandStyle(),
+    )
+  elif e.state.hasOverlay:
     let
       (text, cursorChar) = e.state.overlayInput()
       grid = wrappedInputGrid(text, cursorChar, width)

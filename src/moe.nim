@@ -274,6 +274,41 @@ template editorCallback(
       except Exception as e:
         ed.preserveAndExit(app, crashDeath(e), clc, lg)
 
+type HeldInput = ref object
+  ## Input read while the editor waited in place, until the wait is over.
+  events: seq[Event]
+  interrupted: bool ## Ctrl-C came: everything held is dropped.
+
+proc blockingWait(app: AsyncApp): BlockingWait =
+  ## Draw and read input through `app` while its loop is held up by a handler.
+  let held = HeldInput()
+  BlockingWait(
+    render: proc(): bool {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        try:
+          app.renderNow()
+        except Exception:
+          false,
+    interrupted: proc(): bool {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        try:
+          for event in app.readAvailableEvents():
+            # celina reads Ctrl-C, as a byte or as CSI u, as `Quit`.
+            if event.kind == EventKind.Quit:
+              held.interrupted = true
+            elif not held.interrupted:
+              held.events.add event
+        except Exception:
+          discard
+        held.interrupted,
+    finish: proc() {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if not held.interrupted:
+          app.unreadEvents(held.events)
+        held.events.setLen(0)
+        held.interrupted = false,
+  )
+
 proc applyFrontendRequests(editor: Editor, app: AsyncApp) =
   ## Drain editor-core requests that need concrete Celina app side effects.
   let mouseCapture = editor.state.takeMouseCaptureRequest()
@@ -295,6 +330,7 @@ proc runEditor(
     await app.resumeAsync()
 
   let frontendHooks = FrontendHooks(suspend: suspendFrontend, resume: resumeFrontend)
+  editor.blockingWait = app.blockingWait()
 
   {.cast(gcsafe).}:
     app.onEventAsync proc(e: Event, app: AsyncApp): Future[EventResult] {.async.} =
@@ -358,15 +394,19 @@ proc runEditor(
 
     app.onRenderAsync proc(buffer: var Buffer) =
       editorCallback(editor, app, cmdLineConfig, log):
-        # Execute startup window actions on first render
-        if not editor.state.startUpWindowsDone:
-          editor.handleStartUpWindows(buffer.area.width, buffer.area.height)
+        # A frame drawn while a write waits in place only draws: the write is
+        # still running.
+        if not editor.waitingInPlace:
+          # Execute startup window actions on first render
+          if not editor.state.startUpWindowsDone:
+            editor.handleStartUpWindows(buffer.area.width, buffer.area.height)
 
-        # Poll terminal output for all windows in Terminal mode
-        editor.pollTerminalSessions()
+          # Poll terminal output for all windows in Terminal mode
+          editor.pollTerminalSessions()
 
         editor.render(buffer)
-        editor.applyFrontendRequests(app)
+        if not editor.waitingInPlace:
+          editor.applyFrontendRequests(app)
 
         if not editor.config.standard.disableChangeCursor:
           # Set cursor style based on editor mode (unless disabled)

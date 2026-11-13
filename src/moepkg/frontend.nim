@@ -32,7 +32,8 @@
 ## External work (`[Hook]` commands, builds, syntax checks, filters, `:!`)
 ## runs on the event loop and the pending queue, which only the terminal
 ## frontend drives; a host here does not, so a quit it acts on waits for
-## nothing.
+## nothing. `BufWritePre` hooks are the exception: a write runs them where it
+## is and waits. Set `Editor.blockingWait` to draw and take Ctrl-C meanwhile.
 ##
 ## `activateBuffer` keeps its `bool` shape for hosts already built against it.
 ## `tryActivateBuffer` is the same call with the reason it failed — a buffer that
@@ -42,10 +43,10 @@ import
   config, editor, editor_frame, editor_display, editor_buffers, frontend_input, handler
 import command_handlers/handler_result
 from types/editor_types import
-  HostResultFilter, hostResultRequestCount, takeHostResultRequest
+  BlockingWait, HostResultFilter, hostResultRequestCount, takeHostResultRequest
 
 export handler_result.HandlerResult, handler_result.HandlerResultKind
-export HostResultFilter, hostResultRequestCount, takeHostResultRequest
+export BlockingWait, HostResultFilter, hostResultRequestCount, takeHostResultRequest
 
 export config.EditorConfig, config.newEditorConfig
 export editor.Editor, editor.newEditor

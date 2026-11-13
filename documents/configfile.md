@@ -1452,8 +1452,8 @@ or Emacs' `after-save-hook`.
 without a deprecation period. The plugin work has still to decide what an
 editor event is, and this table should not freeze that answer ahead of it.
 
-Every event observes: the command runs in the background after the fact and
-cannot hold up a write or a read. Hooks run one at a time, whichever file they
+Every event but `BufWritePre` observes: the command runs in the background
+after the fact and cannot hold up a write or a read. Hooks run one at a time, whichever file they
 fired for, as they do in the editors above: what a command touches besides its
 file, such as a build directory or git's index, is not something moe can know,
 and two `git add` runs at once already fail on the index lock. The entries that
@@ -1471,10 +1471,49 @@ overwritten by it, and `liveReloadOfFile` then loads the result like any change
 on disk; a QuickRun or `buildOnSave` started by the same write may read the
 file before or during the rewrite.
 
+`BufWritePre` is the exception: the write waits for it where the write is, as
+Vim waits for a `BufWritePre` autocommand.
+
+- The buffer goes in on standard input, in the file's own encoding and line
+  endings, its last line ended even when the file's is not, and what the
+  command prints on standard output replaces the buffer before it is written,
+  as one change `u` takes back. A file that does not end in a newline still
+  does not after it. Only the lines that differ are touched, so marks and
+  folds on the rest stay, and the cursor and view of each window move with
+  the text, as Neovim moves them across an API edit.
+- Keys after the write in a mapping or a macro run once the file is written.
+- The editor does not respond meanwhile. A command that runs for a moment is
+  named on the status line; Ctrl-C stops it, and the file is not written, nor
+  are the rest of a `:wa`. The keys typed while it ran are dropped, and so is
+  the rest of the mapping or macro that wrote, as Vim drops them.
+- A command that exits non-zero, times out, or prints nothing leaves the
+  buffer alone. Printing nothing empties a buffer only when all its lines are
+  blank. `onFail` says what the write does then: `write` (the default)
+  writes the buffer as it is and says why, `abort` does not write the file.
+  The entries after a failed one are not run: they were to describe text it
+  never changed.
+- `${file}` names the file being written, for a tool that finds its settings
+  from the path (`prettier --stdin-filepath ${file}`). The command must not
+  rewrite that file itself: what it prints is what is written.
+- It runs for `:w`, `:wq`, `:wa`, `:saveas` and the save QuickRun makes
+  (`saveBufferWhenQuickRun`), not for an auto save nor for `:w {file}` writing
+  a copy of the buffer. The EditorConfig `trim_trailing_whitespace` runs after
+  it.
+- It runs at once, beside any `BufWritePost` still running from an earlier
+  write: hooks run one at a time only in the background. The `timeout` of
+  those keeps counting while the write waits.
+- `timeout = 0` waits until the command ends or Ctrl-C stops it.
+
 Example:
 ```toml
 [Hook]
 enable = true
+
+# Format Go files before every write.
+[[Hook.entries]]
+event = "BufWritePre"
+filetype = ["go"]
+command = "gofmt"
 
 # Lint Nim files after every write and show what the linter says.
 [[Hook.entries]]
@@ -1495,7 +1534,7 @@ workingDir = "~/src/api"
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
 | enable | bool | true | Run hooks at all |
-| onAutoSave | bool | false | Run BufWritePost for auto saves too |
+| onAutoSave | bool | false | Run BufWritePost for auto saves too (BufWritePre never runs for one) |
 | exitWaitTimeout | integer | 10 | Seconds a quit waits for the BufWritePost hooks in total. 0 waits without a bound |
 <!-- AUTO-GEN:end Hook -->
 
@@ -1505,19 +1544,21 @@ dropped whole. Keys of a `[[Hook.entries]]` table:
 <!-- AUTO-GEN:start Hook.entries -->
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
-| event | string (enum: BufWritePost, BufReadPost) | BufWritePost | Event to attach to |
+| event | string (enum: BufWritePre, BufWritePost, BufReadPost) | BufWritePost | Event to attach to |
 | command | string |  | Command line to run |
 | filetype | string array | [] | File types this applies to (default: every type) |
 | filter | string |  | Regex the file path must match (default: every path) |
 | workingDir | string |  | Directory to run the command in (default: the file's) |
 | timeout | integer | 60 | Seconds before the command is killed. 0 waits without a bound |
-| showOutput | bool | false | Show the command output in a horizontal split |
+| onFail | string (enum: write, abort) | write | What a failed command does to the write: write (as the buffer is) or abort (only when the event is BufWritePre) |
+| showOutput | bool | false | Show the command output in a horizontal split (only when the event is not BufWritePre) |
 <!-- AUTO-GEN:end Hook.entries -->
 
 Events:
 
 | Name | Fires when |
 |:-----|:-----------|
+| BufWritePre | A buffer is about to be written; the command's output replaces it |
 | BufWritePost | A buffer was written to disk |
 | BufReadPost | A file was read into a buffer |
 
@@ -1615,7 +1656,7 @@ Notes:
   is emptying.
 - A command's standard input is `/dev/null`, not the terminal: pass the file
   as an argument (`${file}`) to a tool that would otherwise read standard
-  input.
+  input. A `BufWritePre` command reads the buffer there instead.
 - `:jobs` lists what is running or waiting, and `:jobs!` ends it: every
   command is killed, what waits is dropped, and a run midway through its entries
   stops instead of starting the next one. Give a command that can hang a real

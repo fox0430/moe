@@ -519,6 +519,21 @@ suite "renderBottomLines - Wrapped overlay input":
     check e.state.screenCursor.x == 1
     check e.state.screenCursor.y == 23
 
+  test "A wait notice takes the row over the command that started it":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 23
+    e.state.enterCommandOverlay()
+    e.state.input.line.text = "w"
+    e.state.ui.waitNotice = "running"
+
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+
+    check rowText(buffer, 23, 9) == "running  "
+
   test "Cursor at the exact right edge grows an extra row":
     let e = createTestEditor()
     var buffer = createTestBuffer()

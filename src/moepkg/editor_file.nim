@@ -67,6 +67,7 @@ type SaveAllBuffersResult* = object
   unwritten*: seq[BufferSaveTarget]
     ## Modified buffers another buffer already wrote (`force` only).
   failures*: seq[tuple[path: string, error: string]]
+  warnings*: seq[string] ## `BufWritePre` failures the writes went past.
 
 proc refreshGitDiff*(e: Editor) =
   ## Mark the active buffer's diff stale so the next tick re-runs the pipeline.
@@ -301,16 +302,31 @@ proc revertTrimIfNeeded(
   buffer.changeListIndex = changeListIndexBefore
   ok(())
 
+proc writtenLanguage(buffer: TextBuffer, writtenPath: string): SourceLanguage =
+  ## The language write hooks match `buffer` written to `writtenPath` by: the
+  ## written file's, since after `:w <other-ext>` `buffer.language` still names
+  ## the old one.
+  if buffer.allowsTextTransforms:
+    detectLanguage(writtenPath)
+  else:
+    buffer.language
+
 proc queueWriteHooks(e: Editor, buffer: TextBuffer, writtenPath: string) =
   ## Queue `BufWritePost` hooks for `buffer` written to `writtenPath`.
-  # Match by the written file: after `:w <other-ext>`, `buffer.language` still
-  # names the old one.
-  let language =
-    if buffer.allowsTextTransforms:
-      detectLanguage(writtenPath)
-    else:
-      buffer.language
-  e.queueHooks(heBufWritePost, writtenPath, language)
+  e.queueHooks(heBufWritePost, writtenPath, writtenLanguage(buffer, writtenPath))
+
+func withWarnings(error: string, warnings: seq[string]): string =
+  ## `error` with the warnings of the `BufWritePre` commands below it: the
+  ## failed write is all the user hears of them.
+  result = error
+  for warning in warnings:
+    result.add "\n" & warning
+
+proc runWritePreHooks(e: Editor, buffer: TextBuffer, savePath: string): WritePreResult =
+  ## Run the `BufWritePre` hooks for `buffer` about to be written to `savePath`.
+  result = e.runWritePreHooks(buffer, savePath, writtenLanguage(buffer, savePath))
+  if result.refusal.len > 0:
+    logError("editor", "Save refused for " & savePath & ": " & result.refusal)
 
 proc noteBufferSaved*(
     e: Editor, buffer: TextBuffer, savedPath: string, automatic = false
@@ -325,17 +341,6 @@ proc noteBufferSaved*(
     e.state.git.requestGitRefresh(buffer)
   if e.lsp.enabled:
     e.lsp.onBufferSave(buffer)
-
-proc prepareQuickRun*(
-    e: Editor, buffer: TextBuffer
-): Result[QuickRunPrepareResult, string] =
-  ## Prepare QuickRun for `buffer` and run `noteBufferSaved` when staging saved the file.
-  let prepared = quick_run_utils.prepareQuickRun(buffer, e.config)
-  if prepared.isErr:
-    return Result[QuickRunPrepareResult, string].err prepared.error
-  if prepared.get.didSave:
-    e.noteBufferSaved(buffer, prepared.get.filePath)
-  return Result[QuickRunPrepareResult, string].ok prepared.get
 
 type
   SaveChoice* = enum
@@ -357,6 +362,7 @@ type
   WriteOutcome* = object
     kind*: WriteKind
     path*: string ## The file written.
+    warnings*: seq[string] ## `BufWritePre` failures the write went past.
 
 proc writeDecisionInSession*(
     e: Editor,
@@ -479,6 +485,12 @@ proc saveFile*(
       e.queueWriteHooks(buffer, savePath)
     return ok(WriteOutcome(kind: kind, path: savePath))
 
+  # Not for a copy, as the trim: the buffer is not being saved. Before the trim,
+  # which then tidies what the commands left.
+  let writePre = e.runWritePreHooks(buffer, savePath)
+  if writePre.refusal.len > 0:
+    return err(writePre.refusal)
+
   # Trim trailing whitespace if EditorConfig says so; reverted on save failure.
   let didTrimRes = trimTrailingWhitespaceTracked(buffer)
   if didTrimRes.isErr:
@@ -486,7 +498,11 @@ proc saveFile*(
       "editor",
       "Failed to trim trailing whitespace for " & savePath & ": " & didTrimRes.error,
     )
-    return err("Failed to trim trailing whitespace: " & didTrimRes.error)
+    return err(
+      ("Failed to trim trailing whitespace: " & didTrimRes.error).withWarnings(
+        writePre.warnings
+      )
+    )
   let (didTrim, changeListBefore, changeListIndexBefore) = didTrimRes.get
 
   # Save the file
@@ -502,15 +518,34 @@ proc saveFile*(
           revertRes.error,
       )
       logError("editor", "Failed to save file " & savePath & ": " & saveResult.error)
-      return err(saveResult.error & " (failed to revert trim: " & revertRes.error & ")")
+      return err(
+        (saveResult.error & " (failed to revert trim: " & revertRes.error & ")").withWarnings(
+          writePre.warnings
+        )
+      )
     logError("editor", "Failed to save file " & savePath & ": " & saveResult.error)
-    return err(saveResult.error)
+    return err(saveResult.error.withWarnings(writePre.warnings))
 
   logInfo("editor", "Successfully saved file: " & savePath)
 
   e.noteBufferSaved(buffer, savePath)
 
-  ok(WriteOutcome(kind: kind, path: savePath))
+  ok(WriteOutcome(kind: kind, path: savePath, warnings: writePre.warnings))
+
+proc prepareQuickRun*(
+    e: Editor, buffer: TextBuffer
+): Result[QuickRunPrepareResult, string] =
+  ## Prepare QuickRun for `buffer`. Staging saves the buffer's file as `:w`
+  ## does, write hooks and trim included.
+  quick_run_utils.prepareQuickRun(
+    buffer,
+    e.config,
+    proc(): Result[seq[string], string] =
+      let written = e.saveFile(buffer)
+      if written.isErr:
+        return err(written.error)
+      ok(written.get.warnings),
+  )
 
 proc batchFileKey(path: string): string =
   ## Batch key for `path`: entity when resolvable, else spelling.
@@ -562,7 +597,20 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
   result.skippedExternal = selected.skippedExternal
   result.unwritten = selected.unwritten
 
-  for (buffer, savePath) in selected.targets:
+  for i, target in selected.targets:
+    let (buffer, savePath) = target
+    let writePre = e.runWritePreHooks(buffer, savePath)
+    result.warnings.add writePre.warnings
+    if writePre.refusal.len > 0:
+      result.failures.add((path: savePath, error: writePre.refusal))
+      if writePre.interrupted:
+        # As Vim's `:wa`: an interrupt ends the batch. The files it leaves are
+        # still unsaved, so they are counted with it.
+        for rest in selected.targets[i + 1 .. ^1]:
+          result.failures.add((path: rest.path, error: "Interrupted; not written"))
+        break
+      continue
+
     # Mirror saveFile: trim per buffer, reverted on save failure.
     let didTrimRes = trimTrailingWhitespaceTracked(buffer)
     if didTrimRes.isErr:

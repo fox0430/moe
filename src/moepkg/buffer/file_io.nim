@@ -153,12 +153,21 @@ proc markDecodeFailed(
   result.encoding = CharacterEncoding.unknown
   result.hasBom = false
 
-proc decodeFileContent(content: string): DecodedFileContent =
+proc decodeFileContent(
+    content: string, expected = CharacterEncoding.unknown
+): DecodedFileContent =
   ## Strip BOM and decode `content` to UTF-8. On failure, return raw bytes
   ## with `decodeFailed` set and the reason in `decodeError`. Failure covers
   ## both bytes a Unicode decode refused and bytes no UTF-8 sequence reads.
+  ##
+  ## `expected` names the encoding `content` is known to be in, in place of
+  ## detection: a short or ASCII-only answer reads as UTF-8 whatever it is.
   result.text = content
-  result.encoding = detectCharacterEncoding(result.text)
+  result.encoding =
+    if expected != CharacterEncoding.unknown:
+      expected
+    else:
+      detectCharacterEncoding(result.text)
   var bomLen = 0
   case result.encoding
   of CharacterEncoding.utf8:
@@ -183,8 +192,13 @@ proc decodeFileContent(content: string): DecodedFileContent =
         CharacterEncoding.utf32Be
   of CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
       CharacterEncoding.utf32Be:
-    # BOM-less detection already names the specific encoding.
-    discard
+    # Named by BOM-less detection, or by the caller, whose content may still
+    # start with the BOM of that byte order.
+    if expected != CharacterEncoding.unknown:
+      let bom = bomBytes(result.encoding)
+      if result.text.startsWith(bom):
+        result.hasBom = true
+        bomLen = bom.len
   of CharacterEncoding.unknown:
     # The detection sample read as no Unicode encoding, so the bytes are not
     # text and nothing may rewrite them.
@@ -237,11 +251,40 @@ proc decodeForBuffer*(content: string): DecodedText =
       result.text.len > 0 and (result.text.endsWith("\n") or result.text.endsWith("\r"))
     result.shape.lineEnding = normalizeLineEndings(result.text)
 
-proc lines*(decoded: DecodedText): seq[string] =
-  ## `decoded.text` split the way buffer storage splits it on load.
-  result = decoded.text.split('\n')
+func storedLines(text: string): seq[string] =
+  ## Normalized `text` split as a load stores it: a line ending ends the last
+  ## line rather than starting another.
+  result = text.split('\n')
   if result.len > 1 and result[^1].len == 0:
     result.setLen(result.len - 1)
+
+proc decodeTransformedContent*(
+    b: TextBuffer, raw: string
+): Result[seq[string], string] =
+  ## The lines of a command's answer to `getFilterInput`, read back as this
+  ## buffer's encoding. The buffer keeps its own line ending, BOM and
+  ## `endOfLine`.
+  ##
+  ## Fails rather than guesses: the answer replaces the user's text, so an
+  ## undecodable byte or a NUL leaves the buffer alone.
+  if not b.allowsTextTransforms:
+    return err(rawBytesRejection("transform"))
+  var decoded = decodeFileContent(raw, b.encoding)
+  if decoded.decodeFailed:
+    let attempted =
+      if decoded.attemptedEncoding.isSome: decoded.attemptedEncoding.get else: b.encoding
+    return err(
+      "output is not valid " & encodingToString(attempted) & ": " & decoded.decodeError
+    )
+  var text = move decoded.text
+  if not b.hasBinaryContent and '\0' in text:
+    return err("output holds binary content")
+  discard normalizeLineEndings(text)
+  ok(text.storedLines)
+
+proc lines*(decoded: DecodedText): seq[string] =
+  ## `decoded.text` split the way buffer storage splits it on load.
+  decoded.text.storedLines
 
 proc lineCount*(decoded: DecodedText): int =
   ## How many lines `lines` would return, without building them.
@@ -525,16 +568,16 @@ proc loadFileWithDecoded*(
 
   return Result[(), string].ok ()
 
-proc getFileContent*(buffer: TextBuffer): string =
-  ## Get the buffer content as it would be written to a file,
-  ## with proper trailing newline handling based on endOfLine setting.
-  ## Internal \n line endings are restored to the original line ending style
-  ## and internal UTF-8 is encoded back to the buffer's on-disk encoding.
+proc fileContent(buffer: TextBuffer, endOfLine: bool): string =
+  ## The buffer content as written to a file whose last line ends when
+  ## `endOfLine`. Internal \n line endings are restored to the original line
+  ## ending style and internal UTF-8 is encoded back to the buffer's on-disk
+  ## encoding.
   if not buffer.allowsTextTransforms:
     # Raw buffer: return bytes verbatim.
     result = buffer.getTextString
     # Restore trailing newline from `endOfLine`.
-    if buffer.endOfLine:
+    if endOfLine:
       if not result.endsWith("\n"):
         result.add('\n')
     elif result.endsWith("\n"):
@@ -551,7 +594,7 @@ proc getFileContent*(buffer: TextBuffer): string =
   of LF:
     discard
 
-  if buffer.endOfLine:
+  if endOfLine:
     # Ensure content ends with the appropriate line ending
     let endsWithNewline =
       case buffer.lineEnding
@@ -582,6 +625,18 @@ proc getFileContent*(buffer: TextBuffer): string =
     result = encodeFromUtf8(result, buffer.encoding)
   if buffer.hasBom:
     result = bomBytes(buffer.encoding) & result
+
+proc getFileContent*(buffer: TextBuffer): string =
+  ## Get the buffer content as it would be written to a file, its last line
+  ## ended or not as `endOfLine` says.
+  buffer.fileContent(buffer.endOfLine)
+
+proc getFilterInput*(buffer: TextBuffer): string =
+  ## The buffer as a filter command reads it: as written to its file, but with
+  ## the last line always ended, so an unchanged answer reads back through
+  ## `decodeTransformedContent` as the same lines. Without its end, a last line
+  ## left empty would be lost.
+  buffer.fileContent(endOfLine = true)
 
 proc fileHoldsBuffer*(b: TextBuffer): bool =
   ## Whether `b`'s file is exactly what saving `b` would write.

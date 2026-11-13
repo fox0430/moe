@@ -271,13 +271,15 @@ proc cancel*(p: QuickRunProcess) {.inline.} =
 proc kill*(p: QuickRunProcess) {.inline.} =
   p.process.kill
 
-type QuickRunPrepareResult* = object
-  command*: BackgroundProcessCommand
-  filePath*: string
-  workDir*: string ## See `QuickRunProcess.workDir`.
-  didSave*: bool
-    ## True when staging saved the buffer to its real file.
-    ## The caller must then run `noteBufferSaved`.
+type
+  QuickRunPrepareResult* = object
+    command*: BackgroundProcessCommand
+    filePath*: string
+    workDir*: string ## See `QuickRunProcess.workDir`.
+    warnings*: seq[string] ## What the save said besides writing, if it saved.
+
+  QuickRunSave* = proc(): Result[seq[string], string]
+    ## Write the buffer to its own file as `:w` does, returning its warnings.
 
 proc createWorkDir(): Result[string, string] =
   ## A fresh dir only the user can enter, so nothing planted can redirect what
@@ -322,16 +324,18 @@ proc removeQuickRunWorkDir*(workDir: string) =
     discard
 
 proc prepareQuickRun*(
-    buffer: TextBuffer, settings: EditorConfig
+    buffer: TextBuffer, settings: EditorConfig, save: QuickRunSave
 ): Result[QuickRunPrepareResult, string] =
   ## Assemble the run command and stage its input.
   ## The buffer's file is written only once the command is built, and a
   ## failure removes the work dir, so failure leaves nothing behind.
-  ## Staging writes bytes directly without trim or mode handling.
+  ## The buffer's own file is written by `save`; a temp copy is written
+  ## directly, without trim or mode handling.
 
   when defined(moe.embedded) and defined(windows):
     discard buffer
     discard settings
+    discard save
     return Result[QuickRunPrepareResult, string].err(
       "QuickRun is unavailable in embedded mode on Windows"
     )
@@ -370,7 +374,7 @@ proc prepareQuickRun*(
     return
       Result[QuickRunPrepareResult, string].err fmt"QuickRun failed: {command.error}"
 
-  var didSave = false
+  var warnings: seq[string]
   if useTempFile:
     # Temp copy only — saveFile would bind the buffer to this path.
     try:
@@ -378,15 +382,14 @@ proc prepareQuickRun*(
     except IOError, OSError:
       return Result[QuickRunPrepareResult, string].err fmt"Failed to write the temporary file: {getCurrentExceptionMsg()}"
   elif settings.quickRun.saveBufferWhenQuickRun:
-    # Real save; checkExternalMod refuses overwrite if the file changed externally.
-    let saveResult = buffer.saveFile(path, checkExternalMod = true)
+    let saveResult = save()
     if saveResult.isErr:
       return Result[QuickRunPrepareResult, string].err fmt"Failed to save the current code: {saveResult.error}"
-    didSave = true
+    warnings = saveResult.get
 
   staged = true
   return Result[QuickRunPrepareResult, string].ok QuickRunPrepareResult(
-    command: command.get, filePath: path, workDir: workDir, didSave: didSave
+    command: command.get, filePath: path, workDir: workDir, warnings: warnings
   )
 
 proc startBackgroundQuickRun*(

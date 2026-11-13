@@ -119,6 +119,9 @@ proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
     logError("handler", "Save and quit failed: " & saveResult.error)
     e.state.statusMessage = "Error: " & saveResult.error
     return true
+  # The session ends with the write, so stderr is where these are read.
+  for warning in saveResult.get.warnings:
+    e.state.exitReports.add warning
   if not r.forceQuitAfterSave and saveResult.get.kind == wkCopy and
       e.activeBuffer().isModified:
     # `:wq {file}` wrote a copy; the buffer's own changes are still unsaved.
@@ -194,6 +197,8 @@ proc processSaveAllResult*(e: Editor, r: HandlerResult) =
   elif e.config.notification.screenNotifications and
       e.config.notification.saveScreenNotify:
     e.state.statusMessage = msg
+  for warning in saveResult.warnings:
+    e.appendStatus(warning)
   if e.config.notification.logNotifications and e.config.notification.saveLogNotify and
       saveResult.savedCount > 0:
     if saveResult.savedCount == 1:
@@ -209,6 +214,9 @@ proc processSaveAllAndQuitResult*(e: Editor, r: HandlerResult): bool =
   if saveResult.failures.len > 0 or saveResult.skippedExternal.len > 0:
     e.state.statusMessage = saveAllStatusMessage(saveResult)
     logError("handler", "Save all and quit aborted: " & e.state.statusMessage)
+    # The editor stays, so the files that were written say what went wrong here.
+    for warning in saveResult.warnings:
+      e.appendStatus(warning)
     return true
   if saveResult.unwritten.len > 0:
     # Forced quit discards the edits that lost the race; leave a trace.
@@ -217,6 +225,8 @@ proc processSaveAllAndQuitResult*(e: Editor, r: HandlerResult): bool =
       "Quitting with " & $saveResult.unwritten.len &
         " buffer(s) left unsaved on files another buffer wrote",
     )
+  for warning in saveResult.warnings:
+    e.state.exitReports.add warning
   logInfo("handler", "All files saved, quitting editor")
   false
 
@@ -269,6 +279,8 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
           e.config.notification.saveScreenNotify:
         e.state.statusMessage =
           (if isCopy: "Saved a copy: " else: "Saved: ") & savedPath
+      for warning in saveResult.get.warnings:
+        e.appendStatus(warning)
       if isCopy:
         # Not a save of the buffer, so nothing runs on save.
         return

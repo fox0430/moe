@@ -331,6 +331,30 @@ command = "second"
     check not vr.hasErrors
     check config.hooks.entries.mapIt(it.command) == @["first", "second"]
 
+  test "A BufWritePre entry takes onFail":
+    let (config, vr) = loadFromTomlString(
+      """
+[[Hook.entries]]
+event = "BufWritePre"
+command = "gofmt"
+onFail = "abort"
+"""
+    )
+    check not vr.hasErrors
+    check config.hooks.entries[0].event == heBufWritePre
+    check config.hooks.entries[0].onFail == hfaAbort
+
+  test "onFail writes by default":
+    let (config, vr) = loadFromTomlString(
+      """
+[[Hook.entries]]
+event = "BufWritePre"
+command = "gofmt"
+"""
+    )
+    check not vr.hasErrors
+    check config.hooks.entries[0].onFail == hfaWrite
+
   test "Every event name loads":
     for name in ValidHookEvents:
       let (config, vr) = loadFromTomlString(
@@ -356,6 +380,18 @@ suite "Hooks - config validation":
 
   test "Missing command":
     checkRejected("[[Hook.entries]]\nevent = \"BufWritePost\"\n", "Hook.entries[0]")
+
+  test "onFail on an event the write does not wait for":
+    checkRejected(
+      "[[Hook.entries]]\nevent = \"BufWritePost\"\ncommand = \"true\"\nonFail = \"abort\"\n",
+      "Hook.entries[0].onFail",
+    )
+
+  test "showOutput on BufWritePre, whose output is the new text":
+    checkRejected(
+      "[[Hook.entries]]\nevent = \"BufWritePre\"\ncommand = \"true\"\nshowOutput = true\n",
+      "Hook.entries[0].showOutput",
+    )
 
   test "Unknown event":
     checkRejected(

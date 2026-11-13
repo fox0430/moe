@@ -1872,8 +1872,8 @@ suite "Editor - save through a file alias":
 
 suite "Editor - prepareQuickRun":
   test "Real save performs post-write effects (git refresh)":
-    # The wrapper must translate `didSave` into `noteBufferSaved`; dropping
-    # that call must fail here via the missing git refresh mark.
+    # The save is the editor's, so it owes what every write owes; a bare
+    # buffer write must fail here via the missing git refresh mark.
     var config = newEditorConfig()
     config.quickRun.saveBufferWhenQuickRun = true
     let e = createTestEditorWithConfig(config)
@@ -1893,7 +1893,6 @@ suite "Editor - prepareQuickRun":
 
     let prepared = e.prepareQuickRun(buf)
     check prepared.isOk
-    check prepared.get.didSave
     check "edited" in readFile(path)
     require e.state.git.diffEntries.hasKey(buf.id)
     check e.state.git.diffEntries[buf.id].forced
@@ -1920,7 +1919,6 @@ suite "Editor - prepareQuickRun":
 
     let prepared = e.prepareQuickRun(buf)
     check prepared.isOk
-    check not prepared.get.didSave
     check readFile(path) == "echo \"original\"\n"
     check not e.state.git.diffEntries.hasKey(buf.id)
 
