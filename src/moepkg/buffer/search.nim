@@ -459,7 +459,9 @@ proc hold(held: var HeldLine, b: TextBuffer, index: int, match: SearchMatch) =
       held.valid = held.text.replaceInvalidUtf8
 
 proc searchable(held: HeldLine): lent string =
-  if held.valid.len > 0: held.valid else: held.text
+  if held.valid.len > 0:
+    return held.valid
+  return held.text
 
 proc countMatches*(
     b: TextBuffer,
