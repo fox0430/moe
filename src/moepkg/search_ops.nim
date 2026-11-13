@@ -22,7 +22,7 @@
 ## make of what is typed after them, the search * and # make of the text under
 ## the cursor (Vim's nv_ident) and n/N repeating the last one.
 
-import std/options
+import std/[options, times]
 
 import pkg/results
 
@@ -34,6 +34,12 @@ proc ignoresCase*(search: SearchState, spec: SearchSpec): bool =
   ## 'smartcase' out.
   shouldIgnoreCase(
     spec.pattern, search.ignorecase, search.smartcase and spec.match == smRegex
+  )
+
+proc countKey(search: SearchState, spec: SearchSpec): SearchCountKey =
+  ## What a count of the matches of `spec` is kept by.
+  SearchCountKey(
+    pattern: spec.pattern, ignorecase: search.ignoresCase(spec), match: spec.match
   )
 
 proc invalidRegex*(search: SearchState, spec: SearchSpec): string =
@@ -122,6 +128,43 @@ proc findCounted*(
     some(state.landing(b, found.get))
   else:
     none(BufferPosition)
+
+const SearchCountBudget = initDuration(milliseconds = 10)
+  ## For each frame, the count going on in the next
+
+proc shownSearch*(state: EditorState, typed: SearchSpec): SearchSpec =
+  ## The search hlsearch shows: what is being `typed`, else the last search,
+  ## also at an empty prompt, unless :nohlsearch hid it.
+  if typed.pattern.len > 0:
+    typed
+  elif state.input.search.hlsearchTempDisabled:
+    SearchSpec()
+  else:
+    state.input.search.last
+
+proc updateSearchCount*(state: EditorState, b: TextBuffer, budget = SearchCountBudget) =
+  ## Count on, for up to `budget`, where the cursor stands among the matches
+  ## of the search hlsearch shows, which the status line shows in Normal and
+  ## Visual mode, also with 'hlsearch' off. None while it or the status line is
+  ## off, nor while a command line is typed, where a :s preview changes the text.
+  if not state.config.statusLine.searchCount or not state.showStatusLine or
+      state.isCommandOverlay:
+    state.searchCount = none(MatchCount)
+    return
+  let
+    typed = state.incrementalSearchLine
+    spec = state.shownSearch(SearchSpec(pattern: typed))
+    last = state.input.search.last
+  if spec.pattern.len == 0 or not state.activeWindow.shownMode.isNormalOrVisualMode:
+    state.searchCount = none(MatchCount)
+    return
+  let keep =
+    if typed.len > 0:
+      state.input.search.countKey(last)
+    else:
+      SearchCountKey()
+  state.searchCount =
+    some(b.countMatches(state.cursor, state.input.search.countKey(spec), budget, keep))
 
 proc addSearchHistory*(state: EditorState, pattern: string) =
   ## Push `pattern` onto the search history, most recent first, dropping an

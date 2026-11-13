@@ -153,6 +153,42 @@ type
   FoldState* = object ## Manages all folds in a buffer
     folds*: seq[Fold] # List of all folds (sorted by startLine, outer-first on ties)
 
+  SearchMatch* = enum
+    ## How a search pattern matches.
+    smRegex ## As a regex (/ and ? and a typed :s)
+    smLiteral ## As it is (g* and g#)
+    smWord
+      ## As it is, a word character at either end starting or ending a word, as
+      ## the `\<` and `\>` Vim's * and # put around a keyword
+
+  SearchCountKey* = object ## What a count is of
+    pattern*: string
+    ignorecase*: bool
+    match*: SearchMatch
+
+  MatchWalkPlace* = object ## Where a walk over a line's matches goes on from
+    pos*, valid*, col*: int ## Bytes in the line and in its valid text, and the column
+    next*: int ## Where a regex looks on from, in the valid text
+    free*: int ## The first column a literal match may start at
+    prev*, prevBase*: Rune ## The character before, and the base it is part of
+
+  HeldLine* = object ## A line a count walks over several frames
+    index*: int ## -1 for none
+    text*: string
+    valid*: string ## The text a regex walks, when `text` is not valid UTF-8
+
+  SearchCountCache* = object ## The matches of a search counted so far
+    contentVersion*: int
+    key*: SearchCountKey
+    before*: seq[int] ## The matches before each line counted, and after the last
+    line*: HeldLine ## The line being counted
+    place*: MatchWalkPlace ## Where it goes on
+    lineCount*: int ## The matches on it before `place`
+    at*: HeldLine ## The cursor's line
+    atPlace*: MatchWalkPlace ## Where the walk over it goes on
+    atStarts*: seq[int] ## The columns its matches before `atPlace` start at
+    atDone*: bool ## Whether that walk has gone through it
+
   BufferEditorConfig* = object
     ## Per-buffer EditorConfig overrides (from .editorconfig files)
     tabStop*: Option[int]
@@ -597,6 +633,9 @@ type
     namedMarks*: NamedMarks
     lastVisual*: Option[VisualArea] ## Reselected by `gv`
 
+    searchCounts*: array[2, SearchCountCache]
+      ## Kept by `countMatches`: the last search's and the one being typed
+    recentSearchCount*: int ## The one of `searchCounts` counted last
     diagnostics*: BufferDiagnostics
     awaitedReports: array[DiagnosticSource, AwaitedReport]
     diagnosticsDirty*: bool

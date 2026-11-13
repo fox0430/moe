@@ -169,6 +169,12 @@ The fileTree supports navigation (`j`/`k`/`gg`/`G`), expanding/collapsing direct
 
 See [How to use - FileTree Mode](howtouse.md#filetree-mode) for key bindings.
 
+## Search count
+
+After a search, the status line of the active window shows the cursor's place among the matches, as `[3/10]`: the matches that start at or before the cursor, then all of them. It follows the cursor in Normal and Visual mode and, with `incsearch`, the pattern being typed after `/` or `?`, and goes away with `:noh`, double-Escape, or a search with no match. It shows with `hlsearch` off too. A large buffer shows `[?/??]` while it is being counted.
+
+Set `searchCount = false` in `[StatusLine]` to turn it off.
+
 ## Runtime Key Mapping
 
 moe supports Vim-like runtime key mapping commands. You can remap keys during an editing session using Command mode commands.

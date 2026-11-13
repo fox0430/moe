@@ -136,6 +136,7 @@ proc newEditorConfig*(): EditorConfig =
       gitBranchName: true,
       showGitInactive: false,
       showModeInactive: false,
+      searchCount: true,
       setupText: DefaultStatusLineSetupText,
     ),
     highlight: HighlightConfig(

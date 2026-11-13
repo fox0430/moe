@@ -248,6 +248,9 @@ type
     showModeInactive* {.
       cfg, cfgDocDescription: "Display the mode on the status line in inactive windows"
     .}: bool
+    searchCount* {.
+      cfg, cfgDocDescription: "Display the cursor's place among the search matches"
+    .}: bool
     setupText* {.
       cfg,
       cfgNoUi,

@@ -21,27 +21,20 @@
 ## literal (* and #) / current-word match enumeration. Compiled regexes are
 ## memoised in a single private slot to avoid recompiling on every keystroke.
 
-import std/[options, sequtils, strutils, unicode]
+import std/[algorithm, monotimes, options, sequtils, strutils, times, unicode]
 
 import pkg/regex
 
 import ../[primitives, unicode_utils, char_case, char_class]
 import core
 
-type
-  SearchMatch* = enum
-    ## How a search pattern matches.
-    smRegex ## As a regex (/ and ? and a typed :s)
-    smLiteral ## As it is (g* and g#)
-    smWord
-      ## As it is, a word character at either end starting or ending a word, as
-      ## the `\<` and `\>` Vim's * and # put around a keyword
+export SearchMatch
 
-  RegexPattern = ref object
-    ## A pattern / and ? and a typed :s look for as a regex, compiled.
-    text: string
-    ignorecase: bool
-    re: Option[Regex2] ## none when it does not compile
+type RegexPattern = ref object
+  ## A pattern / and ? and a typed :s look for as a regex, compiled.
+  text: string
+  ignorecase: bool
+  re: Option[Regex2] ## none when it does not compile
 
 var regexCache: RegexPattern
 
@@ -81,6 +74,8 @@ proc invalidRegex*(pattern: string, ignorecase: bool, match: SearchMatch): strin
 proc validUtf8Step(line: string, i: int): tuple[lineBytes, validBytes: int] =
   ## The character of `line` at byte `i` as `toValidUtf8` writes it: its bytes
   ## in `line` and in the result. An undecodable byte becomes U+FFFD.
+  if line[i].uint8 < 0x80'u8:
+    return (1, 1)
   let size = max(line.runeSizeAt(i), 1)
   if size == 1 and line[i].uint8 >= 0x80'u8:
     (1, "\uFFFD".len)
@@ -98,22 +93,25 @@ proc hasInvalidUtf8*(line: string): bool =
     i += step.lineBytes
   false
 
+proc replaceInvalidUtf8(line: string): string =
+  ## `line` with undecodable bytes replaced by U+FFFD.
+  result = newStringOfCap(line.len)
+  var i, kept = 0
+  while i < line.len:
+    let step = line.validUtf8Step(i)
+    if step.lineBytes != step.validBytes:
+      result.add(line[kept ..< i])
+      result.add("\uFFFD")
+      kept = i + step.lineBytes
+    i += step.lineBytes
+  result.add(line[kept .. ^1])
+
 proc toValidUtf8(line: string): string =
   ## Return `line` with undecodable bytes replaced by U+FFFD so the result is
   ## valid UTF-8 for `regex`. Each undecodable byte becomes one character, so
   ## character indices (`charLen`, `byteToCharPos`) agree between `line` and
   ## the result; regex matches on the result translate back by character.
-  if not line.hasInvalidUtf8:
-    return line
-  result = newStringOfCap(line.len)
-  var i = 0
-  while i < line.len:
-    let step = line.validUtf8Step(i)
-    if step.lineBytes == step.validBytes:
-      result.add(line[i ..< i + step.lineBytes])
-    else:
-      result.add("\uFFFD")
-    i += step.lineBytes
+  if line.hasInvalidUtf8: line.replaceInvalidUtf8 else: line
 
 type
   LiteralChar = object
@@ -241,8 +239,14 @@ type LiteralRange = object
   startCol, endCol: int # Half-open, in characters
   startByte, endByte: int # Half-open
   groups: seq[Slice[int]] # A regex match's groups, bytes in the line; empty when unset
+  checkpoint: bool # No match, only how far the walk has gone
 
-iterator literalMatchRanges(line: string, p: LiteralPattern): LiteralRange =
+const CheckpointBytes = 4096
+  ## How far a literal walk goes without a match before it yields a checkpoint
+
+iterator literalMatchRanges(
+    line: string, p: LiteralPattern, place: var MatchWalkPlace
+): LiteralRange =
   ## Matches of `p` on `line`, left to right. Each one is looked for after the
   ## one before ends, as Vim's search does with 'cpoptions' c. A character and
   ## its composing characters are one, as in Vim: no match starts or ends
@@ -251,52 +255,60 @@ iterator literalMatchRanges(line: string, p: LiteralPattern): LiteralRange =
   ## and `\>` one that ends with a word character of another class than the
   ## character after it.
   ## Walks the line without materialising a folded copy or its rune seq:
-  ## callers that only need the first or last match stop early.
-  if p.chars.len > 0 and not (p.exact and line.find(p.text) < 0):
-    var
-      bytePos = 0
-      charIdx = 0
-      free = 0 # The first column a match may start at
-      prev = Rune(0)
-      prevBase = Rune(0) # The character before
-    while bytePos < line.len:
-      if line[bytePos] in p.notFirst:
-        prev = Rune(line[bytePos].ord)
-        prevBase = prev
-        inc bytePos
-        inc charIdx
+  ## callers that only need the first or last match stop early. The walk goes
+  ## on from `place`, which it keeps where it goes on from, also at a
+  ## checkpoint every `CheckpointBytes` without a match.
+  if p.chars.len > 0 and not (p.exact and line.find(p.text, place.pos) < 0):
+    var mark = place.pos
+    while place.pos < line.len:
+      if place.pos - mark >= CheckpointBytes:
+        mark = place.pos
+        yield LiteralRange(checkpoint: true)
+      if line[place.pos] in p.notFirst:
+        place.prev = Rune(line[place.pos].ord)
+        place.prevBase = place.prev
+        inc place.pos
+        inc place.col
         continue
-      let (r, size) = line.charAtByte(bytePos)
+      let (r, size) = line.charAtByte(place.pos)
       if size == 0:
         break
-      let composed = charIdx > 0 and continuesChar(prev, r)
-      if not composed and charIdx >= free and p.chars[0].takes(r, p.ignorecase):
-        let m = line.literalMatchAt(bytePos, p)
-        var matches = m.endByte >= 0
-        if matches and p.boundsStart:
+      let
+        bytePos = place.pos
+        charIdx = place.col
+        composed = charIdx > 0 and continuesChar(place.prev, r)
+      var
+        found = false
+        m: LiteralMatch
+      if not composed and charIdx >= place.free and p.chars[0].takes(r, p.ignorecase):
+        m = line.literalMatchAt(bytePos, p)
+        found = m.endByte >= 0
+        if found and p.boundsStart:
           let class = mbClass(r)
-          matches = class >= 2 and (charIdx == 0 or mbClass(prevBase) != class)
-        if matches and m.endByte < line.len:
+          found = class >= 2 and (charIdx == 0 or mbClass(place.prevBase) != class)
+        if found and m.endByte < line.len:
           let next = line.charAtByte(m.endByte)[0]
-          matches = not continuesChar(m.last, next)
-          if matches and p.boundsEnd:
+          found = not continuesChar(m.last, next)
+          if found and p.boundsEnd:
             let class = mbClass(m.lastBase)
-            matches = class >= 2 and mbClass(next) != class
-        elif matches and p.boundsEnd:
-          matches = mbClass(m.lastBase) >= 2
-        if matches:
-          yield LiteralRange(
-            startCol: charIdx,
-            endCol: charIdx + m.length,
-            startByte: bytePos,
-            endByte: m.endByte,
-          )
-          free = charIdx + m.length
+            found = class >= 2 and mbClass(next) != class
+        elif found and p.boundsEnd:
+          found = mbClass(m.lastBase) >= 2
+        if found:
+          place.free = charIdx + m.length
       if not composed:
-        prevBase = r
-      prev = r
-      bytePos += size
-      inc charIdx
+        place.prevBase = r
+      place.prev = r
+      place.pos += size
+      inc place.col
+      if found:
+        mark = place.pos
+        yield LiteralRange(
+          startCol: charIdx,
+          endCol: charIdx + m.length,
+          startByte: bytePos,
+          endByte: m.endByte,
+        )
 
 type LineWalk = object ## A place reached walking `line` and its `toValidUtf8` together.
   valid, pos, col: int # Bytes in the valid text and in `line`, and the column
@@ -317,10 +329,11 @@ type MatchWalk = enum
   mwSubstitute ## do_sub does
 
 iterator matchRanges(
-    line, pattern: string,
+    line, searchable, pattern: string,
     ignorecase: bool,
     match: SearchMatch,
     walk: MatchWalk,
+    place: var MatchWalkPlace,
     withGroups = false,
 ): LiteralRange =
   ## The matches of `pattern` on `line`, left to right, matching as `match`
@@ -329,27 +342,36 @@ iterator matchRanges(
   ## end of the line only from its start, so an empty line has its empty
   ## match. After a match mwHighlight looks at the end of the line too, and
   ## mwSubstitute skips an empty match where the one before ended. An empty
-  ## pattern has no matches.
+  ## pattern has no matches. The walk goes on from `place`, which it keeps
+  ## where it goes on from, also at the checkpoints a literal walk yields.
+  ## A regex looks through `searchable`, the `toValidUtf8` of `line`.
   if pattern.len == 0:
     discard
   elif match != smRegex:
-    for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, match)):
+    for r in literalMatchRanges(line, literalPattern(pattern, ignorecase, match), place):
       yield r
   else:
     let p = regexPattern(pattern, ignorecase)
     if p.re.isSome:
-      let searchable = line.toValidUtf8
       var
-        start = 0
         lastEnd = -1
         m = RegexMatch2()
-        at = LineWalk()
-      while (start == 0 or start < searchable.len or walk == mwHighlight) and
-          find(searchable, p.re.get, m, start):
+      while place.next <= searchable.len and
+          (place.next == 0 or place.next < searchable.len or walk == mwHighlight) and
+          find(searchable, p.re.get, m, place.next)
+      :
         let
           a = m.boundaries.a
           b = m.boundaries.b + 1
+        place.next =
+          if a == b and b >= searchable.len:
+            searchable.len + 1
+          elif a == b:
+            b + max(searchable.runeSizeAt(b), 1)
+          else:
+            b
         if not (walk == mwSubstitute and a == b and a == lastEnd):
+          var at = LineWalk(valid: place.valid, pos: place.pos, col: place.col)
           at.walkTo(line, a)
           var to = at
           to.walkTo(line, b)
@@ -371,6 +393,10 @@ iterator matchRanges(
                 var last = first
                 last.walkTo(line, s.b + 1)
                 groups.add(first.pos .. last.pos - 1)
+          place.valid = to.valid
+          place.pos = to.pos
+          place.col = to.col
+          lastEnd = b
           yield LiteralRange(
             startCol: at.col,
             endCol: to.col,
@@ -378,15 +404,22 @@ iterator matchRanges(
             endByte: to.pos,
             groups: groups,
           )
-          at = to
-          lastEnd = b
-        if a == b and b >= searchable.len:
-          break
-        start =
-          if a == b:
-            b + max(searchable.runeSizeAt(b), 1)
-          else:
-            b
+
+iterator matchRanges(
+    line, pattern: string,
+    ignorecase: bool,
+    match: SearchMatch,
+    walk: MatchWalk,
+    withGroups = false,
+): LiteralRange =
+  ## The matches of `pattern` on the whole of `line`, as the walk above finds.
+  var place = MatchWalkPlace()
+  let searchable = if match == smRegex: line.toValidUtf8 else: ""
+  for r in line.matchRanges(
+    searchable, pattern, ignorecase, match, walk, place, withGroups
+  ):
+    if not r.checkpoint:
+      yield r
 
 proc cursorColumn(r: LiteralRange, line: string): int =
   ## The column the cursor goes to on match `r` of `line`. As in Vim's
@@ -410,6 +443,151 @@ proc findSearchMatchRanges*(
     return @[]
   for r in b.getLine(lineIndex).matchRanges(searchText, ignorecase, match, mwHighlight):
     result.add(ColumnRange(startCol: r.startCol, endCol: r.endCol))
+
+type MatchCount* = object ## Where a position stands among a search's matches.
+  current*: int ## The matches that start at or before it, as Vim's searchcount()
+  total*: int
+  complete*: bool ## False while the count has not gone through the buffer
+
+proc holds(kept: SearchCountCache, b: TextBuffer, key: SearchCountKey): bool =
+  kept.before.len > 0 and kept.contentVersion == b.contentVersion and kept.key == key
+
+proc hold(held: var HeldLine, b: TextBuffer, index: int, match: SearchMatch) =
+  if held.index != index:
+    held = HeldLine(index: index, text: b.getLine(index))
+    if match == smRegex and held.text.hasInvalidUtf8:
+      held.valid = held.text.replaceInvalidUtf8
+
+proc searchable(held: HeldLine): lent string =
+  if held.valid.len > 0:
+    return held.valid
+  return held.text
+
+proc countMatches*(
+    b: TextBuffer,
+    pos: BufferPosition,
+    key: SearchCountKey,
+    budget: Duration,
+    keep = SearchCountKey(),
+): MatchCount =
+  ## Count the matches n goes through of the search `key` says, as Vim's
+  ## searchcount(), for up to `budget`, though always at least one match, line
+  ## or checkpoint. The count is kept in `b`, along with one other, and goes on
+  ## from where it stopped, within a line too, on the next call, as the status
+  ## line asks once per frame. So does the walk over the line at `pos`, which
+  ## goes only as far as its column. A new count does not take the place of the
+  ## one for `keep`.
+  let
+    searchText = key.pattern
+    ignorecase = key.ignorecase
+    match = key.match
+  if not searchText.isSearchable(ignorecase, match):
+    return MatchCount(complete: true)
+
+  var slot = -1
+  for i, kept in b.searchCounts:
+    if kept.holds(b, key):
+      slot = i
+  if slot < 0:
+    slot = 1 - b.recentSearchCount
+    if keep.pattern.len > 0 and b.searchCounts[slot].holds(b, keep):
+      slot = b.recentSearchCount
+    b.searchCounts[slot] = SearchCountCache(
+      contentVersion: b.contentVersion,
+      key: key,
+      before: @[0],
+      line: HeldLine(index: -1),
+      at: HeldLine(index: -1),
+    )
+  b.recentSearchCount = slot
+
+  template c(): untyped =
+    b.searchCounts[slot]
+
+  let deadline = getMonoTime() + budget
+  var spent = 0
+  template outOfTime(work: int): bool =
+    spent += work
+    if spent >= 64:
+      spent = 0
+      getMonoTime() >= deadline
+    else:
+      false
+
+  template workSince(walked: var int, place: MatchWalkPlace): int =
+    let work =
+      if match == smRegex:
+        64
+      else:
+        1 + (place.pos - walked) div 64
+    walked = place.pos
+    work
+
+  block counting:
+    while c.before.high < b.len:
+      c.line.hold(b, c.before.high, match)
+      var walked = c.place.pos
+      for r in matchRanges(
+        c.line.text, c.line.searchable, searchText, ignorecase, match, mwSearch, c.place
+      ):
+        if not r.checkpoint:
+          c.lineCount.inc
+        if outOfTime(walked.workSince(c.place)):
+          break counting
+      let rest = c.line.text.len - walked
+      c.before.add c.before[^1] + c.lineCount
+      c.line = HeldLine(index: -1)
+      c.place = MatchWalkPlace()
+      c.lineCount = 0
+      if c.before.high < b.len and outOfTime(1 + rest div 64):
+        break counting
+  if c.before.high < b.len:
+    return MatchCount(total: c.before[^1])
+
+  let total = c.before[^1]
+  if pos.line notin 0 ..< b.len:
+    return MatchCount(total: total, complete: true)
+  if c.at.index != pos.line:
+    c.at = HeldLine(index: -1)
+    c.at.hold(b, pos.line, match)
+    c.atPlace = MatchWalkPlace()
+    c.atStarts.setLen 0
+    c.atDone = false
+  if not c.atDone and (c.atStarts.len == 0 or c.atStarts[^1] <= pos.column):
+    block walking:
+      var walked = c.atPlace.pos
+      for r in matchRanges(
+        c.at.text, c.at.searchable, searchText, ignorecase, match, mwSearch, c.atPlace
+      ):
+        if not r.checkpoint:
+          c.atStarts.add r.startCol
+          if r.startCol > pos.column:
+            break walking
+        if outOfTime(walked.workSince(c.atPlace)):
+          return MatchCount(total: total)
+      c.atDone = true
+      c.at = HeldLine(index: pos.line)
+  MatchCount(
+    current: c.before[pos.line] + c.atStarts.upperBound(pos.column),
+    total: total,
+    complete: true,
+  )
+
+proc countMatches*(
+    b: TextBuffer,
+    pos: BufferPosition,
+    searchText: string,
+    budget: Duration,
+    ignorecase = false,
+    match = smRegex,
+    keep = SearchCountKey(),
+): MatchCount =
+  b.countMatches(
+    pos,
+    SearchCountKey(pattern: searchText, ignorecase: ignorecase, match: match),
+    budget,
+    keep,
+  )
 
 proc firstSubstituteMatch*(
     line, pattern: string, ignorecase: bool, match: SearchMatch

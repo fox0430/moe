@@ -113,6 +113,8 @@ showGitInactive = false                # Show git info in inactive windows
 
 showModeInactive = false               # Show mode in inactive windows
 
+searchCount = true                     # Show the cursor's place among the search matches
+
 # Custom status line format
 # Supported placeholders:
 #   {lineNumber}    - Current line number

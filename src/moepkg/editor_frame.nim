@@ -50,7 +50,8 @@ from command_handlers/insert_handler import runAutoTrigger
 import
   config, git_cache, render_utils, logger, message_log, debug_viewer, completion,
   signature_help, hover_popup, modes, notification_popup, unicode_utils, motion, buffer,
-  lsp_integration, editor_window_layout, editor_notify, macro_recording, page_scroll
+  lsp_integration, editor_window_layout, editor_notify, macro_recording, page_scroll,
+  search_ops
 
 export editor_notify
 
@@ -514,6 +515,7 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
 
   result = e.updateViewportSize(buffer)
   e.advanceLayoutForFrame(buffer, result)
+  e.state.updateSearchCount(activeBuffer)
   for window in e.windowManager.windows:
     window.viewport.noteHeight()
 
