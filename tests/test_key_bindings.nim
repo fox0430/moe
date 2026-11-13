@@ -220,7 +220,12 @@ suite "KeyCombo - parseKeyCombo":
   test "Ctrl + symbol is invalid":
     check parseKeyCombo("C-!").isNone
     check parseKeyCombo("C-@").isNone
-    check parseKeyCombo("C-/").isNone
+
+  test "C-/ is the same key as C-_":
+    let slash = parseKeyCombo("C-/")
+    check slash.isSome
+    check slash.get.char == "_"
+    check slash == parseKeyCombo("C-_")
 
   test "Parse multibyte character as one combo":
     let result = parseKeyCombo("\u3042")
@@ -1997,6 +2002,10 @@ suite "eventToKeyCombo - control bytes celina names as digits":
       let combo = eventToKeyCombo(charEvent(digit, {celina.KeyModifier.Ctrl})).get
       check combo.char == name
       check kmCtrl in combo.modifiers
+
+  test "Ctrl-/ sent as CSI u is the key of C-/":
+    let event = charEvent("/", {celina.KeyModifier.Ctrl})
+    check eventToKeyCombo(event) == parseKeyCombo("C-/")
 
   test "Other digits stay digits":
     check eventToKeyCombo(charEvent("4", {})).get.char == "4"

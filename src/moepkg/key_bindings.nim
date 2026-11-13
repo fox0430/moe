@@ -734,12 +734,13 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
 
 func ctrlCharOf(ch: string): string =
   ## celina names the bytes 0x1c-0x1f Ctrl-4 to Ctrl-7, but a terminal sends
-  ## the same bytes for Ctrl-\, Ctrl-], Ctrl-^ and Ctrl-_.
+  ## the same bytes for Ctrl-\, Ctrl-], Ctrl-^ and Ctrl-_. Ctrl-/ sent as
+  ## CSI u is Ctrl-_ too, as `parseKeyCombo` reads it.
   case ch
   of "4": "\\"
   of "5": "]"
   of "6": "^"
-  of "7": "_"
+  of "7", "/": "_"
   else: ch
 
 proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
