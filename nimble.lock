@@ -102,7 +102,6 @@
       "url": "https://github.com/fox0430/celina",
       "downloadMethod": "git",
       "dependencies": [
-        "nim",
         "unicodedb"
       ],
       "checksums": {
