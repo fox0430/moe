@@ -5763,13 +5763,13 @@ suite "Highlight - Semantic overlay edit shift":
     result.semanticContentVersion = version
 
   proc edit(
-      start, oldEnd, newEnd: (int, int), rowsAtStart = false, guessed = false
+      start, oldEnd, newEnd: (int, int), rowsAt = raBelow, guessed = false
   ): SpanEdit =
     SpanEdit(
       start: BufferPosition(line: start[0], column: start[1]),
       oldEnd: BufferPosition(line: oldEnd[0], column: oldEnd[1]),
       newEnd: BufferPosition(line: newEnd[0], column: newEnd[1]),
-      rowsAtStart: rowsAtStart,
+      rowsAt: rowsAt,
       guessed: guessed,
     )
 
@@ -5849,7 +5849,7 @@ suite "Highlight - Semantic overlay edit shift":
 
   test "a whole row inserted shifts the rows from it down":
     let h = mkH({0: @[mkTok(0, 2)], 2: @[mkTok(1, 3)], 4: @[mkTok(5, 2)]})
-    h.semanticMoveAcross(edit((2, 0), (2, 0), (3, 0), rowsAtStart = true))
+    h.semanticMoveAcross(edit((2, 0), (2, 0), (3, 0), rowsAt = raStart))
     check h.semantic.hasKey(0) # unchanged
     check not h.semantic.hasKey(2)
     check h.semantic[3].tokens[0].firstColumn == 1
@@ -5857,7 +5857,7 @@ suite "Highlight - Semantic overlay edit shift":
 
   test "a whole row deleted drops its tokens and shifts the rows below up":
     let h = mkH({0: @[mkTok(0, 2)], 2: @[mkTok(1, 3)], 5: @[mkTok(5, 2)]})
-    h.semanticMoveAcross(edit((2, 0), (3, 0), (2, 0), rowsAtStart = true))
+    h.semanticMoveAcross(edit((2, 0), (3, 0), (2, 0), rowsAt = raStart))
     check h.semantic.hasKey(0)
     check not h.semantic.hasKey(2)
     check h.semantic[4].tokens[0].firstColumn == 5
@@ -5997,7 +5997,7 @@ suite "Highlight - Semantic overlay edit shift":
             (start[0], 0),
             (start[0] + rng.rand(2), 0),
             (start[0] + rng.rand(2), 0),
-            rowsAtStart = true,
+            rowsAt = raStart,
           )
         else:
           let oldEnd =

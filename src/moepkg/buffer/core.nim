@@ -355,7 +355,9 @@ type
     efLastVisual
     efLineArrays ## `lineMarkers` and `modifiedLines`
     efDiagnostics
-    efJumps ## The editor's jump list, through `rowsMovedHook`
+    efRowsMoved
+      ## What the editor keeps by row, through `rowsMovedHook`: the jump list,
+      ## the tab lines and the other windows on the buffer
 
   BufferFileReadHook* = proc(b: TextBuffer) {.closure.}
     ## Called whenever `lastLoadedContent` is taken from the file: the buffer
@@ -364,6 +366,13 @@ type
   BufferRowsMovedHook* = proc(b: TextBuffer, move: RowMove) {.closure, raises: [].}
     ## Called whenever an edit or undo/redo moves rows, so positions kept
     ## outside the buffer follow its text.
+
+  BufferRowsRestore* = proc() {.closure, raises: [].}
+    ## Puts back the positions a `BufferRowsSaveHook` saved.
+
+  BufferRowsSaveHook* = proc(b: TextBuffer): BufferRowsRestore {.closure, raises: [].}
+    ## Saves the positions `BufferRowsMovedHook` moves, for a rolled back
+    ## transaction to put back as it found them.
 
   BufferContentReplacedHook* = proc(b: TextBuffer) {.closure.}
     ## Called once whenever the buffer's contents are replaced wholesale from
@@ -552,6 +561,13 @@ type
     contentReplacedHook: BufferContentReplacedHook
     fileReadHook: BufferFileReadHook ## A single slot, like the one above.
     rowsMovedHook: BufferRowsMovedHook ## A single slot, like the one above.
+    rowsSaveHook: BufferRowsSaveHook ## Installed with `rowsMovedHook`.
+    rowsRestore: BufferRowsRestore
+      ## What a rollback of the open transaction puts back, saved just before
+      ## its first row move reached `rowsMovedHook`.
+    rowMovesStopped: int
+      ## While positive, row moves do not reach `rowsMovedHook`: a
+      ## `replacingSpan` or a rollback is under way.
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
@@ -1463,7 +1479,7 @@ func rowEdit(row, before, after: int): SpanEdit =
     start: BufferPosition(line: row),
     oldEnd: BufferPosition(line: row + before),
     newEnd: BufferPosition(line: row + after),
-    rowsAtStart: true,
+    rowsAt: raStart,
   )
 
 func tailColumns(text: string): int =
@@ -1556,7 +1572,7 @@ iterator spanEdits(change: BufferChange): SpanEdit =
           else:
             BufferPosition(line: pos.line, column: pos.column + change.insertColDelta),
         atLineEnd: change.insertSplitTailLen <= 0,
-        rowsAtStart: pos.column == 0 and rows > 0,
+        rowsAt: if pos.column == 0 and rows > 0: raSplitStart else: raBelow,
       )
   of ckDeleteText:
     let
@@ -1676,8 +1692,59 @@ proc wantsSnapshotRows(b: TextBuffer): bool =
     b.lastVisual.isNone
 
 proc notifyRowsMoved(b: TextBuffer, move: RowMove) =
-  if b.rowsMovedHook != nil:
-    b.rowsMovedHook(b, move)
+  if b.rowMovesStopped > 0 or b.rowsMovedHook == nil:
+    return
+  if b.inTransaction and b.rowsRestore == nil and b.rowsSaveHook != nil:
+    b.rowsRestore = b.rowsSaveHook(b)
+  b.rowsMovedHook(b, move)
+
+proc stopRowMoves(b: TextBuffer) =
+  inc b.rowMovesStopped
+
+proc resumeRowMoves(b: TextBuffer) =
+  dec b.rowMovesStopped
+
+proc putRowsBack(b: TextBuffer) =
+  ## Put the positions `rowsMovedHook` moved in the open transaction back as
+  ## it found them.
+  if b.rowsRestore != nil:
+    let restore = b.rowsRestore
+    b.rowsRestore = nil
+    restore()
+
+proc forgetSavedRows*(b: TextBuffer) =
+  ## Drop what a rollback of the open transaction would put back: it ended.
+  b.rowsRestore = nil
+
+template rollingBackRows*(b: TextBuffer, body: untyped) =
+  ## Run `body`, rolling back the open transaction, and put the positions
+  ## `rowsMovedHook` moved in it back as it found them, rather than move them
+  ## back: rows its edits deleted took what was on them to one row.
+  bind stopRowMoves, resumeRowMoves, putRowsBack
+  stopRowMoves(b)
+  try:
+    body
+  finally:
+    resumeRowMoves(b)
+    putRowsBack(b)
+
+template replacingSpan*(b: TextBuffer, edit: SpanEdit, body: untyped) =
+  ## Run `body`, edits replacing a span, and move the last Visual area and
+  ## the rows kept outside the buffer once, across `edit` as `body` leaves
+  ## it, as Neovim's nvim_buf_set_text moves them: not across each of the
+  ## edits.
+  bind stopRowMoves, resumeRowMoves, moveLastVisual, notifyRowsMoved, replaceMove
+  let visualBefore = b.lastVisual
+  stopRowMoves(b)
+  try:
+    body
+  finally:
+    resumeRowMoves(b)
+    if edit.oldEnd != edit.start or edit.newEnd != edit.start:
+      let move = replaceMove(edit)
+      b.lastVisual = visualBefore
+      moveLastVisual(b, move)
+      notifyRowsMoved(b, move)
 
 proc restoreRows*(
     b: TextBuffer, rows: openArray[RowSpan], undone: bool, visual = false
@@ -1685,7 +1752,7 @@ proc restoreRows*(
   ## Move the jump list, and the last Visual area when `visual`, across undo
   ## (`undone`) or redo of edits to `rows`, as Vim's u_undoredo does.
   template restore(r: RowSpan) =
-    let move = RowMove(rows: r, restoring: true)
+    let move = restoreMove(r)
     if visual:
       b.moveLastVisual(move)
     b.notifyRowsMoved(move)
@@ -1802,13 +1869,16 @@ proc follow(
       shift(b.foldState.adjustFoldsAfterDelete, b.foldState.adjustFoldsAfterInsert)
     if efBookmarks in followers:
       shift(b.adjustBookmarksForDelete, b.adjustBookmarksForInsert)
-    if efLastVisual in followers:
-      b.moveLastVisual(RowMove(rows: rows))
-    if efJumps in followers:
-      b.notifyRowsMoved(RowMove(rows: rows))
     if efLineArrays in followers:
       shiftPerLineArray(b.lineMarkers, none(LineMarkerKind), rows)
       shiftPerLineArray(b.modifiedLines, lmkInserted, rows)
+  if followers * {efLastVisual, efRowsMoved} != {}:
+    let move = edit.rowMove
+    if move.isSome:
+      if efLastVisual in followers:
+        b.moveLastVisual(move.get)
+      if efRowsMoved in followers:
+        b.notifyRowsMoved(move.get)
   if efNamedMarks in followers:
     b.moveNamedMarks(edit)
   if efDiagnostics in followers:
@@ -1945,9 +2015,15 @@ proc setContentReplacedHook*(b: TextBuffer, cb: BufferContentReplacedHook) =
   ## previous one.
   b.contentReplacedHook = cb
 
-proc setRowsMovedHook*(b: TextBuffer, cb: BufferRowsMovedHook) =
-  ## Install the hook run whenever rows move. Replaces any previous one.
+proc setRowsMovedHook*(
+    b: TextBuffer, cb: BufferRowsMovedHook, save: BufferRowsSaveHook
+) =
+  ## Install the hook run whenever rows move, and `save` for what it moves.
+  ## Replaces any previous ones and drops what the old `save` saved, so a
+  ## rollback no longer puts back what the old hook moved.
   b.rowsMovedHook = cb
+  b.rowsSaveHook = save
+  b.forgetSavedRows()
 
 proc setFileReadHook*(b: TextBuffer, cb: BufferFileReadHook) =
   ## Install the hook run whenever `lastLoadedContent` is taken from the file.
@@ -2104,6 +2180,7 @@ proc clearUndoRedoState*(b: TextBuffer) =
   b.reloadUndoBytes = 0
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
+  b.forgetSavedRows()
   b.discardPendingSnapshot()
   # The empty stack reads as id 0, so this is a clean post-reload state. The
   # counter keeps going: an id names one change for the buffer's whole life.

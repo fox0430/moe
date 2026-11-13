@@ -4028,7 +4028,8 @@ suite "Editor - :bnext walks the tabs of every window":
     result.e = createTestEditor()
     for file in ["a", "b", "c"]:
       let path = getTempDir() / (name & "_" & file & ".txt")
-      writeFile(path, file & "\n")
+      # Two characters, so Normal can rest a cursor on column 1.
+      writeFile(path, file & file & "\n")
       result.paths.add path
     check result.e.editFile(result.paths[0]).isOk
     check result.e.editFile(result.paths[1]).isOk

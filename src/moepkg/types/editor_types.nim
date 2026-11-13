@@ -187,6 +187,64 @@ proc bufferIndexById*(e: Editor, id: BufferId): int =
       return i
   return -1
 
+iterator windowsFollowing(e: Editor, b: TextBuffer): EditorWindow =
+  ## The windows whose cursor and top line follow the text of `b`: all on it
+  ## but the current one, whose cursor the command places.
+  let windows = e.windowManager
+  for i, window in windows.windows:
+    if i != windows.activeWindowIndex and window.buffer == b:
+      yield window
+
+iterator viewersOver(e: Editor, b: TextBuffer): EditorWindow =
+  ## The windows a viewer covers and puts back on `b`. Not a command's to
+  ## place, so they follow its text in the current window too.
+  for window in e.windowManager.windows:
+    if window.viewerEntry.isSome and window.viewerEntry.get.returnTab == b.id:
+      yield window
+
+proc moveRowsFollowing(e: Editor, b: TextBuffer, move: RowMove) =
+  ## Move what the editor keeps by row in `b` across `move`.
+  e.state.jumpList.moveAcross(b.id, move)
+  e.state.tabLines.moveAcross(b.id, move)
+  for window in e.windowsFollowing(b):
+    window.moveAcross(move)
+  for window in e.viewersOver(b):
+    window.viewerEntry.get.moveAcross(move)
+
+proc saveRowsFollowing(e: Editor, b: TextBuffer): BufferRowsRestore =
+  ## Save what `moveRowsFollowing` moves for `b`, to put it back as it is now.
+  type Spot = tuple[window: EditorWindow, cursor: BufferPosition, top, wrapOffset: int]
+  var windows, origins: seq[Spot]
+  for window in e.windowsFollowing(b):
+    if window.viewport.isNil:
+      windows.add (window, window.cursor, -1, 0)
+    else:
+      windows.add (
+        window, window.cursor, window.viewport.topLine, window.viewport.topWrapOffset
+      )
+  for window in e.viewersOver(b):
+    let entry = window.viewerEntry.get
+    origins.add (
+      window, entry.originCursor, entry.originTopLine, entry.originTopWrapOffset
+    )
+  let
+    editor = e
+    jumps = e.state.jumpList
+    tabLines = e.state.tabLines
+  proc() =
+    editor.state.jumpList = jumps
+    editor.state.tabLines = tabLines
+    for spot in windows:
+      spot.window.moveCursorKeepingWanted(spot.cursor)
+      if spot.top >= 0 and not spot.window.viewport.isNil:
+        spot.window.viewport.topLine = spot.top
+        spot.window.viewport.topWrapOffset = spot.wrapOffset
+    for spot in origins:
+      if spot.window.viewerEntry.isSome:
+        spot.window.viewerEntry.get.originCursor = spot.cursor
+        spot.window.viewerEntry.get.originTopLine = spot.top
+        spot.window.viewerEntry.get.originTopWrapOffset = spot.wrapOffset
+
 proc addBuffer*(e: Editor, buf: TextBuffer) =
   ## Append `buf` to `e.buffers` and register it in `bufferIdIndex`, and
   ## subscribe the editor to the buffer's wholesale content replacements and
@@ -197,8 +255,9 @@ proc addBuffer*(e: Editor, buf: TextBuffer) =
   let editor = e
   buf.setRowsMovedHook(
     proc(b: TextBuffer, move: RowMove) =
-      editor.state.jumpList.moveAcross(b.id, move)
-      editor.state.tabLines.moveAcross(b.id, move)
+      editor.moveRowsFollowing(b, move),
+    proc(b: TextBuffer): BufferRowsRestore =
+      editor.saveRowsFollowing(b),
   )
   if e.onBufferContentReplaced != nil:
     buf.setContentReplacedHook(
@@ -224,7 +283,7 @@ proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   e.bufferIdIndex.del(id)
   # Unsubscribe: an untracked buffer must not keep reaching back into the
   # editor, which the hook also keeps alive.
-  buf.setRowsMovedHook(nil)
+  buf.setRowsMovedHook(nil, nil)
   e.state.tabLines.keepItIf(it.bufferId != id)
   buf.setContentReplacedHook(nil)
   buf.setFileReadHook(nil)

@@ -1478,6 +1478,30 @@ proc `preferredColumn=`*(win: EditorWindow, column: int) =
   ## stands for; -1 drops it.
   win.wanted = WantedColumn(cell: column)
 
+proc moveCursorKeepingWanted*(win: EditorWindow, to: BufferPosition) =
+  ## Move the cursor of `win` as Vim does outside the window's own commands,
+  ## as mark_adjust and win_enter do: the column vertical moves want stays.
+  if to == win.cursor:
+    return
+  let wanted = win.curswant
+  win.cursor = to
+  if wanted.cell >= 0:
+    win.wanted = wanted
+
+proc moveAcross*(win: EditorWindow, move: RowMove) =
+  ## Move the cursor and top line of `win`, a window other than the current
+  ## one, with its buffer's text, as Vim's mark_adjust moves them. The column
+  ## is left for entering the window to bring back onto the line.
+  win.moveCursorKeepingWanted(win.cursor.windowCursorMoved(move))
+  if not win.viewport.isNil:
+    moveTopAcross(win.viewport.topLine, win.viewport.topWrapOffset, move)
+
+proc moveAcross*(entry: var ViewerEntry, move: RowMove) =
+  ## Move where `entry` puts its window back on the tab it covers with that
+  ## tab's text, as `moveAcross` moves a window showing it.
+  entry.originCursor = entry.originCursor.windowCursorMoved(move)
+  moveTopAcross(entry.originTopLine, entry.originTopWrapOffset, move)
+
 proc takeWantedColumn*(win, src: EditorWindow) =
   ## Start with the column `src` wants, as Vim's win_init copies curswant into
   ## a new window, and from where `src` stood when its command began.

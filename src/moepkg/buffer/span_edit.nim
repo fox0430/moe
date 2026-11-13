@@ -24,6 +24,15 @@ import std/options
 import ../primitives
 
 type
+  RowsAt* = enum
+    ## Where the rows an edit adds or drops sit.
+    raBelow ## Below `start`'s row, which the edit starts inside.
+    raStart ## At `start`'s row: whole rows replaced.
+    raSplitStart
+      ## A split at column 0: at `start`'s row for what follows the text down
+      ## (folds, line markers), below it for Vim's marks, which open_line
+      ## leaves on the row it splits.
+
   SpanEdit* = object
     ## Text from `start` to `oldEnd` replaced by text from `start` to `newEnd`.
     start*, oldEnd*, newEnd*: BufferPosition
@@ -33,9 +42,7 @@ type
     guessed*: bool
       ## Guessed from a whole-line rewrite; may overlap surviving text, so it
       ## deletes nothing.
-    rowsAtStart*: bool
-      ## Added/dropped rows sit at `start`'s row, not below it: whole rows
-      ## replaced, or a split at column 0 pushing the line down.
+    rowsAt*: RowsAt
 
   Span* = object ## A range with an exclusive end.
     first*, last*: BufferPosition
@@ -44,29 +51,24 @@ type
     ## Rows `start ..< start + before` turned into `start ..< start + after`;
     ## rows below only shift.
     start*, before*, after*: int
-    joinsAbove*: bool ## Dropped rows were joined onto the row above.
 
-  RowMove* = object ## Rows an edit moved, or undo/redo put back.
-    rows*: RowSpan
-    restoring*: bool ## Undo/redo putting `rows` back: marks in them go to their start.
+  RowMoveKind = enum
+    rmCommand ## An edit a command made, as Vim's mark_adjust takes it.
+    rmReplace
+      ## A span replaced as a whole from outside the commands, as Neovim's
+      ## nvim_buf_set_text takes an API edit.
+    rmRestore ## Undo/redo putting rows back, as Vim's u_undoredo.
 
-func moved*(line: int, move: RowMove): int =
-  ## Where a mark on `line` goes across `move`, as Vim's mark_adjust keeps it.
-  ## An edit leaves kept rows, sends dropped rows after the rewrite (or onto
-  ## the row they joined) and shifts rows below. Undo/redo sends rows it
-  ## restores to their start, as u_undoredo does.
-  let rows = move.rows
-  if line >= rows.start + rows.before:
-    line + rows.after - rows.before
-  elif move.restoring:
-    if line >= rows.start and rows.before != rows.after: rows.start else: line
-  elif line >= rows.start + rows.after:
-    if rows.joinsAbove:
-      rows.start - 1
-    else:
-      rows.start + rows.after
-  else:
-    line
+  RowMove* = object
+    ## Rows an edit or undo/redo moved, as mark_adjust takes them: rows
+    ## `first ..< last` go, and the rows from `last` on shift by `shift`. With
+    ## none gone, rows came in just above `last`.
+    first, last, shift: int
+    case kind: RowMoveKind
+    of rmCommand, rmReplace:
+      edit: SpanEdit
+    of rmRestore:
+      discard
 
 func reversed*(edit: SpanEdit): SpanEdit =
   SpanEdit(
@@ -75,7 +77,7 @@ func reversed*(edit: SpanEdit): SpanEdit =
     newEnd: edit.oldEnd,
     atLineEnd: edit.atLineEnd,
     guessed: edit.guessed,
-    rowsAtStart: edit.rowsAtStart,
+    rowsAt: edit.rowsAt,
   )
 
 func goesTopDown*(edits: openArray[SpanEdit]): bool =
@@ -94,27 +96,87 @@ func inLine*(edit: SpanEdit): bool =
   not edit.guessed and edit.oldEnd.line == edit.start.line and
     edit.newEnd.line == edit.start.line
 
-func rows*(edit: SpanEdit): Option[RowSpan] =
-  ## Rows `edit` adds or drops; none when it moves no row.
+func rowsFrom(edit: SpanEdit, start: int): Option[RowSpan] =
   let
     before = edit.oldEnd.line - edit.start.line
     after = edit.newEnd.line - edit.start.line
   if before > 0 or after > 0:
-    some(
-      RowSpan(
-        start: edit.start.line + ord(not edit.rowsAtStart),
-        before: before,
-        after: after,
-        joinsAbove: not edit.rowsAtStart,
-      )
-    )
+    some(RowSpan(start: start, before: before, after: after))
   else:
     none(RowSpan)
+
+func rows*(edit: SpanEdit): Option[RowSpan] =
+  ## Rows `edit` adds or drops; none when it moves no row.
+  edit.rowsFrom(edit.start.line + ord(edit.rowsAt == raBelow))
+
+func rowMove*(edit: SpanEdit): Option[RowMove] =
+  ## The rows `edit` moves, as Vim's mark_adjust takes them; none when it adds
+  ## or drops none. Rows come and go after the rewritten ones.
+  let rows = edit.rowsFrom(edit.start.line + ord(edit.rowsAt != raStart))
+  if rows.isNone:
+    return none(RowMove)
+  let
+    r = rows.get
+    shift = r.after - r.before
+    first =
+      if shift >= 0:
+        r.start + r.before
+      else:
+        r.start + r.after
+  some(
+    RowMove(
+      first: first, last: r.start + r.before, shift: shift, kind: rmCommand, edit: edit
+    )
+  )
+
+func replaceMove*(edit: SpanEdit): RowMove =
+  ## The rows `edit` moves as a span replaced as a whole, as Neovim's
+  ## nvim_buf_set_text takes them: the rows it starts on and goes over go to
+  ## its start, and the rows from its last on shift.
+  RowMove(
+    first: edit.start.line,
+    last: edit.oldEnd.line,
+    shift: edit.newEnd.line - edit.oldEnd.line,
+    kind: rmReplace,
+    edit: edit,
+  )
+
+func restoreMove*(rows: RowSpan): RowMove =
+  ## Undo/redo putting `rows` back, as Vim's u_undoredo moves marks: the rows
+  ## it saved go, unless as many come back.
+  let shift = rows.after - rows.before
+  RowMove(
+    first: rows.start,
+    last:
+      if shift == 0:
+        rows.start
+      else:
+        rows.start + rows.before,
+    shift: shift,
+    kind: rmRestore,
+  )
+
+func joinsAbove(move: RowMove): bool =
+  ## Whether the rows `move` drops were joined onto the row above them.
+  move.kind == rmCommand and move.edit.rowsAt != raStart
+
+func moved*(line: int, move: RowMove): int =
+  ## Where a mark on `line` goes across `move`, as Vim's mark_adjust keeps it:
+  ## rows that go send it to the row after them, or onto the row they joined.
+  if line >= move.last:
+    line + move.shift
+  elif line >= move.first:
+    if move.joinsAbove:
+      move.first - 1
+    else:
+      move.first
+  else:
+    line
 
 iterator steps*(edit: SpanEdit): SpanEdit =
   ## Split a whole-row replacement into delete-then-insert so nothing lands on
   ## new text.
-  if edit.rowsAtStart and not edit.isInsertion and edit.newEnd != edit.start:
+  if edit.rowsAt != raBelow and not edit.isInsertion and edit.newEnd != edit.start:
     yield SpanEdit(start: edit.start, oldEnd: edit.oldEnd, newEnd: edit.start)
     yield SpanEdit(start: edit.start, oldEnd: edit.start, newEnd: edit.newEnd)
   else:
@@ -126,7 +188,7 @@ proc record*(edits: var seq[SpanEdit], edit: SpanEdit) =
   if edits.len > 0:
     let last = edits[^1]
     if last.isInsertion and edit.isInsertion and edit.start == last.newEnd and
-        edit.atLineEnd == last.atLineEnd and edit.rowsAtStart == last.rowsAtStart:
+        edit.atLineEnd == last.atLineEnd and edit.rowsAt == last.rowsAt:
       edits[^1].newEnd = edit.newEnd
       return
   edits.add edit
@@ -147,6 +209,75 @@ func moved(
     BufferPosition(
       line: pos.line + edit.newEnd.line - edit.oldEnd.line, column: pos.column
     )
+
+func joins(move: RowMove, line: int): bool =
+  ## Whether `move` joins `line`, the last of the rows it drops, onto the row
+  ## above, as `J` does.
+  move.joinsAbove and move.first < move.last and line == move.edit.oldEnd.line
+
+func replacedCursorMoved(pos: BufferPosition, edit: SpanEdit): BufferPosition =
+  ## Where a window's cursor goes across `edit` replacing its span, as
+  ## Neovim's nvim_buf_set_text moves it: with the text after the span, or
+  ## kept in what replaced it, on its last character at most.
+  if pos.line < edit.start.line:
+    pos
+  elif pos.line > edit.oldEnd.line:
+    BufferPosition(
+      line: pos.line + edit.newEnd.line - edit.oldEnd.line, column: pos.column
+    )
+  elif pos >= edit.oldEnd:
+    pos.moved(edit, staysAtInsertion = false)
+  elif pos.line < edit.newEnd.line or
+      (pos.line == edit.newEnd.line and pos.column <= edit.newEnd.column):
+    pos
+  else:
+    let lineStart = if edit.newEnd.line == edit.start.line: edit.start.column else: 0
+    BufferPosition(
+      line: edit.newEnd.line,
+      column: edit.newEnd.column - ord(edit.newEnd.column > lineStart),
+    )
+
+func windowCursorMoved*(pos: BufferPosition, move: RowMove): BufferPosition =
+  ## Where the cursor of a window other than the current one goes across
+  ## `move`, as Vim's mark_adjust moves it: with the rows below, onto the line
+  ## a join took its own into, or to the start of the line above rows deleted
+  ## under it. A line split or rewritten keeps it, past its end if need be. A
+  ## replaced span moves it as Neovim does.
+  if move.kind == rmReplace:
+    pos.replacedCursorMoved(move.edit)
+  elif move.joins(pos.line):
+    pos.moved(move.edit, staysAtInsertion = false)
+  elif pos.line >= move.last:
+    BufferPosition(line: pos.line + move.shift, column: pos.column)
+  elif pos.line >= move.first:
+    BufferPosition(line: max(move.first - 1, 0))
+  else:
+    pos
+
+func keepsRows(move: RowMove): bool =
+  ## Whether `move` replaces a span with text over more than one row, which
+  ## Neovim leaves a top line in.
+  move.kind == rmReplace and move.edit.newEnd.line > move.edit.start.line
+
+func moveTopAcross*(top, wrapOffset: var int, move: RowMove) =
+  ## Move `top`, the top line of a window other than the current one, across
+  ## `move` as Vim's mark_adjust moves it. Lines an edit puts just above it
+  ## come into view. A line it no longer shows starts at its first screen row.
+  ## A replaced span moves it as Neovim does, except that it stays on the
+  ## rows the span has left: Neovim waits for its cursor to bring it back,
+  ## which a window scrolled away from its cursor never does here.
+  if top >= move.first and top < move.last:
+    top =
+      if move.keepsRows:
+        min(top, move.edit.newEnd.line)
+      else:
+        max(move.first - 1, 0)
+    wrapOffset = 0
+  elif top > move.last or
+      (top == move.last and (move.kind == rmRestore or move.first < move.last)):
+    top += move.shift
+  elif top == move.last and move.shift > 0:
+    wrapOffset = 0
 
 func deletes*(edit: SpanEdit, span: Span): bool =
   ## Whether `edit` deletes all of `span`, or the line an empty one is on.

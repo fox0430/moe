@@ -128,12 +128,14 @@ suite "viewer_mode - leaveViewerMode":
     discard e.enterViewerMode(
       EditorMode.Help, makeHelpModeState(), newTextBuffer("help"), vpInPlace
     )
-    require fileBuf.replaceAllLines(["ab"]).isOk
+    # The line stays, shorter: a line the edit took away would move the
+    # position with the text instead.
+    require fileBuf.replaceAllLines(["aaaa", "ab"]).isOk
 
     e.leaveViewerMode(EditorMode.Help)
 
     check e.activeWindow.mode == EditorMode.Normal
-    check e.activeWindow.cursor == BufferPosition(line: 0, column: 1)
+    check e.activeWindow.cursor == BufferPosition(line: 1, column: 1)
 
   test "is a no-op when the window has no viewer entry":
     let (e, path) = editorOnFile("moe_viewer_leave2.txt")

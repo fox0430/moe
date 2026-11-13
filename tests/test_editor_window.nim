@@ -29,8 +29,13 @@ import
   ]
 import ../src/moepkg/editor_window {.all.}
 import ../src/moepkg/editor_render_views
+import ../src/moepkg/handler
+import ../src/moepkg/command_handlers/[handler_result, result_processor]
+from ../src/moepkg/lsp_integration import applyTextEdits
+from ../src/moepkg/lsp/protocol/types import TextEdit, newRange
 from pkg/celina import newBuffer
 import visual_test_helper
+import vim_like_test_helper
 
 # Helper to create a minimal Editor for testing
 proc createTestEditor(): Editor =
@@ -595,6 +600,9 @@ suite "closeWindow - sync after close":
 suite "switchToNextWindow - state preservation":
   test "preserves cursor position when switching":
     let e = createTestEditor()
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "0123456789ab\n".repeat(8)
+    )
     discard e.vsplit()
 
     # Set cursor in first window
@@ -1265,3 +1273,452 @@ suite "moveWindowToTab - the line a window left":
 
     check e.cursor == BufferPosition(line: 0, column: 0)
     check e.activeWindow.viewport.topLine == 0
+
+suite "Other windows on the buffer follow its text":
+  # Expected as Vim 9.2's getwininfo().topline and getcurpos() of a second
+  # window on the buffer, with the same keys typed in the first.
+  proc twoWindows(): tuple[e: Editor, other: EditorWindow] =
+    var lines: seq[string]
+    for i in 1 .. 40:
+      lines.add "line" & align($i, 2, '0')
+    let e = newVimLikeEditor(lines, 0, 0)
+    check e.vsplit().isOk
+    (e, e.windowManager.windows[1 - e.windowManager.activeWindowIndex])
+
+  proc place(win: EditorWindow, top, line, column: int) =
+    win.viewport.topLine = top
+    win.cursor = BufferPosition(line: line, column: column)
+
+  proc typeKeys(e: Editor, spec: string) =
+    for key in keysOf(spec):
+      check e.handleKeyCombo(key)
+
+  proc shows(win: EditorWindow): (int, int, int) =
+    (win.viewport.topLine, win.cursor.line, win.cursor.column)
+
+  test "A line deleted under the cursor takes it to the start of the line above":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 2)
+    e.typeKeys("10Gdd")
+    check other.shows == (7, 8, 0)
+    # The window typed in places its own cursor.
+    check e.cursor == BufferPosition(line: 9, column: 0)
+
+  test "Lines deleted above take the cursor and the top line up":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 2)
+    e.typeKeys("3G2dd")
+    check other.shows == (5, 7, 2)
+
+  test "A deleted top line gives way to the line above":
+    let (e, other) = twoWindows()
+    other.place(7, 11, 2)
+    e.typeKeys("7G3dd")
+    check other.shows == (5, 8, 2)
+
+  test "A line opened just above the top line comes into view":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 2)
+    e.typeKeys("7Gox<Esc>")
+    check other.shows == (7, 10, 2)
+
+  test "A line opened further up moves the top line down":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 2)
+    e.typeKeys("6Gox<Esc>")
+    check other.shows == (8, 10, 2)
+
+  test "A line split just above the top line leaves the top line":
+    let (e, other) = twoWindows()
+    other.place(9, 11, 1)
+    e.typeKeys("9G0lli<Enter><Esc>")
+    check other.shows == (9, 12, 1)
+
+  test "A split of the cursor's own line leaves the cursor on it":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 4)
+    e.typeKeys("10G0lli<Enter><Esc>")
+    check other.shows == (7, 9, 4)
+
+  test "A split at column 0 leaves the cursor on the line split":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 4)
+    e.typeKeys("10G0i<Enter><Esc>")
+    check other.shows == (7, 9, 4)
+
+  test "A split at column 0 just above the top line leaves the top line":
+    let (e, other) = twoWindows()
+    other.place(9, 11, 1)
+    e.typeKeys("9G0i<Enter><Esc>")
+    check other.shows == (9, 12, 1)
+
+  test "A charwise put at column 0 leaves the cursor on the line put into":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 4)
+    e.typeKeys("1G0lvjy10G0P")
+    check other.shows == (7, 9, 4)
+
+  test "A line opened above the cursor's line takes the cursor down":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 4)
+    e.typeKeys("10GOx<Esc>")
+    check other.shows == (7, 10, 4)
+
+  test "J takes the cursor along onto the joined line":
+    let (e, other) = twoWindows()
+    other.place(7, 10, 2)
+    e.typeKeys("10GJ")
+    check other.shows == (7, 9, 9)
+
+  test "Backspace joining lines takes the cursor along":
+    let (e, other) = twoWindows()
+    other.place(7, 10, 5)
+    e.typeKeys("11G0i<Backspace><Esc>")
+    check other.shows == (7, 9, 11)
+
+  test "A charwise delete over lines takes the cursor to where it began":
+    let (e, other) = twoWindows()
+    other.place(7, 10, 2)
+    e.typeKeys("10G0llvjjd")
+    check other.shows == (7, 9, 0)
+
+  test "A charwise delete over lines keeps the cursor on the text it joins":
+    # Vim 9.2 counts the deleted head twice and lands past the line (column 6).
+    let (e, other) = twoWindows()
+    other.place(7, 11, 4)
+    e.typeKeys("10G0llvjjd")
+    check other.shows == (7, 9, 3)
+
+  test "Deleting every line leaves the cursor and the top line at the top":
+    let (e, other) = twoWindows()
+    other.place(30, 35, 2)
+    e.typeKeys("ggdG")
+    check other.shows == (0, 0, 0)
+
+  test "Undoing a deletion moves the cursor back down":
+    let (e, other) = twoWindows()
+    e.typeKeys("10Gdd")
+    other.place(7, 9, 2)
+    e.typeKeys("u")
+    check other.shows == (7, 10, 2)
+
+  test "Undoing an opened line takes a cursor on it to the line above":
+    let (e, other) = twoWindows()
+    e.typeKeys("7Gox<Esc>")
+    other.place(7, 7, 0)
+    e.typeKeys("u")
+    check other.shows == (6, 6, 0)
+
+  test "Redoing a deletion moves the cursor as the deletion did":
+    let (e, other) = twoWindows()
+    e.typeKeys("10Gddu")
+    other.place(7, 9, 2)
+    e.typeKeys("<C-r>")
+    check other.shows == (7, 8, 0)
+
+  test "Undoing a join takes a cursor on the joined line to the line above":
+    let (e, other) = twoWindows()
+    e.typeKeys("10GJ")
+    other.place(7, 9, 9)
+    e.typeKeys("u")
+    check other.shows == (7, 8, 0)
+
+  test "Entering the window brings its cursor back onto a shortened line":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 4)
+    e.typeKeys("10GD")
+    check other.shows == (7, 9, 4)
+    e.focusWindow(1 - e.windowManager.activeWindowIndex)
+    check e.cursor == BufferPosition(line: 9, column: 0)
+
+  test "A viewer over the window puts it back where its text went":
+    let (e, other) = twoWindows()
+    let first = e.windowManager.activeWindowIndex
+    e.focusWindow(1 - first)
+    other.place(7, 9, 2)
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer)
+    check other.mode == EditorMode.Filer
+    e.focusWindow(first)
+    e.typeKeys("3G2dd")
+    e.focusWindow(1 - first)
+    discard e.processResult(HandlerResult(kind: hrFilerQuit), e.activeBuffer)
+    check other.mode == EditorMode.Normal
+    check other.shows == (5, 7, 2)
+
+  test "A viewer in the current window puts it back where its text went":
+    # Not the cursor of the command run, so an edit made meanwhile moves it.
+    let (e, other) = twoWindows()
+    let buf = e.activeBuffer
+    e.focusWindow(1 - e.windowManager.activeWindowIndex)
+    other.place(7, 9, 2)
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer)
+    check buf.deleteLine(2).isOk
+    discard e.processResult(HandlerResult(kind: hrFilerQuit), e.activeBuffer)
+    check other.shows == (6, 8, 2)
+
+  test "Entering the window keeps the column it wants past a shortened line":
+    let (e, _) = twoWindows()
+    e.typeKeys("<C-w>w9G04lj<C-w>w")
+    e.typeKeys("10GD<C-w>wj")
+    check e.cursor == BufferPosition(line: 10, column: 4)
+
+  test "The column a window left takes from its cursor stays past a shortened line":
+    # Vim's update_curswant takes it after the window's last command.
+    let (e, _) = twoWindows()
+    e.typeKeys("<C-w>w10G04l<C-w>w")
+    e.typeKeys("10GD<C-w>wj")
+    check e.cursor == BufferPosition(line: 10, column: 4)
+
+  test "A line deleted under the cursor keeps the column it wants":
+    let (e, _) = twoWindows()
+    e.typeKeys("<C-w>w10G04l<C-w>w")
+    e.typeKeys("10Gdd<C-w>wj")
+    check e.cursor == BufferPosition(line: 9, column: 4)
+
+  test "Entering the window to resume Insert leaves its cursor at the line end":
+    let (e, _) = twoWindows()
+    e.typeKeys("<C-w>w10G04l<C-w>w")
+    # Ctrl-o comes on another line, which Insert resuming leaves alone.
+    e.typeKeys("10G$a<Backspace><Backspace><Down><C-o><C-w>wX<Esc>")
+    check e.activeBuffer.getLine(9) == "lineX"
+
+  test "A line opened just above the top line shows from its first row":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 2)
+    other.viewport.topWrapOffset = 2
+    e.typeKeys("7Gox<Esc>")
+    check other.viewport.topWrapOffset == 0
+
+  test "A top line moved down keeps the row it shows from":
+    let (e, other) = twoWindows()
+    other.place(7, 9, 2)
+    other.viewport.topWrapOffset = 2
+    e.typeKeys("6Gox<Esc>")
+    check other.viewport.topWrapOffset == 2
+
+  test "Leaving a listing keeps no column for it":
+    let (e, other) = twoWindows()
+    let first = e.windowManager.activeWindowIndex
+    e.focusWindow(1 - first)
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer)
+    check other.mode == EditorMode.Filer
+    other.preferredColumn = -1
+    e.focusWindow(first)
+    check other.preferredColumn == -1
+
+  # Expected as Neovim 0.12's vim.lsp.util.apply_text_edits, which moves the
+  # other windows and the jumps as nvim_buf_set_text does. Neovim brings the
+  # column onto a shortened line at once; here entering the window does.
+  proc lspEdit(e: Editor, first, last: (int, int), text: string) =
+    check e.activeBuffer.applyTextEdits(
+      @[TextEdit(range: newRange(first[0], first[1], last[0], last[1]), newText: text)]
+    ).isOk
+
+  proc jumpsOn(e: Editor, lines: openArray[int]): seq[int] =
+    for line in lines:
+      e.typeKeys($(line + 1) & "G")
+    e.typeKeys("gg")
+    e.state.jumpList.list.mapIt(it.line)
+
+  test "Whole lines an LSP edit puts at column 0 take the cursor and jumps down":
+    let (e, other) = twoWindows()
+    let jumps = e.jumpsOn([9])
+    other.place(7, 9, 4)
+    e.lspEdit((9, 0), (9, 0), "import x\n")
+    check other.shows == (7, 10, 4)
+    check e.state.jumpList.list.mapIt(it.line) == jumps.mapIt(it + ord(it >= 9))
+
+  test "A line an LSP edit rewrites keeps the cursor and the jumps on it":
+    let (e, other) = twoWindows()
+    let jumps = e.jumpsOn([9, 10, 11])
+    other.place(7, 9, 4)
+    e.lspEdit((9, 0), (10, 0), "bar\n")
+    check other.shows == (7, 9, 4)
+    check e.state.jumpList.list.mapIt(it.line) == jumps
+    e.focusWindow(1 - e.windowManager.activeWindowIndex)
+    check e.cursor == BufferPosition(line: 9, column: 2)
+
+  test "The line after a span an LSP edit rewrites moves with its text":
+    let (e, other) = twoWindows()
+    other.place(10, 10, 2)
+    e.lspEdit((9, 0), (10, 0), "a\nb\nc\n")
+    check other.shows == (12, 12, 2)
+
+  test "A top line an LSP edit rewrites into more lines stays":
+    let (e, other) = twoWindows()
+    other.place(9, 14, 1)
+    e.lspEdit((9, 0), (10, 0), "a\nb\nc\n")
+    check other.shows == (9, 16, 1)
+
+  test "Lines an LSP edit deletes take the cursor to the start of the span":
+    for (line, column) in [(9, 5), (10, 2), (11, 2)]:
+      let (e, other) = twoWindows()
+      other.place(7, line, column)
+      e.lspEdit((9, 0), (12, 0), "")
+      check other.shows == (7, 9, 0)
+
+  test "The line after lines an LSP edit deletes keeps its column":
+    let (e, other) = twoWindows()
+    other.place(7, 12, 2)
+    e.lspEdit((9, 0), (12, 0), "")
+    check other.shows == (7, 9, 2)
+
+  test "A top line an LSP edit deletes gives way to the line above":
+    for top in [9, 10, 11]:
+      let (e, other) = twoWindows()
+      other.place(top, 14, 1)
+      e.lspEdit((9, 0), (12, 0), "")
+      check other.shows == (8, 11, 1)
+    let (e, other) = twoWindows()
+    other.place(12, 14, 1)
+    e.lspEdit((9, 0), (12, 0), "")
+    check other.shows == (9, 11, 1)
+
+  test "Jumps on lines an LSP edit deletes go to the start of the span":
+    let (e, _) = twoWindows()
+    let jumps = e.jumpsOn([9, 10, 11, 12, 13])
+    e.lspEdit((9, 0), (12, 0), "")
+    check e.state.jumpList.list.mapIt(it.line) ==
+      jumps.mapIt(
+        if it in 9 .. 11:
+          9
+        elif it >= 12:
+          it - 3
+        else:
+          it
+      )
+
+  test "A cursor in a span an LSP edit replaces stays in the new text, after it moves with it":
+    for (place, shown) in [
+      ((9, 1), (9, 1)),
+      ((9, 5), (9, 3)),
+      ((10, 1), (9, 3)),
+      ((11, 2), (9, 3)),
+      ((11, 3), (9, 4)),
+      ((11, 5), (9, 6)),
+    ]:
+      let (e, other) = twoWindows()
+      other.place(7, place[0], place[1])
+      e.lspEdit((9, 2), (11, 3), "XY")
+      check other.shows == (7, shown[0], shown[1])
+
+  test "A charwise delete from column 0 keeps the cursor on the line it starts on":
+    # Unlike an LSP edit: Vim 9.2's op_delete truncates that line.
+    let (e, other) = twoWindows()
+    other.place(7, 9, 5)
+    e.typeKeys("10G0vjj$d")
+    check other.shows == (7, 9, 5)
+
+  test "A top line in rows an LSP edit drops stays on the rows that replace them":
+    # Neovim leaves it on 13 for its cursor to bring back, which a window
+    # scrolled away from its cursor never does here.
+    let (e, other) = twoWindows()
+    other.place(13, 20, 1)
+    e.lspEdit((9, 0), (14, 0), "a\nb\n")
+    check other.shows == (11, 17, 1)
+
+  test "A top line stays in the text an LSP edit rewrites into fewer lines":
+    let (e, other) = twoWindows()
+    other.place(30, 35, 2)
+    e.lspEdit((0, 0), (39, 6), "x\n".repeat(19) & "x")
+    check e.activeBuffer.len == 20
+    check other.shows == (19, 19, 0)
+
+  test "LSP edits rolled back move no window and no jump":
+    let (e, other) = twoWindows()
+    let jumps = e.jumpsOn([21, 22])
+    other.place(19, 21, 5)
+    # Applied back to front: the line 6 edit ends past its line, after the
+    # deletion is in.
+    check e.activeBuffer.applyTextEdits(
+      @[
+        TextEdit(range: newRange(20, 0, 23, 0), newText: ""),
+        TextEdit(range: newRange(5, 0, 5, 99), newText: "x"),
+      ]
+    ).isErr
+    check e.activeBuffer.getLine(21) == "line22"
+    check other.shows == (19, 21, 5)
+    check e.state.jumpList.list.mapIt(it.line) == jumps
+    # Nor do failed edits keep later ones from moving it.
+    check e.activeBuffer.replaceSpan(
+      BufferPosition(line: -1, column: 0), BufferPosition(line: 0, column: 0), "x"
+    ).isErr
+    e.typeKeys("3G2dd")
+    check other.shows == (17, 19, 5)
+
+  test "LSP edits rolled back by the transaction they joined move no window and no jump":
+    # As a workspace edit applies them: the buffer's own transaction rolls
+    # back what they put in, after they have moved the windows and jumps.
+    let (e, other) = twoWindows()
+    let jumps = e.jumpsOn([21, 22])
+    other.place(19, 21, 5)
+    let buffer = e.activeBuffer
+    var failed = false
+    try:
+      let rolledBack = withTransaction(buffer, "workspace edit"):
+        var applied: seq[TextEdit]
+        let r = buffer.applyTextEdits(
+          @[
+            TextEdit(range: newRange(20, 0, 23, 0), newText: ""),
+            TextEdit(range: newRange(5, 0, 5, 99), newText: "x"),
+          ],
+          applied,
+          discloseJoined = false,
+        )
+        if r.isErr:
+          raise newException(ValueError, r.error)
+      discard rolledBack
+    except ValueError:
+      failed = true
+    check failed
+    check buffer.getLine(21) == "line22"
+    check other.shows == (19, 21, 5)
+    check e.state.jumpList.list.mapIt(it.line) == jumps
+
+  test "A rolled back command moves no window back off its line":
+    # Undo would leave a cursor deleted with its line on the line above.
+    let (e, other) = twoWindows()
+    other.place(7, 9, 2)
+    let buffer = e.activeBuffer
+    check buffer.beginTransaction("delete").isOk
+    for i in countdown(10, 8):
+      check buffer.deleteLine(i).isOk
+    check other.shows == (7, 7, 0)
+    check buffer.rollbackTransaction().isOk
+    check other.shows == (7, 9, 2)
+
+  test "An LSP edit moves the last Visual area as the jumps":
+    # Neovim's nvim_buf_set_text moves '< and '> as it moves the jumps, by
+    # rows across the span replaced as a whole.
+    let (e, _) = twoWindows()
+    let jumps = e.jumpsOn([14, 15])
+    e.activeBuffer.lastVisual = some(
+      VisualArea(
+        start: BufferPosition(line: 14, column: 5),
+        cursor: BufferPosition(line: 15, column: 1),
+        kind: vskChar,
+      )
+    )
+    e.lspEdit((10, 3), (14, 2), "X\nY")
+    let area = e.activeBuffer.lastVisual.get
+    check (area.start, area.cursor) ==
+      (BufferPosition(line: 11, column: 5), BufferPosition(line: 12, column: 1))
+    check e.state.jumpList.list.mapIt(it.line) ==
+      jumps.mapIt(
+        if it >= 14:
+          it - 3
+        else:
+          it
+      )
+
+  test "A viewer over the window puts it back above its deleted line":
+    let (e, other) = twoWindows()
+    let first = e.windowManager.activeWindowIndex
+    e.focusWindow(1 - first)
+    other.place(7, 9, 2)
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer)
+    e.focusWindow(first)
+    e.typeKeys("10Gdd")
+    e.focusWindow(1 - first)
+    discard e.processResult(HandlerResult(kind: hrFilerQuit), e.activeBuffer)
+    check other.shows == (7, 8, 0)

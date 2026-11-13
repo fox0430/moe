@@ -631,6 +631,39 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
 
   return ok(())
 
+proc replaceSpan*(
+    b: TextBuffer, first, last: BufferPosition, text: string
+): Result[(), string] =
+  ## Replace the text from `first` up to `last` (exclusive) with `text`, as
+  ## Neovim's nvim_buf_set_text does for an API edit: the windows and jumps on
+  ## the buffer follow the span replaced as a whole.
+  var replaced = SpanEdit(start: first, oldEnd: first, newEnd: first)
+  b.replacingSpan(replaced):
+    if first < last:
+      let lastIn =
+        if last.column > 0:
+          BufferPosition(line: last.line, column: last.column - 1)
+        else:
+          # The line break before `last`, which a column past the line covers.
+          let
+            above = last.line - 1
+            column =
+              if above in 0 ..< b.len:
+                b.getLine(above).charLen
+              else:
+                0
+          BufferPosition(line: above, column: column)
+      let deleted = b.deleteRange(first, lastIn)
+      if deleted.isErr:
+        return err("Failed to delete range: " & deleted.error)
+      replaced.oldEnd = last
+    if text.len > 0:
+      let inserted = b.insertTextEnd(first, text)
+      if inserted.isErr:
+        return err("Failed to insert text: " & inserted.error)
+      replaced.newEnd = inserted.get.insertEnd
+  ok(())
+
 proc splitLine*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
   ## Split line at the specified position by inserting a newline
   ## Returns error if position is out of bounds

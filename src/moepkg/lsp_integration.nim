@@ -1692,58 +1692,32 @@ proc applyTextEdits*(
           lspEndPos.character < edit.range.start.character
         )
 
-      # Delete the range if it's not empty
+      # Where the range ends in the buffer, exclusive; at its start when it is
+      # empty or malformed.
+      var endPos = startPos
       if not isEmptyRange and not isMalformedRange:
-        # Convert LSP exclusive end to buffer inclusive end
-        var adjustedEndPos: BufferPosition
-
-        # Get end line text for UTF-16 conversion
-        let endLineText =
-          if lspEndPos.line >= 0 and lspEndPos.line < buffer.len:
-            buffer.getLine(lspEndPos.line)
-          else:
-            ""
-
-        if lspEndPos.character > 0:
-          # Convert UTF-16 to a rune index and decrement by one rune for the
-          # inclusive end
-          if lspEndPos.line >= buffer.len:
-            # End points past EOF: clamp to end of last line
-            let last = buffer.len - 1
-            adjustedEndPos =
-              BufferPosition(line: last, column: buffer.getLine(last).charLen)
-          else:
-            let (endRune, endUtf16Walked) =
-              utf16OffsetToChar(endLineText, lspEndPos.character)
-            if endUtf16Walked < lspEndPos.character:
-              failEdit(
-                "Invalid edit range: end position (line " & $lspEndPos.line &
-                  ", character " & $lspEndPos.character & ") is past the end of its line"
-              )
-            adjustedEndPos =
-              BufferPosition(line: lspEndPos.line, column: max(endRune - 1, 0))
+        if lspEndPos.line >= buffer.len:
+          # End points past EOF: clamp to end of last line
+          let last = buffer.len - 1
+          endPos = BufferPosition(line: last, column: buffer.getLine(last).charLen)
         else:
-          # End is at start of a line (character == 0)
-          # Need to point to end of previous line to include the newline
-          # lspEndPos.line > 0 here: isMalformedRange rejected end at (0,0).
-          let prevIdx = min(lspEndPos.line - 1, buffer.len - 1)
-          adjustedEndPos =
-            BufferPosition(line: prevIdx, column: buffer.getLine(prevIdx).charLen)
+          let endLineText =
+            if lspEndPos.line >= 0:
+              buffer.getLine(lspEndPos.line)
+            else:
+              ""
+          let (endRune, endUtf16Walked) =
+            utf16OffsetToChar(endLineText, lspEndPos.character)
+          if endUtf16Walked < lspEndPos.character:
+            failEdit(
+              "Invalid edit range: end position (line " & $lspEndPos.line &
+                ", character " & $lspEndPos.character & ") is past the end of its line"
+            )
+          endPos = BufferPosition(line: lspEndPos.line, column: endRune)
 
-        # Only delete if we have a valid range
-        if startPos.line < adjustedEndPos.line or (
-          startPos.line == adjustedEndPos.line and
-          startPos.column <= adjustedEndPos.column
-        ):
-          let deleteResult = buffer.deleteRange(startPos, adjustedEndPos)
-          if deleteResult.isErr:
-            failEdit("Failed to delete range: " & deleteResult.error)
-
-      # Insert the new text if not empty
-      if edit.newText.len > 0:
-        let insertResult = buffer.insertText(startPos, edit.newText)
-        if insertResult.isErr:
-          failEdit("Failed to insert text: " & insertResult.error)
+      let replaced = buffer.replaceSpan(startPos, endPos, edit.newText)
+      if replaced.isErr:
+        failEdit(replaced.error)
 
       appliedEdits.add(edit)
 

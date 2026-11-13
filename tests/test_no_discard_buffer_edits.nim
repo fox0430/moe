@@ -40,9 +40,9 @@ const
     "insertText", "insertTextEnd", "deleteChar", "insert", "deleteLine", "deleteRange",
     "replaceLine", "replaceLines", "replaceLineSpans", "deleteAllLines", "splitLine",
     "joinLines", "joinWithNextLine", "transformRange", "replaceWholeLines",
-    "replaceAllLines", "beginTransaction", "commitTransaction", "rollbackTransaction",
-    "withTransaction", "withTransactionForInsert", "deleteBlockSelection",
-    "deleteLineSelection", "undo", "redo", "putText",
+    "replaceSpan", "replaceAllLines", "beginTransaction", "commitTransaction",
+    "rollbackTransaction", "withTransaction", "withTransactionForInsert",
+    "deleteBlockSelection", "deleteLineSelection", "undo", "redo", "putText",
   ].toHashSet
 
   ## Intentional discards that cannot propagate. Keyed by (path suffix,
