@@ -125,18 +125,27 @@ proc columnAtCell*(text: string, cell, tabStop: int, mode: EditorMode): int =
     return last
   min(screenXToCharIndex(text, 0, cell, tabStop), last)
 
-proc cursorCell*(s: EditorState): int =
-  ## The cell vertical moves take from the cursor (`aimsAtTabEnd` on a tab,
-  ## `aimInFold` in a closed fold), as Vim's w_virtcol.
-  let win = s.activeWindow
+proc cursorCell(win: EditorWindow, tabStop: int): int =
   if win.buffer.isNil or win.cursor.line notin 0 ..< win.buffer.len:
     return win.cursor.column
   let inFold = win.aimInFold
   if inFold.isSome:
     return inFold.get
   win.buffer.getLine(win.cursor.line).cursorCell(
-    win.cursor.column, s.tabStop, win.aimsAtTabEnd
+    win.cursor.column, tabStop, win.aimsAtTabEnd
   )
+
+proc cursorCell*(s: EditorState): int =
+  ## The cell vertical moves take from the cursor (`aimsAtTabEnd` on a tab,
+  ## `aimInFold` in a closed fold), as Vim's w_virtcol.
+  s.activeWindow.cursorCell(s.tabStop)
+
+proc keepAim*(win: EditorWindow, tabStop: int) =
+  ## Keep the column vertical moves from `win` aim for as it is left, as Vim's
+  ## update_curswant takes it after each command in the window: edits from
+  ## other windows that move its cursor or change its line keep it.
+  if win.preferredColumn < 0:
+    win.preferredColumn = win.cursorCell(tabStop)
 
 proc aim*(s: EditorState): WantedColumn =
   ## The column vertical moves and scrolls aim for, with the screen cell gj

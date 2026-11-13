@@ -60,7 +60,7 @@ func undoFollowers(change: BufferChange): set[EditFollower] =
   if change.kind == ckSnapshot:
     {efDiagnostics}
   else:
-    AllFollowers - {efLineArrays, efSemantic, efLastVisual, efJumps}
+    AllFollowers - {efLineArrays, efSemantic, efLastVisual, efRowsMoved}
 
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Apply the inverse of a single change (internal helper)
@@ -218,6 +218,7 @@ proc beginTransaction*(
     return err("Transaction already in progress: " & currentDesc)
 
   b.captureSnapshotIfNeeded()
+  b.forgetSavedRows()
   b.inTransaction = true
   b.currentTransaction = some(
     BufferTransaction(
@@ -242,6 +243,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
   var transaction = move(b.currentTransaction.get)
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
+  b.forgetSavedRows()
 
   # Add transaction as a single undo entry if it has changes
   if transaction.changes.len > 0:
@@ -401,56 +403,56 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
   if not b.inTransaction or b.currentTransaction.isNone:
     return err("No transaction in progress")
 
-  # Undo all changes in transaction in reverse order. Moved out rather than
-  # copied: every exit path below clears currentTransaction anyway.
-  let transaction = move(b.currentTransaction.get)
+  b.rollingBackRows:
+    # Undo all changes in transaction in reverse order. Moved out rather than
+    # copied: every exit path below clears currentTransaction anyway.
+    let transaction = move(b.currentTransaction.get)
 
-  if b.pendingSnapshot.isSome:
-    # PieceTable: O(1) restore from snapshot
-    b.storage.pieceTable.restoreSnapshot(b.pendingSnapshot.get)
-    b.lineMarkers = b.pendingSnapshotMarkers
-    b.modifiedLines = b.pendingSnapshotModifiedLines
-    b.foldState = b.pendingSnapshotFolds
-    b.namedMarks = b.pendingSnapshotNamedMarks
-    b.bookmarks = b.pendingSnapshotBookmarks
-    b.followBack(b.pendingSnapshotEdits, {efDiagnostics})
-    b.restoreRows(b.pendingSnapshotRows, undone = true)
-  else:
-    for i in countdown(transaction.changes.len - 1, 0):
-      let r = b.undoChange(transaction.changes[i])
-      if r.isErr:
-        # Clean up transaction state even if rollback partially fails
-        b.lastVisual = transaction.lastVisualBefore
-        b.inTransaction = false
-        b.currentTransaction = none(BufferTransaction)
-        b.discardPendingSnapshot()
-        return err("Failed to rollback transaction: " & r.error)
-  b.lastVisual = transaction.lastVisualBefore
-
-  # Drop every pending-snapshot artifact, matching the commit path, so a later
-  # capture/edit never reuses a stale pre-transaction base. Required for the
-  # non-PieceTable backends too: beginTransaction captured the hasPending*
-  # flags, and a zero-change rollback must clear them or the next
-  # pushUndoChange attaches a stale pre-mutation snapshot.
-  b.discardPendingSnapshot()
-
-  # Restore changeSeq to its value at transaction start
-  b.changeSeq = transaction.startSeq
-  b.advanceContentVersion()
-
-  # Mark highlight as needing update after rollback
-  if transaction.changes.len > 0:
-    var minLine = int.high
-    for change in transaction.changes:
-      minLine = min(minLine, getChangePosition(change).line)
-    if minLine != int.high:
-      b.markLineChanged(minLine)
+    if b.pendingSnapshot.isSome:
+      # PieceTable: O(1) restore from snapshot
+      b.storage.pieceTable.restoreSnapshot(b.pendingSnapshot.get)
+      b.lineMarkers = b.pendingSnapshotMarkers
+      b.modifiedLines = b.pendingSnapshotModifiedLines
+      b.foldState = b.pendingSnapshotFolds
+      b.namedMarks = b.pendingSnapshotNamedMarks
+      b.bookmarks = b.pendingSnapshotBookmarks
+      b.followBack(b.pendingSnapshotEdits, {efDiagnostics})
     else:
-      b.highlightNeedsUpdate = true
+      for i in countdown(transaction.changes.len - 1, 0):
+        let r = b.undoChange(transaction.changes[i])
+        if r.isErr:
+          # Clean up transaction state even if rollback partially fails
+          b.lastVisual = transaction.lastVisualBefore
+          b.inTransaction = false
+          b.currentTransaction = none(BufferTransaction)
+          b.discardPendingSnapshot()
+          return err("Failed to rollback transaction: " & r.error)
+    b.lastVisual = transaction.lastVisualBefore
 
-  b.inTransaction = false
-  b.currentTransaction = none(BufferTransaction)
-  return ok(())
+    # Drop every pending-snapshot artifact, matching the commit path, so a later
+    # capture/edit never reuses a stale pre-transaction base. Required for the
+    # non-PieceTable backends too: beginTransaction captured the hasPending*
+    # flags, and a zero-change rollback must clear them or the next
+    # pushUndoChange attaches a stale pre-mutation snapshot.
+    b.discardPendingSnapshot()
+
+    # Restore changeSeq to its value at transaction start
+    b.changeSeq = transaction.startSeq
+    b.advanceContentVersion()
+
+    # Mark highlight as needing update after rollback
+    if transaction.changes.len > 0:
+      var minLine = int.high
+      for change in transaction.changes:
+        minLine = min(minLine, getChangePosition(change).line)
+      if minLine != int.high:
+        b.markLineChanged(minLine)
+      else:
+        b.highlightNeedsUpdate = true
+
+    b.inTransaction = false
+    b.currentTransaction = none(BufferTransaction)
+    return ok(())
 
 proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   ## Undo the last 'count' changes (or all changes in a transaction group)

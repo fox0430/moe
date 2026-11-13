@@ -924,18 +924,20 @@ suite "Split viewer - a split made from a listing starts where the tab was":
     e.activeWindow.cursor = BufferPosition(line: 1, column: 4)
     let (helpWin, _) = e.openHelp()
     helpWin.cursor = BufferPosition(line: 40, column: 3)
-    require fileBuf.replaceAllLines(["ab"]).isOk
+    # The line stays, shorter: a line the edit took away would move the
+    # position with the text instead.
+    require fileBuf.replaceAllLines(["line0", "ab"]).isOk
 
     e.run(HandlerResult(kind: hrVSplit))
 
     let dupWin = e.activeWindow
     require dupWin != helpWin
     # Normal: on the last character, not past it.
-    check dupWin.viewerEntry.get.originCursor == BufferPosition(line: 0, column: 1)
+    check dupWin.viewerEntry.get.originCursor == BufferPosition(line: 1, column: 1)
     e.run(HandlerResult(kind: hrOnlyWindow))
     e.run(HandlerResult(kind: hrHelpViewerQuit))
     e.checkOnTab(dupWin, fileBuf)
-    check dupWin.cursor == BufferPosition(line: 0, column: 1)
+    check dupWin.cursor == BufferPosition(line: 1, column: 1)
 
   test "a viewer split after its tab moved starts at the fallback position":
     # splitOrigin falls back when the window left its returnTab: :bd elsewhere

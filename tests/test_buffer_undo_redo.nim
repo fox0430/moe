@@ -1991,7 +1991,11 @@ suite "Buffer - rows moved hook":
     held[] = line
     b.setRowsMovedHook(
       proc(b: TextBuffer, move: RowMove) =
-        held[] = held[].moved(move)
+        held[] = held[].moved(move),
+      proc(b: TextBuffer): BufferRowsRestore =
+        let saved = held[]
+        proc() =
+          held[] = saved,
     )
     held
 
@@ -2017,6 +2021,26 @@ suite "Buffer - rows moved hook":
       check b.redo().isOk
       check held[] == 5
 
+    test $backend & ": a split at column 0 leaves it on the line split, as open_line":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5")
+      let held = b.holdLine(3)
+
+      check b.insertText(BufferPosition(line: 3, column: 0), "x\n").isOk
+      check held[] == 3
+
+    test $backend & ": a line opened above it moves it down":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5")
+      let held = b.holdLine(3)
+
+      check b.insertText(BufferPosition(line: 3, column: 0), "x\n", olAbove).isOk
+      check held[] == 4
+
     test $backend & ": a rolled back transaction moves it back":
       setConfiguredBackend(backend)
       defer:
@@ -2030,6 +2054,69 @@ suite "Buffer - rows moved hook":
       check held[] == 5
       check b.rollbackTransaction().isOk
       check held[] == 7
+
+    test $backend & ": a rolled back transaction puts back a line it deleted":
+      # Undo would take it past the rows put back; a rollback leaves the text
+      # as it found it, so it leaves the line there too.
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+      let held = b.holdLine(3)
+
+      discard b.beginTransaction("delete lines")
+      for i in countdown(4, 2):
+        check b.deleteLine(i).isOk
+      check held[] == 2
+      check b.rollbackTransaction().isOk
+      check held[] == 3
+
+    test $backend & ": a rollback after the hook is taken off puts nothing back":
+      # As a buffer deleted from the editor: what was saved must not reach
+      # back into it.
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+      let held = b.holdLine(7)
+
+      discard b.beginTransaction("delete lines")
+      check b.deleteLine(3).isOk
+      check held[] == 6
+      b.setRowsMovedHook(nil, nil)
+      check b.rollbackTransaction().isOk
+      check held[] == 6
+
+    test $backend & ": a rollback after the hook is replaced puts nothing back":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+      let old = b.holdLine(7)
+
+      discard b.beginTransaction("delete lines")
+      check b.deleteLine(3).isOk
+      check old[] == 6
+      let replacing = b.holdLine(2)
+      check b.rollbackTransaction().isOk
+      check old[] == 6
+      check replacing[] == 2
+
+    test $backend & ": a committed transaction keeps the moves":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+      let held = b.holdLine(7)
+
+      b.deleteLines(2, 3)
+      check held[] == 5
+      # Nothing saved for this transaction is put back by the next one's
+      # rollback.
+      discard b.beginTransaction("insert")
+      check b.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+      check b.rollbackTransaction().isOk
+      check held[] == 5
 
     test $backend & ": a deleted line goes to their start, and undo moves it past them":
       setConfiguredBackend(backend)

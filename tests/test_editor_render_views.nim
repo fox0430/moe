@@ -852,12 +852,14 @@ suite "renderSplitView - Viewport adjustment":
     let
       backgroundIndex = if e.windowManager.activeWindowIndex == 0: 1 else: 0
       backgroundWindow = e.windowManager.windows[backgroundIndex]
-    backgroundWindow.viewport.topLine = 60
-    backgroundWindow.viewport.topWrapOffset = 12
-    backgroundWindow.viewport.detachedFromCursor = true
 
     while e.activeBuffer.len > 6:
       discard e.activeBuffer.deleteLine(e.activeBuffer.len - 1)
+    # The deletions take the top line along, so it is put past the end after
+    # them, as a change no edit reports leaves it.
+    backgroundWindow.viewport.topLine = 60
+    backgroundWindow.viewport.topWrapOffset = 12
+    backgroundWindow.viewport.detachedFromCursor = true
     let lastWrapOffset =
       calculateWrapCount(
         $backgroundWindow.buffer.getLine(5), e.wrapWidth(backgroundWindow), e.tabStop

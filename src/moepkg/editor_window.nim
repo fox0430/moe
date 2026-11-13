@@ -40,6 +40,7 @@ import
   git_conflict,
   window_manager,
   motion,
+  wanted_column,
   buffer
 from config_mode import endKeyInput, isEditing
 
@@ -57,21 +58,40 @@ proc saveActiveWindowState*(e: Editor) =
     if e.state.hasOverlay:
       e.activeWindow.mode = e.state.baseMode
 
-proc syncActiveWindow*(e: Editor) =
+proc checkEnteredCursor(e: Editor, win: EditorWindow) =
+  ## Bring the cursor of `win`, just entered, back onto its text, as Vim's
+  ## win_enter checks it: an edit from another window may have left it past
+  ## the end of its line. With Insert to resume after Ctrl-o it may rest just
+  ## past the end, as Vim's restart_edit lets it.
+  if win.modeState.kind == mskNone and not win.buffer.isNil:
+    let clamped = e.motionController.cursorManager.clampPosition(
+      CursorPosition(x: win.cursor.column, y: win.cursor.line),
+      win.buffer,
+      some(if e.state.resumesInsert: EditorMode.Insert else: win.mode),
+    )
+    win.moveCursorKeepingWanted(BufferPosition(line: clamped.y, column: clamped.x))
+
+proc syncActiveWindow*(e: Editor, checkCursor = true) =
   ## Refresh editor-level caches after the active window changes.
   ## The per-window buffer/viewport/wrapCountCache that the executor caches are
   ## re-aliased in a single place via `bindToWindow`, so split / navigation /
-  ## close / resize paths only have to call this hook.
+  ## close / resize paths only have to call this hook. Without `checkCursor`,
+  ## the cursor of a window entered is taken as it is, as one split off has
+  ## the cursor of the window split.
   let left = e.state.activeWindow
   if left != nil and left != e.activeWindow:
     # Visual lives only in the focused window, as in Vim: nothing would move
     # the anchor of a window left behind when another one edits its text.
     left.leaveVisual()
+    if left.modeState.kind == mskNone:
+      left.keepAim(e.state.tabStop)
     if left.modeState.kind == mskConfig:
       if left.modeState.config.isEditing():
         e.state.statusMessage = "Left the Config window; the edit was cancelled"
       left.modeState.config.endKeyInput()
   e.state.activeWindow = e.activeWindow
+  if checkCursor and left != e.activeWindow:
+    e.checkEnteredCursor(e.activeWindow)
   e.motionController.bindToWindow(e.activeWindow)
   # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that
   # window-switch / split / close paths automatically refresh the Jump List
@@ -244,7 +264,7 @@ proc startSplitWindow(e: Editor, newWindow, origin: EditorWindow) =
   let anotherTab = newWindow.tabBufferId != origin.tabBufferId
   if anotherTab:
     e.placeInTab(newWindow, e.tabBuffer(newWindow))
-  e.syncActiveWindow()
+  e.syncActiveWindow(checkCursor = false)
   e.deriveTabMode(newWindow)
   newWindow.previousMode = EditorMode.Normal
   if anotherTab:
