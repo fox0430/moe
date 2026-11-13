@@ -196,6 +196,10 @@ Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md
 
 [Documents (Ncurses base)](https://github.com/fox0430/moe/tree/v0.4.0/documents)
 
+Links inside the Ncurses base documents go to the develop branch, which
+describes the Celina base. Use them with the
+[v0.4.0 example configuration](https://github.com/fox0430/moe/tree/v0.4.0/example).
+
 ### Embedding Moe
 
 Build non-terminal frontends with `-d:moe.embedded` and import
@@ -206,6 +210,9 @@ PTY backend from the build, and imports only Celina's platform-neutral value
 types instead of its POSIX terminal runtime. The embedding frontend owns the
 native clipboard and terminal UI; terminal commands report that the mode is
 unavailable.
+
+See [Git updates in embedding frontends](https://github.com/fox0430/moe/blob/develop/documents/embedding-git.md)
+for how Moe and the host share Git status work.
 
 ## The origin of the name
 moe is a recursive acronym for "moe is an optimal editor".

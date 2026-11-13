@@ -10,6 +10,6 @@
 
 [Language Server Protocol](lsp.md)
 
-[Git updates in embedding frontends](embedding-git.md)
-
 [Developer](developer.md)
+
+[Git updates in embedding frontends](embedding-git.md)

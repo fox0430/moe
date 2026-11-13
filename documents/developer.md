@@ -78,6 +78,9 @@ Host-owned errors still abort replay; the host only owns their presentation.
 are consumed, so dispatch can detect a new request when the filter drains
 earlier requests during the same call.
 
+For Git status in embedding frontends, see
+[Git updates in embedding frontends](embedding-git.md).
+
 ## Code formatting
 
 The repository is formatted with [`nph`](https://github.com/arnetheduck/nph). CI fails if `src/` or `tests/` is not formatted:
