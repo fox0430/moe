@@ -7,7 +7,7 @@ The location is
 ~/.config/moe/moerc.toml
 ```
 
-You can use the [example](../example)
+You can use the [example](../example/moerc.toml).
 
 ## Configuration Items
 

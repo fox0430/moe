@@ -196,9 +196,10 @@ Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md
 
 [Documents (Ncurses base)](https://github.com/fox0430/moe/tree/v0.4.0/documents)
 
-Links inside the Ncurses base documents go to the develop branch, which
-describes the Celina base. Use them with the
-[v0.4.0 example configuration](https://github.com/fox0430/moe/tree/v0.4.0/example).
+The index.md and configfile.md in the Ncurses base documents link to the
+develop branch, which describes the Celina base. Open the files from the list
+above instead, and use the
+[v0.4.0 example configuration](https://github.com/fox0430/moe/blob/v0.4.0/example/moerc.toml).
 
 ### Embedding Moe
 
