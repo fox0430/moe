@@ -124,7 +124,10 @@ proc halfPage*(
     vimTop = top
   result.top = top
   if forward:
-    let left = rl.rowsToEnd(top, height + scrolled)
+    var left = rl.rowsToEnd(top, height + scrolled)
+    if rl.buffer.foldEnd(top.line) > top.line:
+      # Vim's pagescroll counts a closed fold on top twice.
+      inc left
     if left < height + scrolled:
       scrolled = left - height
   if scrolled > 0:

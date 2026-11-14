@@ -30,10 +30,16 @@ import ../src/moepkg/types/config_types
 
 const Height = 17
 
-proc numbered(count: int): TextBuffer =
+proc numbered(count: int, longLine = -1): TextBuffer =
+  ## The line at 0-based `longLine` is 100 cells wide.
   var lines: seq[string]
   for i in 1 .. count:
-    lines.add "line " & $i
+    lines.add(
+      if i - 1 == longLine:
+        "x".repeat(100)
+      else:
+        "line " & $i
+    )
   newTextBuffer(lines.join("\n"))
 
 proc longEvery(count, every, width: int): TextBuffer =
@@ -108,10 +114,10 @@ suite "page - without wrap":
     check rl.page((0, 0), at(5), Height, 1, false).check((0, 0), 5, moved = false)
 
 suite "page scrolls over a closed fold":
-  proc folded(first, last: int): RowLayout =
-    let buf = numbered(200)
+  proc folded(first, last: int, count = 200, longLine = -1, wrap = false): RowLayout =
+    let buf = numbered(count, longLine)
     check buf.foldState.addFold(first, last)
-    buf.noWrap
+    if wrap: buf.wrapped else: buf.noWrap
 
   test "it is one row":
     check folded(4, 9).halfPage((0, 0), at(0), Height, 8, true).check((13, 0), 13)
@@ -121,6 +127,22 @@ suite "page scrolls over a closed fold":
       scroll = rl.halfPage(scroll.top, at(scroll.cursorLine), Height, 8, true)
     check scroll.check((29, 0), 29)
     check folded(4, 9).page((0, 0), at(0), Height, 1, true).check((20, 0), 20)
+
+  test "Ctrl-D near the end counts a fold on top as two rows, as Vim":
+    check folded(4, 9, 30).halfPage((4, 0), at(4), Height, 8, true).check((14, 0), 17)
+    check folded(14, 19, 40).halfPage((14, 0), at(14), Height, 8, true).check(
+      (24, 0), 27
+    )
+    check folded(4, 9, 30, longLine = 4, wrap = true)
+      .halfPage((4, 0), at(4), Height, 8, true)
+      .check((14, 0), 17)
+
+  test "Ctrl-D counts a fold lower in the window once, and one on top far from the end as one row":
+    check folded(10, 15, 30).halfPage((4, 0), at(4), Height, 8, true).check((8, 0), 17)
+    check folded(4, 9, 60).halfPage((4, 0), at(4), Height, 8, true).check((17, 0), 17)
+
+  test "a one-line fold on top counts as one row":
+    check folded(4, 4, 22).halfPage((4, 0), at(4), Height, 8, true).check((5, 0), 12)
 
   test "a page keeps the lines below it":
     check folded(14, 24).page((0, 0), at(0), Height, 1, true).check((25, 0), 25)
