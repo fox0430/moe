@@ -91,7 +91,7 @@ jobs:
       # revision-pinned packages when their generated path contains '#'.
       - name: Update Nimble for revision-pinned dependencies
         if: matrix.nim-version == '2.0.10'
-        run: nimble install 'nimble@0.24.1' -y
+        run: nimble install 'nimble@0.24.1' -y --noLockFile
 
       # nimble.lock pins nim; build with the matrix's Nim instead.
       - run: nimble build -y --useSystemNim
