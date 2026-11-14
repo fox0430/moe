@@ -1024,3 +1024,129 @@ suite "BufWritePre - which writes run it":
     check saved.isOk
     check saved.get.warnings.len == 1
     check "exited with 2: parse error at 1:1" in saved.get.warnings[0]
+
+proc setupOn(
+    backend: BufferBackendKind, name, content: string, entries: seq[HookEntry]
+): (Editor, string, string) =
+  ## An editor on `backend` with `content` open and `entries` as its hooks.
+  let dir = testDir(name)
+  let path = dir / "a.txt"
+  var config = newEditorConfig()
+  config.bufferBackend = BufferBackendConfig(kind: backend)
+  let editor = newEditor(config)
+  editor.openInEditor(path, content)
+  editor.config.hooks.entries = entries
+  (editor, dir, path)
+
+template oneUndoScenarios(backend: BufferBackendKind, tag: string) =
+  ## As Vim takes back what one write's autocommands did with one `u`.
+
+  test "The entries and the trim come back with one undo" & tag:
+    let (editor, dir, path) = setupOn(
+      backend, "one_undo", "b  \na\n", @[writePre("sort"), writePreEx("%s/a/x/")]
+    )
+    defer:
+      removeDir(dir)
+    let buf = editor.activeBuffer
+    buf.editorConfig = some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
+    check buf.insertText(BufferPosition(line: 1, column: 1), "c").isOk
+
+    check editor.saveFile(buf).isOk
+    check readFile(path) == "xc\nb\n"
+    check buf.lines == @["xc", "b"]
+    check buf.undo().isOk
+    check buf.lines == @["b  ", "ac"]
+    check buf.undo().isOk
+    check buf.lines == @["b  ", "a"]
+    check buf.redo().isOk
+    check buf.redo().isOk
+    check buf.lines == @["xc", "b"]
+    check not buf.isModified
+
+  test "An Ex entry that fails between two changes leaves one undo" & tag:
+    let (editor, dir, path) = setupOn(
+      backend,
+      "one_undo_ex_fails",
+      "b\na\n",
+      @[writePreEx("%s/b/c/"), writePreEx("%s/zzz//"), writePre("sort")],
+    )
+    defer:
+      removeDir(dir)
+    let buf = editor.activeBuffer
+    let saved = editor.saveFile(buf)
+    check saved.isOk
+    check saved.get.warnings.len == 1
+    check readFile(path) == "a\nc\n"
+    check buf.undo().isOk
+    check buf.lines == @["b", "a"]
+    check buf.undo().isErr
+
+  test "A program that fails after a change keeps it, in one undo" & tag:
+    let (editor, dir, path) = setupOn(
+      backend,
+      "one_undo_program_fails",
+      "b\na\n",
+      @[writePreEx("%s/a/x/"), writePreEx("%s/b/y/"), writePre("false")],
+    )
+    defer:
+      removeDir(dir)
+    let buf = editor.activeBuffer
+    check editor.saveFile(buf).isOk
+    check readFile(path) == "y\nx\n"
+    check buf.undo().isOk
+    check buf.lines == @["b", "a"]
+
+  test "A write that fails keeps what the entries did, as Vim does" & tag:
+    let (editor, dir, _) =
+      setupOn(backend, "one_undo_write_fails", "b\na\n", @[writePreEx("%s/a/x/")])
+    defer:
+      removeDir(dir)
+    let buf = editor.activeBuffer
+    # An Ex entry: a program would run in the missing directory.
+    buf.filePath = some(dir / "missing" / "a.txt")
+    check editor.saveFile(buf).isErr
+    check buf.lines == @["b", "x"]
+    check buf.isModified
+    check buf.undo().isOk
+    check buf.lines == @["b", "a"]
+
+  test "Ex entries leave the change list as it was, as keepjumps does" & tag:
+    let (editor, dir, _) = setupOn(
+      backend,
+      "one_undo_changelist",
+      "b\na\n",
+      @[writePreEx("%s/a/x/"), writePreEx("%s/b/y/")],
+    )
+    defer:
+      removeDir(dir)
+    let buf = editor.activeBuffer
+    check editor.saveFile(buf).isOk
+    check buf.changeList.len == 0
+    check buf.undo().isOk
+    check buf.lines == @["b", "a"]
+    check buf.changeList.len == 0
+    check buf.redo().isOk
+    check buf.lines == @["y", "x"]
+    check buf.changeList.len == 0
+
+  test "The change list gets one entry for a program's change" & tag:
+    let (editor, dir, _) = setupOn(
+      backend,
+      "one_undo_changelist_program",
+      "b\na\n",
+      @[writePreEx("%s/a/x/"), writePre("sed s/b/q/"), writePreEx("%s/x/z/")],
+    )
+    defer:
+      removeDir(dir)
+    let buf = editor.activeBuffer
+    check editor.saveFile(buf).isOk
+    check buf.lines == @["q", "z"]
+    check buf.changeList.len == 1
+    check buf.changeList[0].line == 0
+    check buf.undo().isOk
+    check buf.lines == @["b", "a"]
+    check buf.changeListIndex == 0
+
+suite "BufWritePre - one write is one undo":
+  oneUndoScenarios(bbcGapBuffer, " [GapBuffer]")
+  oneUndoScenarios(bbcPieceTable, " [PieceTable]")

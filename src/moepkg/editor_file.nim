@@ -174,6 +174,8 @@ proc savePersistData*(e: Editor) {.raises: [].} =
       logError("editor", "Failed to save bookmarks: " & r.error)
 
 proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer): Result[(), string] =
+  ## Raises TransactionRollbackError when a failed trim cannot be rolled back:
+  ## nothing vouches for the buffer then.
   # Skip for read-only and raw buffers (trim may corrupt raw bytes).
   if buffer.readOnly or not buffer.allowsTextTransforms or
       not shouldTrimTrailingWhitespace(buffer):
@@ -229,23 +231,24 @@ proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer): Result[(), string] 
         # Defect must reach the crash-rescue boundary, never err().
         raise e
 
-      return err(
-        "Failed to rollback trim transaction: " & rollbackRes.error & " (original: " &
-          e.msg & ")"
+      raise newException(
+        TransactionRollbackError,
+        e.msg & " (rollback also failed: " & rollbackRes.error & ")",
       )
     if e of Defect:
       # Buffer state is unknown after a Defect; re-raise to crash-rescue.
       logError("editor", "Trim transaction rolled back after Defect: " & e.msg)
       raise e
 
-    return err("Failed to trim trailing whitespace: " & e.msg)
+    # The caller says it was the trim.
+    return err(e.msg)
   if failed:
     let rollbackRes = buffer.rollbackTransaction()
     if rollbackRes.isErr:
       logError("editor", "Failed to rollback trim transaction: " & rollbackRes.error)
-      return err(
-        "Failed to rollback trim transaction: " & rollbackRes.error &
-          " (original trim error: " & trimErr & ")"
+      raise newException(
+        TransactionRollbackError,
+        trimErr & " (rollback also failed: " & rollbackRes.error & ")",
       )
     return err(trimErr)
   let commitRes = buffer.commitTransaction()
@@ -259,11 +262,16 @@ proc trimTrailingWhitespaceTracked(
     tuple[didTrim: bool, changeList: seq[BufferPosition], changeListIndex: int], string
 ] =
   ## Trim and report whether anything changed plus a pre-trim snapshot of the
-  ## changelist, for exact revert on save failure.
+  ## changelist, for exact revert on save failure. A failed rollback is an
+  ## error too: the buffer is skipped either way.
   let prevChangeId = buffer.currentChangeId
   let changeListBefore = buffer.changeList
   let changeListIndexBefore = buffer.changeListIndex
-  let trimResult = trimTrailingWhitespaceIfConfigured(buffer)
+  let trimResult =
+    try:
+      trimTrailingWhitespaceIfConfigured(buffer)
+    except TransactionRollbackError as exc:
+      Result[(), string].err exc.msg
   if trimResult.isErr:
     return err(trimResult.error)
   ok(
@@ -322,9 +330,28 @@ func withWarnings(error: string, warnings: seq[string]): string =
   for warning in warnings:
     result.add "\n" & warning
 
-proc runWritePreHooks(e: Editor, buffer: TextBuffer, savePath: string): WritePreResult =
-  ## Run the `BufWritePre` hooks for `buffer` about to be written to `savePath`.
-  result = e.runWritePreHooks(buffer, savePath, writtenLanguage(buffer, savePath))
+proc settleBeforeWrite(
+    e: Editor, buffer: TextBuffer, savePath: string
+): WritePreResult =
+  ## Run the `BufWritePre` hooks and the EditorConfig trim for `buffer` about
+  ## to be written to `savePath`, joined as one undo entry: Vim takes back what
+  ## one write's autocommands did with one `u`. It stays if the write fails, as
+  ## in Vim. Each step that fails takes back only its own change. A failed
+  ## rollback leaves the history as it is: it is not to be built on.
+  let joinPoint = buffer.undoJoinPoint()
+  # One position on the changelist for the write, the last change's.
+  buffer.withChangeListBlock:
+    result = e.runWritePreHooks(buffer, savePath, writtenLanguage(buffer, savePath))
+    if result.refusal.len == 0:
+      try:
+        let trimmed = trimTrailingWhitespaceIfConfigured(buffer)
+        if trimmed.isErr:
+          result.refusal = "Failed to trim trailing whitespace: " & trimmed.error
+      except TransactionRollbackError as exc:
+        result.refusal = "Failed to trim trailing whitespace: " & exc.msg
+        result.rollbackFailed = true
+  if not result.rollbackFailed:
+    buffer.joinUndoSince(joinPoint)
   if result.refusal.len > 0:
     logError("editor", "Save refused for " & savePath & ": " & result.refusal)
 
@@ -485,44 +512,15 @@ proc saveFile*(
       e.queueWriteHooks(buffer, savePath)
     return ok(WriteOutcome(kind: kind, path: savePath))
 
-  # Not for a copy, as the trim: the buffer is not being saved. Before the trim,
-  # which then tidies what the commands left.
-  let writePre = e.runWritePreHooks(buffer, savePath)
+  # Not for a copy: the buffer is not being saved.
+  let writePre = e.settleBeforeWrite(buffer, savePath)
   if writePre.refusal.len > 0:
     return err(writePre.refusal.withWarnings(writePre.warnings))
-
-  # Trim trailing whitespace if EditorConfig says so; reverted on save failure.
-  let didTrimRes = trimTrailingWhitespaceTracked(buffer)
-  if didTrimRes.isErr:
-    logError(
-      "editor",
-      "Failed to trim trailing whitespace for " & savePath & ": " & didTrimRes.error,
-    )
-    return err(
-      ("Failed to trim trailing whitespace: " & didTrimRes.error).withWarnings(
-        writePre.warnings
-      )
-    )
-  let (didTrim, changeListBefore, changeListIndexBefore) = didTrimRes.get
 
   # Save the file
   logDebug("editor", "Saving file: " & savePath)
   let saveResult = buffer.saveFile(savePath, checkExternalMod = not force)
   if saveResult.isErr:
-    let revertRes =
-      revertTrimIfNeeded(buffer, didTrim, changeListBefore, changeListIndexBefore)
-    if revertRes.isErr:
-      logError(
-        "editor",
-        "Failed to revert trim after save failure for " & savePath & ": " &
-          revertRes.error,
-      )
-      logError("editor", "Failed to save file " & savePath & ": " & saveResult.error)
-      return err(
-        (saveResult.error & " (failed to revert trim: " & revertRes.error & ")").withWarnings(
-          writePre.warnings
-        )
-      )
     logError("editor", "Failed to save file " & savePath & ": " & saveResult.error)
     return err(saveResult.error.withWarnings(writePre.warnings))
 
@@ -599,7 +597,7 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
 
   for i, target in selected.targets:
     let (buffer, savePath) = target
-    let writePre = e.runWritePreHooks(buffer, savePath)
+    let writePre = e.settleBeforeWrite(buffer, savePath)
     result.warnings.add writePre.warnings
     if writePre.refusal.len > 0:
       result.failures.add((path: savePath, error: writePre.refusal))
@@ -611,35 +609,8 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
         break
       continue
 
-    # Mirror saveFile: trim per buffer, reverted on save failure.
-    let didTrimRes = trimTrailingWhitespaceTracked(buffer)
-    if didTrimRes.isErr:
-      logError(
-        "editor", "Save all trim failed for " & savePath & ": " & didTrimRes.error
-      )
-      result.failures.add((path: savePath, error: didTrimRes.error))
-      continue
-    let (didTrim, changeListBefore, changeListIndexBefore) = didTrimRes.get
-
     let saveResult = buffer.saveFile(savePath, checkExternalMod = not force)
     if saveResult.isErr:
-      let revertRes =
-        revertTrimIfNeeded(buffer, didTrim, changeListBefore, changeListIndexBefore)
-      if revertRes.isErr:
-        logError(
-          "editor",
-          "Failed to revert trim after save failure for " & savePath & ": " &
-            revertRes.error,
-        )
-        logError("editor", "Save all failed for " & savePath & ": " & saveResult.error)
-        result.failures.add(
-          (
-            path: savePath,
-            error:
-              saveResult.error & " (failed to revert trim: " & revertRes.error & ")",
-          )
-        )
-        continue
       logError("editor", "Save all failed for " & savePath & ": " & saveResult.error)
       result.failures.add((path: savePath, error: saveResult.error))
       continue
@@ -689,7 +660,8 @@ proc autoSave*(e: Editor) =
   # Same set as `:wa`: one write per file.
   let selected = e.buffersToSave(force = false)
   for (buffer, savePath) in selected.targets:
-    # Mirror saveFile: trim per buffer, reverted on save failure.
+    # Reverted on save failure, unlike `:w`'s: an autosave failure is only
+    # logged, so a kept trim would be an edit nobody saw.
     let didTrimRes = trimTrailingWhitespaceTracked(buffer)
     if didTrimRes.isErr:
       logError(

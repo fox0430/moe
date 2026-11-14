@@ -256,6 +256,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
     var touchedMarks: set[char]
     for change in transaction.changes:
       touchedMarks = touchedMarks + changedMarkNames(change)
+    let kept = not b.noteChangePosition(firstChangePos)
     if b.pendingSnapshot.isSome:
       # PieceTable: single O(1) snapshot undo entry for entire transaction
       b.undoStack.addLast(
@@ -280,6 +281,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
           namedMarkChanges:
             diffNamedMarks(b.pendingSnapshotNamedMarks, b.namedMarks, touchedMarks),
           visualAcross: transaction.lastVisualBefore.boxed,
+          noChangeListPosition: kept,
         )
       )
       # Pending snapshot state is now consumed into the entry; reset it all.
@@ -296,14 +298,12 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
         namedMarkChanges:
           diffNamedMarks(transaction.namedMarksBefore, b.namedMarks, touchedMarks),
         visualAcross: transaction.lastVisualBefore.boxed,
+        noChangeListPosition: kept,
       )
       b.undoStack.addLast(transactionChange)
     # Note: changeSeq was inc'd per inner change in pushUndoChange; preTxnSeq /
     # postTxnSeq above let undo() / redo() restore changeSeq atomically.
     # Note: redoStack was already cleared by the first change in pushUndoChange
-
-    # Record transaction position in changelist
-    b.recordChangePosition(firstChangePos)
 
     # No lastChangedLines recompute needed: pushUndoChange min-merged each
     # inner change's line into the pending anchor via markLineChanged.
@@ -454,6 +454,131 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
     b.currentTransaction = none(BufferTransaction)
     return ok(())
 
+type UndoJoinPoint* = object ## Where the entries `joinUndoSince` joins begin.
+  changeId: int64
+
+proc undoJoinPoint*(b: TextBuffer): UndoJoinPoint =
+  UndoJoinPoint(changeId: b.currentChangeId)
+
+proc joinedMarkChanges(b: TextBuffer, first: int): seq[NamedMarkChange] =
+  ## The marks the undo entries from `first` on changed, from before the first
+  ## to after the last.
+  for k in first ..< b.undoStack.len:
+    for change in b.undoStack[k].namedMarkChanges:
+      var found = false
+      for joined in result.mitems:
+        if joined.name == change.name:
+          joined.after = change.after
+          found = true
+          break
+      if not found:
+        result.add change
+
+proc joinedSnapshot(b: TextBuffer, first: int): BufferChange =
+  ## One ckSnapshot entry for the undo entries from `first` on, the newest of
+  ## which leads to the buffer as it is: the first's state before, the edits of
+  ## all. It reads them where they are, so a raise leaves them be.
+  template entry(i: int): untyped =
+    b.undoStack[first + i]
+
+  let count = b.undoStack.len - first
+  var before = b.modifiedLines
+  for i in countdown(count - 1, 0):
+    applyUndo(before, entry(i).modifiedLinesDelta)
+  var
+    edits = entry(0).snapshotEdits
+    rows = entry(0).snapshotRows
+  for k in 1 ..< count:
+    for i in 0 ..< entry(k).snapshotEdits.len:
+      edits.add entry(k).snapshotEdits[i]
+    for i in 0 ..< entry(k).snapshotRows.len:
+      rows.add entry(k).snapshotRows[i]
+  let head = entry(0)
+  BufferChange(
+    startSeq: head.startSeq,
+    endSeq: entry(count - 1).endSeq,
+    id: entry(count - 1).id,
+    kind: ckSnapshot,
+    snapshotData: head.snapshotData,
+    snapshotCursorPos: head.snapshotCursorPos,
+    snapshotLineMarkers: head.snapshotLineMarkers,
+    modifiedLinesDelta: computeDelta(before, b.modifiedLines),
+    snapshotFoldState: head.snapshotFoldState,
+    snapshotBookmarks: head.snapshotBookmarks,
+    snapshotEdits: edits,
+    snapshotRows: rows,
+    namedMarkChanges: b.joinedMarkChanges(first),
+    visualAcross: head.visualAcross,
+  )
+
+proc joinedTransaction(entries: sink seq[BufferChange]): BufferChange =
+  ## One ckTransaction entry holding `entries`, undone and redone in turn.
+  BufferChange(
+    startSeq: entries[0].startSeq,
+    endSeq: entries[^1].endSeq,
+    id: entries[^1].id,
+    kind: ckTransaction,
+    transactionChanges: entries,
+    visualAcross: entries[0].visualAcross,
+  )
+
+proc joinUndoSince*(b: TextBuffer, point: UndoJoinPoint) =
+  ## Fold the undo entries added since `point` into one, as Vim's `:undojoin`
+  ## makes one undo block. The changelist is left as the entries made it: a
+  ## `withChangeListBlock` around them gives it one position. Entries a reload
+  ## added, which swap the changelist of their own, stay apart, as do snapshot
+  ## and plain entries mixed.
+  var first = b.undoStack.len
+  while first > 0 and b.undoStack[first - 1].id > point.changeId:
+    first.dec
+  let count = b.undoStack.len - first
+  if count < 2:
+    return
+  var
+    snapshots = 0
+    positioned = false
+  for i in first ..< b.undoStack.len:
+    let entry = b.undoStack[i]
+    if entry.isReload or entry.changeListAcross.isSome:
+      return
+    if entry.kind == ckSnapshot:
+      snapshots.inc
+    if not entry.noChangeListPosition:
+      positioned = true
+  if snapshots notin [0, count]:
+    return
+
+  var joined: BufferChange
+  if snapshots > 0:
+    # Built before the entries leave the stack: if building raises, they stay.
+    joined = b.joinedSnapshot(first)
+    for _ in 0 ..< count:
+      discard b.undoStack.popLast()
+  else:
+    # Moved, not copied, as each holds its modifiedLines; nothing here raises.
+    var entries = newSeq[BufferChange](count)
+    for i in countdown(count - 1, 0):
+      entries[i] = b.undoStack.popLast()
+    joined = joinedTransaction(move entries)
+  joined.noChangeListPosition = not positioned
+  b.undoStack.addLast(joined)
+
+proc firstChangedLine(change: BufferChange): int =
+  ## The topmost row `change` touched, where re-highlighting starts; int.high
+  ## for an empty transaction. A joined snapshot is placed at its first change,
+  ## which a later one may sit above.
+  case change.kind
+  of ckTransaction:
+    result = int.high
+    for inner in change.transactionChanges:
+      result = min(result, inner.firstChangedLine)
+  of ckSnapshot:
+    result = change.snapshotCursorPos.line
+    for i in 0 ..< change.snapshotEdits.len:
+      result = min(result, change.snapshotEdits[i].start.line)
+  else:
+    result = getChangePosition(change).line
+
 proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   ## Undo the last 'count' changes (or all changes in a transaction group)
   ## Returns the suggested cursor position for the first undone change
@@ -549,17 +674,8 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   if undoneChanges.len > 0:
     # Compute first changed line from undone changes for incremental highlighting
     var minLine = int.high
-
-    proc findMinLine(change: BufferChange) =
-      case change.kind
-      of ckTransaction:
-        for innerChange in change.transactionChanges:
-          findMinLine(innerChange)
-      else:
-        minLine = min(minLine, getChangePosition(change).line)
-
     for change in undoneChanges:
-      findMinLine(change)
+      minLine = min(minLine, change.firstChangedLine)
 
     if minLine != int.high:
       b.markLineChanged(minLine)
@@ -759,17 +875,8 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   if redoneChanges.len > 0:
     # Compute first changed line from redone changes for incremental highlighting
     var minLine = int.high
-
-    proc findMinLine(change: BufferChange) =
-      case change.kind
-      of ckTransaction:
-        for innerChange in change.transactionChanges:
-          findMinLine(innerChange)
-      else:
-        minLine = min(minLine, getChangePosition(change).line)
-
     for change in redoneChanges:
-      findMinLine(change)
+      minLine = min(minLine, change.firstChangedLine)
     if minLine != int.high:
       b.markLineChanged(minLine)
     else:

@@ -332,6 +332,9 @@ type WritePreResult* = object ## What the `BufWritePre` hooks left a write.
     ## any Ex command's.
   refusal*: string ## Why the file is not to be written; empty to write it.
   interrupted*: bool ## Ctrl-C or a deadly signal stopped a command: write nothing more.
+  rollbackFailed*: bool
+    ## A change of this write, a command's or the trim's, failed to roll back:
+    ## nothing vouches for the buffer, so its history is not built on.
 
 proc holdsNoText(buf: TextBuffer): bool =
   ## Whether every line of `buf` is blank: emptying it loses nothing, and a
@@ -387,18 +390,21 @@ proc runWritePreExCommand(
   let ex = ex.valueOr:
     return err(line.exHookLabel & ": expected " & error)
   e.editOutside(buf):
-    let ran =
-      case ex.kind
-      of hekStripWhitespace:
-        # How many lines it changed says nothing to a hook.
-        buf.stripTrailingWhitespace().map(
-          proc(_: int) =
-            discard
-        )
-      of hekSubstitute:
-        # The case goes by 'ignorecase' and 'smartcase', as for a typed :s.
-        let flags = e.commandLineParser.substituteFlags(ex.pattern, ex.flags, smRegex)
-        buf.substituteInBuffer(ex.pattern, ex.replacement, flags, ex.range)
+    var ran: Result[void, string]
+    # As Vim's `keepjumps`: it adds no changelist position.
+    buf.withKeptChangeList:
+      ran =
+        case ex.kind
+        of hekStripWhitespace:
+          # How many lines it changed says nothing to a hook.
+          buf.stripTrailingWhitespace().map(
+            proc(_: int) =
+              discard
+          )
+        of hekSubstitute:
+          # The case goes by 'ignorecase' and 'smartcase', as for a typed :s.
+          let flags = e.commandLineParser.substituteFlags(ex.pattern, ex.flags, smRegex)
+          buf.substituteInBuffer(ex.pattern, ex.replacement, flags, ex.range)
     if ran.isErr:
       return err(line.exHookLabel & " failed: " & ran.error)
   ok()
@@ -532,6 +538,7 @@ proc runWritePreHooks*(
         # The buffer is in a state nothing vouches for: it is not to be written.
         result.refusal =
           (step.label & " failed: " & exc.msg & "; not written").forDisplay
+        result.rollbackFailed = true
         return
     if step.ex:
       # Over in an instant, and a failure leaves the text as it was, as finding
