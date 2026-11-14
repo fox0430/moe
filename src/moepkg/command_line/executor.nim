@@ -165,6 +165,7 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         reusedPattern: target.reused,
         replacement: parsed.replacement,
         substituteFlags: flags,
+        substituteFlagsText: parsed.flags,
         substituteRange: cmd.range,
       )
     else:

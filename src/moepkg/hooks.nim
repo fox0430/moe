@@ -35,7 +35,7 @@ import types/config_types
 
 export
   HookConfig, HookEntry, HookEvent, HookFailAction, ValidHookEvents,
-  ValidHookFailActions, DefaultHookTimeout
+  ValidHookFailActions, DefaultHookTimeout, isExHook
 
 type HookCommand* = object
   ## One entry resolved against one file, ready to exec: tokenized, expanded,
@@ -53,8 +53,9 @@ type HookCommand* = object
 proc `==`*(a, b: HookEntry): bool =
   ## Compare user-written fields; `filterRegex` is derived and `Regex2` lacks `==`.
   a.event == b.event and a.filetype == b.filetype and a.filter == b.filter and
-    a.command == b.command and a.workingDir == b.workingDir and a.timeout == b.timeout and
-    a.onFail == b.onFail and a.showOutput == b.showOutput
+    a.command == b.command and a.exCommand == b.exCommand and
+    a.workingDir == b.workingDir and a.timeout == b.timeout and a.onFail == b.onFail and
+    a.showOutput == b.showOutput
 
 proc parseHookEvent*(s: string): HookEvent =
   ## Parse `s` as `HookEvent`. Called by name from `config_macros`' enum

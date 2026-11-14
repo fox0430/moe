@@ -21,7 +21,8 @@ import std/[unittest, options, os, sequtils, strutils, times]
 
 import pkg/results
 
-import ../src/moepkg/[config_loader, config, hooks]
+import ../src/moepkg/[config_loader, config, hook_ex_command, hooks]
+import ../src/moepkg/command_line/range_parser
 import ../src/moepkg/syntax/tokenizer
 
 var testFileCounter {.global.} = 0
@@ -516,6 +517,234 @@ command = "also good"
   test "An unknown [Hook] key is reported":
     let (_, vr) = loadFromTomlString("[Hook]\nenabled = true\n")
     check vr.errors.anyIt(it.name == "Hook.enabled")
+
+suite "Hooks - exCommand":
+  proc exEntry(exCommand: string, extra = ""): string =
+    ## One BufWritePre entry; `exCommand` goes in a TOML literal string.
+    "[[Hook.entries]]\nevent = \"BufWritePre\"\nexCommand = '" & exCommand & "'\n" &
+      extra
+
+  template checkRejected(toml: string, badKey: string) =
+    let (config, vr) = loadFromTomlString(toml)
+    check vr.hasErrors
+    check vr.errors.anyIt(it.name.startsWith(badKey))
+    check config.hooks.entries.len == 0
+
+  test "stripwhitespace and a :s are read at load":
+    let (config, vr) = loadFromTomlString(
+      exEntry("stripwhitespace") & "\n" & exEntry(r"%s/\s+$//e") & "\n" &
+        exEntry(r":1,$-1s/a/b\~/gIi")
+    )
+    check not vr.hasErrors
+    check config.hooks.entries.len == 3
+    check parseHookExCommand(config.hooks.entries[0].exCommand).get.kind ==
+      hekStripWhitespace
+    let sub = parseHookExCommand(config.hooks.entries[1].exCommand).get
+    check sub.kind == hekSubstitute
+    check sub.range.kind == erkAll
+    check sub.pattern == r"\s+$"
+    check sub.replacement == ""
+    check sub.flags == "e"
+    check parseHookExCommand(config.hooks.entries[2].exCommand).get.replacement == r"b\~"
+
+  test "An exCommand of blanks alone is no Ex command":
+    let (config, vr) = loadFromTomlString(
+      "[[Hook.entries]]\nevent = \"BufWritePre\"\ncommand = \"fmt\"\nexCommand = ' '\n"
+    )
+    check not vr.hasErrors
+    check config.hooks.entries.len == 1
+    check not config.hooks.entries[0].isExHook
+
+  test "A comment after the flags and a `\\=` past the start read":
+    let (config, vr) =
+      loadFromTomlString(exEntry("%s/a/x\\=y/g \"note") & exEntry("%s/a/\\=/"))
+    check vr.errors.len == 1
+    check config.hooks.entries.len == 1
+    check parseHookExCommand(config.hooks.entries[0].exCommand).get.replacement ==
+      "x\\=y"
+
+  for (name, toml, badKey) in [
+    (
+      "command and exCommand",
+      exEntry("stripwhitespace", "command = \"true\"\n"),
+      "Hook.entries[0].command",
+    ),
+    (
+      "an empty command with exCommand",
+      exEntry("stripwhitespace", "command = \"\"\n"),
+      "Hook.entries[0].command",
+    ),
+    (
+      "exCommand on BufWritePost",
+      "[[Hook.entries]]\nevent = \"BufWritePost\"\nexCommand = \"stripwhitespace\"\n",
+      "Hook.entries[0]",
+    ),
+    ("a command it does not run", exEntry("write"), "Hook.entries[0].exCommand"),
+    ("an unknown command", exEntry("frobnicate"), "Hook.entries[0].exCommand"),
+    (
+      "stripwhitespace with an argument",
+      exEntry("stripwhitespace x"),
+      "Hook.entries[0].exCommand",
+    ),
+    ("stripwhitespace with !", exEntry("stripwhitespace!"), "Hook.entries[0].exCommand"),
+    (
+      "stripwhitespace with a range",
+      exEntry("%stripwhitespace"),
+      "Hook.entries[0].exCommand",
+    ),
+    ("an empty pattern", exEntry("%s//x/"), "Hook.entries[0].exCommand"),
+    ("no range", exEntry("s/a/b/"), "Hook.entries[0].exCommand"),
+    ("the current line", exEntry(".,$s/a/b/"), "Hook.entries[0].exCommand"),
+    ("an offset alone", exEntry("+1s/a/b/"), "Hook.entries[0].exCommand"),
+    ("an open start", exEntry(",$s/a/b/"), "Hook.entries[0].exCommand"),
+    ("an open end", exEntry("5,s/a/b/"), "Hook.entries[0].exCommand"),
+    ("a backwards range", exEntry("10,5s/a/b/"), "Hook.entries[0].exCommand"),
+    ("a backwards range from `$`", exEntry("$,$-1s/a/b/"), "Hook.entries[0].exCommand"),
+    ("a line below `$`", exEntry("1,$+1s/a/b/"), "Hook.entries[0].exCommand"),
+    ("a range ending on line 0", exEntry("1,0s/a/b/"), "Hook.entries[0].exCommand"),
+    ("a line above line 0", exEntry("1-2,3s/a/b/"), "Hook.entries[0].exCommand"),
+    (
+      "an empty exCommand",
+      "[[Hook.entries]]\nevent = \"BufWritePre\"\nexCommand = ''\n",
+      "Hook.entries[0].exCommand",
+    ),
+    (
+      "a range whose offset overflows",
+      exEntry("9223372036854775807+1,1s/a/b/"),
+      "Hook.entries[0].exCommand",
+    ),
+    ("a `~` replacement", exEntry("%s/a/~/"), "Hook.entries[0].exCommand"),
+    ("a leading `\\=`", exEntry("%s/a/\\=x/"), "Hook.entries[0].exCommand"),
+    ("a regex that does not compile", exEntry("%s/(/x/"), "Hook.entries[0].exCommand"),
+    (
+      "workingDir",
+      exEntry("stripwhitespace", "workingDir = \"/\"\n"),
+      "Hook.entries[0].workingDir",
+    ),
+    ("timeout", exEntry("stripwhitespace", "timeout = 3\n"), "Hook.entries[0].timeout"),
+    (
+      "onFail",
+      exEntry("stripwhitespace", "onFail = \"abort\"\n"),
+      "Hook.entries[0].onFail",
+    ),
+  ]:
+    test "Rejected: " & name:
+      checkRejected(toml, badKey)
+
+  for flag in ["c", "n", "&", "p", "#", "l", "r", "gc", "cn"]:
+    test "Rejected: the flags " & flag:
+      checkRejected(exEntry("%s/a/b/" & flag), "Hook.entries[0].exCommand")
+
+  test "Blanks around the command read":
+    let (config, vr) =
+      loadFromTomlString(exEntry(" %s/a/b/ ") & "\n" & exEntry(" stripwhitespace "))
+    check not vr.hasErrors
+    check config.hooks.entries.len == 2
+
+  test "Line 0 and lines that only a long file has read":
+    let (config, vr) = loadFromTomlString(
+      exEntry("0,$s/a/b/") & "\n" & exEntry("0,1s/a/b/") & "\n" &
+        exEntry("100,$-5s/a/b/")
+    )
+    check not vr.hasErrors
+    check config.hooks.entries.len == 3
+
+  test "Blanks after a :s with no closing delimiter are its own":
+    let (config, vr) =
+      loadFromTomlString(exEntry("%s/\\t/    ") & "\n" & exEntry("%s/a /b"))
+    check not vr.hasErrors
+    check parseHookExCommand(config.hooks.entries[0].exCommand).get.replacement == "    "
+    check parseHookExCommand(config.hooks.entries[1].exCommand).get.pattern == "a "
+
+  test "exCommand on another event is the one error":
+    let (config, vr) = loadFromTomlString(
+      "[[Hook.entries]]\nevent = \"BufWritePost\"\nexCommand = \"stripwhitespace\"\n"
+    )
+    check vr.errors.len == 1
+    check vr.errors[0].name == "Hook.entries[0].exCommand"
+    check config.hooks.entries.len == 0
+
+  test "Colons and blanks in front read, as Vim skips them":
+    let (config, vr) = loadFromTomlString(
+      exEntry(": %s/a/b/") & "\n" & exEntry("::stripwhitespace") & "\n" &
+        exEntry(" : :%s/a/b/")
+    )
+    check not vr.hasErrors
+    check config.hooks.entries.len == 3
+
+  test "An exCommand of the wrong type is the one error":
+    let (config, vr) =
+      loadFromTomlString("[[Hook.entries]]\nevent = \"BufWritePre\"\nexCommand = 5\n")
+    check vr.errors.len == 1
+    check vr.errors[0].name == "Hook.entries[0].exCommand"
+    check config.hooks.entries.len == 0
+
+  test "command and exCommand on another event: only exCommand is refused":
+    let (config, vr) = loadFromTomlString(
+      "[[Hook.entries]]\nevent = \"BufWritePost\"\ncommand = \"lint\"\n" &
+        "exCommand = 'stripwhitespace'\ntimeout = 5\nworkingDir = \"/\"\n"
+    )
+    check vr.errors.len == 1
+    check vr.errors[0].name == "Hook.entries[0].exCommand"
+    check config.hooks.entries.len == 0
+
+  test "exCommand makes an Ex hook only on BufWritePre":
+    for event in HookEvent:
+      checkpoint $event
+      let entry = HookEntry(event: event, command: "lint", exCommand: "stripwhitespace")
+      check entry.isExHook == (event == heBufWritePre)
+      check entry.isProgramHook == (event != heBufWritePre)
+
+  test "An entry built in code with exCommand on another event keeps its command":
+    var config = newEditorConfig()
+    config.hooks.entries = @[
+      HookEntry(
+        event: heBufWritePost,
+        command: "lint",
+        exCommand: "stripwhitespace",
+        timeout: DefaultHookTimeout,
+      )
+    ]
+    let path = getTempDir() / "moe_test_hooks_ex_other_event.toml"
+    defer:
+      removeFile(path)
+    check saveConfigToToml(config, path).isOk
+    let (reloaded, vr) = loadConfigFromToml(path).get
+    check not vr.hasErrors
+    check reloaded.hooks.entries.len == 1
+    check reloaded.hooks.entries[0].command == "lint"
+    check reloaded.hooks.entries[0].exCommand == ""
+
+  test "Command aliases do not change what a hook runs":
+    let (config, vr) = loadFromTomlString(
+      "[DisabledCommandAliases]\naliases = [\"stripwhitespace\"]\n\n" &
+        "[CommandAliases]\nstripwhitespace = { command = \"quit\" }\n\n" &
+        exEntry("stripwhitespace")
+    )
+    check not vr.hasErrors
+    check config.hooks.entries.len == 1
+    check parseHookExCommand(config.hooks.entries[0].exCommand).get.kind ==
+      hekStripWhitespace
+
+  test "An entry with exCommand saves and reloads as it was":
+    var config = newEditorConfig()
+    config.hooks.entries = @[
+      HookEntry(event: heBufWritePre, command: "sort", timeout: 5, onFail: hfaAbort),
+      HookEntry(
+        event: heBufWritePre,
+        exCommand: "%s/\\s+$/\\\\ \"q\"/e",
+        filter: r"\.txt$",
+        timeout: DefaultHookTimeout,
+      ),
+    ]
+    let path = getTempDir() / "moe_test_hooks_ex_roundtrip.toml"
+    defer:
+      removeFile(path)
+    check saveConfigToToml(config, path).isOk
+    let (reloaded, vr) = loadConfigFromToml(path).get
+    check not vr.hasErrors
+    check reloaded.hooks.entries == config.hooks.entries
+    check parseHookExCommand(reloaded.hooks.entries[1].exCommand).isOk
 
 suite "Hooks - config round trip":
   test "Saving and reloading preserves every entry":

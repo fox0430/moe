@@ -632,6 +632,8 @@ type
   Replacement* = object ## The replacement of :s, as Vim's regsub() reads it
     pieces: seq[ReplacementPiece]
     usesGroups: bool # Has \1 to \9
+    previous*: bool ## Has a `~`, which Vim reads as the previous replacement
+    expression*: bool ## Starts with `\=`, which Vim reads as an expression
 
 proc parseReplacement*(s: string): Replacement =
   ## `s` as Vim reads a :s replacement with 'magic': `&` and `\0` are the
@@ -639,7 +641,7 @@ proc parseReplacement*(s: string): Replacement =
   ## the case, `\r` and a typed CR break the line, `\n` and a typed NUL are a
   ## NUL, `\t` and `\b` are Tab and Ctrl-H, and a backslash before any
   ## other character takes it as it is. Unlike Vim, `~` is not the previous
-  ## replacement and `\=` is a plain `=`.
+  ## replacement and a leading `\=` is a plain `=`, not an expression.
   var text = ""
   template flush() =
     if text.len > 0:
@@ -653,11 +655,15 @@ proc parseReplacement*(s: string): Replacement =
   template caseChange(one: bool, letterCase: LetterCase) =
     add(ReplacementPiece(kind: rpCase, oneChar: one, to: letterCase))
 
+  result.expression = s.startsWith("\\=")
   var i = 0
   while i < s.len:
     let c = s[i]
     if c == '&':
       add(ReplacementPiece(kind: rpGroup, group: 0))
+    elif c == '~':
+      result.previous = true
+      text.add(c)
     elif c == '\\' and i + 1 < s.len:
       i.inc
       case s[i]
