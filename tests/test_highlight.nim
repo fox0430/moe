@@ -3058,35 +3058,7 @@ suite "Highlight - JS/TS String Line Bounding":
     runColonBelowString(SourceLanguage.langTypeScript)
 
 suite "Highlight - detectLanguage":
-  test "detectLanguage for Rust":
-    check detectLanguage("test.rs") == SourceLanguage.langRust
-
-  test "detectLanguage for Nim":
-    check detectLanguage("test.nim") == SourceLanguage.langNim
-
-  test "detectLanguage for JavaScript":
-    check detectLanguage("test.js") == SourceLanguage.langJavaScript
-
-  test "detectLanguage for TypeScript":
-    check detectLanguage("test.ts") == SourceLanguage.langTypeScript
-
-  test "detectLanguage for Markdown":
-    check detectLanguage("test.markdown") == SourceLanguage.langMarkdown
-    check detectLanguage("test.md") == SourceLanguage.langMarkdown
-
-  test "detectLanguage for R Markdown":
-    check detectLanguage("test.Rmd") == SourceLanguage.langMarkdown
-    check detectLanguage("test.rmd") == SourceLanguage.langMarkdown
-
-  test "detectLanguage for Python":
-    check detectLanguage("test.py") == SourceLanguage.langPython
-
-  test "detectLanguage for unknown extension":
-    check detectLanguage("test.xyz") == SourceLanguage.langNone
-
-  test "detectLanguage for no extension":
-    check detectLanguage("README") == SourceLanguage.langNone
-
+  # Check basename for special files (no extension)
   test "detectLanguage for COMMIT_EDITMSG":
     check detectLanguage("COMMIT_EDITMSG") == SourceLanguage.langCommitEditMsg
 
@@ -3106,50 +3078,14 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for .gitignore with path":
     check detectLanguage("/repo/.gitignore") == SourceLanguage.langGitignore
 
-  test "detectLanguage for LaTeX .tex":
-    check detectLanguage("main.tex") == SourceLanguage.langLatex
+  test "detectLanguage for nimble.lock":
+    check detectLanguage("nimble.lock") == SourceLanguage.langJson
+    check detectLanguage("/repo/nimble.lock") == SourceLanguage.langJson
 
-  test "detectLanguage for LaTeX .sty":
-    check detectLanguage("custom.sty") == SourceLanguage.langLatex
-
-  test "detectLanguage for LaTeX .cls":
-    check detectLanguage("myclass.cls") == SourceLanguage.langLatex
-
-  test "detectLanguage for LaTeX .ltx":
-    check detectLanguage("file.ltx") == SourceLanguage.langLatex
-
-  test "detectLanguage for LaTeX .dtx":
-    check detectLanguage("package.dtx") == SourceLanguage.langLatex
-
-  test "detectLanguage for Tcl .tcl":
-    check detectLanguage("script.tcl") == SourceLanguage.langTcl
-
-  test "detectLanguage for Tcl .tk":
-    check detectLanguage("gui.tk") == SourceLanguage.langTcl
-
-  test "detectLanguage for Tcl .itcl":
-    check detectLanguage("class.itcl") == SourceLanguage.langTcl
-
-  test "detectLanguage for Tcl .itk":
-    check detectLanguage("widget.itk") == SourceLanguage.langTcl
-
-  test "detectLanguage for Go .go":
-    check detectLanguage("main.go") == SourceLanguage.langGo
-
-  test "detectLanguage for Lua .lua":
-    check detectLanguage("init.lua") == SourceLanguage.langLua
-
-  test "detectLanguage for Lua .luau":
-    check detectLanguage("script.luau") == SourceLanguage.langLua
-
-  test "detectLanguage for Lua .rockspec":
-    check detectLanguage("mylib-1.0-1.rockspec") == SourceLanguage.langLua
-
-  test "detectLanguage for Zsh .zsh":
-    check detectLanguage("script.zsh") == SourceLanguage.langZsh
-
-  test "detectLanguage for Zsh .zshrc":
-    check detectLanguage("custom.zshrc") == SourceLanguage.langZsh
+  test "detectLanguage for hyprland.conf":
+    check detectLanguage("hyprland.conf") == SourceLanguage.langHyprland
+    check detectLanguage("/home/user/.config/hypr/hyprland.conf") ==
+      SourceLanguage.langHyprland
 
   test "detectLanguage for bash startup files":
     for name in [
@@ -3164,41 +3100,158 @@ suite "Highlight - detectLanguage":
       check detectLanguage(name) == SourceLanguage.langZsh
       check detectLanguage("/home/user/" & name) == SourceLanguage.langZsh
 
-  test "detectLanguage for Zsh .zshenv":
+  test "detectLanguage for Dockerfile variants":
+    for name in ["Dockerfile", "Dockerfile.prod", "Dockerfile.dev"]:
+      check detectLanguage(name) == SourceLanguage.langDockerfile
+      check detectLanguage("/repo/" & name) == SourceLanguage.langDockerfile
+
+  # Check file extensions
+  test "detectLanguage for Astro":
+    check detectLanguage("page.astro") == SourceLanguage.langAstro
+
+  test "detectLanguage for C":
+    for ext in [".c", ".dox", ".h", ".i"]:
+      check detectLanguage("test" & ext) == SourceLanguage.langC
+
+  test "detectLanguage for C++":
+    for ext in [
+      ".C", ".CPP", ".H", ".HPP", ".c++", ".cc", ".cp", ".cpp", ".cxx", ".h++", ".hh",
+      ".hp", ".hpp", ".hxx", ".ii", ".tcc",
+    ]:
+      check detectLanguage("test" & ext) == SourceLanguage.langCpp
+
+  test "detectLanguage is case-sensitive for C and C++":
+    check detectLanguage("test.c") == SourceLanguage.langC
+    check detectLanguage("test.C") == SourceLanguage.langCpp
+    check detectLanguage("test.h") == SourceLanguage.langC
+    check detectLanguage("test.H") == SourceLanguage.langCpp
+
+  test "detectLanguage for C#":
+    check detectLanguage("test.cs") == SourceLanguage.langCsharp
+
+  test "detectLanguage for .dockerfile":
+    check detectLanguage("app.dockerfile") == SourceLanguage.langDockerfile
+
+  test "detectLanguage for Go":
+    check detectLanguage("main.go") == SourceLanguage.langGo
+
+  test "detectLanguage for Haskell":
+    for ext in [".cabal", ".hs"]:
+      check detectLanguage("test" & ext) == SourceLanguage.langHaskell
+
+  test "detectLanguage for HTML":
+    check detectLanguage("index.html") == SourceLanguage.langHtml
+
+  test "detectLanguage for Java":
+    check detectLanguage("Main.java") == SourceLanguage.langJava
+
+  test "detectLanguage for JavaScript":
+    check detectLanguage("test.js") == SourceLanguage.langJavaScript
+
+  test "detectLanguage for JSX":
+    check detectLanguage("App.jsx") == SourceLanguage.langJsx
+
+  test "detectLanguage for TypeScript":
+    check detectLanguage("test.ts") == SourceLanguage.langTypeScript
+
+  test "detectLanguage for TSX":
+    check detectLanguage("App.tsx") == SourceLanguage.langTsx
+
+  test "detectLanguage for Markdown":
+    check detectLanguage("test.markdown") == SourceLanguage.langMarkdown
+    check detectLanguage("test.md") == SourceLanguage.langMarkdown
+
+  test "detectLanguage for R Markdown":
+    check detectLanguage("test.Rmd") == SourceLanguage.langMarkdown
+    check detectLanguage("test.rmd") == SourceLanguage.langMarkdown
+
+  test "detectLanguage for Nim":
+    for ext in [".nim", ".nimble", ".nims"]:
+      check detectLanguage("test" & ext) == SourceLanguage.langNim
+
+  test "detectLanguage for Nim with path":
+    for ext in [".nim", ".nimble", ".nims"]:
+      check detectLanguage("/path/to/test" & ext) == SourceLanguage.langNim
+
+  test "detectLanguage for Python":
+    for ext in [".py", ".pyw", ".pyx"]:
+      check detectLanguage("test" & ext) == SourceLanguage.langPython
+
+  test "detectLanguage for Rust":
+    check detectLanguage("test.rs") == SourceLanguage.langRust
+
+  test "detectLanguage for Shell":
+    for ext in [".bash", ".sh"]:
+      check detectLanguage("script" & ext) == SourceLanguage.langShell
+
+  test "detectLanguage for Fish":
+    check detectLanguage("config.fish") == SourceLanguage.langFish
+
+  test "detectLanguage for Zsh":
+    check detectLanguage("script.zsh") == SourceLanguage.langZsh
+    check detectLanguage("custom.zshrc") == SourceLanguage.langZsh
     check detectLanguage("env.zshenv") == SourceLanguage.langZsh
-
-  test "detectLanguage for Zsh .zlogin":
     check detectLanguage("login.zlogin") == SourceLanguage.langZsh
-
-  test "detectLanguage for Zsh .zlogout":
     check detectLanguage("logout.zlogout") == SourceLanguage.langZsh
-
-  test "detectLanguage for Zsh .zprofile":
     check detectLanguage("profile.zprofile") == SourceLanguage.langZsh
 
-  test "detectLanguage for XML .xml":
+  test "detectLanguage for Tcl":
+    check detectLanguage("script.tcl") == SourceLanguage.langTcl
+    check detectLanguage("gui.tk") == SourceLanguage.langTcl
+    check detectLanguage("class.itcl") == SourceLanguage.langTcl
+    check detectLanguage("widget.itk") == SourceLanguage.langTcl
+
+  test "detectLanguage for TOML":
+    check detectLanguage("config.toml") == SourceLanguage.langToml
+
+  test "detectLanguage for YAML":
+    for ext in [".cff", ".yaml", ".yml"]:
+      check detectLanguage("test" & ext) == SourceLanguage.langYaml
+
+  test "detectLanguage for JSON":
+    check detectLanguage("data.json") == SourceLanguage.langJson
+
+  test "detectLanguage for JSONC":
+    check detectLanguage("settings.jsonc") == SourceLanguage.langJsonc
+
+  test "detectLanguage for LaTeX":
+    check detectLanguage("main.tex") == SourceLanguage.langLatex
+    check detectLanguage("custom.sty") == SourceLanguage.langLatex
+    check detectLanguage("myclass.cls") == SourceLanguage.langLatex
+    check detectLanguage("file.ltx") == SourceLanguage.langLatex
+    check detectLanguage("package.dtx") == SourceLanguage.langLatex
+
+  test "detectLanguage for Lisp":
+    for ext in [".lisp", ".lsp", ".cl", ".el", ".scm", ".ss", ".rkt", ".asd", ".fasl"]:
+      check detectLanguage("test" & ext) == SourceLanguage.langLisp
+
+  test "detectLanguage for Log":
+    check detectLanguage("app.log") == SourceLanguage.langLog
+
+  test "detectLanguage for Lua":
+    check detectLanguage("init.lua") == SourceLanguage.langLua
+    check detectLanguage("script.luau") == SourceLanguage.langLua
+    check detectLanguage("mylib-1.0-1.rockspec") == SourceLanguage.langLua
+
+  test "detectLanguage for Hyprland":
+    check detectLanguage("config.hl") == SourceLanguage.langHyprland
+
+  test "detectLanguage for XML":
     check detectLanguage("config.xml") == SourceLanguage.langXml
-
-  test "detectLanguage for XML .svg":
     check detectLanguage("icon.svg") == SourceLanguage.langXml
-
-  test "detectLanguage for XML .xsd":
     check detectLanguage("schema.xsd") == SourceLanguage.langXml
-
-  test "detectLanguage for XML .xsl":
     check detectLanguage("style.xsl") == SourceLanguage.langXml
-
-  test "detectLanguage for XML .xslt":
     check detectLanguage("transform.xslt") == SourceLanguage.langXml
-
-  test "detectLanguage for XML .rss":
     check detectLanguage("feed.rss") == SourceLanguage.langXml
-
-  test "detectLanguage for XML .atom":
     check detectLanguage("feed.atom") == SourceLanguage.langXml
-
-  test "detectLanguage for XML .plist":
     check detectLanguage("Info.plist") == SourceLanguage.langXml
+
+  # Fallbacks
+  test "detectLanguage for unknown extension":
+    check detectLanguage("test.xyz") == SourceLanguage.langNone
+
+  test "detectLanguage for no extension":
+    check detectLanguage("README") == SourceLanguage.langNone
 
 suite "Highlight - getSegmentModifiers":
   test "Empty highlight returns empty modifiers":
