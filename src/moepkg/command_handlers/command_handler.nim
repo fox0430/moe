@@ -196,16 +196,8 @@ proc executeGotoLine*(
   ##
   ## Unlike a range, an address past the end lands on the last line rather than
   ## being refused, as in vim. Line 0 is the first line, and above it is E16.
-  let base =
-    case address.base
-    of eabCurrent:
-      currentLine
-    of eabLine:
-      address.line - 1
-    of eabLast:
-      buffer.len - 1
   # Saturating again: the offset may already be at the top.
-  let line = satAdd(satAdd(base, address.offset), 1)
+  let line = satAdd(address.addressLine(currentLine, buffer.len - 1), 1)
   if line < 0:
     return HandlerResult(kind: hrError, errorMessage: "E16: Invalid range")
   HandlerResult(kind: hrGotoLine, lineNumber: clamp(line, 1, buffer.len))
@@ -331,38 +323,52 @@ proc executeBufferDelete*(
     kind: hrBufferDelete, forceBufferDelete: force, deleteBufferArg: bufferArg
   )
 
-proc executeStripWhitespace*(
-    handler: CommandModeHandler, buffer: TextBuffer
-): HandlerResult =
-  ## Execute stripwhitespace command (:stripwhitespace, :stripws)
-  ## Removes trailing whitespace from all lines.
+proc inconsistentMessage(exc: ref TransactionRollbackError): string =
+  ## A failed rollback (untrustworthy buffer) as a status message.
+  exc.msg & " (buffer state may be inconsistent)"
+
+proc stripTrailingWhitespace*(buffer: TextBuffer): Result[int, string] =
+  ## Remove trailing whitespace from every line as one change: how many lines
+  ## it changed. A failed rollback raises `TransactionRollbackError`.
   if buffer.readOnly:
-    return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
+    return err("Buffer is read-only")
   # Raw buffer: stripping may corrupt code units.
   if not buffer.allowsTextTransforms:
-    return HandlerResult(
-      kind: hrError, errorMessage: rawBytesRejection("strip trailing whitespace")
-    )
+    return err(rawBytesRejection("strip trailing whitespace"))
+  # Nothing to strip makes no change, and opens none.
+  var anyTrailing = false
+  for lineIdx in 0 ..< buffer.len:
+    let line = buffer.getLine(lineIdx)
+    if line.len > 0 and line[^1] in Whitespace:
+      anyTrailing = true
+      break
+  if not anyTrailing:
+    return ok 0
   var strippedCount = 0
-  let txr =
-    try:
-      withTransaction(buffer, "stripwhitespace"):
-        for lineIdx in 0 ..< buffer.len:
-          let line = buffer.getLine(lineIdx)
-          let trimmed = line.strip(leading = false, trailing = true)
-          if trimmed != line:
-            let replaceResult = buffer.replaceLine(lineIdx, trimmed)
-            if replaceResult.isErr:
-              return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
-            strippedCount.inc
-    except TransactionRollbackError as exc:
-      # Surface a failed rollback (untrustworthy buffer) as a status message.
-      return HandlerResult(
-        kind: hrError, errorMessage: exc.msg & " (buffer state may be inconsistent)"
-      )
+  let txr = withTransaction(buffer, "stripwhitespace"):
+    for lineIdx in 0 ..< buffer.len:
+      let line = buffer.getLine(lineIdx)
+      let trimmed = line.strip(leading = false, trailing = true)
+      if trimmed != line:
+        let replaceResult = buffer.replaceLine(lineIdx, trimmed)
+        if replaceResult.isErr:
+          return err(replaceResult.error)
+        strippedCount.inc
   if txr.isErr:
-    return HandlerResult(kind: hrError, errorMessage: txr.error)
-  HandlerResult(kind: hrStripWhitespace, strippedLineCount: strippedCount)
+    return err(txr.error)
+  ok strippedCount
+
+proc executeStripWhitespace*(buffer: TextBuffer): HandlerResult =
+  ## Execute stripwhitespace command (:stripwhitespace, :stripws)
+  ## Removes trailing whitespace from all lines.
+  let stripped =
+    try:
+      buffer.stripTrailingWhitespace()
+    except TransactionRollbackError as exc:
+      return HandlerResult(kind: hrError, errorMessage: exc.inconsistentMessage)
+  if stripped.isErr:
+    return HandlerResult(kind: hrError, errorMessage: stripped.error)
+  HandlerResult(kind: hrStripWhitespace, strippedLineCount: stripped.get)
 
 proc executeQuickRun*(handler: CommandModeHandler): HandlerResult =
   HandlerResult(kind: hrQuickRun)
@@ -370,33 +376,23 @@ proc executeQuickRun*(handler: CommandModeHandler): HandlerResult =
 proc resolveAddress(
     a: ExAddress, buffer: TextBuffer, currentLine: int
 ): Result[int, string] =
-  ## The 0-based line an address names, or why the buffer has none.
+  ## The 0-based line an address names, -1 for line 0, or why the buffer has
+  ## none.
   ##
   ## The only place an address is judged: the parser cannot tell that `:0` and
   ## `:1-1` name the same line.
-  let base =
-    case a.base
-    of eabCurrent:
-      currentLine
-    of eabLine:
-      a.line - 1
-    of eabLast:
-      buffer.len - 1
-  let line = satAdd(base, a.offset)
+  let line = a.addressLine(currentLine, buffer.len - 1)
   # Line 0 is the gap above the first line and addresses it: `:0,5d` and
   # `:1-1,5d` both start at line 1. Anything further up is refused.
   if line < -1 or line >= buffer.len:
     return err("Line out of range")
-  ok max(line, 0)
+  ok line
 
-proc resolveExRange*(
+proc resolveExLines(
     buffer: TextBuffer, range: ExLineRange, currentLine: int
 ): Result[tuple[first, last: int], string] =
-  ## Turn the range an Ex command was given into the 0-based span of lines it
-  ## covers, or say why it covers none.
-  ##
-  ## `%` and fold snapping clamp to the buffer; a typed address is refused
-  ## rather than moved.
+  ## The 0-based lines `range` names, folds aside, or why it names none. `%`
+  ## clamps to the buffer; a typed address is refused rather than moved.
   var first, last: int
   case range.kind
   of erkAll:
@@ -405,14 +401,27 @@ proc resolveExRange*(
   of erkAddresses:
     first = ?resolveAddress(range.first, buffer, currentLine)
     last = ?resolveAddress(range.last, buffer, currentLine)
+    # Judged before line 0 becomes line 1, as Vim does (E493): `1,$-1` in a
+    # one-line buffer is backwards, not line 1.
     if first > last:
       return err("Invalid range: start line > end line")
+    first = max(first, 0)
+    last = max(last, 0)
   of erkCurrent:
     if currentLine < 0 or currentLine >= buffer.len:
       return err("Line out of range")
     first = currentLine
     last = currentLine
 
+  ok (first, last)
+
+proc resolveExRange*(
+    buffer: TextBuffer, range: ExLineRange, currentLine: int
+): Result[tuple[first, last: int], string] =
+  ## Turn the range an Ex command was given into the 0-based span of lines it
+  ## covers, or say why it covers none: the lines it names, widened over the
+  ## closed folds it reaches into.
+  let (first, last) = ?buffer.resolveExLines(range, currentLine)
   # A range reaching into a closed fold covers all of its lines.
   let snapped = buffer.foldState.snapRangeToFolds(first, last)
   # Re-clamp: a stale fold can name lines past the end of the buffer.
@@ -447,24 +456,44 @@ proc executeFilter*(
     hrFilterVersion: buffer.contentVersion,
   )
 
-proc substituteLines*(
-    buffer: TextBuffer, range: ExLineRange, currentLine: int, countOnly = false
-): Result[tuple[first, last: int], string] =
-  ## The lines :s runs on, or why it refuses before looking at its pattern.
-  ## Counting changes nothing, so a read-only buffer allows it.
+proc substituteRefusal(buffer: TextBuffer, countOnly: bool): Result[void, string] =
+  ## Why :s refuses `buffer` before looking at its lines. Counting changes
+  ## nothing, so a read-only buffer allows it.
   if buffer.readOnly and not countOnly:
     return err("Buffer is read-only")
   # Raw buffer: pattern may land inside code unit.
   if not buffer.allowsTextTransforms:
     return err(rawBytesRejection("substitute"))
+  ok()
+
+proc substituteLines*(
+    buffer: TextBuffer, range: ExLineRange, currentLine: int, countOnly = false
+): Result[tuple[first, last: int], string] =
+  ## The lines :s runs on, or why it refuses before looking at its pattern.
+  ?buffer.substituteRefusal(countOnly)
   buffer.resolveExRange(range, currentLine)
+
+proc writeSubstitution(buffer: TextBuffer, spans: seq[LineEdit]): Result[void, string] =
+  ## Write what :s made of its lines as one change, so the rows below shift
+  ## once, not once per line. A failed rollback raises
+  ## `TransactionRollbackError`.
+  let txr = withTransaction(buffer, "substitute"):
+    let replaceResult = buffer.replaceLineSpans(spans)
+    if replaceResult.isErr:
+      return err(replaceResult.error)
+  if txr.isErr:
+    return err(txr.error)
+  ok()
+
+proc notFoundMessage(pattern: string): string =
+  "Pattern not found: " & pattern
 
 proc notFound(pattern: string, flags: SubstituteFlags): HandlerResult =
   ## A :s that matched nothing; with `e` that is no error and says nothing.
   if flags.noError:
     HandlerResult(kind: hrSubstituteNoMatch)
   else:
-    HandlerResult(kind: hrError, errorMessage: "Pattern not found: " & pattern)
+    HandlerResult(kind: hrError, errorMessage: notFoundMessage(pattern))
 
 proc countSubstitutions(
     buffer: TextBuffer,
@@ -491,8 +520,37 @@ proc countSubstitutions(
       (if matchedLines == 1: " line" else: " lines"),
   )
 
+proc replaceMatches(
+    buffer: TextBuffer,
+    lines: Slice[int],
+    pattern, replacement: string,
+    flags: SubstituteFlags,
+    match: SearchMatch,
+    skipUnchanged = false,
+): Result[tuple[count, lastLine: int], string] =
+  ## Replace the matches of `pattern` in `lines` as one change: how many there
+  ## were and the last line the change makes. With `skipUnchanged` a line that
+  ## comes out as it was is not written. A failed rollback raises
+  ## `TransactionRollbackError`.
+  var
+    count = 0
+    lastLine = lines.a
+    shift = 0
+    spans: seq[LineEdit]
+  for s in buffer.substitutions(
+    lines, pattern, parseReplacement(replacement), flags.ignoreCase, flags.global, match
+  ):
+    count += s.count
+    # The last line it makes, below what the lines above added.
+    lastLine = s.line + shift + s.lines.high
+    shift += s.lines.len - 1
+    if not skipUnchanged or s.lines.len != 1 or s.lines[0] != buffer.getLine(s.line):
+      spans.add LineEdit(start: s.line, delete: 1, insert: s.lines)
+  if spans.len > 0:
+    ?buffer.writeSubstitution(spans)
+  ok (count: count, lastLine: lastLine)
+
 proc executeSubstitute*(
-    handler: CommandModeHandler,
     buffer: TextBuffer,
     pattern: string,
     replacement: string,
@@ -516,42 +574,39 @@ proc executeSubstitute*(
   if flags.countOnly:
     return buffer.countSubstitutions(pattern, match, rangeStart .. rangeEnd, flags)
 
-  var
-    replaceCount = 0
-    lastLine = rangeStart
-    shift = 0
-    spans: seq[LineEdit]
-
-  let parsed = parseReplacement(replacement)
-  for s in buffer.substitutions(
-    rangeStart .. rangeEnd, pattern, parsed, flags.ignoreCase, flags.global, match
-  ):
-    replaceCount += s.count
-    # The last line it makes, below what the lines above added.
-    lastLine = s.line + shift + s.lines.high
-    shift += s.lines.len - 1
-    spans.add LineEdit(start: s.line, delete: 1, insert: s.lines)
-  if replaceCount == 0:
-    return notFound(pattern, flags)
-
-  # All lines as one change, so the rows below shift once, not once per line.
-  let txr =
+  let replaced =
     try:
-      withTransaction(buffer, "substitute"):
-        let replaceResult = buffer.replaceLineSpans(spans)
-        if replaceResult.isErr:
-          return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
+      buffer.replaceMatches(rangeStart .. rangeEnd, pattern, replacement, flags, match)
     except TransactionRollbackError as exc:
-      # Surface a failed rollback (untrustworthy buffer) as a status message.
-      return HandlerResult(
-        kind: hrError, errorMessage: exc.msg & " (buffer state may be inconsistent)"
-      )
-  if txr.isErr:
-    return HandlerResult(kind: hrError, errorMessage: txr.error)
-
+      return HandlerResult(kind: hrError, errorMessage: exc.inconsistentMessage)
+  let done = replaced.valueOr:
+    return HandlerResult(kind: hrError, errorMessage: error)
+  if done.count == 0:
+    return notFound(pattern, flags)
   HandlerResult(
-    kind: hrSubstitute, hrSubstituteCount: replaceCount, hrSubstituteLastLine: lastLine
+    kind: hrSubstitute, hrSubstituteCount: done.count, hrSubstituteLastLine: done.lastLine
   )
+
+proc substituteInBuffer*(
+    buffer: TextBuffer,
+    pattern: string,
+    replacement: string,
+    flags: SubstituteFlags,
+    range: ExLineRange,
+): Result[void, string] =
+  ## A :s that edits `buffer` alone, for a hook: `range` is lines as numbered,
+  ## which a closed fold does not widen, and a line that comes out as it was
+  ## is left alone, so there is no change when there is nothing to change.
+  ## The counting flag is not taken. `pattern` compiles, as reading the hook
+  ## made sure. A failed rollback raises `TransactionRollbackError`.
+  ?buffer.substituteRefusal(countOnly = false)
+  let (first, last) = ?buffer.resolveExLines(range, 0)
+  let done = ?buffer.replaceMatches(
+    first .. last, pattern, replacement, flags, smRegex, skipUnchanged = true
+  )
+  if done.count == 0 and not flags.noError:
+    return err(notFoundMessage(pattern))
+  ok()
 
 proc executeDelete*(
     handler: CommandModeHandler,
@@ -668,7 +723,7 @@ proc handleCommandModeInput*(
   of claBuffer:
     handler.executeBuffer(cmdResult.bufferArg)
   of claStripWhitespace:
-    handler.executeStripWhitespace(buffer)
+    buffer.executeStripWhitespace()
   of claFiler:
     handler.executeFiler(cmdResult.filerPath)
   of claChangeDir:
@@ -743,7 +798,7 @@ proc handleCommandModeInput*(
       kind: hrEnterTerminal, enterTerminalCommand: cmdResult.terminalCommand
     )
   of claSubstitute:
-    handler.executeSubstitute(
+    executeSubstitute(
       buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,
       cmdResult.match, cmdResult.substituteRange, currentLine,
     )

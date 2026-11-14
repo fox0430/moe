@@ -23,7 +23,8 @@ import pkg/[chronos, results]
 
 import
   ../src/moepkg/[
-    buffer, types, editor, config, hooks, editor_file, editor_frame, editor_hooks,
+    buffer, types, editor, config, hooks, hook_ex_command, editor_file, editor_frame,
+    editor_hooks,
     editor_window, job_lanes,
   ]
 import ../src/moepkg/handler {.all.}
@@ -66,6 +67,11 @@ proc writePre(command: string, onFail = hfaWrite, filter = "", timeout = 5): Hoo
     filter: filter,
     timeout: timeout,
   )
+
+proc writePreEx(exCommand: string, filter = ""): HookEntry =
+  ## An entry running `exCommand`, read as the loader reads it.
+  result = HookEntry(event: heBufWritePre, exCommand: exCommand, filter: filter)
+  doAssert parseHookExCommand(exCommand).isOk, exCommand
 
 proc lines(buf: TextBuffer): seq[string] =
   for i in 0 ..< buf.len:
@@ -404,6 +410,245 @@ suite "BufWritePre - failures":
     check not fileExists(dir / "ran")
     check readFile(path) == "a\xFFb\n"
 
+suite "BufWritePre - an Ex command":
+  proc setup(name, content: string, entries: seq[HookEntry]): (Editor, string, string) =
+    let dir = testDir(name)
+    let path = dir / "a.txt"
+    let editor = newEditor(newEditorConfig())
+    editor.openInEditor(path, content)
+    editor.config.hooks.entries = entries
+    (editor, dir, path)
+
+  test "stripwhitespace strips what is written, and one undo takes it back":
+    let (editor, dir, path) =
+      setup("ex_strip", "a  \nb\t\nc\n", @[writePreEx("stripwhitespace")])
+    defer:
+      removeDir(dir)
+    let saved = editor.saveFile(editor.activeBuffer)
+    check saved.isOk
+    check saved.get.warnings.len == 0
+    check readFile(path) == "a\nb\nc\n"
+    check editor.activeBuffer.lines == @["a", "b", "c"]
+    check editor.activeBuffer.undo().isOk
+    check editor.activeBuffer.lines == @["a  ", "b\t", "c"]
+
+  test "A range backwards in a short file changes nothing, as in Vim":
+    let (editor, dir, path) = setup("ex_short", "a,\n", @[writePreEx("1,$-1s/,$//")])
+    defer:
+      removeDir(dir)
+    let saved = editor.saveFile(editor.activeBuffer)
+    check saved.isOk
+    check saved.get.warnings.len == 1
+    check "Invalid range" in saved.get.warnings[0]
+    check readFile(path) == "a,\n"
+
+  test "stripwhitespace on a clean file makes no change":
+    let (editor, dir, _) = setup("ex_clean", "a\nb\n", @[writePreEx("stripwhitespace")])
+    defer:
+      removeDir(dir)
+    let changeId = editor.activeBuffer.currentChangeId
+    check editor.saveFile(editor.activeBuffer).isOk
+    check editor.activeBuffer.currentChangeId == changeId
+
+  test "An open change runs no entry, and the text is written as it is":
+    let (editor, dir, path) =
+      setup("ex_open", "a  \n", @[writePreEx("stripwhitespace"), writePre("sort")])
+    defer:
+      removeDir(dir)
+    check editor.activeBuffer.beginTransaction("insert").isOk
+    let saved = editor.saveFile(editor.activeBuffer)
+    check editor.activeBuffer.commitTransaction().isOk
+    check saved.isOk
+    check saved.get.warnings.len == 1
+    check "a change is in progress" in saved.get.warnings[0]
+    check readFile(path) == "a  \n"
+
+  test "An open change with an `abort` program refuses the write":
+    let (editor, dir, path) =
+      setup("ex_open_abort", "b\na\n", @[writePre("sort", onFail = hfaAbort)])
+    defer:
+      removeDir(dir)
+    check editor.activeBuffer.beginTransaction("insert").isOk
+    let saved = editor.saveFile(editor.activeBuffer)
+    check editor.activeBuffer.commitTransaction().isOk
+    check saved.isErr
+    check "a change is in progress" in saved.error
+    check "not written" in saved.error
+    check readFile(path) == "b\na\n"
+
+  test "A :s with no closing delimiter keeps the blanks it ends with":
+    let (editor, dir, path) =
+      setup("ex_trailing", "\ta\n", @[writePreEx("%s/\\t/    ")])
+    defer:
+      removeDir(dir)
+    check editor.saveFile(editor.activeBuffer).isOk
+    check readFile(path) == "    a\n"
+
+  test "A :s with `e` that finds nothing writes without a word":
+    let (editor, dir, path) = setup("ex_e", "a\n", @[writePreEx(r"%s/\s+$//e")])
+    defer:
+      removeDir(dir)
+    let saved = editor.saveFile(editor.activeBuffer)
+    check saved.isOk
+    check saved.get.warnings.len == 0
+    check readFile(path) == "a\n"
+
+  test "A :s without `e` that finds nothing warns, writes, and the next entry runs":
+    let (editor, dir, path) =
+      setup("ex_noe", "a\n", @[writePreEx(r"%s/zzz//"), writePreEx(r"%s/a/b/")])
+    defer:
+      removeDir(dir)
+    let saved = editor.saveFile(editor.activeBuffer)
+    check saved.isOk
+    check saved.get.warnings ==
+      @["BufWritePre hook (:%s/zzz//) failed: Pattern not found: zzz"]
+    check readFile(path) == "b\n"
+
+  test "Its warning stays when a program after it stops the write":
+    let (editor, dir, _) = setup(
+      "ex_refused",
+      "a\n",
+      @[writePreEx("%s/zzz//"), writePre("false", onFail = hfaAbort)],
+    )
+    defer:
+      removeDir(dir)
+    let saved = editor.saveFile(editor.activeBuffer)
+    check saved.isErr
+    check "Pattern not found: zzz" in saved.error
+    check "not written" in saved.error
+
+  test "An empty match that changes no line makes no change":
+    let (editor, dir, path) = setup("ex_empty", "a\nb\n", @[writePreEx(r"%s/\s*$//e")])
+    defer:
+      removeDir(dir)
+    let version = editor.activeBuffer.contentVersion
+    check editor.saveFile(editor.activeBuffer).isOk
+    check editor.activeBuffer.contentVersion == version
+    check editor.activeBuffer.undo().isErr
+    check readFile(path) == "a\nb\n"
+
+  test "A range past the end warns and the file is written":
+    let (editor, dir, path) = setup("ex_range", "a\n", @[writePreEx("1,10s/a/b/")])
+    defer:
+      removeDir(dir)
+    let saved = editor.saveFile(editor.activeBuffer)
+    check saved.isOk
+    check saved.get.warnings.len == 1
+    check "1,10s/a/b/" in saved.get.warnings[0]
+    check readFile(path) == "a\n"
+
+  test "An entry built in code that does not read warns, and the file is written":
+    let (editor, dir, path) = setup(
+      "ex_unread", "a\n", @[HookEntry(event: heBufWritePre, exCommand: "s/a/b/")]
+    )
+    defer:
+      removeDir(dir)
+    let saved = editor.saveFile(editor.activeBuffer)
+    check saved.isOk
+    check saved.get.warnings.len == 1
+    check "expected" in saved.get.warnings[0]
+    check readFile(path) == "a\n"
+
+  test "A closed fold does not widen the range":
+    let (editor, dir, path) =
+      setup("ex_fold", "a\na\na\na\na\n", @[writePreEx("1,3s/a/b/")])
+    defer:
+      removeDir(dir)
+    check editor.activeBuffer.foldState.addFold(2, 4, collapsed = true)
+    check editor.saveFile(editor.activeBuffer).isOk
+    check readFile(path) == "b\nb\nb\na\na\n"
+
+  test "The case goes by 'ignorecase' and 'smartcase' and the flags fix it":
+    let (editor, dir, path) = setup(
+      "ex_case",
+      "Ab\nAb\nAb\nAb\n",
+      @[
+        writePreEx("1s/a/x/"),
+        writePreEx("2s/A/y/"),
+        writePreEx("3s/a/z/I"),
+        writePreEx("4s/(?-i)a/w/e"),
+      ],
+    )
+    defer:
+      removeDir(dir)
+    editor.state.input.search.ignorecase = true
+    editor.state.input.search.smartcase = true
+    let saved = editor.saveFile(editor.activeBuffer)
+    check saved.isOk
+    check readFile(path) == "xb\nyb\nAb\nAb\n"
+    check saved.get.warnings.len == 1
+
+  test "The cursor, the view, the searches, the jumps and the message stay":
+    var content = ""
+    for i in 0 ..< 40:
+      content.add "line " & $i & "   \n"
+    let (editor, dir, _) = setup(
+      "ex_state", content, @[writePreEx("stripwhitespace"), writePreEx(r"%s/line/l/g")]
+    )
+    defer:
+      removeDir(dir)
+    editor.activeWindow.cursor = BufferPosition(line: 12, column: 8)
+    editor.activeWindow.viewport.topLine = 10
+    editor.state.input.search.history = @["before"]
+    editor.state.input.search.last.pattern = "before"
+    editor.state.input.commandState.history = @["cmd"]
+    let jumps = editor.state.jumpList
+    editor.state.statusMessage = ""
+
+    check editor.saveFile(editor.activeBuffer).isOk
+    check editor.activeBuffer.getLine(12) == "l 12"
+    # On the line it was, clamped onto its shorter text.
+    check editor.activeWindow.cursor == BufferPosition(line: 12, column: 3)
+    check editor.activeWindow.viewport.topLine == 10
+    check editor.state.input.search.history == @["before"]
+    check editor.state.input.search.last.pattern == "before"
+    check editor.state.input.commandState.history == @["cmd"]
+    check editor.state.jumpList == jumps
+    check editor.state.statusMessage == ""
+
+  test ":wa runs it on a file no window shows":
+    let (editor, dir, _) = setup("ex_wa", "a\n", @[writePreEx("%s/old/OLD/")])
+    defer:
+      removeDir(dir)
+    discard editor.addBackground(dir / "b.txt", "old")
+    let saved = editor.saveAllBuffers()
+    check saved.failures.len == 0
+    check readFile(dir / "b.txt") == "new OLD\n"
+
+  test "It runs in order with programs, and a failed program stops it":
+    let (editor, dir, path) = setup(
+      "ex_order",
+      "a\n",
+      @[writePreEx("%s/a/b/"), writePre("sed s/b/c/"), writePreEx("%s/c/d/")],
+    )
+    defer:
+      removeDir(dir)
+    check editor.saveFile(editor.activeBuffer).isOk
+    check readFile(path) == "d\n"
+
+    editor.activeBuffer.edit(@["a"])
+    editor.config.hooks.entries = @[writePre("false"), writePreEx("%s/a/b/")]
+    let saved = editor.saveFile(editor.activeBuffer)
+    check saved.isOk
+    check saved.get.warnings.len == 1
+    check readFile(path) == "a\n"
+
+  test "A read-only buffer runs none":
+    let (editor, dir, _) = setup("ex_ro", "a  \n", @[writePreEx("stripwhitespace")])
+    defer:
+      removeDir(dir)
+    editor.activeBuffer.readOnly = true
+    discard editor.saveFile(editor.activeBuffer, force = true)
+    check editor.activeBuffer.lines == @["a  "]
+
+  test "A copy written with :w {file} runs none":
+    let (editor, dir, _) = setup("ex_copy", "a  \n", @[writePreEx("stripwhitespace")])
+    defer:
+      removeDir(dir)
+    check editor.saveFile(editor.activeBuffer, some(dir / "copy.txt")).isOk
+    check readFile(dir / "copy.txt") == "a  \n"
+    check editor.activeBuffer.lines == @["a  "]
+
 suite "BufWritePre - the wait":
   test "Ctrl-C stops the command and the file is not written":
     let dir = testDir("interrupt")
@@ -610,6 +855,21 @@ suite "BufWritePre - the wait":
 
     check editor.saveFile(editor.activeBuffer).isOk
     check turns.finishes == 1
+
+  test "Ex commands alone do not wait, so nothing is handed back":
+    let dir = testDir("finish_ex")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.txt"
+    let editor = newEditor(newEditorConfig())
+    editor.openInEditor(path, "a \n")
+    editor.config.hooks.entries = @[writePreEx("stripwhitespace")]
+    let turns = editor.watch
+
+    check editor.saveFile(editor.activeBuffer).isOk
+    check readFile(path) == "a\n"
+    check turns.finishes == 0
+    check not editor.waitingInPlace
 
   test "The event loop does not run while the write waits":
     let dir = testDir("loop")

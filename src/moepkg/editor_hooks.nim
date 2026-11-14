@@ -32,7 +32,10 @@
 ##
 ## `BufWritePre` is the exception: the write waits for it where the write is,
 ## as Vim waits for its autocommands, so the keys after a `:w` in a mapping or
-## a macro run once the file is written. Its output replaces the buffer.
+## a macro run once the file is written. Its output replaces the buffer. An
+## entry may run a moe Ex command (`:s`, `:stripwhitespace`) instead, as an
+## edit of the buffer rather than of a window: the cursor, the last search and
+## the jump list stay as they were.
 
 import std/[options, os, sequtils, strutils]
 
@@ -40,6 +43,9 @@ import pkg/[chronos, results]
 
 import
   types/editor_types,
+  command_handlers/command_handler,
+  command_line,
+  hook_ex_command,
   background_process,
   blocking_filter,
   buffer,
@@ -79,49 +85,96 @@ proc owedOnExit(event: HookEvent): bool =
   ## the user made, while a read is moot once the user leaves.
   event == heBufWritePost
 
-proc hookCommands(
+proc matchingEntries(
     e: Editor, event: HookEvent, path: string, language: SourceLanguage
-): seq[HookCommand] =
-  ## Every entry matching `event` for `path`, resolved and ready to exec.
+): tuple[absPath: string, entries: seq[HookEntry]] =
+  ## The entries matching `event` for `path`, and the absolute path.
   # `hooksFor` checks `enable`; this spares the path work when nothing is set.
   if path.len == 0 or e.config.hooks.entries.len == 0:
-    return @[]
-
+    return
   let absPath = pathKey(path)
   # Matched first: the checks below stat the file.
   let entries = e.config.hooks.hooksFor(event, absPath, language)
   if entries.len == 0:
-    return @[]
+    return
   case event
   of heBufReadPost:
     # No file for a new unsaved path (Vim uses `BufNewFile`), nor a directory.
     if not fileExists(absPath):
-      return @[]
+      return
   of heBufWritePre, heBufWritePost:
     # Rejected here too: the buffer overload's `isUtilityBuffer` check does not
     # cover a path handed in directly.
     if dirExists(absPath):
-      return @[]
+      return
+  (absPath, entries)
 
+proc toHookCommand(
+    entry: HookEntry, event: HookEvent, absPath: string, language: SourceLanguage
+): Option[HookCommand] =
+  ## A program entry resolved against `absPath`, ready to exec.
+  let command = entry.toCommand(absPath, language)
+  if command.cmd.len == 0:
+    # Rejected by the loader; only code-built entries reach here.
+    return none(HookCommand)
+  some HookCommand(
+    event: event,
+    path: absPath,
+    command: entry.command,
+    cmd: command.cmd,
+    args: command.args,
+    workingDir: command.workingDir,
+    timeout: entry.timeout,
+    showOutput: entry.showOutput,
+    onFail: entry.onFail,
+  )
+
+proc hookCommands(
+    e: Editor, event: HookEvent, path: string, language: SourceLanguage
+): seq[HookCommand] =
+  ## Every program entry matching `event` for `path`, resolved and ready to
+  ## exec. An Ex command runs only where a write waits; see `writePreSteps`.
+  let (absPath, entries) = e.matchingEntries(event, path, language)
   for entry in entries:
-    let command = entry.toCommand(absPath, language)
-    if command.cmd.len == 0:
-      # Rejected by the loader; only code-built entries reach here.
-      continue
-    result.add HookCommand(
-      event: event,
-      path: absPath,
-      command: entry.command,
-      cmd: command.cmd,
-      args: command.args,
-      workingDir: command.workingDir,
-      timeout: entry.timeout,
-      showOutput: entry.showOutput,
-      onFail: entry.onFail,
-    )
+    if not entry.isExHook:
+      let command = entry.toHookCommand(event, absPath, language)
+      if command.isSome:
+        result.add command.get
+
+type WritePreStep = object
+  ## One `BufWritePre` entry for one write, in config order.
+  case ex: bool
+  of false:
+    program: HookCommand
+  of true:
+    line: string ## As written, to label it.
+    parsed: Result[HookExCommand, string]
+      ## The loader refused what does not read; an entry built in code may not.
+
+proc writePreSteps(
+    e: Editor, path: string, language: SourceLanguage
+): seq[WritePreStep] =
+  ## Every `BufWritePre` entry matching `path`, programs and Ex commands.
+  let (absPath, entries) = e.matchingEntries(heBufWritePre, path, language)
+  for entry in entries:
+    if entry.isExHook:
+      result.add WritePreStep(
+        ex: true, line: entry.exCommand, parsed: parseHookExCommand(entry.exCommand)
+      )
+    else:
+      let command = entry.toHookCommand(heBufWritePre, absPath, language)
+      if command.isSome:
+        result.add WritePreStep(ex: false, program: command.get)
 
 proc hookLabel(hook: HookCommand): string =
   $hook.event & " hook (" & hook.cmd & ")"
+
+proc exHookLabel(line: string): string =
+  ## A `BufWritePre` Ex command, as written.
+  $heBufWritePre & " hook (:" & line.exCommandText & ")"
+
+proc label(step: WritePreStep): string =
+  if step.ex: step.line.exHookLabel else: step.program.hookLabel
 
 proc jobLabel(hooks: seq[HookCommand]): string =
   ## One job's hooks for `:jobs`: their event and programs.
@@ -275,7 +328,9 @@ proc queueHooks*(e: Editor, event: HookEvent, buf: TextBuffer) =
     e.queueHooks(event, buf.filePath.get, buf.language)
 
 type WritePreResult* = object ## What the `BufWritePre` hooks left a write.
-  warnings*: seq[string] ## Failures the write goes past (`onFail = "write"`).
+  warnings*: seq[string]
+    ## Failures the write goes past: a program's with `onFail = "write"`, and
+    ## any Ex command's.
   refusal*: string ## Why the file is not to be written; empty to write it.
   interrupted*: bool ## Ctrl-C or a deadly signal stopped a command: write nothing more.
 
@@ -287,20 +342,11 @@ proc holdsNoText(buf: TextBuffer): bool =
       return false
   true
 
-proc takeWritePreOutput(
-    e: Editor, buf: TextBuffer, label, output: string
-): Result[void, string] =
-  ## Put a command's answer in the buffer as one undoable change, touching only
-  ## the lines that differ, so marks and folds on the rest stay. Every window
-  ## on the buffer, the current one too, follows its text, as Neovim moves
-  ## them across an API edit.
-  let lines = ?buf.decodeTransformedContent(output)
-  let window = e.activeWindow
-  let wanted = window.wanted
-  e.asOutsideEdit:
-    let replaced = buf.replaceAllLines(lines, description = label)
-    if replaced.isErr:
-      return err(replaced.error)
+proc keepCursorOnText(
+    e: Editor, window: EditorWindow, buf: TextBuffer, wanted: WantedColumn
+) =
+  ## Keep the cursor of `window` on a character of `buf` after an edit that is
+  ## not the user's.
   if window.buffer == buf:
     let clamped = e.motionController.cursorManager.clampPosition(
       CursorPosition(x: window.cursor.column, y: window.cursor.line),
@@ -311,6 +357,48 @@ proc takeWritePreOutput(
     # Kept anew: the edit is not the write command's, so the column vertical
     # moves want outlasts it.
     window.wanted = wanted
+
+template editOutside(e: Editor, buf: TextBuffer, body: untyped) =
+  ## Run `body`, an edit of `buf` that is not the user's. Every window on the
+  ## buffer, the current one too, follows its text, as Neovim moves them across
+  ## an API edit. A `body` that returns early, having failed, leaves the
+  ## cursor alone.
+  let window = e.activeWindow
+  let wanted = window.wanted
+  e.asOutsideEdit:
+    body
+  e.keepCursorOnText(window, buf, wanted)
+
+proc takeWritePreOutput(
+    e: Editor, buf: TextBuffer, label, output: string
+): Result[void, string] =
+  ## Put a command's answer in the buffer as one undoable change, touching only
+  ## the lines that differ, so marks and folds on the rest stay.
+  let lines = ?buf.decodeTransformedContent(output)
+  e.editOutside(buf):
+    let replaced = buf.replaceAllLines(lines, description = label)
+    if replaced.isErr:
+      return err(replaced.error)
+  ok()
+
+proc runWritePreExCommand(
+    e: Editor, buf: TextBuffer, line: string, ex: Result[HookExCommand, string]
+): Result[void, string] =
+  ## Run a `BufWritePre` entry's Ex command on `buf` as one undoable change.
+  let ex = ex.valueOr:
+    return err(line.exHookLabel & ": expected " & error)
+  e.editOutside(buf):
+    let ran =
+      case ex.kind
+      of hekStripWhitespace:
+        # How many lines it changed says nothing to a hook.
+        buf.stripTrailingWhitespace().map(proc(_: int) = discard)
+      of hekSubstitute:
+        # The case goes by 'ignorecase' and 'smartcase', as for a typed :s.
+        let flags = e.commandLineParser.substituteFlags(ex.pattern, ex.flags, smRegex)
+        buf.substituteInBuffer(ex.pattern, ex.replacement, flags, ex.range)
+    if ran.isErr:
+      return err(line.exHookLabel & " failed: " & ran.error)
   ok()
 
 proc writePreTurn(
@@ -392,10 +480,19 @@ proc runWritePreHooks*(
 ): WritePreResult =
   ## Run the `BufWritePre` hooks matching `buf` written to `path`, in config
   ## order, and wait for them here, as Vim waits for its autocommands. Each
-  ## output replaces the buffer. The first failure ends the chain: the
-  ## commands after it were to describe text it never changed.
-  let hooks = e.hookCommands(heBufWritePre, path, language)
-  if hooks.len == 0:
+  ## output replaces the buffer. The first failure of a program ends the
+  ## chain: the commands after it were to describe text it never changed.
+  let steps = e.writePreSteps(path, language)
+  if steps.len == 0:
+    return
+  if buf.inTransaction:
+    # An open change (`<C-o>:w` in Insert) takes no other change. It ends when
+    # Insert does, so a program whose failure stops the write stops it here.
+    let why = "BufWritePre hooks not run: a change is in progress"
+    if steps.anyIt(not it.ex and it.program.onFail == hfaAbort):
+      result.refusal = (why & "; not written").forDisplay
+    else:
+      result.warnings.add why.forDisplay
     return
   if buf.readOnly or not buf.allowsTextTransforms:
     # The user's text goes to disk as it is: refusing it would leave the file
@@ -412,14 +509,34 @@ proc runWritePreHooks*(
     interrupted = new bool
     shown = new string
     wasWaiting = e.waitingInPlace
-  e.waitingInPlace = true
+    # An Ex command waits on no process.
+    waits = steps.anyIt(not it.ex)
+  if waits:
+    e.waitingInPlace = true
   defer:
-    e.waitingInPlace = wasWaiting
-    e.state.ui.waitNotice = ""
-    if not e.blockingWait.finish.isNil:
-      e.blockingWait.finish()
-  for hook in hooks:
-    let ran = e.runWritePreHook(buf, hook, interrupted, shown)
+    if waits:
+      e.waitingInPlace = wasWaiting
+      e.state.ui.waitNotice = ""
+      if not e.blockingWait.finish.isNil:
+        e.blockingWait.finish()
+  for step in steps:
+    let ran =
+      try:
+        if step.ex:
+          e.runWritePreExCommand(buf, step.line, step.parsed)
+        else:
+          e.runWritePreHook(buf, step.program, interrupted, shown)
+      except TransactionRollbackError as exc:
+        # The buffer is in a state nothing vouches for: it is not to be written.
+        result.refusal = (step.label & " failed: " & exc.msg & "; not written").forDisplay
+        return
+    if step.ex:
+      # Over in an instant, and a failure leaves the text as it was, as finding
+      # nothing does: the write and the entries after it go on, as in Vim.
+      if ran.isErr:
+        result.warnings.add ran.error.forDisplay
+      continue
+    let hook = step.program
     if interrupted[]:
       # As Vim's got_int: the rest of the mapping or register that wrote goes too.
       e.state.beep()
