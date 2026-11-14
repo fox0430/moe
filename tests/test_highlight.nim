@@ -3070,6 +3070,14 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for TypeScript":
     check detectLanguage("test.ts") == SourceLanguage.langTypeScript
 
+  test "detectLanguage for Markdown":
+    check detectLanguage("test.markdown") == SourceLanguage.langMarkdown
+    check detectLanguage("test.md") == SourceLanguage.langMarkdown
+
+  test "detectLanguage for R Markdown":
+    check detectLanguage("test.Rmd") == SourceLanguage.langMarkdown
+    check detectLanguage("test.rmd") == SourceLanguage.langMarkdown
+
   test "detectLanguage for Python":
     check detectLanguage("test.py") == SourceLanguage.langPython
 
