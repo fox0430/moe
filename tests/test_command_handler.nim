@@ -1335,6 +1335,39 @@ suite "CommandModeHandler - executeSubstitute":
       handler.executeSubstitute(buffer, "z", "x", "n".parseSubstituteFlags, smRegex)
     check result.kind == hrError
 
+  test "`e` lets a pattern it does not find pass, changing nothing":
+    let handler = setupHandler()
+    let buffer = newTextBuffer("a")
+    for flags in ["e", "ne"]:
+      let result =
+        handler.executeSubstitute(buffer, "z", "x", flags.parseSubstituteFlags, smRegex)
+      check result.kind == hrSubstituteNoMatch
+      check buffer.getLine(0) == "a"
+
+  test "A :s that finds nothing makes no undo step and keeps the content version":
+    for flags in ["", "e"]:
+      checkpoint "flags: " & flags
+      let handler = setupHandler()
+      let buffer = newTextBuffer("a")
+      let version = buffer.contentVersion
+      discard
+        handler.executeSubstitute(buffer, "z", "x", flags.parseSubstituteFlags, smRegex)
+      check buffer.contentVersion == version
+      check buffer.undo().isErr
+
+  test "`e` still refuses a range past the end":
+    let handler = setupHandler()
+    let buffer = newTextBuffer("a")
+    let result = handler.executeSubstitute(
+      buffer,
+      "a",
+      "x",
+      "e".parseSubstituteFlags,
+      smRegex,
+      range = exAddresses(exLine(1), exLine(5)),
+    )
+    check result.kind == hrError
+
   test "Substitute ignores case when told to":
     let handler = setupHandler()
     let buffer = newTextBuffer("Foo foo FOO")

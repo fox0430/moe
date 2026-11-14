@@ -230,7 +230,7 @@ proc processResultWithHost(
       hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrLspFormat, hrLspRestart,
       hrLspFold, hrLspExecuteCommand:
     return e.processLspResult(r, activeBuffer)
-  of hrHandled, hrUnhandled:
+  of hrHandled, hrUnhandled, hrSubstituteNoMatch:
     discard # Fall through to post-processing
   of hrError:
     e.state.statusMessage = r.errorMessage
@@ -298,7 +298,7 @@ proc processResultEpilogue(
     e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
 ): bool =
   ## Post-processing for falling-through arms (hrHandled / hrUnhandled /
-  ## hrError): overlay and mode transitions, viewer buffer
+  ## hrError / hrSubstituteNoMatch): overlay and mode transitions, viewer buffer
   ## regeneration, status messages. Returns true to continue the main loop.
   #
   # Handle overlay transitions
@@ -1106,7 +1106,8 @@ proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
           )
         )
       # As Vim's setpcmark, where the command starts is a jump, which its edit
-      # then moves. A command that fails takes it back.
+      # then moves. A command that fails, or a :s that finds nothing, takes it
+      # back.
       var jumpsBefore = none(JumpListState)
       if cmdResult.kind in JumpActions:
         jumpsBefore = some(e.state.jumpList)
@@ -1115,7 +1116,7 @@ proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
         activeBuffer, cmdResult, isShared, e.activeWindow.cursor.line,
         otherModifiedCount,
       )
-      if r.kind == hrError and jumpsBefore.isSome:
+      if r.kind in {hrError, hrSubstituteNoMatch} and jumpsBefore.isSome:
         e.state.jumpList = jumpsBefore.get
   if commandMode == EditorMode.Config and r.kind == hrCloseWindow:
     r = e.activeWindow.viewerQuit().get(r)

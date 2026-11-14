@@ -459,6 +459,13 @@ proc substituteLines*(
     return err(rawBytesRejection("substitute"))
   buffer.resolveExRange(range, currentLine)
 
+proc notFound(pattern: string, flags: SubstituteFlags): HandlerResult =
+  ## A :s that matched nothing; with `e` that is no error and says nothing.
+  if flags.noError:
+    HandlerResult(kind: hrSubstituteNoMatch)
+  else:
+    HandlerResult(kind: hrError, errorMessage: "Pattern not found: " & pattern)
+
 proc countSubstitutions(
     buffer: TextBuffer,
     pattern: string,
@@ -476,7 +483,7 @@ proc countSubstitutions(
     if count > 0:
       matchedLines.inc
   if matches == 0:
-    return HandlerResult(kind: hrError, errorMessage: "Pattern not found: " & pattern)
+    return notFound(pattern, flags)
   HandlerResult(
     kind: hrHandled,
     statusMessage:
@@ -524,6 +531,8 @@ proc executeSubstitute*(
     lastLine = s.line + shift + s.lines.high
     shift += s.lines.len - 1
     spans.add LineEdit(start: s.line, delete: 1, insert: s.lines)
+  if replaceCount == 0:
+    return notFound(pattern, flags)
 
   # All lines as one change, so the rows below shift once, not once per line.
   let txr =
@@ -539,9 +548,6 @@ proc executeSubstitute*(
       )
   if txr.isErr:
     return HandlerResult(kind: hrError, errorMessage: txr.error)
-
-  if replaceCount == 0:
-    return HandlerResult(kind: hrError, errorMessage: "Pattern not found: " & pattern)
 
   HandlerResult(
     kind: hrSubstitute, hrSubstituteCount: replaceCount, hrSubstituteLastLine: lastLine

@@ -111,6 +111,31 @@ suite ":s breaks lines and lands the cursor as Vim's do_sub":
     check e.cursorAt == (3, 0)
     check e.jumps.len == 0
 
+  test "with `e` a :s that finds nothing says nothing and marks no jump":
+    # Vim 9.2: `:%s/zzz//e` and `:%s/zzz//ne` leave the cursor, the message
+    # and the jump list as they were.
+    for keys in [":%s/q/x/e<Enter>", ":%s/q/x/ne<Enter>"]:
+      let e = newEditorWith(Lines, 3, 0)
+      e.state.statusMessage = ""
+      e.press(keys)
+      check e.text == Lines
+      check e.cursorAt == (3, 0)
+      check e.jumps.len == 0
+      check e.state.statusMessage == ""
+
+  test "with `e` a :s that finds something marks the jump":
+    let e = newEditorWith(Lines, 3, 0)
+    e.press(":%s/,/-/e<Enter>")
+    check e.cursorAt == (2, 2)
+    check e.jumps == @[(3, 0)]
+
+  test "with `e` the keys after a :s that finds nothing still run":
+    let e = newEditorWith(@["a", "b", "c"], 0, 0)
+    e.press("qq:s/z/x/e<Enter>jq")
+    check e.cursorAt == (1, 0)
+    e.press("@q")
+    check e.cursorAt == (2, 0)
+
   test "Ctrl-o goes back to where it started, moved down with its line":
     let e = newEditorWith(@["a,b", "x", "  y"], 2, 2)
     e.press(":1s/,/\\r/<Enter>")

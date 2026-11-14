@@ -165,6 +165,7 @@ type
     hrUndo # Undo the last change (:undo, :u)
     hrRedo # Redo the last undone change (:redo)
     hrSubstitute # Search and replace (:s)
+    hrSubstituteNoMatch # A :s whose `e` flag lets it find nothing, silently
     hrDeleteLines # Delete lines (:d, :%d)
     hrReferencesQuit # Close references viewer and return to previous mode
     hrReferencesJumpTo # Jump to the selected reference
@@ -412,7 +413,7 @@ type
     of hrLspExecuteCommand:
       hrLspCommand*: string
       hrLspCommandArgs*: seq[string]
-    of hrUndo, hrRedo:
+    of hrUndo, hrRedo, hrSubstituteNoMatch:
       discard
     of hrSubstitute:
       hrSubstituteCount*: int
@@ -524,7 +525,7 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
   case k
   of hrQuit, hrCquit:
     hrgAppExit
-  of hrHandled, hrUnhandled, hrError:
+  of hrHandled, hrUnhandled, hrError, hrSubstituteNoMatch:
     hrgHandledGeneric
   of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrJumpList, hrChanges,
       hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat,

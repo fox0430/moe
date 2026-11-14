@@ -3974,6 +3974,16 @@ suite "Editor - handler CommandContext sees live config after applyConfigSetting
     check ctx.notificationConfig.screenNotifications == false
     check ctx.notificationConfig.yankScreenNotify == false
 
+suite ":s with `e` in a viewer":
+  test "a count that finds nothing leaves the viewer in its mode, as one that finds something does":
+    for command in [":%s/zzzz//ne", ":%s/the//n"]:
+      let e = createTestEditor()
+      discard e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer)
+      require e.state.mode == EditorMode.Help
+      discard e.executeCommandOverlay(command)
+      check e.state.mode == EditorMode.Help
+      check e.activeWindow.mode == EditorMode.Help
+
 suite "processResult - viewer split window teardown":
   ## hrHelpViewerQuit and its siblings share one teardown path; these cover it
   ## through processResult rather than re-implementing the sequence.
