@@ -164,7 +164,10 @@ proc clearUntouchedAutoIndent*(buffer: TextBuffer, line: int): Result[bool, stri
   let text = buffer.getLine(line)
   if text.len == 0 or not text.allCharsInSet({' ', '\t'}):
     return ok(false)
+  # Vim's stop_insert opens no fold.
+  let anchor = buffer.editAnchor
   let cleared = buffer.replaceLine(line, "")
+  buffer.editAnchor = anchor
   if cleared.isErr:
     return err(cleared.error)
   ok(true)

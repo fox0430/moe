@@ -25,7 +25,7 @@ import std/[options, unittest]
 import pkg/celina
 
 import ../src/moepkg/[buffer, types, editor]
-import ../src/moepkg/editor_frame
+import ../src/moepkg/[editor_frame, fold_open]
 import ../src/moepkg/handler {.all.}
 import vim_like_test_helper
 
@@ -166,6 +166,137 @@ suite "Insert and Replace open the closed fold the cursor is in, as Vim's edit()
       check e.activeBuffer.foldState.getCollapsedFoldAt(2).isNone
       e.pressWithFrames("<Esc>")
       check e.activeBuffer.foldState.getCollapsedFoldAt(2).isNone
+
+suite "Insert opens a closed fold only as Vim's edit() does":
+  # Typed in Vim 9.2 (`vim -u NONE`): moving up or down leaves a closed fold
+  # closed, and <Up> lands on its last line; typing and moving sideways open
+  # it, a command after Ctrl-o does not.
+  const Indented = @["aa bb", "    cc dd", "    ee ff", "    gg hh", "ii jj"]
+  for (keys, wantCursor, closed) in [
+    ("A<Down>", (1, 5), true),
+    ("A<Down><Down>", (4, 5), false),
+    ("GA<Up>", (3, 5), true),
+    ("GA<Up><Up>", (0, 5), false),
+    ("Gi<Up><Esc>j", (4, 0), false),
+    ("GR<Up><Up>", (0, 0), false),
+    (":3<Enter>o<Up>", (3, 0), true),
+    ("i<C-o>:3<Enter><Down>", (4, 0), false),
+    ("i<C-o>:3<Enter><Up>", (0, 0), false),
+    ("A<Down><Esc>k", (0, 0), false),
+    ("GA<Up>x<Up>", (2, 6), false),
+    ("GA<Up><Backspace><Up>", (2, 4), false),
+    ("GR<Up>x<Up>", (2, 1), false),
+    ("GA<Up><Left><Up>", (2, 4), false),
+    ("GA<Up><Right><Up>", (2, 6), false),
+    ("Gi<Up><Home><Up>", (2, 0), false),
+    (":3<Enter>i<Up>", (1, 4), false),
+    (":3<Enter>R<Down>", (3, 4), false),
+    (":3<Enter>i<C-o>j", (3, 4), false),
+    ("GR<Backspace>", (3, 9), true),
+    ("GR<Backspace><Backspace>", (3, 8), false),
+  ]:
+    test keys & " with lines 2-4 folded":
+      let e = newVimLikeEditor(Indented, 0, 0)
+      check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+      e.pressWithFrames(keys)
+      check e.cursorAt == wantCursor
+      check e.activeBuffer.foldState.getCollapsedFoldAt(e.cursorAt[0]).isSome == closed
+
+  test "Ctrl-o x in a closed fold deletes the fold's lines":
+    let e = newVimLikeEditor(Indented, 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames("GA<Up><C-o>x")
+    check e.lines == @["aa bb", "ii jj"]
+    check e.cursorAt == (1, 0)
+
+  test "<Down> off an unused auto-indent leaves the fold closed":
+    let e =
+      newVimLikeEditor(@["    aa", "bb", "cc", "dd", "ee"], 0, 0, autoIndent = true)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames("o<Down>")
+    check e.lines[1] == ""
+    check e.cursorAt[0] == 2
+    check e.activeBuffer.foldState.getCollapsedFoldAt(2).isSome
+
+  test "<Enter> on the last line of a closed fold opens it":
+    let e = newVimLikeEditor(Indented, 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames("GA<Up><Enter>")
+    check e.cursorAt == (4, 0)
+    check e.activeBuffer.foldState.getCollapsedFoldAt(1).isNone
+
+  test "A paste in a closed fold opens it":
+    let e = newVimLikeEditor(Indented, 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames("GA<Up>")
+    check e.handlePasteText("zz")
+    check e.lines[3] == "    gzzg hh"
+    check e.activeBuffer.foldState.getCollapsedFoldAt(3).isNone
+
+  test "<BS> joining a line up leaves the fold below closed":
+    let e = newVimLikeEditor(@["aa", "bb", "cc", "dd", "ee", "ff"], 1, 0)
+    check e.activeBuffer.foldState.addFold(2, 4, collapsed = true)
+    e.pressWithFrames("i<Backspace>")
+    check e.lines[0] == "aabb"
+    check e.activeBuffer.foldState.getCollapsedFoldAt(1).isSome
+
+  test "<C-w> joining a line up leaves the fold below closed":
+    let e = newVimLikeEditor(@["aa", "bb", "cc", "dd", "ee", "ff"], 1, 0)
+    check e.activeBuffer.foldState.addFold(2, 4, collapsed = true)
+    e.pressWithFrames("i<C-w>")
+    check e.lines[0] == "aabb"
+    check e.activeBuffer.foldState.getCollapsedFoldAt(1).isSome
+
+  test "Replace <BS> taking back a line break leaves the fold below closed":
+    let e = newVimLikeEditor(@["aa", "bb", "cc", "dd", "ee", "ff"], 0, 2)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames("R<Enter><Backspace>")
+    check e.lines[0] == "aa"
+    check e.activeBuffer.foldState.getCollapsedFoldAt(1).isSome
+
+  test "<Enter> at the end of a closed fold's last line opens it":
+    let e = newVimLikeEditor(@["aa", "bb", "cc", "dd", "ee", "ff"], 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames(":5<Enter>A<Up><Enter>")
+    check e.cursorAt == (4, 0)
+    check e.activeBuffer.foldState.getCollapsedFoldAt(1).isNone
+
+  test "A combining mark typed in a closed fold opens it":
+    let e = newVimLikeEditor(@["aa", "bb", "cc", "dd", "ee", "ff"], 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames(":5<Enter>A<Up>")
+    check e.handleTextInput("\u0301")
+    check e.lines[3] == "dd\u0301"
+    check e.activeBuffer.foldState.getCollapsedFoldAt(1).isNone
+
+  test "An edit away from the cursor leaves the fold it is in closed":
+    let e = newVimLikeEditor(@["aa", "bb", "cc", "dd", "ee", "ff"], 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames("GA")
+    e.state.anchorEdits(e.activeBuffer)
+    check e.activeBuffer.insertTextEnd(BufferPosition(line: 2, column: 0), "X").isOk
+    e.state.openFoldsOfEdits(e.activeBuffer)
+    check e.lines[2] == "Xcc"
+    check e.activeBuffer.foldState.getCollapsedFoldAt(1).isSome
+
+  test "<C-o>a in a closed fold opens it":
+    let e = newVimLikeEditor(@["aa", "bb", "cc", "dd", "ee", "ff"], 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames("i<C-o>:3<Enter>")
+    check e.activeBuffer.foldState.getCollapsedFoldAt(2).isSome
+    e.pressWithFrames("<C-o>a")
+    check e.activeBuffer.foldState.getCollapsedFoldAt(2).isNone
+
+  test "Deleting the cursor's row leaves the fold after it closed":
+    let e = newVimLikeEditor(@["aa", "bb", "cc", "dd", "ee", "ff"], 0, 0)
+    check e.activeBuffer.foldState.addFold(3, 4, collapsed = true)
+    e.pressWithFrames(":3<Enter>i")
+    e.state.anchorEdits(e.activeBuffer)
+    check e.activeBuffer.deleteLine(2).isOk
+    e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
+    e.state.openFoldsOfEdits(e.activeBuffer)
+    check e.lines == @["aa", "bb", "dd", "ee", "ff"]
+    check e.activeBuffer.foldState.getCollapsedFoldAt(2).isSome
 
 suite "A page scroll takes the cursor in a closed fold to its first line, as in Vim":
   const

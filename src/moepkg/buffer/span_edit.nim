@@ -160,6 +160,10 @@ func joinsAbove(move: RowMove): bool =
   ## Whether the rows `move` drops were joined onto the row above them.
   move.kind == rmCommand and move.edit.rowsAt != raStart
 
+func drops*(move: RowMove, line: int): bool =
+  ## Whether `move` takes `line` away rather than joining it onto the row above.
+  line >= move.first and line < move.last and not move.joinsAbove
+
 func moved*(line: int, move: RowMove): int =
   ## Where a mark on `line` goes across `move`, as Vim's mark_adjust keeps it:
   ## rows that go send it to the row after them, or onto the row they joined.

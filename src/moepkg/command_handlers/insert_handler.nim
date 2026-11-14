@@ -38,6 +38,7 @@ import
     macro_recording,
   ]
 import handler_types, insert_commands
+import ../fold_open
 import ../insert_record
 import ../types/editor_types
 export handler_types
@@ -236,6 +237,7 @@ proc handleMotion*(
 ): InsertModeResult =
   ## Handle motion commands in insert mode
   let motionCmd = MotionCommand(motion: motion, count: 1)
+  state.openFoldsForTypingMotion(buffer, motion)
 
   # At an edge Vim beeps, but the keys after it still run (ins_left).
   discard handler.motionController.moveCursorByMotion(state, motionCmd)
@@ -466,7 +468,7 @@ proc backspaceInSession(
         max(0, session.stops[session.index].len - overlap)
   return res
 
-proc landOnCurrentStop(state: EditorState) =
+proc landOnCurrentStop(buffer: TextBuffer, state: EditorState) =
   ## Place the cursor at the end of the current stop's content (selection-end
   ## semantics) and re-select the content when there is any: its placeholder
   ## default, or whatever was typed into it, so the next keystroke replaces
@@ -474,6 +476,7 @@ proc landOnCurrentStop(state: EditorState) =
   let stop = state.snippetSession.stops[state.snippetSession.index]
   state.cursor = BufferPosition(line: stop.pos.line, column: stop.pos.column + stop.len)
   state.snippetSession.defaultPending = stop.len > 0
+  state.openCursorLineFolds(buffer)
 
 proc commitCompletion*(
     handler: InsertModeHandler,
@@ -1198,7 +1201,7 @@ proc handleInsertModeKey*(
         kmShift notin keyCombo.modifiers:
       if session.index + 1 < session.stops.len:
         inc session.index
-        landOnCurrentStop(state)
+        landOnCurrentStop(buffer, state)
         # Landing on the last stop with nothing left to replace (typically
         # $0) finishes the snippet; with a default the session stays alive so
         # the next keystroke can still replace it.
@@ -1216,7 +1219,7 @@ proc handleInsertModeKey*(
     ):
       if session.index > 0:
         dec session.index
-        landOnCurrentStop(state)
+        landOnCurrentStop(buffer, state)
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:

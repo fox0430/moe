@@ -27,6 +27,7 @@ import ../[types, modes, key_bindings, motion, command_registry, key_router]
 import ../buffer/[core, edit]
 import ../types/editor_types
 import handler_types
+import ../fold_open
 export handler_types
 
 type
@@ -128,6 +129,7 @@ proc handleBackspace*(
     # No history, just move cursor back (beginning of replace session)
     if state.cursor.column > 0:
       state.cursor.column -= 1
+      state.openCursorLineFolds(buffer)
     elif state.cursor.line > 0:
       let prevLine = buffer.getLine(state.cursor.line - 1)
       state.cursor.line -= 1
@@ -219,6 +221,7 @@ proc handleMotion*(
 ): ReplaceModeResult =
   ## Handle motion commands in replace mode
   let motionCmd = MotionCommand(motion: motion, count: 1)
+  state.openFoldsForTypingMotion(buffer, motion)
 
   # At an edge Vim beeps, but the keys after it still run (ins_left).
   discard handler.motionController.moveCursorByMotion(state, motionCmd)
