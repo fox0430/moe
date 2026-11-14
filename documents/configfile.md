@@ -1477,11 +1477,16 @@ Vim waits for a `BufWritePre` autocommand.
 
 - The buffer goes in on standard input, in the file's own encoding and line
   endings, its last line ended even when the file's is not, and what the
-  command prints on standard output replaces the buffer before it is written,
-  as one change `u` takes back. A file that does not end in a newline still
-  does not after it. Only the lines that differ are touched, so marks and
-  folds on the rest stay, and the cursor and view of each window move with
-  the text, as Neovim moves them across an API edit.
+  command prints on standard output replaces the buffer before it is written.
+  A file that does not end in a newline still does not after it. Only the
+  lines that differ are touched, so marks and folds on the rest stay, and the
+  cursor and view of each window move with the text, as Neovim moves them
+  across an API edit.
+- What the entries of one write change, the EditorConfig trim with them, is
+  one change: one `u` takes it all back, and it adds at most one position to
+  the change list, the last a program or the trim changed, as Vim makes one
+  undo block of what the autocommands of one write change. An Ex entry adds
+  none. It stays if the write fails, as in Vim.
 - Keys after the write in a mapping or a macro run once the file is written.
 - The editor does not respond meanwhile. A command that runs for a moment is
   named on the status line; Ctrl-C stops it, and the file is not written, nor
@@ -1516,10 +1521,11 @@ A `BufWritePre` entry can run a moe Ex command instead of a program: write
 
 - It edits the buffer, not a window, as Vim's `keepjumps keeppatterns` with
   `winsaveview()` around it does: the cursor and the view of each window
-  move with the text, and the cursor, the last search, the search and command
-  histories, the jump list and the status line stay as they were. Each entry is
-  one change `u` takes back, and it goes on the change list, as the output of a
-  program does. A `:s` that leaves every line as it was, such as
+  move with the text, the cursor, the last search, the search and command
+  histories, the jump list and the status line stay as they were, and it adds
+  no position to the change list. What it changes is part of the write's one
+  change, as the output of a program is. A `:s` that leaves every line as it
+  was, such as
   `%s/\s*$//e` on a file with no trailing blanks, makes no change.
 - Two commands may run: `stripwhitespace`, with nothing after it, and `:s`.
   - A `:s` range is `%`, line numbers or `$`, with `+`/`-` offsets
@@ -1544,8 +1550,9 @@ A `BufWritePre` entry can run a moe Ex command instead of a program: write
 - A failure, such as a `:s` without `e` that finds nothing, a range past the
   end of the file, or one backwards in it (`1,$-1` in a one-line file, as
   Vim's E493), is reported, and the write and the entries after it go on,
-  as in Vim: the text is as it was, as when there is nothing to change. A
-  program that fails still ends the chain, Ex commands after it included.
+  as in Vim: the text is as it was before that entry, as when there is
+  nothing to change, and what the entries before it changed stays. A program
+  that fails still ends the chain, Ex commands after it included.
 - `workingDir`, `timeout` and `onFail` are for a program and cannot be set,
   and placeholders are not expanded.
 

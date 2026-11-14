@@ -45,199 +45,33 @@ proc createTestEditorWithBackend(kind: BufferBackendKind): Editor =
   let vr = newValidationResult()
   result = newEditor(config, vr)
 
-template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
-  ## Trim-revert scenarios run under both GapBuffer and PieceTable.
-  test "Reverted trim is dropped from the redo stack on save failure" & tag:
+template failedWriteKeepsTrimScenario(makeEditor: untyped, tag: string) =
+  test "A failed write keeps the trim, and one undo takes it back" & tag:
+    # As Vim keeps what its BufWritePre autocommands changed.
     let e = makeEditor
-    let testFile = getTempDir() / "moe_test_trim_revert_no_redo.txt"
-    let dirPath = getTempDir() / "moe_test_trim_revert_dir"
-
+    let testFile = getTempDir() / "moe_test_failed_write_keeps_trim.txt"
+    let dirPath = getTempDir() / "moe_test_failed_write_keeps_trim_dir"
     createDir(dirPath)
     writeFile(testFile, "hello   \nworld   \n")
     defer:
       removeFile(testFile)
       removeDir(dirPath)
-
     discard e.loadFile(testFile)
     e.activeBuffer.editorConfig =
       some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
-    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x")
-    let beforeLine0 = e.activeBuffer.getLine(0)
-    check beforeLine0.endsWith("   ")
-
-    # Writing fails only after trim (missing parent), so the revert branch runs.
-    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
-
-    let saveRes = e.saveFile(e.activeBuffer())
-    check saveRes.isErr
-
-    # Trim must have been reverted...
-    check e.activeBuffer.getLine(0) == beforeLine0
-    check e.activeBuffer.getLine(0).endsWith("   ")
-    # ...and must not be re-appliable via an explicit user redo.
-    check e.activeBuffer.redo().isErr
-    # No unreachable future changelist entry remains for g, to jump to.
-    check e.activeBuffer.changeList.len == e.activeBuffer.changeListIndex + 1
-
-  test "Trim revert truncates the changelist entry the trim committed" & tag:
-    let e = makeEditor
-    let testFile = getTempDir() / "moe_test_trim_revert_changelist.txt"
-    let dirPath = getTempDir() / "moe_test_trim_revert_cl_dir"
-
-    createDir(dirPath)
-    writeFile(testFile, "hello   \n")
-    defer:
-      removeFile(testFile)
-      removeDir(dirPath)
-
-    discard e.loadFile(testFile)
-    e.activeBuffer.editorConfig =
-      some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
-
-    # A committed transaction records a user changelist position.
     check e.activeBuffer.beginTransaction("user edit").isOk
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x")
     check e.activeBuffer.commitTransaction().isOk
-
-    let beforeLine0 = e.activeBuffer.getLine(0)
-    check beforeLine0.endsWith("   ")
-
-    # Writing fails only after trim (missing parent), so the revert branch runs.
     e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
 
-    let saveRes = e.saveFile(e.activeBuffer())
-    check saveRes.isErr
-
-    check e.activeBuffer.getLine(0) == beforeLine0
-    # Trim's changelist entry is truncated; the user's position is kept.
-    check e.activeBuffer.changeList.len == e.activeBuffer.changeListIndex + 1
-
-  test "Trim revert drops the changelist entry after a prior undo" & tag:
-    # A prior undo leaves a future entry that trim-time pushUndoChange cuts;
-    # the revert must not rely on the pre-trim length alone.
-    let e = makeEditor
-    let testFile = getTempDir() / "moe_test_trim_revert_mid_changelist.txt"
-    let dirPath = getTempDir() / "moe_test_trim_revert_mid_dir"
-
-    createDir(dirPath)
-    writeFile(testFile, "hello   \nworld   \n")
-    defer:
-      removeFile(testFile)
-      removeDir(dirPath)
-
-    discard e.loadFile(testFile)
-    e.activeBuffer.editorConfig =
-      some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
-
-    # Two committed edits record two changelist positions.
-    check e.activeBuffer.beginTransaction("edit 1").isOk
-    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x")
-    check e.activeBuffer.commitTransaction().isOk
-    check e.activeBuffer.beginTransaction("edit 2").isOk
-    discard e.activeBuffer.insertText(BufferPosition(line: 1, column: 0), "y")
-    check e.activeBuffer.commitTransaction().isOk
+    check e.saveFile(e.activeBuffer()).isErr
+    check e.activeBuffer.getLine(0) == "xhello"
+    check e.activeBuffer.getLine(1) == "world"
     check e.activeBuffer.changeList.len == 2
-    check e.activeBuffer.changeListIndex == 1
 
-    # Undo the second edit so the index sits mid-list with a future entry.
-    discard e.activeBuffer.undo()
-    check e.activeBuffer.changeListIndex == 0
-
-    let beforeLine0 = e.activeBuffer.getLine(0)
-    check beforeLine0.endsWith("   ")
-
-    # Writing fails only after trim (missing parent), so the revert branch runs.
-    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
-
-    let saveRes = e.saveFile(e.activeBuffer())
-    check saveRes.isErr
-
-    # Trim must have been reverted...
-    check e.activeBuffer.getLine(0) == beforeLine0
-    check e.activeBuffer.getLine(0).endsWith("   ")
-    # ...and the changelist restored exactly to its pre-trim state: both
-    # recorded entries remain, including the future entry past the index.
-    check e.activeBuffer.changeList.len == 2
-    check e.activeBuffer.changeListIndex == 0
-
-  test "Trim revert drops the changelist entry when trim was the first change" & tag:
-    # Empty changelist at trim time: undo() cannot move the index below 0, so
-    # the revert must still drop the entry index-based truncation would leave.
-    let e = makeEditor
-    let testFile = getTempDir() / "moe_test_trim_revert_first_change.txt"
-    let dirPath = getTempDir() / "moe_test_trim_revert_first_dir"
-
-    createDir(dirPath)
-    writeFile(testFile, "hello   \n")
-    defer:
-      removeFile(testFile)
-      removeDir(dirPath)
-
-    discard e.loadFile(testFile)
-    e.activeBuffer.editorConfig =
-      some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
-
-    # No editing: the changelist is empty (len 0, index 0) at trim time.
-    check e.activeBuffer.changeList.len == 0
-    check e.activeBuffer.changeListIndex == 0
-
-    # Writing fails only after trim (missing parent), so the revert branch runs.
-    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
-
-    let saveRes = e.saveFile(e.activeBuffer())
-    check saveRes.isErr
-
-    # Trim must have been reverted...
-    check e.activeBuffer.getLine(0).endsWith("   ")
-    # ...and the trim's only changelist entry must be gone.
-    check e.activeBuffer.changeList.len == 0
-    check e.activeBuffer.changeListIndex == 0
-    # ...and must not be re-appliable via an explicit user redo.
-    check e.activeBuffer.redo().isErr
-
-  test "Trim revert restores the changelist exactly at the cap" & tag:
-    # At the ChangeListMaxLen cap the trim's own commit evicts the oldest
-    # entry (recordChangePosition deletes index 0); the revert must restore
-    # the full pre-trim snapshot rather than leave the list one short.
-    let e = makeEditor
-    let testFile = getTempDir() / "moe_test_trim_revert_cap.txt"
-    let dirPath = getTempDir() / "moe_test_trim_revert_cap_dir"
-
-    createDir(dirPath)
-    writeFile(testFile, "hello   \n")
-    defer:
-      removeFile(testFile)
-      removeDir(dirPath)
-
-    discard e.loadFile(testFile)
-    e.activeBuffer.editorConfig =
-      some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
-
-    # Fill the changelist to its cap: 99 edits + the pre-fill baseline.
-    check e.activeBuffer.changeList.len == 0
-    for i in 0 ..< ChangeListMaxLen:
-      check e.activeBuffer.beginTransaction("fill " & $i).isOk
-      discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "z")
-      check e.activeBuffer.commitTransaction().isOk
-    check e.activeBuffer.changeList.len == ChangeListMaxLen
-    check e.activeBuffer.changeListIndex == ChangeListMaxLen - 1
-    let lineBefore = e.activeBuffer.getLine(0)
-    check lineBefore.endsWith("   ")
-
-    # Writing fails only after trim (missing parent), so the revert branch runs.
-    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
-
-    let saveRes = e.saveFile(e.activeBuffer())
-    check saveRes.isErr
-
-    # Trim must have been reverted...
-    check e.activeBuffer.getLine(0) == lineBefore
-    check e.activeBuffer.getLine(0).endsWith("   ")
-    # ...and the full pre-trim changelist restored, oldest entry included.
-    check e.activeBuffer.changeList.len == ChangeListMaxLen
-    check e.activeBuffer.changeListIndex == ChangeListMaxLen - 1
-    # ...and must not be re-appliable via an explicit user redo.
-    check e.activeBuffer.redo().isErr
+    check e.activeBuffer.undo().isOk
+    check e.activeBuffer.getLine(0) == "xhello   "
+    check e.activeBuffer.getLine(1) == "world   "
 
 suite "Editor - loadFile":
   test "Load existing file":
@@ -775,8 +609,8 @@ suite "Editor - saveFile":
     check e.activeBuffer.getLine(0) == beforeLine0
     check readFile(testFile) == "externally modified\n"
 
-  trimRevertSaveFileScenarios(createTestEditor(), " [GapBuffer]")
-  trimRevertSaveFileScenarios(
+  failedWriteKeepsTrimScenario(createTestEditor(), " [GapBuffer]")
+  failedWriteKeepsTrimScenario(
     createTestEditorWithBackend(bbcPieceTable), " [PieceTable]"
   )
 
@@ -808,8 +642,7 @@ suite "Editor - saveFile":
     check readFile(testFile).endsWith("   \n")
 
 template saveAllBuffersTrimRevertScenario(makeEditor: untyped, tag: string) =
-  test "saveAllBuffers reverts trim on save failure (write error)" & tag:
-    # Trim runs, then save fails; buffer must stay untrimmed.
+  test "saveAllBuffers keeps the trim on save failure (write error)" & tag:
     let e = makeEditor
     let f1 = getTempDir() / "moe_test_saveall_trim_revert2.txt"
     let dirPath = getTempDir() / "moe_test_saveall_dir"
@@ -824,8 +657,6 @@ template saveAllBuffersTrimRevertScenario(makeEditor: untyped, tag: string) =
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x")
     e.activeBuffer.editorConfig =
       some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
-    let before = e.activeBuffer.getLine(0)
-    check before.endsWith("   ")
 
     # Force save failure by pointing filePath under a missing dir (writeAtomic fails)
     e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
@@ -833,9 +664,9 @@ template saveAllBuffersTrimRevertScenario(makeEditor: untyped, tag: string) =
     let res = e.saveAllBuffers(force = false)
     check res.failures.len == 1
     check res.failures[0].path == dirPath / "missing_subdir" / "file.txt"
-    # Trim must have been reverted
-    check e.activeBuffer.getLine(0) == before
-    check e.activeBuffer.getLine(0).endsWith("   ")
+    check e.activeBuffer.getLine(0) == "xhello"
+    check e.activeBuffer.undo().isOk
+    check e.activeBuffer.getLine(0) == "xhello   "
 
 template saveAllBuffersTrimSuccessScenario(makeEditor: untyped, tag: string) =
   test "saveAllBuffers trims and saves when no external modification" & tag:
@@ -855,6 +686,26 @@ template saveAllBuffersTrimSuccessScenario(makeEditor: untyped, tag: string) =
     check readFile(f1) == "za\nb\n"
     check not e.activeBuffer.getLine(0).endsWith("   ")
     check e.activeBuffer.getLine(1) == "b"
+
+template autoSaveFailing(e: Editor, name: string, content: string, body: untyped) =
+  ## Open `content` with trim on, run `body`, then autosave to a path whose
+  ## write fails only after the trim.
+  let f = getTempDir() / ("moe_test_autosave_" & name & ".txt")
+  let dir = getTempDir() / ("moe_test_autosave_" & name & "_dir")
+  createDir(dir)
+  writeFile(f, content)
+  defer:
+    removeFile(f)
+    removeDir(dir)
+  e.config.autoSave.enable = true
+  e.config.autoSave.interval = 1
+  discard e.loadFile(f)
+  e.activeBuffer.editorConfig =
+    some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
+  body
+  e.activeBuffer.filePath = some(dir / "missing_subdir" / "file.txt")
+  e.state.timing.lastAutoSave = getMonoTime() - initDuration(hours = 1)
+  e.autoSave()
 
 template autoSaveTrimRevertScenario(makeEditor: untyped, tag: string) =
   test "Auto save reverts trim on save failure" & tag:
@@ -881,6 +732,48 @@ template autoSaveTrimRevertScenario(makeEditor: untyped, tag: string) =
     # Trim must be reverted, file not written
     check e.activeBuffer.getLine(0) == before
     check e.activeBuffer.getLine(0).endsWith("   ")
+
+  test "Auto save drops the reverted trim from the redo stack" & tag:
+    let e = makeEditor
+    var before = ""
+    autoSaveFailing(e, "trim_no_redo", "hello   \nworld   \n"):
+      check e.activeBuffer.beginTransaction("user edit").isOk
+      discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x")
+      check e.activeBuffer.commitTransaction().isOk
+      before = e.activeBuffer.getLine(0)
+    check e.activeBuffer.getLine(0) == before
+    check e.activeBuffer.redo().isErr
+    # No unreachable future changelist entry remains for g, to jump to.
+    check e.activeBuffer.changeList.len == 1
+    check e.activeBuffer.changeListIndex == 0
+
+  test "Auto save trim revert keeps the changelist future after an undo" & tag:
+    let e = makeEditor
+    autoSaveFailing(e, "trim_mid_changelist", "hello   \nworld   \n"):
+      check e.activeBuffer.beginTransaction("edit 1").isOk
+      discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x")
+      check e.activeBuffer.commitTransaction().isOk
+      check e.activeBuffer.beginTransaction("edit 2").isOk
+      discard e.activeBuffer.insertText(BufferPosition(line: 1, column: 0), "y")
+      check e.activeBuffer.commitTransaction().isOk
+      check e.activeBuffer.undo().isOk
+    check e.activeBuffer.getLine(0) == "xhello   "
+    check e.activeBuffer.changeList.len == 2
+    check e.activeBuffer.changeListIndex == 0
+
+  test "Auto save trim revert restores the changelist exactly at the cap" & tag:
+    let e = makeEditor
+    var before = ""
+    autoSaveFailing(e, "trim_cap", "hello   \n"):
+      for i in 0 ..< ChangeListMaxLen:
+        check e.activeBuffer.beginTransaction("fill " & $i).isOk
+        discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "z")
+        check e.activeBuffer.commitTransaction().isOk
+      before = e.activeBuffer.getLine(0)
+    check e.activeBuffer.getLine(0) == before
+    check e.activeBuffer.changeList.len == ChangeListMaxLen
+    check e.activeBuffer.changeListIndex == ChangeListMaxLen - 1
+    check e.activeBuffer.redo().isErr
 
 suite "Editor - saveAllBuffers":
   saveAllBuffersTrimRevertScenario(createTestEditor(), " [GapBuffer]")

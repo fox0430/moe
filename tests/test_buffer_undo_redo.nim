@@ -2150,3 +2150,312 @@ suite "Buffer - rows moved hook":
       check held[] == 5
       check b.undo().isOk
       check held[] == 7
+
+suite "Buffer - joined undo entries":
+  # As Vim makes one undo block of the changes after `:undojoin`.
+  proc text(b: TextBuffer): string =
+    for i in 0 ..< b.len:
+      if i > 0:
+        result.add '\n'
+      result.add b.getLine(i)
+
+  proc insertIn(b: TextBuffer, pos: BufferPosition, s: string): Result[(), string] =
+    ## Insert `s` as one undo entry of its own.
+    withTransaction(b, "insert"):
+      let r = b.insertText(pos, s)
+      if r.isErr:
+        return err(r.error)
+
+  for backend in [GapBuffer, PieceTable]:
+    test $backend & ": joined entries undo and redo as one":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("abc\ndef")
+      check b.insertIn(BufferPosition(line: 0, column: 3), "0").isOk
+      let point = b.undoJoinPoint()
+      check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
+      check b.insertIn(BufferPosition(line: 1, column: 0), "2").isOk
+      check b.insertIn(BufferPosition(line: 1, column: 0), "3").isOk
+      b.joinUndoSince(point)
+      check b.undoStack.len == 2
+      check b.text == "1abc0\n32def"
+      check b.undo().isOk
+      check b.text == "abc0\ndef"
+      check b.redo().isOk
+      check b.text == "1abc0\n32def"
+      check b.undo().isOk
+      check b.undo().isOk
+      check b.text == "abc\ndef"
+      check not b.isModified
+      check b.undo().isErr
+      check b.redo().isOk
+      check b.text == "abc0\ndef"
+      check b.redo().isOk
+      check b.text == "1abc0\n32def"
+      check b.redo().isErr
+      # Round trips keep them joined.
+      check b.undo().isOk
+      check b.text == "abc0\ndef"
+
+    test $backend & ": joined entries put named marks back and forth":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("0\n1\n2\n3\n4")
+      b.namedMarks['a'] = some(BufferPosition(line: 4, column: 0))
+      let point = b.undoJoinPoint()
+      check b.deleteLine(0).isOk
+      check b.insertIn(BufferPosition(line: 0, column: 0), "x").isOk
+      check b.deleteLine(0).isOk
+      b.joinUndoSince(point)
+      check b.namedMarks['a'] == some(BufferPosition(line: 2, column: 0))
+      check b.undo().isOk
+      check b.namedMarks['a'] == some(BufferPosition(line: 4, column: 0))
+      check b.redo().isOk
+      check b.namedMarks['a'] == some(BufferPosition(line: 2, column: 0))
+
+    test $backend & ": joined entries mark the lines they changed":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb\nc")
+      let point = b.undoJoinPoint()
+      check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
+      check b.insertIn(BufferPosition(line: 2, column: 0), "2").isOk
+      b.joinUndoSince(point)
+      check b.modifiedLines == @[lmkModified, lmkUnmodified, lmkModified]
+      check b.undo().isOk
+      check b.modifiedLines == @[lmkUnmodified, lmkUnmodified, lmkUnmodified]
+      check b.redo().isOk
+      check b.modifiedLines == @[lmkModified, lmkUnmodified, lmkModified]
+
+    test $backend & ": joined entries re-highlight from the topmost line":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb\nc\nd\ne")
+      let point = b.undoJoinPoint()
+      check b.insertIn(BufferPosition(line: 3, column: 0), "1").isOk
+      check b.insertIn(BufferPosition(line: 1, column: 0), "2").isOk
+      b.joinUndoSince(point)
+      b.highlightNeedsUpdate = false
+      let undone = b.undo()
+      check undone.isOk
+      check b.highlightNeedsUpdate
+      check b.lastChangedLines == 1
+      # The cursor goes to the first change, as in Vim.
+      check undone.get.line == 3
+      b.highlightNeedsUpdate = false
+      check b.redo().isOk
+      check b.highlightNeedsUpdate
+      check b.lastChangedLines == 1
+
+    test $backend & ": a count counts joined entries once":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("abc")
+      check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
+      let point = b.undoJoinPoint()
+      check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
+      check b.insertIn(BufferPosition(line: 0, column: 0), "2").isOk
+      b.joinUndoSince(point)
+      check b.insertIn(BufferPosition(line: 0, column: 0), "3").isOk
+      check b.undo(2).isOk
+      check b.text == "0abc"
+      check b.redo(2).isOk
+      check b.text == "3210abc"
+
+    test $backend & ": an edit after them is not joined":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("abc")
+      let point = b.undoJoinPoint()
+      check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
+      check b.insertIn(BufferPosition(line: 0, column: 0), "2").isOk
+      b.joinUndoSince(point)
+      check b.insertIn(BufferPosition(line: 0, column: 0), "3").isOk
+      check b.undo().isOk
+      check b.text == "21abc"
+      check b.undo().isOk
+      check b.text == "abc"
+
+    test $backend & ": joined entries keep one changelist position, the last":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb\nc")
+      check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
+      check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
+      check b.undo().isOk
+      # The undone edit's position is still there for `g,`.
+      check b.changeList.len == 2
+      let point = b.undoJoinPoint()
+      b.withChangeListBlock:
+        check b.insertIn(BufferPosition(line: 1, column: 0), "1").isOk
+        check b.insertIn(BufferPosition(line: 2, column: 0), "2").isOk
+      b.joinUndoSince(point)
+      check b.changeList ==
+        @[BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)]
+      check b.changeListIndex == 1
+      check b.undo().isOk
+      check b.changeListIndex == 0
+      check b.redo().isOk
+      check b.changeListIndex == 1
+
+    test $backend & ": entries kept off the changelist add no position":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb\nc")
+      let point = b.undoJoinPoint()
+      b.withChangeListBlock:
+        b.withKeptChangeList:
+          check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
+        check b.changeList.len == 0
+        check b.insertIn(BufferPosition(line: 1, column: 0), "1").isOk
+        b.withKeptChangeList:
+          check b.insertIn(BufferPosition(line: 2, column: 0), "2").isOk
+      b.joinUndoSince(point)
+      check b.changeList == @[BufferPosition(line: 1, column: 0)]
+      check b.undo().isOk
+      check b.text == "a\nb\nc"
+      check b.changeListIndex == 0
+      check b.redo().isOk
+      check b.text == "0a\n1b\n2c"
+      check b.changeListIndex == 0
+
+    test $backend & ": joined entries all kept off the changelist add nothing":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb")
+      check b.insertIn(BufferPosition(line: 1, column: 0), "u").isOk
+      let point = b.undoJoinPoint()
+      b.withKeptChangeList:
+        check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
+        check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
+      b.joinUndoSince(point)
+      check b.changeList == @[BufferPosition(line: 1, column: 0)]
+      check b.undo().isOk
+      check b.changeListIndex == 0
+      check b.undo().isOk
+      check b.text == "a\nb"
+
+    test $backend & ": a change kept off the changelist still drops its future":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb")
+      check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
+      check b.insertIn(BufferPosition(line: 1, column: 0), "1").isOk
+      check b.undo().isOk
+      check b.changeList.len == 2
+      b.withKeptChangeList:
+        check b.insertIn(BufferPosition(line: 0, column: 0), "2").isOk
+      # The undone change can no longer be redone: `g,` has nothing to visit.
+      check b.changeList == @[BufferPosition(line: 0, column: 0)]
+      check b.changeListIndex == 0
+      check b.changeListMode == clmEach
+
+    test $backend & ": entries of a changelist block left apart keep the index":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb\nc")
+      check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
+      b.withChangeListBlock:
+        check b.insertIn(BufferPosition(line: 1, column: 0), "1").isOk
+        check b.insertIn(BufferPosition(line: 2, column: 0), "2").isOk
+      check b.changeList ==
+        @[BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)]
+      check b.changeListIndex == 1
+      check b.undo().isOk
+      check b.changeListIndex == 1
+      check b.undo().isOk
+      check b.changeListIndex == 0
+      check b.redo().isOk
+      check b.redo().isOk
+      check b.changeListIndex == 1
+      check b.changeListMode == clmEach
+
+    test $backend & ": joined entries at the changelist cap keep the oldest":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a")
+      for i in 0 ..< ChangeListMaxLen:
+        check b.insertIn(BufferPosition(line: 0, column: 0), "z").isOk
+      let before = b.changeList
+      let point = b.undoJoinPoint()
+      b.withChangeListBlock:
+        check b.insertIn(BufferPosition(line: 0, column: 1), "1").isOk
+        check b.insertIn(BufferPosition(line: 0, column: 2), "2").isOk
+      b.joinUndoSince(point)
+      check b.changeList == before[1 .. ^1] & @[BufferPosition(line: 0, column: 2)]
+
+    test $backend & ": joining more entries than the changelist holds":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a")
+      check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
+      let before = b.changeList
+      let point = b.undoJoinPoint()
+      b.withChangeListBlock:
+        for i in 0 .. ChangeListMaxLen:
+          check b.insertIn(BufferPosition(line: 0, column: 1), "z").isOk
+      b.joinUndoSince(point)
+      check b.changeList == before & @[BufferPosition(line: 0, column: 1)]
+      check b.undo().isOk
+      check b.text == "0a"
+
+    test $backend & ": undo and redo of joined entries put the cursor alike":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb\nc")
+      let point = b.undoJoinPoint()
+      check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
+      check b.insertIn(BufferPosition(line: 2, column: 0), "2").isOk
+      b.joinUndoSince(point)
+      let undone = b.undo()
+      check undone.isOk
+      let redone = b.redo()
+      check redone.isOk
+      check undone.get.line == 0
+      check redone.get.line == 0
+
+    test $backend & ": one entry or none is left alone":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("abc")
+      check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
+      var point = b.undoJoinPoint()
+      b.joinUndoSince(point)
+      check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
+      b.joinUndoSince(point)
+      check b.changeList.len == 2
+      check b.undo().isOk
+      check b.text == "0abc"
+
+    test $backend & ": entries a rolled back change left out stay joined":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("abc")
+      let point = b.undoJoinPoint()
+      check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
+      check b.beginTransaction("failed").isOk
+      check b.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+      check b.rollbackTransaction().isOk
+      check b.insertIn(BufferPosition(line: 0, column: 0), "2").isOk
+      b.joinUndoSince(point)
+      check b.text == "21abc"
+      check b.undo().isOk
+      check b.text == "abc"
+      check not b.isModified
+      check b.undo().isErr

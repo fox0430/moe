@@ -482,6 +482,13 @@ type
     of PieceTable:
       pieceTable*: piece_table.PieceTable
 
+  ChangeListMode* = enum
+    ## How the changes made now go on the changelist.
+    clmEach ## Each adds its position.
+    clmKept ## None adds one, as under Vim's `:keepjumps`.
+    clmBlock ## They add one between them, the last's; none added yet.
+    clmBlockHeld ## As clmBlock, the block's position added: the next moves it.
+
   TextBuffer* = ref object
     id*: BufferId # Unique buffer identifier
     filePath*: Option[string]
@@ -624,6 +631,7 @@ type
     # Change list (tracks positions where changes were made, like Vim's changelist)
     changeList*: seq[BufferPosition]
     changeListIndex*: int
+    changeListMode*: ChangeListMode
 
     # Line folding state (vim-like manual folding)
     foldState*: FoldState
@@ -2125,6 +2133,40 @@ proc recordChangePosition*(b: TextBuffer, pos: BufferPosition) =
     b.changeList.delete(0)
     b.changeListIndex = b.changeList.len - 1
 
+proc noteChangePosition*(b: TextBuffer, pos: BufferPosition): bool =
+  ## Put a change at `pos` on the changelist; whether its undo entry holds a
+  ## position there. One in a block after the first only moves the block's.
+  case b.changeListMode
+  of clmKept:
+    return false
+  of clmBlockHeld:
+    if b.changeList.len > 0:
+      b.changeList[^1] = pos
+      return false
+  of clmBlock:
+    b.changeListMode = clmBlockHeld
+  of clmEach:
+    discard
+  b.recordChangePosition(pos)
+  true
+
+template withChangeListMode(b: TextBuffer, mode: ChangeListMode, body: untyped) =
+  let wasMode = b.changeListMode
+  b.changeListMode = mode
+  try:
+    body
+  finally:
+    b.changeListMode = wasMode
+
+template withChangeListBlock*(b: TextBuffer, body: untyped) =
+  ## Run `body` with its changes adding one position to the changelist, the
+  ## last's, as one write's do.
+  b.withChangeListMode(clmBlock, body)
+
+template withKeptChangeList*(b: TextBuffer, body: untyped) =
+  ## Run `body` with its changes kept off the changelist, as Vim's `:keepjumps`.
+  b.withChangeListMode(clmKept, body)
+
 proc shiftLineArraysUnmarked*(b: TextBuffer, change: BufferChange, undone = false) =
   ## Shift `lineMarkers` and `modifiedLines` across `change` (or back when
   ## `undone`), unmarked, for a change undo does not record.
@@ -2343,11 +2385,11 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
       b.modifiedLines[line] = lmkModified
 
   # Record change position in changelist
-  if not b.inTransaction:
-    b.recordChangePosition(changePos)
+  let kept = not b.inTransaction and not b.noteChangePosition(changePos)
 
   # Attach pre-mutation modifiedLines snapshot to the change
   var changeWithSnapshot = change
+  changeWithSnapshot.noChangeListPosition = kept
   if needsFoldBookmarkRestore:
     changeWithSnapshot.replaceLinesSavedFolds = foldsBefore
     changeWithSnapshot.replaceLinesSavedBookmarks = bookmarksBefore
@@ -2386,6 +2428,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
         snapshotRows: b.takePendingSnapshotRows(),
         namedMarkChanges: diffNamedMarks(b.pendingSnapshotNamedMarks, b.namedMarks),
         visualAcross: visualBefore.boxed,
+        noChangeListPosition: kept,
       )
     )
     # Pending snapshot state is now consumed into the entry; reset it all.
