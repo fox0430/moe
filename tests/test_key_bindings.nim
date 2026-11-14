@@ -226,6 +226,7 @@ suite "KeyCombo - parseKeyCombo":
     check slash.isSome
     check slash.get.char == "_"
     check slash == parseKeyCombo("C-_")
+    check parseKeyCombo("C-M-/").isNone
 
   test "Parse multibyte character as one combo":
     let result = parseKeyCombo("\u3042")

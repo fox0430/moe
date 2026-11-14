@@ -298,7 +298,7 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
   # which have their own control characters. Terminals send 0x1F for Ctrl-/ too,
   # so Ctrl-/ is normalized to Ctrl-_. Multi-byte counts as non-letter.
   if kmCtrl in combo.modifiers and not combo.isSpecial:
-    if combo.char == "/":
+    if combo.char == "/" and kmAlt notin combo.modifiers:
       combo.char = "_"
     let ch = combo.char.asciiChar
     if ch.isNone or ch.get notin {'a' .. 'z', 'A' .. 'Z', '\\', '_'}:
