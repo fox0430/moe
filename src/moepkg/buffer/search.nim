@@ -328,6 +328,84 @@ type MatchWalk = enum
   mwHighlight ## hlsearch does (next_search_hl)
   mwSubstitute ## do_sub does
 
+proc goesOn(place: MatchWalkPlace, textLen: int, walk: MatchWalk): bool =
+  ## Whether a regex walk over a valid text `textLen` bytes long looks on.
+  place.next <= textLen and
+    (place.next == 0 or place.next < textLen or walk == mwHighlight)
+
+proc walkPast(
+    place: var MatchWalkPlace,
+    lastEnd: var int,
+    line, searchable: string,
+    walk: MatchWalk,
+    bounds: Slice[int],
+): Option[LiteralRange] =
+  ## The regex match at `bounds` of `searchable`, none for one the walk skips,
+  ## with `place` moved past it.
+  let
+    a = bounds.a
+    b = bounds.b + 1
+  if a < place.next:
+    return
+  place.next =
+    if a == b and b >= searchable.len:
+      searchable.len + 1
+    elif a == b:
+      b + max(searchable.runeSizeAt(b), 1)
+    else:
+      b
+  if walk == mwSubstitute and a == b and a == lastEnd:
+    return
+  var at = LineWalk(valid: place.valid, pos: place.pos, col: place.col)
+  at.walkTo(line, a)
+  var to = at
+  to.walkTo(line, b)
+  place.valid = to.valid
+  place.pos = to.pos
+  place.col = to.col
+  lastEnd = b
+  some LiteralRange(
+    startCol: at.col, endCol: to.col, startByte: at.pos, endByte: to.pos
+  )
+
+proc walkGroup(w: var LineWalk, line: string, s: Slice[int]): Slice[int] =
+  ## The byte range on `line` of `s` of the valid text, `w` moved to its start.
+  w.walkTo(line, s.a)
+  var last = w
+  last.walkTo(line, s.b + 1)
+  w.pos .. last.pos - 1
+
+proc groupRanges(
+    m: RegexMatch2, line: string, r: LiteralRange, behind: var LineWalk
+): seq[Slice[int]] =
+  ## The byte ranges on `line` of the groups of `m`, found as `r`. `behind` is
+  ## kept where the first group before a match started.
+  result = newSeq[Slice[int]](m.groupsCount)
+  let at = LineWalk(valid: m.boundaries.a, pos: r.startByte, col: r.startCol)
+  var before: seq[(int, int)]
+  for g in 0 ..< m.groupsCount:
+    let s = m.group(g)
+    if s.a < 0 or s.a > s.b:
+      result[g] = 1 .. 0
+    elif s.a >= at.valid:
+      var w = at
+      result[g] = w.walkGroup(line, s)
+    else:
+      before.add((s.a, g))
+  if before.len == 0:
+    return
+  # A group inside a lookbehind may start before the match.
+  before.sort()
+  var w =
+    if behind.valid <= before[0][0]:
+      behind
+    else:
+      LineWalk()
+  w.walkTo(line, before[0][0])
+  behind = w
+  for (_, g) in before:
+    result[g] = w.walkGroup(line, m.group(g))
+
 iterator matchRanges(
     line, searchable, pattern: string,
     ignorecase: bool,
@@ -353,57 +431,24 @@ iterator matchRanges(
   else:
     let p = regexPattern(pattern, ignorecase)
     if p.re.isSome:
-      var
-        lastEnd = -1
-        m = RegexMatch2()
-      while place.next <= searchable.len and
-          (place.next == 0 or place.next < searchable.len or walk == mwHighlight) and
-          find(searchable, p.re.get, m, place.next)
-      :
-        let
-          a = m.boundaries.a
-          b = m.boundaries.b + 1
-        place.next =
-          if a == b and b >= searchable.len:
-            searchable.len + 1
-          elif a == b:
-            b + max(searchable.runeSizeAt(b), 1)
-          else:
-            b
-        if not (walk == mwSubstitute and a == b and a == lastEnd):
-          var at = LineWalk(valid: place.valid, pos: place.pos, col: place.col)
-          at.walkTo(line, a)
-          var to = at
-          to.walkTo(line, b)
-          var groups: seq[Slice[int]]
-          if withGroups:
-            groups = newSeqOfCap[Slice[int]](m.groupsCount)
-            for g in 0 ..< m.groupsCount:
-              let s = m.group(g)
-              if s.a < 0 or s.a > s.b:
-                groups.add(1 .. 0)
-              else:
-                # A group inside a lookbehind may start before the match.
-                var first =
-                  if s.a >= a:
-                    at
-                  else:
-                    LineWalk()
-                first.walkTo(line, s.a)
-                var last = first
-                last.walkTo(line, s.b + 1)
-                groups.add(first.pos .. last.pos - 1)
-          place.valid = to.valid
-          place.pos = to.pos
-          place.col = to.col
-          lastEnd = b
-          yield LiteralRange(
-            startCol: at.col,
-            endCol: to.col,
-            startByte: at.pos,
-            endByte: to.pos,
-            groups: groups,
-          )
+      var lastEnd = -1
+      if withGroups:
+        var behind: LineWalk
+        for m in findAll(searchable, p.re.get, place.next):
+          if not place.goesOn(searchable.len, walk):
+            break
+          let r = place.walkPast(lastEnd, line, searchable, walk, m.boundaries)
+          if r.isSome:
+            var withThem = r.get
+            withThem.groups = m.groupRanges(line, withThem, behind)
+            yield withThem
+      else:
+        for bounds in findAllBounds(searchable, p.re.get, place.next):
+          if not place.goesOn(searchable.len, walk):
+            break
+          let r = place.walkPast(lastEnd, line, searchable, walk, bounds)
+          if r.isSome:
+            yield r.get
 
 iterator matchRanges(
     line, pattern: string,
