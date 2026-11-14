@@ -1342,7 +1342,8 @@ const CommandLineSpecialHelp*:
       "`*`), also from the previous session (E35 without one); " &
       "`\\r` in keyword2 breaks the line and `\\n` puts a NUL, as in Vim; " &
       "the cursor lands on the last line changed; " &
-      "flag `n` only counts the matches, and `c` is refused",
+      "flag `n` only counts the matches, `e` makes finding nothing no error, " &
+      "and `c` is refused",
   ),
   deleteAll:
     HelpEntry(syntax: "%d", description: "Delete all lines and copy to register"),

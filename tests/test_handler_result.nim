@@ -25,7 +25,7 @@ const
   # Expected classification, mirrored from group(). A new kind belongs to
   # hrgExitAndResync unless added to one of these sets.
   AppExitKinds = {hrQuit, hrCquit}
-  HandledGenericKinds = {hrHandled, hrUnhandled, hrError}
+  HandledGenericKinds = {hrHandled, hrUnhandled, hrError, hrSubstituteNoMatch}
   ExitToNormalKinds = {
     hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrJumpList, hrChanges,
     hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat, hrLspRestart,
@@ -45,7 +45,7 @@ suite "HandlerResult - group() classification":
     for k in AppExitKinds:
       check group(k) == hrgAppExit
 
-  test "hrgHandledGeneric covers hrHandled / hrUnhandled / hrError":
+  test "hrgHandledGeneric covers hrHandled / hrUnhandled / hrError / hrSubstituteNoMatch":
     for k in HandledGenericKinds:
       check group(k) == hrgHandledGeneric
 

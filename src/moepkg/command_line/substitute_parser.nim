@@ -30,14 +30,15 @@ type SubstituteFlags* = object
   countOnly*: bool # The `n` flag: report the matches, replace nothing
   confirm*: bool # The `c` flag
   ignoreCase*: bool
+  noError*: bool # The `e` flag: finding nothing is no error
   trailing*: string # What follows the flags, which Vim refuses (E488)
 
 proc parseSubstituteFlags*(text: string, optionsIgnoreCase = false): SubstituteFlags =
   ## `text` as do_sub reads it: an `&` may start it, flags follow up to the
-  ## first character that is no flag, and a `"` ends the command. `g` and `c`
-  ## toggle, and the last of `i` and `I` decides the case for this :s alone,
+  ## first character that is no flag, and a `"` ends the command. `g`, `c` and
+  ## `e` toggle, and the last of `i` and `I` decides the case for this :s alone,
   ## `optionsIgnoreCase` being what it is without them.
-  const IgnoredFlags = {'e', 'p', '#', 'l', 'r'}
+  const IgnoredFlags = {'p', '#', 'l', 'r'}
   result.ignoreCase = optionsIgnoreCase
   var i = if text.len > 0 and text[0] == '&': 1 else: 0
   while i < text.len:
@@ -52,6 +53,8 @@ proc parseSubstituteFlags*(text: string, optionsIgnoreCase = false): SubstituteF
       result.ignoreCase = true
     of 'I':
       result.ignoreCase = false
+    of 'e':
+      result.noError = not result.noError
     of IgnoredFlags:
       discard
     else:

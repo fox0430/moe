@@ -1345,6 +1345,16 @@ suite "CommandLine - parseSubstituteFlags":
   test "Spaces after the flags are no trailing characters":
     check parseSubstituteFlags("g  ").trailing == ""
 
+  test "`e` is read, not skipped":
+    check parseSubstituteFlags("ge").noError
+    check parseSubstituteFlags("ge").global
+    check not parseSubstituteFlags("g").noError
+
+  test "`e` toggles, as `g` does":
+    # Vim 9.2: `:%s/zzz/x/ee` reports E486, `eee` does not.
+    check not parseSubstituteFlags("ee").noError
+    check parseSubstituteFlags("eee").noError
+
   test "`c` is refused unless `n` makes it count":
     check parseSubstituteFlags("gc").refusal != ""
     check parseSubstituteFlags("cc").refusal == ""
