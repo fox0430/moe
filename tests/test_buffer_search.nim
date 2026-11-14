@@ -1191,10 +1191,44 @@ suite "Buffer search - empty lines and empty matches":
     check b.findSearchMatchRanges(1, "x*") == @[ColumnRange(startCol: 0, endCol: 0)]
     check b.findSearchMatchRanges(1, "foo").len == 0
 
+  test "a lookbehind looks before where the walk goes on from":
+    let b = newTextBuffer("xabb aaxaxa日")
+    check b.findSearchMatchRanges(0, "(?<=a)x*b?") ==
+      @[
+        ColumnRange(startCol: 2, endCol: 3),
+        ColumnRange(startCol: 6, endCol: 6),
+        ColumnRange(startCol: 7, endCol: 8),
+        ColumnRange(startCol: 9, endCol: 10),
+        ColumnRange(startCol: 11, endCol: 11),
+      ]
+    check b.findNext("(?<=a)x*b?", BufferPosition(line: 0, column: 0)) ==
+      some(BufferPosition(line: 0, column: 2))
+    check newTextBuffer("ab日").findSearchMatchRanges(0, "(?<=b)") ==
+      @[ColumnRange(startCol: 2, endCol: 2)]
+
+  test "an empty match right after a longer one is highlighted, not searched":
+    let b = newTextBuffer("日aa本")
+    check b.findSearchMatchRanges(0, "a*") ==
+      @[
+        ColumnRange(startCol: 0, endCol: 0),
+        ColumnRange(startCol: 1, endCol: 3),
+        ColumnRange(startCol: 3, endCol: 3),
+        ColumnRange(startCol: 4, endCol: 4),
+      ]
+    check b.countMatches(
+      BufferPosition(line: 0, column: 2), "a*", initDuration(seconds = 60)
+    ) == MatchCount(current: 2, total: 3, complete: true)
+
   test "an empty match steps a character, not a byte":
     check newTextBuffer("éa").findSearchMatchRanges(0, "x*") ==
       @[
         ColumnRange(startCol: 0, endCol: 0),
+        ColumnRange(startCol: 1, endCol: 1),
+        ColumnRange(startCol: 2, endCol: 2),
+      ]
+    check newTextBuffer("aé").findSearchMatchRanges(0, "a|") ==
+      @[
+        ColumnRange(startCol: 0, endCol: 1),
         ColumnRange(startCol: 1, endCol: 1),
         ColumnRange(startCol: 2, endCol: 2),
       ]
@@ -1388,6 +1422,14 @@ suite "substituteMatches with Vim's replacement specials":
   test "\\1 to \\9 are the groups":
     check replaced("abc", "(b)(c)", "[\\2\\1]") == "a[cb]"
     check replaced("foo bar", "(fo+)", "[\\1]") == "[foo] bar"
+
+  test "A group in a lookbehind":
+    check replaced("abab", "(?<=(a))b", "[\\1]") == "a[a]a[a]"
+    check replaced("aaaa", "((?<=a)a)", "[\\1]") == "a[a][a][a]"
+    check replaced("xabb aaxaxa日", "(?<=a)x*b?", "[&]") == "xa[b]b a[]a[x]a[x]a[]日"
+    check replaced("xaybxayb", "(?<=(x)(a)y)b", "[\\2\\1]") == "xay[ax]xay[ax]"
+    check replaced("abcabc", "(?<=(b)(?<=(a)b))c", "[\\1\\2]") == "ab[ba]ab[ba]"
+    check replaced("é日ab日ab", "(?<=(日)a)b", "[\\1]") == "é日a[日]日a[日]"
 
   test "A group that is unset or missing is empty":
     check replaced("abc", "(x)?b", "[\\1]") == "a[]c"
