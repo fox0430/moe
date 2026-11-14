@@ -118,6 +118,26 @@ proc closeSafely(p: Process) =
   except CatchableError as e:
     logError("git diff", "Failed to close process: " & e.msg)
 
+proc startGitMetadataProcess*(directory: string, args: openArray[string]): Process =
+  ## Capture short Git metadata output without aliasing osproc's pipe handles.
+  when defined(posix):
+    # The shell owns stderr redirection; osproc must own two distinct pipes.
+    # Avoid workingDir: Nim 2.2's posix_spawn temporarily changes parent cwd.
+    if directory.len > 0 and not dirExists(directory):
+      raise newException(OSError, "Git working directory does not exist: " & directory)
+    let git = findExe("git")
+    if git.len == 0:
+      raise newException(OSError, "Could not find git executable")
+    let command =
+      "git=$1; directory=$2; shift 2; exec \"$git\" -C \"$directory\" \"$@\" 2>/dev/null"
+    result = startProcess(
+      "sh", args = @["-c", command, "sh", git, directory] & @args, options = {poUsePath}
+    )
+  else:
+    result = startProcess(
+      "git", args = @["-C", directory] & @args, options = {poUsePath, poStdErrToStdOut}
+    )
+
 proc releaseGitProcess*(process: var Process) =
   ## Reap and close a Git child exactly once. Give termination 100ms before
   ## escalating to kill. Call on the editor thread that owns the process.
@@ -396,15 +416,23 @@ proc advanceToGitShow(
   # buffer, and a chatty stderr (LFS/textconv filters) would do the same;
   # both fds are routed off the Nim-side pipe so `peekExitCode` polling
   # can never wedge on a full pipe.
-  let shellCmd = "exec git show \"HEAD:$1\" > \"$2\" 2>/dev/null"
   let nextProc =
     try:
-      startProcess(
-        "sh",
-        workingDir = canonGitRoot,
-        args = ["-c", shellCmd, "sh", relativePath, tempOriginal],
-        options = {poUsePath, poStdErrToStdOut},
-      )
+      when defined(posix):
+        let command = "exec git -C \"$1\" show \"HEAD:$2\" > \"$3\" 2>/dev/null"
+        startProcess(
+          "sh",
+          args = ["-c", command, "sh", canonGitRoot, relativePath, tempOriginal],
+          options = {poUsePath},
+        )
+      else:
+        let command = "exec git show \"HEAD:$1\" > \"$2\" 2>/dev/null"
+        startProcess(
+          "sh",
+          workingDir = canonGitRoot,
+          args = ["-c", command, "sh", relativePath, tempOriginal],
+          options = {poUsePath, poStdErrToStdOut},
+        )
     except OSError as e:
       removeTempFileSafely(tempOriginal)
       return some(Result[GitDiffInfo, string].err("Failed to start git show: " & e.msg))
@@ -457,12 +485,21 @@ proc advanceToGitDiff(diffProc: GitDiffProcess): Option[Result[GitDiffInfo, stri
     "exec git diff --no-index --unified=0 \"$1\" \"$2\" > \"$3\" 2>/dev/null"
   let nextProc =
     try:
-      startProcess(
-        "sh",
-        workingDir = diffProc.workingDir,
-        args = ["-c", shellCmd, "sh", diffProc.tempOriginal, tempModified, tempDiffOut],
-        options = {poUsePath, poStdErrToStdOut},
-      )
+      when defined(posix):
+        startProcess(
+          "sh",
+          args =
+            ["-c", shellCmd, "sh", diffProc.tempOriginal, tempModified, tempDiffOut],
+          options = {poUsePath},
+        )
+      else:
+        startProcess(
+          "sh",
+          workingDir = diffProc.workingDir,
+          args =
+            ["-c", shellCmd, "sh", diffProc.tempOriginal, tempModified, tempDiffOut],
+          options = {poUsePath, poStdErrToStdOut},
+        )
     except OSError as e:
       cleanupTempFiles(diffProc)
       return some(Result[GitDiffInfo, string].err("Failed to start git diff: " & e.msg))
@@ -552,12 +589,7 @@ proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, st
 
   let process =
     try:
-      startProcess(
-        "git",
-        workingDir = fileDir,
-        args = ["rev-parse", "--show-toplevel"],
-        options = {poUsePath, poStdErrToStdOut},
-      )
+      startGitMetadataProcess(fileDir, ["rev-parse", "--show-toplevel"])
     except OSError as e:
       return err("Failed to start git process: " & e.msg)
 

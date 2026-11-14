@@ -296,13 +296,9 @@ proc refreshGitBranch*(gc: var GitCacheState, b: TextBuffer) =
     repository.pendingGeneration = repository.generation
     repository.started = now
     try:
-      repository.pending = startProcess(
-        "git",
-        args = [
-          "-C", entry.repositoryPath, "--no-optional-locks", "rev-parse",
-          "--abbrev-ref", "HEAD",
-        ],
-        options = {poUsePath, poStdErrToStdOut},
+      repository.pending = startGitMetadataProcess(
+        entry.repositoryPath,
+        ["--no-optional-locks", "rev-parse", "--abbrev-ref", "HEAD"],
       )
     except CatchableError:
       repository.deferBranchRetry()

@@ -616,6 +616,37 @@ suite "GitDiff - Integration tests with git repository":
     if dirExists(testDir):
       removeDir(testDir)
 
+  when defined(posix):
+    test "Git stages own distinct pipes and preserve quoted filenames":
+      let testFile = testDir / "file ' $(not-a-command).txt"
+      writeFile(testFile, "original\n")
+      discard execCmdEx("git add -A", workingDir = testDir)
+      discard execCmdEx("git commit -m initial", workingDir = testDir)
+      let buffer = newTextBuffer()
+      require buffer.loadFile(testFile).isOk
+      discard buffer.insertText(BufferPosition(line: 0, column: 0), "modified ")
+
+      let started = startGitDiffFromBufferAsync(buffer)
+      require started.isOk
+      let pipeline = started.get
+      defer:
+        abandonGitDiffProcess(pipeline)
+      var seen: set[GitDiffStage]
+      var completed = false
+      let deadline = getMonoTime() + initDuration(seconds = 60)
+      while not completed and getMonoTime() < deadline:
+        seen.incl pipeline.stage
+        check pipeline.process.outputHandle() != pipeline.process.errorHandle()
+        let outcome = checkGitDiffComplete(pipeline)
+        if outcome.isSome:
+          completed = true
+          require outcome.get.isOk
+          check outcome.get.get.lines.len > 0
+        else:
+          sleep(1)
+      check completed
+      check seen == {gdsGitRoot, gdsGitShow, gdsGitDiff}
+
   test "startGitDiffFromBufferAsync with unchanged buffer (LF, no trailing newline) returns no diff":
     let testFile = testDir / "test.txt"
     writeFile(testFile, "line 1\nline 2\nline 3")
