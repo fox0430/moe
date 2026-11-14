@@ -141,8 +141,7 @@ proc hookCommands(
       if command.isSome:
         result.add command.get
 
-type WritePreStep = object
-  ## One `BufWritePre` entry for one write, in config order.
+type WritePreStep = object ## One `BufWritePre` entry for one write, in config order.
   case ex: bool
   of false:
     program: HookCommand
@@ -392,7 +391,10 @@ proc runWritePreExCommand(
       case ex.kind
       of hekStripWhitespace:
         # How many lines it changed says nothing to a hook.
-        buf.stripTrailingWhitespace().map(proc(_: int) = discard)
+        buf.stripTrailingWhitespace().map(
+          proc(_: int) =
+            discard
+        )
       of hekSubstitute:
         # The case goes by 'ignorecase' and 'smartcase', as for a typed :s.
         let flags = e.commandLineParser.substituteFlags(ex.pattern, ex.flags, smRegex)
@@ -528,7 +530,8 @@ proc runWritePreHooks*(
           e.runWritePreHook(buf, step.program, interrupted, shown)
       except TransactionRollbackError as exc:
         # The buffer is in a state nothing vouches for: it is not to be written.
-        result.refusal = (step.label & " failed: " & exc.msg & "; not written").forDisplay
+        result.refusal =
+          (step.label & " failed: " & exc.msg & "; not written").forDisplay
         return
     if step.ex:
       # Over in an instant, and a failure leaves the text as it was, as finding

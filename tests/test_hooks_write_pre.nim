@@ -24,8 +24,7 @@ import pkg/[chronos, results]
 import
   ../src/moepkg/[
     buffer, types, editor, config, hooks, hook_ex_command, editor_file, editor_frame,
-    editor_hooks,
-    editor_window, job_lanes,
+    editor_hooks, editor_window, job_lanes,
   ]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/command_handlers/[handler_result, editor_ops, file_ops]
@@ -538,9 +537,8 @@ suite "BufWritePre - an Ex command":
     check readFile(path) == "a\n"
 
   test "An entry built in code that does not read warns, and the file is written":
-    let (editor, dir, path) = setup(
-      "ex_unread", "a\n", @[HookEntry(event: heBufWritePre, exCommand: "s/a/b/")]
-    )
+    let (editor, dir, path) =
+      setup("ex_unread", "a\n", @[HookEntry(event: heBufWritePre, exCommand: "s/a/b/")])
     defer:
       removeDir(dir)
     let saved = editor.saveFile(editor.activeBuffer)

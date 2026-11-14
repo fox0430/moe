@@ -1203,7 +1203,10 @@ suite "CommandModeHandler - executeSubstitute":
       let buffer = newTextBuffer("a")
       let version = buffer.contentVersion
       let result = executeSubstitute(
-        buffer, pattern, if pattern == "a": "a" else: "", "".parseSubstituteFlags,
+        buffer,
+        pattern,
+        if pattern == "a": "a" else: "",
+        "".parseSubstituteFlags,
         smRegex,
       )
       check result.kind == hrSubstitute

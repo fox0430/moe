@@ -137,10 +137,12 @@ proc parseHookExCommand*(exCommand: string): Result[HookExCommand, string] =
   of claSubstitute:
     let range = executed.substituteRange
     if range.usesCurrentLine:
-      return err("a :s range of `%`, line numbers or `$`, which the cursor does not move")
+      return
+        err("a :s range of `%`, line numbers or `$`, which the cursor does not move")
     if range.kind == erkAddresses and
         (range.first.outsideEveryBuffer or range.last.outsideEveryBuffer):
-      return err("a :s range whose lines a file can have (not above line 0 or below `$`)")
+      return
+        err("a :s range whose lines a file can have (not above line 0 or below `$`)")
     if range.isBackwards:
       return err("a :s range that does not end above its start")
     let flag = refusedFlag(executed.substituteFlagsText)

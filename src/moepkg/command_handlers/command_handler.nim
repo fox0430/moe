@@ -584,7 +584,9 @@ proc executeSubstitute*(
   if done.count == 0:
     return notFound(pattern, flags)
   HandlerResult(
-    kind: hrSubstitute, hrSubstituteCount: done.count, hrSubstituteLastLine: done.lastLine
+    kind: hrSubstitute,
+    hrSubstituteCount: done.count,
+    hrSubstituteLastLine: done.lastLine,
   )
 
 proc substituteInBuffer*(

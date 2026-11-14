@@ -537,7 +537,8 @@ suite "Hooks - exCommand":
     )
     check not vr.hasErrors
     check config.hooks.entries.len == 3
-    check parseHookExCommand(config.hooks.entries[0].exCommand).get.kind == hekStripWhitespace
+    check parseHookExCommand(config.hooks.entries[0].exCommand).get.kind ==
+      hekStripWhitespace
     let sub = parseHookExCommand(config.hooks.entries[1].exCommand).get
     check sub.kind == hekSubstitute
     check sub.range.kind == erkAll
@@ -559,7 +560,8 @@ suite "Hooks - exCommand":
       loadFromTomlString(exEntry("%s/a/x\\=y/g \"note") & exEntry("%s/a/\\=/"))
     check vr.errors.len == 1
     check config.hooks.entries.len == 1
-    check parseHookExCommand(config.hooks.entries[0].exCommand).get.replacement == "x\\=y"
+    check parseHookExCommand(config.hooks.entries[0].exCommand).get.replacement ==
+      "x\\=y"
 
   for (name, toml, badKey) in [
     (
@@ -721,7 +723,8 @@ suite "Hooks - exCommand":
     )
     check not vr.hasErrors
     check config.hooks.entries.len == 1
-    check parseHookExCommand(config.hooks.entries[0].exCommand).get.kind == hekStripWhitespace
+    check parseHookExCommand(config.hooks.entries[0].exCommand).get.kind ==
+      hekStripWhitespace
 
   test "An entry with exCommand saves and reloads as it was":
     var config = newEditorConfig()
