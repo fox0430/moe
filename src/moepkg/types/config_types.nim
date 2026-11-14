@@ -25,6 +25,7 @@
 ## defaults builder. The tool-detection and defaults procs stay in `config`.
 
 import std/[options, tables]
+from std/strutils import strip
 
 import pkg/regex
 
@@ -840,8 +841,17 @@ type
     ## One `[[Hook.entries]]` table.
     # Required keys come first (also the written/completed/documented order).
     event* {.cfg, cfgDocDescription: "Event to attach to".}: HookEvent = heBufWritePost
-    command* {.cfg, cfgDocDescription: "Command line to run".}: string
-      ## Placeholders are expanded before exec.
+    command* {.
+      cfg,
+      cfgOnlyWhen(isProgramHook, "exCommand is not set"),
+      cfgDocDescription: "Command line to run"
+    .}: string ## Placeholders are expanded before exec.
+    exCommand* {.
+      cfg,
+      cfgOnlyWhen(isWritePreHook, "the event is BufWritePre"),
+      cfgDocDescription:
+        "moe Ex command to run instead of a program: :s or :stripwhitespace"
+    .}: string
     filetype* {.
       cfg,
       cfgSuggest: filetypeNames,
@@ -853,17 +863,22 @@ type
     filterRegex* {.cfgSkip.}: Option[Regex2]
       ## `filter` compiled at load; `matches` runs per event.
     workingDir* {.
-      cfg, cfgDocDescription: "Directory to run the command in (default: the file's)"
+      cfg,
+      cfgOnlyWhen(isProgramHook, "exCommand is not set"),
+      cfgDocDescription: "Directory to run the command in (default: the file's)"
     .}: string
     timeout* {.
       cfg,
+      cfgOnlyWhen(isProgramHook, "exCommand is not set"),
       cfgMin: 0,
       cfgDocDefault: DefaultHookTimeout,
       cfgDocDescription: "Seconds before the command is killed. 0 waits without a bound"
     .}: int = DefaultHookTimeout
     onFail* {.
       cfg,
-      cfgOnlyWhen(isWritePreHook, "the event is BufWritePre"),
+      cfgOnlyWhen(
+        isProgramWritePreHook, "the event is BufWritePre and exCommand is not set"
+      ),
       cfgDocDescription:
         "What a failed command does to the write: write (as the buffer is) or abort"
     .}: HookFailAction
@@ -938,6 +953,17 @@ proc isWritePreHook*(entry: HookEntry): bool =
 
 proc isObserveHook*(entry: HookEntry): bool =
   not entry.isWritePreHook
+
+proc isExHook*(entry: HookEntry): bool =
+  ## Whether the entry runs a moe Ex command rather than a program: only a
+  ## write waits where one can run. Blanks alone are no command.
+  entry.isWritePreHook and entry.exCommand.strip.len > 0
+
+proc isProgramHook*(entry: HookEntry): bool =
+  not entry.isExHook
+
+proc isProgramWritePreHook*(entry: HookEntry): bool =
+  entry.isWritePreHook and entry.isProgramHook
 
 const ValidHookFailActions* = block:
   ## TOML spellings of `HookFailAction`; see `ValidHookEvents`.

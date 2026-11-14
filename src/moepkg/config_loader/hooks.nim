@@ -20,13 +20,13 @@
 ## TOML loader and serializer for `[Hook]` and `[[Hook.entries]]`.
 ##
 ## Keys are derived from the type; only required keys, regex compilation,
-## and contradicting values are checked here.
+## the Ex command, and contradicting values are checked here.
 
 import std/strutils
 
 import pkg/[parsetoml, results]
 
-import ../[command_string, config, hooks]
+import ../[command_string, config, hook_ex_command, hooks]
 import ../syntax/tokenizer
 
 import base, save_base
@@ -49,8 +49,26 @@ proc checkHookEntry*(
   ## patterns. Invalid entries are dropped whole.
   if not t.hasKey("event"):
     vr.addError(label, "missing 'event' key", "table with 'event'")
-  if not t.hasKey("command"):
-    vr.addError(label, "missing 'command' key", "table with 'command'")
+  let exRefused =
+    t.hasKey("exCommand") and
+    (t["exCommand"].kind != TomlValueKind.String or not entry.isWritePreHook)
+  if exRefused and not t.hasKey("command"):
+    # Meant as an Ex hook: its refusal (wrong type, or not BufWritePre) is
+    # reported already, and a missing `command` would only mislead.
+    discard
+  elif entry.isWritePreHook and t.hasKey("exCommand") and not t.hasKey("command") and
+      entry.exCommand.strip.len == 0:
+    vr.addError(fullKey(label, "exCommand"), "empty string", ExCommandExpected)
+  elif entry.isExHook:
+    # `cfgOnlyWhen` refuses a `command` and the keys only a program takes.
+    let parsed = parseHookExCommand(entry.exCommand)
+    if parsed.isErr:
+      vr.addError(fullKey(label, "exCommand"), entry.exCommand, parsed.error)
+  elif not t.hasKey("command"):
+    vr.addError(
+      label, "missing 'command' key",
+      "table with 'command' (or BufWritePre 'exCommand')",
+    )
   elif entry.command.strip.len == 0 and t["command"].kind == TomlValueKind.String:
     vr.addError(fullKey(label, "command"), "empty string", "non-empty command line")
   else:

@@ -1023,19 +1023,26 @@ proc buildLoaderBody(
           `vr`.addDeprecated(fullKey(`secLit`, `keyLit`), `msgLit`)
 
   # A key that does not apply to this shape of the object is rejected, not
-  # ignored. The checks run together once the whole object has loaded, so the
-  # declaration order of the fields a predicate reads does not matter.
+  # ignored. Every predicate reads the object as loaded before any refused
+  # value is taken back, so the declaration order of the fields a predicate
+  # reads does not matter.
+  var restores = newStmtList()
   for (spec, saved) in savedFor:
     let
       keyLit = newLit(spec.key)
       fieldAcc = newDotExpr(cfgVar, ident(spec.name))
       pred = newCall(spec.onlyWhen, cfgVar)
       expected = newLit("no '" & spec.key & "' key unless " & spec.onlyWhenNote)
+      refused = genSym(nskLet, "refused")
     conditionChecks.add quote do:
-      if `t`.hasKey(`keyLit`) and not `pred`:
+      let `refused` = `t`.hasKey(`keyLit`) and not `pred`
+      if `refused`:
         `vr`.addError(fullKey(`secLit`, `keyLit`), $`t`[`keyLit`], `expected`)
+    restores.add quote do:
+      if `refused`:
         # Refused values never stick, as everywhere else in the loader.
         `fieldAcc` = `saved`
+  conditionChecks.add restores
 
   # Build `const validKeys = [...]`. Use gensym'd names so the const block
   # the macro injects into the caller's proc scope cannot be referenced by

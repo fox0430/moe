@@ -1493,6 +1493,11 @@ Vim waits for a `BufWritePre` autocommand.
   writes the buffer as it is and says why, `abort` does not write the file.
   The entries after a failed one are not run: they were to describe text it
   never changed.
+- No entry runs for a read-only buffer, one of raw bytes, or one with a
+  change in progress (`<C-o>:w` in Insert mode): the text is written as it
+  is, and the write says why. With a change in progress, an entry with
+  `onFail = "abort"` stops the write instead; it can be made once Insert mode
+  ends.
 - `${file}` names the file being written, for a tool that finds its settings
   from the path (`prettier --stdin-filepath ${file}`). The command must not
   rewrite that file itself: what it prints is what is written.
@@ -1505,6 +1510,45 @@ Vim waits for a `BufWritePre` autocommand.
   those keeps counting while the write waits.
 - `timeout = 0` waits until the command ends or Ctrl-C stops it.
 
+A `BufWritePre` entry can run a moe Ex command instead of a program: write
+`exCommand` in place of `command`, as Vim's
+`autocmd BufWritePre * %s/\s\+$//e` runs one.
+
+- It edits the buffer, not a window, as Vim's `keepjumps keeppatterns` with
+  `winsaveview()` around it does: the cursor and the view of each window
+  move with the text, and the cursor, the last search, the search and command
+  histories, the jump list and the status line stay as they were. Each entry is
+  one change `u` takes back, and it goes on the change list, as the output of a
+  program does. A `:s` that leaves every line as it was, such as
+  `%s/\s*$//e` on a file with no trailing blanks, makes no change.
+- Two commands may run: `stripwhitespace`, with nothing after it, and `:s`.
+  - A `:s` range is `%`, line numbers or `$`, with `+`/`-` offsets
+    (`1,$-1`); a closed fold does not widen it. A range that hangs on the
+    cursor (none, `.`, `+1`, `,$`, `5,`) is refused, so a forgotten `%` is
+    reported at startup rather than changing one line.
+    So is a range that ends above its start in every file (`10,5`, `$,$-1`),
+    and one with a line no file has (`$+1`, `1-2`).
+  - The flags may be `g`, `i`, `I` and `e`. The others are refused (`c`, `n`,
+    `&`, `p`, `#`, `l`, `r`), and so are an empty pattern, `~` in the
+    replacement (write `\~` for the character) and a leading `\=`.
+  - The pattern is a regex as `/` reads it: PCRE style, not Vim's. Vim's
+    `\s\+` is a blank followed by a `+` here; write `\s+`. The case goes by
+    `ignorecase` and `smartcase`, as for a typed `:s`; fix it with the `I` or
+    `i` flag, or with `(?-i)` or `(?i)` in the pattern (Vim's `\C` and `\c`
+    are the letters `C` and `c` here).
+  - Only built-in command names count: `[CommandAliases]` and
+    `[DisabledCommandAliases]` do not change what a hook runs.
+  - Colons and blanks in front of the command are skipped, as Vim skips
+    them (`: %s/a/b/`). Blanks after it are kept: with no closing delimiter
+    they end the pattern or the replacement (`%s/\t/    `).
+- A failure, such as a `:s` without `e` that finds nothing, a range past the
+  end of the file, or one backwards in it (`1,$-1` in a one-line file, as
+  Vim's E493), is reported, and the write and the entries after it go on,
+  as in Vim: the text is as it was, as when there is nothing to change. A
+  program that fails still ends the chain, Ex commands after it included.
+- `workingDir`, `timeout` and `onFail` are for a program and cannot be set,
+  and placeholders are not expanded.
+
 Example:
 ```toml
 [Hook]
@@ -1515,6 +1559,17 @@ enable = true
 event = "BufWritePre"
 filetype = ["go"]
 command = "gofmt"
+
+# Strip trailing blanks before every write, with no program to run.
+[[Hook.entries]]
+event = "BufWritePre"
+exCommand = "stripwhitespace"
+
+# Turn tabs into spaces in Python files; a literal string keeps the backslash.
+[[Hook.entries]]
+event = "BufWritePre"
+filetype = ["python"]
+exCommand = '%s/\t/    /ge'
 
 # Lint Nim files after every write and show what the linter says.
 [[Hook.entries]]
@@ -1539,19 +1594,20 @@ workingDir = "~/src/api"
 | exitWaitTimeout | integer | 10 | Seconds a quit waits for the BufWritePost hooks in total. 0 waits without a bound |
 <!-- AUTO-GEN:end Hook -->
 
-`event` and `command` are required; an entry missing either is reported and
-dropped whole. Keys of a `[[Hook.entries]]` table:
+`event` and `command` (or, for `BufWritePre`, `exCommand`) are required; an
+entry missing either is reported and dropped whole. Keys of a `[[Hook.entries]]` table:
 
 <!-- AUTO-GEN:start Hook.entries -->
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
 | event | string (enum: BufWritePre, BufWritePost, BufReadPost) | BufWritePost | Event to attach to |
-| command | string |  | Command line to run |
+| command | string |  | Command line to run (only when exCommand is not set) |
+| exCommand | string |  | moe Ex command to run instead of a program: :s or :stripwhitespace (only when the event is BufWritePre) |
 | filetype | string array | [] | File types this applies to (default: every type) |
 | filter | string |  | Regex the file path must match (default: every path) |
-| workingDir | string |  | Directory to run the command in (default: the file's) |
-| timeout | integer | 60 | Seconds before the command is killed. 0 waits without a bound |
-| onFail | string (enum: write, abort) | write | What a failed command does to the write: write (as the buffer is) or abort (only when the event is BufWritePre) |
+| workingDir | string |  | Directory to run the command in (default: the file's) (only when exCommand is not set) |
+| timeout | integer | 60 | Seconds before the command is killed. 0 waits without a bound (only when exCommand is not set) |
+| onFail | string (enum: write, abort) | write | What a failed command does to the write: write (as the buffer is) or abort (only when the event is BufWritePre and exCommand is not set) |
 | showOutput | bool | false | Show the command output in a horizontal split (only when the event is not BufWritePre) |
 <!-- AUTO-GEN:end Hook.entries -->
 

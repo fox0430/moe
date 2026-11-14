@@ -190,3 +190,11 @@ proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   parser.shellCommands.clear()
   for name, entry in config.shellCommands.pairs:
     parser.shellCommands[name] = entry
+
+proc newBuiltinCommandLineParser*(): CommandLineParser =
+  ## A parser that knows the built-in command names alone: no user alias,
+  ## disabled command or shell command, and no last search.
+  result = newCommandLineParser()
+  let config = newCommandConfig()
+  config.loadDefaultConfig()
+  config.applyToParser(result)

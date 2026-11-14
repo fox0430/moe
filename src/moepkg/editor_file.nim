@@ -489,7 +489,7 @@ proc saveFile*(
   # which then tidies what the commands left.
   let writePre = e.runWritePreHooks(buffer, savePath)
   if writePre.refusal.len > 0:
-    return err(writePre.refusal)
+    return err(writePre.refusal.withWarnings(writePre.warnings))
 
   # Trim trailing whitespace if EditorConfig says so; reverted on save failure.
   let didTrimRes = trimTrailingWhitespaceTracked(buffer)

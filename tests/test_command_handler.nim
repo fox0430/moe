@@ -1137,12 +1137,11 @@ suite "CommandModeHandler - raw buffer gates":
   test "stripwhitespace refuses a raw buffer":
     # strip removes any trailing 0x09/0x20, which in UTF-16 can be half of a
     # code unit; the rest of the line then shifts by an odd number of bytes.
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "Hello   ")
     buffer.keepRaw = true
 
-    let result = handler.executeStripWhitespace(buffer)
+    let result = buffer.executeStripWhitespace()
 
     check result.kind == hrError
     check "raw undecodable bytes" in result.errorMessage
@@ -1150,13 +1149,11 @@ suite "CommandModeHandler - raw buffer gates":
 
   test "substitute refuses a raw buffer":
     # The pattern is matched byte-wise, so it can land inside a code unit.
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "Hello")
     buffer.keepRaw = true
 
-    let result =
-      handler.executeSubstitute(buffer, "l", "L", "g".parseSubstituteFlags, smRegex)
+    let result = executeSubstitute(buffer, "l", "L", "g".parseSubstituteFlags, smRegex)
 
     check result.kind == hrError
     check "raw undecodable bytes" in result.errorMessage
@@ -1164,13 +1161,12 @@ suite "CommandModeHandler - raw buffer gates":
 
 suite "CommandModeHandler - executeStripWhitespace":
   test "Strip whitespace from lines":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "Hello   ")
     discard buffer.insert(1, "World  ")
     discard buffer.insert(2, "NoTrailing")
 
-    let result = handler.executeStripWhitespace(buffer)
+    let result = buffer.executeStripWhitespace()
     check result.kind == hrStripWhitespace
     check result.strippedLineCount == 2
     check buffer.getLine(0) == "Hello"
@@ -1178,19 +1174,17 @@ suite "CommandModeHandler - executeStripWhitespace":
     check buffer.getLine(2) == "NoTrailing"
 
   test "Strip whitespace with no trailing spaces":
-    let handler = setupHandler()
     let buffer = setupBuffer(@["Line1", "Line2"])
 
-    let result = handler.executeStripWhitespace(buffer)
+    let result = buffer.executeStripWhitespace()
     check result.kind == hrStripWhitespace
     check result.strippedLineCount == 0
 
   test "Strip whitespace on read-only buffer reports error and leaves buffer intact":
-    let handler = setupHandler()
     let buffer = setupBuffer(@["Hello   ", "World  "])
     buffer.readOnly = true
 
-    let result = handler.executeStripWhitespace(buffer)
+    let result = buffer.executeStripWhitespace()
     check result.kind == hrError
     check result.errorMessage == "Buffer is read-only"
     check buffer.getLine(0) == "Hello   "
@@ -1203,12 +1197,27 @@ suite "CommandModeHandler - executeQuickRun":
     check result.kind == hrQuickRun
 
 suite "CommandModeHandler - executeSubstitute":
+  test "A match that leaves the line as it was still changes it, as in Vim":
+    for pattern in ["a", "x*"]:
+      checkpoint "pattern: " & pattern
+      let buffer = newTextBuffer("a")
+      let version = buffer.contentVersion
+      let result = executeSubstitute(
+        buffer,
+        pattern,
+        if pattern == "a": "a" else: "",
+        "".parseSubstituteFlags,
+        smRegex,
+      )
+      check result.kind == hrSubstitute
+      check buffer.contentVersion != version
+      check buffer.undo().isOk
+
   test "Substitute on current line":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer, "hello", "hi", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
@@ -1216,11 +1225,10 @@ suite "CommandModeHandler - executeSubstitute":
     check buffer.getLine(0) == "hi world"
 
   test "Substitute all occurrences with g flag":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello hello hello")
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer, "hello", "hi", "g".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
@@ -1228,11 +1236,10 @@ suite "CommandModeHandler - executeSubstitute":
     check buffer.getLine(0) == "hi hi hi"
 
   test "Substitute first occurrence without g flag":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello hello hello")
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer, "hello", "hi", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
@@ -1240,13 +1247,12 @@ suite "CommandModeHandler - executeSubstitute":
     check buffer.getLine(0) == "hi hello hello"
 
   test "Substitute on all lines with global range":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo")
     discard buffer.insert(1, "foo")
     discard buffer.insert(2, "foo")
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer,
       "foo",
       "bar",
@@ -1262,14 +1268,13 @@ suite "CommandModeHandler - executeSubstitute":
     check buffer.getLine(2) == "bar"
 
   test "Substitute on line range":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo")
     discard buffer.insert(1, "foo")
     discard buffer.insert(2, "foo")
     discard buffer.insert(3, "foo")
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer,
       "foo",
       "bar",
@@ -1287,10 +1292,9 @@ suite "CommandModeHandler - executeSubstitute":
     check result.hrSubstituteLastLine == 2
 
   test "A line break pushes the rest of the range down":
-    let handler = setupHandler()
     let buffer = newTextBuffer("a,b\nc,d\ne,f")
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer,
       ",",
       "\\r",
@@ -1311,10 +1315,9 @@ suite "CommandModeHandler - executeSubstitute":
     check buffer.getLine(1) == "c,d"
 
   test "`n` counts and changes nothing, even in a read-only buffer":
-    let handler = setupHandler()
     let buffer = newTextBuffer("a a\nb\na")
     buffer.readOnly = true
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer, "a", "x", "gn".parseSubstituteFlags, smRegex, ExLineRange(kind: erkAll)
     )
     check result.kind == hrHandled
@@ -1322,43 +1325,35 @@ suite "CommandModeHandler - executeSubstitute":
     check buffer.getLine(0) == "a a"
 
   test "`n` without `g` counts one match a line":
-    let handler = setupHandler()
     let buffer = newTextBuffer("a a")
-    let result =
-      handler.executeSubstitute(buffer, "a", "x", "n".parseSubstituteFlags, smRegex)
+    let result = executeSubstitute(buffer, "a", "x", "n".parseSubstituteFlags, smRegex)
     check result.statusMessage == "1 match on 1 line"
 
   test "`n` reports a pattern it does not find":
-    let handler = setupHandler()
     let buffer = newTextBuffer("a")
-    let result =
-      handler.executeSubstitute(buffer, "z", "x", "n".parseSubstituteFlags, smRegex)
+    let result = executeSubstitute(buffer, "z", "x", "n".parseSubstituteFlags, smRegex)
     check result.kind == hrError
 
   test "`e` lets a pattern it does not find pass, changing nothing":
-    let handler = setupHandler()
     let buffer = newTextBuffer("a")
     for flags in ["e", "ne"]:
       let result =
-        handler.executeSubstitute(buffer, "z", "x", flags.parseSubstituteFlags, smRegex)
+        executeSubstitute(buffer, "z", "x", flags.parseSubstituteFlags, smRegex)
       check result.kind == hrSubstituteNoMatch
       check buffer.getLine(0) == "a"
 
   test "A :s that finds nothing makes no undo step and keeps the content version":
     for flags in ["", "e"]:
       checkpoint "flags: " & flags
-      let handler = setupHandler()
       let buffer = newTextBuffer("a")
       let version = buffer.contentVersion
-      discard
-        handler.executeSubstitute(buffer, "z", "x", flags.parseSubstituteFlags, smRegex)
+      discard executeSubstitute(buffer, "z", "x", flags.parseSubstituteFlags, smRegex)
       check buffer.contentVersion == version
       check buffer.undo().isErr
 
   test "`e` still refuses a range past the end":
-    let handler = setupHandler()
     let buffer = newTextBuffer("a")
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer,
       "a",
       "x",
@@ -1369,48 +1364,43 @@ suite "CommandModeHandler - executeSubstitute":
     check result.kind == hrError
 
   test "Substitute ignores case when told to":
-    let handler = setupHandler()
     let buffer = newTextBuffer("Foo foo FOO")
     let result =
-      handler.executeSubstitute(buffer, "foo", "x", "gi".parseSubstituteFlags, smRegex)
+      executeSubstitute(buffer, "foo", "x", "gi".parseSubstituteFlags, smRegex)
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 3
     check buffer.getLine(0) == "x x x"
 
   test "Substitute keeps multi-byte text around a case-folded match":
-    let handler = setupHandler()
     let buffer = newTextBuffer("あÉaい éa")
     let result =
-      handler.executeSubstitute(buffer, "éa", "x", "i".parseSubstituteFlags, smRegex)
+      executeSubstitute(buffer, "éa", "x", "i".parseSubstituteFlags, smRegex)
     check result.kind == hrSubstitute
     check buffer.getLine(0) == "あxい éa"
 
   test "Substitute with empty pattern returns error":
-    let handler = setupHandler()
     let buffer = setupBuffer(@["hello"])
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer, "", "replacement", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrError
     check result.errorMessage == "Pattern required"
 
   test "Substitute with no matches returns error":
-    let handler = setupHandler()
     let buffer = setupBuffer(@["hello world"])
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer, "xyz", "replacement", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrError
     check "Pattern not found" in result.errorMessage
 
   test "\\n puts a NUL, as Vim keeps one in a line":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer, "hello", "hi\\nworld", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
@@ -1418,13 +1408,12 @@ suite "CommandModeHandler - executeSubstitute":
     check buffer.getLine(0) == "hi\0world"
 
   test "Substitute with invalid range (start > end) returns error":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo")
     discard buffer.insert(1, "bar")
     discard buffer.insert(2, "baz")
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer,
       "foo",
       "replaced",
@@ -1436,12 +1425,43 @@ suite "CommandModeHandler - executeSubstitute":
     check result.kind == hrError
     check "Invalid range" in result.errorMessage
 
+  test "A range that ends on line 0 is backwards, before line 0 becomes line 1":
+    # `1,$-1` in a one-line buffer, as Vim's E493.
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo,")
+    let result = executeSubstitute(
+      buffer,
+      ",$",
+      "",
+      "".parseSubstituteFlags,
+      smRegex,
+      range = exAddresses(exLine(1), exLast(-1)),
+      currentLine = 0,
+    )
+    check result.kind == hrError
+    check "Invalid range" in result.errorMessage
+    check buffer.getLine(0) == "foo,"
+
+  test "Line 0 at the start is line 1":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo")
+    let result = executeSubstitute(
+      buffer,
+      "foo",
+      "bar",
+      "".parseSubstituteFlags,
+      smRegex,
+      range = exAddresses(exLine(0), exLast()),
+      currentLine = 0,
+    )
+    check result.kind == hrSubstitute
+    check buffer.getLine(0) == "bar"
+
   test "Substitute with empty replacement (delete pattern)":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer, "hello ", "", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrSubstitute
@@ -1449,12 +1469,11 @@ suite "CommandModeHandler - executeSubstitute":
     check buffer.getLine(0) == "world"
 
   test "Substitute on read-only buffer reports error and leaves buffer intact":
-    let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
     buffer.readOnly = true
 
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer, "hello", "hi", "".parseSubstituteFlags, smRegex, currentLine = 0
     )
     check result.kind == hrError
@@ -2555,12 +2574,11 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
   # and last line, so the command acts on all of it. The fold itself stays as
   # the user left it.
   test "substitute widens its range to the whole fold":
-    let handler = setupHandler()
     let buffer = setupBuffer(@["aaa", "foo", "foo", "ccc"])
     check buffer.foldState.addFold(1, 3, collapsed = true)
     # :2s/foo/bar/ -> 1-based line 2 == index 1, the fold start. The range widens
     # to 1..3, so the match on the hidden line 2 is replaced as well.
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer,
       "foo",
       "bar",
@@ -2575,11 +2593,10 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
     check buffer.foldState.getFoldAt(1).get.collapsed == true
 
   test "substitute leaves a fold without a match closed":
-    let handler = setupHandler()
     let buffer = setupBuffer(@["foo", "bbb", "ccc", "ddd"])
     check buffer.foldState.addFold(1, 3, collapsed = true) # no 'foo' inside
     # :%s/foo/bar/ matches only line 0
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer,
       "foo",
       "bar",
@@ -2623,10 +2640,9 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
     check buffer.getLine(0) == "a"
 
   test "substitute over a fold reaching past the end stays in range":
-    let handler = setupHandler()
     let buffer = setupBuffer(@["foo", "foo", "foo"])
     check buffer.foldState.addFold(1, 9, collapsed = true)
-    let result = handler.executeSubstitute(
+    let result = executeSubstitute(
       buffer,
       "foo",
       "bar",
@@ -2655,10 +2671,9 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
     check result.hrDeletedLineCount == 3
 
   test "stripwhitespace covers the whole buffer and opens no fold":
-    let handler = setupHandler()
     let buffer = setupBuffer(@["aaa", "bbb   ", "ccc", "ddd"])
     check buffer.foldState.addFold(1, 3, collapsed = true)
-    let result = handler.executeStripWhitespace(buffer)
+    let result = buffer.executeStripWhitespace()
     check result.kind == hrStripWhitespace
     check buffer.getLine(1) == "bbb"
     check buffer.foldState.getFoldAt(1).get.collapsed == true

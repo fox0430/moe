@@ -97,6 +97,19 @@ func satAdd*(a, b: int): int =
   else:
     a + b
 
+func addressLine*(a: ExAddress, currentLine, lastLine: int): int =
+  ## The 0-based line `a` names before a buffer judges it: -1 is line 0, the
+  ## gap above the first line.
+  let base =
+    case a.base
+    of eabCurrent:
+      currentLine
+    of eabLine:
+      a.line - 1
+    of eabLast:
+      lastLine
+  satAdd(base, a.offset)
+
 proc parseAddress(
     cmd: string, i: var int
 ): Result[tuple[address: ExAddress, found: bool], string] =

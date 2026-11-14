@@ -187,6 +187,7 @@ type
       reusedPattern*: bool # No pattern was typed, so the last search's runs
       replacement*: string
       substituteFlags*: SubstituteFlags
+      substituteFlagsText*: string # The flags as typed, case aside
       substituteRange*: ExLineRange
     of claDeleteLines:
       deleteRange*: ExLineRange
