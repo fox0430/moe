@@ -3287,6 +3287,53 @@ suite "Handler - Scroll operations":
     # Landing on the tab, the cursor shows on its last cell, 3.
     check ctx.cursor == BufferPosition(line: 1, column: 10)
 
+  test "Ctrl-E and Ctrl-Y from a top Ctrl-D left past the last page":
+    # Ctrl-D and Ctrl-Y as Vim 9.2 in 17 rows: Ctrl-D over the fold on top
+    # leaves an empty row. Vim's Ctrl-E would go on to 15, moe's stops at
+    # the last page.
+    proc afterCtrlD(): CommandContext =
+      var lines: seq[string]
+      for i in 0 ..< 30:
+        lines.add($i)
+      let buffer = newTextBuffer(lines.join("\n"))
+      check buffer.foldState.addFold(4, 9, collapsed = true)
+      result = createTestContext(buffer)
+      result.state.config.smoothScroll.enable = false
+      result.cursor = BufferPosition(line: 4, column: 0)
+      result.motionController.viewportManager.viewport.topLine = 4
+      result.motionController.viewportManager.viewport.height = 17
+      result.state.windowDisplay.viewportReservedLines = 0
+      check createTestRegistry().execute(result, builtin(bcScrollHalfPageDown)).isOk
+      check result.motionController.viewportManager.viewport.topLine == 14
+
+    let down = afterCtrlD()
+    check createTestRegistry().execute(down, builtin(bcScrollLineDown)).isOk
+    check down.motionController.viewportManager.viewport.topLine == 14
+
+    let up = afterCtrlD()
+    check createTestRegistry().execute(up, builtin(bcScrollLineUp)).isOk
+    check up.motionController.viewportManager.viewport.topLine == 13
+
+  test "Ctrl-E and Ctrl-Y from a top past the buffer's end go from the last page":
+    proc pastEnd(): CommandContext =
+      var lines: seq[string]
+      for i in 0 ..< 30:
+        lines.add("x".repeat(i))
+      result = createTestContext(newTextBuffer(lines.join("\n")))
+      result.state.config.standard.lineWrap = true
+      result.cursor = BufferPosition(line: 29, column: 0)
+      result.motionController.viewportManager.viewport.height = 17
+      result.motionController.viewportManager.viewport.topLine = 40
+      result.state.windowDisplay.viewportReservedLines = 0
+
+    let down = pastEnd()
+    check createTestRegistry().execute(down, builtin(bcScrollLineDown)).isOk
+    check down.motionController.viewportManager.viewport.topLine == 13
+
+    let up = pastEnd()
+    check createTestRegistry().execute(up, builtin(bcScrollLineUp)).isOk
+    check up.motionController.viewportManager.viewport.topLine == 12
+
 suite "Handler - Visual mode operations":
   test "visual delete":
     let buffer = newTextBuffer("hello world")

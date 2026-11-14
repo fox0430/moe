@@ -121,19 +121,18 @@ proc handleScrollCursorBottom*(
   ctx.scrollCursorLineTo(clsBottom)
   return ok(())
 
-proc maxScrollTop(
+proc scrollTops(
     ctx: CommandContext, layout: RowLayout, visibleHeight: int
-): tuple[line, offset: int] =
-  let
-    lastLine = ctx.buffer.len - 1
-    collapsedFold = ctx.buffer.foldState.getCollapsedFoldAt(lastLine)
-    bottomLine = if collapsedFold.isSome: collapsedFold.get.startLine else: lastLine
-    bottomOffset =
-      if collapsedFold.isSome:
-        0
-      else:
-        layout.lineRows(bottomLine) - 1
-  layout.walkBackRows(bottomLine, bottomOffset, visibleHeight - 1)
+): tuple[current, last: RowSpot] =
+  ## The window's top, or the last page's when it is past the buffer's end,
+  ## and the last page's top, as far as Ctrl-E goes.
+  let viewport = ctx.motionController.viewportManager.viewport
+  result.last = layout.lastPageTop(visibleHeight)
+  result.current =
+    if viewport.topLine < layout.lineCount:
+      (viewport.topLine, viewport.topWrapOffset)
+    else:
+      result.last
 
 proc cursorRow(ctx: CommandContext, layout: RowLayout, visibleHeight: int): int =
   ## The cursor's screen row: negative above the viewport, `visibleHeight` or
@@ -205,15 +204,14 @@ proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), s
     visibleHeight = ctx.scrollVisibleHeight()
     layout = ctx.scrollRowLayout()
     viewport = ctx.motionController.viewportManager.viewport
-    maxTop = ctx.maxScrollTop(layout, visibleHeight)
-    currentTop = min(maxTop, (line: viewport.topLine, offset: viewport.topWrapOffset))
+    (currentTop, maxTop) = ctx.scrollTops(layout, visibleHeight)
     row = layout.rowAt(currentTop.line, currentTop.offset, count)
-    candidate =
+    candidate: RowSpot =
       if row.isSome:
-        (line: row.get.line, offset: row.get.wrapSeg)
+        (row.get.line, row.get.wrapSeg)
       else:
         maxTop
-    targetTop = min(maxTop, candidate)
+    targetTop = max(currentTop, min(maxTop, candidate))
 
   viewport.restoreViewportTop(targetTop.line, targetTop.offset)
   ctx.keepCursorInScrolledViewport(layout, visibleHeight)
@@ -227,8 +225,7 @@ proc handleScrollLineUp*(ctx: CommandContext, args: seq[string]): Result[(), str
     visibleHeight = ctx.scrollVisibleHeight()
     layout = ctx.scrollRowLayout()
     viewport = ctx.motionController.viewportManager.viewport
-    maxTop = ctx.maxScrollTop(layout, visibleHeight)
-    currentTop = min(maxTop, (line: viewport.topLine, offset: viewport.topWrapOffset))
+    currentTop = ctx.scrollTops(layout, visibleHeight).current
     targetTop = layout.walkBackRows(currentTop.line, currentTop.offset, count)
 
   viewport.restoreViewportTop(targetTop.line, targetTop.offset)
