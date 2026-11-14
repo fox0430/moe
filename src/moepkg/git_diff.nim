@@ -589,7 +589,15 @@ proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, st
 
   let process =
     try:
-      startGitMetadataProcess(fileDir, ["rev-parse", "--show-toplevel"])
+      when defined(posix):
+        startGitMetadataProcess(fileDir, ["rev-parse", "--show-toplevel"])
+      else:
+        startProcess(
+          "git",
+          workingDir = fileDir,
+          args = ["rev-parse", "--show-toplevel"],
+          options = {poUsePath, poStdErrToStdOut},
+        )
     except OSError as e:
       return err("Failed to start git process: " & e.msg)
 

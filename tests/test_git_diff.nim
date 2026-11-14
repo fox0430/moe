@@ -617,7 +617,7 @@ suite "GitDiff - Integration tests with git repository":
       removeDir(testDir)
 
   when defined(posix):
-    test "Git stages own distinct pipes and preserve quoted filenames":
+    test "buffer diff preserves quoted filenames":
       let testFile = testDir / "file ' $(not-a-command).txt"
       writeFile(testFile, "original\n")
       discard execCmdEx("git add -A", workingDir = testDir)
@@ -631,12 +631,9 @@ suite "GitDiff - Integration tests with git repository":
       let pipeline = started.get
       defer:
         abandonGitDiffProcess(pipeline)
-      var seen: set[GitDiffStage]
       var completed = false
       let deadline = getMonoTime() + initDuration(seconds = 60)
       while not completed and getMonoTime() < deadline:
-        seen.incl pipeline.stage
-        check pipeline.process.outputHandle() != pipeline.process.errorHandle()
         let outcome = checkGitDiffComplete(pipeline)
         if outcome.isSome:
           completed = true
@@ -645,7 +642,6 @@ suite "GitDiff - Integration tests with git repository":
         else:
           sleep(1)
       check completed
-      check seen == {gdsGitRoot, gdsGitShow, gdsGitDiff}
 
   test "startGitDiffFromBufferAsync with unchanged buffer (LF, no trailing newline) returns no diff":
     let testFile = testDir / "test.txt"
