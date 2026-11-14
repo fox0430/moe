@@ -93,5 +93,4 @@ jobs:
         if: matrix.nim-version == '2.0.10'
         run: nimble install 'nimble@0.24.1' -y
 
-      # nimble.lock pins nim; build with the matrix's Nim instead.
-      - run: nimble build -y --useSystemNim
+      - run: nimble build -y
