@@ -32,7 +32,7 @@ import
     recovery_format, recovery_index, recovery_notice, signal_watcher, terminal_command,
     editor_file_jobs, editor_persist,
   ]
-import moepkg/command_handlers/command_mode_handler
+import moepkg/command_handlers/[command_mode_handler, startup_commands]
 
 proc toCursorStyle(ct: CursorType): CursorStyle =
   ## Convert config CursorType to celina CursorStyle
@@ -545,6 +545,11 @@ proc main() {.used.} =
         editor.applyWorkspaceEditFromServer(edit)
   )
 
+  # Before the startup files and `+` commands, so a split measures its room
+  # against the terminal, not the placeholder size.
+  let termSize = app.getTerminalSize()
+  editor.applyStartUpScreenSize(termSize.width, termSize.height)
+
   if cmdLineConfig.filePaths.len > 0:
     # Check if first path is a directory
     if cmdLineConfig.filePaths.len == 1 and dirExists(cmdLineConfig.filePaths[0]):
@@ -569,6 +574,11 @@ proc main() {.used.} =
         editor.openAdditionalStartupFiles(
           cmdLineConfig.filePaths, cmdLineConfig.isReadonly
         )
+
+  # As Vim's exe_commands, once every file is open, in the first window: on
+  # the filer or the empty buffer too, so `moe +/pat` still sets the last
+  # search.
+  editor.runStartupCommands(cmdLineConfig.startupCommands)
 
   # After the startup files are open, so the count can tell them apart from
   # work no open buffer shows.

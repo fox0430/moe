@@ -735,6 +735,8 @@ proc openAdditionalStartupFiles*(
   ## buffer (like :badd) and joins the active window's tab list so :bnext/:bprev
   ## can reach it without switching away from the first file. Missing files are
   ## skipped. Sharing one loop keeps the split and no-split startup paths in sync.
+  ## The focus stays on the first file, as after Vim's edit_buffers.
+  let first = e.activeWindow
   for i in 1 ..< filePaths.len:
     let filePath = filePaths[i]
     if not fileExists(filePath):
@@ -760,3 +762,4 @@ proc openAdditionalStartupFiles*(
         e.addBufferToWindowList(bufResult.get)
         if readonly:
           bufResult.get.readOnly = true
+  e.focusWindow(e.windowManager.windows.find(first))

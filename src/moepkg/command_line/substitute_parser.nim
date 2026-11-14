@@ -100,20 +100,6 @@ type SubstituteParseResult* = object ## Result of parsing a substitute command
   hasReplacement*: bool # Whether we've reached the replacement section
   range*: ExLineRange # The lines in front of `s`, unresolved
 
-proc skipPattern(s: string, start: int): int =
-  ## The index of the `/` ending the :s pattern that starts at `start`, `s.len`
-  ## without one. As Vim's skip_regexp, neither a `/` after a backslash nor one
-  ## in a `[...]` class ends it, and a class left open runs to the end.
-  var i = start
-  while i < s.len and s[i] != '/':
-    if s[i] == '\\':
-      i += 2
-    elif s[i] == '[':
-      i = s.skipClass(i + 1) + 1
-    else:
-      i.inc
-  min(i, s.len)
-
 proc skipReplacement(s: string, start: int): int =
   ## The index of the `/` ending the :s replacement that starts at `start`,
   ## `s.len` without one. As Vim's skip_substitute, a `/` after a backslash

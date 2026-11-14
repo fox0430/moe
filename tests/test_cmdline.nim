@@ -31,6 +31,59 @@ suite "cmdline - CmdLineConfig":
     check config.filePaths.len == 0
     check config.bufferBackend.isNone
 
+suite "cmdline - parseCmdLine":
+  test "+N is a startup command, not a file":
+    let config = parseCmdLine(@["+5", "a.txt"])
+    check config.filePaths == @["a.txt"]
+    check config.startupCommands.len == 1
+    check config.startupCommands[0].kind == sckEx
+    check config.startupCommands[0].command == "5"
+
+  test "+ alone is +$":
+    let config = parseCmdLine(@["a.txt", "+"])
+    check config.filePaths == @["a.txt"]
+    check config.startupCommands[0].command == "$"
+
+  test "+ takes any Ex command":
+    check parseStartupCommand("+set number").get.command == "set number"
+    check parseStartupCommand("+%").get.command == "%"
+
+  test "+/pat runs to the end of the argument without a closing /":
+    let config = parseCmdLine(@["+/foo bar", "a.txt"])
+    check config.startupCommands[0].kind == sckSearch
+    check config.startupCommands[0].pattern == "foo bar"
+
+  test "The / closing +/pat/ is not in the pattern, as Vim's :/pat/":
+    check parseStartupCommand("+/foo/").get.pattern == "foo"
+    check parseStartupCommand("+//").get.pattern == ""
+
+  test "A / after a backslash or in a class does not close +/pat":
+    check parseStartupCommand("+/a\\/b").get.pattern == "a\\/b"
+    check parseStartupCommand("+/[/]").get.pattern == "[/]"
+
+  test "Startup commands keep their order":
+    let config = parseCmdLine(@["+/a", "+3", "x"])
+    check config.startupCommands.len == 2
+    check config.startupCommands[0].kind == sckSearch
+    check config.startupCommands[1].kind == sckEx
+
+  test "After -- every argument is a file":
+    let config = parseCmdLine(@["-R", "--", "+5", "-d", "--"])
+    check config.isReadonly
+    check not config.debugEnabled
+    check config.startupCommands.len == 0
+    check config.filePaths == @["+5", "-d", "--"]
+
+  test "No argument opens nothing":
+    let config = parseCmdLine(@[])
+    check config.filePaths.len == 0
+    check config.startupCommands.len == 0
+
+  test "parseStartupCommand refuses what moe cannot run":
+    # Vim takes an offset or a command after the closing /; moe takes neither.
+    check parseStartupCommand("+/foo/+1").isNone
+    check parseStartupCommand("+/a/b").isNone
+
 suite "cmdline - parseBufferBackendArg":
   test "auto":
     check parseBufferBackendArg("auto") == bbcAuto

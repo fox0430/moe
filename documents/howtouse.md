@@ -2,6 +2,7 @@
 
 # Table of Contents
 
+- [Starting](#starting)
 - [Exiting](#exiting)
 - [Normal Mode](#normal-mode)
 - [Register](#register)
@@ -26,6 +27,25 @@
 - [Editing the command line](#editing-the-command-line)
 - [Runtime Key Mapping](#runtime-key-mapping)
 
+
+## Starting
+
+```
+moe [arguments] [file ..]
+```
+
+| Argument | Description |
+|---|---|
+| `+N` | Start the first file at line N (the last line if it has fewer) |
+| `+` | Start the first file at the last line |
+| `+/pat` or `+/pat/` | Start the first file at the next line matching `pat`. `pat` becomes the last search, so `n` goes on to the next match. `+/` repeats the last search |
+| `+{command}` | Run an Ex command on the first file, as `:{command}` does (`+$-5`, `+set number`) |
+| `--` | Every argument after this is a file name, even one that starts with `+` or `-` |
+| `-R` | Readonly mode |
+
+Like Vim, `+N` and `+/pat` put the cursor on the first non-blank of the line. `+N` wins over the remembered cursor position, and `+/pat` searches on from it (from the top when it is on the first line). Several `+` arguments run in the order given, and are not added to the command line history.
+
+With several files and `StartUp.FileOpen.autoSplit` (the default), each file opens in its own window and the cursor starts in the first file's window. The `+` arguments run there, once every file is open.
 
 ## Exiting
 

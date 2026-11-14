@@ -48,6 +48,21 @@ proc skipClass*(s: string, start: int): int =
       i.inc
   min(i, s.len)
 
+proc skipPattern*(s: string, start: int): int =
+  ## The index of the `/` ending the pattern (of :s or a `+/pat` argument) that
+  ## starts at `start`, `s.len` without one. As Vim's skip_regexp, neither a
+  ## `/` after a backslash nor one in a `[...]` class ends it, and a class left
+  ## open runs to the end.
+  var i = start
+  while i < s.len and s[i] != '/':
+    if s[i] == '\\':
+      i += 2
+    elif s[i] == '[':
+      i = s.skipClass(i + 1) + 1
+    else:
+      i.inc
+  min(i, s.len)
+
 proc hasUpperLiteral*(pattern: string): bool =
   ## Whether regex `pattern` has an upper case letter it matches as it is, by
   ## its parse: a literal, a class item or a class range end (`[!-~]` has

@@ -201,6 +201,15 @@ proc submitSearch*(
     state.addSearchHistory(typed)
   some(spec)
 
+proc missedSearchMessage*(state: EditorState, spec: SearchSpec): string =
+  ## Why a search for `spec` found nothing: its regex does not compile, or
+  ## nothing matches.
+  let invalid = state.input.search.invalidRegex(spec)
+  if invalid.len > 0:
+    invalid
+  else:
+    "Pattern not found: " & spec.pattern
+
 proc searchSubmitted*(
     state: EditorState, b: TextBuffer, spec: SearchSpec, pos: BufferPosition, count: int
 ): Option[BufferPosition] =
@@ -211,11 +220,7 @@ proc searchSubmitted*(
     if result.isSome:
       "Found: " & spec.pattern
     else:
-      let invalid = state.input.search.invalidRegex(spec)
-      if invalid.len > 0:
-        invalid
-      else:
-        "Pattern not found: " & spec.pattern
+      state.missedSearchMessage(spec)
 
 proc searchIdent*(
     state: EditorState,

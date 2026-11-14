@@ -62,7 +62,9 @@ var frontLayerHook*: LayerHook = nil
   ## The layers in front of the mode handlers that run a key as it is: the
   ## command line, Search, Rename, Debug, a viewer's Ctrl-W and Recent File.
 
-proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome
+proc executeCommandOverlay*(
+  e: Editor, commandText: string, history = true
+): ReplayOutcome
 
 proc processResultEpilogue(
   e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
@@ -1058,9 +1060,12 @@ proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
   e.setMode(EditorMode.Normal)
   return true
 
-proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
+proc executeCommandOverlay*(
+    e: Editor, commandText: string, history = true
+): ReplayOutcome =
   ## Full lifecycle of a Command-overlay Enter: pre-teardown, dispatch,
   ## side effects via processResult, and teardown driven by `r.group`.
+  ## Without `history`, the command line history does not get it.
   ## `roAbort` when the command fails or the host takes its result, so the
   ## keys after it stop as after any replayed key that does.
   # 1. pre-teardown (kind-independent)
@@ -1120,7 +1125,7 @@ proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
         e.state.jumpList = jumpsBefore.get
   if commandMode == EditorMode.Config and r.kind == hrCloseWindow:
     r = e.activeWindow.viewerQuit().get(r)
-  if commandText.len > 1:
+  if history and commandText.len > 1:
     e.addCommandToHistory(commandText[1 ..^ 1])
 
   # 3. requestQuickRun poll (set independently of r.kind by buffer-mode keys)
