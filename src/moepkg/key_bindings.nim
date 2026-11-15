@@ -791,8 +791,13 @@ proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
       combo = KeyCombo(isSpecial: true, special: skEnd, fnNum: 0)
     of celina.KeyCode.Space:
       combo = KeyCombo(isSpecial: false, char: " ")
+    of celina.KeyCode.F1 .. celina.KeyCode.F12:
+      combo = KeyCombo(
+        isSpecial: true,
+        special: skFunction,
+        fnNum: ord(event.key.code) - ord(celina.KeyCode.F1) + 1,
+      )
     else:
-      # Function keys are handled differently in celina
       return none(KeyCombo)
 
   # Extract modifiers from event

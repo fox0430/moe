@@ -1957,6 +1957,32 @@ suite "eventToKeyCombo - special key normalization (#2597)":
     check combo.get.special == skBackTab
     check kmShift notin combo.get.modifiers
 
+  test "F2 event matches parseKeyCombo(\"F2\")":
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(code: celina.KeyCode.F2, char: ""),
+    )
+    let combo = eventToKeyCombo(ev)
+    check combo.isSome
+    check combo.get.isSpecial
+    check combo.get.special == skFunction
+    check kmShift notin combo.get.modifiers
+    check combo.get == parseKeyCombo("F2").get
+
+  test "Shift+F2 event matches parseKeyCombo(\"S-F2\")":
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(
+        code: celina.KeyCode.F2, char: "", modifiers: {celina.KeyModifier.Shift}
+      ),
+    )
+    let combo = eventToKeyCombo(ev)
+    check combo.isSome
+    check combo.get.isSpecial
+    check combo.get.special == skFunction
+    check kmShift in combo.get.modifiers
+    check combo.get == parseKeyCombo("S-F2").get
+
 suite "Vim parity - CTRL-J (<NL>) down motion":
   # Holding Ctrl through a `<C-v>` j gesture sends CTRL-J (0x0a = <NL>), which
   # Vim treats as a down motion in Normal and every Visual mode. celina maps the
