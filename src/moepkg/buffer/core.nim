@@ -143,6 +143,12 @@ type
     fsManual ## Created by the user (e.g. the `zf` command)
     fsLsp ## Provided by an LSP server (textDocument/foldingRange)
 
+  EditAnchor* = object
+    ## The line the cursor was on as a key began, moved with the text and -1
+    ## once deleted, and whether the key changed the buffer.
+    line*: int
+    edited*: bool
+
   Fold* = object ## Represents a foldable region of text (vim-like manual folding)
     startLine*: int # Fold start line (0-based, inclusive)
     endLine*: int # Fold end line (0-based, inclusive)
@@ -635,6 +641,7 @@ type
 
     # Line folding state (vim-like manual folding)
     foldState*: FoldState
+    editAnchor*: Option[EditAnchor]
 
     # Bookmarks (sorted list of bookmarked line numbers)
     bookmarks*: seq[int]
@@ -1904,6 +1911,14 @@ proc follow(
   if efSemantic in followers:
     b.highlight.semanticMoveAcross(edit)
   let rows = edit.rows
+  let move =
+    if rows.isSome and (
+      (efFolds in followers and b.editAnchor.isSome) or
+      followers * {efLastVisual, efRowsMoved} != {}
+    ):
+      edit.rowMove
+    else:
+      none(RowMove)
   if rows.isSome:
     let rows = rows.get
     template shift(onDelete, onInsert: untyped) =
@@ -1914,18 +1929,23 @@ proc follow(
 
     if efFolds in followers:
       shift(b.foldState.adjustFoldsAfterDelete, b.foldState.adjustFoldsAfterInsert)
+      if b.editAnchor.isSome and move.isSome and b.editAnchor.get.line >= 0:
+        let line = b.editAnchor.get.line
+        b.editAnchor.get.line =
+          if move.get.drops(line):
+            -1
+          else:
+            line.moved(move.get)
     if efBookmarks in followers:
       shift(b.adjustBookmarksForDelete, b.adjustBookmarksForInsert)
     if efLineArrays in followers:
       shiftPerLineArray(b.lineMarkers, none(LineMarkerKind), rows)
       shiftPerLineArray(b.modifiedLines, lmkInserted, rows)
-  if followers * {efLastVisual, efRowsMoved} != {}:
-    let move = edit.rowMove
-    if move.isSome:
-      if efLastVisual in followers:
-        b.moveLastVisual(move.get)
-      if efRowsMoved in followers:
-        b.notifyRowsMoved(move.get)
+  if move.isSome:
+    if efLastVisual in followers:
+      b.moveLastVisual(move.get)
+    if efRowsMoved in followers:
+      b.notifyRowsMoved(move.get)
   if efNamedMarks in followers:
     b.moveNamedMarks(edit)
   if efDiagnostics in followers:
@@ -2355,6 +2375,8 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   if needsFoldBookmarkRestore:
     foldsBefore = b.foldState
     bookmarksBefore = b.bookmarks
+  if b.editAnchor.isSome:
+    b.editAnchor.get.edited = true
   b.followChange(change, recording = true)
   let join = change.joinSpan
   if join.isSome:

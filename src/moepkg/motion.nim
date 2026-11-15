@@ -177,24 +177,34 @@ proc linesDown*(buffer: TextBuffer, line, count: int): int =
     result = buffer.foldEnd(result) + 1
   result = buffer.foldStart(min(result, last))
 
-proc linesUp*(buffer: TextBuffer, line, count: int): int =
+proc linesUp*(buffer: TextBuffer, line, count: int, typing = false): int =
   ## The line `count` lines above `line`, a closed fold counting as one line,
   ## as Vim's cursor_up_inner: the first line when there are fewer, and the
-  ## start of a closed fold it lands in. `line` itself when there is no line
-  ## above.
+  ## start of a closed fold it lands in, or its last line when `typing` in
+  ## Insert or Replace. `line` itself when there is no line above.
   if buffer.len == 0 or count > line:
     return 0
   if buffer.foldState.folds.len == 0:
     return line - count
   result = buffer.foldStart(line)
-  for _ in 1 .. count:
+  for _ in 1 ..< count:
     if result <= 0:
-      break
+      return
     result = buffer.foldStart(result - 1)
+  if count > 0 and result > 0:
+    result =
+      if typing:
+        result - 1
+      else:
+        buffer.foldStart(result - 1)
 
-proc moveUp(e: MotionExecutor, currentPos: CursorPosition, count: int): CursorPosition =
+proc moveUp(
+    e: MotionExecutor, currentPos: CursorPosition, count: int, mode = EditorMode.Normal
+): CursorPosition =
   result = currentPos
-  result.y = e.buffer.linesUp(currentPos.y, count)
+  result.y = e.buffer.linesUp(
+    currentPos.y, count, typing = mode in {EditorMode.Insert, EditorMode.Replace}
+  )
 
 proc moveDown(
     e: MotionExecutor, currentPos: CursorPosition, count: int
@@ -1007,7 +1017,7 @@ proc landMotion*(
     else:
       sideways(e.moveRight(currentPos, cmd.count, mode))
   of Motion.Up, Motion.ScreenLineUp:
-    offLine(e.moveUp(currentPos, cmd.count))
+    offLine(e.moveUp(currentPos, cmd.count, mode))
   of Motion.Down, Motion.ScreenLineDown:
     offLine(e.moveDown(currentPos, cmd.count))
   of Motion.Home:

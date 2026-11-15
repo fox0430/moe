@@ -1,5 +1,7 @@
-## Vim's default 'foldopen': a command a typed key runs with no operator
-## waiting opens the closed folds it takes the cursor into.
+## When a closed fold opens at the cursor: Vim's default 'foldopen', where a
+## command a typed key runs with no operator waiting opens the folds it takes
+## the cursor into, and Insert and Replace, which open the cursor line's fold
+## when they begin and when text is typed.
 
 import std/options
 
@@ -9,10 +11,47 @@ import buffer/[core, fold]
 proc opensFolds*(state: EditorState): bool =
   state.keyTyped and state.pendingInput.pendingOperator.isNone
 
+proc openFoldsAt(state: EditorState, buffer: TextBuffer, line: int) =
+  if buffer.foldState.openFoldsInRange(line, line):
+    state.activeWindow.noteFoldOpened()
+
+proc anchorEdits*(state: EditorState, buffer: TextBuffer) =
+  buffer.editAnchor = some(EditAnchor(line: state.cursor.line))
+
+proc dropEditAnchor*(buffer: TextBuffer) =
+  buffer.editAnchor = none(EditAnchor)
+
+proc openFoldsOfEdits*(state: EditorState, buffer: TextBuffer) =
+  ## When the buffer changed since `anchorEdits`, open the closed folds on the
+  ## line the cursor was on, moved with the text, and on the cursor line, as
+  ## Vim's edit() does when text is typed in Insert or Replace: so a split
+  ## opens the fold of the line split, but an edit away from the cursor none.
+  let anchor = buffer.editAnchor
+  buffer.dropEditAnchor()
+  if anchor.isSome and anchor.get.edited:
+    if anchor.get.line >= 0:
+      state.openFoldsAt(buffer, anchor.get.line)
+    state.openFoldsAt(buffer, state.cursor.line)
+
+proc openCursorLineFolds*(state: EditorState, buffer: TextBuffer) =
+  state.openFoldsAt(buffer, state.cursor.line)
+
+proc openCursorLineFolds*(state: EditorState) =
+  state.openCursorLineFolds(state.activeWindow.buffer)
+
 proc openCursorFolds*(state: EditorState) =
   ## Open the closed folds the cursor is in, as Vim's foldOpenCursor, when
   ## `opensFolds`.
   if state.opensFolds:
-    let line = state.cursor.line
-    if state.activeWindow.buffer.foldState.openFoldsInRange(line, line):
-      state.activeWindow.noteFoldOpened()
+    state.openCursorLineFolds()
+
+proc openFoldsForTypingMotion*(state: EditorState, buffer: TextBuffer, motion: Motion) =
+  ## Insert and Replace open the fold on a sideways move, 'foldopen' hor, which
+  ## covers FirstLine and LastLine as it does Vim's <C-Home> and <C-End>.
+  const Sideways = {
+    Motion.Left, Motion.Right, Motion.Home, Motion.End, Motion.WordForward,
+    Motion.WordBackward, Motion.WideWordForward, Motion.WideWordBackward,
+    Motion.FirstLine, Motion.LastLine,
+  }
+  if motion in Sideways and state.opensFolds:
+    state.openCursorLineFolds(buffer)

@@ -38,7 +38,7 @@ import
   ../[
     types, buffer, modes, motion, key_bindings, command_line, command_config,
     command_registry, lsp_integration, logger, key_router, pending_input, insert_record,
-    page_scroll,
+    page_scroll, fold_open,
   ]
 import ../types/editor_types
 # The shared handler-module list lives in handler_modules (single source of
@@ -278,21 +278,23 @@ proc handleNormalMode*(
     manager.normalHandler.handleNormalModeKey(buffer, state, editor.viewport, keyCombo)
   manager.applyNormalModeResult(editor, r)
 
-proc keepCursorLineUnfolded(e: Editor, res: HandlerResult) =
-  ## Typing lands on the cursor line, so Insert and Replace never leave it
-  ## folded. Held after dispatch to cover both mode entry (several handlers, some
-  ## via a transition) and an edit that moves the cursor into a closed fold.
-  let effectiveMode =
-    if res.getModeTransition().isSome:
-      res.getModeTransition().get
-    else:
-      e.state.mode
-  # Only for a dispatch that did something: a rejected key must not open a fold.
-  if res.kind notin {hrError, hrUnhandled} and
-      effectiveMode in {EditorMode.Insert, EditorMode.Replace} and e.activeBuffer != nil:
-    discard e.activeBuffer.foldState.openFoldsInRange(
-      e.state.cursor.line, e.state.cursor.line
-    )
+proc openTypingFolds(
+    e: Editor, res: HandlerResult, startMode: EditorMode, startBuffer: TextBuffer
+) =
+  ## Insert and Replace open the fold on the cursor line when they begin, and
+  ## the folds a key typed in them edited, as Vim's edit(); one held after
+  ## dispatch covers every handler.
+  const Typing = {EditorMode.Insert, EditorMode.Replace}
+  let typing =
+    not e.activeBuffer.isNil and res.getModeTransition().get(e.state.mode) in Typing
+  if startMode in Typing:
+    if typing and e.activeBuffer == startBuffer:
+      e.state.openFoldsOfEdits(startBuffer)
+    elif not startBuffer.isNil:
+      startBuffer.dropEditAnchor()
+  # A rejected key must not open a fold.
+  elif typing and res.kind notin {hrError, hrUnhandled}:
+    e.state.openCursorLineFolds()
 
 proc completeScrollAnimation*(e: Editor) =
   ## Put the window where a smooth page scroll ends, so a replayed key runs
@@ -306,8 +308,13 @@ proc handleKeyCombo*(
   ## the scroll animation jump live in `runNestedKeyCombo` (result_processor.nim)
   ## so this proc can be reused verbatim by macro/mapping-RHS replay without
   ## re-entering the precheck.
+  let
+    startBuffer = e.activeBuffer
+    startMode = e.state.mode
+  if startMode in {EditorMode.Insert, EditorMode.Replace} and not startBuffer.isNil:
+    e.state.anchorEdits(startBuffer)
   let res =
-    case e.state.mode
+    case startMode
     of EditorMode.Normal:
       manager.handleNormalMode(e, keyCombo)
     of EditorMode.Insert:
@@ -319,7 +326,7 @@ proc handleKeyCombo*(
     else:
       manager.dispatchSubStateMode(e, keyCombo)
 
-  e.keepCursorLineUnfolded(res)
+  e.openTypingFolds(res, startMode, startBuffer)
   return res
 
 proc runInsertCommand*(
@@ -330,4 +337,3 @@ proc runInsertCommand*(
   ## the line if need be, which is `a` on its last character.
   let r = manager.normalHandler.resumeInsert(e.activeBuffer, e.state, append)
   result = manager.applyNormalModeResult(e, r)
-  e.keepCursorLineUnfolded(result)

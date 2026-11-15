@@ -52,6 +52,7 @@ import
   viewer_mode,
   frontend_input,
   hover_popup,
+  fold_open,
   encoding,
   unicode_utils,
   editor_mode,
@@ -343,8 +344,10 @@ proc handlePasteText(e: Editor, text: string): bool =
 
     e.state.noteOutsideChange()
     let pos = e.cursor
+    e.state.anchorEdits(activeBuffer)
     let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
     if insertResult.isErr:
+      activeBuffer.dropEditAnchor()
       var msg = "Paste failed: " & insertResult.error
       if ownTransaction:
         let rollbackResult = activeBuffer.rollbackTransaction()
@@ -356,6 +359,7 @@ proc handlePasteText(e: Editor, text: string): bool =
       return true
 
     e.activeWindow.cursor = insertResult.get.cursor
+    e.state.openFoldsOfEdits(activeBuffer)
     # Record it as typed, so `.` types the pasted text.
     e.state.noteTypedText(pastedText, pos)
 
@@ -716,8 +720,10 @@ proc middleClickPaste(e: Editor, row, col: int) =
 
   e.state.noteOutsideChange()
   let pos = e.cursor
+  e.state.anchorEdits(activeBuffer)
   let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
   if insertResult.isErr:
+    activeBuffer.dropEditAnchor()
     var msg = "Paste failed: " & insertResult.error
     # Roll back the transaction we opened; a joined session transaction is
     # left untouched for the mode's own commit path.
@@ -736,6 +742,7 @@ proc middleClickPaste(e: Editor, row, col: int) =
     return
 
   e.activeWindow.cursor = insertResult.get.cursor
+  e.state.openFoldsOfEdits(activeBuffer)
   e.state.noteTypedText(pastedText, pos)
   # The click chose this window, so re-attach its viewport: a wheel-scrolled
   # split would otherwise keep the cursor off-screen after the insert.

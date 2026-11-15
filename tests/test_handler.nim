@@ -5083,7 +5083,7 @@ suite "handleKeyCombo - Insert resumes after the Ctrl-o command":
     check e.state.mode == EditorMode.Insert
     check e.state.insertResume == irNone
 
-  test "Insert resumes with the cursor line unfolded":
+  test "Insert resumes in a closed fold and typing opens it, as in Vim":
     let e = createEditorForCtrlO("aaaa\nbbbb\ncccc\ndddd")
     e.press("i", "C-o")
     discard e.activeBuffer.foldState.addFold(1, 2, collapsed = true)
@@ -5092,6 +5092,9 @@ suite "handleKeyCombo - Insert resumes after the Ctrl-o command":
 
     check e.state.mode == EditorMode.Insert
     check e.cursor.line == 1
+    check e.activeBuffer.foldState.folds[0].collapsed
+
+    e.press("x")
     check not e.activeBuffer.foldState.folds[0].collapsed
 
   test "Ctrl-C in a command line resumes Insert":

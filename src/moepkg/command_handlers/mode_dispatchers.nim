@@ -40,7 +40,7 @@ import
   ../[
     render_utils, types, buffer, modes, key_bindings, keybind_config, filer, filetree,
     diff_viewer, recent_file_mode, command_line, visual_selection, insert_record,
-    wanted_column, visual_block,
+    wanted_column, visual_block, fold_open,
   ]
 
 when not defined(moe.embedded):
@@ -219,9 +219,12 @@ proc typeText*(
   let state = editor.state
   state.noteOutsideChange()
   let at = state.cursor
+  state.anchorEdits(editor.activeBuffer)
   let r = typeTextAgain(editor.activeBuffer, state, typed)
   if r.isErr:
+    editor.activeBuffer.dropEditAnchor()
     return HandlerResult(kind: hrError, errorMessage: r.error)
+  state.openFoldsOfEdits(editor.activeBuffer)
   state.noteTyped([typed], at)
   state.settleTyping()
   HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
