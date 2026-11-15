@@ -27,25 +27,18 @@ import pkg/results
 import
   ../[
     buffer, editor, editor_window_state, filetree, filer, logger, quick_run_utils,
-    types, uri_utils, viewer_mode, window_manager,
+    types, uri_utils, viewer_mode,
   ]
 
 import editor_ops, handler_result
-
-proc restoreSidebarFocus(e: Editor, side: EditorWindow) =
-  ## Return focus to the sidebar after a failed command, so the failure does
-  ## not strand the cursor in the target window.
-  for i, win in e.windowManager.windows:
-    if win == side:
-      e.windowManager.activateWindow(i)
-      e.syncActiveWindow()
-      return
 
 proc openFromSidebar(e: Editor, inServed, beside: proc(): Result[(), string]): bool =
   ## From the sidebar, run `inServed` in the window it serves; beside a lone
   ## sidebar, `beside` opens a window next to it instead. A failure is reported
   ## and leaves the sidebar focused.
-  let side = e.activeWindow
+  let
+    side = e.activeWindow
+    previous = e.windowManager.previousWindow
   let openResult =
     if e.sidebarTarget() < 0:
       beside()
@@ -57,7 +50,7 @@ proc openFromSidebar(e: Editor, inServed, beside: proc(): Result[(), string]): b
   if openResult.isErr:
     logError("handler", "Open from the file tree failed: " & openResult.error)
     e.state.statusMessage = "Error: " & openResult.error
-    e.restoreSidebarFocus(side)
+    e.restoreSidebarFocus(side, previous)
     return false
   true
 
@@ -150,6 +143,10 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
     return true
   of hrFilerOpenFileVSplit:
     # Open file in vertical split from filer
+    let room = e.roomForVsplit()
+    if room.isErr:
+      e.state.statusMessage = "Error: " & room.error
+      return true
     discard e.leaveViewerModeForJump(EditorMode.Filer)
     let splitResult = e.vsplit(some(r.filerFilePath))
     if splitResult.isErr:

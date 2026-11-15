@@ -615,6 +615,118 @@ suite "Editor - multi-file startup (auto-split)":
     check e.findBufferByPath(missing) < 0
     check e.findBufferByPath(fileC) >= 0
 
+  proc startupFiles(name: string, count: int): seq[string] =
+    ## `count` files named after their index, each holding its index.
+    for i in 0 ..< count:
+      let path = getTempDir() / ("moe_test_split_order_" & name & "_" & $i & ".txt")
+      writeFile(path, $i)
+      result.add path
+
+  proc windowFiles(e: Editor): seq[string] =
+    ## The files of the windows, in window order.
+    for win in e.windowManager.windows:
+      result.add win.buffer.filePath.get
+
+  test "horizontal splits keep the argument order, the focus on the top window":
+    let e = createTestEditor()
+    e.syncActiveWindow()
+    e.config.startUpFileOpen.autoSplit = true
+    e.config.startUpFileOpen.splitType = stHorizontal
+    e.applyStartUpScreenSize(80, 40)
+    let files = startupFiles("h", 3)
+    defer:
+      for f in files:
+        removeFile(f)
+
+    check e.loadFile(files[0]).isOk
+    e.openAdditionalStartupFiles(files, readonly = false)
+
+    # As Vim's `-o`: top to bottom in argument order.
+    check e.windowFiles == files
+    let wins = e.windowManager.windows
+    check wins[0].viewport.y < wins[1].viewport.y
+    check wins[1].viewport.y < wins[2].viewport.y
+    check e.windowManager.activeWindowIndex == 0
+    check e.activeBuffer.filePath.get == files[0]
+
+  test "vertical splits keep the argument order, the focus on the left window":
+    let e = createTestEditor()
+    e.syncActiveWindow()
+    e.config.startUpFileOpen.autoSplit = true
+    e.config.startUpFileOpen.splitType = stVertical
+    e.applyStartUpScreenSize(120, 40)
+    let files = startupFiles("v", 3)
+    defer:
+      for f in files:
+        removeFile(f)
+
+    check e.loadFile(files[0]).isOk
+    e.openAdditionalStartupFiles(files, readonly = false)
+
+    # As Vim's `-O`: left to right in argument order.
+    check e.windowFiles == files
+    let wins = e.windowManager.windows
+    check wins[0].viewport.x < wins[1].viewport.x
+    check wins[1].viewport.x < wins[2].viewport.x
+    check e.windowManager.activeWindowIndex == 0
+
+  test "files a horizontal split has no room for open without a window":
+    let e = createTestEditor()
+    e.syncActiveWindow()
+    e.config.startUpFileOpen.autoSplit = true
+    e.config.startUpFileOpen.splitType = stHorizontal
+    e.applyStartUpScreenSize(80, 8)
+    let files = startupFiles("full", 10)
+    defer:
+      for f in files:
+        removeFile(f)
+
+    check e.loadFile(files[0]).isOk
+    e.openAdditionalStartupFiles(files, readonly = true)
+
+    # As Vim's make_windows, only the windows that fit, every one with a row.
+    let wins = e.windowManager.windows
+    check wins.len > 1
+    check wins.len < files.len
+    for win in wins:
+      check win.viewport.height >= 1
+    check e.windowFiles == files[0 ..< wins.len]
+    # The rest are listed buffers the first window can reach, as without
+    # auto-split.
+    check e.buffers.len == files.len
+    check e.windowManager.activeWindowIndex == 0
+    for f in files[wins.len .. ^1]:
+      let buf = e.buffers[e.findBufferByPath(f)]
+      check buf.id in e.activeWindow.bufferIds
+      check buf.readOnly
+
+  test "files a vertical split has no room for open without a window":
+    let e = createTestEditor()
+    e.syncActiveWindow()
+    e.config.startUpFileOpen.autoSplit = true
+    e.config.startUpFileOpen.splitType = stVertical
+    e.applyStartUpScreenSize(20, 24)
+    let files = startupFiles("vfull", 30)
+    defer:
+      for f in files:
+        removeFile(f)
+
+    check e.loadFile(files[0]).isOk
+    e.openAdditionalStartupFiles(files, readonly = false)
+
+    # As Vim's make_windows for `-O`: a column each, beside its separator.
+    let wins = e.windowManager.windows
+    check wins.len > 1
+    check wins.len < files.len
+    for win in wins:
+      check win.viewport.width >= 1
+    let last = wins[^1].viewport
+    check last.x + last.width <= 20
+    check e.windowFiles == files[0 ..< wins.len]
+    check e.buffers.len == files.len
+    for f in files[wins.len .. ^1]:
+      check e.buffers[e.findBufferByPath(f)].id in e.activeWindow.bufferIds
+
 suite "Editor - saveFile":
   test "forced Insert mode commits before trimming and resumes after save":
     let config = newEditorConfig()

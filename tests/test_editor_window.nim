@@ -1083,15 +1083,38 @@ suite "Editor window - hsplit without room":
     check e.hsplitWithBuffer(newTextBuffer()).isErr
     check e.windowManager.windows.len == 1
 
-  test "startup files split before the real size is known":
-    let e = tinyEditor()
-    let path = getTempDir() / "moe_hsplit_startup.txt"
+suite "Editor window - vsplit without room":
+  test ":vsplit is E36 once the row has no column left":
+    let e = createTestEditor()
+    e.syncActiveWindow()
+    e.applyStartUpScreenSize(5, 24)
+    var res = e.vsplit()
+    while res.isOk:
+      res = e.vsplit()
+
+    check res.error == "E36: Not enough room"
+    var used = 0
+    for win in e.windowManager.windows:
+      check win.viewport.width >= 1
+      used += win.viewport.width
+    used += e.windowManager.windows.len - 1
+    check used <= 5
+
+  test "a refused :vsplit {file} registers no buffer":
+    let e = createTestEditor()
+    e.syncActiveWindow()
+    e.applyStartUpScreenSize(2, 24)
+    let buffersBefore = e.buffers.len
+    let path = getTempDir() / "moe_vsplit_no_room.txt"
     writeFile(path, "text")
     defer:
       removeFile(path)
 
-    check e.hsplit(some(path), checkRoom = false).isOk
-    check e.windowManager.windows.len == 2
+    let split = e.vsplit(some(path))
+
+    check split.isErr
+    check e.buffers.len == buffersBefore
+    check e.windowManager.windows.len == 1
 
 suite "moveWindowToTab - the line a window left":
   proc tabs(e: Editor): tuple[first, second: TextBuffer] =

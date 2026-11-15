@@ -37,6 +37,7 @@ import
 import ../src/moepkg/buffer/edit
 import ../src/moepkg/lsp/protocol/types as lspTypes
 from ../src/moepkg/command_registry/core import recordJump
+import visual_test_helper
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -430,6 +431,23 @@ suite "In-place viewer - :bd":
     e.checkOnTab(win, second)
     check e.bufferById(first.id).isSome
 
+  test "a refused vsplit-open keeps the Filer":
+    let (e, path) = editorOnFile("moe_filer_vsplit_no_room.txt")
+    defer:
+      removeFile(path)
+    e.run(HandlerResult(kind: hrEnterFiler))
+    let win = e.activeWindow
+    require win.modeState.kind == mskFiler
+    e.applyStartUpScreenSize(2, 24)
+
+    e.run(HandlerResult(kind: hrFilerOpenFileVSplit, filerFilePath: path))
+
+    check e.state.statusMessage.contains("E36")
+    check e.windowManager.windows.len == 1
+    check e.activeWindow == win
+    check win.mode == EditorMode.Filer
+    check win.modeState.kind == mskFiler
+
   test "keeps every buffer":
     let (e, path) = editorOnFile("moe_bd_filer_keeps.txt")
     defer:
@@ -556,6 +574,29 @@ suite "In-place viewer - :bd":
     check state.selectedIndex == state.items.high
     check win.cursor.line == state.selectedIndex + 1
     check win.cursor.line < win.buffer.len
+
+  test "a :vsplit refused for room keeps the viewer's selection":
+    let (e, paths, first, second) = editorOnTwoFiles("moe_sv_copy_noroom")
+    defer:
+      for path in paths:
+        removeFile(path)
+    first.toggleBookmark(0)
+    second.toggleBookmark(0)
+    e.run(HandlerResult(kind: hrEnterBookmarkManager))
+    let win = e.activeWindow
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 1)
+    )
+    e.applyStartUpScreenSize(2, 24)
+
+    let split = e.splitViewer(vpVSplit)
+
+    check split.isErr
+    check split.error == "E36: Not enough room"
+    check e.windowManager.windows.len == 1
+    check e.activeWindow == win
+    check e.state.mode == EditorMode.Visual
+    check win.visualAnchor == BufferPosition(line: 0, column: 0)
 
   test "D in a Bookmark Manager reaches its split copy":
     let (e, paths, first, second) = editorOnTwoFiles("moe_bd_bkm_copy")
@@ -1160,6 +1201,26 @@ suite "Split viewer - with the FileTree sidebar":
 
     check e.windowManager.windows.len == 1
     check "not enough space" in e.state.statusMessage
+    e.checkSidebar(tree)
+
+  test "a split viewer refused for room leaves the focus on the sidebar":
+    let (e, path) = editorOnFile("moe_sv_tree_split_noroom.txt")
+    defer:
+      removeFile(path)
+    let fileWin = e.activeWindow
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+    # The served window keeps one column: no room for another beside it.
+    e.resize(width + 2, 24)
+    let previous = e.windowManager.previousWindow
+
+    e.run(HandlerResult(kind: hrEnterBackupManager))
+
+    check "E36" in e.state.statusMessage
+    check e.windowManager.windows.len == 2
+    check e.activeWindow == tree
+    check e.windowManager.previousWindow == previous
+    check fileWin.viewerEntry.isNone
     e.checkSidebar(tree)
 
   test "after a resize, a viewer from a lone sidebar still opens beside it":
@@ -1869,6 +1930,38 @@ suite "Tab commands from the FileTree sidebar":
     check fileWin.tabBufferId == tabBefore
     check e.state.jumpList.list[^1] ==
       JumpPosition(bufferId: tabBefore, line: 0, column: 2)
+    e.checkUntouched(tree, width)
+
+  test "a refused split for a jump from the tree leaves the focus on the tree":
+    const name = "moe_sidebar_tab_jump_open_window_no_room"
+    let (e, _, _) = twoFiles(name)
+    let third = getTempDir() / (name & "_c.txt")
+    writeFile(third, "third\nline\n")
+    defer:
+      cleanup(name)
+      removeFile(third)
+    let tree = e.openFileTree()
+    let width = tree.viewport.width
+    # The served window keeps one column: no room for another beside it.
+    e.resize(width + 2, 24)
+    let buffersBefore = e.buffers.len
+
+    check not e.jumpToLspLocation(
+      lspTypes.Location(
+        uri: "file://" & third,
+        range: lspTypes.Range(
+          start: lspTypes.Position(line: 1, character: 0),
+          `end`: lspTypes.Position(line: 1, character: 4),
+        ),
+      ),
+      "Definition",
+      openWindow = true,
+    )
+
+    check e.state.statusMessage.contains("E36")
+    check e.windowManager.windows.len == 2
+    check e.buffers.len == buffersBefore
+    check e.activeWindow == tree
     e.checkUntouched(tree, width)
 
   test "a location response landing on a lone sidebar jumps into one new window":

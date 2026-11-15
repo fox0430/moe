@@ -666,6 +666,24 @@ suite "EditorWindowManager - vsplitWithBuffer":
     check result.get == newBuf
     check wm.windows[0].buffer == newBuf
 
+  test "right opens the window right of the active one":
+    let wm = createSingleWindowManager()
+    let
+      old = wm.windows[0]
+      newBuf = newTextBuffer()
+
+    check wm.vsplitWithBuffer(
+      old.buffer, old.viewport, BufferPosition(line: 0, column: 0), newBuf, right = true
+    ).isOk
+
+    check wm.windows[0] == old
+    check wm.windows[1].buffer == newBuf
+    check wm.activeWindowIndex == 1
+    check wm.windows[1].active
+    check not old.active
+    check old.viewport.x == 0
+    check old.viewport.x + old.viewport.width < wm.windows[1].viewport.x
+
 suite "EditorWindowManager - rows between stacked windows":
   proc splitGap(status: WindowStatus): int =
     let wm = createSingleWindowManager(80, 23)
@@ -784,6 +802,29 @@ suite "EditorWindowManager - hsplitWithBuffer":
     check result.isOk
     check result.get == newBuf
     check wm.windows[0].buffer == newBuf
+
+  test "below opens the window below the active one":
+    let wm = createSingleWindowManager()
+    let
+      old = wm.windows[0]
+      top = old.viewport.y
+      newBuf = newTextBuffer()
+
+    check wm.hsplitWithBuffer(
+      old.buffer,
+      old.viewport,
+      BufferPosition(line: 0, column: 0),
+      newBuf,
+      wsBottomWindows,
+      below = true,
+    ).isOk
+
+    check wm.windows[0] == old
+    check wm.windows[1].buffer == newBuf
+    check wm.activeWindowIndex == 1
+    check wm.windows[1].active
+    check old.viewport.y == top
+    check old.viewport.y + old.viewport.height <= wm.windows[1].viewport.y
 
   test "hsplitWithBuffer with extremely small terminal height (single status line)":
     let wm = createSingleWindowManager(80, 2)

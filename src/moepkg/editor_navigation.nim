@@ -202,7 +202,11 @@ proc moveCursorToLspPosition(e: Editor, buffer: TextBuffer, lspLine, lspColumn: 
 proc splitWindowForJump(e: Editor): bool =
   ## Open a new vertical split window (showing the current buffer) so a
   ## subsequent jump lands in the new window instead of the current one.
-  ## Returns false (with a status message) if the split fails.
+  ## Returns false (with a status message) if the split fails, the focus back
+  ## where it was.
+  let
+    side = e.activeWindow
+    previous = e.windowManager.previousWindow
   let left = e.leaveSidebar()
   if left.isErr:
     e.state.statusMessage = "Failed to open window: " & left.error
@@ -212,6 +216,7 @@ proc splitWindowForJump(e: Editor): bool =
     return true
   let splitResult = e.vsplit()
   if splitResult.isErr:
+    e.restoreSidebarFocus(side, previous)
     e.state.statusMessage = "Failed to open window: " & splitResult.error
     return false
   true

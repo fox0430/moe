@@ -78,6 +78,27 @@ proc leaveSidebar*(e: Editor): Result[bool, string] =
   ?e.openWindowBesideSidebar(tab.get)
   ok(true)
 
+proc restoreSidebarFocus*(e: Editor, side, previous: EditorWindow) =
+  ## Return focus to the sidebar after a failed command, and `previous` as the
+  ## window `<C-w>p` goes to, so the failure does not strand the cursor in the
+  ## target window.
+  for i, win in e.windowManager.windows:
+    if win == side:
+      e.windowManager.activateWindow(i)
+      e.windowManager.previousWindow = previous
+      e.syncActiveWindow()
+      return
+
+proc roomForSplit(e: Editor, placement: ViewerPlacement): Result[(), string] =
+  ## E36 unless the active window has room for a `placement` split.
+  case placement
+  of vpVSplit:
+    e.roomForVsplit()
+  of vpHSplit:
+    e.roomForHsplit()
+  of vpInPlace:
+    ok(())
+
 proc resetViewerViewport(win: EditorWindow) =
   win.cursor = BufferPosition(line: 0, column: 0)
   win.viewport.resetViewportTop()
@@ -160,9 +181,17 @@ proc enterViewerMode*(
   ## first. From the FileTree sidebar, it goes to a main window
   ## (`leaveSidebar`). Fails only when no window can be made for it.
   var placement = placement
+  let
+    side = e.activeWindow
+    previous = e.windowManager.previousWindow
   if ?e.leaveSidebar():
     # That window is new already: cover it rather than split it again.
     placement = vpInPlace
+  # Refused before anything changes, the focus back on the sidebar.
+  let room = e.roomForSplit(placement)
+  if room.isErr:
+    e.restoreSidebarFocus(side, previous)
+    return err(room.error)
   # A viewer replaces what the window shows, so Visual ends as on `:b`.
   e.state.leaveVisual()
   let originMode = e.state.mode
@@ -265,6 +294,8 @@ proc splitViewer*(e: Editor, placement: ViewerPlacement): Result[void, string] =
   let win = e.activeWindow
   if win.viewerEntry.isNone:
     return err("No viewer in the active window")
+  # A refused split keeps the selection.
+  discard ?e.roomForSplit(placement)
   # The copy shows the listing, not a selection on it.
   win.leaveVisual()
   let

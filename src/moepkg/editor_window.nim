@@ -196,9 +196,12 @@ proc registerSplitBuffer(
     e.initLoadedBuffer(newBuffer, roUser)
   logDebug("editor", context & ": buffer added, buffers.len: " & $e.buffers.len)
 
-proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string]
+proc vsplitWithBuffer*(
+  e: Editor, buffer: TextBuffer, checkRoom = true, right = false
+): Result[(), string]
+
 proc hsplitWithBuffer*(
-  e: Editor, buffer: TextBuffer, focus = true, checkRoom = true
+  e: Editor, buffer: TextBuffer, focus = true, checkRoom = true, below = false
 ): Result[(), string]
 
 proc loadSplitBuffer(e: Editor, path: string): Result[TextBuffer, string] =
@@ -352,38 +355,36 @@ proc openWindowBesideSidebar*(e: Editor, buf: TextBuffer): Result[void, string] 
   e.setActiveWindowScreenCursor(win)
   ok()
 
-proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
+proc roomForVsplit*(e: Editor): Result[(), string] =
+  ## E36 unless the active window's row fits one more window.
+  e.windowManager.roomForVsplit()
+
+proc vsplit*(
+    e: Editor, filename: Option[string] = none(string), right = false
+): Result[(), string] =
   ## Create a vertical split window, showing `filename` when one is given and
-  ## the current buffer otherwise.
+  ## the current buffer otherwise. It opens left of the active window, or right
+  ## of it with `right`.
+  # Check the room first so a refused open registers nothing.
+  discard ?e.roomForVsplit()
+
   if filename.isSome:
     let loaded = e.loadSplitBuffer(filename.get)
     if loaded.isErr:
       return err(loaded.error)
-    return e.vsplitWithBuffer(loaded.get)
-
-  # Save current window state before splitting
-  e.saveActiveWindowState()
+    return e.vsplitWithBuffer(loaded.get, checkRoom = false, right = right)
 
   # Split the tab, not a mode-swapped view.
-  let
-    origin = e.splitOrigin()
-    originWindow = e.activeWindow
-  let bufferResult =
-    e.windowManager.vsplit(e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor)
-  if bufferResult.isErr:
-    return err(bufferResult.error)
+  e.vsplitWithBuffer(e.tabBuffer(e.activeWindow), checkRoom = false, right = right)
 
-  let newBuffer = bufferResult.get
+proc vsplitWithBuffer*(
+    e: Editor, buffer: TextBuffer, checkRoom = true, right = false
+): Result[(), string] =
+  ## Create a vertical split window with a specific buffer, left of the active
+  ## window or right of it with `right`.
+  if checkRoom:
+    discard ?e.roomForVsplit()
 
-  # Add the new buffer to the global buffer list if it's not already there
-  e.registerSplitBuffer(newBuffer, applyConfig = true, context = "vsplit")
-
-  e.startSplitWindow(e.activeWindow, originWindow)
-
-  ok(())
-
-proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
-  ## Create a vertical split window with a specific buffer
   # Save current window state before splitting
   e.saveActiveWindowState()
 
@@ -391,7 +392,7 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
     origin = e.splitOrigin()
     originWindow = e.activeWindow
   let bufferResult = e.windowManager.vsplitWithBuffer(
-    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, buffer
+    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, buffer, right
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -410,48 +411,29 @@ proc roomForHsplit*(e: Editor): Result[(), string] =
   e.windowManager.roomForHsplit(e.windowStatus, e.showTabLine)
 
 proc hsplit*(
-    e: Editor, filename: Option[string] = none(string), checkRoom = true
+    e: Editor, filename: Option[string] = none(string), below = false
 ): Result[(), string] =
   ## Create a horizontal split window (top and bottom), showing `filename` when
-  ## one is given and the current buffer otherwise. Without `checkRoom` the
-  ## split is made whatever the height, as the startup files still are.
+  ## one is given and the current buffer otherwise. It opens above the active
+  ## window, or below it with `below`.
   # Check the room first so a refused open registers nothing.
-  if checkRoom:
-    discard ?e.roomForHsplit()
+  discard ?e.roomForHsplit()
 
   if filename.isSome:
     let loaded = e.loadSplitBuffer(filename.get)
     if loaded.isErr:
       return err(loaded.error)
-    return e.hsplitWithBuffer(loaded.get, checkRoom = false)
-
-  # Save current window state before splitting
-  e.saveActiveWindowState()
+    return e.hsplitWithBuffer(loaded.get, checkRoom = false, below = below)
 
   # Split the tab, not a mode-swapped view.
-  let
-    origin = e.splitOrigin()
-    originWindow = e.activeWindow
-  let bufferResult = e.windowManager.hsplit(
-    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, e.windowStatus
-  )
-  if bufferResult.isErr:
-    return err(bufferResult.error)
-
-  let newBuffer = bufferResult.get
-
-  # Add the new buffer to the buffer list if it's not already there
-  e.registerSplitBuffer(newBuffer, applyConfig = true, context = "hsplit")
-
-  e.startSplitWindow(e.activeWindow, originWindow)
-
-  ok(())
+  e.hsplitWithBuffer(e.tabBuffer(e.activeWindow), checkRoom = false, below = below)
 
 proc hsplitWithBuffer*(
-    e: Editor, buffer: TextBuffer, focus = true, checkRoom = true
+    e: Editor, buffer: TextBuffer, focus = true, checkRoom = true, below = false
 ): Result[(), string] =
-  ## Create a horizontal split window with a specific buffer. Without `focus`
-  ## the active window keeps the focus and its mode.
+  ## Create a horizontal split window with a specific buffer, above the active
+  ## window or below it with `below`. Without `focus` the active window keeps
+  ## the focus and its mode.
   if checkRoom:
     discard ?e.roomForHsplit()
 
@@ -463,7 +445,12 @@ proc hsplitWithBuffer*(
     originWindow = e.activeWindow
     previousWindow = e.windowManager.previousWindow
   let bufferResult = e.windowManager.hsplitWithBuffer(
-    e.tabBuffer(e.activeWindow), origin.viewport, origin.cursor, buffer, e.windowStatus
+    e.tabBuffer(e.activeWindow),
+    origin.viewport,
+    origin.cursor,
+    buffer,
+    e.windowStatus,
+    below,
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
