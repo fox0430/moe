@@ -316,6 +316,11 @@ suite "LspService - Worker Management (without actual workers)":
   test "a worker is live the moment startWorker publishes it":
     ## Regression: liveness must hold while the thread is scheduling.
     let svc = newLspService()
+    # A server that lingers, so a missing nimlangserver can't crash it first.
+    var config = svc.getConfig("nim").get
+    config.command = "sleep"
+    config.args = @["5"]
+    svc.setConfig("nim", config)
     let result = svc.startWorker("nim")
     check result.isOk
 
