@@ -33,7 +33,7 @@ import
   syntax/[
     tokenizer, syntax_c, syntax_cpp, syntax_csharp, syntax_fish, syntax_go,
     syntax_haskell, syntax_java, syntax_javascript, syntax_lisp, syntax_lua, syntax_nim,
-    syntax_python, syntax_rust, syntax_shell, syntax_typescript, syntax_zsh,
+    syntax_python, syntax_rust, syntax_shell, syntax_typescript, syntax_vim, syntax_zsh,
   ]
 
 type WordDictionary* = CritBitTree[int]
@@ -113,6 +113,22 @@ proc getLuaKeywords(): seq[string] {.compileTime.} =
   for s in luaSpecialVars:
     result.add s
 
+proc getVimKeywords(): seq[string] {.compileTime.} =
+  for s in vimCommands:
+    # A one-letter command (`:k`, `:t`) has nothing left to complete.
+    if s.len > 1:
+      result.add s
+  for s in vimBuiltins:
+    result.add s
+  for s in vimBooleans:
+    result.add s
+  for s in vimSpecialVars:
+    result.add s
+  for s in vimTypes:
+    result.add s
+  # Commands share names with builtins: `call`, `map`, `sort`
+  result = result.deduplicate
+
 proc getJavaKeywords(): seq[string] {.compileTime.} =
   for s in javaKeywords:
     result.add s
@@ -178,6 +194,7 @@ const
   HaskellKeywordList = getHaskellKeywords()
   LispKeywordList = getLispKeywords()
   LuaKeywordList = getLuaKeywords()
+  VimKeywordList = getVimKeywords()
   JavaKeywordList = getJavaKeywords()
   JavaScriptKeywordList = getJavaScriptKeywords()
   NimKeywordList = getNimKeywords()
@@ -224,6 +241,8 @@ proc getLanguageKeywords*(lang: SourceLanguage): seq[string] =
     @FishKeywordList
   of langTypeScript, langTsx:
     @TypeScriptKeywordList
+  of langVim:
+    @VimKeywordList
   else:
     @[]
 

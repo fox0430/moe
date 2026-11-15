@@ -858,6 +858,29 @@ suite "syntax_markdown - fence lines":
         (gtSpecialVar, "```"),
       ]
 
+  test "a ```vim block starts each line in command position":
+    # Markdown lexes the block's newlines, so the Vim lexer must find each
+    # line start itself: the second `"` is a comment, not a string.
+    let tokens = collectTokens("```vim\nlet x = 1\n\" note\n```")
+    check (gtComment, "\" note") in tokens
+    check tokens[^1] == (gtSpecialVar, "```")
+
+  test "a heredoc in a ```vim block ends at the closing fence":
+    let tokens = collectTokens("```vim\nlet x =<< END\nbody\n```\n# heading")
+    check (gtLongStringLit, "body") in tokens
+    var fences = 0
+    for token in tokens:
+      if token == (gtSpecialVar, "```"):
+        inc fences
+    check fences == 2
+    check (gtBuiltin, "#") in tokens
+
+  test "a ```vim9 block is Vim9 script until the closing fence":
+    let tokens = collectTokens("```vim9\n# c\nvar x = 1 # t\n```\n```vim\n# n\n```")
+    check (gtComment, "# c") in tokens
+    check (gtComment, "# t") in tokens
+    check (gtComment, "# n") notin tokens
+
 suite "syntax_markdown - bold edge cases":
   test "** followed by space is not bold":
     let tokens = collectTokens("** text**")

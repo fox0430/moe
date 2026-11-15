@@ -1974,6 +1974,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langShell
   of ".zshrc", ".zprofile", "zprofile", ".zshenv", ".zlogin", ".zlogout":
     return SourceLanguage.langZsh
+  of ".exrc", "_exrc":
+    return SourceLanguage.langVim
   else:
     # Check for Dockerfile variants (Dockerfile, Dockerfile.prod, etc.)
     if basename.startsWith("Dockerfile"):
@@ -1981,7 +1983,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
 
   # TODO: use settings file
   # Otherwise, determine the language by the file extension (case-sensitive)
-  case filename.splitFile.ext
+  let ext = filename.splitFile.ext
+  case ext
   of ".astro":
     return SourceLanguage.langAstro
   of ".c", ".dox", ".h", ".i":
@@ -2043,9 +2046,15 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langLua
   of ".hl":
     return SourceLanguage.langHyprland
+  of ".vim":
+    return SourceLanguage.langVim
   of ".xml", ".svg", ".xsd", ".xsl", ".xslt", ".rss", ".atom", ".plist":
     return SourceLanguage.langXml
   else:
+    # Vim's `*vimrc*` (`.vimrc.local`), but not a compressed file (`g:ft_ignore_pat`)
+    const compressed = [".Z", ".gz", ".bz2", ".zip", ".tgz"]
+    if "vimrc" in basename and ext notin compressed:
+      return SourceLanguage.langVim
     return SourceLanguage.langNone
 
 # LSP Semantic Tokens Support

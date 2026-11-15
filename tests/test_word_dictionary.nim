@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, critbits]
+import std/[unittest, critbits, sequtils]
 
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/word_dictionary
@@ -273,6 +273,17 @@ suite "word_dictionary: getLanguageKeywords":
     check "function" in keywords
     check "end" in keywords # Fish-specific
     check "set_color" in keywords # Fish-specific
+
+  test "Vim":
+    let keywords = getLanguageKeywords(langVim)
+    check "function" in keywords
+    check "nnoremap" in keywords
+    check "exists" in keywords # builtin function
+    check "fu" notin keywords # abbreviations are not completed
+    check "k" notin keywords # nor one-letter commands
+    check "X" notin keywords
+    check "if" in keywords
+    check keywords.len == keywords.deduplicate.len
 
   test "None language":
     let keywords = getLanguageKeywords(langNone)

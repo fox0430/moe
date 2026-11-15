@@ -26,7 +26,8 @@ import
   syntax_go, syntax_haskell, syntax_html, syntax_hyprland, syntax_java,
   syntax_javascript, syntax_latex, syntax_lisp, syntax_log, syntax_lua, syntax_markdown,
   syntax_nim, syntax_python, syntax_rust, syntax_shell, syntax_tcl, syntax_toml,
-  syntax_yaml, syntax_json, syntax_jsonc, syntax_typescript, syntax_xml, syntax_zsh
+  syntax_yaml, syntax_json, syntax_jsonc, syntax_typescript, syntax_vim, syntax_xml,
+  syntax_zsh
 
 export noteYamlLine
 
@@ -95,6 +96,8 @@ proc languageNextToken(g: var GeneralTokenizer, lang: SourceLanguage) =
     g.jsoncNextToken
   of langTypeScript, langTsx:
     g.typescriptNextToken
+  of langVim:
+    g.vimNextToken
   of langXml:
     g.xmlNextToken
   of langZsh:
