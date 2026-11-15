@@ -24,13 +24,16 @@
 
 import std/[options, os, strutils, terminal]
 
-import app_info, config
+import app_info, config, startup_command
+
+export startup_command
 
 type CmdLineConfig* = object ## Command line configuration
   debugEnabled*: bool ## Enable debug logging
   clearLog*: bool ## Clear existing log file on start
   isReadonly*: bool ## Open files in readonly mode
   filePaths*: seq[string] ## File paths to open (supports multiple files)
+  startupCommands*: seq[StartupCommand] ## In the order typed.
   bufferBackend*: Option[BufferBackendKind]
     ## Override of the configured buffer backend. `none` keeps the TOML value.
 
@@ -43,9 +46,14 @@ proc showHelp() =
   ## Display help message and exit
   const HelpMessage = """
 Usage:
-  moe [file]       Edit file
+  moe [arguments] [file ..]  Edit files
 
 Arguments:
+  +N                       Start at line N
+  +                        Start at the last line
+  +/pat                    Start at the next line matching pat
+  +{command}               Run an Ex command on the first file
+  --                       Only file names after this
   -R                       Readonly mode
   -d, --debug              Enable debug logging
   --clear-log              Clear existing debug log file on start
@@ -85,27 +93,18 @@ proc parseBufferBackendArg(value: string): BufferBackendKind =
     stderr.writeLine "Valid values: auto, gapBuffer, sqrtDecomp, rope, pieceTable"
     quit(1)
 
-proc parseCmdLine*(): CmdLineConfig =
+proc parseCmdLine*(args: seq[string] = commandLineParams()): CmdLineConfig =
   ## Parse command line arguments and return configuration
-  ##
-  ## Returns:
-  ##   CmdLineConfig with parsed settings
-  ##
-  ## Example:
-  ##   let config = parseCmdLine()
-  ##   if config.debugEnabled:
-  ##     echo "Debug mode enabled"
-  result = CmdLineConfig(
-    debugEnabled: false,
-    clearLog: false,
-    isReadonly: false,
-    filePaths: @[],
-    bufferBackend: none(BufferBackendKind),
-  )
+  result = CmdLineConfig(bufferBackend: none(BufferBackendKind))
 
-  for i in 1 .. paramCount():
-    let arg = paramStr(i)
+  var onlyFiles = false
+  for arg in args:
+    if onlyFiles:
+      result.filePaths.add(arg)
+      continue
     case arg
+    of "--":
+      onlyFiles = true
     of "-v", "--version":
       showVersion()
     of "-h", "--help":
@@ -120,6 +119,12 @@ proc parseCmdLine*(): CmdLineConfig =
       if arg.startsWith("--buffer-backend="):
         let value = arg["--buffer-backend=".len .. ^1]
         result.bufferBackend = some(parseBufferBackendArg(value))
+      elif arg.startsWith("+"):
+        let command = parseStartupCommand(arg)
+        if command.isSome:
+          result.startupCommands.add(command.get)
+        else:
+          showUnknownArgsError(arg)
       elif not arg.startsWith("-"):
         result.filePaths.add(arg)
       else:

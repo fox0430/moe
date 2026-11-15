@@ -25,7 +25,11 @@ import
   ../src/moepkg/
     [editor, buffer, config, config_loader, highlight, path_key, editor_persist]
 import ../src/moepkg/command_handlers/editor_ops
+import ../src/moepkg/[cmdline, message_log]
+import ../src/moepkg/command_handlers/startup_commands
 import ../src/moepkg/command_handlers/handler_result
+import ../src/moepkg/handler
+import vim_like_test_helper
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -305,6 +309,229 @@ suite "Editor - multi-file startup (no auto-split)":
     check e.state.mode == EditorMode.Normal
     check not e.activeBuffer.inTransaction
 
+suite "Editor - startup + arguments":
+  proc startOn(text: string, name: string): (Editor, string) =
+    ## An editor with `text` read from a file, as main() reads the first one.
+    let
+      e = createTestEditor()
+      path = getTempDir() / name
+    writeFile(path, text)
+    check e.loadFile(path).isOk
+    (e, path)
+
+  const Text = "foo a\n  bbb foo\nfoo x\n  zzz\n"
+
+  func ex(command: string): StartupCommand =
+    StartupCommand(kind: sckEx, command: command)
+
+  test "+N goes to the first non-blank of line N":
+    let (e, path) = startOn(Text, "moe_test_startup_line.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([ex("2")])
+    check e.state.cursor == BufferPosition(line: 1, column: 2)
+
+  test "+N past the end goes to the last line, +0 to the first":
+    let (e, path) = startOn(Text, "moe_test_startup_clamp.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([ex("99999")])
+    check e.state.cursor == BufferPosition(line: 3, column: 2)
+    e.runStartupCommands([ex("0")])
+    check e.state.cursor == BufferPosition(line: 0, column: 0)
+
+  test "+ goes to the last line":
+    let (e, path) = startOn(Text, "moe_test_startup_last.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([ex("$")])
+    check e.state.cursor == BufferPosition(line: 3, column: 2)
+
+  test "+N wins over the remembered position":
+    let
+      e = createTestEditor()
+      path = getTempDir() / "moe_test_startup_remembered.txt"
+    writeFile(path, Text)
+    defer:
+      removeFile(path)
+    e.persistedCursorPositions.changes[pathKey(path)] =
+      CursorPositionEntry(line: 3, column: 0)
+    check e.loadFile(path).isOk
+    check e.state.cursor.line == 3
+    e.runStartupCommands([ex("1")])
+    check e.state.cursor == BufferPosition(line: 0, column: 0)
+
+  test "+/pat on the first line finds a match there, as Vim's exe_commands":
+    let (e, path) = startOn(Text, "moe_test_startup_search_top.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([StartupCommand(kind: sckSearch, pattern: "foo")])
+    check e.state.cursor == BufferPosition(line: 0, column: 0)
+    check e.state.input.search.last.pattern == "foo"
+    check e.state.input.search.history[0] == "foo"
+
+  test "+/pat lands on the first non-blank of the line, not the match":
+    let (e, path) = startOn(Text, "moe_test_startup_search_col.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([StartupCommand(kind: sckSearch, pattern: "bbb")])
+    check e.state.cursor == BufferPosition(line: 1, column: 2)
+
+  test "Each +/pat searches on from where the one before landed":
+    let (e, path) = startOn(Text, "moe_test_startup_search_twice.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands(
+      [
+        StartupCommand(kind: sckSearch, pattern: "foo"),
+        StartupCommand(kind: sckSearch, pattern: "foo"),
+      ]
+    )
+    check e.state.cursor == BufferPosition(line: 1, column: 2)
+
+  test "+/pat from a remembered position searches after its line, wrapping":
+    let
+      e = createTestEditor()
+      path = getTempDir() / "moe_test_startup_search_wrap.txt"
+    writeFile(path, Text)
+    defer:
+      removeFile(path)
+    e.persistedCursorPositions.changes[pathKey(path)] =
+      CursorPositionEntry(line: 2, column: 0)
+    check e.loadFile(path).isOk
+    e.runStartupCommands([StartupCommand(kind: sckSearch, pattern: "foo")])
+    check e.state.cursor == BufferPosition(line: 0, column: 0)
+
+  test "+/pat with no match leaves the cursor and still sets the last search":
+    let (e, path) = startOn(Text, "moe_test_startup_search_none.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([StartupCommand(kind: sckSearch, pattern: "nomatch")])
+    check e.state.cursor == BufferPosition(line: 0, column: 0)
+    check e.state.statusMessage == "Pattern not found: nomatch"
+    check e.state.input.search.last.pattern == "nomatch"
+
+  test "+-2 above line 0 is E16 and leaves the cursor":
+    let (e, path) = startOn(Text, "moe_test_startup_e16.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([ex("-2")])
+    check e.state.cursor == BufferPosition(line: 0, column: 0)
+    check e.state.statusMessage == "E16: Invalid range"
+
+  test "An error goes below a message already on the status line":
+    let (e, path) = startOn(Text, "moe_test_startup_standing.txt")
+    defer:
+      removeFile(path)
+    e.state.statusMessage = "Config error: x"
+    e.runStartupCommands([StartupCommand(kind: sckSearch, pattern: "nomatch")])
+    check e.state.statusMessage == "Config error: x\nPattern not found: nomatch"
+
+  test "A command that succeeds keeps the message already there":
+    let (e, path) = startOn(Text, "moe_test_startup_standing_ok.txt")
+    defer:
+      removeFile(path)
+    e.state.statusMessage = "Config error: x"
+    e.runStartupCommands([ex("2")])
+    check e.state.statusMessage == "Config error: x"
+
+  test "Every failing command shows, none replacing another":
+    let (e, path) = startOn(Text, "moe_test_startup_two_errors.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands(
+      [ex("-2"), StartupCommand(kind: sckSearch, pattern: "nomatch")]
+    )
+    check e.state.statusMessage == "E16: Invalid range\nPattern not found: nomatch"
+
+  test "+{command} runs any Ex command, outside the command line history":
+    let (e, path) = startOn(Text, "moe_test_startup_set.txt")
+    defer:
+      removeFile(path)
+    let historyBefore = e.state.input.commandState.history.len
+    e.runStartupCommands([ex("set tabstop=7")])
+    check e.config.standard.tabStop == 7
+    check e.state.input.commandState.history.len == historyBefore
+
+  test "A command that quits decides the quit and ends the run":
+    let (e, path) = startOn(Text, "moe_test_startup_quit.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([ex("q"), ex("3")])
+    check e.state.quitDecided
+    check e.state.cursor.line == 0
+
+  test "An error is logged once":
+    let (e, path) = startOn(Text, "moe_test_startup_logged.txt")
+    defer:
+      removeFile(path)
+    clearMessageLog()
+    e.state.statusMessage = "Config error: x"
+    e.runStartupCommands([StartupCommand(kind: sckSearch, pattern: "nomatch")])
+    check getMessageLog() == @["Config error: x", "Pattern not found: nomatch"]
+
+  test "With the file tree to open, every window is placed again by the first frame":
+    let (e, path) = startOn(Text.repeat(200), "moe_test_startup_viewports.txt")
+    defer:
+      removeFile(path)
+    e.config.startUpFileTree.enable = true
+    e.syncActiveWindow()
+    e.runStartupCommands([ex("500"), ex("split")])
+    check e.windowManager.windows.len == 2
+    for window in e.windowManager.windows:
+      check window.viewport.topLine == 0
+
+  test "Without the file tree, the window keeps where the command placed it":
+    let (e, path) = startOn(Text.repeat(200), "moe_test_startup_viewports_kept.txt")
+    defer:
+      removeFile(path)
+    e.syncActiveWindow()
+    e.runStartupCommands([ex("500")])
+    check e.viewport.topLine > 0
+    check e.viewport.topLine <= 499
+
+  test "Neither +N nor +/pat is a jump, as Vim's :N and :/pat are not":
+    let (e, path) = startOn(Text, "moe_test_startup_no_jump.txt")
+    defer:
+      removeFile(path)
+    let before = e.state.jumpList.list.len
+    e.runStartupCommands([ex("3"), StartupCommand(kind: sckSearch, pattern: "bbb")])
+    check e.state.cursor.line == 1
+    check e.state.jumpList.list.len == before
+
+  test "j after +/pat keeps the column it landed on":
+    let (e, path) = startOn(Text, "moe_test_startup_wanted_column.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([StartupCommand(kind: sckSearch, pattern: "bbb")])
+    check e.state.cursor == BufferPosition(line: 1, column: 2)
+    for key in keysOf("j"):
+      check e.handleKeyCombo(key)
+    check e.state.cursor == BufferPosition(line: 2, column: 2)
+
+  test "On a directory they run in the filer":
+    let
+      e = createTestEditor()
+      dir = getTempDir() / "moe_test_startup_filer"
+    createDir(dir)
+    writeFile(dir / "foo.txt", "")
+    defer:
+      removeDir(dir)
+    e.enterFilerInActiveWindow(dir)
+    e.runStartupCommands(
+      [ex("set tabstop=7"), StartupCommand(kind: sckSearch, pattern: "foo")]
+    )
+    check e.config.standard.tabStop == 7
+    check e.state.input.search.last.pattern == "foo"
+
+  test "+/ with no last search is E35":
+    let (e, path) = startOn(Text, "moe_test_startup_search_empty.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([StartupCommand(kind: sckSearch, pattern: "")])
+    check e.state.cursor == BufferPosition(line: 0, column: 0)
+    check e.state.statusMessage.startsWith("E35")
+
 suite "Editor - multi-file startup (auto-split)":
   test "forced Insert mode leaves an auto-split -R buffer in Normal mode":
     let config = newEditorConfig()
@@ -321,12 +548,16 @@ suite "Editor - multi-file startup (auto-split)":
       removeFile(fileA)
       removeFile(fileB)
     check e.loadFile(fileA).isOk
+    # As main() makes the first file readonly.
+    e.activeBuffer.readOnly = true
+    e.enforceModePolicy()
 
     e.openAdditionalStartupFiles(@[fileA, fileB], readonly = true)
 
-    check e.activeBuffer.readOnly
+    let b = e.buffers[e.findBufferByPath(fileB)]
+    check b.readOnly
     check e.state.mode == EditorMode.Normal
-    check not e.activeBuffer.inTransaction
+    check not b.inTransaction
 
   test "Each extra file opens in its own split window":
     # With auto-split every extra path opens in a new split window (and its own
@@ -351,8 +582,9 @@ suite "Editor - multi-file startup (auto-split)":
     check e.loadFile(fileA).isOk
     e.openAdditionalStartupFiles(@[fileA, fileB, fileC], readonly = false)
 
-    # One window and one buffer per file.
+    # One window and one buffer per file, the focus back on the first.
     check e.windowManager.windows.len == 3
+    check e.activeBuffer.filePath.get == fileA
     check e.buffers.len == 3
     check e.findBufferByPath(fileA) >= 0
     check e.findBufferByPath(fileB) >= 0

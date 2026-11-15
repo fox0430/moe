@@ -39,16 +39,26 @@ proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   else:
     e.state.statusMessage = msg
 
+proc showBelowStatus*(e: Editor, msg: string) =
+  ## Show `msg` below the status line rather than replace it, leaving the
+  ## message log alone.
+  let standing = e.state.statusMessage
+  e.state.setStatusQuiet(
+    if standing.len == 0:
+      msg
+    else:
+      standing & "\n" & msg
+  )
+
 proc appendStatus*(e: Editor, msg: string) =
   ## Add `msg` below the status line rather than replace, e.g. a startup
   ## config error.
-  let standing = e.state.statusMessage
-  if standing.len == 0:
+  if e.state.statusMessage.len == 0:
     e.state.statusMessage = msg
   else:
     # `statusMessage=` would log the standing message a second time.
     addMessageLog(msg)
-    e.state.setStatusQuiet(standing & "\n" & msg)
+    e.showBelowStatus(msg)
 
 const MaxNotifiedLines* = 8
   ## Rows one report may spend on screen. The first message is always kept,

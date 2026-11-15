@@ -129,9 +129,8 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   # Note: cursorVisible is set by each mode's render function
 
 proc applyStartUpScreenSize*(e: Editor, termWidth, termHeight: int) =
-  ## Apply the real terminal size on first render. The startup window layout
-  ## (including splits from `moe file1 file2`) is built against the initial
-  ## default screen size before the terminal size is known.
+  ## Apply the real terminal size before the startup files open, and again on
+  ## first render. Until then the layout has the default screen size.
   if e.windowManager.windows.len > 1:
     # Rescale the whole split layout, same as a runtime terminal resize.
     e.windowManager.resizeWindows(
@@ -415,8 +414,7 @@ proc hsplit*(
 ): Result[(), string] =
   ## Create a horizontal split window (top and bottom), showing `filename` when
   ## one is given and the current buffer otherwise. Without `checkRoom` the
-  ## split is made whatever the height: startup files open before the real
-  ## terminal size is known.
+  ## split is made whatever the height, as the startup files still are.
   # Check the room first so a refused open registers nothing.
   if checkRoom:
     discard ?e.roomForHsplit()
