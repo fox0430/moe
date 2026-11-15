@@ -1956,7 +1956,7 @@ proc updateHighlightIncremental*(
   )
 
 proc detectLanguage*(filename: string): SourceLanguage =
-  # Check basename for special files (no extension)
+  # Check basename (takes precedence over the extension)
   let basename = filename.extractFilename
   case basename
   of "COMMIT_EDITMSG":
@@ -1980,6 +1980,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
       return SourceLanguage.langDockerfile
 
   # TODO: use settings file
+  # Otherwise, determine the language by the file extension (case-sensitive)
   case filename.splitFile.ext
   of ".astro":
     return SourceLanguage.langAstro
