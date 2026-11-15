@@ -32,6 +32,8 @@ export window_manager_types
 const
   WindowSeparatorWidth* = 1 ## Width of separator between vertically split windows
   WindowSeparatorHeight* = 1 ## Height of separator between horizontally split windows
+  MinWindowWidth* = 1 ## Narrowest window a vertical split leaves, as Vim's 'winminwidth'
+  NotEnoughRoom* = "E36: Not enough room"
 
 proc newEditorWindowManager*(): EditorWindowManager =
   ## Create a new window manager
@@ -539,14 +541,15 @@ proc equalizeHeightsInGroup*(
     startY: int,
     status: WindowStatus,
 ) =
-  ## Equalize heights of windows in a vertical group
+  ## Equalize heights of windows in a vertical group, top to bottom, windows
+  ## starting on the same row in window order.
   if group.len <= 1:
     return
 
   var sortedGroup = group
   sortedGroup.sort(
     proc(a, b: int): int =
-      cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+      cmp((wm.windows[a].viewport.y, a), (wm.windows[b].viewport.y, b))
   )
 
   let
@@ -851,97 +854,16 @@ proc onlyWindow*(wm: EditorWindowManager, screenWidth: int, screenHeight: int) =
   activeWin.viewport.width = screenWidth
   activeWin.viewport.height = windowAreaHeight(screenHeight)
 
-proc vsplit*(
-    wm: EditorWindowManager,
-    currentBuffer: TextBuffer,
-    currentViewport: ViewPort,
-    cursorPosition: BufferPosition,
-): Result[TextBuffer, string] =
-  ## Create a vertical split window (side by side) showing the current buffer.
-  ## Returns the buffer the new window shows.
-  ##
-  ## Opening a *file* in a split goes through `vsplitWithBuffer` with a buffer
-  ## the editor has already created, registered and loaded; reading a file is
-  ## not the window manager's job.
-  let newBuffer = currentBuffer
-
-  let
-    # Save original viewport dimensions before modification (ViewPort is ref object)
-    origWidth = wm.windows[wm.activeWindowIndex].viewport.width
-    origHeight = wm.windows[wm.activeWindowIndex].viewport.height
-    origX = wm.windows[wm.activeWindowIndex].viewport.x
-    origY = wm.windows[wm.activeWindowIndex].viewport.y
-
-    # Calculate new dimensions - split the active window's width
-    splitWidth = origWidth div 2
-
-  # Move the active window to the right half
-  wm.windows[wm.activeWindowIndex].viewport.width =
-    origWidth - splitWidth - WindowSeparatorWidth
-  wm.windows[wm.activeWindowIndex].viewport.x =
-    origX + splitWidth + WindowSeparatorWidth
-  wm.deactivateAllWindows()
-
-  # When opening the same buffer, inherit cursor position and viewport scroll
-  let isSameBuffer = newBuffer == currentBuffer
-  let newCursor =
-    if isSameBuffer:
-      cursorPosition
-    else:
-      BufferPosition(line: 0, column: 0)
-  let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
-  let newLeftCell = if isSameBuffer: currentViewport.leftCell else: 0
-
-  # Create new window for left half
-  let newWindow = EditorWindow(
-    viewBuffer: newBuffer,
-    tabBufferId: newBuffer.id,
-    bufferIds: @[newBuffer.id], # Per-window tabs start with the split buffer only
-    viewport: ViewPort(
-      topLine: newTopLine,
-      leftCell: newLeftCell,
-      width: splitWidth,
-      height: origHeight,
-      x: origX,
-      y: origY,
-    ),
-    cursor: newCursor,
-    active: true,
-    mode: EditorMode.Normal, # New windows start in Normal mode
-    wrapCountCache: WrapCountCache(),
-  )
-
-  # Insert new window before the active window (left position)
-  wm.previousWindow = wm.windows[wm.activeWindowIndex]
-  wm.windows.insert(newWindow, wm.activeWindowIndex)
-
-  # Equalize widths of all windows at the same vertical position
-  let windowGroups = wm.groupWindowsByY()
-  for group in windowGroups:
-    if group.len > 1:
-      var sortedGroup = group
-      sortedGroup.sort(
-        proc(a, b: int): int =
-          cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
-      )
-      let
-        firstWindow = wm.windows[sortedGroup[0]]
-        lastWindow = wm.windows[sortedGroup[^1]]
-        totalWidth =
-          (lastWindow.viewport.x + lastWindow.viewport.width) - firstWindow.viewport.x
-        startX = firstWindow.viewport.x
-      wm.equalizeWidthsInGroup(sortedGroup, totalWidth, startX)
-
-  return ok(newBuffer)
-
 proc vsplitWithBuffer*(
     wm: EditorWindowManager,
     currentBuffer: TextBuffer,
     currentViewport: ViewPort,
     cursorPosition: BufferPosition,
     newBuffer: TextBuffer,
+    right = false,
 ): Result[TextBuffer, string] =
-  ## Create a vertical split window with a specific buffer
+  ## Create a vertical split window with a specific buffer, left of the active
+  ## window, or right of it with `right` (Vim's 'splitright').
   ## Returns the new buffer that should be used
 
   let
@@ -954,11 +876,18 @@ proc vsplitWithBuffer*(
     # Calculate new dimensions - split the active window's width
     splitWidth = origWidth div 2
 
-  # Move the active window to the right half
-  wm.windows[wm.activeWindowIndex].viewport.width =
-    origWidth - splitWidth - WindowSeparatorWidth
-  wm.windows[wm.activeWindowIndex].viewport.x =
-    origX + splitWidth + WindowSeparatorWidth
+  # The active window keeps the other half.
+  let
+    keptWidth = origWidth - splitWidth - WindowSeparatorWidth
+    newX =
+      if right:
+        origX + keptWidth + WindowSeparatorWidth
+      else:
+        origX
+  wm.windows[wm.activeWindowIndex].viewport.width = keptWidth
+  if not right:
+    wm.windows[wm.activeWindowIndex].viewport.x =
+      origX + splitWidth + WindowSeparatorWidth
   wm.deactivateAllWindows()
 
   # When opening the same buffer, inherit cursor position and viewport scroll
@@ -971,7 +900,6 @@ proc vsplitWithBuffer*(
   let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
   let newLeftCell = if isSameBuffer: currentViewport.leftCell else: 0
 
-  # Create new window for left half with the provided buffer
   let newWindow = EditorWindow(
     viewBuffer: newBuffer,
     tabBufferId: newBuffer.id,
@@ -981,7 +909,7 @@ proc vsplitWithBuffer*(
       leftCell: newLeftCell,
       width: splitWidth,
       height: origHeight,
-      x: origX,
+      x: newX,
       y: origY,
     ),
     cursor: newCursor,
@@ -990,8 +918,10 @@ proc vsplitWithBuffer*(
     wrapCountCache: WrapCountCache(),
   )
 
-  # Insert new window before the active window (left position)
+  # Keep the window order the layout order: before the active window, or after.
   wm.previousWindow = wm.windows[wm.activeWindowIndex]
+  if right:
+    wm.activeWindowIndex.inc
   wm.windows.insert(newWindow, wm.activeWindowIndex)
 
   # Equalize widths of all windows at the same vertical position
@@ -1012,6 +942,23 @@ proc vsplitWithBuffer*(
       wm.equalizeWidthsInGroup(sortedGroup, totalWidth, startX)
 
   return ok(newBuffer)
+
+proc vsplit*(
+    wm: EditorWindowManager,
+    currentBuffer: TextBuffer,
+    currentViewport: ViewPort,
+    cursorPosition: BufferPosition,
+    right = false,
+): Result[TextBuffer, string] =
+  ## Create a vertical split window (side by side) showing the current buffer.
+  ## Returns the buffer the new window shows.
+  ##
+  ## Opening a *file* in a split goes through `vsplitWithBuffer` with a buffer
+  ## the editor has already created, registered and loaded; reading a file is
+  ## not the window manager's job.
+  wm.vsplitWithBuffer(
+    currentBuffer, currentViewport, cursorPosition, currentBuffer, right
+  )
 
 func minWindowHeight(status: WindowStatus, isBottomWindow, showTabLine: bool): int =
   ## One content row plus whatever chrome the window carries: its own tab line
@@ -1042,7 +989,27 @@ proc roomForHsplit*(
       group.len * minWindowHeight(status, false, showTabLine) +
       minWindowHeight(status, wm.windows.reachesBottom(bottomWindow), showTabLine)
     if bottom - top < needed:
-      return err("E36: Not enough room")
+      return err(NotEnoughRoom)
+  ok(())
+
+proc roomForVsplit*(wm: EditorWindowManager): Result[(), string] =
+  ## E36 unless the active window's row still fits one more window, each
+  ## flexible one at least `MinWindowWidth` wide beside its separator.
+  ## Fixed-width windows keep their width.
+  for group in wm.groupWindowsByY():
+    if wm.activeWindowIndex notin group:
+      continue
+    var
+      left = high(int)
+      right = 0
+      needed = group.len * WindowSeparatorWidth + MinWindowWidth
+    for idx in group:
+      let win = wm.windows[idx]
+      left = min(left, win.viewport.x)
+      right = max(right, win.viewport.x + win.viewport.width)
+      needed += win.fixedWidth.get(MinWindowWidth)
+    if right - left < needed:
+      return err(NotEnoughRoom)
   ok(())
 
 proc hsplitWithBuffer*(
@@ -1052,8 +1019,10 @@ proc hsplitWithBuffer*(
     cursorPosition: BufferPosition,
     newBuffer: TextBuffer,
     status: WindowStatus,
+    below = false,
 ): Result[TextBuffer, string] =
-  ## Create a horizontal split window with a specific buffer
+  ## Create a horizontal split window with a specific buffer, above the active
+  ## window, or below it with `below` (Vim's 'splitbelow').
   ## Returns the new buffer that should be used
 
   let active = wm.windows[wm.activeWindowIndex]
@@ -1070,8 +1039,8 @@ proc hsplitWithBuffer*(
   let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
   let newLeftCell = if isSameBuffer: currentViewport.leftCell else: 0
 
-  # The new window takes the active window's place: re-tiling the column below
-  # gives each its rows, and sorts the new window first.
+  # The new window starts on the active window's rows: re-tiling the column
+  # below gives each its rows, ties in window order.
   let newWindow = EditorWindow(
     viewBuffer: newBuffer,
     tabBufferId: newBuffer.id,
@@ -1090,26 +1059,24 @@ proc hsplitWithBuffer*(
     wrapCountCache: WrapCountCache(),
   )
 
-  # Insert new window before the active window (top position)
+  # Insert the new window before the active window (above), or after (below).
   wm.previousWindow = wm.windows[wm.activeWindowIndex]
+  if below:
+    wm.activeWindowIndex.inc
   wm.windows.insert(newWindow, wm.activeWindowIndex)
 
   # Equalize heights of all windows at the same horizontal position
   let windowGroups = wm.groupWindowsByXAndWidth()
   for group in windowGroups:
     if group.len > 1:
-      var sortedGroup = group
-      sortedGroup.sort(
-        proc(a, b: int): int =
-          cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
-      )
-      let
-        firstWindow = wm.windows[sortedGroup[0]]
-        lastWindow = wm.windows[sortedGroup[^1]]
-        totalHeight =
-          (lastWindow.viewport.y + lastWindow.viewport.height) - firstWindow.viewport.y
-        startY = firstWindow.viewport.y
-      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, status)
+      var
+        startY = high(int)
+        endY = 0
+      for idx in group:
+        let v = wm.windows[idx].viewport
+        startY = min(startY, v.y)
+        endY = max(endY, v.y + v.height)
+      wm.equalizeHeightsInGroup(group, endY - startY, startY, status)
 
   return ok(newBuffer)
 
@@ -1119,13 +1086,14 @@ proc hsplit*(
     currentViewport: ViewPort,
     cursorPosition: BufferPosition,
     status: WindowStatus,
+    below = false,
 ): Result[TextBuffer, string] =
   ## Create a horizontal split window (top and bottom) showing the current
   ## buffer. Returns the buffer the new window shows.
   ##
   ## Opening a *file* in a split goes through `hsplitWithBuffer`; see `vsplit`.
   wm.hsplitWithBuffer(
-    currentBuffer, currentViewport, cursorPosition, currentBuffer, status
+    currentBuffer, currentViewport, cursorPosition, currentBuffer, status, below
   )
 
 proc syncFixedWidth(wm: EditorWindowManager, indexes: varargs[int]) =

@@ -202,8 +202,9 @@ let Invariants = @[
     skipFiles: @["window_manager.nim"],
     match: matchActivateWindow,
     allow: @[
-      # Onto an open viewer, or off the FileTree sidebar (no session there).
-      ("moepkg/viewer_mode.nim", 2),
+      # Onto an open viewer, off the FileTree sidebar (no session there), or
+      # back onto it after a failed command.
+      ("moepkg/viewer_mode.nim", 3),
       # Handing the focus back to a reused command-output split.
       ("moepkg/editor_command_output.nim", 1),
       # Off a lone FileTree sidebar onto the window that replaces it, and back
@@ -211,7 +212,6 @@ let Invariants = @[
       # focusWindow, which ends the session first.
       ("moepkg/editor_window.nim", 3),
       ("moepkg/command_handlers/editor_ops.nim", 2),
-      ("moepkg/command_handlers/file_ops.nim", 1),
     ],
   ),
   Invariant(

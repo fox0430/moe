@@ -36,6 +36,7 @@ import
   editor_window,
   editor_window_state,
   editor_window_tab,
+  window_manager,
   viewer_mode,
   buffer_listings,
   git_cache,
@@ -731,35 +732,50 @@ proc openAdditionalStartupFiles*(
 ) =
   ## Open the extra command-line files (everything after the first, which
   ## loadFile already loaded into the active buffer). With auto-split each file
-  ## opens in its own split window; otherwise each is registered as a separate
-  ## buffer (like :badd) and joins the active window's tab list so :bnext/:bprev
-  ## can reach it without switching away from the first file. Missing files are
-  ## skipped. Sharing one loop keeps the split and no-split startup paths in sync.
-  ## The focus stays on the first file, as after Vim's edit_buffers.
-  let first = e.activeWindow
+  ## opens in its own split window, in argument order below (right of) the one
+  ## before, as Vim's `-o`/`-O`; the files left without room for a window, and
+  ## every file without auto-split, are registered as separate buffers (like :badd)
+  ## in the first window's tab list so :bnext/:bprev can reach them.
+  ## Missing files are skipped. Sharing one loop keeps the split and no-split
+  ## startup paths in sync. The focus stays on the first file, as after Vim's
+  ## edit_buffers.
+  let
+    first = e.activeWindow
+    splitType = e.config.startUpFileOpen.splitType
+  var
+    unsplit: seq[TextBuffer]
+    splitting = e.config.startUpFileOpen.autoSplit
   for i in 1 ..< filePaths.len:
     let filePath = filePaths[i]
     if not fileExists(filePath):
       continue
 
-    if e.config.startUpFileOpen.autoSplit:
+    if splitting:
       let splitResult =
-        case e.config.startUpFileOpen.splitType
+        case splitType
         of stVertical:
-          e.vsplit(some(filePath))
+          e.vsplit(some(filePath), right = true)
         of stHorizontal:
-          e.hsplit(some(filePath), checkRoom = false)
-      if splitResult.isErr:
-        logError("moe", fmt"Failed to split for {filePath}: {splitResult.error}")
-      elif readonly:
-        e.activeBuffer().readOnly = true
-        e.enforceModePolicy()
-    else:
-      let bufResult = e.loadOrCreateBuffer(filePath)
-      if bufResult.isErr:
-        logError("moe", fmt"Failed to open {filePath}: {bufResult.error}")
-      else:
-        e.addBufferToWindowList(bufResult.get)
+          e.hsplit(some(filePath), below = true)
+      if splitResult.isOk:
         if readonly:
-          bufResult.get.readOnly = true
+          e.activeBuffer().readOnly = true
+          e.enforceModePolicy()
+        continue
+      if splitResult.error != NotEnoughRoom:
+        # The file could not be read: the buffer list would fail on it too.
+        logError("moe", fmt"Failed to split for {filePath}: {splitResult.error}")
+        continue
+      # As Vim's make_windows, open only the windows that fit.
+      splitting = false
+
+    let bufResult = e.loadOrCreateBuffer(filePath)
+    if bufResult.isErr:
+      logError("moe", fmt"Failed to open {filePath}: {bufResult.error}")
+    else:
+      unsplit.add bufResult.get
+      if readonly:
+        bufResult.get.readOnly = true
   e.focusWindow(e.windowManager.windows.find(first))
+  for buf in unsplit:
+    e.addBufferToWindowList(buf)
