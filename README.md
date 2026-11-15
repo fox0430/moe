@@ -30,14 +30,18 @@ This project's goals are easily customizable, high productivity, user friendly, 
 - Undo/redo
 
 - Syntax highlighting:
-  - C
-  - C++
+  - C, C++
   - C#
   - Go
   - Haskell
+  - HTML
   - Java
-  - JavaScript
-  - Markdown
+  - JavaScript/JSX
+  - JSON/JSONC
+  - LaTeX
+  - Lisp
+  - Lua
+  - Markdown/R Markdown
   - Nim
   - Python
   - Rust
@@ -45,15 +49,12 @@ This project's goals are easily customizable, high productivity, user friendly, 
     - Bash
     - Fish
     - Zsh
-  - TOML
-  - YAML
-  - JSON/JSONC
-  - Lisp
-  - Lua
   - Tcl
-  - Hyprland
-  - Dockerfile
+  - TOML
+  - TypeScript/TSX
   - XML
+  - YAML
+  - Others: Astro, Dockerfile, Hyprland, Log files
 
 - Auto-completion
 
