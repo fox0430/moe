@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, monotimes, options, os, strutils, tables]
+import std/[unittest, monotimes, options, os, sequtils, strutils, tables]
 
 import pkg/[chronos, results]
 
@@ -29,6 +29,7 @@ import
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/command_handlers/[handler_result, editor_ops, file_ops]
 from ../src/moepkg/key_bindings/registry import parseKeyCombo
+from ../src/moepkg/key_bindings import addRuntimeMapping
 
 when defined(posix):
   from std/posix import getuid
@@ -941,6 +942,46 @@ suite "BufWritePre - which writes run it":
 
     editor.state.statusMessage = ""
     check editor.processFileResult(HandlerResult(kind: hrQuickRun), editor.activeBuffer)
+    check "exited with 1" in editor.state.statusMessage
+
+  test "QuickRun from \\r says what failed":
+    let dir = testDir("quickrunkey")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = true
+    let editor = newEditor(config)
+    editor.openInEditor(path, "echo 1\n")
+    editor.activeBuffer.edit(@["echo 2"])
+    editor.config.hooks.entries = @[writePre("false")]
+
+    editor.state.statusMessage = ""
+    editor.typeKeys(["\\", "r"])
+    check readFile(path) == "echo 2\n"
+    check editor.state.pending.countIt(it.kind == paoQuickRun) == 1
+    check "exited with 1" in editor.state.statusMessage
+
+  test "QuickRun from a Visual mode mapping runs at once and ends Visual":
+    let dir = testDir("quickrunvisual")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = true
+    let editor = newEditor(config)
+    editor.openInEditor(path, "echo 1\n")
+    editor.activeBuffer.edit(@["echo 2"])
+    editor.config.hooks.entries = @[writePre("false")]
+    check editor.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Visual, "Q", "quickrun"
+    ) == ""
+
+    editor.state.statusMessage = ""
+    editor.typeKeys(["v", "Q"])
+    check editor.state.mode == EditorMode.Normal
+    check readFile(path) == "echo 2\n"
+    check editor.state.pending.countIt(it.kind == paoQuickRun) == 1
     check "exited with 1" in editor.state.statusMessage
 
   test "An abort stops the QuickRun":

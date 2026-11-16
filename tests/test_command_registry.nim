@@ -448,12 +448,6 @@ suite "CommandRegistry - registerBuiltinCommands":
     check registry.findCommand(builtin(bcFoldDelete)).isSome
     check registry.findCommand(builtin(bcFoldDeleteAll)).isSome
 
-  test "registers quickrun command":
-    let registry = newCommandRegistry()
-    registerBuiltinCommands(registry)
-
-    check registry.findCommand(builtin(bcQuickRun)).isSome
-
   test "registered commands have non-nil handlers":
     let registry = newCommandRegistry()
     registerBuiltinCommands(registry)

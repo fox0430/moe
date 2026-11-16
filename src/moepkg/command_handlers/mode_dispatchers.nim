@@ -50,7 +50,7 @@ import ../types/editor_types
 # The per-mode key handlers this module forwards to come from handler_modules
 # (the shared re-export surface). See handler_modules.nim for why the list is
 # centralized there rather than duplicated per importer.
-import handler_modules
+import handler_modules, command_passthrough
 
 proc commitInsertModeBoundary*(
     buffer: TextBuffer, state: EditorState
@@ -451,9 +451,8 @@ proc handleVisualMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
-  of vmrLspSelectionRange:
-    # Execute LSP selection range
-    return HandlerResult(kind: hrLspSelectionRange)
+  of vmrPassthrough:
+    return toHandlerResult(r.passthroughKind)
   of vmrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of vmrExecCommand:

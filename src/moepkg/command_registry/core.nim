@@ -118,8 +118,6 @@ type
     bcFoldCreate = "fold.create" # zf - create fold from selection
     bcFoldDelete = "fold.delete" # zd - delete fold at cursor
     bcFoldDeleteAll = "fold.delete.all" # zD - delete all folds
-    # QuickRun
-    bcQuickRun = "quickrun" # \r - run current buffer
 
   ## Command ID can be builtin or custom
   CommandIdKind* = enum

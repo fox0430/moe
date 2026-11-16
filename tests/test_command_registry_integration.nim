@@ -5622,16 +5622,6 @@ suite "Handler - Other Commands":
     check registry.execute(ctx, custom("autoindent.line")).isOk
     check buffer[1] == "\tworld"
 
-  test "quick run":
-    let buffer = newTextBuffer("echo hello")
-    let ctx = createTestContext(buffer)
-    ctx.state.mode = EditorMode.Normal
-    let registry = createTestRegistry()
-
-    discard registry.execute(ctx, builtin(bcQuickRun))
-    # Just check it doesn't crash - actual execution depends on config
-    check true # Just verify no crash
-
   test "operator delete to end (D)":
     let buffer = newTextBuffer("hello world test")
     let ctx = createTestContext(buffer)

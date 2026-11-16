@@ -24,6 +24,8 @@
 ##   * normal_handler.nim — Normal mode ctAction / ctCustom branches
 ##   * handler_manager.nim:executeCommandDirect — Special mode runtime mapping
 ##   * handler_manager.nim:handleNormalMode — Normal mode result translation
+##   * visual_handler.nim / mode_dispatchers.nim:handleVisualMode — Visual
+##     mode bindings
 ##
 ## Stateful commandIds (changelist.*, bookmark.*, jump.*, editor.open.uri,
 ## insert.*, edit.{undo,redo}) are NOT handled here and remain in
@@ -81,6 +83,17 @@ type PassthroughKind* = enum
   ptLspDocumentSymbol
   # terminal
   ptTerminalQuit
+
+const KeepsVisual* = {
+  ptLspSelectionRange, ptMaximizeWindowHeight, ptIncreaseWindowHeight,
+  ptDecreaseWindowHeight, ptIncreaseWindowWidth, ptDecreaseWindowWidth,
+  ptEqualizeWindows,
+}
+  ## Run from Visual mode with the selection kept: selection range grows it,
+  ## and resizing leaves it on as Vim's CTRL-W `+`, `_` and `=` do. The others
+  ## end Visual mode first, as a command typed after `:` does. Moving to
+  ## another window ends it even on the same buffer, where Vim keeps it:
+  ## Visual belongs to one window.
 
 proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
   ## Return the canonical PassthroughKind for `commandId`, or none for
