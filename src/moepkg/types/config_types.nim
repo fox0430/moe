@@ -136,7 +136,15 @@ type
     showModifiedLines* {.
       cfg, cfgDocDescription: "Show modified/inserted line indicators in sidebars"
     .}: bool
-    autoCloseParen* {.cfg, cfgDocDescription: "Automatic closing brackets".}: bool
+    autoCloseParen* {.
+      cfg,
+      cfgDocDescription:
+        "Automatic closing brackets and quotes. Typing a closing character " &
+        "before the same one steps over it. After a backslash that is not " &
+        "itself escaped a bracket or quote goes in as typed, as does a single " &
+        "quote after a word character, except in Python after a whole " &
+        "string prefix such as f or rb"
+    .}: bool
     autoIndent* {.cfg, cfgDocDescription: "Automatic indentation".}: bool
     smartIndent* {.
       cfg,
