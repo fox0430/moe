@@ -315,6 +315,7 @@ const ArgumentRequiredActions* = {
   claSet, # requires option name
   claSubstitute, # requires pattern
   claBuffer, # requires buffer number/name
+  claBufferDelete, # optional buffer number/name
   claShellCommand, # requires command
   claFilter, # requires command
   claMan, # requires page name
@@ -349,7 +350,7 @@ const ArgumentRequiredActions* = {
 const NoArgumentActions* = {
   claQuit, claQuitAll, claSave, claSaveAll, claSaveAndQuit, claSaveIfModifiedAndQuit,
   claSaveAllAndQuit, claEnew, claHelp, claUndo, claRedo, claDeleteLines, claNew,
-  claVnew, claBufferNext, claBufferPrev, claBufferFirst, claBufferLast, claBufferDelete,
+  claVnew, claBufferNext, claBufferPrev, claBufferFirst, claBufferLast,
   claStripWhitespace, claLogViewer, claJobs, claQuickRun, claBufferManager,
   claBackupManager, claRecoveryManager, claRecentFile, claClearSearchHighlight,
   claBackground, claJumpList, claChanges, claBookmarks, claVersion, claConflictNext,

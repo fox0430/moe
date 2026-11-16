@@ -6116,6 +6116,29 @@ suite "The search prompt and the command line end as Vim's getcmdline":
     check not e.state.hasOverlay
     check not e.state.commandCompletionManager.isActive()
 
+  test "Enter on a :bd completion waits for its argument":
+    for typed in ["bd", "bdelete"]:
+      let e = createEditorForPrompt("abcdef")
+      e.addBuffer(e.activeBuffer)
+      e.addBuffer(newTextBuffer("other"))
+      let count = e.buffers.len
+      e.press(keys(":" & typed))
+      e.press(@["Tab"])
+      checkpoint(typed)
+      check e.state.input.line.text == typed
+
+      e.press(keys("\r"))
+
+      check e.state.isCommandOverlay
+      check e.state.input.line.text == typed
+      check not e.state.commandCompletionManager.isActive()
+      check e.buffers.len == count
+
+      e.press(keys("\r"))
+
+      check not e.state.isCommandOverlay
+      check e.buffers.len == count - 1
+
   test "Ctrl-H erases as Backspace does":
     for incsearch in [false, true]:
       for by in By:
