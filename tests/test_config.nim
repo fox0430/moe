@@ -174,7 +174,7 @@ suite "Config - newEditorConfig defaults":
     let config = newEditorConfig()
 
     check config.quickRun.saveBufferWhenQuickRun == true
-    check config.quickRun.command.isNone
+    check config.quickRun.entries.len == 0
     check config.quickRun.timeout == 30
     check config.quickRun.nimAdvancedCommand.isNone
     check config.quickRun.clangOptions.isNone
@@ -520,7 +520,6 @@ suite "Config - Option field assignments":
   test "QuickRun Option fields":
     let config = newEditorConfig()
 
-    config.quickRun.command = some("./run.sh")
     config.quickRun.nimAdvancedCommand = some("nim c -r")
     config.quickRun.clangOptions = some("-Wall")
     config.quickRun.cppOptions = some("-std=c++17")
@@ -528,7 +527,6 @@ suite "Config - Option field assignments":
     config.quickRun.shOptions = some("-e")
     config.quickRun.bashOptions = some("-x")
 
-    check config.quickRun.command.get == "./run.sh"
     check config.quickRun.nimAdvancedCommand.get == "nim c -r"
     check config.quickRun.clangOptions.get == "-Wall"
     check config.quickRun.cppOptions.get == "-std=c++17"

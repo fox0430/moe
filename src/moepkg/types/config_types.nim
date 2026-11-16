@@ -337,11 +337,36 @@ type
     .}: seq[string]
 
   # Quick run settings
-  QuickRunConfig* {.cfgSection: "QuickRun".} = object
+  CompiledFilter* = object
+    ## An entry's `filter` compiled at load. Derived from `filter`, so it never
+    ## makes two entries differ.
+    regex*: Option[Regex2]
+
+  QuickRunEntry* {.
+    cfgSkip,
+    cfgDocDescription:
+      "A command QuickRun runs in place of the built-in one, and the files it is for"
+  .} = object ## One `[[QuickRun.entries]]` table.
+    command* {.cfg, cfgDocDescription: "Command line to run".}: string
+      ## Placeholders are expanded before exec.
+    filetype* {.
+      cfg,
+      cfgSuggest: filetypeNames,
+      cfgDocDescription: "File types this applies to (default: every type)"
+    .}: seq[string]
+    filter* {.
+      cfg, cfgDocDescription: "Regex the file path must match (default: every path)"
+    .}: string
+    filterRegex* {.cfgSkip.}: CompiledFilter
+    workingDir* {.
+      cfg, cfgDocDescription: "Directory to run the command in (default: the file's)"
+    .}: string
+
+  QuickRunConfig* {.cfgGroup: "QuickRun", cfgDocDescription: "Run the current buffer".} = object
+    ## `[QuickRun]`. `entries` is filled from the `[[QuickRun.entries]]` array
+    ## of tables; a file no entry matches runs the built-in command.
     saveBufferWhenQuickRun* {.cfg, cfgDocDescription: "Save buffer when run QuickRun".}:
       bool
-    command* {.cfg, cfgNoUi, cfgDocDescription: "Commands to be executed by quick run".}:
-      Option[string]
     timeout* {.
       cfg, cfgMin: 0, cfgDocDescription: "Command timeout (seconds, 0 = no timeout)"
     .}: int
@@ -365,6 +390,8 @@ type
     .}: Option[string]
     shOptions* {.cfg, cfgNoUi, cfgDocDescription: "sh options".}: Option[string]
     bashOptions* {.cfg, cfgNoUi, cfgDocDescription: "bash options".}: Option[string]
+    entries* {.cfgArrayOfTables: "entries", cfgEntryRules: checkQuickRunEntry.}:
+      seq[QuickRunEntry]
 
   # Notification settings
   NotificationConfig* {.cfgSection: "Notification".} = object
@@ -860,8 +887,7 @@ type
     filter* {.
       cfg, cfgDocDescription: "Regex the file path must match (default: every path)"
     .}: string
-    filterRegex* {.cfgSkip.}: Option[Regex2]
-      ## `filter` compiled at load; `matches` runs per event.
+    filterRegex* {.cfgSkip.}: CompiledFilter ## `matches` runs per event.
     workingDir* {.
       cfg,
       cfgOnlyWhen(isProgramHook, "exCommand is not set"),
@@ -964,6 +990,10 @@ proc isProgramHook*(entry: HookEntry): bool =
 
 proc isProgramWritePreHook*(entry: HookEntry): bool =
   entry.isWritePreHook and entry.isProgramHook
+
+proc `==`*(a, b: CompiledFilter): bool =
+  ## Always equal: entries compare by their `filter`, and `Regex2` has no `==`.
+  true
 
 const ValidHookFailActions* = block:
   ## TOML spellings of `HookFailAction`; see `ValidHookEvents`.

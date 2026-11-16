@@ -30,7 +30,13 @@ else:
 import pkg/[results, chronos]
 
 import syntax/tokenizer
-import config, buffer/[core, file_io], background_process
+import
+  config,
+  buffer/[core, file_io],
+  background_process,
+  command_string,
+  file_command,
+  path_key
 
 export SourceLanguage
 
@@ -118,25 +124,34 @@ proc shebangQuickRunCommand(
   args.add path
   BackgroundProcessCommand(cmd: shebang.cmd, args: args)
 
+proc optionArgs(value: Option[string], key: string): Result[seq[string], string] =
+  ## Split an options key into arguments as a shell would, without one.
+  if value.isNone:
+    return Result[seq[string], string].ok newSeq[string]()
+  let words = splitCommandLine(value.get)
+  if words.isErr:
+    return Result[seq[string], string].err key & ": " & words.error
+  words
+
 proc nimQuickRunCommand(
     path: string, settings: QuickRunConfig
-): BackgroundProcessCommand =
+): Result[BackgroundProcessCommand, string] =
   const Cmd = "nim"
   var args: seq[string]
 
-  if settings.nimAdvancedCommand.isSome:
-    args.add settings.nimAdvancedCommand.get
+  let advanced = ?optionArgs(settings.nimAdvancedCommand, "nimAdvancedCommand")
+  if advanced.len > 0:
+    args.add advanced
   else:
     args.add "c" # Default to compile command
 
   args.add "-r"
-
-  if settings.nimOptions.isSome:
-    args.add settings.nimOptions.get
-
+  args.add ?optionArgs(settings.nimOptions, "NimOptions")
   args.add path
 
-  return BackgroundProcessCommand(cmd: Cmd, args: args)
+  Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
+    cmd: Cmd, args: args
+  )
 
 proc clangQuickRunCommand(
     path, program: string, settings: QuickRunConfig
@@ -172,27 +187,21 @@ proc cppQuickRunCommand(
 
 proc shQuickRunCommand(
     path: string, settings: QuickRunConfig
-): BackgroundProcessCommand =
-  var args: seq[string]
-
-  if settings.shOptions.isSome:
-    args.add settings.shOptions.get
-
+): Result[BackgroundProcessCommand, string] =
+  var args = ?optionArgs(settings.shOptions, "shOptions")
   args.add path
-
-  BackgroundProcessCommand(cmd: "/bin/sh", args: args)
+  Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
+    cmd: "/bin/sh", args: args
+  )
 
 proc bashQuickRunCommand(
     path: string, settings: QuickRunConfig
-): BackgroundProcessCommand =
-  var args: seq[string]
-
-  if settings.bashOptions.isSome:
-    args.add settings.bashOptions.get
-
+): Result[BackgroundProcessCommand, string] =
+  var args = ?optionArgs(settings.bashOptions, "bashOptions")
   args.add path
-
-  BackgroundProcessCommand(cmd: "/bin/bash", args: args)
+  Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
+    cmd: "/bin/bash", args: args
+  )
 
 proc pythonQuickRunCommand(
     path: string, settings: QuickRunConfig
@@ -227,26 +236,28 @@ proc buildsProgram(lang: SourceLanguage): bool =
 proc programPath(workDir, path: string): string =
   workDir / path.splitFile.name
 
-proc quickRunCommand(
+proc builtinQuickRunCommand(
     path: string,
     lang: SourceLanguage,
     buffer: TextBuffer,
     settings: QuickRunConfig,
     workDir: string,
 ): Result[BackgroundProcessCommand, string] =
+  ## The command QuickRun has for `lang` when no entry matches. It runs in
+  ## moe's cwd.
   var command: BackgroundProcessCommand
   case lang
   of SourceLanguage.langNim:
-    command = nimQuickRunCommand(path, settings)
+    command = ?nimQuickRunCommand(path, settings)
   of SourceLanguage.langC:
     command = clangQuickRunCommand(path, programPath(workDir, path), settings)
   of SourceLanguage.langCpp:
     command = cppQuickRunCommand(path, programPath(workDir, path), settings)
   of SourceLanguage.langShell:
     if buffer.isSh:
-      command = shQuickRunCommand(path, settings)
+      command = ?shQuickRunCommand(path, settings)
     else:
-      command = bashQuickRunCommand(path, settings)
+      command = ?bashQuickRunCommand(path, settings)
   of SourceLanguage.langPython:
     command = pythonQuickRunCommand(path, settings)
   of SourceLanguage.langRust:
@@ -323,10 +334,42 @@ proc removeQuickRunWorkDir*(workDir: string) =
   except OSError:
     discard
 
+proc quickRunEntryFor*(
+    entries: openArray[QuickRunEntry], path: string, language: SourceLanguage
+): Option[QuickRunEntry] =
+  ## The first entry that applies to the file at absolute `path`, in config
+  ## order. A buffer with no file name has an empty `path`, which no `filter`
+  ## matches.
+  for entry in entries:
+    if entry.matchesFile(path, language):
+      return some(entry)
+  none(QuickRunEntry)
+
+proc builtinTempExtension(buffer: TextBuffer): Result[string, string] =
+  if buffer.language == SourceLanguage.langShell and buffer.isSh:
+    Result[string, string].ok "sh"
+  else:
+    buffer.language.languageExtension
+
+proc entryTempName(buffer: TextBuffer, path: string): string =
+  ## The name a matched entry's temp copy takes: the buffer's file name, as the
+  ## command may go by it (`${basename}`, a compiler wanting the module name).
+  ## A buffer with no file name gets `quickruntemp`, with the built-in
+  ## extension when its file type has one.
+  let name = path.extractFilename
+  if name notin ["", ".", ".."]:
+    return name
+  let ext = builtinTempExtension(buffer)
+  if ext.isOk:
+    "quickruntemp." & ext.get
+  else:
+    "quickruntemp"
+
 proc prepareQuickRun*(
     buffer: TextBuffer, settings: EditorConfig, save: QuickRunSave
 ): Result[QuickRunPrepareResult, string] =
-  ## Assemble the run command and stage its input.
+  ## Assemble the run command, the first matching `[[QuickRun.entries]]` or
+  ## else the built-in one, and stage its input.
   ## The buffer's file is written only once the command is built, and a
   ## failure removes the work dir, so failure leaves nothing behind.
   ## The buffer's own file is written by `save`; a temp copy is written
@@ -340,17 +383,27 @@ proc prepareQuickRun*(
     )
 
   let
-    useTempFile = buffer.filePath.isNone or not fileExists(buffer.filePath.get)
-    langExt =
-      if buffer.language == SourceLanguage.langShell and buffer.isSh:
-        Result[string, string].ok "sh"
-      else:
-        buffer.language.languageExtension
-  if useTempFile and langExt.isErr:
-    return Result[QuickRunPrepareResult, string].err langExt.error
+    onDisk = buffer.filePath.isSome and fileExists(buffer.filePath.get)
+    # A named buffer is saved to make its file, as `:w` would; only an unnamed
+    # one, or a new one QuickRun is not to save, runs from a copy.
+    useTempFile =
+      buffer.filePath.isNone or
+      (not onDisk and not settings.quickRun.saveBufferWhenQuickRun)
+    absPath = pathKey(buffer.filePath.get(""))
+    entry = settings.quickRun.entries.quickRunEntryFor(absPath, buffer.language)
+
+  var tempName = ""
+  if useTempFile:
+    if entry.isSome:
+      tempName = entryTempName(buffer, absPath)
+    else:
+      let ext = builtinTempExtension(buffer)
+      if ext.isErr:
+        return Result[QuickRunPrepareResult, string].err ext.error
+      tempName = "quickruntemp." & ext.get
 
   var workDir = ""
-  if useTempFile or buffer.language.buildsProgram:
+  if useTempFile or (entry.isNone and buffer.language.buildsProgram):
     let created = createWorkDir()
     if created.isErr:
       return Result[QuickRunPrepareResult, string].err fmt"Failed to create a directory for QuickRun: {created.error}"
@@ -363,12 +416,27 @@ proc prepareQuickRun*(
 
   let path =
     if useTempFile:
-      workDir / ("quickruntemp." & langExt.get)
+      workDir / tempName
     else:
       buffer.filePath.get
 
   let command =
-    quickRunCommand(path, buffer.language, buffer, settings.quickRun, workDir)
+    if entry.isSome:
+      # Expanded against the file that runs, absolute as hooks expand it. A
+      # copy's private directory is no place to run in, so it runs where the
+      # built-in commands do.
+      let
+        runPath = if useTempFile: path else: absPath
+        built = entry.get.toCommand(runPath, buffer.language, inMoeCwd = useTempFile)
+      if built.cmd.len == 0:
+        # The loader rejects an empty program word, but a placeholder there can
+        # expand to nothing (`${ext}` of a file with none).
+        Result[BackgroundProcessCommand, string].err "the entry names no program: " &
+          entry.get.command
+      else:
+        Result[BackgroundProcessCommand, string].ok built
+    else:
+      builtinQuickRunCommand(path, buffer.language, buffer, settings.quickRun, workDir)
   if command.isErr:
     return
       Result[QuickRunPrepareResult, string].err fmt"QuickRun failed: {command.error}"

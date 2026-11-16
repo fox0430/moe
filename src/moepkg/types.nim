@@ -49,6 +49,7 @@ import
   types/recent_file_mode_types,
   types/git_cache_types,
   types/key_combo_types,
+  types/background_process_types,
   config
 
 when not defined(moe.embedded):
@@ -1037,7 +1038,7 @@ type
       # and mode.
       automatic: bool
   QuickRunInfo* =
-    tuple[cmd: string, args: seq[string], filePath: string, workDir: string]
+    tuple[command: BackgroundProcessCommand, filePath: string, workDir: string]
   SyntaxCheckInfo* =
     tuple[path: string, language: int, buffer: BufferId, awaited: int, text: string]
     ## `buffer` checked (0 for none), `awaited` its report id, `text` the saved

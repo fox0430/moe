@@ -1427,9 +1427,7 @@ proc runQuickRunJob(
   {.cast(gcsafe).}:
     try:
       let prepared = QuickRunPrepareResult(
-        command: BackgroundProcessCommand(cmd: info.cmd, args: info.args),
-        filePath: info.filePath,
-        workDir: info.workDir,
+        command: info.command, filePath: info.filePath, workDir: info.workDir
       )
       let quickRunResult = startBackgroundQuickRun(prepared)
       if quickRunResult.isErr:

@@ -167,7 +167,6 @@ proc newEditorConfig*(): EditorConfig =
     ),
     quickRun: QuickRunConfig(
       saveBufferWhenQuickRun: true,
-      command: none(string),
       timeout: 30,
       nimAdvancedCommand: none(string),
       clangOptions: none(string),

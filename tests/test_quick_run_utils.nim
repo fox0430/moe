@@ -238,28 +238,28 @@ suite "QuickRunUtils - nimQuickRunCommand":
   test "Basic nim command":
     let settings =
       QuickRunConfig(nimAdvancedCommand: none(string), nimOptions: none(string))
-    let cmd = nimQuickRunCommand("/path/to/file.nim", settings)
+    let cmd = nimQuickRunCommand("/path/to/file.nim", settings).get
     check cmd.cmd == "nim"
     check cmd.args == @["c", "-r", "/path/to/file.nim"]
 
   test "Nim command with advanced command":
     let settings =
       QuickRunConfig(nimAdvancedCommand: some("js"), nimOptions: none(string))
-    let cmd = nimQuickRunCommand("/path/to/file.nim", settings)
+    let cmd = nimQuickRunCommand("/path/to/file.nim", settings).get
     check cmd.cmd == "nim"
     check cmd.args == @["js", "-r", "/path/to/file.nim"]
 
   test "Nim command with options":
     let settings =
       QuickRunConfig(nimAdvancedCommand: none(string), nimOptions: some("-d:release"))
-    let cmd = nimQuickRunCommand("/path/to/file.nim", settings)
+    let cmd = nimQuickRunCommand("/path/to/file.nim", settings).get
     check cmd.cmd == "nim"
     check cmd.args == @["c", "-r", "-d:release", "/path/to/file.nim"]
 
   test "Nim command with advanced command and options":
     let settings =
       QuickRunConfig(nimAdvancedCommand: some("cpp"), nimOptions: some("-d:danger"))
-    let cmd = nimQuickRunCommand("/path/to/file.nim", settings)
+    let cmd = nimQuickRunCommand("/path/to/file.nim", settings).get
     check cmd.cmd == "nim"
     check cmd.args == @["cpp", "-r", "-d:danger", "/path/to/file.nim"]
 
@@ -296,26 +296,26 @@ suite "QuickRunUtils - cppQuickRunCommand":
 suite "QuickRunUtils - shQuickRunCommand":
   test "Basic sh command":
     let settings = QuickRunConfig(shOptions: none(string))
-    let cmd = shQuickRunCommand("/path/to/script.sh", settings)
+    let cmd = shQuickRunCommand("/path/to/script.sh", settings).get
     check cmd.cmd == "/bin/sh"
     check cmd.args == @["/path/to/script.sh"]
 
   test "sh command with options":
     let settings = QuickRunConfig(shOptions: some("-x"))
-    let cmd = shQuickRunCommand("/path/to/script.sh", settings)
+    let cmd = shQuickRunCommand("/path/to/script.sh", settings).get
     check cmd.cmd == "/bin/sh"
     check cmd.args == @["-x", "/path/to/script.sh"]
 
 suite "QuickRunUtils - bashQuickRunCommand":
   test "Basic bash command":
     let settings = QuickRunConfig(bashOptions: none(string))
-    let cmd = bashQuickRunCommand("/path/to/script.sh", settings)
+    let cmd = bashQuickRunCommand("/path/to/script.sh", settings).get
     check cmd.cmd == "/bin/bash"
     check cmd.args == @["/path/to/script.sh"]
 
   test "bash command with options":
     let settings = QuickRunConfig(bashOptions: some("-x"))
-    let cmd = bashQuickRunCommand("/path/to/script.sh", settings)
+    let cmd = bashQuickRunCommand("/path/to/script.sh", settings).get
     check cmd.cmd == "/bin/bash"
     check cmd.args == @["-x", "/path/to/script.sh"]
 
@@ -374,13 +374,13 @@ suite "QuickRunUtils - command injection (H11 regression)":
     check "$(id)" notin
       cmd.args[1].replace(quoteShell(malicious), "").replace(quoteShell(program), "")
 
-suite "QuickRunUtils - quickRunCommand":
+suite "QuickRunUtils - builtinQuickRunCommand":
   test "Nim language":
     var buffer = newTextBuffer("echo \"hello\"")
     buffer.language = SourceLanguage.langNim
     let settings =
       QuickRunConfig(nimAdvancedCommand: none(string), nimOptions: none(string))
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/file.nim", SourceLanguage.langNim, buffer, settings, "/work"
     )
     check result.isOk
@@ -390,7 +390,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#include <stdio.h>\nint main() { return 0; }")
     buffer.language = SourceLanguage.langC
     let settings = QuickRunConfig(clangOptions: none(string))
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/file.c", SourceLanguage.langC, buffer, settings, "/work"
     )
     check result.isOk
@@ -401,7 +401,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#include <iostream>\nint main() { return 0; }")
     buffer.language = SourceLanguage.langCpp
     let settings = QuickRunConfig(cppOptions: none(string))
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/file.cpp", SourceLanguage.langCpp, buffer, settings, "/work"
     )
     check result.isOk
@@ -412,7 +412,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("fn main() {}")
     buffer.language = SourceLanguage.langRust
     let settings = QuickRunConfig()
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/file.rs", SourceLanguage.langRust, buffer, settings, "/work"
     )
     check result.isOk
@@ -423,7 +423,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("print('hello')")
     buffer.language = SourceLanguage.langPython
     let settings = QuickRunConfig()
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/script.py", SourceLanguage.langPython, buffer, settings, "/work"
     )
     check result.isOk
@@ -433,7 +433,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#!/bin/sh\necho hello")
     buffer.language = SourceLanguage.langShell
     let settings = QuickRunConfig(shOptions: none(string), bashOptions: none(string))
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/script.sh", SourceLanguage.langShell, buffer, settings, "/work"
     )
     check result.isOk
@@ -443,7 +443,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#!/bin/bash\necho hello")
     buffer.language = SourceLanguage.langShell
     let settings = QuickRunConfig(shOptions: none(string), bashOptions: none(string))
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/script.sh", SourceLanguage.langShell, buffer, settings, "/work"
     )
     check result.isOk
@@ -453,7 +453,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("<html></html>")
     buffer.language = SourceLanguage.langHtml
     let settings = QuickRunConfig()
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/file.html", SourceLanguage.langHtml, buffer, settings, "/work"
     )
     check result.isErr
@@ -463,7 +463,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#!/usr/bin/env python3\nprint('x')")
     buffer.language = SourceLanguage.langNone
     let settings = QuickRunConfig()
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/script", SourceLanguage.langNone, buffer, settings, "/work"
     )
     check result.isOk
@@ -474,7 +474,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("#!/usr/bin/perl -w\nprint \"x\\n\";")
     buffer.language = SourceLanguage.langNone
     let settings = QuickRunConfig()
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/script.pl", SourceLanguage.langNone, buffer, settings, "/work"
     )
     check result.isOk
@@ -485,7 +485,7 @@ suite "QuickRunUtils - quickRunCommand":
     var buffer = newTextBuffer("just text")
     buffer.language = SourceLanguage.langNone
     let settings = QuickRunConfig()
-    let result = quickRunCommand(
+    let result = builtinQuickRunCommand(
       "/path/to/file", SourceLanguage.langNone, buffer, settings, "/work"
     )
     check result.isErr
@@ -768,16 +768,27 @@ suite "QuickRunUtils - prepareQuickRun":
     check readFile(path) == "<html>original</html>"
     check buffer.isModified
 
-  test "Prepare QuickRun with nonexistent file path uses temp file":
+  test "A new file in a directory that does not exist fails to save, as :w":
     var buffer = newTextBuffer("echo \"hello\"", some("/nonexistent/path/file.nim"))
     buffer.language = SourceLanguage.langNim
 
     let config = newEditorConfig()
     let result = prepareQuickRun(buffer, config)
+    check result.isErr
+    check "Failed to save" in result.error
+
+  test "A new file QuickRun is not to save runs from a copy":
+    var buffer = newTextBuffer("echo \"hello\"", some("/nonexistent/path/file.nim"))
+    buffer.language = SourceLanguage.langNim
+
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = false
+    let result = prepareQuickRun(buffer, config)
     require result.isOk
     defer:
       removeQuickRunWorkDir(result.get.workDir)
     check result.get.filePath == result.get.workDir / "quickruntemp.nim"
+    check not fileExists("/nonexistent/path/file.nim")
 
   test "Prepare QuickRun for unsupported language with no filePath":
     var buffer = newTextBuffer("unsupported content")
@@ -805,6 +816,309 @@ suite "QuickRunUtils - prepareQuickRun":
       check result.get.filePath == result.get.workDir / name
       check fileExists(result.get.filePath)
       removeQuickRunWorkDir(result.get.workDir)
+
+suite "QuickRunUtils - option keys are split into arguments":
+  # Each used to reach the program as one argument, so two options failed.
+  test "NimOptions with two options":
+    let settings = QuickRunConfig(nimOptions: some("-d:release --opt:speed"))
+    let cmd = nimQuickRunCommand("/path/to/file.nim", settings).get
+    check cmd.args == @["c", "-r", "-d:release", "--opt:speed", "/path/to/file.nim"]
+
+  test "A quoted option stays one argument":
+    let settings = QuickRunConfig(nimOptions: some("\"-d:msg=a b\""))
+    let cmd = nimQuickRunCommand("/path/to/file.nim", settings).get
+    check cmd.args == @["c", "-r", "-d:msg=a b", "/path/to/file.nim"]
+
+  test "nimAdvancedCommand with an option of its own":
+    let settings = QuickRunConfig(nimAdvancedCommand: some("js -d:nodejs"))
+    let cmd = nimQuickRunCommand("/path/to/file.nim", settings).get
+    check cmd.args == @["js", "-d:nodejs", "-r", "/path/to/file.nim"]
+
+  test "A blank nimAdvancedCommand falls back to c":
+    let settings = QuickRunConfig(nimAdvancedCommand: some("  "))
+    let cmd = nimQuickRunCommand("/path/to/file.nim", settings).get
+    check cmd.args == @["c", "-r", "/path/to/file.nim"]
+
+  test "shOptions and bashOptions with two options":
+    let settings = QuickRunConfig(shOptions: some("-e -x"), bashOptions: some("-e -x"))
+    check shQuickRunCommand("/s.sh", settings).get.args == @["-e", "-x", "/s.sh"]
+    check bashQuickRunCommand("/s.sh", settings).get.args == @["-e", "-x", "/s.sh"]
+
+  test "A quoted empty first argument is kept, as anywhere else":
+    let settings = QuickRunConfig(bashOptions: some("'' -x"))
+    check bashQuickRunCommand("/s.sh", settings).get.args == @["", "-x", "/s.sh"]
+
+  test "A quote left open is an error naming the key":
+    let settings = QuickRunConfig(nimOptions: some("-d:'x"))
+    let cmd = nimQuickRunCommand("/path/to/file.nim", settings)
+    check cmd.isErr
+    check "NimOptions" in cmd.error
+
+suite "QuickRunUtils - quickRunEntryFor":
+  test "The first matching entry wins, in config order":
+    let entries = @[
+      QuickRunEntry(filetype: @["python"], command: "uv run ${file}"),
+      QuickRunEntry(filetype: @["nim"], command: "nimbang ${file}"),
+      QuickRunEntry(filetype: @["nim"], command: "nim e ${file}"),
+    ]
+    let entry = entries.quickRunEntryFor("/src/a.nim", SourceLanguage.langNim)
+    require entry.isSome
+    check entry.get.command == "nimbang ${file}"
+
+  test "No matching entry":
+    let entries = @[QuickRunEntry(filetype: @["python"], command: "uv run ${file}")]
+    check entries.quickRunEntryFor("/src/a.nim", SourceLanguage.langNim).isNone
+
+  test "filter matches the path":
+    let entries =
+      @[QuickRunEntry(filter: "/scratch/.*\\.py$", command: "uv run ${file}")]
+    check entries.quickRunEntryFor("/scratch/a.py", SourceLanguage.langPython).isSome
+    check entries.quickRunEntryFor("/src/a.py", SourceLanguage.langPython).isNone
+
+  test "A buffer with no file name matches no filter, not even one matching anything":
+    let entries = @[QuickRunEntry(filter: ".*", command: "cat ${file}")]
+    check entries.quickRunEntryFor("", SourceLanguage.langPython).isNone
+
+  test "An entry with neither filetype nor filter matches every buffer":
+    let entries = @[QuickRunEntry(command: "make run")]
+    check entries.quickRunEntryFor("/src/a.nim", SourceLanguage.langNim).isSome
+    check entries.quickRunEntryFor("", SourceLanguage.langNone).isSome
+
+suite "QuickRunUtils - prepareQuickRun with entries":
+  let dir = getTempDir() / "moe_test_quickrun_entries"
+
+  setup:
+    removeDir(dir)
+    createDir(dir)
+
+  teardown:
+    removeDir(dir)
+
+  proc fileBuffer(path, text: string, lang: SourceLanguage): TextBuffer =
+    writeFile(path, text)
+    result = newTextBuffer(text, some(path))
+    result.language = lang
+    # Stamped like a real load: the write gate refuses a file no one read.
+    result.noteFileStamp(path)
+
+  test "A matching entry replaces the built-in command":
+    let path = dir / "a.nim"
+    var buffer = fileBuffer(path, "echo 1", SourceLanguage.langNim)
+    var config = newEditorConfig()
+    config.quickRun.entries =
+      @[QuickRunEntry(filetype: @["nim"], command: "nimbang ${file}")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    check result.get.command.cmd == "nimbang"
+    check result.get.command.args == @[path]
+    # The file's directory, as hooks run in it.
+    check result.get.command.workingDir == dir
+    check result.get.workDir == ""
+
+  test "No matching entry keeps the built-in command and moe's cwd":
+    let path = dir / "a.nim"
+    var buffer = fileBuffer(path, "echo 1", SourceLanguage.langNim)
+    var config = newEditorConfig()
+    config.quickRun.entries =
+      @[QuickRunEntry(filetype: @["python"], command: "uv run ${file}")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    check result.get.command.cmd == "nim"
+    check result.get.command.workingDir == ""
+
+  test "A matched entry for C builds nothing, so it makes no work dir":
+    let path = dir / "a.c"
+    var buffer = fileBuffer(path, "int main() { return 0; }", SourceLanguage.langC)
+    var config = newEditorConfig()
+    config.quickRun.entries =
+      @[QuickRunEntry(filetype: @["c"], command: "tcc -run ${file}")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    check result.get.workDir == ""
+    check result.get.command.args == @["-run", path]
+
+  test "A relative buffer path still expands to an absolute ${file}":
+    let path = dir / "a.nim"
+    var buffer = fileBuffer(path, "echo 1", SourceLanguage.langNim)
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = false
+    config.quickRun.entries = @[QuickRunEntry(command: "nimbang ${file}")]
+
+    let saved = getCurrentDir()
+    setCurrentDir(dir)
+    defer:
+      setCurrentDir(saved)
+    buffer.filePath = some("a.nim")
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    check result.get.command.args == @[path]
+    check result.get.command.workingDir == dir
+
+  test "A relative workingDir is taken from the file's directory":
+    let path = dir / "a.nim"
+    var buffer = fileBuffer(path, "echo 1", SourceLanguage.langNim)
+    var config = newEditorConfig()
+    config.quickRun.entries = @[QuickRunEntry(command: "make run", workingDir: "..")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    check result.get.command.workingDir == dir.parentDir
+
+  test "An unsaved buffer runs the entry on its temp copy":
+    var buffer = newTextBuffer("print(1)")
+    buffer.language = SourceLanguage.langPython
+    var config = newEditorConfig()
+    config.quickRun.entries =
+      @[QuickRunEntry(filetype: @["python"], command: "uv run ${file}")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    defer:
+      removeQuickRunWorkDir(result.get.workDir)
+    let temp = result.get.workDir / "quickruntemp.py"
+    check result.get.filePath == temp
+    check result.get.command.args == @["run", temp]
+    # Not the private dir, which is removed after the run: moe's cwd, as the
+    # built-in commands.
+    check result.get.command.workingDir == ""
+    check fileExists(temp)
+
+  test "A copy's relative workingDir is taken from moe's cwd":
+    # Taken from the copy, `..` would be the base every run's dir sits in.
+    var buffer = newTextBuffer("print(1)")
+    buffer.language = SourceLanguage.langPython
+    var config = newEditorConfig()
+    config.quickRun.entries = @[QuickRunEntry(command: "make", workingDir: "..")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    defer:
+      removeQuickRunWorkDir(result.get.workDir)
+    check result.get.command.workingDir == ".."
+
+  test "A new file is saved and runs from where it belongs":
+    # Not from a copy, so `..` reaches the project and imports find their files.
+    let path = dir / "src" / "new.py"
+    createDir(dir / "src")
+    var buffer = newTextBuffer("print(1)", some(path))
+    buffer.language = SourceLanguage.langPython
+    var config = newEditorConfig()
+    config.quickRun.entries =
+      @[QuickRunEntry(command: "python ${file}", workingDir: "..")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    check result.get.workDir == ""
+    check result.get.filePath == path
+    check readFile(path).strip == "print(1)"
+    check result.get.command.args == @[path]
+    check result.get.command.workingDir == dir
+
+  test "A new file's temp copy takes its name":
+    # javac wants the public class's name, and ${basename} should be the file's.
+    var buffer = newTextBuffer("public class A {}", some(dir / "A.java"))
+    buffer.language = SourceLanguage.langJava
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = false
+    config.quickRun.entries =
+      @[QuickRunEntry(filetype: @["java"], command: "javac ${file} -d ${basename}")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    defer:
+      removeQuickRunWorkDir(result.get.workDir)
+    check result.get.filePath == result.get.workDir / "A.java"
+    check result.get.command.args == @[result.get.filePath, "-d", "A"]
+    check fileExists(result.get.filePath)
+
+  test "A new file with no extension keeps its name, not the built-in one":
+    var buffer = newTextBuffer("echo hello", some(dir / "newscript"))
+    buffer.language = SourceLanguage.langShell
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = false
+    config.quickRun.entries =
+      @[QuickRunEntry(filetype: @["shell"], command: "bash ${file}")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    defer:
+      removeQuickRunWorkDir(result.get.workDir)
+    check result.get.filePath == result.get.workDir / "newscript"
+
+  test "An unnamed buffer of a type with no built-in command runs from a copy":
+    # The built-in commands have no extension for Java, so the copy has none.
+    var buffer = newTextBuffer("class A {}")
+    buffer.language = SourceLanguage.langJava
+    var config = newEditorConfig()
+    config.quickRun.entries =
+      @[QuickRunEntry(filetype: @["java"], command: "java ${file}")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    defer:
+      removeQuickRunWorkDir(result.get.workDir)
+    check result.get.filePath == result.get.workDir / "quickruntemp"
+    check fileExists(result.get.filePath)
+
+  test "A file the built-in commands cannot run runs through an entry":
+    let path = dir / "a.java"
+    var buffer = fileBuffer(path, "class A {}", SourceLanguage.langJava)
+    var config = newEditorConfig()
+    config.quickRun.entries =
+      @[QuickRunEntry(filetype: @["java"], command: "java ${file}")]
+
+    let result = prepareQuickRun(buffer, config)
+    require result.isOk
+    check result.get.command.cmd == "java"
+    check result.get.command.args == @[path]
+
+  test "An entry built in code with no program is an error, and leaves nothing":
+    var buffer = newTextBuffer("print(1)")
+    buffer.language = SourceLanguage.langPython
+    var config = newEditorConfig()
+    config.quickRun.entries = @[QuickRunEntry(command: "  ")]
+
+    let before = toSeq(walkDir(testCacheHome / "moe" / "quickrun")).len
+    let result = prepareQuickRun(buffer, config)
+    check result.isErr
+    check "names no program" in result.error
+    check toSeq(walkDir(testCacheHome / "moe" / "quickrun")).len == before
+
+  test "A program that expands to nothing is an error naming the command":
+    # The loader passes it: the word is there until ${ext} of a bare name empties it.
+    let path = dir / "script"
+    var buffer = fileBuffer(path, "print(1)", SourceLanguage.langPython)
+    var config = newEditorConfig()
+    config.quickRun.entries = @[QuickRunEntry(command: "${ext} run")]
+
+    let result = prepareQuickRun(buffer, config)
+    check result.isErr
+    check "names no program: ${ext} run" in result.error
+
+  test "The entry runs in its working directory":
+    let sub = dir / "sub"
+    createDir(sub)
+    let path = sub / "a.nim"
+    var buffer = fileBuffer(path, "echo 1", SourceLanguage.langNim)
+    var config = newEditorConfig()
+    config.quickRun.entries = @[QuickRunEntry(command: "pwd")]
+
+    proc runTest(prepared: QuickRunPrepareResult): Future[seq[string]] {.async.} =
+      let started = startBackgroundQuickRun(prepared)
+      if started.isErr:
+        return @[]
+      let output = await started.get.waitForResultAsync(30.seconds)
+      if output.isErr:
+        return @[]
+      return output.get
+
+    let prepared = prepareQuickRun(buffer, config)
+    require prepared.isOk
+    check waitFor(runTest(prepared.get)) == @[sub]
 
 suite "QuickRunUtils - startBackgroundQuickRun":
   test "Start QuickRun with echo command":

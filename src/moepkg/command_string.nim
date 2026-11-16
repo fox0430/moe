@@ -19,18 +19,17 @@
 
 ## Splitting a command line into an argv the process starter can use.
 ##
-## Used by build-on-save and `[Hook]`, which take a command as one string from
-## the config and must exec it without a shell.
+## Used by build-on-save, `[Hook]` and QuickRun, which take a command as one
+## string from the config and must exec it without a shell.
 
 import pkg/results
 
 type CommandArgv* = tuple[cmd: string, args: seq[string]]
 
-proc parseCommandString*(cmdStr: string): Result[CommandArgv, string] =
-  ## Parse a command string into a `Result` whose ok value is a CommandArgv
-  ## tuple, honoring POSIX-style single/double quotes and backslash escapes
-  ## so args containing whitespace survive as a single token.
-  ## E.g., `nim c "-d:foo bar" file.nim` -> (cmd: "nim", args: @["c", "-d:foo bar", "file.nim"])
+proc splitCommandLine*(cmdStr: string): Result[seq[string], string] =
+  ## Split a command line into its words, honoring POSIX-style single/double
+  ## quotes and backslash escapes so args containing whitespace survive as a
+  ## single word, and a quoted empty one (`''`) as an empty word.
   ## Returns err "unterminated quote" when a quote is left open.
   var
     tokens: seq[string] = @[]
@@ -79,13 +78,16 @@ proc parseCommandString*(cmdStr: string): Result[CommandArgv, string] =
         hasToken = true
     inc i
   if inSingle or inDouble:
-    return Result[CommandArgv, string].err "unterminated quote"
+    return Result[seq[string], string].err "unterminated quote"
   if hasToken:
     tokens.add current
+  Result[seq[string], string].ok tokens
 
+proc parseCommandString*(cmdStr: string): Result[CommandArgv, string] =
+  ## `splitCommandLine` with the first word as the program.
+  ## E.g., `nim c "-d:foo bar" file.nim` -> (cmd: "nim", args: @["c", "-d:foo bar", "file.nim"])
+  let tokens = ?splitCommandLine(cmdStr)
   if tokens.len == 0:
-    return Result[CommandArgv, string].ok (cmd: "", args: @[])
-  elif tokens.len == 1:
-    return Result[CommandArgv, string].ok (cmd: tokens[0], args: @[])
+    Result[CommandArgv, string].ok (cmd: "", args: @[])
   else:
-    return Result[CommandArgv, string].ok (cmd: tokens[0], args: tokens[1 .. ^1])
+    Result[CommandArgv, string].ok (cmd: tokens[0], args: tokens[1 .. ^1])

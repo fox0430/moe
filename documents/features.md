@@ -31,9 +31,9 @@ Currently QuickRun supports these languages by default and runs the following co
 - bash ```bash filename```
 - sh ```sh filename```
 
-A buffer with no file on disk runs from a copy. The copy and the C, C++ and Rust programs go in a private directory under `~/.cache/moe/quickrun` that is removed when the run ends, so QuickRun writes nothing to the current directory. The program still runs in the current directory.
+A buffer with a file name is saved first, which makes its file if it is new, unless `saveBufferWhenQuickRun` is off. A buffer with no file name, or a new one QuickRun is not to save, runs from a copy. The copy and the C, C++ and Rust programs go in a private directory under `~/.cache/moe/quickrun` that is removed when the run ends, so QuickRun writes nothing to the current directory. The program still runs in the current directory.
 
-You can overwrite the command to be executed in the setting. That way you can use other compilers and languages.
+To run files with a command of your own, such as another compiler or a language not listed above, add a `[[QuickRun.entries]]` table to the config. See [QuickRun table](configfile.md#quickrun-table).
 
 ## VSCode theme
 

@@ -1047,8 +1047,7 @@ proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
       kind: paoQuickRun,
       epoch: e.state.commandEpoch,
       quickRun: (
-        cmd: prepared.command.cmd,
-        args: prepared.command.args,
+        command: prepared.command,
         filePath: prepared.filePath,
         workDir: prepared.workDir,
       ),

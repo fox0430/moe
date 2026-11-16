@@ -1423,14 +1423,12 @@ suite "Config Validation - QuickRun section":
     let tomlStr = """
 [QuickRun]
 saveBufferWhenQuickRun = true
-command = "make run"
 timeout = 60
 nimAdvancedCommand = "c"
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
     check config.quickRun.saveBufferWhenQuickRun == true
-    check config.quickRun.command == some("make run")
     check config.quickRun.timeout == 60
     check config.quickRun.nimAdvancedCommand == some("c")
 
@@ -1453,14 +1451,14 @@ timeout = -1
     check "QuickRun.timeout" in vr.errors[0].name
     check config.quickRun.timeout == 30 # Default value
 
-  test "Invalid command type is detected":
+  test "Invalid nimOptions type is detected":
     let tomlStr = """
 [QuickRun]
-command = 123
+NimOptions = 123
 """
     let (_, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
-    check "QuickRun.command" in vr.errors[0].name
+    check "QuickRun.NimOptions" in vr.errors[0].name
 
 suite "Config Validation - TabLine section":
   test "Valid TabLine config passes validation":

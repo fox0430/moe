@@ -26,21 +26,12 @@ import std/strutils
 
 import pkg/[parsetoml, results]
 
-import ../[command_string, config, hook_ex_command, hooks]
+import ../[config, hook_ex_command, hooks]
 import ../syntax/tokenizer
 
-import base, save_base
+import base, file_command, save_base
 
 const HookSectionName* = "Hook"
-
-proc hasEntryErrors(vr: ValidationResult, label: string): bool =
-  ## Whether a value under `label` was rejected (unknown keys excluded),
-  ## so half-built entries are dropped.
-  for issue in vr.errors:
-    if issue.kind != sikUnknownKey and
-        (issue.name == label or issue.name.startsWith(label & ".")):
-      return true
-  false
 
 proc checkHookEntry*(
     t: TomlTableRef, entry: var HookEntry, label: string, vr: var ValidationResult
@@ -69,30 +60,10 @@ proc checkHookEntry*(
       label, "missing 'command' key",
       "table with 'command' (or BufWritePre 'exCommand')",
     )
-  elif entry.command.strip.len == 0 and t["command"].kind == TomlValueKind.String:
-    vr.addError(fullKey(label, "command"), "empty string", "non-empty command line")
   else:
-    let parsed = parseCommandString(entry.command)
-    if parsed.isErr:
-      # Otherwise the quote runs to the end of the line, and a placeholder meant
-      # as an argument to `sh -c` lands in its script.
-      vr.addError(
-        fullKey(label, "command"), entry.command, "command line with every quote closed"
-      )
-    elif entry.command.len > 0 and parsed.get.cmd.len == 0:
-      # Quoted-but-empty program (`'' fmt`); report at load, not at exec.
-      vr.addError(
-        fullKey(label, "command"), entry.command, "command line naming a program"
-      )
+    checkCommandLine(t, entry.command, label, vr)
 
-  for i, name in entry.filetype:
-    if not isValidFiletype(name):
-      vr.addError(label & ".filetype[" & $i & "]", name, "known file type")
-
-  # Compile once here, not per matched event.
-  let filterError = entry.compileFilter()
-  if filterError.len > 0:
-    vr.addError(fullKey(label, "filter"), entry.filter, "regex: " & filterError)
+  checkFileMatch(entry, label, vr)
 
   not vr.hasEntryErrors(label)
 
