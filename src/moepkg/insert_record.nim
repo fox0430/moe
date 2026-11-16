@@ -127,6 +127,7 @@ proc addTyped(record: var InsertRecord, typed: TypedInput) =
         removeAfter: last.removeAfter + typed.removeAfter,
         text: typed.text,
         cursorAt: typed.cursorAt,
+        foldJoin: typed.foldJoin,
       )
       return
   record.typed.add typed
@@ -240,6 +241,11 @@ proc noteKey*(
   elif moves or state.cursor != cursorBefore:
     state.noteMove()
 
-proc noteTypedText*(state: EditorState, text: string, at: BufferPosition) =
-  state.noteTyped([TypedInput(kind: tiText, text: text, cursorAt: text.charLen)], at)
+proc noteTypedText*(
+    state: EditorState, text: string, at: BufferPosition, foldJoin: FoldJoin
+) =
+  state.noteTyped(
+    [TypedInput(kind: tiText, text: text, cursorAt: text.charLen, foldJoin: foldJoin)],
+    at,
+  )
   state.settleTyping()

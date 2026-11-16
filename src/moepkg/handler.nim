@@ -344,7 +344,7 @@ proc handlePasteText(e: Editor, text: string): bool =
 
     e.state.noteOutsideChange()
     let pos = e.cursor
-    e.state.anchorEdits(activeBuffer)
+    e.state.anchorEdits(activeBuffer, fjPasted)
     let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
     if insertResult.isErr:
       activeBuffer.dropEditAnchor()
@@ -361,7 +361,7 @@ proc handlePasteText(e: Editor, text: string): bool =
     e.activeWindow.cursor = insertResult.get.cursor
     e.state.openFoldsOfEdits(activeBuffer)
     # Record it as typed, so `.` types the pasted text.
-    e.state.noteTypedText(pastedText, pos)
+    e.state.noteTypedText(pastedText, pos, fjPasted)
 
     if ownTransaction:
       let commitResult = activeBuffer.commitTransaction()
@@ -720,7 +720,8 @@ proc middleClickPaste(e: Editor, row, col: int) =
 
   e.state.noteOutsideChange()
   let pos = e.cursor
-  e.state.anchorEdits(activeBuffer)
+  let foldJoin = if enteringInsertFromNormal: fjNone else: fjTyped
+  e.state.anchorEdits(activeBuffer, foldJoin)
   let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
   if insertResult.isErr:
     activeBuffer.dropEditAnchor()
@@ -743,7 +744,7 @@ proc middleClickPaste(e: Editor, row, col: int) =
 
   e.activeWindow.cursor = insertResult.get.cursor
   e.state.openFoldsOfEdits(activeBuffer)
-  e.state.noteTypedText(pastedText, pos)
+  e.state.noteTypedText(pastedText, pos, foldJoin)
   # The click chose this window, so re-attach its viewport: a wheel-scrolled
   # split would otherwise keep the cursor off-screen after the insert.
   e.activeWindow.viewport.detachedFromCursor = false

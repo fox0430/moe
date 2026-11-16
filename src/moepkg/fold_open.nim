@@ -15,8 +15,8 @@ proc openFoldsAt(state: EditorState, buffer: TextBuffer, line: int) =
   if buffer.foldState.openFoldsInRange(line, line):
     state.activeWindow.noteFoldOpened()
 
-proc anchorEdits*(state: EditorState, buffer: TextBuffer) =
-  buffer.editAnchor = some(EditAnchor(line: state.cursor.line))
+proc anchorEdits*(state: EditorState, buffer: TextBuffer, foldJoin = fjNone) =
+  buffer.editAnchor = some(EditAnchor(line: state.cursor.line, foldJoin: foldJoin))
 
 proc dropEditAnchor*(buffer: TextBuffer) =
   buffer.editAnchor = none(EditAnchor)

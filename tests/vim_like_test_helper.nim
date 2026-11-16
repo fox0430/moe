@@ -89,3 +89,7 @@ proc keysOf*(spec: string): seq[KeyCombo] =
 proc lines*(e: Editor): seq[string] =
   for i in 0 ..< e.activeBuffer.len:
     result.add e.activeBuffer.getLine(i)
+
+proc foldRanges*(e: Editor): seq[(int, int)] =
+  for f in e.activeBuffer.foldState.folds:
+    result.add (f.startLine, f.endLine)

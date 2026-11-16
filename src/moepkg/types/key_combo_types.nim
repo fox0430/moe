@@ -20,6 +20,9 @@
 ## Key combinations and what Insert mode records of them, kept out of
 ## `key_bindings/registry` so `types` need not import the binding tables.
 
+import fold_join
+export fold_join
+
 type
   ## Key modifiers that can be combined
   KeyModifier* = enum
@@ -77,3 +80,4 @@ type
       removeAfter*: int # and after it
       text*: string
       cursorAt*: int # Characters into `text` the cursor ends up at
+      foldJoin*: FoldJoin
