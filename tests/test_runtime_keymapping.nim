@@ -1446,6 +1446,65 @@ suite "addRuntimeMappingExpanded - complex command targets":
     let m = registry.runtimeMappings[Insert][^1]
     check m.kind == rmkKeySequence
 
+suite "addRuntimeMappingExpanded - the :map commands read : command names as keys":
+  # Vim's `:map` takes its right-hand side as keys, so `:nnoremap Q w` moves by
+  # a word. The `[KeyMapping]` config keeps running `:w` for `"Q" = "w"`.
+  test "a : command name, alone or followed by more keys, is keys":
+    for rhs in ["w", "x", "q", "wq", "bd", "quit", "bdelete", "bnext", "bd w"]:
+      var registry = newKeyBindingRegistry()
+      registry.setupDefaultBindings()
+
+      let err = registry.addRuntimeMappingExpanded(
+        Normal, "Q", rhs, noremap = true, exNamesAsKeys = true
+      )
+
+      checkpoint(rhs)
+      check err == ""
+      let m = registry.runtimeMappings[Normal][^1]
+      check m.kind == rmkKeySequence
+      check m.targetKeys == parseKeyString(rhs)
+
+  test "moe's own command names stay commands":
+    # `saveall` runs `:wa` but is not a `:` command name itself.
+    for rhs in ["save", "saveall", "undo", "delete-char", "mode_switch insert"]:
+      var registry = newKeyBindingRegistry()
+      registry.setupDefaultBindings()
+
+      let err = registry.addRuntimeMappingExpanded(
+        Normal, "Q", rhs, noremap = true, exNamesAsKeys = true
+      )
+
+      checkpoint(rhs)
+      check err == ""
+      check registry.runtimeMappings[Normal][^1].kind == rmkCommand
+
+  test "keys replace a command mapped to the same key before":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    check registry.addRuntimeMappingExpanded(
+      Normal, "Q", "delete-char", exNamesAsKeys = true
+    ) == ""
+
+    check registry.addRuntimeMappingExpanded(Normal, "Q", "w", exNamesAsKeys = true) ==
+      ""
+
+    check registry.runtimeMappings[Normal].len == 1
+    check registry.runtimeMappings[Normal][0].kind == rmkKeySequence
+    let q = registry.findSingleBinding(
+      Normal, KeyCombo(isSpecial: false, char: "Q", modifiers: {})
+    )
+    check q.isNone or q.get.name != "delete-char"
+
+  test "the [KeyMapping] config still runs the : command":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check registry.addRuntimeMappingExpanded(Normal, "Q", "w") == ""
+
+    let m = registry.runtimeMappings[Normal][^1]
+    check m.kind == rmkCommand
+    check m.commandName == "w"
+
 suite "Integration - mode_switch into Visual":
   test "starts the selection at the cursor, not at an old anchor":
     # The switch reaches the mode transition with nothing but a target mode.

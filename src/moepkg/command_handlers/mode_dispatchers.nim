@@ -341,7 +341,7 @@ proc handleCommandMode*(
     var modeNames: seq[string] = @[]
     for mode in r.mapAddModes:
       let err = manager.keyBindingRegistry.addRuntimeMappingExpanded(
-        mode, r.mapAddLhs, r.mapAddRhs, noremap = r.mapAddNoremap
+        mode, r.mapAddLhs, r.mapAddRhs, noremap = r.mapAddNoremap, exNamesAsKeys = true
       )
       if err.len > 0:
         if firstError.len == 0:

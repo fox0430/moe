@@ -217,6 +217,12 @@ proc resolveRuntimeCommandTarget(
       return attachArgs(registry.commandRegistry[tokens[0]], tokens[1 ..^ 1])
     return (none(Command), "")
 
+proc namesExCommand(registry: KeyBindingRegistry, name: string): bool =
+  ## True if `name` maps to the `:` command of the same name (`w`, `bd`,
+  ## `quit`, ...), where Vim's `:map` would read the name as keys.
+  name in registry.commandRegistry and
+    registry.commandRegistry[name].commandId == ExecCmdlinePrefix & name
+
 proc addRuntimeMappingExpanded*(
     registry: KeyBindingRegistry,
     mode: EditorMode,
@@ -225,6 +231,7 @@ proc addRuntimeMappingExpanded*(
     noremap = true,
     args: seq[string] = @[],
     forceKeySeq = false,
+    exNamesAsKeys = false,
 ): string =
   ## Runtime `:nmap` / `[KeyMapping]` entry point. Understands complex RHS forms
   ## (`mode_switch <mode>`, `overlay_switch <overlay>`, `<command> <args...>`) in
@@ -232,10 +239,17 @@ proc addRuntimeMappingExpanded*(
   ## addRuntimeMapping. `forceKeySeq` binds `rhsStr` as a verbatim key sequence
   ## (skipping command resolution); explicit `args` attaches arguments to a
   ## registered command without whitespace-splitting (so args may contain
-  ## spaces). Returns "" on success, an error message otherwise.
+  ## spaces). `exNamesAsKeys` (the `:map` commands) reads an RHS that starts
+  ## with a `:` command name as keys, as Vim does: `:nnoremap Q w` moves by a
+  ## word. Returns "" on success, an error message otherwise.
   if forceKeySeq:
     registry.addKeySequenceMapping(mode, lhsStr, rhsStr, noremap)
     return ""
+
+  if exNamesAsKeys:
+    let tokens = rhsStr.splitWhitespace()
+    if tokens.len > 0 and registry.namesExCommand(tokens[0]):
+      return registry.addRuntimeMapping(mode, lhsStr, rhsStr, noremap, asKeys = true)
 
   if args.len > 0:
     if not registry.commandRegistry.hasKey(rhsStr):

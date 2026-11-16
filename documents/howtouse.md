@@ -1050,6 +1050,14 @@ The `{rhs}` can take any of these forms:
 `mode_switch` and `overlay_switch` are reserved first words. The same RHS forms
 work in the `[KeyMapping]` config section.
 
+A right-hand side that starts with a Vim-style `:` command name (`w`, `x`, `q`,
+`bd`, `quit`, `bdelete`, ..., the
+[aliases](configfile.md#command-mode-command-aliases) except `saveall`) is a key
+sequence, as in Vim: `:nnoremap Q w` moves by a word. To run the `:` command,
+type it: `:nnoremap C-s :w Enter`. In the `[KeyMapping]` config section these
+names run the `:` command instead. moe's own command names such as `save` and
+`undo` stay commands.
+
 **Examples:**
 
 ```

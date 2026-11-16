@@ -244,10 +244,12 @@ proc addRuntimeMapping*(
     lhsStr: string,
     rhsStr: string,
     noremap = true,
+    asKeys = false,
 ): string =
   ## Add a runtime key mapping. Returns empty string on success, error message on failure.
   ## If RHS is a known command name, registers as key→command.
   ## Otherwise, parses RHS as key sequence and registers as key→key-sequence.
+  ## `asKeys` skips the command lookup and always takes RHS as keys.
   ## `noremap` defaults to true for backwards compatibility (direct callers,
   ## TOML, macros); only `:map`-family runtime commands pass false to opt into
   ## recursive expansion.
@@ -257,7 +259,7 @@ proc addRuntimeMapping*(
 
   # if/else (not early return) so the command branch can never fall through to
   # the key-sequence branch even if a trailing `return ""` is stripped.
-  if rhsStr in registry.commandRegistry:
+  if not asKeys and rhsStr in registry.commandRegistry:
     let builtinErr = insertBuiltinKeyError(mode, lhsKeys)
     if builtinErr.len > 0:
       return builtinErr
