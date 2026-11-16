@@ -25,7 +25,7 @@
 
 import std/[unittest, options, tables, os, osproc, times, posix]
 from std/strutils import
-  contains, continuesWith, endsWith, escape, join, repeat, split, strip
+  contains, continuesWith, count, endsWith, escape, join, repeat, split, strip
 
 import pkg/chronos
 import ../src/moepkg/celina_backend
@@ -34,6 +34,7 @@ import pkg/celina/core/mouse_logic
 import config_test_helper
 import ../src/moepkg/tab_line
 import visual_test_helper, clipboard_test_helper
+from vim_like_test_helper import foldRanges
 
 import
   ../src/moepkg/[
@@ -13450,3 +13451,52 @@ suite "Change directory command":
 
     e.press("Return")
     check getCurrentDir() == tempRoot / "sub"
+
+suite "A middle-click paste below a fold's last line":
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  for (mode, text, added, want) in [
+    (EditorMode.Normal, "p\nq", "one line", @[(1, 3)]),
+    (EditorMode.Normal, "p\nq\n", "two lines", @[(1, 3)]),
+    (EditorMode.Insert, "p\nq\n", "two lines", @[(1, 3)]),
+    (EditorMode.Insert, "p\nq", "one line", @[(1, 4)]),
+  ]:
+    test $mode & " mode, " & added & " added":
+      when defined(posix):
+        let fakeDir = installFakeClipboardTool(text)
+        defer:
+          removeFakeClipboardTool(fakeDir)
+        let e = createTestEditorForMiddleClick("l1\nl2\nl3\nl4\nl5\nl6")
+        e.config.clipboard.tool = cbtXclip
+        check e.activeBuffer.foldState.addFold(1, 3, collapsed = false)
+        e.state.mode = mode
+        e.windowManager.windows[0].cursor = BufferPosition(line: 3, column: 2)
+        e.middleClickInWindow()
+        check e.activeBuffer.getLine(3) == "l4p"
+        check e.foldRanges == want
+
+  for (enter, text, want) in [
+    ("a", "p\nq\nr", @[(1, 2), (6, 7)]),
+    ("a", "p\nq", @[(1, 3), (5, 7)]),
+    ("", "p\nq", @[(1, 2), (5, 6)]),
+  ]:
+    test "after \"" & enter & "\", " & $text.count('\n') &
+      " line breaks, repeated with .":
+      when defined(posix):
+        let fakeDir = installFakeClipboardTool(text)
+        defer:
+          removeFakeClipboardTool(fakeDir)
+        let e = createTestEditorForMiddleClick("l1\nl2\nl3\nl4\nl5\nl6")
+        e.motionController.bindToWindow(e.activeWindow)
+        e.config.clipboard.tool = cbtXclip
+        check e.activeBuffer.foldState.addFold(1, 2, collapsed = false)
+        check e.activeBuffer.foldState.addFold(4, 5, collapsed = false)
+        e.press("3", "G", "$")
+        if enter.len > 0:
+          e.press(enter)
+        e.middleClickInWindow()
+        e.press("Esc", "G", "$", ".")
+        check e.activeBuffer.len == 6 + 2 * text.count('\n')
+        check e.foldRanges == want

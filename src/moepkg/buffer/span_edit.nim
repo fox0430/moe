@@ -31,7 +31,7 @@ type
     raSplitStart
       ## A split at column 0: at `start`'s row for what follows the text down
       ## (folds, line markers), below it for Vim's marks, which open_line
-      ## leaves on the row it splits.
+      ## leaves on the row it splits, and for a fold a typed line break joins.
 
   SpanEdit* = object
     ## Text from `start` to `oldEnd` replaced by text from `start` to `newEnd`.
@@ -109,10 +109,15 @@ func rows*(edit: SpanEdit): Option[RowSpan] =
   ## Rows `edit` adds or drops; none when it moves no row.
   edit.rowsFrom(edit.start.line + ord(edit.rowsAt == raBelow))
 
+func markRows*(edit: SpanEdit): Option[RowSpan] =
+  ## The rows `edit` adds or drops, where Vim's marks take them: after the
+  ## rewritten ones.
+  edit.rowsFrom(edit.start.line + ord(edit.rowsAt != raStart))
+
 func rowMove*(edit: SpanEdit): Option[RowMove] =
   ## The rows `edit` moves, as Vim's mark_adjust takes them; none when it adds
-  ## or drops none. Rows come and go after the rewritten ones.
-  let rows = edit.rowsFrom(edit.start.line + ord(edit.rowsAt != raStart))
+  ## or drops none.
+  let rows = edit.markRows
   if rows.isNone:
     return none(RowMove)
   let

@@ -20,7 +20,7 @@
 ## The cursor in a closed fold stays on the line a command puts it on, as in
 ## Vim: only vertical moves and scrolls take it to the fold's first line.
 
-import std/[options, unittest]
+import std/[algorithm, options, unittest]
 
 import pkg/celina
 
@@ -357,3 +357,141 @@ suite "Relative line numbers with the cursor in a closed fold":
     check numberAt(1) == "  1"
     check numberAt(2) == "  1"
     check numberAt(3) == "  2"
+
+suite "Lines typed below a fold's last line go into the fold, as Vim's foldMarkAdjust":
+  # Typed in Vim 9.2 (`vim -u NONE`) on lines l1..l6 with `:2,4fold`.
+  const Six = @["l1", "l2", "l3", "l4", "l5", "l6"]
+
+  for (keys, want) in [
+    (":4<Enter>A<Enter>x<Esc>", @[(1, 4)]),
+    (":4<Enter>0i<Enter><Esc>", @[(1, 4)]),
+    (":4<Enter>A<Enter><Enter>x<Esc>", @[(1, 5)]),
+    (":4<Enter>$R<Enter><Esc>", @[(1, 4)]),
+    (":2<Enter>0i<Enter><Esc>", @[(1, 4)]),
+    (":1<Enter>A<Enter>x<Esc>", @[(2, 4)]),
+    (":5<Enter>0i<Enter><Esc>", @[(1, 3)]),
+    (":4<Enter>ox<Esc>", @[(1, 3)]),
+    (":5<Enter>Ox<Esc>", @[(1, 3)]),
+    (":4<Enter>A<C-o>ox<Esc>", @[(1, 3)]),
+    (":4<Enter>A<Enter>x<Esc>u", @[(1, 3)]),
+    (":4s/$/\\r/<Enter>", @[(1, 3)]),
+  ]:
+    test keys:
+      let e = newVimLikeEditor(Six, 0, 0)
+      check e.activeBuffer.foldState.addFold(1, 3, collapsed = false)
+      e.pressWithFrames(keys)
+      check e.foldRanges == want
+
+  for (keys, want) in [
+    (":4<Enter>A<Enter>x<Esc>", @[(2, 4), (1, 5)]),
+    (":5<Enter>A<Enter>x<Esc>", @[(2, 3), (1, 5)]),
+  ]:
+    test keys & " with folds 2-5 and 3-4":
+      let e = newVimLikeEditor(Six, 0, 0)
+      check e.activeBuffer.foldState.addFold(2, 3, collapsed = false)
+      check e.activeBuffer.foldState.addFold(1, 4, collapsed = false)
+      e.pressWithFrames(keys)
+      check e.foldRanges.sorted == want.sorted
+
+  test "A paste of two lines at a fold's last line goes into the fold":
+    let e = newVimLikeEditor(Six, 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = false)
+    e.pressWithFrames(":4<Enter>A")
+    check e.handlePasteText("p\nq\n")
+    check e.lines[3 .. 5] == @["l4p", "q", ""]
+    check e.foldRanges == @[(1, 5)]
+
+  for (keys, want) in [
+    ("GA<Enter>x<Esc>", @[(3, 6)]), ("GA<Enter><Enter>x<Esc>", @[(3, 7)])
+  ]:
+    test keys & " with a fold ending on the last line":
+      let e = newVimLikeEditor(Six, 0, 0)
+      check e.activeBuffer.foldState.addFold(3, 5, collapsed = false)
+      e.pressWithFrames(keys)
+      check e.foldRanges == want
+
+  for keys in ["3GA<Enter>p<Enter>q<Esc>8G.", "3GA<Enter>p<Enter>q<Esc>8GA<C-a><Esc>"]:
+    test keys & " with folds 2-3 and 5-6 types the lines again into the fold":
+      let e = newVimLikeEditor(Six, 0, 0)
+      check e.activeBuffer.foldState.addFold(1, 2, collapsed = false)
+      check e.activeBuffer.foldState.addFold(4, 5, collapsed = false)
+      e.pressWithFrames(keys)
+      check e.lines == @["l1", "l2", "l3", "p", "q", "l4", "l5", "l6", "p", "q"]
+      check e.foldRanges.sorted == @[(1, 4), (6, 9)]
+
+  for keys in ["8G.", "8GA<C-a><Esc>"]:
+    test "A paste repeated with " & keys & " types the lines again into the fold":
+      let e = newVimLikeEditor(Six, 0, 0)
+      check e.activeBuffer.foldState.addFold(1, 2, collapsed = false)
+      check e.activeBuffer.foldState.addFold(4, 5, collapsed = false)
+      e.pressWithFrames("3GA")
+      check e.handlePasteText("\np\nq")
+      e.pressWithFrames("<Esc>" & keys)
+      check e.lines == @["l1", "l2", "l3", "p", "q", "l4", "l5", "l6", "p", "q"]
+      check e.foldRanges.sorted == @[(1, 4), (6, 9)]
+
+  test "<Up> after <Enter> below a closed fold lands in the grown fold":
+    let e = newVimLikeEditor(Six[0 .. 4], 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = true)
+    e.pressWithFrames("GA<Up><Enter><Up><Up>")
+    check e.foldRanges == @[(1, 4)]
+    check e.cursorAt[0] == 2
+
+  test "Two lines added by one edit at a fold's last line stay out of the fold":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    check b.foldState.addFold(1, 3, collapsed = false)
+    e.pressWithFrames(":4<Enter>A")
+    e.state.anchorEdits(b, fjTyped)
+    check b.insertTextEnd(BufferPosition(line: 3, column: 2), "\np\nq").isOk
+    b.dropEditAnchor()
+    check e.foldRanges == @[(1, 3)]
+
+  test "A rolled back deletion below a fold's last line leaves the fold":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    check b.foldState.addFold(1, 3, collapsed = false)
+    check b.beginTransaction("t").isOk
+    e.state.anchorEdits(b, fjTyped)
+    check b.deleteLine(4).isOk
+    check e.foldRanges == @[(1, 3)]
+    check b.rollbackTransaction().isOk
+    b.dropEditAnchor()
+    check e.lines == Six
+    check e.foldRanges == @[(1, 3)]
+
+  test "A line an Insert key adds other than by a line break stays out of the fold":
+    # As an LSP completion's import: Vim joins only open_line's line.
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    check b.foldState.addFold(1, 3, collapsed = false)
+    e.pressWithFrames("GA")
+    e.state.anchorEdits(b)
+    check b.insertTextEnd(BufferPosition(line: 3, column: 2), "\nimport x").isOk
+    b.dropEditAnchor()
+    check e.lines[4] == "import x"
+    check e.foldRanges == @[(1, 3)]
+
+  for mode in [bsmNoIndent, bsmIndent]:
+    test "<Enter> splitting a bracket pair on a fold's last line, " & $mode:
+      let e = newVimLikeEditor(@["l1", "l2", "l3", "l4()", "l5"], 0, 0)
+      e.config.standard.bracketSplit = mode
+      check e.activeBuffer.foldState.addFold(1, 3, collapsed = false)
+      e.pressWithFrames(":4<Enter>$i<Enter>x<Esc>")
+      check e.lines.len == 7
+      check e.lines[6] == "l5"
+      check e.foldRanges == @[(1, 5)]
+
+  test "<Enter> in Replace on a fold's last line":
+    let e = newVimLikeEditor(Six, 0, 0)
+    check e.activeBuffer.foldState.addFold(1, 3, collapsed = false)
+    e.pressWithFrames(":4<Enter>$R<Enter>x<Esc>")
+    check e.foldRanges == @[(1, 4)]
+
+  test "joiningFolds gives back the join it found":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    e.state.anchorEdits(b, fjPasted)
+    check b.joiningFolds(fjTyped, b.editAnchor.get.foldJoin) == fjTyped
+    check b.editAnchor.get.foldJoin == fjPasted
+    b.dropEditAnchor()

@@ -25,13 +25,14 @@ import std/[algorithm, deques, hashes, options, os, tables, times, unicode]
 
 import
   ../[encoding, highlight, logger, path_key, primitives, setting_issue, unicode_utils]
-import ../types/highlight_types
+import ../types/[highlight_types, fold_join]
 when defined(moe.matter) or defined(features.moe.matter):
   import ../syntax/matter_backend
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 import cow_seq, seq_delta, span_edit
 
 export cow_seq, seq_delta, span_edit
+export fold_join
 
 export
   CharacterEncoding, encodingToString, detectCharacterEncoding, BufferPosition,
@@ -145,9 +146,11 @@ type
 
   EditAnchor* = object
     ## The line the cursor was on as a key began, moved with the text and -1
-    ## once deleted, and whether the key changed the buffer.
+    ## once deleted, whether the key changed the buffer, and which rows its
+    ## edits add below a fold's last line join the fold (`joiningFolds`).
     line*: int
     edited*: bool
+    foldJoin*: FoldJoin
 
   Fold* = object ## Represents a foldable region of text (vim-like manual folding)
     startLine*: int # Fold start line (0-based, inclusive)
@@ -801,13 +804,17 @@ proc initFoldState*(): FoldState =
   ## Initialize an empty fold state
   FoldState(folds: @[])
 
-proc adjustFoldsAfterInsert*(state: var FoldState, insertLine: int, lineCount: int) =
-  ## Adjust fold line numbers after lines are inserted
+proc adjustFoldsAfterInsert*(
+    state: var FoldState, insertLine: int, lineCount: int, joinAbove = false
+) =
+  ## Adjust fold line numbers after lines are inserted. With `joinAbove` the
+  ## lines also go into a fold ending just above them, as Vim's foldMarkAdjust
+  ## does in Insert.
   for i in 0 ..< state.folds.len:
     if state.folds[i].startLine >= insertLine:
       state.folds[i].startLine += lineCount
       state.folds[i].endLine += lineCount
-    elif state.folds[i].endLine >= insertLine:
+    elif state.folds[i].endLine >= insertLine - ord(joinAbove):
       # Fold spans the insertion point - extend it
       state.folds[i].endLine += lineCount
 
@@ -1904,8 +1911,29 @@ proc followAll(
   if efLineArrays in followers:
     b.shiftLineArrays(edits, lmkInserted)
 
+template joiningFolds*(b: TextBuffer, join: FoldJoin, body: untyped): untyped =
+  ## `body`, whose added rows below a fold's last line join it by `join`.
+  let anchored = b.editAnchor.isSome
+  let outer = if anchored: b.editAnchor.get.foldJoin else: fjNone
+  if anchored:
+    b.editAnchor.get.foldJoin = join
+  try:
+    body
+  finally:
+    if anchored and b.editAnchor.isSome:
+      b.editAnchor.get.foldJoin = outer
+
+func joins(j: FoldJoin, added: int): bool =
+  case j
+  of fjNone:
+    false
+  of fjTyped:
+    added == 1
+  of fjPasted:
+    true
+
 proc follow(
-    b: TextBuffer, edit: SpanEdit, followers: set[EditFollower]
+    b: TextBuffer, edit: SpanEdit, followers: set[EditFollower], forward = true
 ) {.raises: [].} =
   ## Move `followers` across `edit`.
   if efSemantic in followers:
@@ -1928,7 +1956,13 @@ proc follow(
         onInsert(rows.start, rows.after)
 
     if efFolds in followers:
-      shift(b.foldState.adjustFoldsAfterDelete, b.foldState.adjustFoldsAfterInsert)
+      if forward and b.editAnchor.isSome and rows.before == 0 and
+          b.editAnchor.get.foldJoin.joins(rows.after):
+        b.foldState.adjustFoldsAfterInsert(
+          edit.markRows.get.start, rows.after, joinAbove = true
+        )
+      else:
+        shift(b.foldState.adjustFoldsAfterDelete, b.foldState.adjustFoldsAfterInsert)
       if b.editAnchor.isSome and move.isSome and b.editAnchor.get.line >= 0:
         let line = b.editAnchor.get.line
         b.editAnchor.get.line =
@@ -1956,7 +1990,7 @@ proc followBack*(
 ) =
   ## Move `followers` back across `edits` being undone.
   for i in countdown(edits.high, 0):
-    b.follow(edits[i].reversed, followers)
+    b.follow(edits[i].reversed, followers, forward = false)
 
 proc followChange*(
     b: TextBuffer,

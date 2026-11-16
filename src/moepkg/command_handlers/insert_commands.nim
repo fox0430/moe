@@ -302,7 +302,8 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
       else:
         ""
     let textToInsert = "\n" & middleIndent & "\n" & closeIndent
-    let insertResult = buffer.insertText(pos, textToInsert)
+    let insertResult =
+      buffer.joiningFolds(fjPasted, buffer.insertText(pos, textToInsert))
     if insertResult.isErr:
       state.statusMessage = insertResult.error
       return
@@ -342,7 +343,8 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
     if cut.isErr:
       state.statusMessage = cut.error
       return
-  let insertResult = buffer.insertText(at, "\n" & newLineIndent)
+  let insertResult =
+    buffer.joiningFolds(fjTyped, buffer.insertText(at, "\n" & newLineIndent))
   if insertResult.isErr:
     state.statusMessage = insertResult.error
     return
