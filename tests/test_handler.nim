@@ -43,6 +43,7 @@ import
     editor_window_layout, config_mode, viewer_mode,
   ]
 import ../src/moepkg/handler {.all.}
+from ../src/moepkg/types/background_process_types import BackgroundProcessCommand
 from ../src/moepkg/command_completion import isActive, getSelectedCommand
 import ../src/moepkg/editor_build_jobs {.all.}
 import ../src/moepkg/job_lanes
@@ -107,6 +108,10 @@ proc frontendSuspendBodyRuns(
     withFrontendSuspend(frontend, editor):
       bodyRan = true
   return bodyRan
+
+proc echoCommand(arg: string): BackgroundProcessCommand =
+  ## A queued QuickRun's command.
+  BackgroundProcessCommand(cmd: "echo", args: @[arg])
 
 suite "screenToBufferPosition - Basic":
   test "Click at top-left corner of viewport":
@@ -1153,7 +1158,7 @@ suite "Pending async operations":
     )
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["hi"], filePath: "", workDir: ""),
+      quickRun: (command: echoCommand("hi"), filePath: "", workDir: ""),
     )
 
     waitFor editor.handlePendingAsyncOperations(
@@ -1211,7 +1216,7 @@ proc detachedPendingWriter(e: Editor): Future[void] {.async: (raises: [Exception
   # from handler.nim after handleEvent has already returned.
   e.state.pending.add PendingAsyncOp(
     kind: paoQuickRun,
-    quickRun: (cmd: "echo", args: @["detached"], filePath: "", workDir: ""),
+    quickRun: (command: echoCommand("detached"), filePath: "", workDir: ""),
   )
 
 proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception]).} =
@@ -1254,7 +1259,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["hi"], filePath: "", workDir: ""),
+      quickRun: (command: echoCommand("hi"), filePath: "", workDir: ""),
     )
 
     waitFor editor.handlePendingAsyncOperations(FrontendHooks())
@@ -1281,7 +1286,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["hi"], filePath: "", workDir: ""),
+      quickRun: (command: echoCommand("hi"), filePath: "", workDir: ""),
     )
     editor.state.pending.add PendingAsyncOp(
       kind: paoFilter,
@@ -1305,11 +1310,11 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["a"], filePath: "", workDir: ""),
+      quickRun: (command: echoCommand("a"), filePath: "", workDir: ""),
     )
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
-      quickRun: (cmd: "echo", args: @["b"], filePath: "", workDir: ""),
+      quickRun: (command: echoCommand("b"), filePath: "", workDir: ""),
     )
     check editor.state.pending.len == 2
 
@@ -1329,8 +1334,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
       kind: paoQuickRun,
       epoch: editor.state.commandEpoch,
       quickRun: (
-        cmd: "echo",
-        args: @["never run"],
+        command: echoCommand("never run"),
         filePath: workDir / "quickruntemp.py",
         workDir: workDir,
       ),

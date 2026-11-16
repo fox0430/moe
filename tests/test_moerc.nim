@@ -39,8 +39,9 @@ proc looksLikeKey(line: string): bool =
       return false
   true
 
-proc uncommentedHookSection(): string =
-  ## The `[Hook]` example as TOML the loader can read.
+proc uncommentedSection(name: string): string =
+  ## The `[name]` example, commented-out lines included, as TOML the loader
+  ## can read.
   ##
   ## The block ships commented out, so nothing else here checks that what it
   ## shows is a config moe would actually accept: the rules about which event
@@ -50,7 +51,7 @@ proc uncommentedHookSection(): string =
   ## Headers and `key = value` lines are taken and the prose between them is
   ## left behind. A sentence written to look like a key is the one thing this
   ## cannot tell apart, and then the load fails and says so.
-  var inHook = false
+  var inSection = false
   for line in readFile(ExampleMoerc).splitLines:
     let bare =
       if line.startsWith("# "):
@@ -59,11 +60,11 @@ proc uncommentedHookSection(): string =
         ""
       else:
         line
-    if bare.startsWith("[Hook") or bare.startsWith("[[Hook"):
-      inHook = true
-    elif inHook and bare.startsWith("["):
+    if bare.startsWith("[" & name) or bare.startsWith("[[" & name):
+      inSection = true
+    elif inSection and bare.startsWith("["):
       break
-    if not inHook:
+    if not inSection:
       continue
     if bare.startsWith("[") or bare.looksLikeKey:
       result.add bare & "\n"
@@ -96,7 +97,7 @@ suite "example/moerc.toml":
     check errors.len == 0
 
   test "The [Hook] example is a config the loader accepts":
-    let toml = uncommentedHookSection()
+    let toml = uncommentedSection("Hook")
     check "[Hook]" in toml
     check toml.count("[[Hook.entries]]") == 5
 
@@ -113,3 +114,20 @@ suite "example/moerc.toml":
     check vr.errors.len == 0
     # Every entry survived: a rejected one is dropped whole.
     check config.hooks.entries.len == 5
+
+  test "The [[QuickRun.entries]] example is a config the loader accepts":
+    let toml = uncommentedSection("QuickRun")
+    check toml.count("[[QuickRun.entries]]") == 1
+
+    let path = getTempDir() / "moe_test_moerc_quickrun_example.toml"
+    defer:
+      removeFile(path)
+    writeFile(path, toml)
+
+    let loadResult = loadConfigFromToml(path)
+    require loadResult.isOk
+    let (config, vr) = loadResult.get
+    for e in vr.errors:
+      echo "  Validation error: ", e.toMessage
+    check vr.errors.len == 0
+    check config.quickRun.entries.len == 1

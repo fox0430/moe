@@ -117,6 +117,7 @@ proc derivedSections(): seq[ConfigSchemaSection] =
   generateConfigSchema(result, EditorConfig)
   generateConfigSchema(result, DebugConfig)
   generateSectionGroupSchema(result, LspConfig)
+  generateSectionGroupSchema(result, QuickRunConfig)
   generateSectionGroupSchema(result, HookConfig)
 
 const DerivedSectionNames* = derivedSections().mapIt(it.name)

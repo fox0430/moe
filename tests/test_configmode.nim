@@ -2367,7 +2367,6 @@ suite "ConfigMode - descriptor completeness":
       ("AutoBackup", "dirToExclude"),
       ("BuildOnSave", "workspaceRoot"),
       ("BuildOnSave", "command"),
-      ("QuickRun", "command"),
       ("QuickRun", "nimAdvancedCommand"),
       ("QuickRun", "clangOptions"),
       ("QuickRun", "cppOptions"),

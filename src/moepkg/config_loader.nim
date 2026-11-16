@@ -24,13 +24,13 @@
 ## `generateSectionSerializers` from `config_macros`), which derive the section
 ## set from `EditorConfig`'s `{.cfgSection.}` fields so it cannot drift from the
 ## type. Sections without a `{.cfgSection.}` (Theme, Lsp, Debug, KeyMapping,
-## Hook, CommandAliases, ShellCommands, DisabledCommandAliases) and the nested
+## QuickRun, Hook, CommandAliases, ShellCommands, DisabledCommandAliases) and the nested
 ## `[StartUp.*]` tables are dispatched by hand here, using the helpers from
 ## `config_loader/<section>.nim`. `[Lsp]` is dispatched by hand because its
 ## parent table also holds the dynamic `[Lsp.<languageId>]` keyspace, but its
 ## body is derived from `LspConfig` all the same (see `config_loader/lsp`).
-## `[Hook]` is by hand because the dispatch macros do not model its
-## `[[Hook.entries]]` array of tables.
+## `[QuickRun]` and `[Hook]` are by hand because the dispatch macros do not
+## model their `[[QuickRun.entries]]` / `[[Hook.entries]]` arrays of tables.
 ## Those sub-modules are re-exported so external callers (`editor.nim`,
 ## `command_handlers/*`, etc.) can keep `import config_loader` unchanged.
 
@@ -55,10 +55,11 @@ import
     keymapping,
     user_commands,
     hooks as hooksLoader,
+    quick_run as quickRunLoader,
   ]
 export
   base, save_base, simple, debug, lsp, themeLoader, keymapping, user_commands,
-  hooksLoader
+  hooksLoader, quickRunLoader
 
 # Every top-level section name moerc.toml accepts. Each sub-module owns the
 # names it handles; "StartUp" is the parent table of `[StartUp.FileOpen]` and
@@ -67,7 +68,7 @@ const KnownTopLevelSections* =
   @SimpleSectionNames &
   @[
     DebugSectionName, LspSectionName, ThemeSectionName, KeyMappingSectionName,
-    HookSectionName, "StartUp",
+    QuickRunSectionName, HookSectionName, "StartUp",
   ] & @UserCommandsSectionNames
 
 # The sub-tables of [StartUp].
@@ -151,9 +152,9 @@ proc loadConfigFromToml*(
   # loading). This single macro call expands to the per-section
   # `if toml.hasKey(...)` dispatch derived from EditorConfig's fields, so it
   # stays in sync with the type automatically. Sections with no {.cfgSection.}
-  # (Theme, Lsp, Debug, KeyMapping, Hook, CommandAliases, ShellCommands,
-  # DisabledCommandAliases) and the nested [StartUp.*] sections are handled by
-  # hand below.
+  # (Theme, Lsp, Debug, KeyMapping, QuickRun, Hook, CommandAliases,
+  # ShellCommands, DisabledCommandAliases) and the nested [StartUp.*] sections
+  # are handled by hand below.
   generateSectionLoaders(toml, config, vr, EditorConfig)
   if mergeStatusLine:
     # A merged status line was the bottom windows' only one.
@@ -193,6 +194,9 @@ proc loadConfigFromToml*(
 
   if expectTable(toml, "ShellCommands", vr):
     loadShellCommandsConfig(toml["ShellCommands"].getTable(), config.shellCommands, vr)
+
+  if expectTable(toml, QuickRunSectionName, vr):
+    loadQuickRunConfig(toml[QuickRunSectionName].getTable(), config.quickRun, vr)
 
   if expectTable(toml, "Hook", vr):
     loadHookConfig(toml["Hook"].getTable(), config.hooks, vr)
@@ -249,6 +253,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   appendCommandAliasesToml(lines, config.commandAliases)
   appendShellCommandsToml(lines, config.shellCommands)
   appendDisabledCommandAliasesToml(lines, config.disabledCommandAliases)
+  appendQuickRunToml(lines, config.quickRun)
   appendHookToml(lines, config.hooks)
 
   # Auto-create missing theme files only inside the moe config dir (same rule

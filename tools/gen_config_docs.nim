@@ -30,7 +30,7 @@ proc formatDocDefault*(v: float): string =
 
 proc formatDocDefault*(v: string): string =
   ## Empty strings render as a blank cell (matching the convention used by
-  ## the hand-written tables, e.g. QuickRun.command). Non-empty values are
+  ## the hand-written tables). Non-empty values are
   ## wrapped in double quotes so they are visually distinguishable from
   ## numeric or enum defaults in the same column.
   if v.len == 0:
@@ -147,7 +147,6 @@ defineSections:
   ("StatusLine", cfg.statusLine, StatusLineConfig)
   ("Highlight", cfg.highlight, HighlightConfig)
   ("AutoBackup", cfg.autoBackup, AutoBackupConfig)
-  ("QuickRun", cfg.quickRun, QuickRunConfig)
   ("Notification", cfg.notification, NotificationConfig)
   ("Persist", cfg.persist, PersistConfig)
   ("Log", cfg.log, LogConfig)
@@ -246,6 +245,7 @@ macro defineGroupSections(ownerField: untyped, GroupT: typedesc): untyped =
       `caseStmt`
 
 defineGroupSections(lsp, LspConfig)
+defineGroupSections(quickRun, QuickRunConfig)
 defineGroupSections(hooks, HookConfig)
 
 proc replaceMarkers(text: string, name, body: string): string =
@@ -312,6 +312,8 @@ proc regenerateConfigDocs*(input: string): string =
     result = replaceMarkers(result, name, bodyFor(name, cfg))
   for name in LspSectionNames:
     result = replaceMarkers(result, name, lspBodyFor(name, cfg))
+  for name in QuickRunSectionNames:
+    result = replaceMarkers(result, name, quickRunBodyFor(name, cfg))
   for name in HookSectionNames:
     result = replaceMarkers(result, name, hookBodyFor(name, cfg))
   for name in ExtraSectionNames:
@@ -325,7 +327,8 @@ proc main() {.used.} =
   let original = readFile(DocsPath)
   let regenerated = regenerateConfigDocs(original)
   let totalSections =
-    SectionNames.len + LspSectionNames.len + HookSectionNames.len + ExtraSectionNames.len
+    SectionNames.len + LspSectionNames.len + QuickRunSectionNames.len +
+    HookSectionNames.len + ExtraSectionNames.len
   if regenerated != original:
     writeFile(DocsPath, regenerated)
     echo "regenerated ", totalSections, " section(s) in ", DocsPath

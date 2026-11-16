@@ -183,8 +183,6 @@ dirToExclude = ["/etc"]                # Directories to exclude
 
 saveBufferWhenQuickRun = true          # Save buffer before running
 
-# command = "nimble build"             # Custom command override
-
 # A program still running after this is killed (0 = wait forever)
 timeout = 30                           # Timeout in seconds
 
@@ -196,9 +194,19 @@ timeout = 30                           # Timeout in seconds
 
 # NimOptions = "--debugger:native"     # Nim compiler options
 
-# shOptions = "-c"                     # sh shell options
+# shOptions = "-e"                     # sh shell options
 
-# bashOptions = "-c"                   # bash shell options
+# bashOptions = "-e"                   # bash shell options
+
+# A command of your own for some files, in place of the built-in one. The first
+# entry that matches runs; placeholders and filetype/filter are those of the
+# hook entries below.
+#
+# [[QuickRun.entries]]
+# command     = "nimbang ${file}"  # Not run through a shell
+# filetype    = ["nim"]            # Default: every file type
+# filter      = "/scratch/"        # Regex over the path. Default: every path
+# workingDir  = ".."               # Relative to the file's directory. Default: that directory
 
 [Notification]
 

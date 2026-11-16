@@ -229,11 +229,57 @@ You can use the [example](../example/moerc.toml).
 
 ### QuickRun table
 
+QuickRun runs the current buffer with a command it picks from the buffer's
+file type: `nim c -r` for Nim, `gcc` for C, and so on (see
+[features](features.md#quickrun)). Each `[[QuickRun.entries]]` table names a
+command of your own, and the files it is for.
+
+```toml
+[QuickRun]
+saveBufferWhenQuickRun = true
+
+# Run Nim files as scripts.
+[[QuickRun.entries]]
+filetype = ["nim"]
+command = "nimbang ${file}"
+
+# Python files under a scratch directory, picked by path.
+[[QuickRun.entries]]
+filter = "/scratch/.*\\.py$"
+command = "uv run ${file}"
+```
+
+- The entries are tried in the order they are written, and the first that
+  matches runs. A buffer no entry matches runs the built-in command. An entry
+  with neither `filetype` nor `filter` matches every buffer, so put it last.
+- `filetype`, `filter`, the placeholders (`${file}`, `${dir}`, ...) and the
+  way `command` is split into arguments are those of
+  [`[[Hook.entries]]`](#hook-table). The command is not run through a shell.
+- `${file}` is the absolute path of the file that runs. A buffer with a file
+  name runs from that file, saved first and made if it is new, unless
+  `saveBufferWhenQuickRun` is off. A buffer with no file name, or a new one
+  QuickRun is not to save, runs from a copy in QuickRun's private directory,
+  which is then `${dir}`. The copy takes the buffer's file name, so
+  `${basename}` is the buffer's; with no file name it is `quickruntemp`, with
+  the built-in extension for its file type when there is one.
+- A buffer with no file name matches no entry with a `filter`.
+- The command runs in the file's directory unless `workingDir` says otherwise;
+  a relative `workingDir` is taken from the file's directory. One that runs
+  from a copy takes both from moe's current directory instead (the one `:cd`
+  sets), where the built-in commands run.
+- `timeout` and `saveBufferWhenQuickRun` apply to entries as to the built-in
+  commands. The other keys of `[QuickRun]` belong to the built-in commands
+  only. `nimAdvancedCommand`, `NimOptions`, `shOptions` and `bashOptions` are
+  split into arguments as `command` is, so `NimOptions = "-d:release
+  --opt:speed"` passes two options, and a quote left open in one is reported
+  at startup; `ClangOptions` and `CppOptions` go into the shell line that
+  compiles. A value that once went whole as one argument needs quotes now:
+  `NimOptions = "--passC:'-O2 -march=native'"`.
+
 <!-- AUTO-GEN:start QuickRun -->
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
 | saveBufferWhenQuickRun | bool | true | Save buffer when run QuickRun |
-| command | string (optional) | none | Commands to be executed by quick run |
 | timeout | integer | 30 | Command timeout (seconds, 0 = no timeout) |
 | nimAdvancedCommand | string (optional) | none | Nim compiler advanced args |
 | clangOptions | string (optional) | none | C lang compiler options. The default compiler is gcc |
@@ -242,6 +288,18 @@ You can use the [example](../example/moerc.toml).
 | shOptions | string (optional) | none | sh options |
 | bashOptions | string (optional) | none | bash options |
 <!-- AUTO-GEN:end QuickRun -->
+
+`command` is required; an entry without one is reported and dropped whole.
+Keys of a `[[QuickRun.entries]]` table:
+
+<!-- AUTO-GEN:start QuickRun.entries -->
+| Name | Type | Default Value | Description |
+|:---|:---|:---|:---|
+| command | string |  | Command line to run |
+| filetype | string array | [] | File types this applies to (default: every type) |
+| filter | string |  | Regex the file path must match (default: every path) |
+| workingDir | string |  | Directory to run the command in (default: the file's) |
+<!-- AUTO-GEN:end QuickRun.entries -->
 
 
 ### Notification table
