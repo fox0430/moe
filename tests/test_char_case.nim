@@ -50,3 +50,42 @@ suite "utfIsUpper":
     check Rune(0x3a3).utfIsUpper
     check not Rune(0xe9).utfIsUpper
     check not Rune(0x3042).utfIsUpper
+
+proc lower(c: int32): int32 =
+  Rune(c).utfToLower.int32
+
+proc upper(c: int32): int32 =
+  Rune(c).utfToUpper.int32
+
+suite "utfToLower and utfToUpper":
+  test "ASCII":
+    check lower(0x41) == 0x61
+    check upper(0x61) == 0x41
+    check upper(0x5b) == 0x5b
+
+  test "Beyond ASCII":
+    check upper(0x1c5) == 0x1c4 # Dz titlecase
+    check lower(0x1c5) == 0x1c6
+    check lower(0x212a) == 0x6b # Kelvin sign
+    check upper(0x3c2) == 0x3a3 # final sigma
+    check upper(0xb5) == 0x39c # micro sign
+    check upper(0x131) == 0x49 # dotless i
+    check lower(0x130) == 0x69 # dotted capital I
+    check upper(0xff46) == 0xff26
+    check upper(0x10428) == 0x10400
+
+  test "Characters with no simple mapping":
+    check upper(0xdf) == 0xdf # sharp s
+    check lower(0xfb03) == 0xfb03 and upper(0xfb03) == 0xfb03 # ffi ligature
+
+suite "utfIsLower":
+  test "ASCII":
+    check Rune('a').utfIsLower
+    check not Rune('A').utfIsLower
+    check not Rune('1').utfIsLower
+
+  test "Beyond ASCII":
+    check Rune(0xe9).utfIsLower
+    check Rune(0xdf).utfIsLower # though it has no upper case
+    check not Rune(0x1e9e).utfIsLower
+    check not Rune(0x3042).utfIsLower
