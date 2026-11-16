@@ -21,7 +21,7 @@
 ##
 ## This module handles commands specific to Normal mode.
 
-import std/[options, tables, strutils]
+import std/[options, tables]
 
 import pkg/results
 
@@ -70,7 +70,7 @@ type
     of nmrRepeatInsert:
       repeatTyped*: seq[TypedInput]
     of nmrExecCommand:
-      execCommandText*: string # Command text to execute (without leading ":")
+      execLine*: ExecLine
       execCommandCount*: int # Number of times to execute (default 1)
     of nmrJumpToBuffer:
       nmrJumpBufferId*: BufferId # Target BufferId
@@ -506,10 +506,9 @@ proc handleNormalModeKey*(
     # Command mode command alias bridge: `exec.cmdline.<alias>` runs
     # `:<alias>` via the full command-line parser, so safety checks
     # (modified-buffer guard etc.) fire.
-    if cmd.commandId.startsWith(ExecCmdlinePrefix):
-      let aliasText = cmd.commandId[ExecCmdlinePrefix.len ..^ 1]
+    if cmd.isExecCmdline:
       return NormalModeResult(
-        kind: nmrExecCommand, execCommandText: aliasText, execCommandCount: 1
+        kind: nmrExecCommand, execLine: cmd.execLine, execCommandCount: 1
       )
     # Trivial passthrough commands (window.*, file.*, buffer.*.tab) share
     # their commandId table with executeCommandDirect via command_passthrough.
@@ -717,7 +716,9 @@ proc handleNormalModeKey*(
         if state.input.commandState.history.len > 0:
           let lastCmd = state.input.commandState.history[0]
           return NormalModeResult(
-            kind: nmrExecCommand, execCommandText: lastCmd, execCommandCount: count
+            kind: nmrExecCommand,
+            execLine: ExecLine(text: lastCmd),
+            execCommandCount: count,
           )
         else:
           state.statusMessage = "No previous Command mode command"

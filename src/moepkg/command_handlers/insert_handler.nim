@@ -71,7 +71,7 @@ type
     of imrTypeAgain:
       thenLeave*: bool # Leave Insert after it, as Ctrl-@ does
     of imrExecCommand:
-      execCommandText*: string
+      execLine*: ExecLine
         ## Insert mode has no count prefix, so the dispatcher always
         ## forwards count = 1 to the command-line parser.
     of imrError:
@@ -1469,9 +1469,8 @@ proc handleInsertModeKey*(
       # (modified-buffer guard etc.) fire. Caller
       # (`mode_dispatchers.handleInsertMode`) is responsible for committing
       # the in-progress insert transaction before dispatching.
-      if cmd.commandId.startsWith(ExecCmdlinePrefix):
-        let aliasText = cmd.commandId[ExecCmdlinePrefix.len ..^ 1]
-        return InsertModeResult(kind: imrExecCommand, execCommandText: aliasText)
+      if cmd.isExecCmdline:
+        return InsertModeResult(kind: imrExecCommand, execLine: cmd.execLine)
       case cmd.commandId
       of "insert.backspace":
         return handler.handleBackspace(buffer, state)

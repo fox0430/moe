@@ -62,7 +62,9 @@ var frontLayerHook*: LayerHook = nil
   ## The layers in front of the mode handlers that run a key as it is: the
   ## command line, Search, Rename, Debug, a viewer's Ctrl-W and Recent File.
 
-proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome
+proc executeCommandOverlay*(
+  e: Editor, commandText: string, args: seq[string] = @[]
+): ReplayOutcome
 
 proc processResultEpilogue(
   e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
@@ -522,7 +524,7 @@ proc processReplayedResult*(
       return roAbort
     var outcome = roContinue
     for _ in 0 ..< r.execCommandCount:
-      outcome = e.executeCommandOverlay(":" & r.execCommandText)
+      outcome = e.executeCommandOverlay(":" & r.execLine.text, r.execLine.args)
       if outcome != roContinue:
         break
     return outcome
@@ -678,11 +680,11 @@ proc repeatInsert(e: Editor, r: HandlerResult): ReplayOutcome =
     e.state.editState.typing.repeating = wasRepeating
   if result == roContinue and r.repeatLeave and e.state.mode == EditorMode.Insert:
     result = processReplayedResult(e, e.handlerManager.leaveInsert(e), e.activeBuffer)
-  if result == roContinue and r.repeatThenExec.len > 0:
+  if result == roContinue and r.repeatThenExec.text.len > 0:
     result = processReplayedResult(
       e,
       HandlerResult(
-        kind: hrExecCommand, execCommandText: r.repeatThenExec, execCommandCount: 1
+        kind: hrExecCommand, execLine: r.repeatThenExec, execCommandCount: 1
       ),
       e.activeBuffer,
     )
@@ -740,16 +742,13 @@ proc replayRuntimeKeySequence(
       editor.state.insertResume = waiting
 
 proc runRuntimeCommand(
-    manager: HandlerManager,
-    editor: Editor,
-    commandName: string,
-    standsFor: seq[KeyCombo],
+    editor: Editor, mapping: RuntimeKeyMapping, standsFor: seq[KeyCombo]
 ): Option[ReplayOutcome] =
-  ## Run the command an `rmkCommand` mapping names, for the typed keys
-  ## `standsFor` of its left-hand side. `none` when it names none that can run
-  ## here, which runs nothing and records nothing.
+  ## Run the command an `rmkCommand` mapping holds, with the arguments it gives,
+  ## for the typed keys `standsFor` of its left-hand side. `none` when it holds
+  ## none that can run here, which runs nothing and records nothing.
   editor.recordingIfRan(standsFor):
-    let cmdResult = manager.executeCommandDirect(commandName)
+    let cmdResult = executeCommandDirect(mapping.command)
     if cmdResult.isSome:
       some(processReplayedResult(editor, cmdResult.get, editor.activeBuffer))
     else:
@@ -765,7 +764,7 @@ proc runMapping(
   ## command that cannot run here.
   case mapping.kind
   of rmkCommand:
-    manager.runRuntimeCommand(editor, mapping.commandName, lhsKeys.standsFor)
+    editor.runRuntimeCommand(mapping, lhsKeys.standsFor)
   of rmkKeySequence:
     some(editor.replayRuntimeKeySequence(mapping, lhsKeys.standsFor))
 
@@ -1030,10 +1029,14 @@ proc runKeyCombo*(
     runNestedKeyCombo(manager, e, KeyInput(combo: keyCombo, remap: remap, typed: false)),
   )
 
-proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
+proc executeCommandOverlay*(
+    e: Editor, commandText: string, args: seq[string] = @[]
+): ReplayOutcome =
   ## Full lifecycle of a Command-overlay Enter: pre-teardown, dispatch,
   ## side effects via processResult, and teardown driven by `r.group`. The
   ## teardown closes only the command line, not a prompt the command opened.
+  ## `args` go after the line's own arguments, each whole, as a mapping gives
+  ## them.
   ## The command line history does not get it: the open command line adds a
   ## typed line once it ran.
   ## `roAbort` when the command fails or the host takes its result, so the
@@ -1058,7 +1061,8 @@ proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
       otherModifiedCount,
     )
   else:
-    let parsed = e.commandLineParser.parseCommandLine(commandText)
+    var parsed = e.commandLineParser.parseCommandLine(commandText)
+    parsed.args.add args
     if e.interceptHostCommand(parsed):
       r = HandlerResult(kind: hrHandled)
     else:

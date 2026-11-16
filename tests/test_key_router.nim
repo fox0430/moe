@@ -316,7 +316,7 @@ suite "KeyRouter - rmkCommand routing":
 
     let r = router.feedKey(EditorMode.Filer, toKeyCombo('j', ctrl = true))
     check r.kind == rrRunMapping and r.mapping.kind == rmkCommand
-    check r.mapping.commandName == "window-prev"
+    check r.mapping.command.name == "window-prev"
 
   test "feedKey multi-key rmkCommand waits then fires on exact match":
     let router = newRouter()
@@ -329,7 +329,7 @@ suite "KeyRouter - rmkCommand routing":
 
     let fired = router.feedKey(EditorMode.Filer, toKeyCombo('d'))
     check fired.kind == rrRunMapping and fired.mapping.kind == rmkCommand
-    check fired.mapping.commandName == "go-to-definition"
+    check fired.mapping.command.name == "go-to-definition"
 
   test "flushTimeout fires exact-match rmkCommand (prefix becomes exact)":
     let router = newRouter()
@@ -345,7 +345,7 @@ suite "KeyRouter - rmkCommand routing":
 
     let r = router.flushTimeout(EditorMode.Filer)
     check r.kind == rrRunMapping and r.mapping.kind == rmkCommand
-    check r.mapping.commandName == "go-back"
+    check r.mapping.command.name == "go-back"
 
   test "rmkCommand in Normal mode is invisible to KeyRouter (file-edit mode)":
     # File-edit modes use getRuntimeKeySeqMappings, which filters out

@@ -29,15 +29,17 @@ import std/[tables, strutils, options, sequtils, hashes]
 
 import ../[types, modes, logger, unicode_utils]
 import ../types/key_combo_types
+from ../command_line/types import ExecLine
 
-export key_combo_types
+export key_combo_types, ExecLine
 
 const ExecCmdlinePrefix* = "exec.cmdline."
   ## commandId prefix for Command mode command alias bridge entries (see
   ## `keyMappableCommandModeAliases`). At dispatch time, a Command with
   ## `commandId = ExecCmdlinePrefix & <alias>` is rewritten into an
   ## `hrExecCommand` / `nmrExecCommand` carrying `<alias>` as the command-line
-  ## text, so the full `:`-parser (and its safety checks) runs.
+  ## text and the mapping's arguments whole, so the full `:`-parser (and its
+  ## safety checks) runs.
 
 type
   ## Types of commands that can be bound
@@ -113,11 +115,9 @@ type
     case kind*: RuntimeMappingKind
     of rmkCommand:
       command*: Command
-        ## Resolved command, stored so `rebuildEffectiveBindings` can re-bind it
-        ## verbatim. `commandName` cannot round-trip synthetic commands
-        ## (mode_switch / overlay_switch are absent from commandRegistry, and
-        ## custom-with-args entries differ from the bare registry version).
-      commandName*: string
+        ## Resolved command, run and re-bound verbatim: its name cannot
+        ## round-trip synthetic commands (mode_switch / overlay_switch are
+        ## absent from commandRegistry) or the arguments the mapping gives.
     of rmkKeySequence:
       targetKeys*: seq[KeyCombo] ## Parsed RHS keys, ready for replay
 
@@ -161,6 +161,15 @@ type
     commandRegistry*: Table[string, Command]
     sequenceState*: KeySequenceState ## Current built-in sequence being built
     runtimeMappings*: Table[EditorMode, seq[RuntimeKeyMapping]]
+
+proc isExecCmdline*(command: Command): bool =
+  ## Runs a `:` command through the command line (`ExecCmdlinePrefix`).
+  command.kind == ctAction and command.commandId.startsWith(ExecCmdlinePrefix)
+
+proc execLine*(command: Command): ExecLine =
+  ## The line an `isExecCmdline` command runs: its alias and then the arguments
+  ## the mapping gives it, so `"Space w" = "w out.txt"` runs `:w out.txt`.
+  ExecLine(text: command.commandId[ExecCmdlinePrefix.len ..^ 1], args: command.args)
 
 proc `==`*(a, b: KeyCombo): bool =
   if a.isSpecial != b.isSpecial:

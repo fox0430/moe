@@ -62,16 +62,24 @@ proc typedSubstitutePattern*(
   else:
     SubstitutePattern()
 
+proc argumentError*(cmd: ParsedCommand): string =
+  ## The error `execute` gives `cmd` for its arguments whatever the editor
+  ## holds, empty when none: Vim's E172 for a second file name, as the rest of
+  ## the name would be dropped.
+  if cmd.abbreviatedAction.get(cmd.action) in FileNameActions and cmd.args.len > 1:
+    "Only one file name allowed"
+  else:
+    ""
+
 proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult =
   ## Execute a parsed command and return the result
+  let argError = cmd.argumentError
+  if argError.len > 0:
+    return CommandLineResult(kind: claUnknown, errorMessage: argError)
   var cmd = cmd
   cmd.action = cmd.abbreviatedAction.get(cmd.action)
   # A local, so a branch can construct with it as the discriminator.
   let action = cmd.action
-  if action in FileNameActions and cmd.args.len > 1:
-    # Vim's E172; the rest of the name would be dropped.
-    return
-      CommandLineResult(kind: claUnknown, errorMessage: "Only one file name allowed")
   case action
   of claQuit:
     return CommandLineResult(kind: claQuit, forceQuit: "force" in cmd.flags)

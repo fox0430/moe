@@ -168,7 +168,10 @@ proc leaveInsertForCtrlO(state: EditorState, buffer: TextBuffer) =
   state.wanted = wanted
 
 proc leaveInsert*(
-    manager: HandlerManager, editor: Editor, target = EditorMode.Normal, thenExec = ""
+    manager: HandlerManager,
+    editor: Editor,
+    target = EditorMode.Normal,
+    thenExec = ExecLine(),
 ): HandlerResult =
   ## Leave Insert as Escape does, running the command line `thenExec` after if
   ## given. A count types the record again first (`3ifoo`, `2o`), unless a
@@ -195,15 +198,14 @@ proc leaveInsert*(
       repeatThenExec: thenExec,
     )
   let finalizeResult = finalizeInsertExit(buffer, state)
-  if thenExec.len > 0:
+  if thenExec.text.len > 0:
     if finalizeResult.isErr:
       return HandlerResult(kind: hrError, errorMessage: finalizeResult.error)
     if finalizeResult.get.len > 0:
       # Committed with a partial-replication warning: surface it but run the
       # command anyway, the session being finalized already.
       state.statusMessage = finalizeResult.get
-    return
-      HandlerResult(kind: hrExecCommand, execCommandText: thenExec, execCommandCount: 1)
+    return HandlerResult(kind: hrExecCommand, execLine: thenExec, execCommandCount: 1)
   # Even on failure, allow the mode transition so the user is not stuck in Insert.
   HandlerResult(
     kind: hrHandled,
@@ -326,7 +328,7 @@ proc handleInsertMode*(
   of imrExecCommand:
     # `imap K = "bdelete"` bridge: leave Insert as `<Esc>:bdelete<CR>` would,
     # cleanup and all, before the aliased command runs.
-    return manager.leaveInsert(editor, thenExec = r.execCommandText)
+    return manager.leaveInsert(editor, thenExec = r.execLine)
   of imrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -472,9 +474,7 @@ proc handleVisualMode*(
     # Command mode command alias bridge fired from a Visual mode
     # (`xnoremap K = "bdelete"`). Visual mode has no buffer transaction; just
     # forward the alias.
-    return HandlerResult(
-      kind: hrExecCommand, execCommandText: r.execCommandText, execCommandCount: 1
-    )
+    return HandlerResult(kind: hrExecCommand, execLine: r.execLine, execCommandCount: 1)
   of vmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 

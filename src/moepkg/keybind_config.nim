@@ -22,9 +22,10 @@
 ## It turns an RHS string (plus optional args / force-key-sequence flag) into a
 ## registered command binding or a key-sequence remap on the registry.
 
-import std/[strutils, tables, options]
+import std/[strutils, tables, options, sequtils]
 
-import key_bindings, modes
+import key_bindings, modes, command_line, command_line_commands
+import key_bindings/commands
 
 proc parseModes(s: string): seq[EditorMode] =
   ## Parse a mode string to a seq of EditorMode enums.
@@ -184,11 +185,24 @@ proc attachArgs(
     base: Command, args: seq[string]
 ): tuple[cmd: Option[Command], err: string] =
   ## Clone `base` with `args` attached. Only command kinds that carry an args
-  ## field accept arguments.
+  ## field accept arguments. A name that is also a `:` command takes them as
+  ## that command (`save out.txt` is `:w out.txt`), and only those it takes.
   if base.kind notin {ctAction, ctTextObject, ctOperator, ctCustom}:
     return (none(Command), "command '" & base.name & "' does not take arguments")
-  var c = base
+  var c = cmdlineAliasCommand(base.name).get(base)
   c.args = args
+  if c.isExecCmdline:
+    let
+      line = c.execLine
+      action = builtinAction(line.text)
+    if action.isSome:
+      let err = ParsedCommand(action: action.get, args: line.args).argumentError
+      if err.len > 0:
+        return (
+          none(Command),
+          "':" & line.text & "' with [" & line.args.mapIt(it.escape).join(", ") & "]: " &
+            err,
+        )
   (some(c), "")
 
 proc resolveRuntimeCommandTarget(

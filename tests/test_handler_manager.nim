@@ -27,7 +27,7 @@ import pkg/results
 import
   ../src/moepkg/[
     buffer, types, config, key_bindings, modes, motion, command_registry, registers,
-    command_line, command_config, filetree,
+    command_line, command_config, filetree, keybind_config,
   ]
 import
   ../src/moepkg/command_handlers/
@@ -708,6 +708,11 @@ suite "HandlerManager - Map list commands":
     check "INSERT" in result.statusMessage
 
 suite "HandlerManager - executeCommandDirect":
+  proc executeCommandDirect(
+      manager: HandlerManager, name: string
+  ): Option[HandlerResult] =
+    executeCommandDirect(manager.keyBindingRegistry.commandRegistry[name])
+
   # Existing ctAction commands
   test "window.next returns hrNextWindow":
     let manager = createTestManager()
@@ -869,8 +874,16 @@ suite "HandlerManager - executeCommandDirect":
     let r = manager.executeCommandDirect("bdelete")
     check r.isSome
     check r.get.kind == hrExecCommand
-    check r.get.execCommandText == "bdelete"
+    check r.get.execLine.text == "bdelete"
     check r.get.execCommandCount == 1
+
+  test "exec.cmdline.* alias runs with the mapping's arguments":
+    let manager = createTestManager()
+    var w = manager.keyBindingRegistry.commandRegistry["w"]
+    w.args = @["out.txt"]
+    let r = executeCommandDirect(w)
+    check r.isSome
+    check r.get.execLine == ExecLine(text: "w", args: @["out.txt"])
 
   test "exec.cmdline.* alias preserves the alias name (short alias)":
     # Short aliases (bd, q, wq, ...) used to silently become key sequences.
@@ -880,7 +893,7 @@ suite "HandlerManager - executeCommandDirect":
       let r = manager.executeCommandDirect(alias)
       check r.isSome
       check r.get.kind == hrExecCommand
-      check r.get.execCommandText == alias
+      check r.get.execLine.text == alias
 
   # Unsupported commands (context-dependent) return none
   test "motion command returns none":
@@ -891,12 +904,6 @@ suite "HandlerManager - executeCommandDirect":
   test "operator command returns none":
     let manager = createTestManager()
     let r = manager.executeCommandDirect("operator-delete")
-    check r.isNone
-
-  # Unknown command returns none
-  test "unknown command returns none":
-    let manager = createTestManager()
-    let r = manager.executeCommandDirect("nonexistent-command")
     check r.isNone
 
   # ctModeSwitch
@@ -916,6 +923,18 @@ suite "HandlerManager - executeCommandDirect":
     check r.get.kind == hrHandled
     check r.get.overlayTransition.isSome
     check r.get.overlayTransition.get == okCommand
+
+  test "A mapping's own mode or overlay switch runs as a registered one":
+    # `mode_switch insert` and `overlay_switch command` are not in the registry.
+    let manager = createTestManager()
+    var mapped: seq[Command]
+    for rhs in ["mode_switch insert", "overlay_switch command"]:
+      check manager.keyBindingRegistry.addRuntimeMappingExpanded(
+        EditorMode.Filer, "x", rhs
+      ) == ""
+      mapped.add manager.keyBindingRegistry.runtimeMappings[EditorMode.Filer][^1].command
+    check executeCommandDirect(mapped[0]).get.modeTransition == some(EditorMode.Insert)
+    check executeCommandDirect(mapped[1]).get.overlayTransition == some(okCommand)
 
 suite "HandlerManager - o/O open line with auto-indent":
   proc createAutoIndentState(): EditorState =
@@ -1133,7 +1152,7 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
 
     # hrExecCommand is returned for handler.nim to execute with full Editor context
     check colonResult.kind == hrExecCommand
-    check colonResult.execCommandText == "set number"
+    check colonResult.execLine.text == "set number"
     check colonResult.execCommandCount == 1
 
   test "@: with no command history shows error":
@@ -1184,7 +1203,7 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
     )
 
     check r.kind == hrExecCommand
-    check r.execCommandText == "set number"
+    check r.execLine.text == "set number"
     check r.execCommandCount == 3
 
 suite "HandlerManager - FileTree search statusMessage":
@@ -1343,7 +1362,7 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
     )
 
     check r.kind == hrExecCommand
-    check r.execCommandText == "bdelete"
+    check r.execLine.text == "bdelete"
     # The open transaction must be committed before forwarding the alias.
     check not buffer.inTransaction
 
@@ -1368,7 +1387,7 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
     )
 
     check r.kind == hrExecCommand
-    check r.execCommandText == "bdelete"
+    check r.execLine.text == "bdelete"
     check not buffer.inTransaction
 
 suite "HandlerManager - Insert mode exec.cmdline.* bridge full finalize":
@@ -1438,7 +1457,7 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge full finalize":
     check r.kind == hrRepeatInsert
     check r.repeatTimes == 2
     check r.repeatLeave
-    check r.repeatThenExec == "bdelete"
+    check r.repeatThenExec.text == "bdelete"
 
 suite "HandlerManager - Replace mode fold auto-expand":
   test "Entering Replace mode opens a collapsed fold at the cursor":

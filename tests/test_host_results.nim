@@ -366,4 +366,4 @@ suite "Host result interception":
       let request = requestAfter(keys)
       require request.isSome
       check request.get.kind == hrExecCommand
-      check request.get.execCommandText == "bnext"
+      check request.get.execLine.text == "bnext"

@@ -481,25 +481,35 @@ proc registerOperatorPendingCommands(reg: KeyBindingRegistry) =
       )
     )
 
+proc execCmdlineCommand(alias: KeyMappableCommandAlias): Command =
+  Command(
+    name: alias.name,
+    description: alias.description,
+    kind: ctAction,
+    commandId: ExecCmdlinePrefix & alias.cmdlineName,
+    args: @[],
+  )
+
+proc cmdlineAliasCommand*(name: string): Option[Command] =
+  ## The command that runs the `:` command a keymap `name` stands for, even
+  ## when a command of its own has the name: `save` is also `:w`.
+  for alias in keyMappableCommandModeAliases:
+    if alias.name == name:
+      return some(alias.execCmdlineCommand)
+  none(Command)
+
 proc registerCommandModeAliases(reg: KeyBindingRegistry) =
   ## Register Command mode command aliases (`:bd`, `:q`, `:w`, `:bnext` ...)
   ## as keymap targets. Each is dispatched at runtime via `hrExecCommand` /
   ## `nmrExecCommand`, routing through the full command-line parser so safety
   ## checks (modified-buffer guard etc.) are inherited automatically. Names
   ## that already exist as registered Commands (e.g. "save") are skipped — the
-  ## pre-existing handler already covers them with the right commandId.
+  ## pre-existing handler already covers them without arguments, and a
+  ## mapping that gives arguments takes `cmdlineAliasCommand` instead.
   for alias in keyMappableCommandModeAliases:
     if reg.commandRegistry.hasKey(alias.name):
       continue
-    reg.registerCommand(
-      Command(
-        name: alias.name,
-        description: alias.description,
-        kind: ctAction,
-        commandId: ExecCmdlinePrefix & alias.cmdlineName,
-        args: @[],
-      )
-    )
+    reg.registerCommand(alias.execCmdlineCommand)
 
 proc registerAllCommands*(reg: KeyBindingRegistry) =
   ## Register every default `Command` consumed by `setupDefaultBindings`.
