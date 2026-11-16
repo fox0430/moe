@@ -777,6 +777,7 @@ suite "CommandLine - isNoArgumentAction":
     parser.addAlias("bn", claBufferNext)
     parser.addAlias("set", claSet)
     parser.addAlias("man", claMan)
+    parser.addAlias("bd", claBufferDelete)
 
   test "Quit is a no-argument action":
     check parser.isNoArgumentAction("q") == true
@@ -795,6 +796,9 @@ suite "CommandLine - isNoArgumentAction":
 
   test "Man requires argument":
     check parser.isNoArgumentAction("man") == false
+
+  test "BufferDelete takes an optional argument":
+    check parser.isNoArgumentAction("bd") == false
 
   test "Unknown command returns false":
     check parser.isNoArgumentAction("unknown") == false
