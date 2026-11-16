@@ -227,8 +227,7 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
         e.state.statusMessage = "Failed to open: " & resolvedPath
     return true
   of hrQuickRun:
-    # Mirror command_mode_handler.nim's hrQuickRun branch so Normal mode
-    # keybindings (e.g. \r) run the same path as `:quickrun`.
+    # `:quickrun`, `\r` in Normal mode and a Visual mode mapping all run here.
     let prepareResult = e.prepareQuickRun(activeBuffer)
     if prepareResult.isErr:
       e.state.statusMessage = "QuickRun error: " & prepareResult.error

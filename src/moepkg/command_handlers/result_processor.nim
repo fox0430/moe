@@ -28,9 +28,9 @@ import pkg/[results, chronos]
 import
   ../[
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
-    syntax_checker, quick_run_utils, command_completion, key_bindings, key_router,
-    lsp_integration, command_registry, command_line, editor_window_state, pending_input,
-    macro_recording, insert_record, wanted_column, search_ops,
+    syntax_checker, command_completion, key_bindings, key_router, lsp_integration,
+    command_registry, command_line, editor_window_state, pending_input, macro_recording,
+    insert_record, wanted_column, search_ops,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -1030,35 +1030,6 @@ proc runKeyCombo*(
     runNestedKeyCombo(manager, e, KeyInput(combo: keyCombo, remap: remap, typed: false)),
   )
 
-proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
-  ## Consume `state.requestQuickRun` (set by buffer-mode key handlers) and
-  ## fire QuickRun via pending state. Returns true when a QuickRun request
-  ## was consumed; callers should skip further hr-teardown in that case.
-  if not e.state.requestQuickRun:
-    return false
-  e.state.requestQuickRun = false
-  let prepareResult = e.prepareQuickRun(activeBuffer)
-  if prepareResult.isErr:
-    e.state.statusMessage = "QuickRun error: " & prepareResult.error
-    logError("handler", "QuickRun prepare failed: " & prepareResult.error)
-  else:
-    let prepared = prepareResult.get
-    e.state.pending.add PendingAsyncOp(
-      kind: paoQuickRun,
-      epoch: e.state.commandEpoch,
-      quickRun: (
-        command: prepared.command,
-        filePath: prepared.filePath,
-        workDir: prepared.workDir,
-      ),
-    )
-    if e.config.notification.screenNotifications and
-        e.config.notification.quickRunScreenNotify:
-      e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
-  e.state.exitOverlay()
-  e.setMode(EditorMode.Normal)
-  return true
-
 proc executeCommandOverlay*(
     e: Editor, commandText: string, history = true
 ): ReplayOutcome =
@@ -1127,11 +1098,7 @@ proc executeCommandOverlay*(
   if history and commandText.len > 1:
     e.addCommandToHistory(commandText[1 ..^ 1])
 
-  # 3. requestQuickRun poll (set independently of r.kind by buffer-mode keys)
-  if e.tryHandleQuickRunRequest(activeBuffer):
-    return roContinue
-
-  # 4. side effects
+  # 3. side effects
   let queued = e.hostResultRequestCount
   var hostHandled: bool
   let shouldContinue = e.processResultWithHost(r, activeBuffer, hostHandled)
@@ -1146,7 +1113,7 @@ proc executeCommandOverlay*(
     e.setMode(e.state.mode)
     return
 
-  # 5. teardown
+  # 4. teardown
   case r.group
   of hrgAppExit:
     return roQuit # unreachable — processResult would have returned false
@@ -1168,7 +1135,7 @@ proc executeCommandOverlay*(
     else:
       e.setMode(e.state.mode)
 
-  # 6. status message from HandlerResult payload
+  # 5. status message from HandlerResult payload
   let statusMsg = r.getStatusMessage()
   if statusMsg.len > 0:
     e.state.statusMessage = statusMsg

@@ -19,7 +19,7 @@
 
 ## Tests for `gv` and the buffer's last Visual area.
 
-import std/[unittest, options, strutils, deques]
+import std/[unittest, options, os, strutils, deques]
 
 import pkg/results
 
@@ -686,6 +686,46 @@ suite "gv":
     e.press("g", "g", "g", "v")
     check e.state.mode == EditorMode.Visual
     check e.selection == (pos(1, 0), pos(2, 0))
+
+  test "a command the editor runs from Visual mode saves the area":
+    # The command registry has no `file.save`; Visual mode once failed it
+    # with "Command not found".
+    let path =
+      getTempDir() / ("moe_test_visual_save_" & $getCurrentProcessId() & ".txt")
+    defer:
+      removeFile(path)
+    let e = newTestEditor("one\ntwo\nthree")
+    e.activeBuffer.filePath = some(path)
+    e.addBuffer(e.activeBuffer)
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Visual, "S", "save") == ""
+    e.press("j", "v", "j", "S")
+    check readFile(path) == "one\ntwo\nthree\n"
+    check e.state.mode == EditorMode.Normal
+    check not e.state.visualSelection.active
+
+    e.press("g", "g", "g", "v")
+    check e.state.mode == EditorMode.Visual
+    check e.selection == (pos(1, 0), pos(2, 0))
+
+  test "resizing a window from Visual mode keeps the selection":
+    # Vim's CTRL-W + leaves Visual mode on; closing a window (CTRL-W c) ends
+    # it.
+    let e = newTestEditor("one\ntwo\nthree")
+    check e.hsplit().isOk
+    let height = e.activeWindow.viewport.height
+    check e.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Visual, "Q", "window-increase-height"
+    ) == ""
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Visual, "C", "close-window") ==
+      ""
+    e.press("j", "v", "j", "Q")
+    check e.activeWindow.viewport.height == height + 1
+    check e.state.mode == EditorMode.Visual
+    check e.selection == (pos(1, 0), pos(2, 0))
+
+    e.press("C")
+    check e.windowManager.windows.len == 1
+    check e.state.mode == EditorMode.Normal
 
   test "a command that fails and stays in Visual mode leaves the area alone":
     let e = newTestEditor("one\ntwo\nthree")

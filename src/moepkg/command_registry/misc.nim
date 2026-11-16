@@ -62,12 +62,6 @@ proc handleNewline*(ctx: CommandContext): Result[(), string] =
   insertNewline(ctx.buffer, ctx.state)
   Result[(), string].ok ()
 
-proc handleQuickRun*(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Run current buffer (\r command)
-  ## Sets requestQuickRun flag which is handled by the main event loop
-  ctx.state.requestQuickRun = true
-  return ok(())
-
 proc jumpCursorToLine*(ctx: CommandContext, line: int) =
   ## Record a jump, move the cursor to `line` at column 0, and refresh the
   ## viewport. Shared by commands that jump to non-adjacent lines (git change
@@ -122,13 +116,7 @@ proc findGnMatch*(
   ok((match.start, BufferPosition(line: match.line, column: lastColumn)))
 
 proc registerMiscCommands*(registry: CommandRegistry) =
-  ## Register mode/insert/quickrun/search/git navigation/motion.match.bracket
-  ## commands.
-
-  # QuickRun command
-  registry.register(
-    builtin(bcQuickRun), "QuickRun", "Run current buffer (\\r)", handleQuickRun, 0, 0
-  )
+  ## Register mode/insert/search/git navigation/motion.match.bracket commands.
 
   # Mode switching commands
   registry.register(

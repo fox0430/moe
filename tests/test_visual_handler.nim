@@ -26,7 +26,7 @@ import
   ../src/moepkg/
     [buffer, types, key_bindings, modes, motion, command_registry, config, registers]
 import ../src/moepkg/types/editor_types
-import ../src/moepkg/command_handlers/visual_handler
+import ../src/moepkg/command_handlers/[visual_handler, command_passthrough]
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -200,9 +200,10 @@ suite "VisualModeHandler - VisualModeResult":
     let result = VisualModeResult(kind: vmrWaitingForInput)
     check result.kind == vmrWaitingForInput
 
-  test "vmrLspSelectionRange result":
-    let result = VisualModeResult(kind: vmrLspSelectionRange)
-    check result.kind == vmrLspSelectionRange
+  test "vmrPassthrough result":
+    let result = VisualModeResult(kind: vmrPassthrough, passthroughKind: ptQuickRun)
+    check result.kind == vmrPassthrough
+    check result.passthroughKind == ptQuickRun
 
   test "vmrError result":
     let result = VisualModeResult(kind: vmrError, errorMessage: "test error")
@@ -669,6 +670,52 @@ suite "VisualModeHandler - Command mode command alias bridge":
 
     check r.kind == vmrExecCommand
     check r.execCommandText == "bd"
+
+suite "VisualModeHandler - commands the editor runs":
+  test "a mapping in any Visual mode hands each one to the editor":
+    # The command registry runs none of these, so they once failed with
+    # "Command not found" in Visual mode only.
+    let registry = newKeyBindingRegistry()
+    setupDefaultBindings(registry)
+    var names: seq[string]
+    for name, command in registry.commandRegistry:
+      if command.kind in {ctAction, ctTextObject, ctOperator, ctCustom} and
+          lookupPassthrough(command.commandId).isSome:
+        names.add name
+    check "quickrun" in names
+    check "save" in names
+
+    for name in names:
+      let buf = newTextBuffer("hello")
+      let handler = createTestHandler(buf)
+      let kind = lookupPassthrough(
+        handler.keyBindingRegistry.commandRegistry[name].commandId
+      ).get
+      check handler.keyBindingRegistry.addRuntimeMapping(EditorMode.Visual, "Q", name) ==
+        ""
+      for mode in [EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock]:
+        let state = createTestState()
+        state.mode = mode
+        state.visualAnchor = state.cursor
+        let keyCombo = KeyCombo(isSpecial: false, char: "Q", modifiers: {})
+
+        let r = handler.handleVisualModeKey(buf, state, createTestViewport(), keyCombo)
+
+        checkpoint name & " in " & $mode
+        check r.kind == vmrPassthrough
+        if r.kind == vmrPassthrough:
+          check r.passthroughKind == kind
+        # Selection range grows the selection and resizing keeps it, as
+        # Vim's CTRL-W `+`, `_` and `=`; the others run outside Visual, as a
+        # command typed after `:` does.
+        if kind in {
+          ptLspSelectionRange, ptMaximizeWindowHeight, ptIncreaseWindowHeight,
+          ptDecreaseWindowHeight, ptIncreaseWindowWidth, ptDecreaseWindowWidth,
+          ptEqualizeWindows,
+        }:
+          check state.mode == mode
+        else:
+          check state.mode == EditorMode.Normal
 
 suite "VisualModeHandler - Escape returns to previousMode":
   test "Escape from Visual returns to Normal when previousMode is Normal":

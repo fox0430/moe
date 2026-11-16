@@ -32,7 +32,7 @@ import
     pending_input,
   ]
 import ../types/editor_types
-import handler_types
+import handler_types, command_passthrough
 export handler_types
 
 type
@@ -40,7 +40,9 @@ type
     vmrHandled
     vmrUnhandled
     vmrWaitingForInput ## Waiting for additional input (e.g., replace char)
-    vmrLspSelectionRange ## Execute LSP selection range
+    vmrPassthrough
+      ## A command the editor runs, shared with Normal mode through
+      ## command_passthrough
     vmrExecCommand
       ## Command mode command alias bridge — run `:<alias>` via the
       ## command-line parser
@@ -54,8 +56,8 @@ type
       discard
     of vmrWaitingForInput:
       discard
-    of vmrLspSelectionRange:
-      discard
+    of vmrPassthrough:
+      passthroughKind*: PassthroughKind
     of vmrExecCommand:
       execCommandText*: string
         ## Visual mode has no count prefix, so the dispatcher always
@@ -287,8 +289,7 @@ proc handleVisualModeKey*(
 
   # Special-case action dispatch — mirrors the `of ctAction` arm in
   # `normal_handler.handleNormalModeKey` so all three mode handlers funnel
-  # the exec.cmdline.* bridge (and other action-only commandIds like
-  # `lsp.selection.range`) through one place.
+  # the exec.cmdline.* bridge through one place.
   if cmd.kind == ctAction:
     # Command mode command alias bridge: `exec.cmdline.<alias>` runs
     # `:<alias>` via the full command-line parser so safety checks
@@ -299,12 +300,14 @@ proc handleVisualModeKey*(
       let aliasText = cmd.commandId[ExecCmdlinePrefix.len ..^ 1]
       return VisualModeResult(kind: vmrExecCommand, execCommandText: aliasText)
 
-  # LSP selection range can also be reached via ctTextObject / ctOperator /
-  # ctCustom bindings, so the check is kept separate from the ctAction arm
-  # above.
+  # Commands the registry does not run (window.*, file.*, quickrun, lsp.*)
+  # go to the editor as in Normal mode.
   if cmd.kind in {ctAction, ctTextObject, ctOperator, ctCustom}:
-    if cmd.commandId == "lsp.selection.range":
-      return VisualModeResult(kind: vmrLspSelectionRange)
+    let passthrough = lookupPassthrough(cmd.commandId)
+    if passthrough.isSome:
+      if passthrough.get notin KeepsVisual:
+        state.leaveVisual()
+      return VisualModeResult(kind: vmrPassthrough, passthroughKind: passthrough.get)
 
   let ctx = newCommandContext(
     buffer, state, viewport, handler.motionController, handler.keyBindingRegistry,
