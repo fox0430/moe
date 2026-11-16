@@ -1957,6 +1957,83 @@ suite "eventToKeyCombo - special key normalization (#2597)":
     check combo.get.special == skBackTab
     check kmShift notin combo.get.modifiers
 
+  test "F2 event matches parseKeyCombo(\"F2\")":
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(code: celina.KeyCode.F2, char: ""),
+    )
+    let combo = eventToKeyCombo(ev)
+    check combo.isSome
+    check combo.get.isSpecial
+    check combo.get.special == skFunction
+    check kmShift notin combo.get.modifiers
+    check combo.get == parseKeyCombo("F2").get
+
+  test "F1..F12 events match parseKeyCombo":
+    for code in celina.KeyCode.F1 .. celina.KeyCode.F12:
+      let n = ord(code) - ord(celina.KeyCode.F1) + 1
+      let ev = celina.Event(
+        kind: celina.EventKind.Key, key: celina.KeyEvent(code: code, char: "")
+      )
+      check eventToKeyCombo(ev) == parseKeyCombo("F" & $n)
+
+  test "Shift+F2 event matches parseKeyCombo(\"S-F2\")":
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(
+        code: celina.KeyCode.F2, char: "", modifiers: {celina.KeyModifier.Shift}
+      ),
+    )
+    let combo = eventToKeyCombo(ev)
+    check combo.isSome
+    check combo.get.isSpecial
+    check combo.get.special == skFunction
+    check kmShift in combo.get.modifiers
+    check combo.get == parseKeyCombo("S-F2").get
+
+  test "Ctrl+Shift+F2 event matches parseKeyCombo":
+    for (mods, name) in [
+      ({celina.KeyModifier.Ctrl, celina.KeyModifier.Shift}, "C-S-F2")
+    ]:
+      let ev = celina.Event(
+        kind: celina.EventKind.Key,
+        key: celina.KeyEvent(code: celina.KeyCode.F2, char: "", modifiers: mods),
+      )
+      check eventToKeyCombo(ev) == parseKeyCombo(name)
+
+  test "Ctrl+Shift+Alt+F2 event matches parseKeyCombo":
+    for (mods, name) in [
+      (
+        {celina.KeyModifier.Ctrl, celina.KeyModifier.Shift, celina.KeyModifier.Alt},
+        "C-S-M-F2",
+      )
+    ]:
+      let ev = celina.Event(
+        kind: celina.EventKind.Key,
+        key: celina.KeyEvent(code: celina.KeyCode.F2, char: "", modifiers: mods),
+      )
+      check eventToKeyCombo(ev) == parseKeyCombo(name)
+
+  test "nothing/Ctrl/Alt/Shift+F5 events match parseKeyCombo":
+    for (mods, name) in [
+      ({}, "F5"),
+      ({celina.KeyModifier.Ctrl}, "C-F5"),
+      ({celina.KeyModifier.Alt}, "M-F5"),
+      ({celina.KeyModifier.Shift}, "S-F5"),
+      ({celina.KeyModifier.Ctrl, celina.KeyModifier.Alt}, "C-M-F5"),
+      ({celina.KeyModifier.Ctrl, celina.KeyModifier.Shift}, "C-S-F5"),
+      ({celina.KeyModifier.Shift, celina.KeyModifier.Alt}, "S-M-F5"),
+      (
+        {celina.KeyModifier.Ctrl, celina.KeyModifier.Shift, celina.KeyModifier.Alt},
+        "C-S-M-F5",
+      ),
+    ]:
+      let ev = celina.Event(
+        kind: celina.EventKind.Key,
+        key: celina.KeyEvent(code: celina.KeyCode.F5, char: "", modifiers: mods),
+      )
+      check eventToKeyCombo(ev) == parseKeyCombo(name)
+
 suite "Vim parity - CTRL-J (<NL>) down motion":
   # Holding Ctrl through a `<C-v>` j gesture sends CTRL-J (0x0a = <NL>), which
   # Vim treats as a down motion in Normal and every Visual mode. celina maps the
