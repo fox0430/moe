@@ -12993,6 +12993,60 @@ suite "handleKeyCombo - a key that beeps or errs stops the register or mapping i
     e.press(keys("Qx"))
     check e.lines == @["bc"]
 
+suite "The :map commands read a : command name on the right as keys, as Vim":
+  proc createEditor(content: string, column = 0): Editor =
+    result = newEditor(newEditorConfig())
+    result.state.registers = initRegisters()
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].setTab(buf)
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
+    result.motionController.bindToWindow(result.activeWindow)
+    result.state.mode = EditorMode.Normal
+    result.activeWindow.cursor = BufferPosition(line: 0, column: column)
+
+  proc pressQ(e: Editor) =
+    check e.handleKeyCombo(parseKeyCombo("Q").get)
+
+  proc lines(e: Editor): seq[string] =
+    for i in 0 ..< e.activeBuffer.len:
+      result.add e.activeBuffer.getLine(i)
+
+  test "w moves by a word":
+    let e = createEditor("foo bar")
+    check e.executeCommandOverlay(":nnoremap Q w") == roContinue
+
+    e.pressQ()
+
+    check e.activeWindow.cursor == BufferPosition(line: 0, column: 4)
+    check e.lines == @["foo bar"]
+
+  test "x deletes a character and does not quit":
+    let e = createEditor("foo bar")
+    check e.executeCommandOverlay(":nnoremap Q x") == roContinue
+
+    e.pressQ()
+
+    check e.lines == @["oo bar"]
+
+  test "keys after a : command name are keys too":
+    let e = createEditor("foo bar", 4)
+    check e.executeCommandOverlay(":nnoremap Q bd w") == roContinue
+
+    e.pressQ()
+
+    check e.lines == @["bar"]
+
+  test "typing the : command runs it":
+    let e = createEditor("foo bar")
+    check e.executeCommandOverlay(":nnoremap Q :s/a/b/ Enter") == roContinue
+
+    e.pressQ()
+
+    check e.lines == @["foo bbr"]
+    check e.state.mode == EditorMode.Normal
+
 suite "n and N go the way the last search went":
   # The way /, ?, *, # and their kin went, as Vim keeps it with the pattern
   # (spats[0].off.dir). Expected positions are measured in Vim 9.2.

@@ -138,7 +138,9 @@ const UntrimmedHelpLines =
   ) & blank() &
   prose(
     "{rhs} can be a command name or a key sequence (e.g. Escape).\n" &
-      "Use :help to see the list of available command names.\n"
+      "Use :help to see the list of available command names.\n" &
+      "Vim-style : command names (w, q, bd, ...) are read as keys;\n" &
+      "to run :w, map to :w Enter.\n"
   ) & blank() & prose("Examples:\n") &
   keyTable(
     {

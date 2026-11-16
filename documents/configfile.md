@@ -997,7 +997,9 @@ Commands are grouped by category below. Any command name listed here can be used
 The following Vim-style short names are also accepted as the right-hand side of a
 `[KeyMapping]` (and `keybindings.toml` `command`) entry. They are dispatched
 through the full Command mode (`:`) parser, so safety checks like the
-modified-buffer guard for `:bdelete` / `:quit` apply automatically.
+modified-buffer guard for `:bdelete` / `:quit` apply automatically. The runtime
+`:nmap` family reads them, except `saveall`, as keys, as Vim does
+(`:nnoremap Q w` moves by a word).
 
 | Alias | Description |
 |:----|:----|
