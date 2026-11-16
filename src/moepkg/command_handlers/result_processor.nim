@@ -1036,7 +1036,8 @@ proc executeCommandOverlay*(
     e: Editor, commandText: string, history = true
 ): ReplayOutcome =
   ## Full lifecycle of a Command-overlay Enter: pre-teardown, dispatch,
-  ## side effects via processResult, and teardown driven by `r.group`.
+  ## side effects via processResult, and teardown driven by `r.group`. The
+  ## teardown closes only the command line, not a prompt the command opened.
   ## Without `history`, the command line history does not get it.
   ## `roAbort` when the command fails or the host takes its result, so the
   ## keys after it stop as after any replayed key that does.
@@ -1108,27 +1109,25 @@ proc executeCommandOverlay*(
     return roQuit
   result =
     if e.hostResultRequestCount > queued or r.kind == hrError: roAbort else: roContinue
+
+  # 4. teardown
+  e.state.exitOverlay(okCommand)
   if hostHandled:
     # A host-owned result must not quit or re-apply a synthesized mode switch
     # through the original result's group after its side effects were skipped.
-    e.state.exitOverlay()
     e.setMode(e.state.mode)
     return
 
-  # 4. teardown
   case r.group
   of hrgAppExit:
     return roQuit # unreachable — processResult would have returned false
   of hrgExitToNormal:
-    e.state.exitOverlay()
     e.setMode(EditorMode.Normal)
   of hrgExitToNewMode:
-    e.state.exitOverlay()
+    discard # processResult already set the target mode
   of hrgExitAndResync:
-    e.state.exitOverlay()
     e.setMode(e.state.mode)
   of hrgHandledGeneric:
-    e.state.exitOverlay()
     let t = r.getModeTransition()
     # `ModesNeedingContext` targets were refused by processResult; re-applying
     # the transition here would put the window in that mode with no state.

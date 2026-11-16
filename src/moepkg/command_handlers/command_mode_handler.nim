@@ -163,7 +163,7 @@ proc cancelCommandLine*(e: Editor) =
   # Cancel substitute preview and restore original content
   e.cancelSubstitutePreview()
   # Exit overlay and restore base mode
-  e.state.exitOverlay()
+  e.state.exitOverlay(okCommand)
   e.setMode(e.state.mode) # Sync window mode
 
 proc updateCompletionAfterEdit(e: Editor) =

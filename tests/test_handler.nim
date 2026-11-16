@@ -1442,7 +1442,7 @@ suite "Search Mode - Start Position":
     check state.input.search.startPos.line == 0
     check state.input.search.startPos.column == 0
 
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
 
     # Second search from different position
     state.cursor = BufferPosition(line: 50, column: 20)
@@ -1462,7 +1462,7 @@ suite "Search Mode - Text Handling":
     let state = createTestState()
     state.enterSearchOverlay(Forward)
     state.input.line.text = "current search"
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
 
     check state.input.line.text == ""
 
@@ -1471,7 +1471,7 @@ suite "Search Mode - Text Handling":
     state.input.search.history = @["pattern1", "pattern2"]
     state.enterSearchOverlay(Forward)
     state.input.line.entry = some(1)
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
 
     check state.input.line.entry.isNone
 
@@ -1539,7 +1539,7 @@ suite "Command Mode - Text Input State":
     state.enterCommandOverlay()
     state.input.line.text = "wq"
     state.input.line.cursor = 2
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
 
     check state.input.line.text == ""
     check state.input.line.cursor == 0
@@ -2699,6 +2699,24 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
     check not e.state.isCommandOverlay # overlay exited
     check e.state.input.line.text == "" # command line cleared
     check "modified externally" in e.state.statusMessage
+
+  test "A prompt the command opens stays after the command line closes":
+    # A host command stands in for one that opens a prompt (`:picker`).
+    let e = createTestEditorWithBuffer("hello")
+    e.hostCommandFilter = proc(host: Editor, command: ParsedCommand): bool =
+      if command.rawText == ":open-search":
+        host.state.enterSearchOverlay(Forward)
+        host.state.input.line.text = "hel"
+        return true
+    e.state.enterCommandOverlay()
+    e.state.input.line.text = "open-search"
+    e.state.input.line.cursor = 11
+
+    check handleCommandModeEvent(e, makeEnterEvent())
+
+    check e.state.isSearchOverlay
+    check e.state.input.line.text == "hel"
+    check e.takeHostCommandRequest().isSome
 
 suite "Command mode - :w {file}, :wq {file} and :saveas, as Vim":
   # Measured in Vim 9.2 with a modified buffer on `src`.

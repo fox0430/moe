@@ -198,7 +198,7 @@ suite "renderConfig - search highlight gating":
     e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) > 0
 
-    e.state.exitOverlay()
+    e.state.exitOverlay(okSearch)
     buffer = createTestBuffer()
     e.renderConfig(buffer, e.activeWindow, true, true, 0)
     check countSearchHighlightCells(buffer) == 0

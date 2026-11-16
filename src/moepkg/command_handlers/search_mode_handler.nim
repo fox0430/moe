@@ -183,7 +183,7 @@ proc finalizeSearch(e: Editor): bool =
 
   # Exit overlay and return to base mode
   # The base mode (Normal, LogViewer, Filer, etc.) is preserved
-  e.state.exitOverlay()
+  e.state.exitOverlay(okSearch)
   e.setMode(e.state.mode) # Sync window mode
 
 proc cancelSearch*(e: Editor) =
@@ -210,7 +210,7 @@ proc cancelSearch*(e: Editor) =
   elif e.state.input.search.incsearch:
     e.backToSearchStart()
   # Exit overlay and restore base mode
-  e.state.exitOverlay()
+  e.state.exitOverlay(okSearch)
   e.setMode(e.state.mode) # Sync window mode
 
 proc performIncrementalSearch(e: Editor) =

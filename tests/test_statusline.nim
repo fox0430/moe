@@ -256,7 +256,7 @@ suite "StatusLine - search count":
     check state.countShown(textBuffer) == " [1/2]"
     state.enterCommandOverlay()
     check state.countShown(textBuffer) == ""
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     state.updateSearchCount(textBuffer, DurationZero)
     check state.buildSearchCount().joined == " [1/2]"
 

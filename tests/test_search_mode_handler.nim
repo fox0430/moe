@@ -1377,7 +1377,7 @@ suite "Search highlight after :noh":
     e.state.enterCommandOverlay()
     e.state.input.line.text = "s/bar"
     check e.matchesOnFirstLine == 1
-    e.state.exitOverlay()
+    e.state.exitOverlay(okCommand)
     check e.matchesOnFirstLine == 0
 
   test "A :s being typed with an empty pattern shows the last search":
@@ -1465,7 +1465,7 @@ suite "Search highlight after :noh":
     e.state.enterCommandOverlay()
     e.state.input.line.text = "s/a\\/b"
     check e.matchesOnFirstLine == 1
-    e.state.exitOverlay()
+    e.state.exitOverlay(okCommand)
     check e.executeCommandOverlay(":s/a\\/b/x/") == roContinue
     check e.activeBuffer.getLine(0) == "foo x"
     # As Vim saves it, so Ctrl-R / gives back what was typed.

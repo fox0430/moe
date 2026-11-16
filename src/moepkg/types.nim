@@ -1859,11 +1859,24 @@ proc incrementalSearchLine*(state: EditorState): string =
   ## The pattern at the search prompt that 'incsearch' shows as it is typed.
   if state.input.search.incsearch: state.searchLine else: ""
 
+proc exitOverlay*(state: EditorState, kind: OverlayKind) =
+  ## Close the `kind` overlay and return to the base mode. Another one, as a
+  ## prompt a command run from it opened, stays.
+  if state.overlay == some(kind):
+    state.overlay = none(OverlayKind)
+    state.input.line = PromptLine()
+
+proc leaveOverlay(state: EditorState) =
+  ## Close whatever overlay is open through `exitOverlay`, before another opens.
+  if state.overlay.isSome:
+    state.exitOverlay(state.overlay.get)
+
 proc enterCommandOverlay*(state: EditorState) =
   ## Enter command mode overlay
   ## The base mode (Normal, Filer, etc.) is preserved; Visual ends first, as
   ## in Vim.
   state.leaveVisual()
+  state.leaveOverlay()
   state.overlay = some(okCommand)
   state.input.line = PromptLine()
 
@@ -1895,6 +1908,7 @@ proc enterSearchOverlay*(
 ) =
   ## Enter search mode overlay, for the `count`-th match (`3/foo`)
   ## The base mode (Normal, LogViewer, etc.) is preserved
+  state.leaveOverlay()
   state.overlay = some(okSearch)
   state.input.search.direction = direction
   state.input.search.count = max(1, count)
@@ -1907,18 +1921,13 @@ proc enterSearchOverlay*(
 proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
   ## Enter rename mode overlay
   ## The base mode (Normal) is preserved
+  state.leaveOverlay()
   state.overlay = some(okRename)
   # Typing goes on at the end of the word, as input() with a default.
   state.input.line = PromptLine(text: word, cursor: word.charLen)
   state.renameState.originalWord = word
   state.renameState.cursorLine = line
   state.renameState.cursorColumn = col
-
-proc exitOverlay*(state: EditorState) =
-  ## Exit the current overlay and return to the base mode
-  if state.overlay.isSome:
-    state.overlay = none(OverlayKind)
-    state.input.line = PromptLine()
 
 proc baseMode*(state: EditorState): EditorMode =
   ## Get the base mode (the mode under the overlay)

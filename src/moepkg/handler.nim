@@ -139,12 +139,12 @@ proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Returns: true (event handled)
   case e.state.input.line.takeKey(keyCombo, e.state.keyTyped, e.state.interrupted)
   of pkLeave:
-    e.state.exitOverlay()
+    e.state.exitOverlay(okRename)
     e.setMode(e.state.mode) # Sync window mode
     e.state.statusMessage = "Rename cancelled"
   of pkEnter, pkRun:
     let newName = e.state.input.line.text
-    e.state.exitOverlay()
+    e.state.exitOverlay(okRename)
     e.setMode(e.state.mode) # Sync window mode
     if newName.len == 0:
       e.state.statusMessage = "Rename cancelled: empty name"
