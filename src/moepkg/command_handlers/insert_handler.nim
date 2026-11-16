@@ -35,7 +35,7 @@ import
   ../[
     types, buffer, config, modes, key_bindings, motion, command_registry, unicode_utils,
     completion, signature_help, lsp_integration, lsp_request_context, key_router,
-    macro_recording,
+    macro_recording, auto_pair,
   ]
 import handler_types, insert_commands
 import ../fold_open
@@ -120,42 +120,64 @@ proc executeCommand*(
   else:
     return InsertModeResult(kind: imrError, errorMessage: cmdResult.error)
 
-proc handleCharacterInsertion*(
-    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, text: string
-): InsertModeResult =
-  ## Handle regular character insertion with auto-close paren support
-  let pos = state.cursor
-
-  # Track paren depth for signature help
+proc trackParenDepth(handler: InsertModeHandler, text: string) =
+  ## Keep the signature help's paren depth on what was typed; a `)` stepped
+  ## over closes the call too.
   if text.len == 1:
     if text[0] == '(':
       handler.signatureHelpManager.incrementParenDepth()
     elif text[0] == ')':
       handler.signatureHelpManager.decrementParenDepth()
 
-  # Check if auto-close paren is enabled and text is a single character opening paren
-  if state.autoCloseParen and text.len == 1 and isOpeningParen(text[0]):
-    let openChar = text[0]
-    let closeChar = getClosingChar(openChar)
-
-    # Insert both characters, with the cursor going after the opening one so
-    # it lands between the pair.
-    let insertResult =
-      buffer.insertTextEnd(pos, text & $closeChar, cursorByte = text.len)
-    if insertResult.isErr:
-      return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
-
-    state.cursor.column = insertResult.get.cursor.column
+proc autoPairActionAt(
+    state: EditorState, buffer: TextBuffer, text: string
+): AutoPairAction =
+  # Any other key is told apart before the line is copied.
+  if state.autoCloseParen and text.isPairChar:
+    autoPairAction(
+      buffer.getLine(state.cursor.line), state.cursor.column, text, buffer.language
+    )
   else:
-    # Normal insertion
-    let insertResult = buffer.insertTextEnd(pos, text)
+    apNone
+
+proc stepOver(state: EditorState, buffer: TextBuffer) =
+  state.cursor.column = buffer.getLine(state.cursor.line).stepRight(state.cursor.column)
+
+proc typedPair(action: AutoPairAction, text: string): seq[TypedInput] =
+  ## What `.` types again for a bracket or quote: what it did, not the key,
+  ## which would be judged again where it is typed.
+  case action
+  of apNone:
+    @[]
+  of apInsert, apPair:
+    @[TypedInput(kind: tiText, text: action.insertedText(text), cursorAt: 1)]
+  of apStepOver:
+    @[TypedInput(kind: tiRight)]
+
+proc handleCharacterInsertion*(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, text: string
+): InsertModeResult =
+  ## Handle regular character insertion with auto-close paren support
+  let pos = state.cursor
+  handler.trackParenDepth(text)
+
+  let action = state.autoPairActionAt(buffer, text)
+  if action == apStepOver:
+    state.stepOver(buffer)
+  else:
+    # The cursor goes after the text typed, between a pair.
+    let insertResult =
+      buffer.insertTextEnd(pos, action.insertedText(text), cursorByte = text.len)
     if insertResult.isErr:
       return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
-
-    # Move cursor right after insertion (by character count, not byte count)
     state.cursor.column = insertResult.get.cursor.column
 
-  return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+  InsertModeResult(
+    kind: imrHandled,
+    modeTransition: none(EditorMode),
+    typedBefore: typedPair(action, text),
+    keyConsumed: action != apNone,
+  )
 
 proc handleBackspace*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
@@ -360,28 +382,33 @@ proc insertCharInSession(
   ## Insert a typed character during a snippet session. A pending placeholder
   ## default is replaced wholesale by the first keystroke (selection
   ## semantics), and the remaining tabstop coordinates are remapped across
-  ## both edits. Auto-close paren applies as in handleCharacterInsertion: the
-  ## pair is still a single insertion at the cursor, so the remap covers both
-  ## characters while the cursor lands between them.
+  ## both edits. Auto-close paren applies as in handleCharacterInsertion, judged
+  ## once the default is gone: the pair is still a single insertion at the
+  ## cursor, so the remap covers both characters while the cursor lands between
+  ## them. A step over a closing character out of the current stop ends the
+  ## session, as a move does.
   let pendingResult = deletePendingDefault(buffer, state)
   if pendingResult.isErr:
     return InsertModeResult(kind: imrError, errorMessage: pendingResult.error)
 
-  # Track paren depth for signature help (same as handleCharacterInsertion).
-  if text.len == 1:
-    if text[0] == '(':
-      handler.signatureHelpManager.incrementParenDepth()
-    elif text[0] == ')':
-      handler.signatureHelpManager.decrementParenDepth()
-
-  let autoClose = state.autoCloseParen and text.len == 1 and isOpeningParen(text[0])
-  let toInsert =
-    if autoClose:
-      text & $getClosingChar(text[0])
-    else:
-      text
+  handler.trackParenDepth(text)
 
   let idx = state.snippetSession.index
+  let action = state.autoPairActionAt(buffer, text)
+  if action == apStepOver:
+    state.stepOver(buffer)
+    let stop = state.snippetSession.stops[idx]
+    if state.cursor.line != stop.pos.line or state.cursor.column < stop.pos.column or
+        state.cursor.column > stop.pos.column + stop.len:
+      state.snippetSession.active = false
+    return InsertModeResult(
+      kind: imrHandled,
+      modeTransition: none(EditorMode),
+      typedBefore: pendingResult.get & typedPair(action, text),
+      keyConsumed: true,
+    )
+  let toInsert = action.insertedText(text)
+
   let before = state.cursor
   # The current stop grows to cover the inserted text instead of being pushed
   # ahead of it: when it starts at the insertion point the generic remap would
@@ -405,7 +432,10 @@ proc insertCharInSession(
   state.snippetSession.stops[idx].len =
     max(0, state.snippetSession.stops[idx].len + gained)
   return InsertModeResult(
-    kind: imrHandled, modeTransition: none(EditorMode), typedBefore: pendingResult.get
+    kind: imrHandled,
+    modeTransition: none(EditorMode),
+    typedBefore: pendingResult.get & typedPair(action, text),
+    keyConsumed: action != apNone,
   )
 
 proc backspaceInSession(
@@ -1168,6 +1198,7 @@ proc handleInsertModeKey*(
       # Insert the new character. When a snippet session is active (possibly
       # just started by the commit above), the session insert replaces a
       # pending placeholder default and keeps the stops remapped.
+      let versionBefore = buffer.contentVersion
       let insertResult =
         if state.snippetSession.active:
           handler.insertCharInSession(buffer, state, keyCombo.char)
@@ -1177,11 +1208,16 @@ proc handleInsertModeKey*(
         return insertResult
       typedBefore.add insertResult.typedBefore
 
-      # Re-trigger completion with new prefix
-      if not handler.completeTypedWord(buffer, state):
+      # Re-trigger completion with new prefix. A closing character stepped
+      # over changes nothing and ends it, as an arrow does.
+      if buffer.contentVersion == versionBefore or
+          not handler.completeTypedWord(buffer, state):
         handler.completionManager.cancelCompletion()
       return InsertModeResult(
-        kind: imrHandled, modeTransition: none(EditorMode), typedBefore: typedBefore
+        kind: imrHandled,
+        modeTransition: none(EditorMode),
+        typedBefore: typedBefore,
+        keyConsumed: insertResult.keyConsumed,
       )
 
     # Any other key ends the completion and is handled as if no popup were
@@ -1223,12 +1259,14 @@ proc handleInsertModeKey*(
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+      let versionBefore = buffer.contentVersion
       let insertResult = handler.insertCharInSession(buffer, state, keyCombo.char)
       if insertResult.kind != imrHandled:
         return insertResult
       # Mirror the normal character path's auto-completion trigger so the
       # popup keeps working inside placeholders.
-      handler.markAutoTrigger(buffer, state)
+      if buffer.contentVersion != versionBefore:
+        handler.markAutoTrigger(buffer, state)
       return insertResult
 
     if keyCombo.isSpecial and keyCombo.special == skBackspace:
@@ -1449,11 +1487,14 @@ proc handleInsertModeKey*(
 
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
     # Handle regular character insertion; the frame opens the popup for it
+    # when the text changed, as Vim's TextChangedI.
+    let versionBefore = buffer.contentVersion
     let insertResult = handler.handleCharacterInsertion(buffer, state, keyCombo.char)
     if insertResult.kind != imrHandled:
       return insertResult
-    handler.markAutoTrigger(buffer, state)
-    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+    if buffer.contentVersion != versionBefore:
+      handler.markAutoTrigger(buffer, state)
+    return insertResult
 
   # Handle special keys
   if keyCombo.isSpecial:

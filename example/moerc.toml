@@ -28,7 +28,7 @@ bookmarkMarker = "♥ "                  # Bookmark indicator in sidebar
 
 showModifiedLines = true               # Highlight modified line numbers
 
-autoCloseParen = true                  # Auto-close parentheses
+autoCloseParen = true                  # Auto-close brackets and quotes, and step over a closing one typed again
 
 autoIndent = true                      # Auto-indent
 

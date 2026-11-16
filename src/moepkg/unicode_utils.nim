@@ -462,6 +462,16 @@ proc isOpeningParen*(ch: char): bool =
   ## Check if a character is an opening parenthesis/bracket/quote
   ch in parenPairs
 
+const closingParens = block:
+  var closing: set[char]
+  for close in parenPairs.values:
+    closing.incl close
+  closing
+
+proc isClosingParen*(ch: char): bool =
+  ## Check if a character closes a parenthesis/bracket/quote pair
+  ch in closingParens
+
 proc getClosingChar*(openChar: char): char =
   ## Get the closing character for an opening character
   ## Returns '\0' if the character is not an opening paren

@@ -62,11 +62,16 @@ type
   TypedInputKind* = enum
     tiKey # A key, typed again as it was
     tiText # Text that came in otherwise (a paste, a completion)
+    tiRight
+      # A step right that stays in the typing, as Vim's <C-g>U<Right> (a
+      # closing character stepped over)
 
   TypedInput* = object ## One thing typed in Insert mode
     case kind*: TypedInputKind
     of tiKey:
       key*: KeyCombo
+    of tiRight:
+      discard
     of tiText:
       removeBefore*: int # Characters before the cursor the text replaces
       removeAfter*: int # and after it

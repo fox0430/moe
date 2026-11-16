@@ -131,20 +131,36 @@ proc addTyped(record: var InsertRecord, typed: TypedInput) =
       return
   record.typed.add typed
 
-proc noteTyped*(state: EditorState, typed: openArray[TypedInput], at: BufferPosition) =
-  ## Add what a key typed at `at`, as a plain insert when nothing is being
-  ## recorded. The count's repeats type what is recorded already.
-  if state.editState.typing.repeating:
-    return
-  state.stopArrow(at)
+proc openTypedRecord(state: EditorState) =
+  ## Start recording what is typed as a plain insert when nothing is being
+  ## recorded.
   if not state.editState.typing.open:
     state.keepChangeBefore()
     state.editState.insertRecord =
       InsertRecord(entry: InsertEntry(kind: ieInsert), count: 1)
     state.editState.typing.open = true
     state.editState.lastEditCommand = some(LastEditCommand(kind: lecInsert))
+
+proc noteTyped*(state: EditorState, typed: openArray[TypedInput], at: BufferPosition) =
+  ## Add what a key typed at `at`, as a plain insert when nothing is being
+  ## recorded. The count's repeats type what is recorded already.
+  if state.editState.typing.repeating:
+    return
+  state.stopArrow(at)
+  state.openTypedRecord()
   for t in typed:
     state.editState.insertRecord.addTyped(t)
+
+proc noteRight*(state: EditorState) =
+  ## Add a step right that stays in the typing, as Vim's <C-g>U<Right>: it is
+  ## no change and no move, so where typing starts stays put. After a move it
+  ## is not added, as the change that follows starts the typing anew. With no
+  ## record open (after a forced Insert boundary) it starts one as noteTyped
+  ## does, as Vim's `i` takes over `.` even when nothing is typed.
+  if state.editState.typing.repeating or state.insertStart.moved:
+    return
+  state.openTypedRecord()
+  state.editState.insertRecord.addTyped(TypedInput(kind: tiRight))
 
 proc untouchedAutoIndent*(buffer: TextBuffer, state: EditorState): Option[int] =
   ## The line Insert indented, while nothing has changed the buffer since. Text
@@ -212,7 +228,11 @@ proc noteKey*(
   if state.editState.typing.repeating:
     return
   if typedBefore.len > 0:
-    state.noteTyped(typedBefore, cursorBefore)
+    for typed in typedBefore:
+      if typed.kind == tiRight:
+        state.noteRight()
+      else:
+        state.noteTyped([typed], cursorBefore)
     if not keyConsumed:
       state.noteTyped([TypedInput(kind: tiKey, key: key)], cursorBefore)
   elif buffer.contentVersion != versionBefore:

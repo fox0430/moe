@@ -108,7 +108,7 @@ You can use the [example](../example/moerc.toml).
 | scrollbarWidth | integer | 1 | Scrollbar width in characters (0 = hidden) |
 | bookmarkMarker | string | "♥ " | Bookmark indicator symbol in sidebars |
 | showModifiedLines | bool | true | Show modified/inserted line indicators in sidebars |
-| autoCloseParen | bool | true | Automatic closing brackets |
+| autoCloseParen | bool | true | Automatic closing brackets and quotes. Typing a closing character before the same one steps over it. After a backslash that is not itself escaped a bracket or quote goes in as typed, as does a single quote after a word character, except in Python after a whole string prefix such as f or rb |
 | autoIndent | bool | true | Automatic indentation |
 | smartIndent | bool | false | Language-aware extra indent on Enter (Nim: var/let/const/type, trailing or/and/object/tuple/enum, trailing `:` or `=`, unclosed brackets) |
 | ignorecase | bool | true | Enable ignorecase when searching |

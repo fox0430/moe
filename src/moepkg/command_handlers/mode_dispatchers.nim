@@ -40,7 +40,7 @@ import
   ../[
     render_utils, types, buffer, modes, key_bindings, keybind_config, filer, filetree,
     diff_viewer, recent_file_mode, command_line, visual_selection, insert_record,
-    wanted_column, visual_block, fold_open,
+    wanted_column, visual_block, fold_open, auto_pair,
   ]
 
 when not defined(moe.embedded):
@@ -226,6 +226,19 @@ proc typeText*(
     return HandlerResult(kind: hrError, errorMessage: r.error)
   state.openFoldsOfEdits(editor.activeBuffer)
   state.noteTyped([typed], at)
+  state.settleTyping()
+  HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
+
+proc typeRight*(manager: HandlerManager, editor: Editor): HandlerResult =
+  ## Step right as typed (a closing character `.` steps over again), unless at
+  ## the end of the line. Recorded only when the cursor moved, as Vim's
+  ## ins_right.
+  let state = editor.state
+  state.noteOutsideChange()
+  let line = editor.activeBuffer.getLine(state.cursor.line)
+  if state.cursor.column < line.charLen:
+    state.cursor.column = line.stepRight(state.cursor.column)
+    state.noteRight()
   state.settleTyping()
   HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
 
