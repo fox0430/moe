@@ -956,7 +956,7 @@ suite "renderSplitView - Viewport adjustment":
     check e.windowManager.windows[0].viewport.topLine == settledTopLine
 
     # And the viewport is unchanged after the overlay closes
-    e.state.exitOverlay()
+    e.state.exitOverlay(okCommand)
     e.renderSplitView(buffer, false)
     check e.windowManager.windows[0].viewport.topLine == settledTopLine
 

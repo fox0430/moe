@@ -252,7 +252,7 @@ suite "Overlay - exitOverlay":
     check state.hasOverlay == true
     check state.isCommandOverlay == true
 
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
 
     check state.hasOverlay == false
     check state.mode == EditorMode.Normal
@@ -266,7 +266,7 @@ suite "Overlay - exitOverlay":
     check state.hasOverlay == true
     check state.isSearchOverlay == true
 
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
 
     check state.hasOverlay == false
     check state.mode == EditorMode.Filer
@@ -280,7 +280,7 @@ suite "Overlay - exitOverlay":
     check state.hasOverlay == true
     check state.isRenameOverlay == true
 
-    state.exitOverlay()
+    state.exitOverlay(okRename)
 
     check state.hasOverlay == false
     check state.mode == EditorMode.Normal
@@ -291,7 +291,7 @@ suite "Overlay - exitOverlay":
     state.input.line.text = "wq"
     state.input.line.cursor = 2
 
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
 
     check state.input.line.text == ""
     check state.input.line.cursor == 0
@@ -302,7 +302,7 @@ suite "Overlay - exitOverlay":
     state.input.line.text = "pattern"
     state.input.line.entry = some(2)
 
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
 
     check state.input.line.text == ""
     check state.input.line.entry.isNone
@@ -311,10 +311,20 @@ suite "Overlay - exitOverlay":
     let state = createTestState()
     state.mode = EditorMode.Normal
 
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
 
     check state.mode == EditorMode.Normal
     check state.hasOverlay == false
+
+  test "Leaves an overlay of another kind open":
+    let state = createTestState()
+    state.enterSearchOverlay(Forward)
+    state.input.line.text = "pattern"
+
+    state.exitOverlay(okCommand)
+
+    check state.isSearchOverlay
+    check state.input.line.text == "pattern"
 
 suite "Overlay - baseMode":
   test "Returns current mode when no overlay is active":
@@ -365,7 +375,7 @@ suite "Overlay - mode transitions":
     check state.isCommandOverlay == true
 
     # Exit overlay
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     check state.mode == EditorMode.Normal
     check state.hasOverlay == false
 
@@ -381,7 +391,7 @@ suite "Overlay - mode transitions":
     check state.isCommandOverlay == true
 
     # Exit overlay - should return to Filer
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     check state.mode == EditorMode.Filer
     check state.hasOverlay == false
 
@@ -397,7 +407,7 @@ suite "Overlay - mode transitions":
     check state.isSearchOverlay == true
 
     # Exit overlay
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
     check state.mode == EditorMode.Normal
     check state.hasOverlay == false
 
@@ -413,7 +423,7 @@ suite "Overlay - mode transitions":
     check state.isSearchOverlay == true
 
     # Exit overlay - should return to LogViewer
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
     check state.mode == EditorMode.LogViewer
     check state.hasOverlay == false
 
@@ -429,7 +439,7 @@ suite "Overlay - mode transitions":
     check state.isRenameOverlay == true
 
     # Exit overlay
-    state.exitOverlay()
+    state.exitOverlay(okRename)
     check state.mode == EditorMode.Normal
     check state.hasOverlay == false
 
@@ -442,13 +452,13 @@ suite "Overlay - mode transitions":
     check state.isCommandOverlay == true
 
     # Exit and enter search overlay
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     state.enterSearchOverlay(Forward)
     check state.isCommandOverlay == false
     check state.isSearchOverlay == true
 
     # Exit and enter rename overlay
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
     state.enterRenameOverlay("test", 0, 0)
     check state.isSearchOverlay == false
     check state.isRenameOverlay == true
@@ -468,7 +478,7 @@ suite "Overlay - special mode transitions":
     # Simulate executing :conf command
     # Handler should: save baseMode, exit overlay, set previousMode, enter Config
     let baseModeBeforeOverlay = state.baseMode
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     state.previousMode = baseModeBeforeOverlay
     state.mode = EditorMode.Config
 
@@ -493,7 +503,7 @@ suite "Overlay - special mode transitions":
 
     # Simulate executing :conf command
     let baseModeBeforeOverlay = state.baseMode
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     state.previousMode = baseModeBeforeOverlay
     state.mode = EditorMode.Config
 
@@ -516,7 +526,7 @@ suite "Overlay - special mode transitions":
 
     # Simulate executing :help command
     let baseModeBeforeOverlay = state.baseMode
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     state.previousMode = baseModeBeforeOverlay
     state.mode = EditorMode.Help
 
@@ -530,7 +540,7 @@ suite "Overlay - special mode transitions":
 
     state.enterCommandOverlay()
     let baseModeBeforeOverlay = state.baseMode
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     state.previousMode = baseModeBeforeOverlay
     state.mode = EditorMode.BufferManager
 
@@ -549,7 +559,7 @@ suite "Overlay - special mode transitions":
     check state.isSearchOverlay == true
 
     # Cancel search (ESC) - should return to LogViewer
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
     check state.mode == EditorMode.LogViewer
     check state.hasOverlay == false
 
@@ -562,7 +572,7 @@ suite "Overlay - special mode transitions":
     check state.baseMode == EditorMode.Normal
 
     # Simulate executing :e command (no mode transition, just exit overlay)
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
 
     check state.mode == EditorMode.Normal
     check state.hasOverlay == false
@@ -575,19 +585,19 @@ suite "Overlay - edge cases":
     # First overlay: command
     state.enterCommandOverlay()
     check state.baseMode == EditorMode.Normal
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     check state.mode == EditorMode.Normal
 
     # Second overlay: search
     state.enterSearchOverlay(Forward)
     check state.baseMode == EditorMode.Normal
-    state.exitOverlay()
+    state.exitOverlay(okSearch)
     check state.mode == EditorMode.Normal
 
     # Third overlay: rename
     state.enterRenameOverlay("var", 1, 2)
     check state.baseMode == EditorMode.Normal
-    state.exitOverlay()
+    state.exitOverlay(okRename)
     check state.mode == EditorMode.Normal
 
   test "Overlay after mode change":
@@ -607,7 +617,7 @@ suite "Overlay - edge cases":
     check state.isCommandOverlay == true
 
     # Exit overlay
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     check state.mode == EditorMode.Filer
 
   test "baseMode returns correct mode for all overlay types":
@@ -624,35 +634,35 @@ suite "Overlay - edge cases":
       # Command overlay
       state.enterCommandOverlay()
       check state.baseMode == baseMode
-      state.exitOverlay()
+      state.exitOverlay(okCommand)
 
       # Search overlay
       state.mode = baseMode
       state.enterSearchOverlay(Forward)
       check state.baseMode == baseMode
-      state.exitOverlay()
+      state.exitOverlay(okSearch)
 
       # Rename overlay
       state.mode = baseMode
       state.enterRenameOverlay("test", 0, 0)
       check state.baseMode == baseMode
-      state.exitOverlay()
+      state.exitOverlay(okRename)
 
   test "exitOverlay is idempotent":
     let state = createTestState()
     state.mode = EditorMode.Normal
 
     # Exit without overlay - should be safe
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     check state.mode == EditorMode.Normal
 
     # Enter and exit overlay
     state.enterCommandOverlay()
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     check state.mode == EditorMode.Normal
 
     # Exit again - should be safe
-    state.exitOverlay()
+    state.exitOverlay(okCommand)
     check state.mode == EditorMode.Normal
 
   test "Overlay state is independent of window mode":
