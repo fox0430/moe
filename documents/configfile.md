@@ -1008,6 +1008,7 @@ modified-buffer guard for `:bdelete` / `:quit` apply automatically. The runtime
 | bf / bfirst | Move to first window by default, or to this window's first tab |
 | bl / blast | Move to last window by default, or to this window's last tab |
 | bd / bdelete | Delete current buffer |
+| filetree | Toggle FileTree sidebar |
 | q / quit | Quit |
 | qa / quitall | Quit all |
 | w | Save current buffer |
