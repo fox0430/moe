@@ -203,7 +203,7 @@ proc handleNewline*(
   ##
   ## Insert newline and move to next line
   let pos = state.cursor
-  let insertResult = buffer.joiningFolds(fjTyped, buffer.insertText(pos, "\n"))
+  let insertResult = buffer.insertText(pos, "\n", foldJoin = fjTyped)
   if insertResult.isErr:
     return ReplaceModeResult(
       kind: rmrError, errorMessage: "Failed to insert newline: " & insertResult.error

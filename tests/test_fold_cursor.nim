@@ -26,6 +26,7 @@ import pkg/celina
 
 import ../src/moepkg/[buffer, types, editor]
 import ../src/moepkg/[editor_frame, fold_open]
+import ../src/moepkg/command_handlers/insert_commands
 import ../src/moepkg/handler {.all.}
 import vim_like_test_helper
 
@@ -442,9 +443,9 @@ suite "Lines typed below a fold's last line go into the fold, as Vim's foldMarkA
     let b = e.activeBuffer
     check b.foldState.addFold(1, 3, collapsed = false)
     e.pressWithFrames(":4<Enter>A")
-    e.state.anchorEdits(b, fjTyped)
-    check b.insertTextEnd(BufferPosition(line: 3, column: 2), "\np\nq").isOk
-    b.dropEditAnchor()
+    check b.insertTextEnd(
+      BufferPosition(line: 3, column: 2), "\np\nq", foldJoin = fjTyped
+    ).isOk
     check e.foldRanges == @[(1, 3)]
 
   test "A rolled back deletion below a fold's last line leaves the fold":
@@ -452,7 +453,7 @@ suite "Lines typed below a fold's last line go into the fold, as Vim's foldMarkA
     let b = e.activeBuffer
     check b.foldState.addFold(1, 3, collapsed = false)
     check b.beginTransaction("t").isOk
-    e.state.anchorEdits(b, fjTyped)
+    e.state.anchorEdits(b)
     check b.deleteLine(4).isOk
     check e.foldRanges == @[(1, 3)]
     check b.rollbackTransaction().isOk
@@ -488,10 +489,90 @@ suite "Lines typed below a fold's last line go into the fold, as Vim's foldMarkA
     e.pressWithFrames(":4<Enter>$R<Enter>x<Esc>")
     check e.foldRanges == @[(1, 4)]
 
-  test "joiningFolds gives back the join it found":
+  test "A line break run in Insert with no key to anchor it goes into the fold":
+    # As a script running insert.newline.
     let e = newVimLikeEditor(Six, 0, 0)
     let b = e.activeBuffer
-    e.state.anchorEdits(b, fjPasted)
-    check b.joiningFolds(fjTyped, b.editAnchor.get.foldJoin) == fjTyped
-    check b.editAnchor.get.foldJoin == fjPasted
+    check b.foldState.addFold(1, 3, collapsed = false)
+    e.state.mode = EditorMode.Insert
+    e.state.cursor = BufferPosition(line: 3, column: 2)
+    check b.editAnchor.isNone
+    insertNewline(b, e.state)
+    check e.lines.len == 7
+    check e.foldRanges == @[(1, 4)]
+
+  test "A line break run in Insert with no key to anchor it opens the fold it joins":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    check b.foldState.addFold(1, 3, collapsed = true)
+    e.state.mode = EditorMode.Insert
+    e.state.cursor = BufferPosition(line: 3, column: 2)
+    insertNewline(b, e.state)
+    check e.foldRanges == @[(1, 4)]
+    check not b.foldState.folds[0].collapsed
+    check b.editAnchor.isNone
+
+  test "A line break run in Insert on a buffer no window shows opens no fold":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let other = newTextBuffer("l1\nl2\nl3\nl4\nl5\nl6")
+    check other.foldState.addFold(1, 3, collapsed = true)
+    e.state.mode = EditorMode.Insert
+    e.state.cursor = BufferPosition(line: 3, column: 2)
+    insertNewline(other, e.state)
+    check other.len == 7
+    check other.foldState.folds[0].collapsed
+    check other.editAnchor.isNone
+
+  test "A line break a key types leaves the opening of its fold to the key":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    check b.foldState.addFold(1, 3, collapsed = true)
+    e.state.mode = EditorMode.Insert
+    e.state.cursor = BufferPosition(line: 3, column: 2)
+    e.state.anchorEdits(b)
+    insertNewline(b, e.state)
+    check b.editAnchor.isSome
+    check b.foldState.folds[0].collapsed
     b.dropEditAnchor()
+
+  test "A line break run outside Insert leaves the fold":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    check b.foldState.addFold(1, 3, collapsed = false)
+    e.state.cursor = BufferPosition(line: 3, column: 2)
+    insertNewline(b, e.state)
+    check e.lines.len == 7
+    check e.foldRanges == @[(1, 3)]
+
+  test "Lines opened below a fold's last line leave it whatever the join":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    check b.foldState.addFold(1, 3, collapsed = false)
+    check b.insertText(
+      BufferPosition(line: 4, column: 0), "x\n", openLine = olAbove, foldJoin = fjTyped
+    ).isOk
+    check e.foldRanges == @[(1, 3)]
+
+  test "A redo of a typed line break below a fold's last line leaves the fold":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    check b.foldState.addFold(1, 3, collapsed = false)
+    check b.insertText(BufferPosition(line: 3, column: 2), "\n", foldJoin = fjTyped).isOk
+    check e.foldRanges == @[(1, 4)]
+    check b.undo().isOk
+    check e.foldRanges == @[(1, 3)]
+    check b.redo().isOk
+    check e.foldRanges == @[(1, 3)]
+
+  test "A redo of a transaction with a typed line break leaves the fold":
+    let e = newVimLikeEditor(Six, 0, 0)
+    let b = e.activeBuffer
+    check b.foldState.addFold(1, 3, collapsed = false)
+    check b.beginTransaction("t").isOk
+    check b.insertText(BufferPosition(line: 3, column: 2), "\n", foldJoin = fjTyped).isOk
+    check b.commitTransaction().isOk
+    check e.foldRanges == @[(1, 4)]
+    check b.undo().isOk
+    check e.foldRanges == @[(1, 3)]
+    check b.redo().isOk
+    check e.foldRanges == @[(1, 3)]

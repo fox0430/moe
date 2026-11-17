@@ -5,7 +5,7 @@
 
 import std/options
 
-import types
+import types, modes
 import buffer/[core, fold]
 
 proc opensFolds*(state: EditorState): bool =
@@ -15,11 +15,24 @@ proc openFoldsAt(state: EditorState, buffer: TextBuffer, line: int) =
   if buffer.foldState.openFoldsInRange(line, line):
     state.activeWindow.noteFoldOpened()
 
-proc anchorEdits*(state: EditorState, buffer: TextBuffer, foldJoin = fjNone) =
-  buffer.editAnchor = some(EditAnchor(line: state.cursor.line, foldJoin: foldJoin))
+func typedJoin*(state: EditorState, join: FoldJoin): FoldJoin =
+  ## `join` while typing, as Vim's foldMarkAdjust joins only in Insert.
+  if state.mode in {EditorMode.Insert, EditorMode.Replace}: join else: fjNone
+
+proc anchorEdits*(state: EditorState, buffer: TextBuffer) =
+  buffer.editAnchor = some(EditAnchor(line: state.cursor.line))
 
 proc dropEditAnchor*(buffer: TextBuffer) =
   buffer.editAnchor = none(EditAnchor)
+
+proc anchorUnkeyedEdits*(state: EditorState, buffer: TextBuffer): bool =
+  ## Anchor the edits made in Insert or Replace to the active window's buffer
+  ## with no key's anchor, as a script's, so `openFoldsOfEdits` opens their folds as a key's; true when it
+  ## did.
+  if buffer.editAnchor.isNone and buffer == state.activeWindow.buffer and
+      state.mode in {EditorMode.Insert, EditorMode.Replace}:
+    state.anchorEdits(buffer)
+    return true
 
 proc openFoldsOfEdits*(state: EditorState, buffer: TextBuffer) =
   ## When the buffer changed since `anchorEdits`, open the closed folds on the

@@ -98,11 +98,13 @@ proc insertTextEnd*(
     text: string,
     cursorByte: int = -1,
     openLine = olNone,
+    foldJoin = fjNone,
 ): Result[InsertOutcome, string] =
   ## Insert text at `pos`, handling newlines. CR normalized for decoded buffers only.
   ## Returns end and cursor positions, or error if out of bounds. `openLine`
   ## marks text opening whole lines beside `pos`; ignored where it does not
-  ## apply.
+  ## apply. `foldJoin` tells which added rows below a fold's last line join it;
+  ## opened lines join none, as Vim's `o` and `O`.
   if b.readOnly:
     return err("Buffer is read-only")
   if text.len == 0:
@@ -150,16 +152,21 @@ proc insertTextEnd*(
       insertByteOffset: outcome.byteOffset,
       insertSplitTailLen: splitTailLen,
       insertOpenLine: opened,
-    )
+    ),
+    foldJoin = if opened == olNone: foldJoin else: fjNone,
   )
 
   return ok(outcome)
 
 proc insertText*(
-    b: TextBuffer, pos: BufferPosition, text: string, openLine = olNone
+    b: TextBuffer,
+    pos: BufferPosition,
+    text: string,
+    openLine = olNone,
+    foldJoin = fjNone,
 ): Result[(), string] =
   ## `insertTextEnd` for callers that place no cursor after the insertion.
-  let r = b.insertTextEnd(pos, text, openLine = openLine)
+  let r = b.insertTextEnd(pos, text, openLine = openLine, foldJoin = foldJoin)
   if r.isErr:
     return err(r.error)
   ok(())
