@@ -1580,8 +1580,8 @@ suite "Split from the FileTree sidebar":
 suite "Tab commands from the FileTree sidebar":
   ## The sidebar keeps its listing, as Vim's 'winfixbuf' window keeps its
   ## buffer: a command that would show another buffer there is refused, one
-  ## that opens a window splits the window it serves, and the rest act on the
-  ## listing, which refuses writes and reloads.
+  ## that opens a window splits the window it serves, a jump lands in that
+  ## window, and the rest act on the listing, which refuses writes and reloads.
   proc twoFiles(name: string): tuple[e: Editor, first, second: TextBuffer] =
     let (e, _) = editorOnFile(name & "_a.txt")
     let first = e.activeBuffer()
@@ -2002,32 +2002,94 @@ suite "Tab commands from the FileTree sidebar":
     check e.state.jumpList.list[^1].bufferId == second.id
     e.checkSidebar(tree)
 
-  test "a jump that lands while the tree has focus moves nothing there":
+  test "a jump that lands while the tree has focus goes to the window it serves":
     const name = "moe_sidebar_tab_jump"
-    let (e, first, _) = twoFiles(name)
+    let (e, first, second) = twoFiles(name)
     let third = getTempDir() / (name & "_c.txt")
     writeFile(third, "third\nline\n")
     defer:
       cleanup(name)
       removeFile(third)
+    let fileWin = e.activeWindow
+    fileWin.cursor = BufferPosition(line: 0, column: 2)
     let tree = e.openFileTree()
     let width = tree.viewport.width
     let cursorBefore = tree.cursor
+    let windowsBefore = e.windowManager.windows.len
     let buffersBefore = e.buffers.len
-    let jumpsBefore = e.state.jumpList.list.len
 
     # Regression: the jump was taken as done and its position was set on the
-    # listing; a refused jump still went into the jump list.
-    check not e.openFileAndJumpTo(third, 1, 0)
-    check not e.openFileAndJumpTo(first.filePath.get, 1, 0)
+    # listing. Then it was refused, as `:b` is; it lands where one opening a
+    # window does, the file the listing does not replace.
+    check e.jumpToLspPosition(third, 1, 0)
+
+    check e.activeWindow == fileWin
+    check e.windowManager.windows.len == windowsBefore
+    check e.buffers.len == buffersBefore + 1
+    check e.activeBuffer().filePath == some(third)
+    check e.cursor == BufferPosition(line: 1, column: 0)
+    check e.state.jumpList.list[^1] ==
+      JumpPosition(bufferId: second.id, line: 0, column: 2)
+    check tree.cursor == cursorBefore
+    e.checkUntouched(tree, width)
+
+    e.focus(tree)
     check e.tryActivateBuffer(first.id).error.contains("E1513")
     check not e.activateBuffer(first.id)
-
-    check e.state.jumpList.list.len == jumpsBefore
-    check e.buffers.len == buffersBefore
-    check tree.cursor == cursorBefore
     check first.id notin tree.bufferIds
-    e.checkRefused(tree, width)
+    check e.activeWindow == tree
+    e.checkUntouched(tree, width)
+
+  test "a jump that lands on a lone sidebar opens one window beside it":
+    const name = "moe_sidebar_tab_jump_lone"
+    let (e, _, second) = twoFiles(name)
+    let third = getTempDir() / (name & "_c.txt")
+    writeFile(third, "third\nline\n")
+    defer:
+      cleanup(name)
+      removeFile(third)
+    let tree = e.loneSidebar()
+
+    check e.jumpToLspPosition(third, 1, 0)
+
+    check e.windowManager.windows.len == 2
+    check e.activeWindow != tree
+    check e.activeBuffer().filePath == some(third)
+    check e.cursor.line == 1
+    check e.state.jumpList.list[^1].bufferId == second.id
+    e.checkSidebar(tree)
+
+  test "a jump from the tree that cannot open leaves the focus on the tree":
+    const name = "moe_sidebar_tab_jump_fail"
+    let (e, _, second) = twoFiles(name)
+    let bad = getTempDir() / (name & "_bad.txt")
+    writeFile(bad, "bad\n")
+    defer:
+      cleanup(name)
+      setFilePermissions(bad, {fpUserRead, fpUserWrite})
+      removeFile(bad)
+    setFilePermissions(bad, {fpUserWrite})
+    var canRead = true
+    try:
+      discard readFile(bad)
+    except CatchableError:
+      canRead = false
+    if canRead:
+      # Running as root: there is no way to fail the load here.
+      skip()
+    else:
+      let fileWin = e.activeWindow
+      let tree = e.openFileTree()
+      let width = tree.viewport.width
+      let jumpsBefore = e.state.jumpList.list.len
+
+      check not e.jumpToLspPosition(bad, 0, 0)
+
+      check e.state.statusMessage.startsWith("Failed to open file: ")
+      check e.activeWindow == tree
+      check fileWin.buffer == second
+      check e.state.jumpList.list.len == jumpsBefore
+      e.checkUntouched(tree, width)
 
   test "deleting the last buffer while the tree has focus moves its windows":
     let (e, path) = editorOnFile("moe_sidebar_tab_last_buffer.txt")

@@ -131,7 +131,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     let openWindow =
       win.modeState.kind == mskReferences and win.modeState.references.openWindowOnJump
     discard e.leaveViewerModeForJump(EditorMode.References)
-    discard e.openFileAndJumpTo(r.jumpToPath, r.jumpToLine, r.jumpToColumn, openWindow)
+    discard e.jumpToLspPosition(r.jumpToPath, r.jumpToLine, r.jumpToColumn, openWindow)
     return true
   of hrDocumentSymbolQuit:
     e.leaveViewerMode(EditorMode.DocumentSymbol)
@@ -145,7 +145,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
         ""
     discard e.leaveViewerModeForJump(EditorMode.DocumentSymbol)
     if filePath.len > 0:
-      discard e.openFileAndJumpTo(filePath, r.symbolLine, r.symbolColumn)
+      discard e.jumpToLspPosition(filePath, r.symbolLine, r.symbolColumn)
     return true
   of hrCallHierarchyQuit:
     e.leaveViewerMode(EditorMode.CallHierarchy)
@@ -160,7 +160,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     let path = pathRes.get
     discard e.leaveViewerModeForJump(EditorMode.CallHierarchy)
     discard
-      e.openFileAndJumpTo(path, r.callHierarchyJumpLine, r.callHierarchyJumpColumn)
+      e.jumpToLspPosition(path, r.callHierarchyJumpLine, r.callHierarchyJumpColumn)
     return true
   of hrCallHierarchyRequestIncoming:
     # Request incoming calls for selected item

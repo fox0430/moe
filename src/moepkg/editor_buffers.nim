@@ -648,12 +648,14 @@ proc deleteCurrentBuffer*(e: Editor, force: bool = false): Result[(), string] =
     return e.deleteBufferById(target.id)
   e.closeBuffer(target.id)
 
-proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
+proc loadOrCreateBuffer*(
+    e: Editor, path: string, origin = roUser
+): Result[TextBuffer, string] =
   ## Return the buffer for `path`: reuse an existing one from the global
   ## buffer list, or create, initialise, and register a new buffer.
   ## New buffers are loaded from disk when the file exists, otherwise created
   ## empty with filePath preset (for saving later), then have EditorConfig and
-  ## reserved-word highlighting applied.
+  ## reserved-word highlighting applied. `origin` is as for `initLoadedBuffer`.
   let existingIndex = e.findBufferByPath(path)
   if existingIndex >= 0:
     return ok(e.buffers[existingIndex])
@@ -694,8 +696,25 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
   # multi-file startup get the same setup as the first file. Shared with the
   # split startup path (registerSplitBuffer) so the file looks identical however
   # it is opened.
-  e.initLoadedBuffer(newBuffer, roUser)
+  e.initLoadedBuffer(newBuffer, origin)
   ok(newBuffer)
+
+proc openFileInBackground*(e: Editor, path: string): Result[TextBuffer, string] =
+  ## Open `path` as a buffer without showing it anywhere: it joins the global
+  ## buffer list but no window's tab list, so nothing on screen moves.
+  ##
+  ## Gives a file an undoable editing history before it is rewritten on the
+  ## user's behalf.
+  e.loadOrCreateBuffer(path, roInternal)
+
+proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string] =
+  ## Open `path` in the active window, as `:e` does, and return the buffer now
+  ## shown there: the one already holding the file, or a freshly loaded one.
+  ## Either way it joins the window's tab list.
+  ?e.activeWindow.checkTabSwitch()
+  let buffer = ?e.loadOrCreateBuffer(path)
+  e.switchToBufferByIndex(e.bufferIndexById(buffer.id))
+  ok(buffer)
 
 proc editFile*(e: Editor, path: string): Result[(), string] =
   ## Load a file and switch to it (like :e in Vim)
@@ -705,13 +724,7 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
   logDebug("editor", "editFile called with path: " & path)
   logDebug("editor", "Current buffers.len: " & $e.buffers.len)
 
-  ?e.activeWindow.checkTabSwitch()
-  let bufferResult = e.loadOrCreateBuffer(path)
-  if bufferResult.isErr:
-    return err(bufferResult.error)
-
-  let idx = e.findBufferByPath(path)
-  e.switchToBufferByIndex(idx)
+  discard ?e.openFileInActiveWindow(path)
   logDebug("editor", "editFile completed, buffers.len: " & $e.buffers.len)
   ok(())
 

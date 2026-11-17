@@ -38,6 +38,7 @@ import
   editor_hover,
   editor_callhierarchy,
   editor_navigation,
+  editor_open,
   editor_render,
   editor_display,
   editor_substitute,
@@ -65,9 +66,9 @@ export
   editor_types, editor_window, editor_file, editor_lsp, editor_codelens,
   editor_selection, editor_selectionrange, editor_documentsymbol, editor_documentlink,
   editor_signaturehelp, editor_hover, editor_callhierarchy, editor_navigation,
-  editor_render, editor_display, editor_substitute, editor_buffers, editor_reload,
-  editor_config_reload, editor_frame, editor_mode, editor_window_tab, editor_hooks,
-  editor_command_output
+  editor_open, editor_render, editor_display, editor_substitute, editor_buffers,
+  editor_reload, editor_config_reload, editor_frame, editor_mode, editor_window_tab,
+  editor_hooks, editor_command_output
 
 proc addCommandAlias*(
     e: Editor, alias: string, action: CommandLineAction

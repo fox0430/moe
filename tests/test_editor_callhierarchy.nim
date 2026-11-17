@@ -19,7 +19,7 @@
 
 ## Tests for editor_callhierarchy.nim
 
-import std/[unittest, os, strutils, options, json, importutils, tables]
+import std/[unittest, strutils, options, json, importutils, tables]
 
 import pkg/results
 
@@ -319,36 +319,6 @@ suite "editor_callhierarchy - requestCallHierarchyOutgoingForItem":
     check not e.state.statusMessage.contains("Buffer has no file path")
     check e.state.statusMessage.contains("No LSP support for file")
     check e.state.statusMessage.contains("x.unknownlang")
-
-suite "editor_callhierarchy - jumpToCallHierarchyItem":
-  test "Jumps to item location in same file":
-    let e = createTestEditor()
-    let testFile = getTempDir() / "moe_test_call_hierarchy.txt"
-
-    writeFile(testFile, "line 0\nline 1\nline 2\n")
-    defer:
-      removeFile(testFile)
-
-    discard e.editFile(testFile)
-
-    let item = lspTypes.CallHierarchyItem(
-      name: "test",
-      kind: SymbolKind.skFunction,
-      uri: "file://" & testFile,
-      range: lspTypes.Range(
-        start: lspTypes.Position(line: 1, character: 0),
-        `end`: lspTypes.Position(line: 1, character: 6),
-      ),
-      selectionRange: lspTypes.Range(
-        start: lspTypes.Position(line: 1, character: 0),
-        `end`: lspTypes.Position(line: 1, character: 6),
-      ),
-    )
-
-    let result = e.jumpToCallHierarchyItem(item)
-
-    check result
-    check e.cursor.line == 1
 
 suite "editor_callhierarchy - config gate":
   test "Incoming calls returns false when disabled in config":

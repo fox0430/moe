@@ -26,12 +26,7 @@ import std/[json, options, tables]
 import pkg/results
 
 import
-  types/editor_types,
-  viewer_mode,
-  editor_lsp,
-  lsp_integration,
-  callhierarchy_viewer,
-  editor_navigation
+  types/editor_types, viewer_mode, editor_lsp, lsp_integration, callhierarchy_viewer
 import lsp/protocol/types as lspTypes
 
 const CallHierarchyFeatures = {
@@ -259,9 +254,3 @@ proc requestCallHierarchyOutgoingForItem*(
     return false
   storeItemDrivenPending(e, lrfCallHierarchyOutgoing, reqRes.get)
   return true
-
-proc jumpToCallHierarchyItem*(e: Editor, item: lspTypes.CallHierarchyItem): bool =
-  ## Jump to a CallHierarchyItem location
-  ## Returns true if successful
-  let loc = lspTypes.Location(uri: item.uri, range: item.selectionRange)
-  return e.jumpToLspLocation(loc, "Call Hierarchy")

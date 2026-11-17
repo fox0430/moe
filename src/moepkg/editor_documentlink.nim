@@ -23,13 +23,7 @@ import std/[options, strutils, tables]
 
 import pkg/results
 
-import
-  types/editor_types,
-  editor_lsp,
-  lsp_service,
-  lsp_integration,
-  buffer,
-  editor_navigation
+import types/editor_types, editor_lsp, lsp_service, lsp_integration, buffer, editor_open
 import lsp/protocol/types as lspTypes
 
 const DocumentLinkValidModes* =
@@ -79,26 +73,7 @@ proc jumpToDocumentLink(e: Editor, link: lspTypes.DocumentLink): bool =
   # open a buffer, so anything else falls through to the scheme display.
   let pathRes = lsp_service.validateLocalFileUri(target)
   if pathRes.isOk:
-    let path = pathRes.get
-    let activeBuffer = e.activeBuffer()
-
-    # Compare as files, not URI spelling. Check before the jump list;
-    # staying put is not a jump.
-    if activeBuffer.bufferHoldsFile(path):
-      e.state.statusMessage = "Already in this file"
-      return true
-
-    # Recorded once the jump lands: a refused or failed open is no jump.
-    let origin = e.jumpOrigin()
-
-    let opened = e.openFileInActiveWindow(path)
-    if opened.isErr:
-      e.state.statusMessage = "Failed to open file: " & opened.error
-      return false
-
-    e.addToJumpList(origin)
-    e.state.statusMessage = "Opened: " & path.split('/')[^1]
-    return true
+    return e.followFileLink(pathRes.get)
   elif target.startsWith("http://") or target.startsWith("https://"):
     # External URL - show message (could open browser in the future)
     e.state.statusMessage = "External link: " & target
