@@ -77,7 +77,7 @@ proc runStartupCommands*(e: Editor, commands: openArray[StartupCommand]) =
       case command.kind
       of sckEx:
         # As with -c, the command line history does not get it.
-        quit = e.executeCommandOverlay(":" & command.command, history = false) == roQuit
+        quit = e.executeCommandOverlay(":" & command.command) == roQuit
         moved = e.cursor != before
       of sckSearch:
         moved = e.searchStartLine(command.pattern, aboveFirst)

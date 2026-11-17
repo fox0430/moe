@@ -62,9 +62,7 @@ var frontLayerHook*: LayerHook = nil
   ## The layers in front of the mode handlers that run a key as it is: the
   ## command line, Search, Rename, Debug, a viewer's Ctrl-W and Recent File.
 
-proc executeCommandOverlay*(
-  e: Editor, commandText: string, history = true
-): ReplayOutcome
+proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome
 
 proc processResultEpilogue(
   e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
@@ -1032,13 +1030,12 @@ proc runKeyCombo*(
     runNestedKeyCombo(manager, e, KeyInput(combo: keyCombo, remap: remap, typed: false)),
   )
 
-proc executeCommandOverlay*(
-    e: Editor, commandText: string, history = true
-): ReplayOutcome =
+proc executeCommandOverlay*(e: Editor, commandText: string): ReplayOutcome =
   ## Full lifecycle of a Command-overlay Enter: pre-teardown, dispatch,
   ## side effects via processResult, and teardown driven by `r.group`. The
   ## teardown closes only the command line, not a prompt the command opened.
-  ## Without `history`, the command line history does not get it.
+  ## The command line history does not get it: the open command line adds a
+  ## typed line once it ran.
   ## `roAbort` when the command fails or the host takes its result, so the
   ## keys after it stop as after any replayed key that does.
   # 1. pre-teardown (kind-independent)
@@ -1098,8 +1095,6 @@ proc executeCommandOverlay*(
         e.state.jumpList = jumpsBefore.get
   if commandMode == EditorMode.Config and r.kind == hrCloseWindow:
     r = e.activeWindow.viewerQuit().get(r)
-  if history and commandText.len > 1:
-    e.addCommandToHistory(commandText[1 ..^ 1])
 
   # 3. side effects
   let queued = e.hostResultRequestCount

@@ -3,12 +3,20 @@ import std/[options, os, strutils, tempfiles, unittest]
 import ../src/moepkg/frontend
 import ../src/moepkg/[editor, key_bindings, keybind_config, types]
 import ../src/moepkg/command_handlers/result_processor
+from vim_like_test_helper import keysOf
 
 proc testEditor(): Editor =
   newEditor(newEditorConfig())
 
 proc key(e: Editor, notation: string): bool =
   e.handleKeyCombo(parseKeyCombo(notation).get)
+
+proc typeKeys(e: Editor, spec: string): bool =
+  ## Type `spec` as the user would, `<Name>` as one key. False on quit.
+  result = true
+  for k in keysOf(spec):
+    if not e.handleKeyCombo(k):
+      return false
 
 suite "Host result interception":
   test "an unset hook preserves native splits":
@@ -263,7 +271,8 @@ suite "Host result interception":
       e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
         r.kind in {hrNew, hrHSplit}
       if rhs == "@ : i X Esc":
-        require e.executeCommandOverlay(":split x") != roQuit
+        # Typed, as only a typed line is the one `@:` runs.
+        require e.typeKeys(":split x<Enter>")
         require e.takeHostResultRequest().isSome
       require e.keyBindingRegistry.addRuntimeMappingExpanded(Normal, "C-y", rhs).len == 0
       require e.key("C-y")
@@ -329,7 +338,8 @@ suite "Host result interception":
       e.releaseExternalResources()
     e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
       r.kind == hrHSplit
-    require e.executeCommandOverlay(":split x") != roQuit
+    # Typed, as only a typed line is the one `@:` runs.
+    require e.typeKeys(":split x<Enter>")
     require e.takeHostResultRequest().isSome
     for k in ["3", "@", ":"]:
       require e.key(k)

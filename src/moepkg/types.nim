@@ -346,6 +346,11 @@ type
     wordAt*: Option[BufferPosition]
       # Where Ctrl-R Ctrl-W reads while 'incsearch' shows a match or `:s` a
       # preview, as neither leaves the cursor where Vim's stays.
+    typed*: bool
+      # A key was typed at it, as Vim's some_key_typed: not when a mapping or
+      # a register ran it to the end. The `:` line also counts the editor
+      # waiting for a key, and is the only prompt that reads it, to go into
+      # the history.
 
   SearchState* = object ## Search-related state grouped together for better organization
     last*: SearchSpec # Last executed search, replayed by n/N and an empty `/`
