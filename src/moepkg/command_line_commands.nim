@@ -997,6 +997,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     ],
     action: some(claTerminal),
     isCanonicalLong: true,
+    keymapBaseDescription: "Open terminal emulator (default shell)",
   ),
   CommandLineCommandSpec(
     name: "bg",

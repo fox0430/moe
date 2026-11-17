@@ -1011,6 +1011,7 @@ modified-buffer guard for `:bdelete` / `:quit` apply automatically. The runtime
 | filetree | Toggle FileTree sidebar |
 | q / quit | Quit |
 | qa / quitall | Quit all |
+| terminal | Open terminal emulator (default shell) |
 | w | Save current buffer |
 | wa / saveall | Save all buffers |
 | wq | Save and quit |
