@@ -45,9 +45,6 @@ proc filetypeName*(language: SourceLanguage): string =
 proc filetypeLanguage*(name: string): Option[SourceLanguage] =
   ## Resolve a `filetype` entry to its language, or `none`.
   ## Accepts display names, abbreviations, and `${filetype}` spellings.
-  for language in SourceLanguage:
-    if language != langNone and cmpIgnoreStyle(name, filetypeName(language)) == 0:
-      return some(language)
   let language = getSourceLanguage(name)
   # `getSourceLanguage` reports an unknown name as `langNone`.
   if language != langNone:

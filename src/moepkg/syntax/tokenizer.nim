@@ -428,29 +428,50 @@ const filetypeNames*: seq[string] = block:
       names.add sourceLanguageToFiletype[language]
   names
 
+const sourceLanguageAliases* = [
+  ## Abbreviations `getSourceLanguage` accepts besides names and display names.
+  ("js", langJavaScript),
+  ("ts", langTypeScript),
+  ("py", langPython),
+  ("rs", langRust),
+  ("sh", langShell),
+  ("bash", langShell),
+  ("yml", langYaml),
+  ("docker", langDockerfile),
+  ("md", langMarkdown),
+  ("cxx", langCpp),
+  ("cs", langCsharp),
+  ("golang", langGo),
+  ("hs", langHaskell),
+  ("luau", langLua),
+  ("tex", langLatex),
+  ("viml", langVim),
+  ("vim9", langVim),
+]
+
+static:
+  for a in succ(langNone) ..< high(SourceLanguage):
+    for b in succ(a) .. high(SourceLanguage):
+      for x in [sourceLanguageToStr[a], sourceLanguageToFiletype[a]]:
+        for y in [sourceLanguageToStr[b], sourceLanguageToFiletype[b]]:
+          doAssert cmpIgnoreStyle(x, y) != 0, "two languages share a name: " & x
+  for i, (alias, _) in sourceLanguageAliases:
+    for (other, _) in sourceLanguageAliases[i + 1 ..^ 1]:
+      doAssert cmpIgnoreStyle(alias, other) != 0, "duplicate alias: " & alias
+    for named in succ(langNone) .. high(SourceLanguage):
+      doAssert cmpIgnoreStyle(alias, sourceLanguageToStr[named]) != 0 and
+        cmpIgnoreStyle(alias, sourceLanguageToFiletype[named]) != 0,
+        "alias repeats a name: " & alias
+
 proc getSourceLanguage*(name: string): SourceLanguage =
   for i in countup(succ(low(SourceLanguage)), high(SourceLanguage)):
-    if cmpIgnoreStyle(name, sourceLanguageToStr[i]) == 0:
+    if cmpIgnoreStyle(name, sourceLanguageToStr[i]) == 0 or
+        cmpIgnoreStyle(name, sourceLanguageToFiletype[i]) == 0:
       return i
-  case name.toLowerAscii
-  of "js": langJavaScript
-  of "jsx": langJsx
-  of "ts": langTypeScript
-  of "tsx": langTsx
-  of "py": langPython
-  of "rs": langRust
-  of "sh", "bash": langShell
-  of "yml": langYaml
-  of "docker": langDockerfile
-  of "md": langMarkdown
-  of "cpp", "cxx": langCpp
-  of "cs", "csharp": langCsharp
-  of "golang": langGo
-  of "hs": langHaskell
-  of "luau": langLua
-  of "tex", "latex": langLatex
-  of "vim", "viml", "vim9": langVim
-  else: langNone
+  for (alias, language) in sourceLanguageAliases:
+    if cmpIgnoreStyle(name, alias) == 0:
+      return language
+  langNone
 
 proc defaultLangState*(): LangState =
   ## Initial `LangState` for a fresh tokenizer. Callers seeding a tokenizer at
