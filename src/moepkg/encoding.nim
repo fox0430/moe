@@ -237,7 +237,7 @@ proc sanitizeInvalidUtf8*(s: string): string =
 const EncodingDetectionSampleLen = EncodingDetectionSampleSize div 4 * 4
   ## Sample length for `detectCharacterEncoding`, 4-byte aligned.
 
-proc utf8TruncatedTailStart(s: string): int =
+proc utf8TruncatedTailStart*(s: string): int =
   ## Start offset of a UTF-8 sequence cut short by the end of `s`, or -1 when
   ## `s` does not end in one. Only the last 3 bytes can begin such a sequence.
   for i in countdown(s.len - 1, max(0, s.len - 3)):

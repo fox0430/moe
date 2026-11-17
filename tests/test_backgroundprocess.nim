@@ -22,7 +22,8 @@ import std/[importutils, unittest, options, os, sequtils, strutils]
 import pkg/chronos
 import pkg/chronos/asyncproc
 
-import ../src/moepkg/[background_process {.all.}, child_process {.all.}]
+import
+  ../src/moepkg/[background_process {.all.}, child_process {.all.}, job_stop {.all.}]
 
 proc outputOf(bp: BackgroundProcess): Future[seq[string]] {.async.} =
   ## Unbounded wait, for the tests that are about what a command printed
@@ -127,6 +128,84 @@ suite "BackgroundProcess - whether the child runs":
       return bp.process.running()
 
     check not waitFor runTest()
+
+  test "A kill that reaches a running child marks it signalled":
+    proc runTest(): Future[bool] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sleep", args: @["30"], workingDir: getCurrentDir()
+        )
+      ).get
+      bp.kill()
+      result = bp.process.signalled
+      await bp.closeAsync()
+
+    check waitFor runTest()
+
+  test "A kill once the child has exited leaves it unsignalled, with its code":
+    proc runTest(): Future[tuple[signalled: bool, code: Option[int]]] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sh", args: @["-c", "exit 3"], workingDir: getCurrentDir()
+        )
+      ).get
+      let deadline = Moment.now() + 5.seconds
+      while bp.process.running() and Moment.now() < deadline:
+        await sleepAsync(10.milliseconds)
+      bp.kill()
+      result.signalled = bp.process.signalled
+      discard await bp.waitForExitAsync()
+      result.code = bp.exitCode
+      await bp.closeAsync()
+
+    let r = waitFor runTest()
+    check not r.signalled
+    check r.code == some(3)
+
+suite "BackgroundProcess - a read hands the event loop a turn":
+  test "Even with data waiting in the pipe":
+    # chronos would read it without suspending, and a command that keeps
+    # writing would hold the loop.
+    proc runTest(): Future[tuple[suspended: bool, n: int]] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sh", args: @["-c", "echo hi; sleep 30"], workingDir: getCurrentDir()
+        )
+      ).get
+      await sleepAsync(200.milliseconds)
+      var buffer = newString(16)
+      let read = bp.process.stdoutStream().readTurn(addr buffer[0], buffer.len)
+      result.suspended = not read.finished
+      result.n = await read
+      bp.kill()
+      await bp.closeAsync()
+
+    let r = waitFor runTest()
+    check r.suspended
+    check r.n == 3
+
+  test "A cancel throws away nothing that was read":
+    proc runTest(): Future[string] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sh", args: @["-c", "echo hi; sleep 30"], workingDir: getCurrentDir()
+        )
+      ).get
+      await sleepAsync(200.milliseconds)
+      let reader = bp.process.stdoutStream()
+      var buffer = newString(16)
+      await reader.readTurn(addr buffer[0], buffer.len).cancelAndWait()
+      let n =
+        try:
+          await reader.readOnce(addr buffer[0], buffer.len).wait(2.seconds)
+        except AsyncTimeoutError:
+          0
+      buffer.setLen(n)
+      bp.kill()
+      await bp.closeAsync()
+      return buffer
+
+    check waitFor(runTest()) == "hi\n"
 
 suite "BackgroundProcess - readAllOutput":
   test "Read single line output":
@@ -847,6 +926,343 @@ suite "BackgroundProcess - waitForAsync with a stop":
       check r.isErr
       check "stopped" in r.error
       check Moment.now() - started < 5.seconds
+
+suite "BackgroundProcess - a stop that outlives the run":
+  test "The run lets go of it":
+    let stop = JobStop()
+    let bp = startBackgroundProcess(
+      BackgroundProcessCommand(cmd: "true", workingDir: getCurrentDir())
+    ).get
+    discard waitFor bp.waitForAsync(5.seconds, stop)
+    privateAccess(JobStop)
+    check stop.actions.len == 0
+
+suite "BackgroundProcess - streamLines":
+  proc sh(script: string): BackgroundProcessCommand =
+    BackgroundProcessCommand(cmd: "sh", args: @["-c", script], workingDir: "")
+
+  proc streamed(
+      command: BackgroundProcessCommand, separator = '\n', maxLines = 0
+  ): LineQueue =
+    result = newLineQueue()
+    waitFor streamLines(
+      command, result, initLineSplitter(separator, maxLines), JobStop()
+    )
+
+  proc waitUntil(cond: proc(): bool {.gcsafe, raises: [].}) {.async.} =
+    ## Poll until `cond` comes true, for a few seconds at most: a run that never
+    ## gets there then fails the checks that follow rather than hanging.
+    let deadline = Moment.now() + 5.seconds
+    while not cond() and Moment.now() < deadline:
+      await sleepAsync(10.milliseconds)
+
+  test "Lines are queued, and the run says how the command ended":
+    let q = streamed(sh "printf 'a\\nb\\n'; exit 3")
+    check q.ended
+    check q.take(10) == @["a", "b"]
+    check q.exitCode == some(3)
+    check not q.stopped
+    check not q.limitReached
+    check q.failure == ""
+
+  test "NUL separated output keeps a newline inside a line":
+    let q = streamed(sh "printf 'a\\nb\\0c\\0'", separator = '\0')
+    check q.take(10) == @["a\nb", "c"]
+
+  test "Standard error is kept apart, as diagnostics":
+    let q = streamed(sh "echo out; echo err >&2")
+    check q.take(10) == @["out"]
+    check q.diagnostics == @["err"]
+
+  test "The command reads no input":
+    let q = streamed(BackgroundProcessCommand(cmd: "cat", workingDir: ""))
+    check q.take(10).len == 0
+    check q.exitCode == some(0)
+
+  test "A command that cannot start says so":
+    let q = streamed(
+      BackgroundProcessCommand(cmd: "/nonexistent/command/that/does/not/exist")
+    )
+    check q.ended
+    check q.failure.len > 0
+    check q.len == 0
+
+  test "Past the line limit the command is stopped, not read away":
+    let
+      started = Moment.now()
+      q = newLineQueue()
+      stop = JobStop()
+    waitFor streamLines(
+      BackgroundProcessCommand(cmd: "yes", workingDir: ""),
+      q,
+      initLineSplitter('\n', maxLines = 5),
+      stop,
+    )
+    check q.take(10) == @["y", "y", "y", "y", "y"]
+    check q.limitReached
+    check not q.stopped
+    # The caller's stop is left alone, and the kill's code is not the command's.
+    check not stop.requested
+    check q.exitCode.isNone
+    check Moment.now() - started < 5.seconds
+
+  test "A stop ends the run, keeping the lines read before it":
+    proc runTest(): Future[LineQueue] {.async.} =
+      let
+        q = newLineQueue()
+        stop = JobStop()
+        run = streamLines(sh "echo first; sleep 30", q, initLineSplitter('\n'), stop)
+      await waitUntil(
+        proc(): bool =
+          q.len > 0
+      )
+      stop.request()
+      await run
+      return q
+
+    let started = Moment.now()
+    let q = waitFor runTest()
+    check q.ended
+    check q.stopped
+    check q.take(10) == @["first"]
+    check q.exitCode.isNone
+    check Moment.now() - started < 5.seconds
+
+  test "Output past the line limit stops the run before its line ends":
+    let
+      started = Moment.now()
+      q = newLineQueue()
+      stop = JobStop()
+    waitFor streamLines(
+      sh "printf 'a\\nb\\nc'; sleep 30", q, initLineSplitter('\n', maxLines = 2), stop
+    )
+    check q.take(10) == @["a", "b"]
+    check q.limitReached
+    check not q.stopped
+    check not stop.requested
+    privateAccess(JobStop)
+    check stop.actions.len == 0
+    check Moment.now() - started < 5.seconds
+
+  when defined(linux):
+    test "A command that ended on its own keeps its exit code when a stop cuts the read short":
+      # The output outgrows the queue but fits the pipe, so the command exits
+      # while the read waits for room. The marker says it has exited: a
+      # watcher touches it once the shell is a zombie.
+      let marker = getTempDir() / "moe_test_stream_lines_exited"
+      removeFile(marker)
+      defer:
+        removeFile(marker)
+      let script =
+        "(n=0; while ! grep -q '^State:[[:space:]]*Z' /proc/$$/status && " &
+        "[ $n -lt 500 ]; do sleep 0.01; n=$((n+1)); done; touch " & marker &
+        ") >/dev/null 2>&1 & seq 1 1000; exit 3"
+
+      proc runTest(marker, script: string): Future[LineQueue] {.async.} =
+        let
+          q = newLineQueue(capacity = 64)
+          stop = JobStop()
+          run = streamLines(sh script, q, initLineSplitter('\n'), stop)
+        await waitUntil(
+          proc(): bool =
+            fileExists(marker)
+        )
+        stop.request()
+        await run
+        return q
+
+      let q = waitFor runTest(marker, script)
+      check fileExists(marker)
+      check q.stopped
+      check q.exitCode == some(3)
+
+  test "A stop once all the output is read does not say it was cut short":
+    # The command closes its output and works on.
+    let marker = getTempDir() / "moe_test_stream_lines_closed"
+    removeFile(marker)
+    defer:
+      removeFile(marker)
+
+    proc runTest(marker: string): Future[LineQueue] {.async.} =
+      let
+        q = newLineQueue()
+        stop = JobStop()
+        run = streamLines(
+          sh("seq 3; exec >&-; touch " & marker & "; sleep 30"),
+          q,
+          initLineSplitter('\n'),
+          stop,
+        )
+      await waitUntil(
+        proc(): bool =
+          fileExists(marker)
+      )
+      # Turns for the read to reach the end.
+      await sleepAsync(100.milliseconds)
+      stop.request()
+      await run
+      return q
+
+    let q = waitFor runTest(marker)
+    check fileExists(marker)
+    check not q.stopped
+    check q.take(10) == @["1", "2", "3"]
+
+  test "A stop leaves out the line it cut off":
+    proc runTest(): Future[LineQueue] {.async.} =
+      let
+        q = newLineQueue()
+        stop = JobStop()
+        run = streamLines(
+          sh "printf 'whole\\npart'; sleep 30", q, initLineSplitter('\n'), stop
+        )
+      await waitUntil(
+        proc(): bool =
+          q.len > 0
+      )
+      stop.request()
+      await run
+      return q
+
+    let q = waitFor runTest()
+    check q.stopped
+    check q.take(10) == @["whole"]
+
+  when defined(linux):
+    test "Lines written after a stop are not queued":
+      # A descendant that escaped the group kill writes only once the stop is
+      # in, while the run still reads during the kill's grace.
+      let marker = getTempDir() / "moe_test_stream_lines_stopped"
+      removeFile(marker)
+      defer:
+        removeFile(marker)
+      let late =
+        "n=0; while [ ! -e " & marker & " ] && [ $n -lt 500 ]; do " &
+        "sleep 0.01; n=$((n+1)); done; " &
+        "i=0; while [ $i -lt 100 ]; do echo late; sleep 0.01; i=$((i+1)); done"
+
+      proc runTest(marker, late: string): Future[LineQueue] {.async.} =
+        let
+          q = newLineQueue()
+          stop = JobStop()
+          run = streamLines(
+            sh("echo first; setsid sh -c '" & late & "' & sleep 30"),
+            q,
+            initLineSplitter('\n'),
+            stop,
+          )
+        await waitUntil(
+          proc(): bool =
+            q.len > 0
+        )
+        stop.request()
+        writeFile(marker, "")
+        await run
+        return q
+
+      let q = waitFor runTest(marker, late)
+      check q.stopped
+      check q.take(10) == @["first"]
+
+  test "A stop asked before the start keeps the command from starting":
+    let marker = getTempDir() / "moe_test_stream_lines_started"
+    removeFile(marker)
+    defer:
+      removeFile(marker)
+    let
+      q = newLineQueue()
+      stop = JobStop()
+    stop.request()
+    waitFor streamLines(
+      BackgroundProcessCommand(cmd: "touch", args: @[marker]),
+      q,
+      initLineSplitter('\n'),
+      stop,
+    )
+    check q.ended
+    check q.stopped
+    check not fileExists(marker)
+
+  test "A full queue holds the read back, and every line still comes in order":
+    proc runTest(): Future[tuple[held: bool, lines: seq[string]]] {.async.} =
+      let
+        q = newLineQueue(capacity = 64)
+        run = streamLines(
+          BackgroundProcessCommand(cmd: "seq", args: @["1", "100000"]),
+          q,
+          initLineSplitter('\n'),
+          JobStop(),
+        )
+      await sleepAsync(200.milliseconds)
+      # The capacity and at most one line past it: 64 + 6 bytes of lines no
+      # shorter than 2 bytes.
+      result.held = not run.finished and q.len <= 35
+      while not q.drained:
+        result.lines.add q.take(1000)
+        await sleepAsync(1.milliseconds)
+      await run
+
+    let r = waitFor runTest()
+    check r.held
+    check r.lines.len == 100000
+    check r.lines == toSeq(1 .. 100000).mapIt($it)
+
+  test "A long line comes in whole reads however little room the queue has":
+    # A line takes no room until it ends, so reads of only the room left would
+    # bring it a byte a turn.
+    proc runTest(): Future[bool] {.async.} =
+      let
+        q = newLineQueue(capacity = 10)
+        stop = JobStop()
+        run = streamLines(
+          sh "printf 'aaaaaaaa\\n'; head -c 4000000 /dev/zero | tr '\\0' b; echo",
+          q,
+          initLineSplitter('\n'),
+          stop,
+        )
+      await waitUntil(
+        proc(): bool =
+          q.len == 2
+      )
+      result = q.len == 2
+      stop.request()
+      await run
+
+    let started = Moment.now()
+    check waitFor(runTest())
+    check Moment.now() - started < 2.seconds
+
+  test "A stop while the read waits for room ends the run":
+    proc runTest(): Future[LineQueue] {.async.} =
+      let
+        q = newLineQueue(capacity = 64)
+        stop = JobStop()
+        run = streamLines(
+          BackgroundProcessCommand(cmd: "yes"), q, initLineSplitter('\n'), stop
+        )
+      await waitUntil(
+        proc(): bool =
+          q.full
+      )
+      stop.request()
+      await run
+      return q
+
+    let started = Moment.now()
+    let q = waitFor runTest()
+    check q.stopped
+    check q.len > 0
+    check Moment.now() - started < 5.seconds
+
+  test "A wait for room ends with a stop, not at the kill's grace":
+    let q = newLineQueue(capacity = 1)
+    q.add "a"
+    let
+      stop = JobStop()
+      wait = q.waitForRoom(stop)
+    check not wait.finished
+    stop.request()
+    check waitFor(wait.withTimeout(5.seconds))
 
 suite "BackgroundProcess - timeoutFromSeconds":
   test "Positive seconds become a bounded duration":

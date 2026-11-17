@@ -112,6 +112,24 @@ suite "Job stop":
     check acted == 1
     check ended.finished
 
+  test "Every action set runs, in order, and a forgotten one does not":
+    let stop = JobStop()
+    var trace = 0
+    stop.onStop(
+      proc() =
+        trace = trace * 10 + 1
+    )
+    let second = proc() =
+      trace = trace * 10 + 2
+    stop.onStop(second)
+    stop.onStop(
+      proc() =
+        trace = trace * 10 + 3
+    )
+    stop.forget(second)
+    stop.request()
+    check trace == 13
+
   test "What comes after the stop is carried out at once":
     let stop = JobStop()
     stop.request()

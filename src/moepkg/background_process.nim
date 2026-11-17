@@ -22,10 +22,11 @@ import std/[options, strformat, strutils]
 import pkg/[results, chronos]
 import pkg/chronos/asyncproc
 
-import child_process, job_stop
+import child_process, job_stop, line_queue
 
 import types/background_process_types
 export background_process_types, job_stop
+export line_queue except addChars
 
 proc timeoutFromSeconds*(seconds: int): Duration =
   ## Convert a config timeout to the value the bounded waits expect.
@@ -91,12 +92,11 @@ proc runToCompletion(
   ## closed, and the child is reaped - or, if it outlived its kill, left to be
   ## reaped once it exits. A second copy of this drifts, and always the same
   ## way - some path reaches the wait for exit with no kill in front of it.
+  let killOnStop: StopAction = proc() =
+    bp.kill()
   if not stop.isNil:
     # Killed at once as well: a stop at quit gets no turn to reach the race.
-    stop.onStop(
-      proc() =
-        bp.kill()
-    )
+    stop.onStop(killOnStop)
 
   proc runAll(): Future[void] {.async: (raises: [CancelledError]).} =
     ## Everything the run consists of. The exit belongs here with the transfers
@@ -154,6 +154,9 @@ proc runToCompletion(
     await noCancel cancelAndWait(transfers)
   await cancelAndWait(transfers)
   await bp.closeAsync()
+  if not stop.isNil:
+    # A stop that outlives the run must not hold on to the command.
+    stop.forget(killOnStop)
   return outcome
 
 proc startBackgroundProcess*(command: BackgroundProcessCommand): StartProcessResult =
@@ -168,6 +171,17 @@ proc startBackgroundProcess*(command: BackgroundProcessCommand): StartProcessRes
   StartProcessResult.ok BackgroundProcess(process: process)
 
 const ReadChunk = 64 * 1024 ## Bytes asked of a pipe per read.
+
+proc readTurn(
+    reader: AsyncStreamReader, buffer: pointer, size: int
+): Future[int] {.async: (raises: [AsyncStreamError, CancelledError]).} =
+  ## A turn for the rest of the event loop, then one read of at most `size`
+  ## bytes. chronos reads a pipe that has data without yielding, so a command
+  ## that keeps writing would otherwise hold the loop, timers and keys
+  ## included, for as long as it writes. The turn comes first: after the read,
+  ## a cancel would throw away what was read.
+  await sleepAsync(ZeroDuration)
+  return await reader.readOnce(buffer, size)
 
 const
   FilterDiagnosticsLimit = 8 * 1024
@@ -206,13 +220,6 @@ type
 proc fail(f: RunFailure, kind: FilterFailureKind, message: string) =
   if f.error.isNone:
     f.error = some filterError(kind, message)
-
-proc addFront(s: var string, chunk: string, n: int) =
-  ## Append the first `n` bytes of `chunk` without slicing them out first.
-  if n > 0:
-    let at = s.len
-    s.setLen(at + n)
-    copyMem(addr s[at], unsafeAddr chunk[0], n)
 
 proc feedStdin(
     process: ChildProcess, data: sink string, failure: RunFailure
@@ -290,7 +297,7 @@ proc drainBounded(
   var chunk = newString(ReadChunk)
   try:
     while not reader.atEof():
-      let n = await reader.readOnce(addr chunk[0], ReadChunk)
+      let n = await reader.readTurn(addr chunk[0], ReadChunk)
       if n <= 0:
         break
       if sink.overflowed and sink.policy != dlpKeepTail:
@@ -306,13 +313,13 @@ proc drainBounded(
           bp.kill()
           continue
         of dlpTruncate:
-          sink.text.addFront(chunk, sink.limit - sink.text.len)
+          sink.text.addChars(chunk.toOpenArray(0, sink.limit - sink.text.len - 1))
           continue
         of dlpKeepTail:
           # Trimmed only past twice the limit, so each byte is moved about once.
           if sink.text.len > 2 * sink.limit:
             sink.text.delete(0 ..< sink.text.len - sink.limit)
-      sink.text.addFront(chunk, n)
+      sink.text.addChars(chunk.toOpenArray(0, n - 1))
     sink.atEnd = true
   except AsyncStreamError as e:
     if sink.policy != dlpTruncate:
@@ -322,6 +329,18 @@ proc drainBounded(
       bp.kill()
   except CancelledError:
     discard
+
+proc diagnosticLines(sink: DrainSink): tuple[lines: seq[string], truncated: bool] =
+  ## The first lines of a standard error drained into `sink`.
+  # Commands end their standard error with a newline, and splitting that
+  # yields a trailing empty line that would show up as a blank diagnostic.
+  let text = sink.text.strip(leading = false, chars = {'\n', '\r'})
+  if text.len > 0:
+    result.lines = text.splitLines
+  result.truncated = sink.overflowed
+  if result.lines.len > FilterDiagnosticsLines:
+    result.lines.setLen(FilterDiagnosticsLines)
+    result.truncated = true
 
 const OutputDroppedMarker* = "... earlier output dropped"
   ## The first line of output `readAllOutput` kept only the end of.
@@ -370,11 +389,7 @@ proc readAllOutput*(
       if firstEnd >= 0 and firstEnd < text.high and
           text[firstEnd + 1 .. ^1].strip(chars = {'\n'}).len > 0:
         text.delete(0 .. firstEnd)
-  if text.len == 0:
-    return OutputReadResult.ok(@[])
-  var lines = text.split('\n')
-  if text.endsWith('\n'):
-    lines.setLen(lines.len - 1)
+  var lines = text.cutLines('\n')
   if dropped:
     lines.insert(OutputDroppedMarker, 0)
   return OutputReadResult.ok(lines)
@@ -485,16 +500,7 @@ proc filterOutput*(
     )
 
   # Standard error only ever costs the message, never the run.
-  var diagnostics: seq[string]
-  # Commands end their standard error with a newline, and splitting that
-  # yields a trailing empty line that would show up as a blank diagnostic.
-  let text = errSink.text.strip(leading = false, chars = {'\n', '\r'})
-  if text.len > 0:
-    diagnostics = text.splitLines
-  var truncated = errSink.overflowed
-  if diagnostics.len > FilterDiagnosticsLines:
-    diagnostics.setLen(FilterDiagnosticsLines)
-    truncated = true
+  let (diagnostics, truncated) = errSink.diagnosticLines
 
   return FilterProcessResult.ok FilterProcessOutput(
     output: outSink.text,
@@ -502,3 +508,124 @@ proc filterOutput*(
     diagnosticsTruncated: truncated,
     exitCode: bp.exitCode,
   )
+
+proc waitForRoom(
+    queue: LineQueue, stop: JobStop
+): Future[void] {.async: (raises: [CancelledError]).} =
+  ## Wait until the taker makes room in `queue` or the job is told to stop.
+  let room = newFuture[void]("LineQueue.room")
+  queue.onRoom(
+    proc() =
+      if not room.finished:
+        room.complete()
+  )
+  try:
+    discard await race(FutureBase(room), FutureBase(stop.stopped))
+  finally:
+    queue.onRoom(nil)
+    if not room.finished:
+      room.cancelSoon()
+
+proc readLines(
+    bp: BackgroundProcess,
+    queue: LineQueue,
+    splitter: LineSplitter,
+    stop: JobStop,
+    failure: RunFailure,
+): Future[void] {.async: (raises: []).} =
+  ## Queue standard output a line at a time as it comes, until EOF or `stop`,
+  ## and set `queue.stopped` if it was cut short. The first byte past the line
+  ## limit requests `stop` rather than the rest being read away. While the
+  ## queue is full the read waits, and once the pipe fills, so does the
+  ## command.
+  let reader = bp.process.stdoutStream()
+  if reader.isNil:
+    failure.fail(ffReadFailed, "The command has no output stream")
+    bp.kill()
+    return
+
+  var
+    lines = splitter
+    chunk = newString(ReadChunk)
+    fed, read = 0 ## `chunk[fed ..< read]` is read but not yet queued.
+  try:
+    while not stop.requested:
+      if queue.full:
+        await queue.waitForRoom(stop)
+      elif fed < read:
+        fed += lines.feed(queue, chunk.toOpenArray(fed, read - 1))
+        if lines.overLimit:
+          queue.limitReached = true
+          stop.request()
+          return
+      elif not reader.atEof():
+        read = await reader.readTurn(addr chunk[0], ReadChunk)
+        fed = 0
+      elif bp.process.signalled:
+        # The end a cancelled run's kill brought.
+        break
+      else:
+        lines.finish(queue)
+        return
+    # A stopped run keeps the lines read before the stop. What is left in the
+    # pipe, or written by a descendant the kill missed, is not kept, nor the
+    # line the kill cut off.
+    queue.stopped = true
+  except AsyncStreamError as e:
+    failure.fail(ffReadFailed, "Failed to read the command output: " & e.msg)
+    bp.kill()
+  except CancelledError:
+    # Only a run already stopped or cancelled cancels its transfers.
+    queue.stopped = true
+
+proc streamLines*(
+    command: BackgroundProcessCommand,
+    queue: LineQueue,
+    splitter: LineSplitter,
+    stop: JobStop,
+): Future[void] {.async: (raises: []).} =
+  ## Run `command` on no input and queue its standard output a line at a time
+  ## as it comes, cut by `splitter`. Standard error is kept apart, as
+  ## diagnostics.
+  ##
+  ## No timeout bounds the run: it lasts until the command ends or `stop` is
+  ## requested, so whoever starts it holds the stop, never nil. One asked
+  ## before the start keeps the command from starting. Output past the line
+  ## limit stops the run without requesting `stop`, which stays the caller's
+  ## own.
+  ##
+  ## However this returns, the command has been released, and `queue` says
+  ## how the run went with `ended` set.
+  # Requested by the caller's stop or by the line limit.
+  let
+    run = JobStop()
+    forward: StopAction = proc() =
+      run.request()
+  stop.onStop(forward)
+  try:
+    if run.requested:
+      queue.stopped = true
+      return
+    let process = startChild(
+      command.cmd, command.workingDir, command.args, stderrMode = cePipe
+    ).valueOr:
+      queue.failure = fmt"Failed to create a background process: {error}"
+      return
+    let
+      bp = BackgroundProcess(process: process)
+      failure = RunFailure()
+      errSink = DrainSink(limit: FilterDiagnosticsLimit, policy: dlpTruncate)
+      outReader = bp.readLines(queue, splitter, run, failure)
+      errReader = bp.drainBounded(process.stderrStream(), errSink, failure)
+    discard await bp.runToCompletion(
+      @[FutureBase(outReader), FutureBase(errReader)], InfiniteDuration, run
+    )
+    if not process.signalled:
+      # Otherwise how it ended may be the kill's doing, not the command's.
+      queue.exitCode = bp.exitCode
+    if failure.error.isSome:
+      queue.failure = failure.error.get.message
+    (queue.diagnostics, queue.diagnosticsTruncated) = errSink.diagnosticLines
+  finally:
+    stop.forget(forward)
+    queue.ended = true
