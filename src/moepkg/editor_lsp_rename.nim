@@ -31,7 +31,6 @@ import pkg/[chronos, results]
 import
   types/editor_types,
   editor_lsp,
-  editor_navigation,
   editor_buffers,
   git_cache,
   lsp_integration,

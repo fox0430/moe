@@ -25,7 +25,7 @@ import std/[unittest, json, options, os, strutils, tables]
 import pkg/results
 
 import ../src/moepkg/[editor, config, config_loader, persist]
-import ../src/moepkg/[editor_buffers, editor_file, editor_navigation, editor_window]
+import ../src/moepkg/[editor_buffers, editor_file, editor_window]
 import ../src/moepkg/[filer, viewer_mode, window_manager]
 import ../src/moepkg/[editor_persist, search_utils, primitives]
 import ../src/moepkg/buffer/search

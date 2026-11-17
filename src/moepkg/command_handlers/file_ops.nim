@@ -201,11 +201,7 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
   of hrOpenUri:
     let uri = r.openUri
     if isLocalFileUri(uri):
-      let path = fileUriToPath(uri)
-      if e.openFileAndJumpTo(path, 0, 0):
-        e.state.statusMessage = "Opened: " & path.extractFilename
-      else:
-        e.state.statusMessage = "Failed to open: " & path
+      discard e.followFileLink(fileUriToPath(uri))
     elif isExternalUri(uri):
       let openResult = openExternalUri(uri)
       if openResult.isOk:
@@ -220,11 +216,7 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
           activeBufferLocal.filePath.get.parentDir
         else:
           getCurrentDir()
-      let resolvedPath = basePath / uri
-      if e.openFileAndJumpTo(resolvedPath, 0, 0):
-        e.state.statusMessage = "Opened: " & resolvedPath.extractFilename
-      else:
-        e.state.statusMessage = "Failed to open: " & resolvedPath
+      discard e.followFileLink(basePath / uri)
     return true
   of hrQuickRun:
     # `:quickrun`, `\r` in Normal mode and a Visual mode mapping all run here.

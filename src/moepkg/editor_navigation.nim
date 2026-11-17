@@ -18,9 +18,7 @@
 #[############################################################################]#
 
 ## LSP navigation: definition / declaration / references / type-definition /
-## implementation requests, plus the shared jump-list, buffer-switch, and
-## location-jump helpers that other LSP feature modules (call hierarchy,
-## document link) depend on.
+## implementation requests, and the jumps to the locations they return.
 
 import std/[options, strutils, tables]
 
@@ -28,18 +26,12 @@ import pkg/results
 
 import
   types/editor_types,
-  editor_window,
-  editor_hooks,
+  editor_open,
   viewer_mode,
   editor_lsp,
   lsp_service,
   lsp_integration,
-  references_viewer,
-  buffer,
-  unicode_utils,
-  editorconfig_helper,
-  highlight_config,
-  editor_window_tab
+  references_viewer
 import lsp/protocol/types as lspTypes
 
 const
@@ -68,158 +60,11 @@ func locationKindOfFeature*(f: LspRequestFeature): LspLocationRequestKind =
   of lrfImplementation: lrkImplementation
   else: lrkNone
 
-proc switchToBufferForLsp*(e: Editor, index: int) =
-  ## Switch to buffer at given index (simplified version for LSP jumps)
-  if index < 0 or index >= e.buffers.len:
-    return
+func jumpPlacement(openWindow: bool): ViewerPlacement =
+  if openWindow: vpVSplit else: vpInPlace
 
-  let targetBuffer = e.buffers[index]
-
-  # Shared tab transition; no-op when already on this tab.
-  if e.moveWindowToTab(e.activeWindow, targetBuffer) != tabMoved:
-    return
-
-  # Re-sync executor, motion controller, jump-list anchor and per-buffer
-  # EditorConfig now that the active window's buffer changed.
-  e.syncActiveWindow()
-  e.setActiveWindowScreenCursor(e.activeWindow)
-
-proc bufferIndexForFile(e: Editor, path: string): int =
-  ## Index of the buffer holding `path`, or -1.
-  indexOfBufferHoldingPath(e.buffers, path)
-
-proc loadAndRegisterBuffer(
-    e: Editor, path: string, origin: ReadOrigin
-): Result[TextBuffer, string] =
-  ## Load `path` into a fresh buffer and register it in the global buffer list
-  ## with the setup every opened file gets. Whether a window shows the result is
-  ## the caller's choice; `origin` is as for `initLoadedBuffer`.
-  let newBuffer = newTextBuffer()
-  # Seed the highlight cap before loadFile builds the first chunk, so the cap
-  # is not changed afterwards (which would nil the progressive-load cache).
-  newBuffer.applyHighlightCap(e.config)
-  # Register before loading so the load announces itself through the hook
-  # `addBuffer` installs. A failed load is unregistered again.
-  e.addBuffer(newBuffer)
-  let loadResult = newBuffer.loadFile(path)
-  if loadResult.isErr:
-    e.unregisterBufferNoLsp(newBuffer)
-    return err(loadResult.error)
-
-  applyEditorConfigToBuffer(newBuffer, e.config)
-  applyHighlightConfig(newBuffer, e.config)
-  # Doing this by hand used to leave a file reached by go-to-definition without
-  # its bookmarks, gutter or conflict blocks.
-  e.initLoadedBuffer(newBuffer, origin)
-
-  ok(newBuffer)
-
-proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string] =
-  ## Open `path` in the active window and return the buffer now shown there.
-  ##
-  ## If a buffer already holds this file, switch the active window to it.
-  ## Otherwise load it into a freshly registered buffer and switch to that.
-  ##
-  ## Shared by the LSP/jump/document-link navigation paths so they all open
-  ## files into the *active* window's buffer with identical setup. Unlike the
-  ## legacy `e.loadFile`, content is loaded into a freshly registered buffer
-  ## rather than mutating the active buffer in place.
-  ?e.activeWindow.checkTabSwitch()
-  let existing = e.bufferIndexForFile(path)
-  if existing >= 0:
-    e.switchToBufferForLsp(existing)
-    return ok(e.buffers[existing])
-
-  let bufRes = e.loadAndRegisterBuffer(path, roUser)
-  if bufRes.isErr:
-    return err(bufRes.error)
-  e.switchToBufferForLsp(e.buffers.high)
-
-  ok(bufRes.get)
-
-proc openFileInBackground*(e: Editor, path: string): Result[TextBuffer, string] =
-  ## Open `path` as a buffer without showing it anywhere: it joins the global
-  ## buffer list but no window's tab list, so nothing on screen moves.
-  ##
-  ## Gives a file an undoable editing history before it is rewritten on the
-  ## user's behalf.
-  let existing = e.bufferIndexForFile(path)
-  if existing >= 0:
-    return ok(e.buffers[existing])
-
-  e.loadAndRegisterBuffer(path, roInternal)
-
-proc jumpOrigin*(e: Editor): JumpPosition =
-  ## The cursor position, for a jump list entry once a jump from it lands.
-  JumpPosition(
-    bufferId: e.state.windowDisplay.currentBufferId,
-    line: e.activeWindow.cursor.line,
-    column: e.activeWindow.cursor.column,
-  )
-
-proc addToJumpList*(e: Editor, jumpPos: JumpPosition) =
-  ## Add `jumpPos`, where a jump started, to the jump list.
-  # Don't add if same as last position (same buffer, line, and column), but
-  # stop navigating the list as any jump does (Vim's setpcmark)
-  if e.state.jumpList.list.len > 0:
-    let lastPos = e.state.jumpList.list[^1]
-    if lastPos.bufferId == jumpPos.bufferId and lastPos.line == jumpPos.line and
-        lastPos.column == jumpPos.column:
-      e.state.jumpList.index = -1
-      return
-
-  e.state.jumpList.list.add(jumpPos)
-  # Keep jump list at reasonable size (max 100 entries)
-  if e.state.jumpList.list.len > 100:
-    e.state.jumpList.list.delete(0)
-  # Reset jump list index when adding new position
-  e.state.jumpList.index = -1
-
-proc moveCursorToLspPosition(e: Editor, buffer: TextBuffer, lspLine, lspColumn: int) =
-  ## Move the active window's cursor to an LSP location within `buffer`,
-  ## clamped to the buffer/line bounds.
-  ##
-  ## `lspLine`/`lspColumn` are LSP coordinates: a 0-based line and a UTF-16
-  ## code unit offset, which is converted to a character column here.
-  let targetLine = min(lspLine, max(0, buffer.len - 1))
-  let lineText =
-    if buffer.len > 0:
-      buffer.getLine(targetLine)
-    else:
-      ""
-  # Convert LSP UTF-16 character offset to character index
-  let charCol = utf16ToCharIndex(lineText, lspColumn)
-  # Insert mode allows cursor at charLen (append position)
-  let maxCol =
-    if e.state.mode == EditorMode.Insert:
-      lineText.charLen
-    else:
-      max(0, lineText.charLen - 1)
-  let targetCol = min(charCol, maxCol)
-  e.activeWindow.cursor.line = targetLine
-  e.activeWindow.cursor.column = max(0, targetCol)
-
-proc splitWindowForJump(e: Editor): bool =
-  ## Open a new vertical split window (showing the current buffer) so a
-  ## subsequent jump lands in the new window instead of the current one.
-  ## Returns false (with a status message) if the split fails, the focus back
-  ## where it was.
-  let
-    side = e.activeWindow
-    previous = e.windowManager.previousWindow
-  let left = e.leaveSidebar()
-  if left.isErr:
-    e.state.statusMessage = "Failed to open window: " & left.error
-    return false
-  if left.get:
-    # That window is new already: jump into it rather than split it again.
-    return true
-  let splitResult = e.vsplit()
-  if splitResult.isErr:
-    e.restoreSidebarFocus(side, previous)
-    e.state.statusMessage = "Failed to open window: " & splitResult.error
-    return false
-  true
+func lspTarget(line, utf16Column: int): Option[TargetPosition] =
+  some(TargetPosition(line: line, column: utf16Column, unit: cuUtf16))
 
 proc jumpToLspLocation*(
     e: Editor, loc: lspTypes.Location, resultKind: string, openWindow: bool = false
@@ -235,39 +80,20 @@ proc jumpToLspLocation*(
     e.state.statusMessage = "Cannot jump to non-file location: " & pathRes.error
     return false
   let path = pathRes.get
-  if openWindow and not e.splitWindowForJump():
+  let jumped = e.jumpToFile(
+    path,
+    lspTarget(loc.range.start.line, loc.range.start.character),
+    jumpPlacement(openWindow),
+  )
+  if jumped.isErr:
+    e.state.statusMessage = jumped.error
     return false
-
-  # Taken after the split, which leaves the FileTree sidebar for the window it
-  # serves. Recorded once the jump lands: a refused or failed open is no jump.
-  let activeBuffer = e.activeBuffer()
-  let origin = e.jumpOrigin()
-
-  # Same file (spelling or entity), not merely the same typed path.
-  if activeBuffer.bufferHoldsFile(path):
-    # Same file - just move cursor with boundary checks
-    e.moveCursorToLspPosition(
-      activeBuffer, loc.range.start.line, loc.range.start.character
-    )
-    e.state.statusMessage = resultKind & " at line " & $(e.activeWindow.cursor.line + 1)
-  else:
-    # Different file - open it in a new buffer (or switch to existing)
-    let opened = e.openFileInActiveWindow(path)
-    if opened.isErr:
-      if openWindow:
-        # Don't leave the freshly split window behind on failure
-        discard e.closeWindow()
-      e.state.statusMessage = "Failed to open file: " & opened.error
-      return false
-
-    # Set cursor with boundary checks against the now-active buffer
-    e.moveCursorToLspPosition(
-      e.activeBuffer(), loc.range.start.line, loc.range.start.character
-    )
-    e.state.statusMessage = resultKind & " in " & path
-
-  e.addToJumpList(origin)
-  return true
+  e.state.statusMessage =
+    if jumped.get == ooOpened:
+      resultKind & " in " & path
+    else:
+      resultKind & " at line " & $(e.activeWindow.cursor.line + 1)
+  true
 
 proc handleLspLocations*(
     e: Editor,
@@ -325,39 +151,18 @@ proc handleLspLocations*(
     e.state.statusMessage = $items.len & " " & title.toLowerAscii() & " found"
     return true
 
-proc openFileAndJumpTo*(
-    e: Editor, path: string, line, column: int, openWindow: bool = false
+proc jumpToLspPosition*(
+    e: Editor, path: string, line, utf16Column: int, openWindow: bool = false
 ): bool =
-  ## Open a file and jump to a specific location. When `openWindow` is true,
-  ## the jump happens in a new vertical split window instead of the current one.
-  ## Note: column is expected to be LSP UTF-16 code unit offset
-  ## Returns true if successful
-  if openWindow and not e.splitWindowForJump():
+  ## Jump to an LSP position (a 0-based line and a UTF-16 offset) in `path`.
+  ## When `openWindow` is true, the jump happens in a new vertical split window
+  ## instead of the current one. Returns true if successful.
+  let jumped =
+    e.jumpToFile(path, lspTarget(line, utf16Column), jumpPlacement(openWindow))
+  if jumped.isErr:
+    e.state.statusMessage = jumped.error
     return false
-
-  # Taken after the split, which leaves the FileTree sidebar for the window it
-  # serves. Recorded once the jump lands: a refused or failed open is no jump.
-  let activeBuffer = e.activeBuffer()
-  let origin = e.jumpOrigin()
-
-  # Same file (spelling or entity), not merely the same typed path.
-  if activeBuffer.bufferHoldsFile(path):
-    # Same file - just move cursor with boundary checks
-    e.moveCursorToLspPosition(activeBuffer, line, column)
-  else:
-    # Different file - open it in a new buffer (or switch to existing)
-    let opened = e.openFileInActiveWindow(path)
-    if opened.isErr:
-      if openWindow:
-        # Don't leave the freshly split window behind on failure
-        discard e.closeWindow()
-      e.state.statusMessage = "Failed to open file: " & opened.error
-      return false
-    # Set cursor with boundary checks against the now-active buffer
-    e.moveCursorToLspPosition(e.activeBuffer(), line, column)
-
-  e.addToJumpList(origin)
-  return true
+  true
 
 proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
   ## Start an async LSP location request (definition, declaration, references, etc.)

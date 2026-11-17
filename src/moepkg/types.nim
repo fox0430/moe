@@ -216,8 +216,9 @@ type
           ## keys go to the session. Leaving the tab drops it with the variant.
 
   ViewerPlacement* = enum
-    ## Where a viewer's listing goes. Either way it covers a window's tab in
-    ## place; a split opens that window for it and closes it on exit.
+    ## Where a viewer's listing goes or a jump lands: the active window, or a
+    ## new split of it. A viewer covers the window's tab either way, and closes
+    ## its split on exit.
     vpInPlace ## Covered the active window
     vpVSplit
     vpHSplit

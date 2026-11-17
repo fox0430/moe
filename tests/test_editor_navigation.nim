@@ -101,7 +101,7 @@ suite "editor_navigation - pollLspLocationRequest":
     e.pollLspLocationRequest()
     # No crash means success
 
-suite "editor_navigation - openFileAndJumpTo":
+suite "editor_navigation - jumpToLspPosition":
   test "Jumps to location in same file":
     let e = createTestEditor()
     let testFile = getTempDir() / "moe_test_jump_same.txt"
@@ -112,7 +112,7 @@ suite "editor_navigation - openFileAndJumpTo":
 
     discard e.editFile(testFile)
 
-    let result = e.openFileAndJumpTo(testFile, 1, 0)
+    let result = e.jumpToLspPosition(testFile, 1, 0)
 
     check result
     check e.cursor.line == 1
@@ -129,7 +129,7 @@ suite "editor_navigation - openFileAndJumpTo":
     discard e.editFile(testFile)
     let initialJumpListLen = e.state.jumpList.list.len
 
-    discard e.openFileAndJumpTo(testFile, 2, 0)
+    discard e.jumpToLspPosition(testFile, 2, 0)
 
     check e.state.jumpList.list.len == initialJumpListLen + 1
 
@@ -146,7 +146,7 @@ suite "editor_navigation - openFileAndJumpTo":
 
     discard e.editFile(testFile1)
 
-    let result = e.openFileAndJumpTo(testFile2, 1, 0)
+    let result = e.jumpToLspPosition(testFile2, 1, 0)
 
     check result
     check e.cursor.line == 1
@@ -155,7 +155,7 @@ suite "editor_navigation - openFileAndJumpTo":
     # moe treats nonexistent files as new files (no error)
     let e = createTestEditor()
 
-    let result = e.openFileAndJumpTo(getTempDir() / "moe_test_new_file.txt", 0, 0)
+    let result = e.jumpToLspPosition(getTempDir() / "moe_test_new_file.txt", 0, 0)
 
     # Should succeed as new file creation
     check result
@@ -174,10 +174,10 @@ suite "editor_navigation - Jump list":
     discard e.editFile(testFile)
 
     # Jump to same position twice
-    discard e.openFileAndJumpTo(testFile, 0, 0)
+    discard e.jumpToLspPosition(testFile, 0, 0)
     let lenAfterFirst = e.state.jumpList.list.len
 
-    discard e.openFileAndJumpTo(testFile, 0, 0)
+    discard e.jumpToLspPosition(testFile, 0, 0)
     let lenAfterSecond = e.state.jumpList.list.len
 
     # Should not add duplicate
@@ -198,7 +198,7 @@ suite "editor_navigation - Jump list":
 
     # Add many positions to jump list
     for i in 0 ..< 110:
-      discard e.openFileAndJumpTo(testFile, i, 0)
+      discard e.jumpToLspPosition(testFile, i, 0)
 
     # Jump list should be capped at 100
     check e.state.jumpList.list.len <= 100
@@ -405,12 +405,12 @@ suite "editor_navigation - openFileInActiveWindow per-buffer setup":
     check second.get == first.get
     check second.get.bookmarks == @[1]
 
-suite "editor_navigation - switchToBufferForLsp":
+suite "editor_navigation - switchToBufferByIndex, as the jumps switch":
   test "Does nothing for invalid negative index":
     let e = createTestEditor()
     let initialBufferId = e.state.windowDisplay.currentBufferId
 
-    e.switchToBufferForLsp(-1)
+    e.switchToBufferByIndex(-1)
 
     check e.state.windowDisplay.currentBufferId == initialBufferId
 
@@ -418,7 +418,7 @@ suite "editor_navigation - switchToBufferForLsp":
     let e = createTestEditor()
     let initialBufferId = e.state.windowDisplay.currentBufferId
 
-    e.switchToBufferForLsp(999)
+    e.switchToBufferByIndex(999)
 
     check e.state.windowDisplay.currentBufferId == initialBufferId
 
@@ -431,7 +431,7 @@ suite "editor_navigation - switchToBufferForLsp":
       removeFile(testFile)
 
     discard e.editFile(testFile)
-    e.switchToBufferForLsp(0)
+    e.switchToBufferByIndex(0)
 
     check e.state.windowDisplay.currentBufferId == e.buffers[0].id
 
@@ -440,7 +440,7 @@ suite "editor_navigation - switchToBufferForLsp":
     let initialBufferId = e.state.windowDisplay.currentBufferId
     let initialIndex = e.currentBufferIndex()
 
-    e.switchToBufferForLsp(initialIndex)
+    e.switchToBufferByIndex(initialIndex)
 
     check e.state.windowDisplay.currentBufferId == initialBufferId
 
@@ -466,14 +466,14 @@ suite "editor_navigation - switchToBufferForLsp":
       require e.state.mode == EditorMode.Terminal
       require e.activeWindow.modeState.kind == mskTerminal
 
-      e.switchToBufferForLsp(textIdx)
+      e.switchToBufferByIndex(textIdx)
 
       check e.activeWindow.tabBufferId == e.buffers[textIdx].id
       check e.state.mode == EditorMode.Normal
       check e.activeWindow.modeState.kind == mskNone
       check e.terminalStates.hasKey(termBuf.id)
 
-  test "switchToBufferForLsp re-enters Insert under forceInsertMode":
+  test "switchToBufferByIndex re-enters Insert under forceInsertMode":
     let e = createTestEditor()
     e.config.standard.forceInsertMode = true
     e.state.config.standard.forceInsertMode = true
@@ -482,7 +482,7 @@ suite "editor_navigation - switchToBufferForLsp":
     e.addBufferToWindowList(buf2)
     e.setMode(EditorMode.Normal)
 
-    e.switchToBufferForLsp(1)
+    e.switchToBufferByIndex(1)
 
     check e.activeWindow.tabBufferId == buf2.id
     check e.state.mode == EditorMode.Insert
@@ -613,7 +613,7 @@ suite "editor_navigation - jumpToLspLocation":
     let buffersCount = e.buffers.len
 
     # Switch back to first file
-    e.switchToBufferForLsp(0)
+    e.switchToBufferByIndex(0)
 
     # Jump to second file (should reuse existing buffer)
     let loc = lspTypes.Location(
@@ -667,7 +667,7 @@ suite "editor_navigation - relative/absolute path deduplication":
     # Must NOT have created a duplicate buffer for the already-open file.
     check e.buffers.len == buffersCount
 
-  test "openFileAndJumpTo reuses buffer opened with a relative path":
+  test "jumpToLspPosition reuses buffer opened with a relative path":
     let e = createTestEditor()
     let dir = getTempDir() / "moe_test_relabs2"
     createDir(dir)
@@ -684,14 +684,14 @@ suite "editor_navigation - relative/absolute path deduplication":
     discard e.editFile("g.txt")
     let buffersCount = e.buffers.len
 
-    let result = e.openFileAndJumpTo(absPath, 1, 0)
+    let result = e.jumpToLspPosition(absPath, 1, 0)
 
     check result
     check e.cursor.line == 1
     check e.buffers.len == buffersCount
 
 suite "editor_navigation - UTF-16 to UTF-8 conversion":
-  test "openFileAndJumpTo handles UTF-16 column offset":
+  test "jumpToLspPosition handles UTF-16 column offset":
     let e = createTestEditor()
     let testFile = getTempDir() / "moe_test_utf16.txt"
 
@@ -704,7 +704,7 @@ suite "editor_navigation - UTF-16 to UTF-8 conversion":
 
     # UTF-16 offset for "world" start
     # "こんにちは " = 5 chars + 1 space = 6 UTF-16 code units
-    let result = e.openFileAndJumpTo(testFile, 0, 6)
+    let result = e.jumpToLspPosition(testFile, 0, 6)
 
     check result
     # Cursor lands on 'w', which is the 6th character (0-based) of the line.
@@ -726,7 +726,7 @@ suite "editor_navigation - cursor clamping":
     let lastLine = e.activeBuffer().len - 1
 
     # Request a line far beyond the buffer end
-    let result = e.openFileAndJumpTo(testFile, 999, 0)
+    let result = e.jumpToLspPosition(testFile, 999, 0)
 
     check result
     check e.cursor.line == lastLine
@@ -742,7 +742,7 @@ suite "editor_navigation - cursor clamping":
     discard e.editFile(testFile)
 
     # Request a column far beyond the line end ("abc" has 3 chars)
-    let result = e.openFileAndJumpTo(testFile, 0, 999)
+    let result = e.jumpToLspPosition(testFile, 0, 999)
 
     check result
     check e.cursor.line == 0
@@ -933,7 +933,7 @@ suite "editor_navigation - openWindow option":
     check e.activeWindow.modeState.kind == mskReferences
     check e.activeWindow.modeState.references.openWindowOnJump
 
-  test "openFileAndJumpTo opens a new split window when openWindow is true":
+  test "jumpToLspPosition opens a new split window when openWindow is true":
     let e = createTestEditor()
     let testFile1 = getTempDir() / "moe_test_ow_open1.txt"
     let testFile2 = getTempDir() / "moe_test_ow_open2.txt"
@@ -947,7 +947,7 @@ suite "editor_navigation - openWindow option":
     discard e.editFile(testFile1)
     let windowsBefore = e.windowManager.windows.len
 
-    check e.openFileAndJumpTo(testFile2, 1, 0, openWindow = true)
+    check e.jumpToLspPosition(testFile2, 1, 0, openWindow = true)
     check e.windowManager.windows.len == windowsBefore + 1
     check e.activeBuffer().filePath.get == testFile2
     check e.cursor.line == 1
