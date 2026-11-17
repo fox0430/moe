@@ -81,6 +81,7 @@ type
 
   ChildProcess* = ref object ## A started child and the one record of its life.
     ending: ChildEnd
+    signalledRunning: bool ## `terminate` or `kill` reached it while it was known to run.
     releasing: FutureBase ## The one `release`; nil until it starts.
     stdinMode: ChildStdin
     stderrMode: ChildStderr
@@ -116,6 +117,11 @@ proc fate*(c: ChildProcess): ChildFate =
 proc released*(c: ChildProcess): bool =
   ## Whether `release` has begun: the pipes are closed or closing.
   not c.releasing.isNil
+
+proc signalled*(c: ChildProcess): bool =
+  ## Whether `terminate` or `kill` reached the child while it ran, so that how
+  ## it ended may be the signal's doing rather than its own.
+  c.signalledRunning
 
 proc exitCode*(c: ChildProcess): Option[int] =
   ## How the child ended, as a shell reports it; none until then, or if that
@@ -245,6 +251,8 @@ when defined(linux):
     c.observe()
     if c.ending.fate notin {cfRunning, cfExited}:
       return
+    if c.ending.fate == cfRunning:
+      c.signalledRunning = true
     let pid = Pid(c.childPid)
     # The child by its pid too only when it has left the group, so it is not
     # signalled twice.
@@ -334,6 +342,9 @@ else:
   proc signal(c: ChildProcess, sig: cint) =
     if c.ending.fate != cfRunning:
       return
+    # The fate is learnt only through the one wait, which may not have begun
+    # yet, so a child that has exited may count as signalled.
+    c.signalledRunning = true
     when defined(posix):
       let pid = Pid(c.process.pid)
       if posix.kill(-pid, sig) != 0 or getpgid(pid) != pid:

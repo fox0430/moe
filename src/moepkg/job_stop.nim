@@ -26,23 +26,33 @@
 
 import pkg/chronos
 
-type JobStop* = ref object
-  asked: bool
-  action: proc() {.closure, gcsafe, raises: [].}
-  signal: Future[void]
+type
+  StopAction* = proc() {.closure, gcsafe, raises: [].}
+
+  JobStop* = ref object
+    asked: bool
+    actions: seq[StopAction]
+    signal: Future[void]
 
 proc requested*(stop: JobStop): bool =
   ## Whether the job has been told to stop. Checked after each await, before
   ## acting on what was waited for.
   stop.asked
 
-proc onStop*(stop: JobStop, action: proc() {.closure, gcsafe, raises: [].}) =
-  ## Run `action` when the job is told to stop, or now if it has been. Replaces
-  ## any previous action.
+proc onStop*(stop: JobStop, action: StopAction) =
+  ## Run `action` when the job is told to stop, after any set before it, or now
+  ## if it has been.
   if stop.asked:
     action()
   else:
-    stop.action = action
+    stop.actions.add action
+
+proc forget*(stop: JobStop, action: StopAction) =
+  ## Drop `action`, set by `onStop`, for a holder done before the job is. A
+  ## no-op once it has run.
+  let i = stop.actions.find(action)
+  if i >= 0:
+    stop.actions.delete(i)
 
 proc stopped*(stop: JobStop): Future[void] =
   ## Completes once the job is told to stop.
@@ -57,7 +67,8 @@ proc request*(stop: JobStop) =
   if stop.asked:
     return
   stop.asked = true
-  if not stop.action.isNil:
-    stop.action()
+  let actions = move stop.actions
+  for action in actions:
+    action()
   if not stop.signal.isNil and not stop.signal.finished:
     stop.signal.complete()
