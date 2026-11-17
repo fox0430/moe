@@ -1334,130 +1334,46 @@ suite "HandlerManager - FileTree search statusMessage":
     check state.statusMessage == "Permission denied"
     check fileTreeState.lastError == ""
 
-suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
-  ## Regression: `imap K = "bdelete"` fires while an Insert-mode transaction
-  ## is open. The dispatcher must commit that transaction before producing
-  ## `hrExecCommand`, otherwise `:bdelete` runs while the buffer is still
-  ## mid-edit and a dangling transaction is carried across the buffer switch.
-  test "Open Insert transaction is committed before hrExecCommand is returned":
+suite "HandlerManager - A mapping to a : command in Insert or Replace":
+  # The dispatcher gives the line and leaves the session as it is; the editor
+  # leaves the mode as Escape does when it runs the line (test_handler.nim).
+  test "Insert gives the line":
     let manager = createTestManager()
-    let buffer = newTextBuffer()
-    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let buffer = newTextBuffer("hello")
     let state = createTestState()
     state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-
-    # Simulate having entered Insert mode: open a transaction.
     check buffer.beginTransaction("test insert").isOk
-    check buffer.inTransaction
-
-    # `imap K = "bdelete"` — RHS resolves to the exec.cmdline.* bridge.
-    let err =
-      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
-    check err == ""
-
-    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
-    let r = manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
-    )
-
-    check r.kind == hrExecCommand
-    check r.execLine.text == "bdelete"
-    # The open transaction must be committed before forwarding the alias.
-    check not buffer.inTransaction
-
-  test "Bridge works when no Insert transaction is open":
-    # Sanity-check: the commit branch is a no-op when there's nothing to
-    # commit (e.g. the bridge fires on the very first key after entering
-    # Insert mode, before any text was typed).
-    let manager = createTestManager()
-    let buffer = newTextBuffer()
-    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
-    let state = createTestState()
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-    check not buffer.inTransaction
-
-    discard
-      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
-
-    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
-    let r = manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
-    )
-
-    check r.kind == hrExecCommand
-    check r.execLine.text == "bdelete"
-    check not buffer.inTransaction
-
-suite "HandlerManager - Insert mode exec.cmdline.* bridge full finalize":
-  # Regression: the bridge used to only commit the transaction; leaking
-  # visualBlockInsertContext and skipping `.` and [count]i.
-  proc typeInsert(manager: HandlerManager, e: Editor, keys: string) =
-    for k in keys:
-      discard manager.handleKeyCombo(e, KeyCombo(isSpecial: false, char: $k))
-
-  test "Bridge ends what `.` repeats":
-    let manager = createTestManager()
-    let buffer = newTextBuffer()
-    let state = createTestState()
-    let e =
-      createTestEditor(buffer, state, createTestViewport(), manager.keyBindingRegistry)
     check manager.keyBindingRegistry.addRuntimeMapping(
       EditorMode.Insert, "K", "bdelete"
     ) == ""
 
-    manager.typeInsert(e, "iabc")
-    let r = manager.handleInsertMode(e, KeyCombo(isSpecial: false, char: "K"))
-
-    check r.kind == hrExecCommand
-    check state.editState.lastEditCommand.get.kind == types.lecInsert
-    check state.editState.insertRecord.typed.len == 3
-    check not state.editState.typing.open
-    check state.editState.lastInserted.get.len == 3
-
-  test "Bridge clears visualBlockInsertContext":
-    let manager = createTestManager()
-    let buffer = newTextBuffer()
-    discard buffer.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
-    let state = createTestState()
-    state.mode = EditorMode.Insert
-    let viewport = createTestViewport()
-
-    check buffer.beginTransaction("test insert").isOk
-    state.editState.visualBlockInsertContext = some(
-      types.VisualBlockInsertContext(
-        kind: vbiInsert, area: BlockArea(firstLine: 0, lastLine: 2), insertColumn: 0
-      )
-    )
-
-    discard
-      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
-
-    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
     let r = manager.handleInsertMode(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
+      createTestEditor(buffer, state, createTestViewport(), manager.keyBindingRegistry),
+      KeyCombo(isSpecial: false, char: "K"),
     )
 
     check r.kind == hrExecCommand
-    check state.editState.visualBlockInsertContext.isNone
+    check r.execLine.text == "bdelete"
+    check buffer.inTransaction
 
-  test "Bridge types [count]i's repeats before the command":
+  test "Replace gives the line":
     let manager = createTestManager()
-    let buffer = newTextBuffer()
+    let buffer = newTextBuffer("hello")
     let state = createTestState()
-    let e =
-      createTestEditor(buffer, state, createTestViewport(), manager.keyBindingRegistry)
-    discard
-      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
+    state.mode = EditorMode.Replace
+    check buffer.beginTransaction("test replace").isOk
+    check manager.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Replace, "K", "bdelete"
+    ) == ""
 
-    manager.typeInsert(e, "3ix")
-    let r = manager.handleInsertMode(e, KeyCombo(isSpecial: false, char: "K"))
+    let r = manager.handleReplaceMode(
+      createTestEditor(buffer, state, createTestViewport(), manager.keyBindingRegistry),
+      KeyCombo(isSpecial: false, char: "K"),
+    )
 
-    check r.kind == hrRepeatInsert
-    check r.repeatTimes == 2
-    check r.repeatLeave
-    check r.repeatThenExec.text == "bdelete"
+    check r.kind == hrExecCommand
+    check r.execLine.text == "bdelete"
+    check buffer.inTransaction
 
 suite "HandlerManager - Replace mode fold auto-expand":
   test "Entering Replace mode opens a collapsed fold at the cursor":

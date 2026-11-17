@@ -474,7 +474,6 @@ type
         # The count of o and O: Enter at the end of what was typed, on the
         # line above the last this many lines
       repeatLeave*: bool # Leave Insert after, as Escape does
-      repeatThenExec*: ExecLine # A command line to run once Insert is left
     of hrMapAdd:
       mapAddLhs*: string
       mapAddRhs*: string

@@ -34,6 +34,7 @@ type
   ReplaceModeResultKind* = enum
     rmrHandled
     rmrUnhandled
+    rmrExecCommand
     rmrError
 
   ReplaceModeResult* = object ## Result of replace mode command execution
@@ -42,6 +43,8 @@ type
       modeTransition*: Option[EditorMode]
     of rmrUnhandled:
       discard
+    of rmrExecCommand:
+      execLine*: ExecLine
     of rmrError:
       errorMessage*: string
 
@@ -259,6 +262,11 @@ proc handleReplaceModeKey*(
       return ReplaceModeResult(kind: rmrUnhandled)
     of ctMotion:
       return handler.handleMotion(buffer, state, cmd.motion)
+    of ctAction:
+      # A `:` command runs through the command line, as in Insert.
+      if cmd.isExecCmdline:
+        return ReplaceModeResult(kind: rmrExecCommand, execLine: cmd.execLine)
+      return ReplaceModeResult(kind: rmrUnhandled)
     else:
       # Other command types not supported in replace mode
       return ReplaceModeResult(kind: rmrUnhandled)

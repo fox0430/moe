@@ -3903,6 +3903,79 @@ suite "A mapping to a : command runs it with the mapping's arguments":
     e.press("i", "C-s")
     check readFile(path) == "abc\n"
 
+  test "From Replace":
+    let (e, path) = createEditorForMapped("moe_test_mapped_w_replace.txt")
+    defer:
+      removeFile(path)
+    e.map(EditorMode.Replace, "C-s", "w " & path)
+
+    e.press("R", "x", "C-s")
+    check readFile(path) == "xbc\n"
+
+  test "Insert and Replace are left first, as by <Esc>:w<CR>":
+    for (mode, keys) in [
+      (EditorMode.Insert, @["i", "x", "C-s"]), (EditorMode.Replace, @["R", "x", "C-s"])
+    ]:
+      let (e, path) = createEditorForMapped("moe_test_mapped_w_leave.txt")
+      defer:
+        removeFile(path)
+      e.map(mode, "C-s", "w " & path)
+
+      e.press(keys)
+      check e.state.mode == EditorMode.Normal
+      check e.activeWindow.cursor == BufferPosition(line: 0, column: 0)
+      # What was typed is one change, ended before the command.
+      check not e.activeBuffer.inTransaction
+      e.press("u")
+      check e.activeBuffer.getLine(0) == "abc"
+
+  test "The mode is left before the line runs, also when the host takes it":
+    for (mode, keys) in [
+      (EditorMode.Insert, @["i", "x", "C-s"]), (EditorMode.Replace, @["R", "x", "C-s"])
+    ]:
+      let (e, _) = createEditorForMapped("moe_test_mapped_w_host.txt")
+      var seen: seq[(EditorMode, bool)]
+      e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+        if r.kind == hrExecCommand:
+          seen.add((host.state.mode, host.activeBuffer.inTransaction))
+          return true
+      e.map(mode, "C-s", "w")
+
+      e.press(keys)
+      check seen == @[(EditorMode.Normal, false)]
+
+  test "Insert is left as Escape leaves it, so . types what was typed again":
+    let (e, path) = createEditorForMapped("moe_test_mapped_w_dot.txt")
+    defer:
+      removeFile(path)
+    e.map(EditorMode.Insert, "C-s", "w " & path)
+
+    e.press("i", "x", "y", "z", "C-s", ".")
+    check e.activeBuffer.getLine(0) == "xyxyzzabc"
+
+  test "[count]i types its repeats before the line runs":
+    let (e, path) = createEditorForMapped("moe_test_mapped_w_count.txt")
+    defer:
+      removeFile(path)
+    e.map(EditorMode.Insert, "C-s", "w " & path)
+
+    e.press("3", "i", "x", "C-s")
+    check e.activeBuffer.getLine(0) == "xxxabc"
+    check readFile(path) == "xxxabc\n"
+
+  test "A block insert is copied to its lines before the line runs":
+    let path = getTempDir() / "moe_test_mapped_w_block.txt"
+    removeFile(path)
+    defer:
+      removeFile(path)
+    let e = createTestEditorWithBuffer("abc\ndef")
+    e.state.registers = initRegisters()
+    e.map(EditorMode.Insert, "C-s", "w " & path)
+
+    e.press("C-v", "j", "I", "x", "C-s")
+    check readFile(path) == "xabc\nxdef\n"
+    check e.state.editState.visualBlockInsertContext.isNone
+
   test "From a viewer":
     let (e, path) = createEditorForMapped("moe_test_mapped_w_viewer.txt")
     defer:
@@ -3919,6 +3992,7 @@ suite "A mapping to a : command runs it with the mapping's arguments":
     for (mode, lhs, keys) in [
       (EditorMode.Normal, "Space w", @["Space", "w"]),
       (EditorMode.Insert, "C-s", @["i", "C-s"]),
+      (EditorMode.Replace, "C-s", @["R", "C-s"]),
     ]:
       let (e, path) = createEditorForMapped("moe test mapped " & $mode & ".txt")
       defer:
@@ -3946,6 +4020,7 @@ suite "A mapping to a : command runs it with the mapping's arguments":
       (EditorMode.Normal, "Space t", @["Space", "t"]),
       (EditorMode.Visual, "Space t", @["v", "Space", "t"]),
       (EditorMode.Insert, "C-s", @["i", "C-s"]),
+      (EditorMode.Replace, "C-s", @["R", "C-s"]),
       (EditorMode.LogViewer, "Space t", @["Space", "t"]),
     ]:
       let (e, _) = createEditorForMapped("moe_test_mapped_terminal.txt")
@@ -3962,6 +4037,17 @@ suite "A mapping to a : command runs it with the mapping's arguments":
       let taken = e.takeHostResultRequest()
       require taken.isSome
       check taken.get.enterTerminalCommand == "python3"
+
+  test "Replace runs one without arguments too":
+    let (e, _) = createEditorForMapped("moe_test_mapped_terminal_replace.txt")
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      r.kind == hrEnterTerminal
+    e.map(EditorMode.Replace, "C-s", "terminal")
+
+    e.press("R", "C-s")
+    let taken = e.takeHostResultRequest()
+    require taken.isSome
+    check taken.get.enterTerminalCommand == ""
 
   test "A viewer runs a mapping's own overlay switch too":
     let (e, _) = createEditorForMapped("moe_test_mapped_overlay_viewer.txt")
