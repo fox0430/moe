@@ -219,7 +219,7 @@ proc typeText*(
   let state = editor.state
   state.noteOutsideChange()
   let at = state.cursor
-  state.anchorEdits(editor.activeBuffer, typed.foldJoin)
+  state.anchorEdits(editor.activeBuffer)
   let r = typeTextAgain(editor.activeBuffer, state, typed)
   if r.isErr:
     editor.activeBuffer.dropEditAnchor()

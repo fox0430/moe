@@ -32,6 +32,7 @@ import
     wanted_column,
   ]
 import ../buffer/[core, edit, undo]
+import ../fold_open
 import smart_indent
 
 proc beginInsertModeSession*(
@@ -273,6 +274,10 @@ proc insertDelete*(buffer: TextBuffer, state: EditorState) =
 
 proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   ## Handle newline insertion with optional auto-indentation
+  let unkeyed = state.anchorUnkeyedEdits(buffer)
+  defer:
+    if unkeyed:
+      state.openFoldsOfEdits(buffer)
   let pos = state.cursor
 
   # Get current line content for indent detection
@@ -303,7 +308,7 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
         ""
     let textToInsert = "\n" & middleIndent & "\n" & closeIndent
     let insertResult =
-      buffer.joiningFolds(fjPasted, buffer.insertText(pos, textToInsert))
+      buffer.insertText(pos, textToInsert, foldJoin = state.typedJoin(fjPasted))
     if insertResult.isErr:
       state.statusMessage = insertResult.error
       return
@@ -344,7 +349,7 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
       state.statusMessage = cut.error
       return
   let insertResult =
-    buffer.joiningFolds(fjTyped, buffer.insertText(at, "\n" & newLineIndent))
+    buffer.insertText(at, "\n" & newLineIndent, foldJoin = state.typedJoin(fjTyped))
   if insertResult.isErr:
     state.statusMessage = insertResult.error
     return
@@ -693,7 +698,10 @@ proc typeTextAgain*(
   state.cursor = first
   if typed.text.len > 0:
     let inserted = buffer.insertTextEnd(
-      first, typed.text, cursorByte = typed.text.charToBytePos(typed.cursorAt)
+      first,
+      typed.text,
+      cursorByte = typed.text.charToBytePos(typed.cursorAt),
+      foldJoin = typed.foldJoin,
     )
     if inserted.isErr:
       return err(inserted.error)

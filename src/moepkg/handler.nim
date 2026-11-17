@@ -344,8 +344,8 @@ proc handlePasteText(e: Editor, text: string): bool =
 
     e.state.noteOutsideChange()
     let pos = e.cursor
-    e.state.anchorEdits(activeBuffer, fjPasted)
-    let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
+    e.state.anchorEdits(activeBuffer)
+    let insertResult = activeBuffer.insertTextEnd(pos, pastedText, foldJoin = fjPasted)
     if insertResult.isErr:
       activeBuffer.dropEditAnchor()
       var msg = "Paste failed: " & insertResult.error
@@ -721,8 +721,8 @@ proc middleClickPaste(e: Editor, row, col: int) =
   e.state.noteOutsideChange()
   let pos = e.cursor
   let foldJoin = if enteringInsertFromNormal: fjNone else: fjTyped
-  e.state.anchorEdits(activeBuffer, foldJoin)
-  let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
+  e.state.anchorEdits(activeBuffer)
+  let insertResult = activeBuffer.insertTextEnd(pos, pastedText, foldJoin = foldJoin)
   if insertResult.isErr:
     activeBuffer.dropEditAnchor()
     var msg = "Paste failed: " & insertResult.error

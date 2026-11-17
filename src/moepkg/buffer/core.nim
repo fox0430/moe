@@ -146,11 +146,9 @@ type
 
   EditAnchor* = object
     ## The line the cursor was on as a key began, moved with the text and -1
-    ## once deleted, whether the key changed the buffer, and which rows its
-    ## edits add below a fold's last line join the fold (`joiningFolds`).
+    ## once deleted, and whether the key changed the buffer.
     line*: int
     edited*: bool
-    foldJoin*: FoldJoin
 
   Fold* = object ## Represents a foldable region of text (vim-like manual folding)
     startLine*: int # Fold start line (0-based, inclusive)
@@ -1911,18 +1909,6 @@ proc followAll(
   if efLineArrays in followers:
     b.shiftLineArrays(edits, lmkInserted)
 
-template joiningFolds*(b: TextBuffer, join: FoldJoin, body: untyped): untyped =
-  ## `body`, whose added rows below a fold's last line join it by `join`.
-  let anchored = b.editAnchor.isSome
-  let outer = if anchored: b.editAnchor.get.foldJoin else: fjNone
-  if anchored:
-    b.editAnchor.get.foldJoin = join
-  try:
-    body
-  finally:
-    if anchored and b.editAnchor.isSome:
-      b.editAnchor.get.foldJoin = outer
-
 func joins(j: FoldJoin, added: int): bool =
   case j
   of fjNone:
@@ -1933,9 +1919,10 @@ func joins(j: FoldJoin, added: int): bool =
     true
 
 proc follow(
-    b: TextBuffer, edit: SpanEdit, followers: set[EditFollower], forward = true
+    b: TextBuffer, edit: SpanEdit, followers: set[EditFollower], join = fjNone
 ) {.raises: [].} =
-  ## Move `followers` across `edit`.
+  ## Move `followers` across `edit`, whose added rows below a fold's last line
+  ## join it by `join`.
   if efSemantic in followers:
     b.highlight.semanticMoveAcross(edit)
   let rows = edit.rows
@@ -1956,8 +1943,7 @@ proc follow(
         onInsert(rows.start, rows.after)
 
     if efFolds in followers:
-      if forward and b.editAnchor.isSome and rows.before == 0 and
-          b.editAnchor.get.foldJoin.joins(rows.after):
+      if rows.before == 0 and join.joins(rows.after):
         b.foldState.adjustFoldsAfterInsert(
           edit.markRows.get.start, rows.after, joinAbove = true
         )
@@ -1990,7 +1976,7 @@ proc followBack*(
 ) =
   ## Move `followers` back across `edits` being undone.
   for i in countdown(edits.high, 0):
-    b.follow(edits[i].reversed, followers, forward = false)
+    b.follow(edits[i].reversed, followers)
 
 proc followChange*(
     b: TextBuffer,
@@ -1998,10 +1984,11 @@ proc followChange*(
     followers: set[EditFollower] = AllFollowers,
     undone = false,
     recording = false,
+    foldJoin = fjNone,
 ) =
-  ## Move `followers` across `change` (or back when `undone`). `recording`
-  ## saves replaced text for the snapshot entry. Marks the semantic overlay up
-  ## to date.
+  ## Move `followers` across `change` (or back when `undone`), joining folds by
+  ## `foldJoin`. `recording` saves replaced text for the snapshot entry. Marks
+  ## the semantic overlay up to date.
   var edits: seq[SpanEdit]
   for edit in change.spanEdits:
     edits.add edit
@@ -2012,7 +1999,7 @@ proc followChange*(
       b.followAll(edits.takenBackInOrder, followers)
   else:
     for edit in edits:
-      b.follow(edit, each)
+      b.follow(edit, each, foldJoin)
       if recording and b.pendingSnapshot.isSome:
         b.pendingSnapshotEdits.record(edit)
     b.followAll(edits, followers)
@@ -2377,9 +2364,10 @@ proc refundReloadUndoBudget*(b: TextBuffer, entry: BufferChange) =
   b.reloadUndoLines -= entry.reloadChargeLines
   b.reloadUndoBytes -= entry.reloadChargeBytes
 
-proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
+proc pushUndoChange*(b: TextBuffer, change: BufferChange, foldJoin = fjNone) =
   ## Add a change to the undo stack (or current transaction)
-  ## Always increments changeSeq to mark buffer as modified
+  ## Always increments changeSeq to mark buffer as modified. Rows the change
+  ## adds below a fold's last line join it by `foldJoin`.
 
   # Clear redo; refund reload-budget charges those entries still held.
   for dropped in b.redoStack:
@@ -2411,7 +2399,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
     bookmarksBefore = b.bookmarks
   if b.editAnchor.isSome:
     b.editAnchor.get.edited = true
-  b.followChange(change, recording = true)
+  b.followChange(change, recording = true, foldJoin = foldJoin)
   let join = change.joinSpan
   if join.isSome:
     for name in 'a' .. 'z':
