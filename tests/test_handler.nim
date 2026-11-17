@@ -34,7 +34,7 @@ import pkg/celina/core/mouse_logic
 import config_test_helper
 import ../src/moepkg/tab_line
 import visual_test_helper, clipboard_test_helper
-from vim_like_test_helper import foldRanges
+from vim_like_test_helper import foldRanges, keysOf
 
 import
   ../src/moepkg/[
@@ -3713,6 +3713,148 @@ suite "Command Mode - History Navigation (prefix match)":
     check e.state.input.line.text == "q"
     check e.state.input.line.entry == some(1)
     check e.state.input.line.lookfor == some("")
+
+suite "Command line history - only a line a key was typed at, as Vim":
+  # Expected values are measured in Vim 9.2 with keys typed through a pty:
+  # getcmdline adds a `:` line, and makes it what `@:` runs, only when a key
+  # was typed at it or it waited for one.
+  proc createEditorForHistory(): Editor =
+    result = createTestEditorWithBuffer("abc")
+    result.state.registers = initRegisters()
+    result.state.input.commandState.history = @[]
+
+  proc press(e: Editor, spec: string) =
+    for key in keysOf(spec):
+      check e.handleKeyCombo(key)
+
+  proc map(e: Editor, mode: EditorMode, lhs, rhs: string, noremap = true) =
+    check e.keyBindingRegistry.addRuntimeMapping(mode, lhs, rhs, noremap).len == 0
+
+  proc history(e: Editor): seq[string] =
+    e.state.input.commandState.history
+
+  test "A typed line goes in, and @: runs it":
+    let e = createEditorForHistory()
+    e.press(":set tabstop=2<Enter>")
+    check e.history == @["set tabstop=2"]
+
+    e.config.standard.tabStop = 8
+    e.press("@:")
+    check e.config.standard.tabStop == 2
+
+  test "A line a mapping runs does not, nor does @: run it":
+    # `nnoremap X :set ts=3<CR>`
+    let e = createEditorForHistory()
+    e.press(":set tabstop=2<Enter>")
+    e.map(EditorMode.Normal, "X", ":set Space tabstop=3 Enter")
+
+    e.press("X")
+    check e.config.standard.tabStop == 3
+    check e.history == @["set tabstop=2"]
+
+    e.press("@:")
+    check e.config.standard.tabStop == 2
+
+  test "A line a mapping runs with a register does not go in":
+    # `nnoremap Y :<C-r>a<CR>`
+    let e = createEditorForHistory()
+    check e.state.registers.setRegister('a', "set tabstop=3", false).isOk
+    e.map(EditorMode.Normal, "Y", ": C-r a Enter")
+
+    e.press("Y")
+    check e.config.standard.tabStop == 3
+    check e.history.len == 0
+
+  test "A line a mapping leaves open goes in once Enter is typed":
+    # `nnoremap Y :set ts=4`, then a typed Enter.
+    let e = createEditorForHistory()
+    e.map(EditorMode.Normal, "Y", ":set Space tabstop=4")
+
+    e.press("Y<Enter>")
+    check e.config.standard.tabStop == 4
+    check e.history == @["set tabstop=4"]
+
+  test "A line a mapping leaves open goes in even if a mapped key runs it":
+    # `nnoremap Y :set ts=4` and `cnoremap <C-x> <CR>`, then a typed Ctrl-x:
+    # the line waited for a key.
+    let e = createEditorForHistory()
+    e.map(EditorMode.Normal, "Y", ":set Space tabstop=4")
+    e.map(EditorMode.Command, "C-x", "Enter")
+
+    e.press("Y<C-x>")
+    check e.config.standard.tabStop == 4
+    check e.history == @["set tabstop=4"]
+
+  test "A line a mapped Ctrl-R waits at goes in":
+    # `nnoremap Y :<C-r>` and `cnoremap <C-x> <CR>`, then a typed `a` and
+    # Ctrl-x.
+    let e = createEditorForHistory()
+    check e.state.registers.setRegister('a', "set tabstop=3", false).isOk
+    e.map(EditorMode.Normal, "Y", ": C-r")
+    e.map(EditorMode.Command, "C-x", "Enter")
+
+    e.press("Ya<C-x>")
+    check e.config.standard.tabStop == 3
+    check e.history == @["set tabstop=3"]
+
+  test "An Esc a mapping puts in runs the line without it going in":
+    # `nnoremap Z :set ts=5<Esc>`
+    let e = createEditorForHistory()
+    e.map(EditorMode.Normal, "Z", ":set Space tabstop=5 Esc")
+
+    e.press("Z")
+    check e.config.standard.tabStop == 5
+    check e.history.len == 0
+
+  test "A line a register puts in does not go in":
+    let e = createEditorForHistory()
+    var stored: seq[string]
+    for key in keysOf(":set tabstop=6<Enter>"):
+      stored.add keyComboToString(key)
+    e.state.pendingInput.macroState.registers['a'] = stored
+
+    e.press("@a")
+    check e.config.standard.tabStop == 6
+    check e.history.len == 0
+
+  test "A line pasted into goes in":
+    # `nmap W :s` and `cnoremap sx <CR>`: `s` waits for the rest of `sx`, so
+    # the line has not waited for a key until the paste lets it go.
+    let e = createEditorForHistory()
+    e.map(EditorMode.Normal, "W", ": s", noremap = false)
+    e.map(EditorMode.Command, "s x", "Enter")
+    e.map(EditorMode.Command, "C-x", "Enter")
+
+    e.press("W")
+    check not e.state.input.line.typed
+    check e.handlePaste("et tabstop=7")
+    check e.state.input.line.typed
+    e.press("<C-x>")
+    check e.config.standard.tabStop == 7
+    check e.history == @["set tabstop=7"]
+
+  test "A line run while a mapping holds keys does not go in":
+    # `nmap V :set ts=6 s` and `cnoremap sx <CR>`, then a typed `x`: the line
+    # never waited for a key, as `s` was still to be read.
+    let e = createEditorForHistory()
+    e.map(EditorMode.Normal, "V", ":set Space tabstop=6 Space s", noremap = false)
+    e.map(EditorMode.Command, "s x", "Enter")
+
+    e.press("Vx")
+    check e.config.standard.tabStop == 6
+    check e.history.len == 0
+
+  test "A command line run by name does not go in":
+    # A mapping to a command (`"Q" = "bnext"`) runs it as `<Cmd>` would.
+    let e = createEditorForHistory()
+    check e.processReplayedResult(
+      HandlerResult(
+        kind: hrExecCommand, execCommandText: "set tabstop=3", execCommandCount: 1
+      ),
+      e.activeBuffer,
+    ) == roContinue
+    check e.config.standard.tabStop == 3
+    check e.history.len == 0
 
 suite "adjustCursorAfterInsertExit":
   test "Cursor moves one position left (middle of line)":

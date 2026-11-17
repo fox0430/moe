@@ -201,13 +201,22 @@ proc updateCompletionAfterTyping(e: Editor, typed: string) =
 
 proc runCommandLine(e: Editor): ReplayOutcome =
   ## Run the command line, or leave it when there is nothing after the `:`.
-  if e.state.input.line.text.len > 0:
-    # Full-lifecycle dispatch (pre-teardown, side effects, post-teardown)
-    # is centralised in executeCommandOverlay so the Command overlay Enter
-    # path and hrExecCommand (@:) share a single entry point.
-    return e.executeCommandOverlay(e.state.commandLine)
-  e.cancelCommandLine()
-  roContinue
+  ## A line a key was typed at then goes into the history, not one a mapping
+  ## or a register ran to the end. It goes in after it ran, as Vim's
+  ## last_cmdline, which the newest entry stands for to `@:` and `":`.
+  if e.state.input.line.text.len == 0:
+    e.cancelCommandLine()
+    return roContinue
+  # Taken before the command line closes.
+  let
+    text = e.state.input.line.text
+    typed = e.state.input.line.typed
+  # Full-lifecycle dispatch (pre-teardown, side effects, post-teardown)
+  # is centralised in executeCommandOverlay so the Command overlay Enter
+  # path and hrExecCommand (@:) share a single entry point.
+  result = e.executeCommandOverlay(":" & text)
+  if typed:
+    e.addCommandToHistory(text)
 
 proc applyCompletion(e: Editor): bool =
   ## Put the selected completion in the line. Returns whether it was a

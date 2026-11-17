@@ -85,11 +85,15 @@ proc takeKey*(
 ): PromptKey =
   ## What `key` does to the prompt. A key that does not browse the history
   ## ends what Up and Down look for, whatever it then does. A Ctrl-R waits
-  ## for any key but an interrupt; a Ctrl-V for that too.
+  ## for any key but an interrupt; a Ctrl-V for that too. A typed key marks
+  ## the line typed, but not the key a Ctrl-R or Ctrl-V reads, as Vim reads
+  ## that one outside getcmdline's loop.
   if line.wait != pwNone:
     if line.wait == pwLiteral or not (key.isCtrlC and interrupted):
       return pkArgument
     line.wait = pwNone
+  if typed:
+    line.typed = true
   if not key.keepsLookfor:
     line.lookfor = none(string)
   promptKey(key, typed)

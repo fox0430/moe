@@ -1005,6 +1005,14 @@ proc prepareForKeyCombo(e: Editor) =
   ## Per-input setup for frontend-neutral key handling.
   e.prepareForInput(true)
 
+proc noteWaitAtCommandLine(e: Editor) =
+  ## The editor now waits for the user. A `:` line open then counts as typed,
+  ## even if the next key runs a mapping, as Vim's getcmdline takes it when
+  ## nothing but the user's keys is left to read. Keys held for a mapping
+  ## are still to be read.
+  if e.state.isCommandOverlay and not e.keyRouter.isHoldingKeys:
+    e.state.input.line.typed = true
+
 template asInput(e: Editor, body: untyped) =
   ## Run a public input entry as one command (`asCommand`). Whichever way the
   ## input went (a mode, an overlay, the pointer, a mapping timeout), Insert
@@ -1014,6 +1022,7 @@ template asInput(e: Editor, body: untyped) =
   e.asCommand:
     body
   e.settleInsertResume()
+  e.noteWaitAtCommandLine()
 
 proc handlePaste*(e: Editor, text: string): bool =
   ## Handle pasted text supplied by any frontend.
