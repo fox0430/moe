@@ -690,6 +690,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     action: some(claFileTree),
     isCanonicalLong: true,
     takesFilePath: true,
+    keymapBaseDescription: "Toggle FileTree sidebar",
   ),
   # Theme / search / whitespace
   CommandLineCommandSpec(
