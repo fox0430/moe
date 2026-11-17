@@ -89,6 +89,55 @@ You can use the [example](../example/moerc.toml).
 | vscode | VSCode theme |
 | config | User theme. Also please set `Theme.path` |
 
+### Filetype
+
+- type: string
+
+The names accepted by `filetype` in `[[QuickRun.entries]]` and
+`[[Hook.entries]]`. Any of `Name`, `Display name` and `Aliases` works,
+ignoring case and `_`. `${filetype}` expands to `Name`.
+
+<!-- AUTO-GEN:start Filetype -->
+| Name | Display name | Aliases |
+|:---|:---|:---|
+| astro | Astro |  |
+| c | C |  |
+| commiteditmsg | COMMIT_EDITMSG |  |
+| cpp | C++ | cxx |
+| csharp | C# | cs |
+| diff | Diff |  |
+| dockerfile | Dockerfile | docker |
+| fish | Fish |  |
+| gitignore | gitignore |  |
+| gitrebasetodo | git-rebase-todo |  |
+| go | Go | golang |
+| haskell | Haskell | hs |
+| html | HTML |  |
+| hyprland | Hyprland |  |
+| java | Java |  |
+| javascript | JavaScript | js |
+| json | Json |  |
+| jsonc | Jsonc |  |
+| jsx | JavaScriptReact |  |
+| latex | LaTeX | tex |
+| lisp | Lisp |  |
+| log | Log |  |
+| lua | Lua | luau |
+| markdown | Markdown | md |
+| nim | Nim |  |
+| python | Python | py |
+| rust | Rust | rs |
+| shell | Shell | sh, bash |
+| tcl | Tcl |  |
+| toml | Toml |  |
+| tsx | TypeScriptReact |  |
+| typescript | TypeScript | ts |
+| vim | Vimscript | viml, vim9 |
+| xml | XML |  |
+| yaml | Yaml | yml |
+| zsh | Zsh |  |
+<!-- AUTO-GEN:end Filetype -->
+
 ### Standard table
 
 <!-- AUTO-GEN:start Standard -->
@@ -296,7 +345,7 @@ Keys of a `[[QuickRun.entries]]` table:
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
 | command | string |  | Command line to run |
-| filetype | string array | [] | File types this applies to (default: every type) |
+| filetype | string array | [] | File types this applies to, named as in Filetype (default: every type) |
 | filter | string |  | Regex the file path must match (default: every path) |
 | workingDir | string |  | Directory to run the command in (default: the file's) |
 <!-- AUTO-GEN:end QuickRun.entries -->
@@ -1672,7 +1721,7 @@ entry missing either is reported and dropped whole. Keys of a `[[Hook.entries]]`
 | event | string (enum: BufWritePre, BufWritePost, BufReadPost) | BufWritePost | Event to attach to |
 | command | string |  | Command line to run (only when exCommand is not set) |
 | exCommand | string |  | moe Ex command to run instead of a program: :s or :stripwhitespace (only when the event is BufWritePre) |
-| filetype | string array | [] | File types this applies to (default: every type) |
+| filetype | string array | [] | File types this applies to, named as in Filetype (default: every type) |
 | filter | string |  | Regex the file path must match (default: every path) |
 | workingDir | string |  | Directory to run the command in (default: the file's) (only when exCommand is not set) |
 | timeout | integer | 60 | Seconds before the command is killed. 0 waits without a bound (only when exCommand is not set) |

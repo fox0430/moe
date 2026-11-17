@@ -360,7 +360,8 @@ type
     filetype* {.
       cfg,
       cfgSuggest: filetypeNames,
-      cfgDocDescription: "File types this applies to (default: every type)"
+      cfgDocDescription:
+        "File types this applies to, named as in Filetype (default: every type)"
     .}: seq[string]
     filter* {.
       cfg, cfgDocDescription: "Regex the file path must match (default: every path)"
@@ -890,7 +891,8 @@ type
     filetype* {.
       cfg,
       cfgSuggest: filetypeNames,
-      cfgDocDescription: "File types this applies to (default: every type)"
+      cfgDocDescription:
+        "File types this applies to, named as in Filetype (default: every type)"
     .}: seq[string]
     filter* {.
       cfg, cfgDocDescription: "Regex the file path must match (default: every path)"

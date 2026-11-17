@@ -13,9 +13,10 @@
 ## the running `newEditorConfig()` instance unless the field overrides it
 ## with `{.cfgDocDefault: <literal>.}`.
 
-import std/[macros, options, os, sequtils, strutils]
+import std/[algorithm, macros, options, os, sequtils, strutils]
 
 import ../src/moepkg/[color, config, config_macros, help_description]
+import ../src/moepkg/syntax/tokenizer
 
 # default-value formatters used by `generateSectionMarkdown`
 
@@ -289,7 +290,23 @@ proc generateColorsMarkdown(): string =
     let desc = escapeMdCell(EditorColorPairDocDescription[index])
     result &= "| " & key & " | " & desc & " |\n"
 
-const ExtraSectionNames* = @["Colors"]
+proc generateFiletypeMarkdown(): string =
+  result = "| Name | Display name | Aliases |\n"
+  result &= "|:---|:---|:---|\n"
+  let languages = toSeq(succ(langNone) .. high(SourceLanguage)).sortedByIt(
+      sourceLanguageToFiletype[it]
+    )
+  for language in languages:
+    let name = sourceLanguageToFiletype[language]
+    var aliases: seq[string]
+    for (alias, aliased) in sourceLanguageAliases:
+      if aliased == language:
+        aliases.add alias
+    result &=
+      "| " & escapeMdCell(name) & " | " & escapeMdCell(sourceLanguageToStr[language]) &
+      " | " & escapeMdCell(aliases.join(", ")) & " |\n"
+
+const ExtraSectionNames* = @["Colors", "Filetype"]
   ## Section names handled outside the struct-driven `defineSections`
   ## dispatch. Each entry has a one-off generator invoked from
   ## `regenerateConfigDocs` after the standard sections.
@@ -298,6 +315,8 @@ proc bodyForExtra(name: string): string =
   case name
   of "Colors":
     generateColorsMarkdown()
+  of "Filetype":
+    generateFiletypeMarkdown()
   else:
     raise newException(ValueError, "unknown extra section: " & name)
 
