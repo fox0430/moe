@@ -22,7 +22,7 @@
 ## This module handles visual selection and provides the core selection
 ## functionality for Visual mode
 
-import std/[options, strutils]
+import std/options
 
 import pkg/results
 
@@ -59,7 +59,7 @@ type
     of vmrPassthrough:
       passthroughKind*: PassthroughKind
     of vmrExecCommand:
-      execCommandText*: string
+      execLine*: ExecLine
         ## Visual mode has no count prefix, so the dispatcher always
         ## forwards count = 1 to the command-line parser.
     of vmrError:
@@ -296,9 +296,8 @@ proc handleVisualModeKey*(
     # (modified-buffer guard etc.) fire. Visual mode has no in-progress
     # buffer transaction to commit, so just forward the alias to the
     # dispatcher.
-    if cmd.commandId.startsWith(ExecCmdlinePrefix):
-      let aliasText = cmd.commandId[ExecCmdlinePrefix.len ..^ 1]
-      return VisualModeResult(kind: vmrExecCommand, execCommandText: aliasText)
+    if cmd.isExecCmdline:
+      return VisualModeResult(kind: vmrExecCommand, execLine: cmd.execLine)
 
   # Commands the registry does not run (window.*, file.*, quickrun, lsp.*)
   # go to the editor as in Normal mode.

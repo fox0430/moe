@@ -30,6 +30,7 @@ import std/options
 import ../[modes, setting_options]
 import ../buffer/core
 import ../types/key_combo_types
+from ../command_line/types import ExecLine
 import ../lsp/protocol/types as lspTypes
 
 type
@@ -448,7 +449,7 @@ type
     of hrTerminalQuit:
       discard
     of hrExecCommand:
-      execCommandText*: string # Command text (without leading ":")
+      execLine*: ExecLine
       execCommandCount*: int # Number of times to execute
     of hrOnlyWindow:
       discard
@@ -473,7 +474,7 @@ type
         # The count of o and O: Enter at the end of what was typed, on the
         # line above the last this many lines
       repeatLeave*: bool # Leave Insert after, as Escape does
-      repeatThenExec*: string # A command line to run once Insert is left
+      repeatThenExec*: ExecLine # A command line to run once Insert is left
     of hrMapAdd:
       mapAddLhs*: string
       mapAddRhs*: string

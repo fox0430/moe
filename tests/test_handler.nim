@@ -25,7 +25,8 @@
 
 import std/[unittest, options, tables, os, osproc, times, posix]
 from std/strutils import
-  contains, continuesWith, count, endsWith, escape, join, repeat, split, strip
+  contains, continuesWith, count, endsWith, escape, join, repeat, split, startsWith,
+  strip
 
 import pkg/chronos
 import ../src/moepkg/celina_backend
@@ -41,7 +42,7 @@ import
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
     render_utils, clipboard, message_log, frontend_input, pending_input, key_router,
     completion, signature_help, macro_recording, wanted_column, hover_popup,
-    editor_window_layout, config_mode, viewer_mode,
+    editor_window_layout, config_mode, viewer_mode, keybind_config,
   ]
 import ../src/moepkg/handler {.all.}
 from ../src/moepkg/types/background_process_types import BackgroundProcessCommand
@@ -3849,12 +3850,127 @@ suite "Command line history - only a line a key was typed at, as Vim":
     let e = createEditorForHistory()
     check e.processReplayedResult(
       HandlerResult(
-        kind: hrExecCommand, execCommandText: "set tabstop=3", execCommandCount: 1
+        kind: hrExecCommand,
+        execLine: ExecLine(text: "set tabstop=3"),
+        execCommandCount: 1,
       ),
       e.activeBuffer,
     ) == roContinue
     check e.config.standard.tabStop == 3
     check e.history.len == 0
+
+suite "A mapping to a : command runs it with the mapping's arguments":
+  # `"Space w" = "w out.txt"` in [KeyMapping] runs `:w out.txt`, whichever
+  # mode has the key.
+  proc createEditorForMapped(name: string): (Editor, string) =
+    let path = getTempDir() / name
+    removeFile(path)
+    let e = createTestEditorWithBuffer("abc")
+    e.state.registers = initRegisters()
+    (e, path)
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc map(e: Editor, mode: EditorMode, lhs, rhs: string) =
+    check e.keyBindingRegistry.addRuntimeMappingExpanded(mode, lhs, rhs).len == 0
+
+  test "From Normal":
+    let (e, path) = createEditorForMapped("moe_test_mapped_w_normal.txt")
+    defer:
+      removeFile(path)
+    e.map(EditorMode.Normal, "Space w", "w " & path)
+
+    e.press("Space", "w")
+    check readFile(path) == "abc\n"
+
+  test "From Visual":
+    let (e, path) = createEditorForMapped("moe_test_mapped_w_visual.txt")
+    defer:
+      removeFile(path)
+    e.map(EditorMode.Visual, "Space w", "w " & path)
+
+    e.press("v", "Space", "w")
+    check readFile(path) == "abc\n"
+
+  test "From Insert":
+    let (e, path) = createEditorForMapped("moe_test_mapped_w_insert.txt")
+    defer:
+      removeFile(path)
+    e.map(EditorMode.Insert, "C-s", "w " & path)
+
+    e.press("i", "C-s")
+    check readFile(path) == "abc\n"
+
+  test "From a viewer":
+    let (e, path) = createEditorForMapped("moe_test_mapped_w_viewer.txt")
+    defer:
+      removeFile(path)
+    check e.executeCommandOverlay(":log") == roContinue
+    require e.activeWindow.mode == EditorMode.LogViewer
+    let shown = e.activeBuffer.getLine(0)
+    e.map(EditorMode.LogViewer, "Space w", "w " & path)
+
+    e.press("Space", "w")
+    check readFile(path).startsWith(shown)
+
+  test "Each of `args` stays one argument, spaces and all":
+    for (mode, lhs, keys) in [
+      (EditorMode.Normal, "Space w", @["Space", "w"]),
+      (EditorMode.Insert, "C-s", @["i", "C-s"]),
+    ]:
+      let (e, path) = createEditorForMapped("moe test mapped " & $mode & ".txt")
+      defer:
+        removeFile(path)
+      check e.keyBindingRegistry.addRuntimeMappingExpanded(
+        mode, lhs, "w", args = @[path]
+      ).len == 0
+
+      e.press(keys)
+      check readFile(path) == "abc\n"
+
+  test "save, the TOML spelling of :w, also writes the file it names":
+    let (e, path) = createEditorForMapped("moe_test_mapped_save.txt")
+    defer:
+      removeFile(path)
+    e.map(EditorMode.Normal, "Space w", "save " & path)
+
+    e.press("Space", "w")
+    check readFile(path) == "abc\n"
+
+  test "terminal runs its arguments, whichever mode has the key (#3539)":
+    # `{ command = "terminal", args = ["python3"] }`. The host takes the
+    # terminal, so no PTY starts.
+    for (mode, lhs, keys) in [
+      (EditorMode.Normal, "Space t", @["Space", "t"]),
+      (EditorMode.Visual, "Space t", @["v", "Space", "t"]),
+      (EditorMode.Insert, "C-s", @["i", "C-s"]),
+      (EditorMode.LogViewer, "Space t", @["Space", "t"]),
+    ]:
+      let (e, _) = createEditorForMapped("moe_test_mapped_terminal.txt")
+      if mode == EditorMode.LogViewer:
+        check e.executeCommandOverlay(":log") == roContinue
+        require e.activeWindow.mode == EditorMode.LogViewer
+      e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+        r.kind == hrEnterTerminal
+      check e.keyBindingRegistry.addRuntimeMappingExpanded(
+        mode, lhs, "terminal", args = @["python3"]
+      ).len == 0
+
+      e.press(keys)
+      let taken = e.takeHostResultRequest()
+      require taken.isSome
+      check taken.get.enterTerminalCommand == "python3"
+
+  test "A viewer runs a mapping's own overlay switch too":
+    let (e, _) = createEditorForMapped("moe_test_mapped_overlay_viewer.txt")
+    check e.executeCommandOverlay(":log") == roContinue
+    require e.activeWindow.mode == EditorMode.LogViewer
+    e.map(EditorMode.LogViewer, "Space c", "overlay_switch command")
+
+    e.press("Space", "c")
+    check e.state.overlay == some(okCommand)
 
 suite "adjustCursorAfterInsertExit":
   test "Cursor moves one position left (middle of line)":

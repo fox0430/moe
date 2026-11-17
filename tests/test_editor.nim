@@ -3489,7 +3489,9 @@ suite "Editor - a command line from Visual":
     )
 
     discard e.processReplayedResult(
-      HandlerResult(kind: hrExecCommand, execCommandText: "noh", execCommandCount: 1),
+      HandlerResult(
+        kind: hrExecCommand, execLine: ExecLine(text: "noh"), execCommandCount: 1
+      ),
       e.activeBuffer(),
     )
 
@@ -3499,8 +3501,8 @@ suite "Editor - a command line from Visual":
 suite "Editor - Command mode command alias bridge end-to-end (#2597)":
   # Regression: the `keyMappableCommandModeAliases` bridge in
   # `command_handlers/handler_manager.nim` rewrites a `K = "bdelete"` keymap
-  # dispatch into `HandlerResult(kind: hrExecCommand, execCommandText:
-  # "bdelete")`, which reaches `processReplayedResult`. That is supposed to
+  # dispatch into `HandlerResult(kind: hrExecCommand, execLine:
+  # ExecLine(text: "bdelete"))`, which reaches `processReplayedResult`. That is supposed to
   # drive the full `:bdelete` command-line parser (so the modified-buffer guard
   # fires). These tests exercise the processReplayedResult half of that
   # pipeline with the exact result the
@@ -3525,7 +3527,7 @@ suite "Editor - Command mode command alias bridge end-to-end (#2597)":
     # The bridge in handler_manager.nim/normal_handler.nim builds exactly this
     # HandlerResult for an alias like "bdelete".
     let r = HandlerResult(
-      kind: hrExecCommand, execCommandText: "bdelete", execCommandCount: 1
+      kind: hrExecCommand, execLine: ExecLine(text: "bdelete"), execCommandCount: 1
     )
     discard e.processReplayedResult(r, e.activeBuffer())
 
@@ -3558,7 +3560,7 @@ suite "Editor - Command mode command alias bridge end-to-end (#2597)":
     check e.activeBuffer().isModified
 
     let r = HandlerResult(
-      kind: hrExecCommand, execCommandText: "bdelete", execCommandCount: 1
+      kind: hrExecCommand, execLine: ExecLine(text: "bdelete"), execCommandCount: 1
     )
     discard e.processReplayedResult(r, e.activeBuffer())
 
@@ -3603,7 +3605,9 @@ suite "Editor - unreachable kinds reaching processResult are loud":
       HandlerResult(
         kind: hrPlaybackMacro, playbackMacroKeys: @[], playbackMacroCount: 1
       ),
-      HandlerResult(kind: hrExecCommand, execCommandText: "noh", execCommandCount: 1),
+      HandlerResult(
+        kind: hrExecCommand, execLine: ExecLine(text: "noh"), execCommandCount: 1
+      ),
     ]
     for r in kinds:
       check e.processResult(r, e.activeBuffer())

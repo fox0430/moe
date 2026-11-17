@@ -2073,7 +2073,7 @@ suite "InsertModeHandler - Command mode command alias bridge":
     let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrExecCommand
-    check r.execCommandText == "bdelete"
+    check r.execLine.text == "bdelete"
 
   test "imap D to bd preserves the short alias verbatim":
     let buf = newTextBuffer()
@@ -2085,7 +2085,7 @@ suite "InsertModeHandler - Command mode command alias bridge":
     let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrExecCommand
-    check r.execCommandText == "bd"
+    check r.execLine.text == "bd"
 
 suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
   test "Ctrl+O leaves for one Normal mode command":

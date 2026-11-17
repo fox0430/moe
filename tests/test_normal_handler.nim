@@ -1533,7 +1533,7 @@ suite "NormalModeHandler - Command mode command alias dispatch (#2597)":
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrExecCommand
-    check r.execCommandText == "bdelete"
+    check r.execLine.text == "bdelete"
     check r.execCommandCount == 1
 
   test "D mapped to bd dispatches the short alias verbatim":
@@ -1551,7 +1551,7 @@ suite "NormalModeHandler - Command mode command alias dispatch (#2597)":
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrExecCommand
-    check r.execCommandText == "bd"
+    check r.execLine.text == "bd"
 
 suite "NormalModeHandler - updateCursorToJumpPosition":
   test "Jump to buffer with single empty line":

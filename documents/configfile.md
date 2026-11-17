@@ -1026,6 +1026,8 @@ Example:
 "F2" = "wq"
 ```
 
+Arguments after one of these names go on its `:` line: `"Space w" = "w out.txt"` runs `:w out.txt`, and `save` with arguments is `:w` too. For a command that takes a path (`w`, `wq`, `x`, `filetree`), each entry of `args` stays one path, spaces and all, so `"Space w" = { command = "w", args = ["My Notes.txt"] }` writes `My Notes.txt`. The arguments of `terminal` are a shell command line, as typed after `:terminal`, so `{ command = "terminal", args = ["make test"] }` runs `make test`. A mapping that gives one of the path commands more than one path is an error when the configuration is read.
+
 #### Application order
 
 Key mappings are resolved in two stages.

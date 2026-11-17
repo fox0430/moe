@@ -122,6 +122,13 @@ type
     claCquit # :cq, :cquit (quit with non-zero exit code)
     claUnknown # Unknown command
 
+  ExecLine* = object
+    ## A `:` line run without being typed: `@:`'s, or the `:` command a mapping
+    ## names, with the arguments the mapping gives passed whole after the
+    ## line's own.
+    text*: string ## Without the leading `:`
+    args*: seq[string]
+
   ParsedCommand* = object
     action*: CommandLineAction
     abbreviatedAction*: Option[CommandLineAction]

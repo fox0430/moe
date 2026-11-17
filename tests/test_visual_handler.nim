@@ -652,7 +652,7 @@ suite "VisualModeHandler - Command mode command alias bridge":
     let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrExecCommand
-    check r.execCommandText == "bdelete"
+    check r.execLine.text == "bdelete"
 
   test "xmap D to bd preserves the short alias verbatim":
     let buf = newTextBuffer()
@@ -669,7 +669,7 @@ suite "VisualModeHandler - Command mode command alias bridge":
     let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrExecCommand
-    check r.execCommandText == "bd"
+    check r.execLine.text == "bd"
 
 suite "VisualModeHandler - commands the editor runs":
   test "a mapping in any Visual mode hands each one to the editor":

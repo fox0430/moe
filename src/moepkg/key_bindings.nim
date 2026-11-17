@@ -273,7 +273,6 @@ proc addRuntimeMapping*(
       noremap: noremap,
       kind: rmkCommand,
       command: command,
-      commandName: rhsStr,
     )
     # Remove existing mapping for same trigger
     registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
@@ -325,7 +324,6 @@ proc setRuntimeCommandMapping*(
     noremap: noremap,
     kind: rmkCommand,
     command: command,
-    commandName: command.name,
   )
   registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
   registry.runtimeMappings[mode].add(mapping)

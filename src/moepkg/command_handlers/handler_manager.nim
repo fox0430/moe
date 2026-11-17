@@ -30,7 +30,7 @@
 ## so external callers (`editor.nim`, `handler.nim`, tests) see the same
 ## public surface as before.
 
-import std/[options, tables, strutils]
+import std/options
 
 import pkg/results
 
@@ -83,26 +83,20 @@ proc newHandlerManager*(
     commandRegistry: commandRegistry,
   )
 
-proc executeCommandDirect*(
-    manager: HandlerManager, commandName: string
-): Option[HandlerResult] =
-  ## Execute a named command directly, returning a HandlerResult.
+proc executeCommandDirect*(command: registry.Command): Option[HandlerResult] =
+  ## Execute `command` directly, returning a HandlerResult.
   ## This is used for rmkCommand runtime mappings in modes that don't use
-  ## findBinding (Special modes like Filer, LogViewer, etc.).
-  ## Returns none if the command is unknown or not executable directly.
+  ## findBinding (Special modes like Filer, LogViewer, etc.), with the command
+  ## the mapping holds, arguments and all.
+  ## Returns none if the command is not executable directly.
 
-  if not manager.keyBindingRegistry.commandRegistry.hasKey(commandName):
-    return none(HandlerResult)
-
-  let command = manager.keyBindingRegistry.commandRegistry[commandName]
   # Command mode command alias bridge: `exec.cmdline.<alias>` routes through
   # the full command-line parser so `:bd`-style safety checks fire even in
   # special modes.
-  if command.kind == ctAction and command.commandId.startsWith(ExecCmdlinePrefix):
-    let aliasText = command.commandId[ExecCmdlinePrefix.len ..^ 1]
+  if command.isExecCmdline:
     return some(
       HandlerResult(
-        kind: hrExecCommand, execCommandText: aliasText, execCommandCount: 1
+        kind: hrExecCommand, execLine: command.execLine, execCommandCount: 1
       )
     )
   case command.kind
@@ -150,7 +144,7 @@ proc executeCommandDirect*(
     )
   of ctMotion, ctOperator, ctTextObject, ctOperatorPending:
     logWarn "executeCommandDirect",
-      "Command '" & commandName &
+      "Command '" & command.name &
         "' cannot be executed directly in special modes; use key sequence mapping instead"
     return none(HandlerResult)
 
@@ -234,7 +228,7 @@ proc applyNormalModeResult(
     # Pass through to handler.nim which has access to Editor for full result processing
     return HandlerResult(
       kind: hrExecCommand,
-      execCommandText: r.execCommandText,
+      execLine: r.execLine,
       execCommandCount: if r.execCommandCount > 0: r.execCommandCount else: 1,
     )
   of nmrJumpToBuffer:

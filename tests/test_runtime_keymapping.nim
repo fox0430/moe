@@ -278,7 +278,7 @@ suite "addRuntimeMapping - key to command":
     check err == ""
     check registry.runtimeMappings[Normal].len == 1
     check registry.runtimeMappings[Normal][0].kind == rmkCommand
-    check registry.runtimeMappings[Normal][0].commandName == "file.save"
+    check registry.runtimeMappings[Normal][0].command.name == "file.save"
 
   test "Map S-j to bnext resolves as command, not key sequence (#2597)":
     var registry = newKeyBindingRegistry()
@@ -289,7 +289,7 @@ suite "addRuntimeMapping - key to command":
     check registry.runtimeMappings[Normal].len == 1
     let m = registry.runtimeMappings[Normal][0]
     check m.kind == rmkCommand
-    check m.commandName == "bnext"
+    check m.command.name == "bnext"
     # S-j must normalize to 'J' (no Shift modifier) so it matches actual
     # terminal events for Shift+j.
     check m.triggerKeys.len == 1
@@ -304,7 +304,7 @@ suite "addRuntimeMapping - key to command":
     check err == ""
     let m = registry.runtimeMappings[Normal][^1]
     check m.kind == rmkCommand
-    check m.commandName == "bprev"
+    check m.command.name == "bprev"
 
   test "Map D to bdelete resolves as command (#2597)":
     # Issue #2597 follow-up: `bdelete` must be a registered alias so it stops
@@ -316,7 +316,7 @@ suite "addRuntimeMapping - key to command":
     check err == ""
     let m = registry.runtimeMappings[Normal][^1]
     check m.kind == rmkCommand
-    check m.commandName == "bdelete"
+    check m.command.name == "bdelete"
 
   test "Map Q to q resolves as command (#2597)":
     # Single-letter alias `q` is registered so `Q = "q"` reaches the
@@ -329,7 +329,7 @@ suite "addRuntimeMapping - key to command":
     check err == ""
     let m = registry.runtimeMappings[Normal][^1]
     check m.kind == rmkCommand
-    check m.commandName == "q"
+    check m.command.name == "q"
 
   test "Map F2 to wq resolves as command (#2597)":
     var registry = newKeyBindingRegistry()
@@ -339,7 +339,7 @@ suite "addRuntimeMapping - key to command":
     check err == ""
     let m = registry.runtimeMappings[Normal][^1]
     check m.kind == rmkCommand
-    check m.commandName == "wq"
+    check m.command.name == "wq"
 
   test "Map overwrites existing":
     var registry = newKeyBindingRegistry()
@@ -363,7 +363,7 @@ suite "addRuntimeMapping - key to command":
     discard registry.addRuntimeMapping(Normal, "C-s", "file.save")
     discard registry.addRuntimeMapping(Normal, "C-s", "file.quit")
     check registry.runtimeMappings[Normal].len == 1
-    check registry.runtimeMappings[Normal][0].commandName == "file.quit"
+    check registry.runtimeMappings[Normal][0].command.name == "file.quit"
 
 suite "addRuntimeMapping - Insert mode built-in keys":
   # `handleInsertModeKey` answers C-a / C-p / C-@ before `resolveBuiltin`, so a
@@ -1404,6 +1404,35 @@ suite "addRuntimeMappingExpanded - complex command targets":
     check m.command.kind == ctCustom
     check m.command.args == @["foo", "bar"]
 
+  test "save with arguments is :w with them, and without stays a command":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    check registry.addRuntimeMappingExpanded(Normal, "C-y", "save out.txt") == ""
+    let withArgs = registry.runtimeMappings[Normal][^1].command
+    check withArgs.isExecCmdline
+    check withArgs.execLine == ExecLine(text: "w", args: @["out.txt"])
+
+    check registry.addRuntimeMappingExpanded(Normal, "C-u", "save") == ""
+    check registry.runtimeMappings[Normal][^1].command.commandId == "file.save"
+
+  test "A : command refuses arguments it would refuse when run":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    check registry.addRuntimeMappingExpanded(Normal, "C-y", "w a b") ==
+      "':w' with [\"a\", \"b\"]: Only one file name allowed"
+    check registry.addRuntimeMappingExpanded(Normal, "C-y", "save", args = @["a", "b"]) ==
+      "':w' with [\"a\", \"b\"]: Only one file name allowed"
+    check registry.runtimeMappings[Normal].len == 0
+
+  test "A : command takes each of `args` whole, spaces and all":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    check registry.addRuntimeMappingExpanded(
+      Normal, "C-y", "w", args = @["My Notes.txt"]
+    ) == ""
+    check registry.runtimeMappings[Normal][^1].command.execLine ==
+      ExecLine(text: "w", args: @["My Notes.txt"])
+
   test "complex mapping survives a rebuild triggered by another mapping":
     var registry = newKeyBindingRegistry()
     registry.setupDefaultBindings()
@@ -1436,7 +1465,7 @@ suite "addRuntimeMappingExpanded - complex command targets":
     check err == ""
     let m = registry.runtimeMappings[Normal][^1]
     check m.kind == rmkCommand
-    check m.commandName == "delete-char"
+    check m.command.name == "delete-char"
 
   test "non-command multi-key RHS still falls back to a key sequence":
     var registry = newKeyBindingRegistry()
@@ -1503,7 +1532,7 @@ suite "addRuntimeMappingExpanded - the :map commands read : command names as key
 
     let m = registry.runtimeMappings[Normal][^1]
     check m.kind == rmkCommand
-    check m.commandName == "w"
+    check m.command.name == "w"
 
 suite "Integration - mode_switch into Visual":
   test "starts the selection at the cursor, not at an old anchor":
@@ -2126,4 +2155,4 @@ suite "rmkCommand mapping - findBinding integration":
     let allMappings = registry.getAllRuntimeMappings(EditorMode.Filer)
     check allMappings.len == 1
     check allMappings[0].kind == rmkCommand
-    check allMappings[0].commandName == "window-prev"
+    check allMappings[0].command.name == "window-prev"

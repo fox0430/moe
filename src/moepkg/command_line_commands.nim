@@ -1371,3 +1371,11 @@ proc findCommandLineCommand*(name: string): Option[CommandLineCommandSpec] =
   if name in CommandLineCommandIndex:
     return some(CommandLineCommandTable[CommandLineCommandIndex[name]])
   none(CommandLineCommandSpec)
+
+proc builtinAction*(name: string): Option[CommandLineAction] =
+  ## The action the built-in `:name` runs, none for a name only TOML knows.
+  let spec = findCommandLineCommand(name)
+  if spec.isSome and not spec.get.isTomlOnly:
+    spec.get.action
+  else:
+    none(CommandLineAction)
