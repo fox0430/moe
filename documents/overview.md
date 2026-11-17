@@ -40,27 +40,10 @@ $ nimble release
 
 # Test
 
-## Unit test
-
-### Requires
+## Requires
 
 - [nimlangserver](https://github.com/nim-lang/langserver)
 
 ```
 nimble test
-```
-
-## Integration test
-
-### Requires
-
-[abduco](https://github.com/martanne/abduco)
-
-[shpec](https://github.com/rylnd/shpec)
-
-### Run integration test
-```
-cd moe
-nimble install
-shpec ./shpec.sh
 ```
