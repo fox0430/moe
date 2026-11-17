@@ -1466,9 +1466,8 @@ proc handleInsertModeKey*(
       handler.completionManager.cancelCompletion()
       # Command mode command alias bridge: `exec.cmdline.<alias>` runs
       # `:<alias>` via the full command-line parser, so safety checks
-      # (modified-buffer guard etc.) fire. Caller
-      # (`mode_dispatchers.handleInsertMode`) is responsible for committing
-      # the in-progress insert transaction before dispatching.
+      # (modified-buffer guard etc.) fire. The editor leaves Insert as Escape
+      # does before the line runs (`processReplayedResult`).
       if cmd.isExecCmdline:
         return InsertModeResult(kind: imrExecCommand, execLine: cmd.execLine)
       case cmd.commandId

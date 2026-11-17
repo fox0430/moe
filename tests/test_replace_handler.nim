@@ -981,3 +981,18 @@ suite "ReplaceModeHandler - Newline history (Enter + Backspace)":
     check state.cursor.line == 0
     check state.cursor.column == 3
     check state.editState.replaceHistory.len == 0
+
+suite "ReplaceModeHandler - A mapping to a : command":
+  test "gives the command line, as Insert does":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    check handler.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Replace, "C-s", "bdelete"
+    ) == ""
+
+    let r = handler.handleReplaceModeKey(
+      buf, createTestState(), KeyCombo(isSpecial: false, char: "s", modifiers: {kmCtrl})
+    )
+
+    check r.kind == rmrExecCommand
+    check r.execLine.text == "bdelete"

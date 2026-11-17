@@ -519,6 +519,18 @@ proc processReplayedResult*(
   ## keys or command line here count times, so a failure stops the rest and
   ## the keys after them.
   if r.kind == hrExecCommand:
+    # A `:` line runs from Normal mode: a mapping in Insert or Replace leaves
+    # it first, as the <Esc> of `<Esc>:w<CR>` does.
+    let left =
+      case e.state.mode
+      of EditorMode.Insert:
+        processReplayedResult(e, e.handlerManager.leaveInsert(e), activeBuffer)
+      of EditorMode.Replace:
+        processReplayedResult(e, e.leaveReplace(), activeBuffer)
+      else:
+        roContinue
+    if left != roContinue:
+      return left
     # Vim stuffs the command line count times and an error flushes the rest.
     if e.interceptHostResult(r):
       return roAbort
@@ -680,14 +692,6 @@ proc repeatInsert(e: Editor, r: HandlerResult): ReplayOutcome =
     e.state.editState.typing.repeating = wasRepeating
   if result == roContinue and r.repeatLeave and e.state.mode == EditorMode.Insert:
     result = processReplayedResult(e, e.handlerManager.leaveInsert(e), e.activeBuffer)
-  if result == roContinue and r.repeatThenExec.text.len > 0:
-    result = processReplayedResult(
-      e,
-      HandlerResult(
-        kind: hrExecCommand, execLine: r.repeatThenExec, execCommandCount: 1
-      ),
-      e.activeBuffer,
-    )
 
 template expandingMapping(router: KeyRouter, body: untyped) =
   ## Run `body` as one expansion, which `MaxMapRecursionDepth` bounds.

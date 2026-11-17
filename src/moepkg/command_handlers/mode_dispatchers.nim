@@ -168,14 +168,10 @@ proc leaveInsertForCtrlO(state: EditorState, buffer: TextBuffer) =
   state.wanted = wanted
 
 proc leaveInsert*(
-    manager: HandlerManager,
-    editor: Editor,
-    target = EditorMode.Normal,
-    thenExec = ExecLine(),
+    manager: HandlerManager, editor: Editor, target = EditorMode.Normal
 ): HandlerResult =
-  ## Leave Insert as Escape does, running the command line `thenExec` after if
-  ## given. A count types the record again first (`3ifoo`, `2o`), unless a
-  ## typed Ctrl-C interrupts, as Vim's ins_esc.
+  ## Leave Insert as Escape does. A count types the record again first
+  ## (`3ifoo`, `2o`), unless a typed Ctrl-C interrupts, as Vim's ins_esc.
   let buffer = editor.activeBuffer
   let state = editor.state
   manager.insertHandler.closeInsertPopups()
@@ -195,17 +191,8 @@ proc leaveInsert*(
         else:
           none(int),
       repeatLeave: true,
-      repeatThenExec: thenExec,
     )
   let finalizeResult = finalizeInsertExit(buffer, state)
-  if thenExec.text.len > 0:
-    if finalizeResult.isErr:
-      return HandlerResult(kind: hrError, errorMessage: finalizeResult.error)
-    if finalizeResult.get.len > 0:
-      # Committed with a partial-replication warning: surface it but run the
-      # command anyway, the session being finalized already.
-      state.statusMessage = finalizeResult.get
-    return HandlerResult(kind: hrExecCommand, execLine: thenExec, execCommandCount: 1)
   # Even on failure, allow the mode transition so the user is not stuck in Insert.
   HandlerResult(
     kind: hrHandled,
@@ -326,9 +313,9 @@ proc handleInsertMode*(
   of imrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of imrExecCommand:
-    # `imap K = "bdelete"` bridge: leave Insert as `<Esc>:bdelete<CR>` would,
-    # cleanup and all, before the aliased command runs.
-    return manager.leaveInsert(editor, thenExec = r.execLine)
+    # `imap K = "bdelete"`: the line runs as by `<Esc>:bdelete<CR>`, Insert
+    # being left when it runs (processReplayedResult).
+    return HandlerResult(kind: hrExecCommand, execLine: r.execLine, execCommandCount: 1)
   of imrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -478,6 +465,17 @@ proc handleVisualMode*(
   of vmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc leaveReplace*(editor: Editor, target = EditorMode.Normal): HandlerResult =
+  ## Leave Replace as Escape does, what it typed being one change.
+  let buffer = editor.activeBuffer
+  var message = ""
+  if buffer.inTransaction:
+    let transactionResult = buffer.commitTransaction()
+    if transactionResult.isErr:
+      message = "Failed to commit transaction: " & transactionResult.error
+  # Even on failure, allow the mode transition so the user is not stuck in Replace.
+  HandlerResult(kind: hrHandled, modeTransition: some(target), statusMessage: message)
+
 proc handleReplaceMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
@@ -486,22 +484,17 @@ proc handleReplaceMode*(
   let r = manager.replaceHandler.handleReplaceModeKey(buffer, editor.state, keyCombo)
   case r.kind
   of rmrHandled:
-    # Check if we're leaving Replace mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Replace:
-      # Commit the transaction when leaving Replace mode
-      let transactionResult = buffer.commitTransaction()
-      if transactionResult.isErr:
-        # Even if commit fails, allow mode transition so user isn't stuck in Replace mode
-        return HandlerResult(
-          kind: hrHandled,
-          modeTransition: r.modeTransition,
-          statusMessage: "Failed to commit transaction: " & transactionResult.error,
-        )
+      return editor.leaveReplace(r.modeTransition.get)
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
   of rmrUnhandled:
     return HandlerResult(kind: hrUnhandled)
+  of rmrExecCommand:
+    # `[KeyMapping.Replace] "C-s" = "w"`: the line runs as by `<Esc>:w<CR>`,
+    # Replace being left when it runs (processReplayedResult).
+    return HandlerResult(kind: hrExecCommand, execLine: r.execLine, execCommandCount: 1)
   of rmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
