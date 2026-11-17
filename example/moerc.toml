@@ -707,6 +707,26 @@ clientCommands = ["rust-analyzer.runSingle", "rust-analyzer.debugSingle"]
 # event       = "BufWritePre"
 # exCommand   = '%s/\s+$//e'   # The pattern is PCRE style, as for /: \s+, not Vim's \s\+
 #
+# [[Hook.entries]]
+# event   = "BufWritePre"      # Runs the command before writing; its output replaces the buffer
+# filter  = "\\.py$"           # Only for files whose path ends in .py
+# command = "ruff format -"    # Reads the code from stdin, prints the result to stdout
+#
+# [[Hook.entries]]
+# event       = "BufWritePre"
+# filter      = "\\.nim$"
+# command     = "nph -"
+#
+# [[Hook.entries]]
+# event       = "BufWritePre"
+# filter      = "\\.c$"
+# command     = "clang-format --style=Microsoft"
+#
+# [[Hook.entries]]
+# event       = "BufWritePre"
+# filter      = "\\.go$"
+# command     = "gofmt"
+#
 # Placeholders usable in command and workingDir:
 #   ${file} ${dir} ${filename} ${basename} ${ext} ${filetype}
 #
