@@ -52,7 +52,10 @@ proc forget*(stop: JobStop, action: StopAction) =
   ## no-op once it has run.
   let i = stop.actions.find(action)
   if i >= 0:
-    stop.actions.delete(i)
+    # Nim 2.2's seq.delete loses the closure's raises annotation when moving it.
+    for index in i ..< stop.actions.high:
+      stop.actions[index] = stop.actions[index + 1]
+    stop.actions.setLen(stop.actions.len - 1)
 
 proc stopped*(stop: JobStop): Future[void] =
   ## Completes once the job is told to stop.
