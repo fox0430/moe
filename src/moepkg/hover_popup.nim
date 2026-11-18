@@ -160,15 +160,18 @@ proc hoverPopupBorderStyle*(): Style =
 proc hoverPopupScrollIndicatorStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.popupWindowScrollBar)
 
-proc calculateHoverPopupPosition*(
-    cursorX, cursorY: int,
-    termWidth, termHeight: int,
+proc fitHoverPopup*(
     mgr: HoverPopupManager,
+    cursorY: int,
+    termWidth, termHeight: int,
     bottomReserve: int = 2,
-): HoverPopupPosition =
-  ## Hover popup appears above the cursor line if possible; maximizes size
-  ## when scrolling is needed. `bottomReserve` = rows at the bottom the
-  ## popup must not cross.
+) =
+  ## Size the popup's visible area for the screen: the lines it shows and its
+  ## content width. Run each frame before the draw, which places the popup by
+  ## this size; scrolling reads it too. The popup is as tall as it needs to
+  ## be, or as tall as the room above or below the cursor line allows when it
+  ## has to scroll. `bottomReserve` = rows at the bottom the popup must not
+  ## cross.
 
   # Content width from the widest line (CJK-aware).
   var maxLineLen = 0
@@ -177,7 +180,6 @@ proc calculateHoverPopupPosition*(
 
   let maxWidth = termWidth - 2
   let contentWidth = min(max(maxLineLen + PopupPadding, MinPopupWidth), maxWidth)
-  let popupWidth = contentWidth + 2
 
   let spaceAbove = cursorY
   let spaceBelow = max(0, termHeight - bottomReserve - cursorY - 1)
@@ -198,17 +200,22 @@ proc calculateHoverPopupPosition*(
     # Use as much space as possible, but cap at total lines
     optimalVisibleLines = min(totalLines, max(maxAvailable, DefaultMaxVisibleLines))
 
-  # Update manager's maxVisibleLines and maxVisibleWidth for rendering
   mgr.display.maxVisibleLines = optimalVisibleLines
   mgr.display.maxVisibleWidth = contentWidth
 
-  let popupHeight = optimalVisibleLines + 2 # +2 for border
-
+proc calculateHoverPopupPosition*(
+    cursorX, cursorY: int,
+    termWidth, termHeight: int,
+    mgr: HoverPopupManager,
+    bottomReserve: int = 2,
+): HoverPopupPosition =
+  ## Where the popup goes for the size `fitHoverPopup` gave it: above the
+  ## cursor line if possible. Read-only.
   let rect = placeAboveCursor(
     cursorX,
     cursorY,
-    popupWidth,
-    popupHeight,
+    mgr.display.maxVisibleWidth + 2, # +2 for border
+    mgr.display.maxVisibleLines + 2,
     initScreen(termWidth, termHeight, bottomReserve),
   )
   HoverPopupPosition(x: rect.x, y: rect.y, width: rect.width, height: rect.height)

@@ -370,7 +370,7 @@ proc tickPicker(e: Editor) =
 
 proc tick*(e: Editor) =
   ## Background processing: LSP, file watching, autosave, etc.
-  ## Should be called each frame before rendering.
+  ## Called each frame, drawn or not, before `updateForFrame`.
   ##
   ## Each phase is a self-contained proc; the call order below is significant
   ## (see the per-phase docs for the dependencies between them) and must match
@@ -392,16 +392,17 @@ proc tick*(e: Editor) =
   e.tickNotifications()
   e.tickPicker()
 
-proc updateForFrame*(e: Editor, buffer: Buffer): bool =
-  ## Advance per-frame editor state: smooth-scroll animation, matching-paren /
-  ## current-word, syntax + semantic highlight, viewport size, and window layout
-  ## (viewport scroll, selection-cursor sync, screen cursor).
+proc updateForFrame*(e: Editor, area: Rect): bool =
+  ## Advance per-frame editor state for a frame drawn at `area`: smooth-scroll
+  ## animation, matching-paren / current-word, syntax + semantic highlight,
+  ## viewport size, window layout (viewport scroll, selection-cursor sync,
+  ## screen cursor) and the hover popup's size.
   ## No drawing — the draw pass (`draw`) is a read-only projection of the state
   ## this produces. Returns true if the viewport was resized.
 
   # Walk a smooth page scroll on. A resize puts the top where the cursor
   # shows, so the scroll ends first, as one in Vim would have.
-  if buffer.area.width != e.screenSize.width or buffer.area.height != e.screenSize.height:
+  if area.width != e.screenSize.width or area.height != e.screenSize.height:
     e.state.windowDisplay.scrollAnimation.finishPageScroll()
   elif e.state.windowDisplay.scrollAnimation.active:
     e.state.windowDisplay.scrollAnimation.advancePageScroll(
@@ -509,14 +510,27 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
 
   # The preview of an open picker: a file it read is a buffer of no window.
   if e.state.isPickerOverlay:
-    let layout = e.state.pickerScreenLayout(buffer.area.width, buffer.area.height)
+    let layout = e.state.pickerScreenLayout(area.width, area.height)
     e.advancePickerPreview(getMonoTime(), onScreen = layout.preview.height > 0)
 
-  result = e.updateViewportSize(buffer)
-  e.advanceLayoutForFrame(buffer, result)
+  result = e.updateViewportSize(area)
+  e.advanceLayoutForFrame(area, result)
   e.state.updateSearchCount(activeBuffer)
   for window in e.windowManager.windows:
     window.viewport.noteHeight()
+
+  # After the layout: the size follows the screen cursor.
+  if e.state.lspCache.hoverPopup.isActive():
+    e.state.lspCache.hoverPopup.fitHoverPopup(
+      e.state.screenCursor.y,
+      area.width,
+      area.height,
+      e.state.bottomAreaHeight(area.width),
+    )
+
+proc updateForFrame*(e: Editor, buffer: Buffer): bool =
+  ## `updateForFrame` for the area of `buffer`.
+  e.updateForFrame(buffer.area)
 
 proc renderMainContent(e: Editor, buffer: var Buffer) =
   ## Paint the main editor view (always uses split view since we always have at
@@ -625,12 +639,14 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
     for rect in rects:
       renderNotificationPopup(buffer, rect)
 
-proc draw(e: Editor, buffer: var Buffer) =
-  ## Read-only projection of editor state onto the render buffer. The only state
-  ## writes remaining in the draw are the idempotent, draw-side exceptions of
-  ## Config (cursor placement + its own list scroll via ensureSelectedVisible)
-  ## and Terminal-Input (cursor from the grid), each inline with its specialized
-  ## render; see renderConfig / renderTerminal.
+proc draw*(e: Editor, buffer: var Buffer) =
+  ## Read-only projection of editor state onto the render buffer, after
+  ## `stepFrame` for the same area. The one state write left is Config's screen
+  ## cursor, which follows the rows it draws; see renderConfig. Caches that
+  ## check their own keys (wrap counts, the recovery index) may fill in.
+  if buffer.area.width <= 0 or buffer.area.height <= 0:
+    return
+
   clearBuffer(buffer)
 
   # Always use split view rendering - each window renders based on its own mode
@@ -638,12 +654,17 @@ proc draw(e: Editor, buffer: var Buffer) =
 
   e.renderOverlays(buffer)
 
-proc render*(e: Editor, buffer: var Buffer) =
-  ## Main render procedure: background processing (`tick`), per-frame state
-  ## advancement (`updateForFrame`), then a read-only draw (`draw`).
-  if buffer.area.width <= 0 or buffer.area.height <= 0:
-    return
-
+proc stepFrame*(e: Editor, area: Rect) =
+  ## The work of one frame, drawn or not: background processing (`tick`), then
+  ## per-frame state advancement (`updateForFrame`) for a frame at `area`.
+  ## A frame of no size still runs `tick`: LSP, watchers and auto save must
+  ## not stall while the terminal reports zero rows or columns.
   e.tick()
-  discard e.updateForFrame(buffer)
+  if area.width <= 0 or area.height <= 0:
+    return
+  discard e.updateForFrame(area)
+
+proc render*(e: Editor, buffer: var Buffer) =
+  ## One whole frame: `stepFrame`, then a read-only draw (`draw`).
+  e.stepFrame(buffer.area)
   e.draw(buffer)

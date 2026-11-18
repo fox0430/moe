@@ -58,7 +58,7 @@ proc isBrowsed(e: Editor, id: BufferId): bool =
 
 proc pollTerminalSessions*(e: Editor) =
   ## Drain every live Terminal session's PTY, resize the ones on screen and
-  ## tear down the ones that exited. Called on every render frame.
+  ## tear down the ones that exited. Called on every frame.
   ##
   ## Follows `e.terminalStates`, not the windows: a backgrounded session is in
   ## no window, and a child whose output nobody drains blocks in write().
@@ -90,7 +90,8 @@ proc pollTerminalSessions*(e: Editor) =
     e.closeTerminalBuffer(id)
 
 proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
-  ## Execute startup window actions on first render when terminal size is known.
+  ## Execute startup window actions on the first frame, when the terminal size
+  ## is known.
   ## Called once; guards itself with `startUpWindowsDone`.
   if e.state.startUpWindowsDone:
     return
@@ -325,6 +326,23 @@ proc applyFrontendRequests(editor: Editor, app: AsyncApp) =
     else:
       app.disableMouse()
 
+proc runFrame(e: Editor, area: Rect): bool =
+  ## Everything a frame does before it is drawn, drawn or not. Returns whether
+  ## the frontend may act on the editor's requests now.
+  ##
+  ## While a write waits in place, only `stepFrame` runs (and holds back what
+  ## could land in the middle of the write): a terminal that exits must not
+  ## close its window, and the frontend must not change, before the write is
+  ## done.
+  if e.waitingInPlace:
+    e.stepFrame(area)
+    return false
+  if not e.state.startUpWindowsDone:
+    e.handleStartUpWindows(area.width, area.height)
+  e.pollTerminalSessions()
+  e.stepFrame(area)
+  true
+
 proc runEditor(
     editor: Editor, app: AsyncApp, cmdLineConfig: CmdLineConfig, log: Logger
 ) {.async.} =
@@ -399,22 +417,17 @@ proc runEditor(
           discard
       return trContinue
 
-    app.onRenderAsync proc(buffer: var Buffer) =
+    app.onFrameAsync proc(area: Rect) =
       editorCallback(editor, app, cmdLineConfig, log):
-        # A frame drawn while a write waits in place only draws: the write is
-        # still running.
-        if not editor.waitingInPlace:
-          # Execute startup window actions on first render
-          if not editor.state.startUpWindowsDone:
-            editor.handleStartUpWindows(buffer.area.width, buffer.area.height)
-
-          # Poll terminal output for all windows in Terminal mode
-          editor.pollTerminalSessions()
-
-        editor.render(buffer)
-        if not editor.waitingInPlace:
+        if editor.runFrame(area):
           editor.applyFrontendRequests(app)
 
+    app.onRenderAsync proc(buffer: var Buffer) =
+      editorCallback(editor, app, cmdLineConfig, log):
+        editor.draw(buffer)
+
+        # Here, not in the frame handler: Config's cursor is known only once
+        # the draw has placed its rows.
         if not editor.config.standard.disableChangeCursor:
           # Set cursor style based on editor mode (unless disabled)
           let cursorStyle =

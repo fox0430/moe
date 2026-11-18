@@ -2547,6 +2547,30 @@ suite "Terminal tabs - cursor belongs to the active window":
     check e.state.screenCursor.y == active.viewport.y + tabLineOffset + grid.cursorRow
     check e.state.cursorVisible
 
+  test "the frame places the grid's cursor before the draw":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (_, active) = e.twoWindowsOnSession(textBuf, termBuf)
+    require e.activeWindow == active
+    let grid = active.modeState.terminal.grid
+    grid.cursorRow = 2
+    grid.cursorCol = 5
+    grid.cursorVisible = true
+    e.state.cursorVisible = false
+
+    e.advanceLayoutForFrame(Rect(x: 0, y: 0, width: 80, height: 24), false)
+
+    let tabLineOffset = if e.showTabLine: TabLineHeight else: 0
+    check e.state.screenCursor.x == active.viewport.x + grid.cursorCol
+    check e.state.screenCursor.y == active.viewport.y + tabLineOffset + grid.cursorRow
+    check e.state.cursorVisible
+
+    grid.cursorVisible = false
+    e.advanceLayoutForFrame(Rect(x: 0, y: 0, width: 80, height: 24), false)
+
+    check not e.state.cursorVisible
+
   test "an inactive live window with a hidden grid cursor keeps the cursor visible":
     # The active window is a normal text tab; the live terminal sharing the
     # frame hides its grid cursor. Only the active window's visibility may stand.

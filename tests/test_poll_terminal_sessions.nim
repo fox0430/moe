@@ -24,6 +24,7 @@
 import std/[unittest, options, posix, tables, strutils]
 
 import pkg/results
+from pkg/celina import Rect
 
 import ../src/moe {.all.}
 import
@@ -454,3 +455,21 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
     check e.terminalStates.hasKey(termBuf.id)
     check session.grid.cols == 80
     check session.grid.rows == 24
+
+suite "runFrame - a write waiting in place":
+  test "a frame while a write waits leaves the terminals, the start-up windows and the frontend alone":
+    let e = createTestEditor()
+    let window = e.windowManager.windows[0]
+    let termBuf = e.registerExitedTerminalInWindow(window, "bash")
+    e.state.startUpWindowsDone = false
+    e.waitingInPlace = true
+
+    check not e.runFrame(Rect(x: 0, y: 0, width: 80, height: 24))
+    check e.terminalStates.hasKey(termBuf.id)
+    check not e.state.startUpWindowsDone
+
+    e.waitingInPlace = false
+
+    check e.runFrame(Rect(x: 0, y: 0, width: 80, height: 24))
+    check not e.terminalStates.hasKey(termBuf.id)
+    check e.state.startUpWindowsDone
