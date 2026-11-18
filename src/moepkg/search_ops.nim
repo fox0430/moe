@@ -27,6 +27,7 @@ import std/[options, times]
 import pkg/results
 
 import types, buffer, modes, search_utils, unicode_utils
+import command_registry/core
 
 proc ignoresCase*(search: SearchState, spec: SearchSpec): bool =
   ## Whether `spec` ignores case: 'ignorecase', unless 'smartcase' finds an
@@ -283,3 +284,11 @@ proc searchLast*(
 
   state.statusMessage = "Found: " & spec.pattern
   ok(found.get)
+
+proc jumpToLastSearch*(
+    state: EditorState, b: TextBuffer, pos: BufferPosition, reverse: bool, count: int
+): Result[BufferPosition, string] =
+  ## n/N: `searchLast` from `pos`, recorded as a jump from there.
+  result = state.searchLast(b, pos, reverse, count)
+  if result.isOk:
+    state.recordJump(pos)

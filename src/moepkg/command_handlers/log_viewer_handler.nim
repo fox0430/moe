@@ -371,7 +371,7 @@ proc handleLogViewerModeKey*(
       return LogViewerResult(kind: lvrRefresh)
     of "n", "N":
       # Repeat the last search the way it went, N the other way
-      let found = state.searchLast(
+      let found = state.jumpToLastSearch(
         buffer, state.cursor, reverse = keyCombo.char == "N", count = 1
       )
       if found.isOk:

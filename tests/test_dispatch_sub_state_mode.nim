@@ -25,7 +25,7 @@
 ##   * isSome smoke for Filer (template happy path)
 ##   * Early-return branches (migrated modes + Command/RecentFile/Debug)
 
-import std/[unittest, os]
+import std/[unittest, os, strutils]
 
 import
   ../src/moepkg/[
@@ -287,18 +287,108 @@ suite "dispatchSubStateMode - Config search highlight clear":
     check r.errorMessage == "Pattern not found: zzzzNoSuchItem"
     check not editor.state.input.search.hlsearchTempDisabled
 
-  test "Help 'n' that finds nothing still ends the clear":
-    let (manager, editor, _) = setupDispatchTest(EditorMode.Help)
-    let helpState = newHelpViewerState()
-    helpState.setSearchQuery("zzzzNoSuchHelpText", Forward)
-    editor.activeWindow.modeState = ModeState(kind: mskHelp, help: helpState)
+proc setupHelpDispatch(): (HandlerManager, Editor, HelpViewerState) =
+  ## An editor in Help mode, the help text its buffer, as :help opens it.
+  let manager = createTestManager()
+  let helpState = newHelpViewerState()
+  let state = createTestState()
+  state.activeWindow.mode = EditorMode.Help
+  let editor = createTestEditor(
+    helpState.createHelpTextBuffer(),
+    state,
+    createTestViewport(),
+    manager.keyBindingRegistry,
+  )
+  editor.activeWindow.modeState = ModeState(kind: mskHelp, help: helpState)
+  (manager, editor, helpState)
+
+proc press(manager: HandlerManager, editor: Editor, c: string): HandlerResult =
+  manager.dispatchSubStateMode(editor, KeyCombo(isSpecial: false, char: c))
+
+suite "dispatchSubStateMode - Help n and N":
+  test "n that finds nothing still ends the clear":
+    let (manager, editor, _) = setupHelpDispatch()
+    editor.state.input.search.last = SearchSpec(pattern: "zzzzNoSuchHelpText")
     editor.state.input.search.hlsearchTempDisabled = true
 
-    let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
-    let r = manager.dispatchSubStateMode(editor, n)
+    let r = manager.press(editor, "n")
     check r.kind == hrError
     check r.errorMessage == "Pattern not found: zzzzNoSuchHelpText"
     check not editor.state.input.search.hlsearchTempDisabled
+
+  test "n reads the pattern as a regex, as Enter does":
+    let (manager, editor, helpState) = setupHelpDispatch()
+    editor.state.input.search.last = SearchSpec(pattern: "Vis.al mode")
+
+    check manager.press(editor, "n").kind == hrHandled
+    check helpState.selectedIndex > 0
+    check editor.activeBuffer.getLine(helpState.selectedIndex).contains("Visual mode")
+    check editor.state.statusMessage == "Found: Vis.al mode"
+
+    editor.state.input.search.last = SearchSpec(pattern: "ab(")
+    let r = manager.press(editor, "n")
+    check r.kind == hrError
+    check r.errorMessage == "Invalid regex: ab("
+
+  test "n finds the only match again from the line it is on":
+    let (manager, editor, helpState) = setupHelpDispatch()
+    editor.state.input.search.last = SearchSpec(pattern: "# Exiting$")
+
+    check manager.press(editor, "n").kind == hrHandled
+    let line = helpState.selectedIndex
+    check manager.press(editor, "n").kind == hrHandled
+    check helpState.selectedIndex == line
+    check editor.state.statusMessage == "Found: # Exiting$"
+
+  test "n goes the way the search went, N the other way":
+    let (manager, editor, helpState) = setupHelpDispatch()
+    editor.state.input.search.last = SearchSpec(pattern: "Visual", direction: Backward)
+    helpState.selectedIndex = editor.activeBuffer.len div 2
+    let start = helpState.selectedIndex
+
+    check manager.press(editor, "n").kind == hrHandled
+    check helpState.selectedIndex < start
+    let back = helpState.selectedIndex
+    check manager.press(editor, "N").kind == hrHandled
+    check helpState.selectedIndex > back
+
+  test "n with no previous search is E35":
+    let (manager, editor, _) = setupHelpDispatch()
+    let r = manager.press(editor, "n")
+    check r.kind == hrError
+    check r.errorMessage == "E35: No previous regular expression"
+
+  test "N from the last line finds a match above":
+    let (manager, editor, helpState) = setupHelpDispatch()
+    editor.state.input.search.last = SearchSpec(pattern: "Visual")
+    helpState.selectedIndex = editor.activeBuffer.len - 1
+
+    check manager.press(editor, "N").kind == hrHandled
+    check helpState.selectedIndex < editor.activeBuffer.len - 1
+
+  test "n searches from the start of a line j moved to":
+    let (manager, editor, helpState) = setupHelpDispatch()
+    var line = 1
+    while editor.activeBuffer.getLine(line).find("Insert mode") < 1:
+      inc line
+    helpState.selectedIndex = line - 1
+    editor.state.cursor = BufferPosition(line: line - 1, column: 1000)
+    editor.state.input.search.last = SearchSpec(pattern: "Insert mode")
+
+    check manager.press(editor, "j").kind == hrHandled
+    check editor.state.cursor.column == 0
+    check manager.press(editor, "n").kind == hrHandled
+    check helpState.selectedIndex == line
+
+  test "n records a jump from where it started":
+    let (manager, editor, helpState) = setupHelpDispatch()
+    editor.state.input.search.last = SearchSpec(pattern: "Visual")
+    let before = editor.state.jumpList.list.len
+
+    check manager.press(editor, "n").kind == hrHandled
+    check editor.state.jumpList.list.len == before + 1
+    check editor.state.jumpList.list[^1].line == 0
+    check helpState.selectedIndex > 0
 
 suite "dispatchSubStateMode - FileTree search highlight clear":
   test "FileTree double-Escape clears the search via the dispatcher":

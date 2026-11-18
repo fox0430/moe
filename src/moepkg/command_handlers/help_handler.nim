@@ -22,8 +22,6 @@
 ## This module handles commands specific to Help Viewer mode.
 ## The help viewer displays editor help information.
 
-import std/options
-
 import ../[key_bindings, help_viewer]
 import handler_types
 export handler_types
@@ -34,8 +32,7 @@ type
     hvrEnterCommand # Enter command mode
     hvrEnterSearch # Enter search mode (forward)
     hvrEnterSearchBackward # Enter search mode (backward)
-    hvrRepeatSearch # Jumped to next/prev match (re-enable highlight)
-    hvrSearchNotFound # Repeated a search that found nothing (re-enable highlight)
+    hvrRepeatSearch # n, or N when `reverse`
     hvrClearSearchHighlight # Clear search highlight (double-Escape)
     hvrQuit # Close help viewer and return to previous mode
     hvrUnhandled # Command was not handled
@@ -43,8 +40,10 @@ type
 
   HelpViewerResult* = object
     case kind*: HelpViewerResultKind
-    of hvrError, hvrSearchNotFound:
+    of hvrError:
       errorMessage*: string
+    of hvrRepeatSearch:
+      reverse*: bool
     else:
       discard
 
@@ -61,7 +60,6 @@ proc handleHelpViewerModeKey*(
     helpState.waitingForG = false
     if helpState.lastKeyWasEscape:
       helpState.lastKeyWasEscape = false
-      helpState.clearSearch()
       return HelpViewerResult(kind: hvrClearSearchHighlight)
     helpState.lastKeyWasEscape = true
     return HelpViewerResult(kind: hvrHandled)
@@ -89,17 +87,7 @@ proc handleHelpViewerModeKey*(
   of "?":
     return HelpViewerResult(kind: hvrEnterSearchBackward)
   of "n", "N":
-    let found = helpState.repeatSearch(reverse = keyCombo.char == "N")
-    # Re-enable highlight whether found or not, like Vim's n; an empty query must
-    # not touch the gate.
-    if found.isSome:
-      return HelpViewerResult(kind: hvrRepeatSearch)
-    if helpState.hasSearchQuery:
-      return HelpViewerResult(
-        kind: hvrSearchNotFound,
-        errorMessage: "Pattern not found: " & helpState.searchQuery,
-      )
-    return HelpViewerResult(kind: hvrHandled)
+    return HelpViewerResult(kind: hvrRepeatSearch, reverse: keyCombo.char == "N")
   of "}":
     helpState.moveToNextSection()
     return HelpViewerResult(kind: hvrHandled)

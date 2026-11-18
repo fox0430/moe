@@ -26,7 +26,6 @@
 
 import std/strutils
 
-import ../primitives
 import list_viewer_types
 export list_viewer_types
 
@@ -43,8 +42,6 @@ type
     keyFirst*, keyEnd*: int ## Byte range of the keys in an entry's `text`
 
   HelpViewerState* = ref object of ListViewer[HelpLine]
-    searchQuery*: string # Current search query
-    searchDirection*: SearchDirection # The way the search for it went
     lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight
 
 func oneRow(text: string): string =
