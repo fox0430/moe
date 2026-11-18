@@ -234,8 +234,8 @@ proc resolveRuntimeCommandTarget(
 proc namesExCommand(registry: KeyBindingRegistry, name: string): bool =
   ## True if `name` maps to the `:` command of the same name (`w`, `bd`,
   ## `quit`, ...), where Vim's `:map` would read the name as keys.
-  name in registry.commandRegistry and
-    registry.commandRegistry[name].commandId == ExecCmdlinePrefix & name
+  registry.commandRegistry.withValue(name, c):
+    return c[].isExecCmdline and c[].execLine.text == name
 
 proc addRuntimeMappingExpanded*(
     registry: KeyBindingRegistry,

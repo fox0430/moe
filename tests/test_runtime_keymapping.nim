@@ -1495,7 +1495,10 @@ suite "addRuntimeMappingExpanded - the :map commands read : command names as key
 
   test "moe's own command names stay commands":
     # `saveall` runs `:wa` but is not a `:` command name itself.
-    for rhs in ["save", "saveall", "undo", "delete-char", "mode_switch insert"]:
+    for rhs in [
+      "save", "saveall", "undo", "delete-char", "mode_switch insert", "move-right",
+      "switch-to-insert", "switch-to-command", "mark-set",
+    ]:
       var registry = newKeyBindingRegistry()
       registry.setupDefaultBindings()
 
