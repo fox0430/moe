@@ -45,6 +45,7 @@ import
   window_manager,
   popup_render,
   recovery_notice
+import picker/[layout, render, session]
 
 type WindowLayout = object
   ## Per-frame layout metrics for a window. A pure, idempotent projection of
@@ -334,11 +335,23 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
       e.state.cursorVisible = e.state.hasOverlay or activeCursorInViewport
 
   # Screen-cursor override. Higher-priority owners set the cursor last, so the
-  # final precedence is tempMessage > overlay > window (matching the former
+  # final precedence is tempMessage > picker > overlay > window (matching the former
   # draw-order of renderWrappedInput / renderTempMessages). Config / Terminal
   # defer to these via a guard in their render procs.
   let width = buffer.area.width
-  if e.state.hasOverlay:
+  if e.state.isPickerOverlay:
+    # In the picker's prompt, which its list keeps the selection shown under;
+    # hidden with the picker on a screen with no room for it.
+    let layout = e.state.pickerScreenLayout(width, buffer.area.height)
+    e.state.picker.keepSelectionVisible(layout.list.height)
+    if layout.shown:
+      let (query, cursor) = e.state.input.line.shownPromptLine
+      e.state.screenCursor.x =
+        layout.prompt.x + promptScroll(query, cursor, layout.prompt.width).cursorX
+      e.state.screenCursor.y = layout.prompt.y
+    else:
+      e.state.cursorVisible = false
+  elif e.state.hasOverlay:
     let
       areaTopY = buffer.commandAreaTopY(e)
       areaH = buffer.area.y + buffer.area.height - areaTopY

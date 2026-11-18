@@ -74,6 +74,7 @@ const UntrimmedHelpLines =
   blank() & heading("Command mode") & renderCommandModeHead() & blank() &
   renderSetOptionsSection() & renderCommandModeTail() & blank() &
   subheading("Editing the command line") & renderCommandLineEditingSection() & blank() &
+  subheading("Picker") & renderPickerSection() & blank() &
   subheading("Runtime Key Mapping") &
   keyTable(
     {

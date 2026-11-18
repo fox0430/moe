@@ -237,6 +237,9 @@ proc executeCommand*(
     of okRename:
       # Rename is typically entered via LSP, not keybinding
       discard
+    of okPicker:
+      # A picker needs its source, which only `:picker` gives
+      discard
     ctx.state.statusMessage = "" # Clear any status message
     # Clear any pending key sequences when switching overlays
     if ctx.keyBindingRegistry != nil:

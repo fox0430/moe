@@ -299,7 +299,8 @@ proc allKinds(value: string): array[VsThemeKind, string] =
 const VsColorDefaults = [
   # VS Code's own defaults (its color registry as of 1.138, and the git
   # extension) for the colors read here and those they refer to. "@key" is
-  # another color, "@key*a" that color with its alpha scaled by a, "" none.
+  # another color, "@key*a" that color with its alpha scaled by a, "" none,
+  # and "?key:a:b" a when the theme sets key, else b (ifDefinedThenElse).
   ("foreground", byKind("#CCCCCC", "#616161", "#FFFFFF", "#292929")),
   ("contrastBorder", byKind("", "", "#6FC3DF", "#0F4A85")),
   ("contrastActiveBorder", byKind("", "", "@focusBorder", "@focusBorder")),
@@ -360,6 +361,27 @@ const VsColorDefaults = [
     byKind(
       "@list.activeSelectionForeground", "@list.activeSelectionForeground",
       "@editorSuggestWidget.background", "@editorSuggestWidget.background",
+    ),
+  ),
+  ("editorSuggestWidget.highlightForeground", allKinds("@list.highlightForeground")),
+  (
+    "editorSuggestWidget.focusHighlightForeground",
+    byKind(
+      "@list.focusHighlightForeground", "@list.focusHighlightForeground",
+      "@editorSuggestWidget.selectedForeground",
+      "@editorSuggestWidget.selectedForeground",
+    ),
+  ),
+  (
+    "list.highlightForeground",
+    byKind("#2AAAFF", "#0066BF", "@focusBorder", "@focusBorder"),
+  ),
+  (
+    "list.focusHighlightForeground",
+    byKind(
+      "@list.highlightForeground",
+      "?list.activeSelectionBackground:@list.highlightForeground:#BBE7FF",
+      "@list.highlightForeground", "@list.highlightForeground",
     ),
   ),
   ("list.activeSelectionBackground", byKind("#04395E", "#0060C0", "", "#0F4A851A")),
@@ -465,7 +487,14 @@ proc defaultRgba(vs: VsColors, key: string, depth = 0): Option[Rgba] =
   ## VS Code's default for `key` in the theme kind, whatever the theme sets.
   if depth > 8:
     return
-  let default = vsDefault(key, vs.kind)
+  var default = vsDefault(key, vs.kind)
+  if default.startsWith('?'):
+    let parts = default[1 .. ^1].split(':')
+    default =
+      if themeRgba(vs.colors, parts[0]).isSome:
+        parts[1]
+      else:
+        parts[2]
   if not default.startsWith('@'):
     return parseVsColor(default)
   let star = default.find('*')
@@ -919,10 +948,20 @@ proc makeColorThemeFromVSCodeThemeFile(
   let popupBg = vs.color("editorSuggestWidget.background")
   result.setPair(vs.rgba("editorSuggestWidget.foreground"), popupBg, [I.popupWindow])
   # The selected item sits on the widget, not on the editor.
+  let selectedBg =
+    vs.rgba("editorSuggestWidget.selectedBackground").over(popupBg.get(vs.surface))
   result.setPair(
     vs.rgba("editorSuggestWidget.selectedForeground"),
-    vs.rgba("editorSuggestWidget.selectedBackground").over(popupBg.get(vs.surface)),
+    selectedBg,
     [I.popupWinCurrentLine],
+  )
+  result.setPair(
+    vs.rgba("editorSuggestWidget.highlightForeground"), popupBg, [I.popupWindowMatch]
+  )
+  result.setPair(
+    vs.rgba("editorSuggestWidget.focusHighlightForeground"),
+    selectedBg,
+    [I.popupWindowMatchSel],
   )
   # A manager's current line is VS Code's selected list item.
   result.setPair(

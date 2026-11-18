@@ -235,7 +235,7 @@ proc applyCompletion(e: Editor): bool =
     # Use original directory prefix (saved when completion started)
     line.text = mgr.baseCommand & " " & mgr.originalDirPrefix & selected
     result = selected.endsWith("/")
-  of cmSetOption:
+  of cmSetOption, cmPickerSource:
     # Replace only the argument part
     line.text = parseCommandLine(e.state.commandLine).cmd & " " & selected
   line.cursor = line.text.charLen
@@ -303,7 +303,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
       let isWholeArgument = isFile or (isDir and mgr.baseCommand.completesDirectories)
       # Check if it's an action that should execute immediately
       let shouldExecuteNow =
-        isWholeArgument or mgr.mode == cmSetOption or (
+        isWholeArgument or mgr.mode in {cmSetOption, cmPickerSource} or (
           mgr.mode == cmCommand and
           e.commandLineParser.isNoArgumentAction(mgr.getSelectedCommand())
         )

@@ -26,7 +26,7 @@ import std/[options, times]
 
 import pkg/results
 
-import types, buffer, modes, search_utils, unicode_utils
+import types, buffer, modes, search_utils, unicode_utils, prompt_line
 import command_registry/core
 
 proc ignoresCase*(search: SearchState, spec: SearchSpec): bool =
@@ -170,15 +170,9 @@ proc updateSearchCount*(state: EditorState, b: TextBuffer, budget = SearchCountB
 proc addSearchHistory*(state: EditorState, pattern: string) =
   ## Push `pattern` onto the search history, most recent first, dropping an
   ## older duplicate and trimming to the configured limit.
-  for i in countdown(state.input.search.history.high, 0):
-    if state.input.search.history[i] == pattern:
-      state.input.search.history.delete(i)
-
-  state.input.search.history.insert(pattern, 0)
-
-  let historyLimit = state.config.persist.searchHistoryLimit
-  if state.input.search.history.len > historyLimit:
-    state.input.search.history.setLen(historyLimit)
+  state.input.search.history.addToHistory(
+    pattern, state.config.persist.searchHistoryLimit
+  )
 
 proc submitSearch*(
     state: EditorState, typed: string, direction: SearchDirection

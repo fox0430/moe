@@ -174,8 +174,9 @@ proc handleModeSwitchToOverlay*(
   of okSearch:
     # `/` and `?` open through the command registry, as in Visual.
     return NormalModeResult(kind: nmrHandled)
-  of okRename:
-    # Rename mode is entered through LSP rename command, not mode switch
+  of okRename, okPicker:
+    # Rename opens from the LSP rename command and a picker from `:picker`,
+    # not from a mode switch
     return NormalModeResult(kind: nmrHandled)
 
 const DoubledByOwnKey = [

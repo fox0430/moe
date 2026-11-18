@@ -300,6 +300,8 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.popupWindowDetail: makeColorPair("#636d83", "#000000"),
   EditorColorPairIndex.popupWindowScrollBar: makeColorPair("#e5c07b", "#000000"),
   EditorColorPairIndex.popupWindowActiveParameter: makeColorPair("#e5c07b", "#000000"),
+  EditorColorPairIndex.popupWindowMatch: makeColorPair("#61afef", "#000000"),
+  EditorColorPairIndex.popupWindowMatchSel: makeColorPair("#61afef", "#3e4452"),
 
   # Notification popup
   EditorColorPairIndex.notificationPopupInfo: makeColorPair("#ffffff", "#323232"),
@@ -680,6 +682,8 @@ const LightColors*: ThemeColors = [
   EditorColorPairIndex.popupWindowDetail: makeColorPair("#4d4d4d", "#808080"),
   EditorColorPairIndex.popupWindowScrollBar: makeColorPair("#ffff00", "#808080"),
   EditorColorPairIndex.popupWindowActiveParameter: makeColorPair("#ffff00", "#808080"),
+  EditorColorPairIndex.popupWindowMatch: makeColorPair("#ffff00", "#808080"),
+  EditorColorPairIndex.popupWindowMatchSel: makeColorPair("#ffff00", "#444444"),
 
   # Notification popup
   EditorColorPairIndex.notificationPopupInfo: makeColorPair("#000000", "#d0d0d0"),

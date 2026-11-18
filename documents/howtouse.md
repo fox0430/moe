@@ -25,6 +25,7 @@
 - [Configuration Mode](#configuration-mode)
 - [Command Mode](#command-mode)
 - [Editing the command line](#editing-the-command-line)
+- [Picker](#picker)
 - [Runtime Key Mapping](#runtime-key-mapping)
 
 
@@ -913,6 +914,10 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `filer path` | Open file explorer at specified path (a file opens its parent directory) |
 | `filetree` | Toggle FileTree sidebar |
 | `filetree path` | Toggle FileTree sidebar with specified root path |
+| `picker source` | Pick from a list filtered as you type; e.g. `picker buffers` |
+| `picker source -- query` | Pick, the query starting as `query`; e.g. `picker oldfiles -- src` |
+| `picker` | Pick a source to pick from |
+| `picker resume` | Go back to the last picker as it was left |
 | `cd path` | Change the current directory |
 | `cd` | Change the current directory to home |
 | `cd -` | Change to the previous directory |
@@ -973,6 +978,35 @@ prompt has no history yet.
 | <kbd>**Ctrl**</kbd> <kbd>**n**</kbd> | Select the next completion, or recall the next newer history entry |
 | <kbd>**Ctrl**</kbd> <kbd>**p**</kbd> | Select the previous completion, or recall the next older history entry |
 <!-- AUTO-GEN:end CommandLineEditing -->
+
+</details>
+
+### Picker
+
+<!-- AUTO-GEN:start PickerIntro -->
+`:picker` lists what a source has, the best match of the query first, as Vim's
+fuzzy matching ranks it: `buffers` the buffers, `oldfiles` the files edited
+before. The query is edited as the command line is, but for these keys.
+<!-- AUTO-GEN:end PickerIntro -->
+
+<details open>
+  <summary>Picker keys</summary>
+
+<!-- AUTO-GEN:start Picker -->
+| Keys | Description |
+|:---|:---|
+| <kbd>**Enter**</kbd> | Open the selected item |
+| <kbd>**Ctrl**</kbd> <kbd>**v**</kbd> | Open the selected item in a vertical split |
+| <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> | Open the selected item in a split |
+| <kbd>**Down**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**n**</kbd> | Select the next item |
+| <kbd>**Up**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**p**</kbd> | Select the previous item |
+| <kbd>**Page Down**</kbd> | Select the item a page down |
+| <kbd>**Page Up**</kbd> | Select the item a page up |
+| <kbd>**Ctrl**</kbd> <kbd>**Up**</kbd> | Recall an older query that starts with the text before the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**Down**</kbd> | Recall a newer query that starts with the same text, or that text after the newest |
+| <kbd>**Ctrl**</kbd> <kbd>**q**</kbd> | Insert the next key as it is, or a character by its code |
+| <kbd>**Esc**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**c**</kbd> | Close the picker; an Esc a mapping or a register puts in opens the selected item |
+<!-- AUTO-GEN:end Picker -->
 
 </details>
 

@@ -219,6 +219,8 @@ popupWindowBorder = { fg = "#c8c8c8", bg = "#f3f3f3" }
 popupWindowDetail = { fg = "#616161", bg = "#f3f3f3" }
 popupWindowScrollBar = { fg = "#bababa", bg = "#f3f3f3" }
 popupWindowActiveParameter = { fg = "#0066bf", bg = "#f3f3f3" }
+popupWindowMatch = { fg = "#0066bf", bg = "#f3f3f3" }
+popupWindowMatchSel = { fg = "#bbe7ff", bg = "#0060c0" }
 
 notificationPopupInfo = { fg = "#000000", bg = "#f3f3f3" }
 notificationPopupInfoBorder = { fg = "#d4d4d4", bg = "#f3f3f3" }

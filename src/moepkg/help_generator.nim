@@ -906,6 +906,45 @@ const LogViewerModeCommands*: HelpGroup = HelpGroup(
   ]
 )
 
+const PickerIntro* =
+  "`:picker` lists what a source has, the best match of the query first, as Vim's\n" &
+  "fuzzy matching ranks it: `buffers` the buffers, `oldfiles` the files edited\n" &
+  "before. The query is edited as the command line is, but for these keys.\n"
+  ## What comes before the keys of PickerCommands.
+
+const PickerCommands*: HelpGroup = HelpGroup(
+  ## The keys of a picker that differ from the command line's.
+  entries: @[
+    HelpEntry(syntax: "Enter", description: "Open the selected item"),
+    HelpEntry(
+      syntax: "Ctrl-v", description: "Open the selected item in a vertical split"
+    ),
+    HelpEntry(syntax: "Ctrl-x", description: "Open the selected item in a split"),
+    HelpEntry(syntax: "Down or Ctrl-n", description: "Select the next item"),
+    HelpEntry(syntax: "Up or Ctrl-p", description: "Select the previous item"),
+    HelpEntry(syntax: "Page Down", description: "Select the item a page down"),
+    HelpEntry(syntax: "Page Up", description: "Select the item a page up"),
+    HelpEntry(
+      syntax: "Ctrl-Up",
+      description: "Recall an older query that starts with the text before the cursor",
+    ),
+    HelpEntry(
+      syntax: "Ctrl-Down",
+      description:
+        "Recall a newer query that starts with the same text, or that text after the newest",
+    ),
+    HelpEntry(
+      syntax: "Ctrl-q",
+      description: "Insert the next key as it is, or a character by its code",
+    ),
+    HelpEntry(
+      syntax: "Esc or Ctrl-c",
+      description:
+        "Close the picker; an Esc a mapping or a register puts in opens the selected item",
+    ),
+  ]
+)
+
 const RecentFileModeCommands*: HelpGroup = HelpGroup(
   entries: @[
     HelpEntry(syntax: "j or Down", description: "Move selection down"),
@@ -1035,6 +1074,11 @@ proc renderCommandLineEditingSection*(): seq[HelpLine] {.compileTime.} =
   prose(parseDescription(CommandLineEditingIntro).toPlainText) & textLine("") &
     renderGroup(CommandLineEditingCommands)
 
+proc renderPickerSection*(): seq[HelpLine] {.compileTime.} =
+  ## The "## Picker" section body: its intro and its keys.
+  prose(parseDescription(PickerIntro).toPlainText) & textLine("") &
+    renderGroup(PickerCommands)
+
 proc renderTerminalInputSection*(): seq[HelpLine] {.compileTime.} =
   ## The "## Terminal-Input sub-mode" body (just the key entry,
   ## not the narrative paragraph that precedes it).
@@ -1119,6 +1163,7 @@ proc renderCommandModeTail*(): seq[HelpLine] {.compileTime.} =
     helpEntriesFor("moerc"),
     helpEntriesFor("quickrun"),
     helpEntriesFor("recent"),
+    helpEntriesFor("picker"),
     helpEntriesFor("backup"),
     helpEntriesFor("recover"),
     helpEntriesFor("config"),

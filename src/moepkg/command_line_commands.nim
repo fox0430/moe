@@ -676,6 +676,30 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     isCanonicalLong: true,
     isTomlOnly: true,
   ),
+  # Picker
+  CommandLineCommandSpec(
+    name: "picker",
+    completionDescription: "Pick from a list filtered as you type; e.g. picker buffers",
+    helpEntries: @[
+      HelpEntry(
+        syntax: "picker source",
+        description: "Pick from a list filtered as you type; e.g. `picker buffers`",
+      ),
+      HelpEntry(
+        syntax: "picker source -- query",
+        description:
+          "Pick, the query starting as `query`; e.g. `picker oldfiles -- src`",
+      ),
+      HelpEntry(syntax: "picker", description: "Pick a source to pick from"),
+      HelpEntry(
+        syntax: "picker resume",
+        description: "Go back to the last picker as it was left",
+      ),
+    ],
+    action: some(claPicker),
+    isCanonicalLong: true,
+    keymapBaseDescription: "Pick from a list filtered as you type",
+  ),
   # File tree sidebar (multi-usage)
   CommandLineCommandSpec(
     name: "filetree",

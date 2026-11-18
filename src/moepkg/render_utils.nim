@@ -662,7 +662,7 @@ func motionReservedLines*(state: EditorState): int {.inline.} =
   else:
     StatusLineReserve
 
-proc shownPromptLine(line: PromptLine): tuple[text: string, cursor: int] =
+proc shownPromptLine*(line: PromptLine): tuple[text: string, cursor: int] =
   ## `line` as a prompt shows it: a control character as `^M` or `<9b>`, and at
   ## the cursor the `"` of a waiting Ctrl-R or the `^` of a Ctrl-V, with the
   ## rest of the line after it.

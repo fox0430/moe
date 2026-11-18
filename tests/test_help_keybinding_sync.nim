@@ -56,6 +56,7 @@ import ../src/moepkg/key_bindings/normal_bindings {.all.}
 import ../src/moepkg/key_bindings/commands {.all.}
 import ../src/moepkg/key_bindings/visual_bindings {.all.}
 import ../src/moepkg/key_bindings/insert_bindings {.all.}
+import ../src/moepkg/command_handlers/picker_handler {.all.}
 
 const FeaturesDocPath = currentSourcePath.parentDir.parentDir / "documents/features.md"
 
@@ -269,4 +270,14 @@ suite "help / keybinding consistency":
     let allowCmds = toHashSet(["switch-to-normal"]) # C-c alias; Esc documented
     let missing = findUndocumented(InsertReplaceBindings, help, allowCmds = allowCmds)
     report("Insert/Replace", missing)
+    check missing.len == 0
+
+  test "Picker keys are documented":
+    # The picker's keys are KeyCombos, not binding strings.
+    let help = helpTokenSeqs(PickerCommands)
+    var missing: seq[string]
+    for (key, action) in PickerKeys:
+      if keyComboTokens(key) notin help:
+        missing.add $key & " (" & $action & ")"
+    report("Picker", missing)
     check missing.len == 0
