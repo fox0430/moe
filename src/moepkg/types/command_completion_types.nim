@@ -33,6 +33,7 @@ type
     cmCommand ## Completing command names
     cmFilePath ## Completing file/directory paths
     cmSetOption ## Completing :set options
+    cmPickerSource ## Completing the source of :picker
 
   CommandCompletionEntry* = object ## A single completion entry
     command*: string ## The command text (without :)

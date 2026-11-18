@@ -68,8 +68,8 @@ when not defined(moe.embedded):
   import terminal_mode
 import
   command_handlers/[
-    handler_manager, command_mode_handler, search_mode_handler, result_processor,
-    command_passthrough,
+    handler_manager, command_mode_handler, search_mode_handler, picker_handler,
+    result_processor, command_passthrough,
   ]
 import prompt_line
 from config_mode import clearKeySequence
@@ -228,7 +228,8 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrCallHierarchyRequestOutgoing, hrEnterTerminal, hrTerminalQuit, hrExecCommand,
       hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri,
       hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd, hrMapRemove, hrMapClear,
-      hrMapList, hrPlaybackMacro, hrRepeatInsert, hrUndo, hrRedo, hrJobs:
+      hrMapList, hrPlaybackMacro, hrRepeatInsert, hrUndo, hrRedo, hrJobs, hrPickerEnter,
+      hrPickerOpen:
     discard # Not expected from RecentFile mode handler
 
   # Route overlay/mode transitions through processResult so a viewer target
@@ -281,7 +282,7 @@ type PasteSink = enum
 proc pasteSinkOf(e: Editor, window: EditorWindow): PasteSink =
   ## Where a paste into `window` would go. `window` need not hold the keys yet:
   ## a click resolves its target before it moves the focus there.
-  if e.state.isCommandOverlay or e.state.isSearchOverlay or e.state.isRenameOverlay:
+  if e.state.hasOverlay:
     return psOverlay
   when not defined(moe.embedded):
     if window.modeState.kind == mskTerminal:
@@ -489,7 +490,8 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
   ## Apply a frontend-neutral physical-line scroll and describe the affected
   ## rendered region for GUI repainting.
   result.requestedRows = input.deltaPhysicalRows
-  if not e.config.standard.mouse:
+  # A picker covers the windows, which keep still under it.
+  if not e.config.standard.mouse or e.state.isPickerOverlay:
     return
   if input.deltaPhysicalRows == 0:
     return
@@ -905,7 +907,8 @@ proc updatePointerGesture(e: Editor, input: PointerInput): bool =
 
 proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
   ## Apply a frontend-neutral pointer event expressed in rendered grid cells.
-  if not e.config.standard.mouse or input.button != pbPrimary:
+  ## A picker covers the windows, so a click there does nothing to them.
+  if not e.config.standard.mouse or input.button != pbPrimary or e.state.isPickerOverlay:
     return false
 
   if input.action in {paDrag, paRelease}:
@@ -1005,12 +1008,13 @@ proc prepareForKeyCombo(e: Editor) =
   ## Per-input setup for frontend-neutral key handling.
   e.prepareForInput(true)
 
-proc noteWaitAtCommandLine(e: Editor) =
-  ## The editor now waits for the user. A `:` line open then counts as typed,
-  ## even if the next key runs a mapping, as Vim's getcmdline takes it when
-  ## nothing but the user's keys is left to read. Keys held for a mapping
-  ## are still to be read.
-  if e.state.isCommandOverlay and not e.keyRouter.isHoldingKeys:
+proc noteWaitAtPrompt(e: Editor) =
+  ## The editor now waits for the user. A `:` line or a picker open then
+  ## counts as typed, even if the next key runs a mapping, as Vim's getcmdline
+  ## takes it when nothing but the user's keys is left to read; input() reads
+  ## its line there too. Keys held for a mapping are still to be read.
+  if (e.state.isCommandOverlay or e.state.isPickerOverlay) and
+      not e.keyRouter.isHoldingKeys:
     e.state.input.line.typed = true
 
 template asInput(e: Editor, body: untyped) =
@@ -1022,7 +1026,7 @@ template asInput(e: Editor, body: untyped) =
   e.asCommand:
     body
   e.settleInsertResume()
-  e.noteWaitAtCommandLine()
+  e.noteWaitAtPrompt()
 
 proc handlePaste*(e: Editor, text: string): bool =
   ## Handle pasted text supplied by any frontend.
@@ -1250,12 +1254,15 @@ proc dispatchFrontLayers(e: Editor, keyCombo: KeyCombo): Option[ReplayOutcome] =
   ## The layers in front of the mode handlers, which run a key the mappings
   ## have had: the overlays, Debug mode, a viewer's Ctrl-W and Recent File
   ## mode. `none` falls through to the mode handlers.
-  # The command and search lines report how their Enter went themselves.
+  # The command and search lines and a picker report how their Enter went
+  # themselves.
   let line =
     if e.state.isCommandOverlay:
       some(e.handleCommandModeKeyCombo(keyCombo))
     elif e.state.isSearchOverlay:
       some(e.handleSearchModeKeyCombo(keyCombo))
+    elif e.state.isPickerOverlay:
+      some(e.handlePickerKeyCombo(keyCombo))
     else:
       none(ReplayOutcome)
   if line.isSome:

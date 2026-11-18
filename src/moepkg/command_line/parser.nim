@@ -159,6 +159,16 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     parts[0] = first[0 ..< nameEnd]
     parts.insert(first[nameEnd .. ^1], 1)
 
+  block:
+    # After the name, or after the `!` a name runs into, as `parts` has it.
+    var i = 0
+    while i < cleanInput.len and cleanInput[i] in Whitespace:
+      inc i
+    i += parts[0].len
+    while i < cleanInput.len and cleanInput[i] in Whitespace:
+      inc i
+    result.argText = cleanInput[i ..^ 1]
+
   let cmd = parts[0]
 
   # Check for bang commands (force)

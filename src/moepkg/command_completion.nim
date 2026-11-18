@@ -31,6 +31,7 @@ import
   popup_render, color, unicode_utils, logger
 
 import types/command_completion_types
+import picker/catalog
 export command_completion_types
 
 const
@@ -302,6 +303,18 @@ proc collectSetOptions*(prefix: string): seq[CommandCompletionEntry] =
     else:
       cmp(a.command, b.command)
 
+proc collectPickerSources*(prefix: string): seq[CommandCompletionEntry] =
+  ## The sources `:picker` takes, and `resume`, that `prefix` begins.
+  for source in PickerSourceKind:
+    if ($source).startsWith(prefix):
+      result.add CommandCompletionEntry(
+        command: $source, description: PickerSourceDescriptions[source]
+      )
+  if PickerResume.startsWith(prefix):
+    result.add CommandCompletionEntry(
+      command: PickerResume, description: PickerResumeDescription
+    )
+
 # Completion menu operations
 
 proc newCommandCompletionManager*(): CommandCompletionManager =
@@ -392,6 +405,15 @@ proc triggerArgumentCompletion*(
   if cmd == "set":
     mgr.mode = cmSetOption
     mgr.menu.entries = collectSetOptions(arg)
+    mgr.argStartX = baseArgX
+    mgr.originalDirPrefix = ""
+  elif name == "picker":
+    # Only the source: what follows it is the source's own.
+    if commandText.substr(2 + cmd.len).contains({' ', '\t'}):
+      mgr.state = ccsIdle
+      return
+    mgr.mode = cmPickerSource
+    mgr.menu.entries = collectPickerSources(arg)
     mgr.argStartX = baseArgX
     mgr.originalDirPrefix = ""
   elif name in FilePathCommands:

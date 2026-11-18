@@ -30,12 +30,12 @@ import
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
     syntax_checker, command_completion, key_bindings, key_router, lsp_integration,
     command_registry, command_line, editor_window_state, pending_input, macro_recording,
-    insert_record, wanted_column, search_ops,
+    insert_record, wanted_column, search_ops, editor_open,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
-  handler_manager, list_ops, lsp_ops, misc_ops, option_ops, recovery_ops, viewer_ops,
-  window_ops
+  handler_manager, list_ops, lsp_ops, misc_ops, option_ops, picker_ops, recovery_ops,
+  viewer_ops, window_ops
 
 type
   ReplayOutcome* = enum
@@ -286,6 +286,28 @@ proc processResultWithHost(
         " (folded by handleCommandMode)",
     )
     discard # Folded to hrHandled/hrError by handleCommandMode; unreachable here.
+  of hrPickerEnter:
+    return e.processPickerEnter(r)
+  of hrPickerOpen:
+    let target = r.pickerTarget
+    case target.kind
+    of ptkFile:
+      return e.processPickerOpen(r, JumpSubject(isBuffer: false, path: target.path))
+    of ptkBuffer:
+      return e.processPickerOpen(r, JumpSubject(isBuffer: true, id: target.buffer))
+    of ptkExCommand:
+      let queued = e.hostResultRequestCount
+      case e.executeCommandOverlay(":" & target.command)
+      of roQuit:
+        return false
+      of roAbort:
+        # A failed command beeps, as an item that fails to open does; one a
+        # host took did not fail.
+        if e.hostResultRequestCount == queued:
+          e.state.beep()
+      of roContinue:
+        discard
+      return true
   of hrPlaybackMacro, hrExecCommand, hrRepeatInsert:
     logWarn(
       "result_processor",
@@ -318,6 +340,8 @@ proc processResultEpilogue(
         e.state.renameState.originalWord, e.state.renameState.cursorLine,
         e.state.renameState.cursorColumn,
       )
+    of okPicker:
+      discard # Only `:picker` opens one, with its source
 
   # Handle mode transitions
   let modeTransition = r.getModeTransition()

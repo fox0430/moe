@@ -98,6 +98,19 @@ proc takeKey*(
     line.lookfor = none(string)
   promptKey(key, typed)
 
+proc addToHistory*(history: var seq[string], entry: string, limit: int) =
+  ## Put `entry` first in `history` (newest first), an older copy of it gone
+  ## and the oldest past `limit` dropped, as Vim's add_to_history. An empty
+  ## entry is not added.
+  if entry.len == 0:
+    return
+  for i in countdown(history.high, 0):
+    if history[i] == entry:
+      history.delete(i)
+  history.insert(entry, 0)
+  if history.len > limit:
+    history.setLen(limit)
+
 proc insert(line: var PromptLine, s: string) =
   ## Put `s` in at the cursor and the cursor after it.
   let at = charToBytePos(line.text, line.cursor)
@@ -414,6 +427,7 @@ proc edit*(line: var PromptLine, key: KeyCombo, history: seq[string]): LineEdit 
 const
   CtrlV = '\x16'
   CtrlVKey = KeyCombo(isSpecial: false, char: "v", modifiers: {kmCtrl})
+  CtrlQKey = KeyCombo(isSpecial: false, char: "q", modifiers: {kmCtrl})
   ActsWhenTyped = {
     '\x02', '\x05', '\x08', '\x0e', '\x10', '\x11', '\x12', '\x15', '\x16', '\x17',
     '\x1d', '\x1e',
@@ -442,18 +456,20 @@ proc keyOf(c: string): KeyCombo =
   else:
     KeyCombo(isSpecial: false, char: c)
 
-proc asTyped(lines: openArray[string]): tuple[plain: string, keys: seq[KeyCombo]] =
+proc asTyped(
+    lines: openArray[string], quote: KeyCombo
+): tuple[plain: string, keys: seq[KeyCombo]] =
   ## `lines` as Vim's cmdline_paste_reg types them, each with a CR between
   ## them put in by cmdline_paste_str on its own, so a Ctrl-V that ends one
   ## covers nothing: what is plain up to the first character a prompt takes as
   ## a key, then the rest as keys, each character that would end the line or
-  ## that a Ctrl-V covers after a Ctrl-V.
+  ## that a Ctrl-V covers after `quote`.
   for n, text in lines:
     if n > 0:
       if result.keys.len == 0:
         result.plain.add '\r'
       else:
-        result.keys.add [CtrlVKey, "\r".keyOf]
+        result.keys.add [quote, "\r".keyOf]
     var at = 0
     if result.keys.len == 0:
       while at < text.len and text[at] notin ActsWhenTyped:
@@ -466,7 +482,7 @@ proc asTyped(lines: openArray[string]): tuple[plain: string, keys: seq[KeyCombo]
         at += size
         size = text.runeSizeAt(at)
       if viaCtrlV or (text[at].isControl and text[at] notin ActsWhenTyped):
-        result.keys.add CtrlVKey
+        result.keys.add quote
       result.keys.add text[at ..< at + size].keyOf
       at += size
 
@@ -585,6 +601,11 @@ proc registerText(
         .split('\n')
     )
 
+proc quoteKey(state: EditorState): KeyCombo =
+  ## The key that puts the next one in as it is at the open prompt: Ctrl-V, as
+  ## cmdline_paste_str stuffs, but Ctrl-Q at a picker, whose Ctrl-V splits.
+  if state.isPickerOverlay: CtrlQKey else: CtrlVKey
+
 proc readRegister(state: EditorState, b: TextBuffer, key: KeyCombo): LineEdit =
   ## Take `key` as what Ctrl-R reads, as Vim's cmdline_insert_reg: a register
   ## or an object under the cursor, after Ctrl-R or Ctrl-O for its text
@@ -613,7 +634,7 @@ proc readRegister(state: EditorState, b: TextBuffer, key: KeyCombo): LineEdit =
     if literally:
       (lines.join("\r"), newSeq[KeyCombo]())
     else:
-      lines.asTyped
+      lines.asTyped(state.quoteKey)
   line.insert(plain)
   let ran = line.runOnLine(keys)
   for k in keys[ran ..^ 1]:

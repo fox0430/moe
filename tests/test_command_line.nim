@@ -1084,6 +1084,12 @@ suite "CommandLine - execute additional commands":
     check parsed.args == @["x"]
     check parser.execute(parsed).kind == claVersion
 
+  test "argText is the arguments as typed, after an embedded bang too":
+    check parser.parseCommandLine(":e  a\tb ").argText == "a\tb "
+    check parser.parseCommandLine(":w!a  b").argText == "a  b"
+    check parser.parseCommandLine(":w! a").argText == "a"
+    check parser.parseCommandLine(":q").argText == ""
+
   test "Execute :build":
     let result = parser.parseAndExecute(":build")
     check result.kind == claBuild

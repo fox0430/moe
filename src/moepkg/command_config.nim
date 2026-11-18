@@ -51,9 +51,9 @@ const CommandNameTable*: Table[string, CommandLineAction] = block:
 # Command mode command aliases registrable as keymap RHS targets. Each is
 # dispatched at runtime through `hrExecCommand` / `nmrExecCommand`, so the
 # full command-line parser runs (inheriting modified-buffer safety checks
-# like `:bd` / `:q`). Curated to argumentless Command mode commands — `:vs`,
-# `:e`, `:ls`, `:set` etc. need arguments to be useful and are intentionally
-# excluded.
+# like `:bd` / `:q`). Curated to commands worth a key of their own, run with
+# the arguments the mapping gives, if any (`w out.txt`, `picker buffers`);
+# `:vs`, `:e`, `:ls`, `:set` etc. are left out.
 #
 # Derived from the canonical `CommandLineCommandTable`: any spec carrying a
 # non-empty `keymapBaseDescription` becomes an entry here, with the full

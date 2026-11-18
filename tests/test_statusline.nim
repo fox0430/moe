@@ -28,6 +28,7 @@ import ../src/moepkg/buffer/core
 import ../src/moepkg/search_ops
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/status_line {.all.}
+import ../src/moepkg/display_path {.all.}
 
 privateAccess(StatusItem)
 privateAccess(Ruler)
@@ -120,27 +121,11 @@ proc activeRuler(
 template withHomes(dirs: openArray[string], body: untyped) =
   ## Runs `body` with `dirs` as the home prefixes, whatever `$HOME` is.
   let savedDirs = homeDirs
-  homeDirs = some(@dirs)
+  homeDirs = some[seq[string]](@dirs)
   try:
     body
   finally:
     homeDirs = savedDirs
-
-template withHomeEnv(value: string, body: untyped) =
-  ## Runs `body` with `$HOME` set to `value` and the prefixes not yet read.
-  let hadHome = existsEnv("HOME")
-  let savedHome = getEnv("HOME")
-  let savedDirs = homeDirs
-  putEnv("HOME", value)
-  homeDirs = none(seq[string])
-  try:
-    body
-  finally:
-    homeDirs = savedDirs
-    if hadHome:
-      putEnv("HOME", savedHome)
-    else:
-      delEnv("HOME")
 
 proc joined(items: openArray[StatusItem]): string =
   ## The parts' text as one line shows them with room for all.
@@ -1379,60 +1364,13 @@ suite "StatusLine - cutFromLeft":
     check cutFromLeft(" file.nim", MinCutWidth) == " <m"
     check cutFromLeft(" file.nim", MinCutWidth - 1) == ""
 
-suite "StatusLine - homeReplace":
+suite "StatusLine - the home as ~":
   let home = getTempDir() / "moe_statusline_home"
   setup:
     removeDir(home)
     createDir(home)
   teardown:
     removeDir(home)
-
-  test "The home itself":
-    check homeReplace("/home/u", ["/home/u"]) == "~"
-
-  test "A path under the home":
-    check homeReplace("/home/u/.config/moe", ["/home/u"]) == "~/.config/moe"
-
-  test "Another user's path that shares the prefix":
-    check homeReplace("/home/u2/file.nim", ["/home/u"]) == "/home/u2/file.nim"
-
-  test "Relative paths and other absolute paths stay":
-    check homeReplace("src/file.nim", ["/home/u"]) == "src/file.nim"
-    check homeReplace("/etc/hosts", ["/home/u"]) == "/etc/hosts"
-
-  test "Either the home as written or its real path":
-    let homes = ["/home/u", "/var/home/u"]
-    check homeReplace("/home/u/a.nim", homes) == "~/a.nim"
-    check homeReplace("/var/home/u/a.nim", homes) == "~/a.nim"
-
-  test "The prefixes are $HOME and the path its link resolves to":
-    let real = home / "real"
-    let link = home / "link"
-    createDir(real)
-    createSymlink(real, link)
-    withHomeEnv(link):
-      check homePrefixes() == @[link, expandFilename(real)]
-
-  test "A plain $HOME is one prefix without its trailing separator":
-    let plain = expandFilename(home)
-    withHomeEnv(plain & DirSep):
-      check homePrefixes() == @[plain]
-
-  test "A $HOME that does not exist is kept as written":
-    let missing = home / "missing"
-    withHomeEnv(missing):
-      check homePrefixes() == @[missing]
-
-  test "A root home replaces the root alone":
-    withHomeEnv("/"):
-      check homePrefixes() == @["/"]
-      check homeReplace("/") == "~"
-      check homeReplace("/etc/hosts") == "/etc/hosts"
-
-  test "An empty $HOME gives no prefix":
-    withHomeEnv(""):
-      check homePrefixes().len == 0
-      check homeReplace("/") == "/"
 
   test "The file name with the directory shown":
     withHomes([home]):

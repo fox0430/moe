@@ -28,6 +28,7 @@ type
     okCommand ## Command mode overlay (ex-mode, :)
     okSearch ## Search mode overlay (/, ?)
     okRename ## LSP rename mode overlay
+    okPicker ## A picker: a query over a list to open one from
 
   EditorMode* {.pure.} = enum
     Normal
@@ -162,3 +163,4 @@ proc overlayLabel*(o: OverlayKind): string =
   of okCommand: "COMMAND"
   of okSearch: "SEARCH"
   of okRename: "RENAME"
+  of okPicker: "PICKER"

@@ -24,8 +24,11 @@
 
 import std/[options, strutils]
 
+import pkg/results
+
 import types, substitute_parser
 import ../command_line_commands
+import ../picker/catalog
 
 proc optionsIgnoreCaseOf*(
     parser: CommandLineParser, pattern: string, match: SearchMatch
@@ -65,9 +68,13 @@ proc typedSubstitutePattern*(
 proc argumentError*(cmd: ParsedCommand): string =
   ## The error `execute` gives `cmd` for its arguments whatever the editor
   ## holds, empty when none: Vim's E172 for a second file name, as the rest of
-  ## the name would be dropped.
-  if cmd.abbreviatedAction.get(cmd.action) in FileNameActions and cmd.args.len > 1:
+  ## the name would be dropped, or a source `:picker` has not.
+  let action = cmd.abbreviatedAction.get(cmd.action)
+  if action in FileNameActions and cmd.args.len > 1:
     "Only one file name allowed"
+  elif action == claPicker:
+    let spec = parsePickerCommand(cmd.argText, cmd.args)
+    if spec.isErr: spec.error else: ""
   else:
     ""
 
@@ -402,20 +409,14 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       else:
         discard
     let lhs = cmd.args[0]
-    # Read the RHS verbatim from rawText — tokenize+join would lose tabs.
+    # The RHS as typed: splitting and joining would lose tabs.
     let rhs = block:
-      var i = 0
-      if i < cmd.rawText.len and cmd.rawText[i] == ':':
-        inc i
-      while i < cmd.rawText.len and cmd.rawText[i] notin Whitespace:
-        inc i
-      while i < cmd.rawText.len and cmd.rawText[i] in Whitespace:
-        inc i
-      if i + lhs.len <= cmd.rawText.len and cmd.rawText[i ..< i + lhs.len] == lhs:
-        i += lhs.len
-        while i < cmd.rawText.len and cmd.rawText[i] in Whitespace:
+      let text = cmd.argText
+      if text.startsWith(lhs):
+        var i = lhs.len
+        while i < text.len and text[i] in Whitespace:
           inc i
-        cmd.rawText[i ..^ 1]
+        text[i ..^ 1]
       else:
         cmd.args[1 ..^ 1].join(" ")
     case cmd.action
@@ -494,6 +495,10 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     )
   of claCquit:
     return CommandLineResult(kind: claCquit)
+  of claPicker:
+    return CommandLineResult(
+      kind: claPicker, pickerSpec: parsePickerCommand(cmd.argText, cmd.args).get
+    )
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

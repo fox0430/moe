@@ -1058,6 +1058,7 @@ modified-buffer guard for `:bdelete` / `:quit` apply automatically. The runtime
 | bl / blast | Move to last window by default, or to this window's last tab |
 | bd / bdelete | Delete current buffer |
 | filetree | Toggle FileTree sidebar |
+| picker | Pick from a list filtered as you type |
 | q / quit | Quit |
 | qa / quitall | Quit all |
 | terminal | Open terminal emulator (default shell) |
@@ -1075,7 +1076,7 @@ Example:
 "F2" = "wq"
 ```
 
-Arguments after one of these names go on its `:` line: `"Space w" = "w out.txt"` runs `:w out.txt`, and `save` with arguments is `:w` too. For a command that takes a path (`w`, `wq`, `x`, `filetree`), each entry of `args` stays one path, spaces and all, so `"Space w" = { command = "w", args = ["My Notes.txt"] }` writes `My Notes.txt`. The arguments of `terminal` are a shell command line, as typed after `:terminal`, so `{ command = "terminal", args = ["make test"] }` runs `make test`. A mapping that gives one of the path commands more than one path is an error when the configuration is read.
+Arguments after one of these names go on its `:` line: `"Space w" = "w out.txt"` runs `:w out.txt`, and `save` with arguments is `:w` too. For a command that takes a path (`w`, `wq`, `x`, `filetree`), each entry of `args` stays one path, spaces and all, so `"Space w" = { command = "w", args = ["My Notes.txt"] }` writes `My Notes.txt`. The arguments of `terminal` are a shell command line, as typed after `:terminal`, so `{ command = "terminal", args = ["make test"] }` runs `make test`. Those of `picker` are the source and what `:picker` takes after it: `"Space f" = "picker buffers"` opens the buffer picker, and the words after `--` are the query it starts with, each entry of `args` whole (`{ command = "picker", args = ["oldfiles", "--", "src"] }`). A mapping that gives one of the path commands more than one path, or `picker` a source it does not have, is an error when the configuration is read.
 
 In Insert and Replace mode, one of these leaves the mode first, as `<Esc>:w<CR>` does: `[KeyMapping.Replace] "C-s" = "w"` ends what was typed as one change, returns to Normal mode, and then runs `:w`.
 
@@ -2066,6 +2067,8 @@ with an unknown-key warning and can be removed.
 | popupWindowDetail | Pop-up window detail text |
 | popupWindowScrollBar | Pop-up window scroll indicator |
 | popupWindowActiveParameter | Pop-up window active parameter (signature help) |
+| popupWindowMatch | Pop-up window: characters a query matched |
+| popupWindowMatchSel | Pop-up window: characters a query matched on the current line |
 | notificationPopupInfo | Notification popup: info body |
 | notificationPopupInfoBorder | Notification popup: info border |
 | notificationPopupWarning | Notification popup: warning body |

@@ -853,6 +853,8 @@ proc handleCommandModeInput*(
     )
   of claCquit:
     HandlerResult(kind: hrCquit)
+  of claPicker:
+    HandlerResult(kind: hrPickerEnter, pickerSpec: cmdResult.pickerSpec)
   of claUnknown:
     HandlerResult(kind: hrError, errorMessage: cmdResult.errorMessage)
 

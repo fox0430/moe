@@ -469,7 +469,7 @@ suite "HelpViewer - Command mode rendering (snapshot)":
       "conflictprev - Jump to previous git merge conflict block"
     )
 
-  test "blank lines separate Command mode, its editing keys and Runtime Key Mapping":
+  test "blank lines separate Command mode, its editing keys, the picker's and Runtime Key Mapping":
     let state = newHelpViewerState()
     # The last line of a section, a blank line, then the next subsection header
     # must appear consecutively in the rendered output.
@@ -483,7 +483,11 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     )
     check last > idx
     check state.texts[last + 1] == ""
-    check state.texts[last + 2] == "## Runtime Key Mapping"
+    check state.texts[last + 2] == "## Picker"
+    let mapping = state.texts.find("## Runtime Key Mapping")
+    check mapping > last + 2
+    check state.texts[mapping - 1] == ""
+    check state.texts[mapping - 2].startsWith("Esc or Ctrl-c")
 
 suite "HelpViewer - Mode sections (snapshot)":
   ## Snapshot assertions for the per-mode `render*Section` procs in

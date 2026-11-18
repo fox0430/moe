@@ -282,6 +282,8 @@ type
     popupWindowDetail
     popupWindowScrollBar
     popupWindowActiveParameter
+    popupWindowMatch
+    popupWindowMatchSel
 
     # Notification popup
     notificationPopupInfo
@@ -642,6 +644,9 @@ const
     EditorColorPairIndex.popupWindowScrollBar: "Pop-up window scroll indicator",
     EditorColorPairIndex.popupWindowActiveParameter:
       "Pop-up window active parameter (signature help)",
+    EditorColorPairIndex.popupWindowMatch: "Pop-up window: characters a query matched",
+    EditorColorPairIndex.popupWindowMatchSel:
+      "Pop-up window: characters a query matched on the current line",
     EditorColorPairIndex.notificationPopupInfo: "Notification popup: info body",
     EditorColorPairIndex.notificationPopupInfoBorder: "Notification popup: info border",
     EditorColorPairIndex.notificationPopupWarning: "Notification popup: warning body",

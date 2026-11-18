@@ -21,7 +21,7 @@ import std/[strformat, options, strutils, os]
 
 import celina_backend as celina
 
-import types, buffer/core, modes, color, config, git_cache, unicode_utils
+import types, buffer/core, modes, color, config, git_cache, unicode_utils, display_path
 import syntax/tokenizer
 
 proc toggleStatusLine*(state: var EditorState) =
@@ -145,44 +145,6 @@ type
     fieldWidth: int
       ## Columns kept for `text` wherever the cursor is, as Vim's ruler width:
       ## the file name is cut against them, not against `text`
-
-var homeDirs: Option[seq[string]]
-  ## `$HOME` and the path it resolves to, read on first use
-
-proc homePrefixes(): lent seq[string] =
-  ## The prefixes Vim's `home_replace` shows as `~`: `$HOME` as written and,
-  ## when it goes through a link, its real path.
-  if homeDirs.isNone:
-    var dirs: seq[string]
-    # Not getHomeDir: it gives "/" for an empty $HOME.
-    let raw =
-      when defined(posix):
-        getEnv("HOME")
-      else:
-        getHomeDir()
-    var home = raw.strip(leading = false, chars = {DirSep})
-    if home.len == 0 and raw.len > 0:
-      # A root home: Vim shows the root itself as `~` and nothing under it.
-      home = $DirSep
-    if home.len > 0:
-      dirs.add home
-      try:
-        let real = expandFilename(home)
-        if real != home:
-          dirs.add real
-      except OSError:
-        discard
-    homeDirs = some(dirs)
-  homeDirs.get
-
-proc homeReplace(path: string, homes: openArray[string] = homePrefixes()): string =
-  ## `path` with a leading home directory shown as `~`, as Vim's
-  ## `home_replace`: only the home itself or a path under it.
-  for home in homes:
-    if home.len > 0 and path.startsWith(home) and
-        (path.len == home.len or path[home.len] == DirSep):
-      return "~" & path[home.len .. ^1]
-  path
 
 proc shownPath(rawPath: string): string =
   ## `rawPath` as the status line shows it, with the home as `~`.

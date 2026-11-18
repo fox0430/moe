@@ -52,6 +52,7 @@ import
   signature_help, hover_popup, modes, notification_popup, unicode_utils, motion, buffer,
   lsp_integration, editor_window_layout, editor_notify, macro_recording, page_scroll,
   search_ops
+import picker/[session, render]
 
 export editor_notify
 
@@ -352,6 +353,12 @@ proc tickNotifications(e: Editor) =
   ## Dismiss expired popup notifications.
   e.state.notificationPopup.tick()
 
+const PickerMatchBudget = initDuration(milliseconds = 4)
+
+proc tickPicker(e: Editor) =
+  if e.state.isPickerOverlay:
+    e.state.picker.advancePicker(e.state.input.line.text, some(PickerMatchBudget))
+
 proc tick*(e: Editor) =
   ## Background processing: LSP, file watching, autosave, etc.
   ## Should be called each frame before rendering.
@@ -374,6 +381,7 @@ proc tick*(e: Editor) =
   e.tickAutoSave()
   e.tickBufferNotes()
   e.tickNotifications()
+  e.tickPicker()
 
 proc updateForFrame*(e: Editor, buffer: Buffer): bool =
   ## Advance per-frame editor state: smooth-scroll animation, matching-paren /
@@ -607,6 +615,10 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
       buffer.area.height, hoverMgr, bottomReserve,
     )
     renderHoverPopup(buffer, hoverMgr, popupPos, true)
+
+  if e.state.isPickerOverlay:
+    let layout = e.state.pickerScreenLayout(buffer.area.width, buffer.area.height)
+    buffer.renderPicker(layout, e.state.pickerView(layout.list.height))
 
   # Render notification popups: float above the (possibly grown)
   # command-line area and the status line

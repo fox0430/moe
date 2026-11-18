@@ -26,6 +26,7 @@ import pkg/results
 
 import range_parser, substitute_parser
 import ../buffer/search
+import ../picker/catalog
 
 export SearchMatch
 export range_parser
@@ -120,6 +121,7 @@ type
     claEditConfigFile # :moerc (open config file for editing)
     claFileTree # :filetree (toggle file tree sidebar)
     claCquit # :cq, :cquit (quit with non-zero exit code)
+    claPicker # :picker (a list to filter by typing and open an item from)
     claUnknown # Unknown command
 
   ExecLine* = object
@@ -139,6 +141,9 @@ type
     args*: seq[string]
     flags*: seq[string]
     rawText*: string
+    argText*: string
+      ## The line's arguments as typed, blanks and all: what `args` splits up
+      ## before a mapping's words join them.
 
   ShellCommandEntry* = object
     command*: string ## The shell command to execute
@@ -306,6 +311,8 @@ type
       fileTreePath*: Option[string] # Optional root path for file tree
     of claCquit:
       discard
+    of claPicker:
+      pickerSpec*: PickerSpec
     of claUnknown:
       errorMessage*: string
 
@@ -334,6 +341,7 @@ const ArgumentRequiredActions* = {
   claChangeDir, # optional but user may want to specify path
   claTerminal, # optional but user may want to specify command
   claFileTree, # optional but user may want to specify path
+  claPicker, # optional but user may want to specify the source
   claMap, # requires lhs and rhs
   claNmap, # requires lhs and rhs
   claImap, # requires lhs and rhs

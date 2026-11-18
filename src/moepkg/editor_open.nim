@@ -17,8 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-## Jumping to a file: the LSP jumps, the list viewers, document links and `gx`
-## all go through `jumpToFile`, which opens the file as `:e` does.
+## Jumping to a file: the LSP jumps, the list viewers, document links, `gx`
+## and a picker all go through `jumpToFile`, which opens the file as `:e`
+## does, or `jumpTo`, which takes a buffer too.
 
 import std/[options, os]
 
@@ -113,18 +114,37 @@ proc splitForJump(e: Editor, placement: ViewerPlacement): Result[bool, string] =
     discard ?e.hsplit()
   ok(true)
 
-proc jumpToFile*(
+type JumpSubject* = object ## What a jump shows: a file, or a buffer of the editor.
+  case isBuffer*: bool
+  of false:
+    path*: string
+  of true:
+    id*: BufferId
+
+proc shows(e: Editor, subject: JumpSubject): bool =
+  if subject.isBuffer:
+    e.activeBuffer().id == subject.id
+  else:
+    e.activeBuffer().bufferHoldsFile(subject.path)
+
+proc show(e: Editor, subject: JumpSubject): Result[void, string] =
+  if subject.isBuffer:
+    e.tryActivateBuffer(subject.id)
+  else:
+    let opened = e.openFileInActiveWindow(subject.path)
+    if opened.isErr:
+      return err("Failed to open file: " & opened.error)
+    ok()
+
+proc jumpTo*(
     e: Editor,
-    path: string,
-    at = none(TargetPosition),
-    placement: ViewerPlacement = vpInPlace,
+    subject: JumpSubject,
+    at: Option[TargetPosition],
+    placement: ViewerPlacement,
 ): Result[OpenOutcome, string] =
-  ## Show `path` in the active window, or in a `placement` split of it, with the
-  ## cursor `at` a position, or where `:e` puts it without one. A jump that
-  ## lands joins the jump list. With no position and the file shown there
-  ## already, no jump is recorded, as with Vim's `:b` and `:sb` on the current
-  ## buffer; a split asked for still opens. On failure the focus goes back
-  ## where it was.
+  ## `jumpToFile` for a file or a buffer of the editor, a buffer shown as `:b`
+  ## shows it. Unlike moe's `:b`, and as Vim's, going to another buffer is a
+  ## jump.
   let
     side = e.activeWindow
     previous = e.windowManager.previousWindow
@@ -137,14 +157,14 @@ proc jumpToFile*(
   # the file it serves, not the listing.
   let origin = e.jumpOrigin()
   var outcome = ooMoved
-  if not e.activeBuffer().bufferHoldsFile(path):
-    let opened = e.openFileInActiveWindow(path)
-    if opened.isErr:
+  if not e.shows(subject):
+    let shown = e.show(subject)
+    if shown.isErr:
       if split.get:
         # Don't leave the window opened for the jump behind
         discard e.closeWindow()
       e.restoreSidebarFocus(side, previous)
-      return err("Failed to open file: " & opened.error)
+      return err(shown.error)
     outcome = ooOpened
   elif at.isNone:
     return ok(ooStayed)
@@ -153,6 +173,20 @@ proc jumpToFile*(
     e.placeCursor(at.get)
   e.addToJumpList(origin)
   ok(outcome)
+
+proc jumpToFile*(
+    e: Editor,
+    path: string,
+    at = none(TargetPosition),
+    placement: ViewerPlacement = vpInPlace,
+): Result[OpenOutcome, string] =
+  ## Show `path` in the active window, or in a `placement` split of it, with the
+  ## cursor `at` a position, or where `:e` puts it without one. A jump that
+  ## lands joins the jump list. With no position and the file shown there
+  ## already, no jump is recorded, as with Vim's `:b` and `:sb` on the current
+  ## buffer; a split asked for still opens. On failure the focus goes back
+  ## where it was.
+  e.jumpTo(JumpSubject(isBuffer: false, path: path), at, placement)
 
 proc followFileLink*(e: Editor, path: string): bool =
   ## Jump to `path`, the target of a link, as `gx` and an LSP document link do,

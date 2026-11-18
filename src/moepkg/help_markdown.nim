@@ -66,7 +66,7 @@ const
     "build", "jobs", "lspfold", "lspformat", "log", "lsplog", "lsprestart",
     "lspcallhierarchyincoming", "lspcallhierarchyoutgoing", "help", "putconfigfile",
     "moerc", "quickrun", "recent", "backup", "recover", "config", "debug", "filer",
-    "filetree", "cd", "jump", "terminal", "changes", "bookmarks", "version",
+    "filetree", "picker", "cd", "jump", "terminal", "changes", "bookmarks", "version",
     "conflictnext", "conflictprev",
   ]
 
@@ -318,6 +318,12 @@ proc renderCommandLineEditingIntro*(): string =
 
 proc renderCommandLineEditingTable*(): string =
   renderKbdHelpGroup(CommandLineEditingCommands)
+
+proc renderPickerIntro*(): string =
+  PickerIntro
+
+proc renderPickerTable*(): string =
+  renderKbdHelpGroup(PickerCommands)
 
 proc renderBackupModeTable*(): string =
   renderKbdHelpGroup(BackupModeCommands)

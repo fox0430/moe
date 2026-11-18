@@ -32,6 +32,8 @@ import ../buffer/core
 import ../types/key_combo_types
 from ../command_line/types import ExecLine
 import ../lsp/protocol/types as lspTypes
+import ../types/picker_types
+from ../types import EditorWindow, ViewerPlacement
 
 type
   HandlerResultGroup* = enum
@@ -192,6 +194,8 @@ type
     hrMapRemove # Remove runtime key mapping (:unmap, :nunmap, etc.)
     hrMapClear # Clear runtime key mappings (:mapclear, :nmapclear, etc.)
     hrMapList # List runtime key mappings
+    hrPickerEnter # Open a picker (:picker)
+    hrPickerOpen # Open what a picker's item names, the picker closed
 
   HandlerResult* = object ## Unified result type for all handlers
     case kind*: HandlerResultKind
@@ -487,6 +491,13 @@ type
     of hrMapList:
       mapListModes*: seq[EditorMode]
       mapListPrefix*: string
+    of hrPickerEnter:
+      pickerSpec*: PickerSpec
+    of hrPickerOpen:
+      pickerTarget*: PickerTarget
+      pickerPlacement*: ViewerPlacement
+      pickerOrigin*: EditorWindow
+        ## The window the picker was over; the active one if it went
     of hrUnhandled:
       discard
     of hrError:
@@ -562,7 +573,8 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig, hrDebugViewerQuit,
       hrLogViewerQuit, hrTerminalQuit, hrExecCommand, hrFileTreeOpenFile,
       hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrRepeatInsert, hrMapAdd, hrMapRemove,
-      hrMapClear, hrMapList, hrUndo, hrRedo, hrJumpList, hrChanges, hrJobs:
+      hrMapClear, hrMapList, hrUndo, hrRedo, hrJumpList, hrChanges, hrJobs,
+      hrPickerEnter, hrPickerOpen:
     hrgExitAndResync
 
 proc group*(r: HandlerResult): HandlerResultGroup =

@@ -50,6 +50,7 @@ import
   types/git_cache_types,
   types/key_combo_types,
   types/background_process_types,
+  types/picker_types,
   config
 
 when not defined(moe.embedded):
@@ -67,7 +68,7 @@ export
   diff_viewer_types, debug_viewer_types, config_mode_types, references_viewer_types,
   documentsymbol_viewer_types, callhierarchy_viewer_types, hover_popup_types,
   notification_popup_types, primitives, syntax_checker_types, recent_file_mode_types,
-  key_combo_types, config.BracketSplitMode
+  key_combo_types, picker_types, config.BracketSplitMode
 
 when not defined(moe.embedded):
   export terminal_mode_types
@@ -349,9 +350,9 @@ type
       # preview, as neither leaves the cursor where Vim's stays.
     typed*: bool
       # A key was typed at it, as Vim's some_key_typed: not when a mapping or
-      # a register ran it to the end. The `:` line also counts the editor
-      # waiting for a key, and is the only prompt that reads it, to go into
-      # the history.
+      # a register ran it to the end. The `:` line and a picker also count
+      # the editor waiting for a key, and are the prompts that read it, to go
+      # into the history.
 
   SearchState* = object ## Search-related state grouped together for better organization
     last*: SearchSpec # Last executed search, replayed by n/N and an empty `/`
@@ -527,6 +528,19 @@ type
     cursorLine*: int # Line where rename was initiated
     cursorColumn*: int # Column where rename was initiated
     originalWord*: string # Original word being renamed
+
+  PickerSession* = ref object
+    ## An open picker, or the last one closed. The query is the prompt's line
+    ## while it is open, and `query` once it closed.
+    title*: string
+    items*: seq[PickerItem]
+    message*: string ## What went wrong getting the items
+    selected*: Option[int]
+      ## The item the selection was moved to; none while it follows the best
+    topIndex*: int
+    origin*: EditorWindow ## The window it is open over; nil once it closed
+    matches*: PickerMatches
+    query*: string
 
   CallHierarchyRequestKind* = enum
     chrkNone
@@ -1126,6 +1140,9 @@ type
     line*: PromptLine # The line of the open prompt
     search*: SearchState # Search-related state (history, settings)
     commandState*: CommandState # Command mode (ex-mode) state (history)
+    pickerHistory*: seq[string]
+      # The queries typed at a picker, newest first: one for every source, as
+      # Vim's input() has one history
 
   JumpListState* = object ## Jump list navigation state (Ctrl-o / Ctrl-i).
     list*: seq[JumpPosition] # List of jump positions
@@ -1183,9 +1200,11 @@ type
     lspCache*: LspCacheState # LSP cache and picker state
     # LSP Rename state
     renameState*: RenameState # State for LSP rename mode
-    # Overlay state for transient modes (Command, Search, Rename)
+    # Overlay state for transient modes (Command, Search, Rename, Picker)
     # When set, the editor displays an overlay on top of the base mode
     overlay*: Option[OverlayKind]
+    picker*: PickerSession ## Set while the picker overlay is open
+    lastPicker*: PickerSession ## The one `:picker resume` goes back to
     # Set by Ctrl-o until Insert resumes or is given up (settleInsertResume)
     insertResume*: InsertResume
     # Line Ctrl-o was typed past the end of (Vim's ins_at_eol)
@@ -1849,6 +1868,9 @@ proc isRenameOverlay*(state: EditorState): bool =
   ## Check if rename overlay is active
   state.overlay == some(okRename)
 
+proc isPickerOverlay*(state: EditorState): bool =
+  state.overlay == some(okPicker)
+
 proc commandLine*(state: EditorState): string =
   ## The open command line with its `:`, as the parser and the completion
   ## take it, or "" with none open.
@@ -1867,8 +1889,15 @@ proc incrementalSearchLine*(state: EditorState): string =
 
 proc exitOverlay*(state: EditorState, kind: OverlayKind) =
   ## Close the `kind` overlay and return to the base mode. Another one, as a
-  ## prompt a command run from it opened, stays.
+  ## prompt a command run from it opened, stays. A picker keeps its query and
+  ## becomes the one to resume.
   if state.overlay == some(kind):
+    if kind == okPicker and state.picker != nil:
+      state.picker.query = state.input.line.text
+      # A resume takes the window it is run in, so the closed one can go.
+      state.picker.origin = nil
+      state.lastPicker = state.picker
+      state.picker = nil
     state.overlay = none(OverlayKind)
     state.input.line = PromptLine()
 
@@ -1934,6 +1963,28 @@ proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
   state.renameState.originalWord = word
   state.renameState.cursorLine = line
   state.renameState.cursorColumn = col
+
+proc enterPickerOverlay*(
+    state: EditorState, session: PickerSession, query: string, origin: EditorWindow
+) =
+  ## Open `session` over `origin`, its query `query`.
+  state.leaveOverlay()
+  state.overlay = some(okPicker)
+  session.origin = origin
+  state.picker = session
+  state.input.line = PromptLine(text: query, cursor: query.charLen)
+  # The picker takes the message line, as the command line does.
+  state.statusMessage = ""
+
+proc resumePickerOverlay*(state: EditorState, origin: EditorWindow): bool =
+  ## Open the last picker closed again as it was left, over `origin`; false
+  ## with none. An open one closes first, so it is the one taken back.
+  state.leaveOverlay()
+  let session = state.lastPicker
+  if session.isNil:
+    return false
+  state.enterPickerOverlay(session, session.query, origin)
+  true
 
 proc baseMode*(state: EditorState): EditorMode =
   ## Get the base mode (the mode under the overlay)
