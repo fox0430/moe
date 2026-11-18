@@ -703,6 +703,35 @@ suite "CommandLine - execute":
     check result.kind == claBuffer
     check result.bufferArg == "3"
 
+  test "A number right after a name is its argument":
+    for (typed, kind, arg) in [
+      (":b2", claBuffer, "2"),
+      (":bd2", claBufferDelete, "2"),
+      (":BD2", claBufferDelete, "2"),
+      (":bd12", claBufferDelete, "12"),
+    ]:
+      let parsed = parser.parseCommandLine(typed)
+      checkpoint(typed)
+      check parsed.action == kind
+      check parsed.args == @[arg]
+    check parser.parseCommandLine(":bd2x").action == claUnknown
+
+  test "A number right after a name that takes no buffer is not split":
+    parser.addAlias("undo", claUndo)
+    parser.addAlias("version", claVersion)
+    parser.addAlias("chdir", claChangeDir)
+    parser.shellCommands["build"] = ShellCommandEntry(command: "make")
+    for typed in [":q2", ":qa2", ":bn2", ":undo2", ":ve2", ":chd2", ":build2"]:
+      let parsed = parser.parseCommandLine(typed)
+      checkpoint(typed)
+      check parsed.action == claUnknown
+      check parsed.abbreviatedAction.isNone
+
+  test "A name that ends in a number is not split":
+    parser.addAlias("bd2", claBufferNext)
+    check parser.parseCommandLine(":bd2").action == claBufferNext
+    check parser.parseCommandLine(":bd2").args.len == 0
+
   test "Execute :b and :bd keep a name with spaces whole":
     check parser.parseAndExecute(":b htop (1)").bufferArg == "htop (1)"
     check parser.parseAndExecute(":bd make test").deleteBufferArg == "make test"

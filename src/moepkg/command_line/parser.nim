@@ -58,6 +58,12 @@ proc abbreviatedAction(
     if parser.aliases.getOrDefault(target.name, claUnknown) == target.action:
       return some(target.action)
 
+const BufferNumberActions = {claBuffer, claBufferDelete}
+
+proc isKnownName(parser: CommandLineParser, name: string): bool =
+  name in parser.aliases or name in parser.shellCommands or
+    parser.abbreviatedAction(name).isSome
+
 proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand =
   ## Parse a command line input string into a structured command
   result.rawText = input
@@ -130,13 +136,28 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     let bangPos = first.find('!')
     if bangPos <= 0 or bangPos >= first.high:
       break splitEmbeddedBang
-    let prefix = first[0 ..< bangPos].toLowerAscii()
-    if prefix notin parser.aliases and prefix notin parser.shellCommands and
-        parser.abbreviatedAction(prefix).isNone:
+    if not parser.isKnownName(first[0 ..< bangPos].toLowerAscii()):
       break splitEmbeddedBang
     let rest = first[bangPos + 1 ..^ 1]
     parts[0] = first[0 .. bangPos]
     parts.insert(rest, 1)
+
+  # Vim ends a name at its letters, so ":bd2" is ":bd 2".
+  block splitTrailingNumber:
+    let first = parts[0]
+    if parser.isKnownName(first.toLowerAscii()):
+      break splitTrailingNumber
+    var nameEnd = 0
+    while nameEnd < first.len and first[nameEnd].isAlphaAscii:
+      inc nameEnd
+    if nameEnd == 0 or nameEnd == first.len or
+        not first[nameEnd .. ^1].allCharsInSet(Digits):
+      break splitTrailingNumber
+    let name = first[0 ..< nameEnd].toLowerAscii()
+    if parser.aliases.getOrDefault(name, claUnknown) notin BufferNumberActions:
+      break splitTrailingNumber
+    parts[0] = first[0 ..< nameEnd]
+    parts.insert(first[nameEnd .. ^1], 1)
 
   let cmd = parts[0]
 
