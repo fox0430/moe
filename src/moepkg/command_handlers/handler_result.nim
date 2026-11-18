@@ -527,10 +527,9 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
     hrgAppExit
   of hrHandled, hrUnhandled, hrError, hrSubstituteNoMatch:
     hrgHandledGeneric
-  of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrJumpList, hrChanges,
-      hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat,
-      hrLspRestart, hrLspFold, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
-      hrLspCallHierarchyOutgoing, hrJobs:
+  of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrConflictNext,
+      hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat, hrLspRestart, hrLspFold,
+      hrLspExecuteCommand, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing:
     hrgExitToNormal
   of hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
       hrEnterBufferManager, hrEnterBackupManager, hrEnterRecoveryManager, hrRecentFile,
@@ -563,7 +562,7 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig, hrDebugViewerQuit,
       hrLogViewerQuit, hrTerminalQuit, hrExecCommand, hrFileTreeOpenFile,
       hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrRepeatInsert, hrMapAdd, hrMapRemove,
-      hrMapClear, hrMapList, hrUndo, hrRedo:
+      hrMapClear, hrMapList, hrUndo, hrRedo, hrJumpList, hrChanges, hrJobs:
     hrgExitAndResync
 
 proc group*(r: HandlerResult): HandlerResultGroup =

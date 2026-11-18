@@ -27,10 +27,9 @@ const
   AppExitKinds = {hrQuit, hrCquit}
   HandledGenericKinds = {hrHandled, hrUnhandled, hrError, hrSubstituteNoMatch}
   ExitToNormalKinds = {
-    hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrJumpList, hrChanges,
-    hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat, hrLspRestart,
-    hrLspFold, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
-    hrLspCallHierarchyOutgoing, hrJobs,
+    hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrConflictNext,
+    hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat, hrLspRestart, hrLspFold,
+    hrLspExecuteCommand, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
   }
   ExitToNewModeKinds = {
     hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
