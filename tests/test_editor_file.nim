@@ -22,8 +22,10 @@
 import std/[unittest, os, options, monotimes, times, posix, strutils, tables]
 import pkg/results
 import
-  ../src/moepkg/
-    [editor, buffer, config, config_loader, highlight, path_key, editor_persist]
+  ../src/moepkg/[
+    editor, buffer, config, config_loader, highlight, path_key, editor_persist,
+    editor_window_layout,
+  ]
 import ../src/moepkg/command_handlers/editor_ops
 import ../src/moepkg/[cmdline, message_log]
 import ../src/moepkg/command_handlers/startup_commands
@@ -163,6 +165,48 @@ suite "Editor - loadFile":
     check result.isOk
     check e.state.cursor.line == 2
     check e.state.cursor.column == 3
+
+  test "A remembered line goes to the middle of the window, as with :e":
+    var config = newEditorConfig()
+    config.persist.cursorPosition = true
+    let e = createTestEditorWithConfig(config)
+    let testFile = getTempDir() / "moe_test_load_persist_center.txt"
+    writeFile(testFile, "line\n".repeat(300))
+    defer:
+      removeFile(testFile)
+    let rows = e.textRows(e.activeWindow)
+    # Close enough below the first screen that update_topline alone would
+    # leave it at the bottom.
+    let line = rows + rows div 4
+    e.persistedCursorPositions.changes[pathKey(testFile)] =
+      CursorPositionEntry(line: line, column: 0)
+
+    check e.loadFile(testFile).isOk
+    check e.state.cursor.line == line
+    let
+      above = line - e.viewport.topLine
+      below = e.viewport.topLine + rows - 1 - line
+    check abs(above - below) <= 1
+
+  test "A remembered line on the first screen moves to the middle too":
+    var config = newEditorConfig()
+    config.persist.cursorPosition = true
+    let e = createTestEditorWithConfig(config)
+    let testFile = getTempDir() / "moe_test_load_persist_first_screen.txt"
+    writeFile(testFile, "line\n".repeat(300))
+    defer:
+      removeFile(testFile)
+    let rows = e.textRows(e.activeWindow)
+    let line = rows - 2
+    e.persistedCursorPositions.changes[pathKey(testFile)] =
+      CursorPositionEntry(line: line, column: 0)
+
+    check e.loadFile(testFile).isOk
+    check e.state.cursor.line == line
+    let
+      above = line - e.viewport.topLine
+      below = e.viewport.topLine + rows - 1 - line
+    check abs(above - below) <= 1
 
   test "Load file clamps persisted cursor to buffer bounds":
     var config = newEditorConfig()
@@ -669,6 +713,83 @@ suite "Editor - multi-file startup (auto-split)":
     check wins[0].viewport.x < wins[1].viewport.x
     check wins[1].viewport.x < wins[2].viewport.x
     check e.windowManager.activeWindowIndex == 0
+
+  proc rememberedFiles(name: string, count: int, text: string): seq[string] =
+    ## `count` files of 300 lines of `text`.
+    for i in 0 ..< count:
+      let path = getTempDir() / ("moe_test_split_center_" & name & "_" & $i & ".txt")
+      writeFile(path, (text & "\n").repeat(300))
+      result.add path
+
+  proc rememberAt(e: Editor, files: seq[string], line: int) =
+    ## Each of `files` remembered at `line`, as a session before left it.
+    for f in files:
+      e.persistedCursorPositions.changes[pathKey(f)] =
+        CursorPositionEntry(line: line, column: 0)
+
+  test "each window centres its remembered line at the size the splits leave it":
+    var config = newEditorConfig()
+    config.persist.cursorPosition = true
+    config.startUpFileOpen.autoSplit = true
+    config.startUpFileOpen.splitType = stHorizontal
+    let e = createTestEditorWithConfig(config)
+    e.syncActiveWindow()
+    e.applyStartUpScreenSize(80, 40)
+    let files = rememberedFiles("h", 3, "line")
+    defer:
+      for f in files:
+        removeFile(f)
+    e.rememberAt(files, 100)
+
+    check e.loadFile(files[0]).isOk
+    e.openAdditionalStartupFiles(files, readonly = false)
+
+    # The later splits shrank the first two windows after they were centred.
+    let wins = e.windowManager.windows
+    check wins.len == 3
+    for win in wins:
+      check win.cursor.line == 100
+      let
+        rows = e.textRows(win)
+        above = win.cursor.line - win.viewport.topLine
+        below = win.viewport.topLine + rows - 1 - win.cursor.line
+      check abs(above - below) <= 1
+
+  test "a vertical split centres the first window again at the width that wraps":
+    var config = newEditorConfig()
+    config.persist.cursorPosition = true
+    config.standard.lineWrap = true
+    config.startUpFileOpen.autoSplit = true
+    config.startUpFileOpen.splitType = stVertical
+    let e = createTestEditorWithConfig(config)
+    e.syncActiveWindow()
+    e.applyStartUpScreenSize(120, 40)
+    const LineLen = 80
+    let files = rememberedFiles("v", 2, "x".repeat(LineLen))
+    defer:
+      for f in files:
+        removeFile(f)
+    e.rememberAt(files, 100)
+
+    check e.loadFile(files[0]).isOk
+    let first = e.activeWindow
+    # A line takes one row at the full width.
+    check e.textAreaWidth(first) >= LineLen
+    e.openAdditionalStartupFiles(files, readonly = false)
+
+    check e.windowManager.windows.len == 2
+    check first.cursor.line == 100
+    let width = e.textAreaWidth(first)
+    # And more than one in the split.
+    check width < LineLen
+    # Whole lines above the cursor line, and whole lines that fit below it.
+    let
+      perLine = (LineLen + width - 1) div width
+      rows = e.textRows(first)
+      above = first.cursor.line - first.viewport.topLine
+      below = (rows - (above + 1) * perLine) div perLine
+    check first.viewport.topWrapOffset == 0
+    check abs(above - below) <= 1
 
   test "files a horizontal split has no room for open without a window":
     let e = createTestEditor()

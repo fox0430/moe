@@ -97,6 +97,8 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   e.restoreCursorPosition(e.activeBuffer)
   e.placeInTab(e.activeWindow, e.activeBuffer)
+  # In the middle, as every other way into a buffer puts it.
+  e.centerCursorLine(e.activeWindow)
 
   e.restoreBookmarks(e.activeBuffer)
 

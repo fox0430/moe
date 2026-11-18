@@ -789,6 +789,10 @@ proc openAdditionalStartupFiles*(
       unsplit.add bufResult.get
       if readonly:
         bufResult.get.readOnly = true
+  # Each split shrank the windows before it, so centre them at their final size.
+  if e.windowManager.windows.len > 1:
+    for win in e.windowManager.windows:
+      e.centerCursorLine(win)
   e.focusWindow(e.windowManager.windows.find(first))
   for buf in unsplit:
     e.addBufferToWindowList(buf)
