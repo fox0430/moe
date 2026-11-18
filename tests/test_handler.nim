@@ -13681,6 +13681,35 @@ suite "Version command":
     check e.currentMode == EditorMode.Filer
     check e.activeWindow.modeState.filer.selectedIndex == 1
 
+suite "List commands in a viewer":
+  for cmd in [":changes", ":jump"]:
+    test cmd & " keeps the viewer it was typed from":
+      let e = createFilerEditor(2)
+      e.activeWindow.mode = EditorMode.Filer
+      e.state.jumpList.list =
+        @[JumpPosition(bufferId: e.activeBuffer.id, line: 0, column: 0)]
+      e.activeBuffer.changeList = @[BufferPosition(line: 0, column: 0)]
+
+      check e.executeCommandOverlay(cmd) == roContinue
+
+      check e.currentMode == EditorMode.Filer
+      check e.state.ui.tempMessages.len > 0
+
+      check e.handleKeyCombo(parseKeyCombo("j").get)
+
+      check e.state.ui.tempMessages.len == 0
+      check e.currentMode == EditorMode.Filer
+      check e.activeWindow.modeState.filer.selectedIndex == 1
+
+  test ":jobs keeps the viewer it was typed from":
+    let e = createFilerEditor(2)
+    e.activeWindow.mode = EditorMode.Filer
+
+    check e.executeCommandOverlay(":jobs") == roContinue
+
+    check e.currentMode == EditorMode.Filer
+    check e.state.statusMessage == "No external commands are running"
+
 suite "Change directory command":
   var startDir: string
   var tempRoot: string
