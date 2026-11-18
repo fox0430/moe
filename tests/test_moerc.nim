@@ -97,9 +97,11 @@ suite "example/moerc.toml":
     check errors.len == 0
 
   test "The [Hook] example is a config the loader accepts":
+    let shipped = readFile(ExampleMoerc).splitLines.countIt(it == "# [[Hook.entries]]")
     let toml = uncommentedSection("Hook")
     check "[Hook]" in toml
-    check toml.count("[[Hook.entries]]") == 5
+    check shipped > 0
+    check toml.count("[[Hook.entries]]") == shipped
 
     let path = getTempDir() / "moe_test_moerc_hook_example.toml"
     defer:
@@ -113,7 +115,7 @@ suite "example/moerc.toml":
       echo "  Validation error: ", e.toMessage
     check vr.errors.len == 0
     # Every entry survived: a rejected one is dropped whole.
-    check config.hooks.entries.len == 5
+    check config.hooks.entries.len == shipped
 
   test "The [[QuickRun.entries]] example is a config the loader accepts":
     let toml = uncommentedSection("QuickRun")
