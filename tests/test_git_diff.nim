@@ -617,11 +617,25 @@ suite "GitDiff - Integration tests with git repository":
       removeDir(testDir)
 
   when defined(posix):
-    test "buffer diff preserves quoted filenames":
+    test "buffer diff uses its repo config and each Git stage owns distinct pipes":
       let testFile = testDir / "file ' $(not-a-command).txt"
       writeFile(testFile, "original\n")
-      discard execCmdEx("git add -A", workingDir = testDir)
-      discard execCmdEx("git commit -m initial", workingDir = testDir)
+      require execCmdEx("git config color.diff never", workingDir = testDir).exitCode ==
+        0
+      require execCmdEx("git add -A", workingDir = testDir).exitCode == 0
+      require execCmdEx("git commit -m initial", workingDir = testDir).exitCode == 0
+
+      let otherRepo = createTempDir("moe_git_diff_other_", "")
+      defer:
+        removeDir(otherRepo)
+      require execCmdEx("git init", workingDir = otherRepo).exitCode == 0
+      require execCmdEx("git config color.diff always", workingDir = otherRepo).exitCode ==
+        0
+      let originalDir = getCurrentDir()
+      setCurrentDir(otherRepo)
+      defer:
+        setCurrentDir(originalDir)
+
       let buffer = newTextBuffer()
       require buffer.loadFile(testFile).isOk
       discard buffer.insertText(BufferPosition(line: 0, column: 0), "modified ")
@@ -631,9 +645,13 @@ suite "GitDiff - Integration tests with git repository":
       let pipeline = started.get
       defer:
         abandonGitDiffProcess(pipeline)
+      var seen: set[GitDiffStage]
       var completed = false
       let deadline = getMonoTime() + initDuration(seconds = 60)
       while not completed and getMonoTime() < deadline:
+        if pipeline.stage notin seen:
+          seen.incl pipeline.stage
+          check pipeline.process.outputHandle() != pipeline.process.errorHandle()
         let outcome = checkGitDiffComplete(pipeline)
         if outcome.isSome:
           completed = true
@@ -642,6 +660,7 @@ suite "GitDiff - Integration tests with git repository":
         else:
           sleep(1)
       check completed
+      check seen == {gdsGitRoot, gdsGitShow, gdsGitDiff}
 
   test "startGitDiffFromBufferAsync with unchanged buffer (LF, no trailing newline) returns no diff":
     let testFile = testDir / "test.txt"

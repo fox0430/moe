@@ -481,18 +481,22 @@ proc advanceToGitDiff(diffProc: GitDiffProcess): Option[Result[GitDiffInfo, stri
   # discard stderr, so a large diff (>~64KB, easy to hit with a bulk edit
   # under --unified=0) cannot block `git diff` on a full pipe while
   # `peekExitCode` spins waiting for it to exit.
-  let shellCmd =
-    "exec git diff --no-index --unified=0 \"$1\" \"$2\" > \"$3\" 2>/dev/null"
   let nextProc =
     try:
       when defined(posix):
+        let shellCmd =
+          "exec git -C \"$1\" diff --no-index --unified=0 \"$2\" \"$3\" > \"$4\" 2>/dev/null"
         startProcess(
           "sh",
-          args =
-            ["-c", shellCmd, "sh", diffProc.tempOriginal, tempModified, tempDiffOut],
+          args = [
+            "-c", shellCmd, "sh", diffProc.workingDir, diffProc.tempOriginal,
+            tempModified, tempDiffOut,
+          ],
           options = {poUsePath},
         )
       else:
+        let shellCmd =
+          "exec git diff --no-index --unified=0 \"$1\" \"$2\" > \"$3\" 2>/dev/null"
         startProcess(
           "sh",
           workingDir = diffProc.workingDir,
