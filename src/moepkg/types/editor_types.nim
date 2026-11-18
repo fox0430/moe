@@ -36,6 +36,7 @@ import ../key_router/types as key_router_types
 import
   background_process_types, persist_types, virtual_text_types, command_config_types,
   config_types, window_manager_types, lsp_integration_types
+import ../path_key
 
 export
   types, motion, commands, command_registry, modes, handler_types,
@@ -68,6 +69,13 @@ type
       ## The wait is over: give back the input taken, for the editor to read
       ## next, or drop it after a Ctrl-C, as Vim flushes its typeahead.
 
+  BufferUse* = object
+    ## When a window last started showing each buffer this session, as Vim's
+    ## b_last_used. A deleted buffer leaves its stamp under its file.
+    clock*: int
+    shown*: Table[BufferId, int] ## Per buffer still in `buffers`.
+    closed*: Table[string, int] ## Per `pathKey` of a deleted buffer.
+
   Editor* = ref object
     state*: EditorState
     screenSize*: ScreenSize
@@ -91,6 +99,7 @@ type
     lsp*: LspIntegration
     persistedCursorPositions*: PersistedRecords[CursorPositionEntry]
     persistedBookmarks*: PersistedRecords[seq[int]]
+    bufferUse*: BufferUse ## The per-file records are saved in this order.
     recovery*: Option[RecoveryIndex]
       ## What a crash preserved, as this editor last read it. Only `main` sets
       ## it, so an editor a test builds never reads the user's cache.
@@ -317,6 +326,12 @@ proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   ## wrapper can call it without duplicating index/table bookkeeping.
   let buf = e.buffers[idx]
   let id = buf.id
+  let used = e.bufferUse.shown.getOrDefault(id)
+  if used > 0:
+    e.bufferUse.shown.del(id)
+    if buf.filePath.isSome:
+      let key = pathKey(buf.filePath.get)
+      e.bufferUse.closed[key] = max(e.bufferUse.closed.getOrDefault(key), used)
   e.buffers.delete(idx)
   e.bufferIdIndex.del(id)
   # Unsubscribe: an untracked buffer must not keep reaching back into the

@@ -19,7 +19,7 @@
 
 ## File operation procedures (load, save, auto-save, auto-backup)
 
-import std/[options, os, monotimes, times, tables, strutils, sequtils]
+import std/[options, os, monotimes, times, strutils]
 
 import pkg/results
 
@@ -155,11 +155,12 @@ proc savePersistData*(e: Editor) {.raises: [].} =
     if r.isErr:
       logError("editor", "Failed to save command history: " & r.error)
 
+  let used = e.lastUsedFiles
   if e.config.persist.cursorPosition:
     for buf in e.buffers:
       e.saveBufferCursorPosition(buf)
     let r = updateCursorPositions(
-      e.persistedCursorPositions.changes, e.persistedCursorPositions.restored.keys.toSeq
+      e.persistedCursorPositions.changes, used, e.persistedCursorPositions.restored
     )
     if r.isErr:
       logError("editor", "Failed to save cursor positions: " & r.error)
@@ -167,9 +168,8 @@ proc savePersistData*(e: Editor) {.raises: [].} =
   if e.config.persist.bookmarks:
     for buf in e.buffers:
       e.rememberBookmarks(buf)
-    let r = updateBookmarks(
-      e.persistedBookmarks.changes, e.persistedBookmarks.restored.keys.toSeq
-    )
+    let r =
+      updateBookmarks(e.persistedBookmarks.changes, used, e.persistedBookmarks.restored)
     if r.isErr:
       logError("editor", "Failed to save bookmarks: " & r.error)
 
@@ -525,6 +525,8 @@ proc saveFile*(
     return err(saveResult.error.withWarnings(writePre.warnings))
 
   logInfo("editor", "Successfully saved file: " & savePath)
+  if kind == wkTakesName:
+    e.noteRenamed(buffer)
 
   e.noteBufferSaved(buffer, savePath)
 

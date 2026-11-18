@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, tables, json, strutils]
+import std/[unittest, os, sequtils, tables, json, strutils]
 import pkg/results
 import ../src/moepkg/persist
 
@@ -431,18 +431,21 @@ suite "persist - updateBookmarks and loadBookmarks":
 
     check not fileExists(getBookmarksPath().get.string)
 
-  test "updateBookmarks keeps changes ahead of the file's oldest entries":
-    var old = initTable[string, seq[int]]()
+  test "updateBookmarks keeps changes and used files ahead of the file's oldest entries":
+    var old = newJObject()
     for i in 0 ..< MaxRecordedFiles:
-      old["/old/" & $i & ".nim"] = @[i]
-    check updateBookmarks(old).isOk
+      old["/old/" & $i & ".nim"] = %[i]
+    writeBookmarksFile($old)
+    let last = "/old/" & $(MaxRecordedFiles - 1) & ".nim"
 
-    check updateBookmarks({"/new.nim": @[1]}.toTable, ["/old/7.nim"]).isOk
+    check updateBookmarks(
+      {"/new.nim": @[1]}.toTable, [last], {last: @[MaxRecordedFiles - 1]}.toTable
+    ).isOk
 
     let loaded = loadBookmarks().get
     check loaded.len == MaxRecordedFiles
-    check loaded["/new.nim"] == @[1]
-    check loaded["/old/7.nim"] == @[7]
+    check loaded.keys.toSeq[0 .. 2] == @[last, "/new.nim", "/old/0.nim"]
+    check "/old/" & $(MaxRecordedFiles - 2) & ".nim" notin loaded
 
   test "updateBookmarks refuses to replace an unreadable file":
     writeBookmarksFile("not valid json {{{")
@@ -510,6 +513,102 @@ suite "persist - updateBookmarks and loadBookmarks":
     writeBookmarksFile("[1, 2, 3]")
 
     check loadBookmarks().isErr
+
+suite "persist - records in the order files were last used":
+  setup:
+    removeDir(TestCacheHome)
+
+  teardown:
+    removeDir(TestCacheHome)
+
+  proc at(line: int): CursorPositionEntry =
+    CursorPositionEntry(line: line, column: 0)
+
+  proc writePositions(entries: openArray[(string, int)]) =
+    var obj = newJObject()
+    for (key, line) in entries:
+      obj[key] = %*{"line": line, "column": 0}
+    let path = getCursorPositionsPath().get.string
+    createDir(path.parentDir)
+    writeFile(path, $obj)
+
+  proc savedKeys(): seq[string] =
+    loadCursorPositions().get.keys.toSeq
+
+  test "loadCursorPositions keeps the file's order":
+    writePositions([("/z.nim", 1), ("/a.nim", 2), ("/m.nim", 3)])
+
+    check savedKeys() == @["/z.nim", "/a.nim", "/m.nim"]
+
+  test "Used files come first, the most recent first":
+    writePositions([("/a.nim", 1), ("/b.nim", 2), ("/c.nim", 3)])
+
+    check updateCursorPositions(
+      initTable[string, CursorPositionEntry](),
+      ["/c.nim", "/b.nim"],
+      {"/b.nim": at(2), "/c.nim": at(3)}.toTable,
+    ).isOk
+
+    check savedKeys() == @["/c.nim", "/b.nim", "/a.nim"]
+
+  test "A used file keeps the file's value over the one it opened with":
+    writePositions([("/other.nim", 1), ("/a.nim", 5)])
+
+    check updateCursorPositions(
+      initTable[string, CursorPositionEntry](), ["/a.nim"], {"/a.nim": at(1)}.toTable
+    ).isOk
+
+    check savedKeys() == @["/a.nim", "/other.nim"]
+    check loadCursorPositions().get["/a.nim"] == at(5)
+
+  test "A used file without an entry is saved where it opened":
+    writePositions([("/old.nim", 1)])
+
+    check updateCursorPositions(
+      initTable[string, CursorPositionEntry](),
+      ["/new.nim"],
+      {"/new.nim": at(0)}.toTable,
+    ).isOk
+
+    check savedKeys() == @["/new.nim", "/old.nim"]
+    check loadCursorPositions().get["/new.nim"] == at(0)
+
+  test "A change goes ahead of the file's entries, behind the used files":
+    writePositions([("/a.nim", 1), ("/b.nim", 2)])
+
+    check updateCursorPositions(
+      {"/b.nim": at(7)}.toTable, ["/a.nim"], {"/a.nim": at(1)}.toTable
+    ).isOk
+
+    check savedKeys() == @["/a.nim", "/b.nim"]
+    check loadCursorPositions().get["/b.nim"] == at(7)
+
+  test "A used file never opened with a record keeps its place":
+    writePositions([("/a.nim", 1), ("/b.nim", 2)])
+
+    check updateCursorPositions(initTable[string, CursorPositionEntry](), ["/b.nim"]).isOk
+
+    check savedKeys() == @["/a.nim", "/b.nim"]
+
+  test "The file is not rewritten when nothing would change":
+    let content =
+      """{ "/a.nim": {"line": 1, "column": 0}, "/b.nim": {"line": 2, "column": 0} }"""
+    let path = getCursorPositionsPath().get.string
+    createDir(path.parentDir)
+    writeFile(path, content)
+
+    check updateCursorPositions({"/a.nim": at(1)}.toTable, ["/a.nim"]).isOk
+
+    check readFile(path) == content
+
+  test "The file is not read when no used file was restored and nothing changed":
+    let path = getCursorPositionsPath().get.string
+    createDir(path.parentDir)
+    writeFile(path, "not json")
+
+    check updateCursorPositions(initTable[string, CursorPositionEntry](), ["/dir"]).isOk
+
+    check readFile(path) == "not json"
 
 suite "persist - default limits":
   test "DefaultCommandHistoryLimit is reasonable":

@@ -26,7 +26,8 @@
 
 import
   std/[
-    algorithm, os, appdirs, paths, sequtils, strformat, strutils, tables, json, options
+    algorithm, os, appdirs, paths, sequtils, sets, strformat, strutils, tables, json,
+    options,
   ]
 
 import pkg/results
@@ -173,37 +174,53 @@ proc loadRecords[T](
     return err(fmt"{pathStr}: {e.msg}")
   ok(records)
 
-proc toTable[T](records: OrderedTable[string, T]): Table[string, T] =
-  for key, value in records:
-    result[key] = value
-
 proc updateRecords[T](
     path: Result[Path, string],
     changes: Table[string, T],
-    opened: openArray[string],
+    used: openArray[string],
+    restored: Table[string, T],
     parse: RecordParser[T],
     emit: proc(value: T): JsonNode {.nimcall, raises: [].},
     drop: proc(value: T): bool {.nimcall, raises: [].},
 ): Result[void, string] {.raises: [].} =
-  ## Apply `changes` onto the entries in `path`, leaving the rest as they are.
-  ## A change `drop` accepts removes its entry. Like Vim's viminfo, the file
-  ## keeps the `MaxRecordedFiles` most recent files: this session's changes and
-  ## `opened` files first, then the file's own order. Nothing is written when
-  ## the current file cannot be read.
-  if changes.len == 0:
+  ## Merge this session's records into the entries in `path`, leaving the rest
+  ## as they are. Like Vim's viminfo, the file keeps the `MaxRecordedFiles` most
+  ## recently used files: `used` (shown this session, the most recent first),
+  ## then the other `changes`, then the file's own order. Unlike Vim, which
+  ## merges by when each file was used, this session's files always go ahead
+  ## of the file's entries, however long ago they were shown. A used file the
+  ## session did not change keeps the file's value, else the one it was opened
+  ## with (`restored`); one never restored keeps its place. A value `drop`
+  ## accepts removes its entry. Nothing is written when the current file
+  ## cannot be read or would stay the same, and nothing is read when there is
+  ## no change and no used file was restored.
+  if changes.len == 0 and not used.anyIt(it in restored):
     return ok()
   let current = ?loadRecords(path, parse)
-  var records = initOrderedTable[string, T]()
+  var
+    records = initOrderedTable[string, T]()
+    settled: HashSet[string]
+  template put(key: string, value: T) =
+    let v = value
+    settled.incl key
+    if not drop(v) and records.len < MaxRecordedFiles:
+      records[key] = v
+
+  for key in used:
+    if key in settled:
+      continue
+    if key in changes:
+      put(key, changes.getOrDefault(key))
+    elif key in restored:
+      put(key, current.getOrDefault(key, restored.getOrDefault(key)))
   for key, value in changes:
-    if not drop(value) and records.len < MaxRecordedFiles:
-      records[key] = value
-  for key in opened:
-    if key notin changes and key notin records and key in current and
-        records.len < MaxRecordedFiles:
-      records[key] = current.getOrDefault(key)
+    if key notin settled:
+      put(key, value)
   for key, value in current:
-    if key notin changes and key notin records and records.len < MaxRecordedFiles:
-      records[key] = value
+    if key notin settled:
+      put(key, value)
+  if records == current:
+    return ok()
 
   let pathStr = path.get.string
   if records.len == 0:
@@ -256,19 +273,24 @@ proc emitCursorPosition(pos: CursorPositionEntry): JsonNode =
 proc neverDrop(pos: CursorPositionEntry): bool =
   false
 
-proc loadCursorPositions*(): Result[Table[string, CursorPositionEntry], string] =
-  ## Cursor positions by `pathKey`; empty when there is no file.
-  loadRecords(getCursorPositionsPath(), parseCursorPosition).map(toTable)
+proc loadCursorPositions*(): Result[OrderedTable[string, CursorPositionEntry], string] =
+  ## Cursor positions by `pathKey`, the most recently used file first (Vim's
+  ## v:oldfiles); empty when there is no file.
+  loadRecords(getCursorPositionsPath(), parseCursorPosition)
 
 proc updateCursorPositions*(
-    changes: Table[string, CursorPositionEntry], opened: openArray[string] = []
+    changes: Table[string, CursorPositionEntry],
+    used: openArray[string] = [],
+    restored = initTable[string, CursorPositionEntry](),
 ): Result[void, string] =
-  ## Merge `changes` into the cursor positions file. `opened` are files this
-  ## session opened, kept ahead of older entries.
+  ## Merge `changes` into the cursor positions file. `used` are the files this
+  ## session showed, the most recent first, and `restored` the positions they
+  ## were opened at.
   updateRecords(
     getCursorPositionsPath(),
     changes,
-    opened,
+    used,
+    restored,
     parseCursorPosition,
     emitCursorPosition,
     neverDrop,
@@ -299,18 +321,27 @@ proc emitBookmarks(lines: seq[int]): JsonNode =
 proc noBookmarks(lines: seq[int]): bool =
   lines.len == 0
 
-proc loadBookmarks*(): Result[Table[string, seq[int]], string] =
-  ## Bookmarked lines by `pathKey`; empty when there is no file.
-  loadRecords(getBookmarksPath(), parseBookmarks).map(toTable)
+proc loadBookmarks*(): Result[OrderedTable[string, seq[int]], string] =
+  ## Bookmarked lines by `pathKey`, the most recently used file first; empty
+  ## when there is no file.
+  loadRecords(getBookmarksPath(), parseBookmarks)
 
 proc updateBookmarks*(
-    changes: Table[string, seq[int]], opened: openArray[string] = []
+    changes: Table[string, seq[int]],
+    used: openArray[string] = [],
+    restored = initTable[string, seq[int]](),
 ): Result[void, string] =
   ## Merge `changes` into the bookmarks file. An empty list removes the entry,
-  ## and the file goes away with its last entry. `opened` are files this
-  ## session opened, kept ahead of older entries.
+  ## and the file goes away with its last entry. `used` and `restored` are as
+  ## for `updateCursorPositions`.
   updateRecords(
-    getBookmarksPath(), changes, opened, parseBookmarks, emitBookmarks, noBookmarks
+    getBookmarksPath(),
+    changes,
+    used,
+    restored,
+    parseBookmarks,
+    emitBookmarks,
+    noBookmarks,
   )
 
 # Session state
@@ -348,3 +379,7 @@ proc record*[T](records: var PersistedRecords[T], key: string, value: T) =
   ## A file never opened counts as opened with the default value.
   if key in records.changes or records.restored.getOrDefault(key) != value:
     records.changes[key] = value
+
+proc recordChanged*[T](records: var PersistedRecords[T], key: string, value: T) =
+  ## Record `value` for the next save whatever `key` was opened with.
+  records.changes[key] = value

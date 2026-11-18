@@ -36,7 +36,10 @@ type PersistedRecords*[T] = object
   changes*: Table[string, T] ## This session's writes, merged on save.
   restored*: Table[string, T]
     ## The value each path was last opened with. A value equal to it is not a
-    ## change, so it never overwrites what another session saved since.
+    ## change, so it never overwrites a value another session saved since. A
+    ## file shown without a change is saved with it when the file has no entry,
+    ## so an entry another session removed comes back: the price of keeping
+    ## every shown file in the record.
   unreadableReported*: bool
     ## Whether the user was told the file cannot be read. Saving skips such a
     ## file, so it is reported once rather than lost silently.
