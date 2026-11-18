@@ -17,9 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, sequtils, strutils, tables]
+import std/[unittest, sequtils, strutils, tables]
 from std/unicode import runeLen
-import ../src/moepkg/[help_viewer, buffer, primitives, color, highlight]
+import ../src/moepkg/[help_viewer, buffer, color, highlight]
 import pkg/celina
 
 proc texts(state: HelpViewerState): seq[string] =
@@ -31,7 +31,6 @@ suite "HelpViewer - State creation":
 
     check state.items.len > 0
     check state.selectedIndex == 0
-    check state.searchQuery == ""
 
   test "lineCount returns correct count":
     let state = newHelpViewerState()
@@ -330,198 +329,6 @@ suite "HelpViewer - Section navigation":
     check state.selectedIndex < subIdx
     check state.texts[state.selectedIndex].startsWith("# ")
     check not state.texts[state.selectedIndex].startsWith("## ")
-
-suite "HelpViewer - Search query":
-  test "setSearchQuery sets the query":
-    let state = newHelpViewerState()
-
-    state.setSearchQuery("test", Forward)
-    check state.searchQuery == "test"
-
-  test "clearSearch clears the query":
-    let state = newHelpViewerState()
-    state.setSearchQuery("test", Forward)
-
-    state.clearSearch()
-    check state.searchQuery == ""
-
-  test "hasSearchQuery returns true when query exists":
-    let state = newHelpViewerState()
-    state.setSearchQuery("test", Forward)
-
-    check state.hasSearchQuery == true
-
-  test "hasSearchQuery returns false when query is empty":
-    let state = newHelpViewerState()
-
-    check state.hasSearchQuery == false
-
-  test "hasSearchQuery returns false after clearSearch":
-    let state = newHelpViewerState()
-    state.setSearchQuery("test", Forward)
-    state.clearSearch()
-
-    check state.hasSearchQuery == false
-
-suite "HelpViewer - Line matching":
-  test "isLineMatched returns true for matching line":
-    let state = newHelpViewerState()
-    state.setSearchQuery("Normal mode", Forward)
-
-    # Find a line containing "Normal mode"
-    var foundIndex = -1
-    for i, line in state.texts:
-      if "Normal mode" in line:
-        foundIndex = i
-        break
-
-    check foundIndex >= 0
-    check state.isLineMatched(foundIndex) == true
-
-  test "isLineMatched is case insensitive":
-    let state = newHelpViewerState()
-    state.setSearchQuery("normal MODE", Forward)
-
-    var foundIndex = -1
-    for i, line in state.texts:
-      if "Normal mode" in line:
-        foundIndex = i
-        break
-
-    check foundIndex >= 0
-    check state.isLineMatched(foundIndex) == true
-
-  test "isLineMatched returns false for non-matching line":
-    let state = newHelpViewerState()
-    state.setSearchQuery("xyznonexistent123", Forward)
-
-    check state.isLineMatched(0) == false
-
-  test "isLineMatched returns false when no search query":
-    let state = newHelpViewerState()
-
-    check state.isLineMatched(0) == false
-
-  test "isLineMatched returns false for negative index":
-    let state = newHelpViewerState()
-    state.setSearchQuery("test", Forward)
-
-    check state.isLineMatched(-1) == false
-
-  test "isLineMatched returns false for out of range index":
-    let state = newHelpViewerState()
-    state.setSearchQuery("test", Forward)
-
-    check state.isLineMatched(state.items.len) == false
-
-suite "HelpViewer - Search forward":
-  test "searchForward finds next matching line":
-    let state = newHelpViewerState()
-    state.setSearchQuery(":w", Forward)
-    state.selectedIndex = 0
-
-    let result = state.searchForward()
-    check result.isSome
-    check state.selectedIndex > 0
-    check ":w" in state.texts[state.selectedIndex].toLowerAscii or
-      ":W" in state.texts[state.selectedIndex]
-
-  test "searchForward wraps around to beginning":
-    let state = newHelpViewerState()
-    state.setSearchQuery("Exiting", Forward)
-
-    # Set selectedIndex to after the "Exiting" section
-    state.selectedIndex = state.items.high
-
-    let result = state.searchForward()
-    check result.isSome
-    # Should wrap around and find "Exiting" near the beginning
-    check state.selectedIndex < state.items.high
-
-  test "searchForward returns none when no match":
-    let state = newHelpViewerState()
-    state.setSearchQuery("xyznonexistent123456", Forward)
-    state.selectedIndex = 0
-
-    let result = state.searchForward()
-    check result.isNone
-
-  test "searchForward returns none when no search query":
-    let state = newHelpViewerState()
-    state.selectedIndex = 0
-
-    let result = state.searchForward()
-    check result.isNone
-
-suite "HelpViewer - Search backward":
-  test "searchBackward finds previous matching line":
-    let state = newHelpViewerState()
-    state.setSearchQuery("mode", Forward)
-    state.selectedIndex = state.items.high
-
-    let result = state.searchBackward()
-    check result.isSome
-    check state.selectedIndex < state.items.high
-
-  test "searchBackward wraps around to end":
-    let state = newHelpViewerState()
-    state.setSearchQuery("backup", Forward)
-    state.selectedIndex = 0
-
-    let result = state.searchBackward()
-    check result.isSome
-    # Should wrap around and find "jumps" near the end
-    check state.selectedIndex > 0
-
-  test "searchBackward returns none when no match":
-    let state = newHelpViewerState()
-    state.setSearchQuery("xyznonexistent123456", Forward)
-    state.selectedIndex = 10
-
-    let result = state.searchBackward()
-    check result.isNone
-
-  test "searchBackward returns none when no search query":
-    let state = newHelpViewerState()
-    state.selectedIndex = 10
-
-    let result = state.searchBackward()
-    check result.isNone
-
-suite "HelpViewer - Search first":
-  test "searchFirst finds first matching line from beginning":
-    let state = newHelpViewerState()
-    state.setSearchQuery("Exiting", Forward)
-    state.selectedIndex = state.items.high
-
-    let result = state.searchFirst()
-    check result.isSome
-    # Should find "Exiting" near the beginning
-    check state.selectedIndex < state.items.high
-
-  test "searchFirst returns none when no match":
-    let state = newHelpViewerState()
-    state.setSearchQuery("xyznonexistent123456", Forward)
-    state.selectedIndex = 0
-
-    let result = state.searchFirst()
-    check result.isNone
-
-  test "searchFirst returns none when no search query":
-    let state = newHelpViewerState()
-
-    let result = state.searchFirst()
-    check result.isNone
-
-  test "searchFirst always starts from line 0":
-    let state = newHelpViewerState()
-    state.setSearchQuery("# Exiting", Forward)
-    state.selectedIndex = 50
-
-    let result = state.searchFirst()
-    check result.isSome
-    # The first match should be the "# Exiting" header near the beginning
-    check state.selectedIndex < 10
 
 suite "HelpViewer - Command mode rendering (snapshot)":
   ## These assertions pin the exact output of `help_generator` so that any

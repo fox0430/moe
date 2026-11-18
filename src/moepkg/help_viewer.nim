@@ -21,12 +21,11 @@
 ##
 ## This module provides the data structures and operations for the help viewer mode.
 
-import std/[strutils, options, sequtils]
+import std/[strutils, sequtils]
 
 import celina_backend as celina
 
-import
-  buffer/core, color, help_generator, highlight, list_viewer, primitives, unicode_utils
+import buffer/core, color, help_generator, highlight, list_viewer, unicode_utils
 
 import types/help_viewer_types
 export help_viewer_types, list_viewer
@@ -164,7 +163,7 @@ const HelpLines* = UntrimmedHelpLines.withoutTrailingBlanks
 
 proc newHelpViewerState*(): HelpViewerState =
   ## Create a new help viewer state
-  HelpViewerState(items: HelpLines, selectedIndex: 0, searchQuery: "")
+  HelpViewerState(items: HelpLines, selectedIndex: 0)
 
 proc lineCount*(state: HelpViewerState): int =
   ## Get the number of lines in the help
@@ -196,92 +195,6 @@ proc moveToPreviousSection*(state: HelpViewerState) =
     if state.items[i].isSectionHeader:
       state.selectedIndex = i
       return
-
-proc setSearchQuery*(
-    state: HelpViewerState, query: string, direction: SearchDirection
-) =
-  ## Set the search query and the way its search went, which n goes too
-  state.searchQuery = query
-  state.searchDirection = direction
-
-proc clearSearch*(state: HelpViewerState) =
-  ## Clear the search query
-  state.searchQuery = ""
-
-proc hasSearchQuery*(state: HelpViewerState): bool =
-  ## Check if there is an active search query
-  state.searchQuery.len > 0
-
-proc isLineMatched*(state: HelpViewerState, index: int): bool =
-  ## Check if a line matches the current search query (case-insensitive)
-  if not state.hasSearchQuery:
-    return false
-  if index < 0 or index >= state.items.len:
-    return false
-  state.items[index].text.toLowerAscii.contains(state.searchQuery.toLowerAscii)
-
-proc searchForward*(state: HelpViewerState): Option[int] =
-  ## Search forward from current position.
-  ## Returns the line index if found, none otherwise.
-  if not state.hasSearchQuery:
-    return none(int)
-
-  let query = state.searchQuery.toLowerAscii
-  # Search from next line to end
-  for i in (state.selectedIndex + 1) ..< state.items.len:
-    if state.items[i].text.toLowerAscii.contains(query):
-      state.selectedIndex = i
-      return some(i)
-
-  # Wrap around: search from beginning to current position
-  for i in 0 ..< state.selectedIndex:
-    if state.items[i].text.toLowerAscii.contains(query):
-      state.selectedIndex = i
-      return some(i)
-
-  none(int)
-
-proc searchBackward*(state: HelpViewerState): Option[int] =
-  ## Search backward from current position.
-  ## Returns the line index if found, none otherwise.
-  if not state.hasSearchQuery:
-    return none(int)
-
-  let query = state.searchQuery.toLowerAscii
-  # Search from previous line to beginning
-  for i in countdown(state.selectedIndex - 1, 0):
-    if state.items[i].text.toLowerAscii.contains(query):
-      state.selectedIndex = i
-      return some(i)
-
-  # Wrap around: search from end to current position
-  for i in countdown(state.items.high, state.selectedIndex + 1):
-    if state.items[i].text.toLowerAscii.contains(query):
-      state.selectedIndex = i
-      return some(i)
-
-  none(int)
-
-proc repeatSearch*(state: HelpViewerState, reverse: bool): Option[int] =
-  ## n, or N when `reverse`: the next match the way the search went.
-  if repeatDirection(state.searchDirection, reverse) == Forward:
-    state.searchForward()
-  else:
-    state.searchBackward()
-
-proc searchFirst*(state: HelpViewerState): Option[int] =
-  ## Search from the beginning of the document.
-  ## Returns the line index if found, none otherwise.
-  if not state.hasSearchQuery:
-    return none(int)
-
-  let query = state.searchQuery.toLowerAscii
-  for i in 0 ..< state.items.len:
-    if state.items[i].text.toLowerAscii.contains(query):
-      state.selectedIndex = i
-      return some(i)
-
-  none(int)
 
 proc helpHighlight(lines: openArray[HelpLine]): Highlight =
   ## Section headings and the keys of entries in their colors, the rest plain.

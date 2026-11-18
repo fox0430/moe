@@ -267,9 +267,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     ## n, or N when `reverse`, which jump from where the cursor was. They repeat
     ## the last search, how it matches included, so they land only on the
     ## matches the highlighter draws.
-    result = ctx.state.searchLast(ctx.buffer, ctx.cursor, reverse, count)
-    if result.isOk:
-      recordJump(ctx.state)
+    ctx.state.jumpToLastSearch(ctx.buffer, ctx.cursor, reverse, count)
 
   proc searchTarget(
       findMatch: proc(ctx: CommandContext, count: int): Result[BufferPosition, string]

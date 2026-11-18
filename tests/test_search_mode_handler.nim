@@ -291,7 +291,6 @@ suite "Search mode - Help mode incremental search sync":
     let helpState = e.activeWindow.modeState.help
     # selectedIndex should match cursor position, not reset to first match
     check helpState.selectedIndex == cursorLineAfterSearch
-    check helpState.searchQuery == "Visual"
 
   test "finalizeSearch without incsearch syncs selectedIndex":
     let e = createTestEditorInHelpMode()
@@ -304,7 +303,6 @@ suite "Search mode - Help mode incremental search sync":
 
     let helpState = e.activeWindow.modeState.help
     check helpState.selectedIndex == e.cursor.line
-    check helpState.searchQuery == "Insert"
 
   test "Backspace syncs selectedIndex":
     let e = createTestEditorInHelpMode()
@@ -345,17 +343,6 @@ suite "Search mode - Help mode incremental search sync":
     # Cancel should restore selectedIndex to startPos
     cancelSearch(e)
     check helpState.selectedIndex == 10
-
-  test "A search keeps the way it went with its query, for n":
-    let e = createTestEditorInHelpMode()
-    e.state.enterSearchOverlay(Backward)
-    e.setSearchText("Visual")
-
-    discard finalizeSearch(e)
-
-    let help = e.activeWindow.modeState.help
-    check help.searchQuery == "Visual"
-    check help.searchDirection == Backward
 
 suite "Search mode - Config mode integration":
   test "performIncrementalSearch moves selection to a match from the anchor":
@@ -1018,7 +1005,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     check e.cursor == BufferPosition(line: 1, column: 0)
     check e.state.statusMessage == "Pattern not found: zzz"
 
-  test "Help mode: an invalid pattern still becomes the help search query":
+  test "Help mode: an invalid pattern is still the last search":
     let e = createTestEditorInHelpMode()
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.incsearch = true
@@ -1027,7 +1014,7 @@ suite "Search mode - jump list and viewport on a failed or erased search":
     check not finalizeSearch(e)
 
     check e.state.statusMessage == "Invalid regex: ab("
-    check e.activeWindow.modeState.help.searchQuery == "ab("
+    check e.state.input.search.last.pattern == "ab("
 
   test "A reload that drops the incsearch match searches again from the anchor":
     let e = createTestEditorWithBuffer("x\nfoo\nfoo\nfoo\n")

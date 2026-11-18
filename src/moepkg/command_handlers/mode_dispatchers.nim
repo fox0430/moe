@@ -40,7 +40,7 @@ import
   ../[
     render_utils, types, buffer, modes, key_bindings, keybind_config, filer, filetree,
     diff_viewer, recent_file_mode, command_line, visual_selection, insert_record,
-    wanted_column, visual_block, fold_open, auto_pair,
+    wanted_column, visual_block, fold_open, auto_pair, search_ops, cursor_util,
   ]
 
 when not defined(moe.embedded):
@@ -743,12 +743,16 @@ proc handleCallHierarchyMode*(
 proc handleHelpViewerMode*(
     manager: HandlerManager,
     helpState: HelpViewerState,
+    buffer: TextBuffer,
     state: EditorState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Help Viewer mode input
+  let lineBefore = helpState.selectedIndex
   let r = handleHelpViewerModeKey(helpState, viewportHeight, keyCombo)
+  if helpState.selectedIndex != lineBefore:
+    state.cursor.column = 0
   case r.kind
   of hvrHandled:
     return HandlerResult(
@@ -773,9 +777,15 @@ proc handleHelpViewerMode*(
       kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
     )
   of hvrRepeatSearch:
-    # n/N jumped to a match: re-enable the global hlsearch gate (like Vim's n
-    # after :noh) so the highlight comes back across all windows/modes.
-    state.showSearchMatches()
+    # As in any buffer: the help text is one, and selectedIndex its cursor line.
+    let line = helpState.selectedIndex
+    var pos = BufferPosition(line: line, column: state.cursor.column)
+    pos.clampCursorToLastChar(buffer.getLine(line).charLen)
+    let found = state.jumpToLastSearch(buffer, pos, r.reverse, count = 1)
+    if found.isErr:
+      return HandlerResult(kind: hrError, errorMessage: state.statusMessage)
+    state.cursor = found.get
+    helpState.selectedIndex = found.get.line
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
@@ -789,9 +799,6 @@ proc handleHelpViewerMode*(
     return HandlerResult(kind: hrHelpViewerQuit)
   of hvrUnhandled:
     return HandlerResult(kind: hrUnhandled)
-  of hvrSearchNotFound:
-    state.showSearchMatches()
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
   of hvrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -1114,10 +1121,10 @@ proc dispatchSubStateMode*(
   ## object on `EditorWindow` (via the `modeState` variant). Called from the
   ## Editor-based handleKeyCombo for any mode it does not handle directly.
   ##
-  ## 12 sub-state modes (Filer, FileTree, Help, BufferManager, BookmarkManager,
+  ## 11 sub-state modes (Filer, FileTree, BufferManager, BookmarkManager,
   ## BackupManager, RecoveryManager, DiffViewer, Config, References,
   ## DocumentSymbol, CallHierarchy) share the same dispatch shape and use the
-  ## `dispatchSubState` template. LogViewer and Terminal have non-standard
+  ## `dispatchSubState` template. LogViewer, Help and Terminal have non-standard
   ## handler signatures and remain as explicit branches.
   let buffer = editor.activeBuffer
   let state = editor.state
@@ -1146,7 +1153,13 @@ proc dispatchSubStateMode*(
       return
         HandlerResult(kind: hrError, errorMessage: "Log viewer state not initialized")
   of EditorMode.Help:
-    dispatchSubState(mskHelp, help, handleHelpViewerMode, "Help viewer")
+    if activeWindow.modeState.kind == mskHelp:
+      return manager.handleHelpViewerMode(
+        activeWindow.modeState.help, buffer, state, viewport.height, keyCombo
+      )
+    else:
+      return
+        HandlerResult(kind: hrError, errorMessage: "Help viewer state not initialized")
   of EditorMode.BufferManager:
     dispatchSubState(
       mskBufferManager, bufferManager, handleBufferManagerMode, "Buffer manager"

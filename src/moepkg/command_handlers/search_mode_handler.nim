@@ -30,8 +30,8 @@ import ../celina_backend as celina
 
 import
   ../[
-    editor, key_bindings, modes, buffer, types, help_viewer, config_mode, search_ops,
-    fold_open, pending_input, prompt_line,
+    editor, key_bindings, modes, buffer, types, config_mode, search_ops, fold_open,
+    pending_input, prompt_line,
   ]
 import ../command_registry/core
 import command_mode_handler, result_processor
@@ -150,12 +150,6 @@ proc goToSearch(e: Editor, spec: SearchSpec, isRepeat: bool): bool =
     result = e.searchFromStart(spec)
     if result:
       recordJump(e.state, e.state.input.search.startPos)
-
-    # Sync search query and position to help viewer state if in Help mode
-    if e.state.mode == EditorMode.Help:
-      let window = e.activeWindow
-      if window.modeState.kind == mskHelp:
-        window.modeState.help.setSearchQuery(pattern, e.state.input.search.direction)
     e.syncHelpViewerIndex(e.cursor.line)
 
 proc finalizeSearch(e: Editor): bool =
