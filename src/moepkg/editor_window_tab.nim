@@ -25,7 +25,7 @@
 ## viewer resuming after its tab moved underneath it. `syncTabView` derives what
 ## the window then shows. A window comes back to the line it left a tab on.
 
-import std/[options, sequtils]
+import std/[options, sequtils, tables]
 
 import pkg/results
 
@@ -40,7 +40,6 @@ import
   visible_rows
 
 when not defined(moe.embedded):
-  import std/tables
   import commands
 
 when not defined(moe.embedded):
@@ -218,10 +217,17 @@ proc tabLineFor(e: Editor, win: EditorWindow, buf: TextBuffer): Option[TabLine] 
       if result.isNone:
         result = some(spot)
 
+proc noteUse(e: Editor, buf: TextBuffer) =
+  ## Make `buf` the most recently used.
+  inc e.bufferUse.clock
+  e.bufferUse.shown[buf.id] = e.bufferUse.clock
+
 proc placeInTab*(e: Editor, win: EditorWindow, buf: TextBuffer) =
   ## Put `win`, new on `buf`'s tab, where it left the tab. The column does not
   ## come back, as with Vim's 'startofline', unless the file was just read: the
-  ## first window takes that position, and no other does.
+  ## first window takes that position, and no other does. `buf` becomes the
+  ## most recently used, as Vim's enter_buffer stamps b_last_used.
+  e.noteUse(buf)
   let spot = e.tabLineFor(win, buf)
   var position = BufferPosition(line: 0, column: 0)
   if spot.isSome:

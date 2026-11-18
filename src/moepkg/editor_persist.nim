@@ -19,7 +19,7 @@
 
 ## Per-file state restored when a file opens and saved when the editor exits.
 
-import std/[options, sequtils]
+import std/[algorithm, options, sequtils, tables]
 
 import pkg/results
 
@@ -58,18 +58,22 @@ proc keepsCursorPosition*(language: SourceLanguage): bool =
   ## Temporary git files are not reopened to continue work.
   language notin {SourceLanguage.langGitRebaseTodo, SourceLanguage.langCommitEditMsg}
 
-proc saveBufferCursorPosition*(e: Editor, buffer: TextBuffer) =
-  ## Record where the cursor stands in `buffer` for the next save, if
-  ## persist.cursorPosition is enabled and a window has shown it.
+proc cursorEntry(e: Editor, buffer: TextBuffer): Option[CursorPositionEntry] =
+  ## Where the cursor stands in `buffer`, if persist.cursorPosition is enabled
+  ## and a window has shown it.
   if not e.config.persist.cursorPosition or buffer.filePath.isNone or
       not buffer.language.keepsCursorPosition:
     return
   let position = e.lastCursorIn(buffer)
   if position.isSome:
-    e.persistedCursorPositions.record(
-      pathKey(buffer.filePath.get),
-      CursorPositionEntry(line: position.get.line, column: position.get.column),
-    )
+    return
+      some(CursorPositionEntry(line: position.get.line, column: position.get.column))
+
+proc saveBufferCursorPosition*(e: Editor, buffer: TextBuffer) =
+  ## Record where the cursor stands in `buffer` for the next save.
+  let entry = e.cursorEntry(buffer)
+  if entry.isSome:
+    e.persistedCursorPositions.record(pathKey(buffer.filePath.get), entry.get)
 
 proc restoreCursorPosition*(e: Editor, buffer: TextBuffer) =
   ## Leave the position recorded for a freshly read `buffer` to the first window
@@ -112,6 +116,34 @@ proc rememberBookmarks*(e: Editor, buffer: TextBuffer) =
   if not e.config.persist.bookmarks or buffer.filePath.isNone:
     return
   e.persistedBookmarks.record(pathKey(buffer.filePath.get), buffer.bookmarks)
+
+proc noteRenamed*(e: Editor, buffer: TextBuffer) =
+  ## `buffer` took a new name. Its records are changes for that file whatever
+  ## they are, since the file now holds its text.
+  if buffer.filePath.isNone:
+    return
+  let key = pathKey(buffer.filePath.get)
+  let entry = e.cursorEntry(buffer)
+  if entry.isSome:
+    e.persistedCursorPositions.recordChanged(key, entry.get)
+  if e.config.persist.bookmarks:
+    e.persistedBookmarks.recordChanged(key, buffer.bookmarks)
+
+proc lastUsedFiles*(e: Editor): seq[string] =
+  ## `pathKey`s of the files windows started showing this session, the most
+  ## recent first: each buffer under the name it has now, and a deleted one
+  ## under the name it had.
+  var stamps = e.bufferUse.closed
+  for buffer in e.buffers:
+    let used = e.bufferUse.shown.getOrDefault(buffer.id)
+    if used > 0 and buffer.filePath.isSome:
+      let key = pathKey(buffer.filePath.get)
+      stamps[key] = max(stamps.getOrDefault(key), used)
+  var order: seq[(int, string)]
+  for key, used in stamps:
+    order.add (used, key)
+  order.sort(Descending)
+  order.mapIt(it[1])
 
 proc restoreLastSearch*(e: Editor) =
   ## Bring back the last search the previous session left, as Vim's viminfo

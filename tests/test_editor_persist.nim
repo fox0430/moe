@@ -20,7 +20,7 @@
 ## Per-file state saved at exit is merged into the cache file as it is then:
 ## entries this session did not restore stay as they are on disk.
 
-import std/[unittest, json, options, os, strutils, tables]
+import std/[unittest, json, options, os, sequtils, strutils, tables]
 
 import pkg/results
 
@@ -47,10 +47,10 @@ proc writeTestFile(name: string): string =
   result = cacheHome / name
   writeFile(result, "a\nb\nc\nd\n")
 
-proc savedBookmarks(): Table[string, seq[int]] =
+proc savedBookmarks(): OrderedTable[string, seq[int]] =
   let loaded = loadBookmarks()
   check loaded.isOk
-  loaded.valueOr(initTable[string, seq[int]]())
+  loaded.valueOr(initOrderedTable[string, seq[int]]())
 
 suite "bookmark persistence":
   setup:
@@ -635,6 +635,168 @@ suite "cursor position persistence":
     check e.editFile(path).isOk
 
     check e.cursorIs(3, 2)
+
+proc savedOrder(): seq[string] =
+  let loaded = loadCursorPositions()
+  check loaded.isOk
+  loaded.valueOr(initOrderedTable[string, CursorPositionEntry]()).keys.toSeq
+
+suite "per-file records in the order files were last shown":
+  setup:
+    removeDir(cacheHome)
+    createDir(cacheHome)
+
+  teardown:
+    removeDir(cacheHome)
+
+  test "A file shown without moving the cursor comes first":
+    let first = writeLines("used_first.txt")
+    let second = writeLines("used_second.txt")
+    saveCursor(first, 1, 0)
+    saveCursor(second, 2, 0)
+    check savedOrder() == @[second, first]
+    let e = cursorEditor()
+    check e.editFile(first).isOk
+
+    e.savePersistData()
+
+    check savedOrder() == @[first, second]
+    check savedCursor(first) == CursorPositionEntry(line: 1, column: 0)
+
+  test "A file without a record is recorded where it opened":
+    let known = writeLines("known.txt")
+    let fresh = writeLines("fresh.txt")
+    saveCursor(known, 1, 0)
+    let e = cursorEditor()
+    check e.editFile(fresh).isOk
+
+    e.savePersistData()
+
+    check savedOrder() == @[fresh, known]
+    check savedCursor(fresh) == CursorPositionEntry(line: 0, column: 0)
+
+  test "The file shown last comes first":
+    let a = writeLines("last_a.txt")
+    let b = writeLines("last_b.txt")
+    let e = cursorEditor()
+    check e.editFile(a).isOk
+    check e.editFile(b).isOk
+    check e.editFile(a).isOk
+
+    e.savePersistData()
+
+    check savedOrder() == @[a, b]
+
+  test "A split shows its file":
+    let first = writeLines("split_first.txt")
+    let second = writeLines("split_second.txt")
+    let e = cursorEditor()
+    check e.editFile(first).isOk
+    check e.vsplit(some(second)).isOk
+
+    e.savePersistData()
+
+    check savedOrder() == @[second, first]
+
+  test "A file read but never shown keeps its place":
+    let first = writeLines("place_first.txt")
+    let second = writeLines("place_second.txt")
+    saveCursor(second, 2, 0)
+    saveCursor(first, 1, 0)
+    let before = readFile(getCursorPositionsPath().get.string)
+    let e = cursorEditor()
+    check e.openFileInBackground(second).isOk
+
+    e.savePersistData()
+
+    check readFile(getCursorPositionsPath().get.string) == before
+
+  test "Bookmarks are saved in the order files were shown":
+    let first = writeLines("bm_first.txt")
+    let second = writeLines("bm_second.txt")
+    check updateBookmarks({first: @[1]}.toTable).isOk
+    check updateBookmarks({second: @[2]}.toTable).isOk
+    let e = createTestEditor()
+    check e.editFile(first).isOk
+
+    e.savePersistData()
+
+    check savedBookmarks().keys.toSeq == @[first, second]
+
+  test "A file renamed by :saveas keeps its place":
+    let other = writeLines("rename_other.txt")
+    let former = writeLines("rename_former.txt")
+    let renamed = cacheHome / "rename_new.txt"
+    let e = cursorEditor()
+    check e.editFile(former).isOk
+    check e.editFile(other).isOk
+    let buf = e.buffers.filterIt(it.filePath == some(former))[0]
+
+    check e.saveFile(buf, some(renamed), saveAs = true).isOk
+    e.savePersistData()
+
+    check savedOrder() == @[other, renamed]
+
+  test "A buffer without a name keeps its place when written":
+    let first = writeLines("noname_first.txt")
+    let last = writeLines("noname_last.txt")
+    let named = cacheHome / "noname_named.txt"
+    let e = cursorEditor()
+    check e.editFile(first).isOk
+    check e.enew().isOk
+    let buf = e.activeBuffer
+    check e.editFile(last).isOk
+
+    check e.saveFile(buf, some(named)).isOk
+    e.savePersistData()
+
+    check savedOrder() == @[last, named, first]
+
+  test "A deleted buffer keeps its place":
+    let first = writeLines("deleted_first.txt")
+    let deleted = writeLines("deleted_middle.txt")
+    let last = writeLines("deleted_last.txt")
+    let e = cursorEditor()
+    check e.editFile(first).isOk
+    check e.editFile(deleted).isOk
+    check e.editFile(last).isOk
+    let buf = e.buffers.filterIt(it.filePath == some(deleted))[0]
+
+    check e.deleteBufferById(buf.id).isOk
+    e.savePersistData()
+
+    check savedOrder() == @[last, deleted, first]
+
+  test "A more recent use of the name taken keeps its place":
+    let former = writeLines("taken_former.txt")
+    let between = writeLines("taken_between.txt")
+    let taken = writeLines("taken.txt")
+    let last = writeLines("taken_last.txt")
+    let e = cursorEditor()
+    check e.editFile(former).isOk
+    check e.editFile(between).isOk
+    check e.editFile(taken).isOk
+    check e.editFile(last).isOk
+    let takenBuf = e.buffers.filterIt(it.filePath == some(taken))[0]
+    check e.deleteBufferById(takenBuf.id).isOk
+    let buf = e.buffers.filterIt(it.filePath == some(former))[0]
+
+    check e.saveFile(buf, some(taken), force = true, saveAs = true).isOk
+    e.savePersistData()
+
+    check savedOrder() == @[last, taken, between]
+
+  test "A renamed file drops the bookmarks of the file it replaced":
+    let source = writeTestFile("replace_source.txt")
+    let target = writeTestFile("replace_target.txt")
+    check updateBookmarks({target: @[2]}.toTable).isOk
+    let e = createTestEditor()
+    check e.editFile(source).isOk
+
+    check e.saveFile(e.activeBuffer, some(target), force = true, saveAs = true).isOk
+    e.savePersistData()
+
+    check target notin savedBookmarks()
 
 proc createSearchTestEditor(): Editor =
   ## An editor that persists the search state, as the application runs.
