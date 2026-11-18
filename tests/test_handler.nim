@@ -6502,6 +6502,22 @@ suite "The search prompt and the command line end as Vim's getcmdline":
       check not e.state.isCommandOverlay
       check e.buffers.len == count - 1
 
+  test "A number typed after a :bd completion deletes that buffer":
+    let e = createEditorForPrompt("abcdef")
+    e.addBuffer(e.activeBuffer)
+    let other = newTextBuffer("other")
+    e.addBuffer(other)
+    let count = e.buffers.len
+    e.press(keys(":bd"))
+    e.press(@["Tab"])
+    e.press(keys("\r"))
+
+    e.press(keys($other.id.int & "\r"))
+
+    check not e.state.isCommandOverlay
+    check e.buffers.len == count - 1
+    check other notin e.buffers
+
   test "Ctrl-H erases as Backspace does":
     for incsearch in [false, true]:
       for by in By:
