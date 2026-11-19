@@ -109,12 +109,12 @@ type
     of sokInt:
       intOption*: IntSettingOption
       intBound*: IntBound
-      intExample*: int ## Used in `requires a value (e.g., X=N)` messages
+      intExample*: int ## Shown in help and completion as `X=N`
     of sokFloat:
       floatOption*: FloatSettingOption
       floatExample*: float
         ## All current float options use `>= 0` with `must be non-negative`,
-        ## so no bound variant is needed. Used in error message example.
+        ## so no bound variant is needed. Shown in help and completion.
 
 const SetOptionTable*: seq[SetOptionSpec] = @[
   SetOptionSpec(
@@ -411,3 +411,27 @@ proc intBoundOk*(bound: IntBound, value: int): bool =
     value > 0
   of ibNonNegative:
     value >= 0
+
+template optionNames(Option: typedesc, optionKind: SetOptionKind, field): untyped =
+  block:
+    var names: array[Option, string]
+    for spec in SetOptionTable:
+      if spec.kind == optionKind:
+        names[spec.field] = spec.longName
+    for option, name in names:
+      doAssert name.len > 0, "SetOptionTable has no entry for " & $option
+    names
+
+const
+  boolOptionNames = optionNames(BoolSettingOption, sokBool, boolOption)
+  intOptionNames = optionNames(IntSettingOption, sokInt, intOption)
+  floatOptionNames = optionNames(FloatSettingOption, sokFloat, floatOption)
+
+proc longName*(option: BoolSettingOption): string =
+  boolOptionNames[option]
+
+proc longName*(option: IntSettingOption): string =
+  intOptionNames[option]
+
+proc longName*(option: FloatSettingOption): string =
+  floatOptionNames[option]

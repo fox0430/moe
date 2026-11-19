@@ -24,139 +24,168 @@ import ../[editor, setting_options, types]
 
 import handler_result
 
+proc boolOptionValue(e: Editor, option: BoolSettingOption): bool =
+  case option
+  of bsoNumber: e.config.standard.number
+  of bsoRelativeNumber: e.config.standard.relativeNumber
+  of bsoCursorLine: e.config.highlight.currentLine
+  of bsoCursorColumn: e.config.highlight.currentColumn
+  of bsoStatusLine: e.config.standard.statusLine
+  of bsoSyntax: e.config.standard.syntax
+  of bsoIndentationLines: e.config.standard.indentationLines
+  of bsoAutoIndent: e.config.standard.autoIndent
+  of bsoAutoCloseParen: e.config.standard.autoCloseParen
+  of bsoAutoDeleteParen: e.config.standard.autoDeleteParen
+  of bsoClipboard: e.config.clipboard.enable
+  of bsoSmoothScroll: e.config.smoothScroll.enable
+  of bsoLiveReloadOfConf: e.config.standard.liveReloadOfConf
+  of bsoShowIcons: e.config.filer.showIcons
+  of bsoHighlightCurrentLine: e.config.highlight.currentLine
+  of bsoHighlightCurrentWord: e.config.highlight.currentWord
+  of bsoHighlightFullWidthSpace: e.config.highlight.fullWidthSpace
+  of bsoHighlightPairOfParen: e.config.highlight.pairOfParen
+  of bsoHighlightFindChar: e.config.highlight.findCharHighlight
+  of bsoHighlightColorCode: e.config.highlight.colorCodeHighlight
+  of bsoHighlightGitConflict: e.config.highlight.gitConflict
+  of bsoHighlightGitConflictTwoColor: e.config.highlight.gitConflictTwoColor
+  of bsoMultipleStatusLine: e.config.statusLine.multipleStatusLine
+  of bsoIgnoreCase: e.state.ignorecase
+  of bsoSmartCase: e.state.smartcase
+  of bsoIncSearch: e.state.incsearch
+  of bsoHlSearch: e.state.input.search.hlsearch
+  of bsoBuildOnSave: e.config.buildOnSave.enable
+  of bsoShowGitInactive: e.config.statusLine.showGitInactive
+  of bsoLineWrap: e.config.standard.lineWrap
+  of bsoExpandTab: e.state.expandTab
+  of bsoScrollbar: e.config.standard.scrollbar
+
+proc setBoolOption(e: Editor, option: BoolSettingOption, value: bool) =
+  case option
+  of bsoNumber:
+    e.config.standard.number = value
+  of bsoRelativeNumber:
+    e.config.standard.relativeNumber = value
+  of bsoCursorLine:
+    e.config.highlight.currentLine = value
+  of bsoCursorColumn:
+    e.config.highlight.currentColumn = value
+  of bsoStatusLine:
+    e.config.standard.statusLine = value
+  of bsoSyntax:
+    e.config.standard.syntax = value
+  of bsoIndentationLines:
+    e.config.standard.indentationLines = value
+  of bsoAutoIndent:
+    e.config.standard.autoIndent = value
+  of bsoAutoCloseParen:
+    e.config.standard.autoCloseParen = value
+  of bsoAutoDeleteParen:
+    e.config.standard.autoDeleteParen = value
+  of bsoClipboard:
+    e.config.clipboard.enable = value
+  of bsoSmoothScroll:
+    e.config.smoothScroll.enable = value
+  of bsoLiveReloadOfConf:
+    e.config.standard.liveReloadOfConf = value
+  of bsoShowIcons:
+    e.config.filer.showIcons = value
+  of bsoHighlightCurrentLine:
+    e.config.highlight.currentLine = value
+  of bsoHighlightCurrentWord:
+    e.config.highlight.currentWord = value
+  of bsoHighlightFullWidthSpace:
+    e.config.highlight.fullWidthSpace = value
+  of bsoHighlightPairOfParen:
+    e.config.highlight.pairOfParen = value
+  of bsoHighlightFindChar:
+    e.config.highlight.findCharHighlight = value
+  of bsoHighlightColorCode:
+    e.config.highlight.colorCodeHighlight = value
+  of bsoHighlightGitConflict:
+    e.config.highlight.gitConflict = value
+  of bsoHighlightGitConflictTwoColor:
+    e.config.highlight.gitConflictTwoColor = value
+  of bsoMultipleStatusLine:
+    e.config.statusLine.multipleStatusLine = value
+  of bsoIgnoreCase:
+    e.state.ignorecase = value
+  of bsoSmartCase:
+    e.state.smartcase = value
+  of bsoIncSearch:
+    e.state.incsearch = value
+  of bsoHlSearch:
+    e.state.input.search.hlsearch = value
+    e.state.showSearchMatches()
+  of bsoBuildOnSave:
+    e.config.buildOnSave.enable = value
+  of bsoShowGitInactive:
+    e.config.statusLine.showGitInactive = value
+  of bsoLineWrap:
+    e.config.standard.lineWrap = value
+  of bsoExpandTab:
+    e.state.expandTab = value
+  of bsoScrollbar:
+    e.config.standard.scrollbar = value
+
+proc intOptionValue(e: Editor, option: IntSettingOption): int =
+  case option
+  of isoTabStop: e.state.tabStop
+  of isoShiftWidth: e.state.shiftWidth
+  of isoSoftTabStop: e.config.standard.softTabStop
+  of isoScrollbarWidth: e.config.standard.scrollbarWidth
+
+proc setIntOption(e: Editor, option: IntSettingOption, value: int) =
+  case option
+  of isoTabStop:
+    e.state.tabStop = value
+  of isoShiftWidth:
+    e.state.shiftWidth = value
+  of isoSoftTabStop:
+    e.config.standard.softTabStop = value
+  of isoScrollbarWidth:
+    e.config.standard.scrollbarWidth = value
+
+proc floatOptionValue(e: Editor, option: FloatSettingOption): float =
+  case option
+  of fsoScrollFriction: e.config.smoothScroll.friction
+  of fsoScrollAirDrag: e.config.smoothScroll.airDrag
+
+proc setFloatOption(e: Editor, option: FloatSettingOption, value: float) =
+  case option
+  of fsoScrollFriction:
+    e.config.smoothScroll.friction = value
+  of fsoScrollAirDrag:
+    e.config.smoothScroll.airDrag = value
+
+proc shownValue(e: Editor, spec: SetOptionSpec): string =
+  ## Vim's `:set X?` wording: `  number`, `nonumber`, `  tabstop=4`.
+  case spec.kind
+  of sokBool:
+    (if e.boolOptionValue(spec.boolOption): "  " else: "no") & spec.longName
+  of sokInt:
+    "  " & spec.longName & "=" & $e.intOptionValue(spec.intOption)
+  of sokFloat:
+    "  " & spec.longName & "=" & $e.floatOptionValue(spec.floatOption)
+
 proc processSetOptionResult*(e: Editor, r: HandlerResult): bool =
-  ## Apply hrSetBoolOption / hrSetIntOption / hrSetFloatOption.
-  ## Returns true to continue.
+  ## Apply hrSetBoolOption / hrSetIntOption / hrSetFloatOption /
+  ## hrToggleBoolOption / hrShowOption. Returns true to continue.
   case r.kind
   of hrSetBoolOption:
-    let opt = r.boolOption
-    let val = r.boolValue
-    case opt
-    of bsoNumber:
-      e.config.standard.number = val
-      e.state.statusMessage = "number = " & $val
-    of bsoRelativeNumber:
-      e.config.standard.relativeNumber = val
-      e.state.statusMessage = "relativenumber = " & $val
-    of bsoCursorLine:
-      e.config.highlight.currentLine = val
-      e.state.statusMessage = "cursorline = " & $val
-    of bsoCursorColumn:
-      e.config.highlight.currentColumn = val
-      e.state.statusMessage = "cursorcolumn = " & $val
-    of bsoStatusLine:
-      e.config.standard.statusLine = val
-      e.state.statusMessage = "statusline = " & $val
-    of bsoSyntax:
-      e.config.standard.syntax = val
-      e.state.statusMessage = "syntax = " & $val
-    of bsoIndentationLines:
-      e.config.standard.indentationLines = val
-      e.state.statusMessage = "indentationlines = " & $val
-    of bsoAutoIndent:
-      e.config.standard.autoIndent = val
-      e.state.statusMessage = "autoindent = " & $val
-    of bsoAutoCloseParen:
-      e.config.standard.autoCloseParen = val
-      e.state.statusMessage = "autocloseparen = " & $val
-    of bsoAutoDeleteParen:
-      e.config.standard.autoDeleteParen = val
-      e.state.statusMessage = "autodeleteparen = " & $val
-    of bsoClipboard:
-      e.config.clipboard.enable = val
-      e.state.statusMessage = "clipboard = " & $val
-    of bsoSmoothScroll:
-      e.config.smoothScroll.enable = val
-      e.state.statusMessage = "smoothscroll = " & $val
-    of bsoLiveReloadOfConf:
-      e.config.standard.liveReloadOfConf = val
-      e.state.statusMessage = "livereload = " & $val
-    of bsoShowIcons:
-      e.config.filer.showIcons = val
-      e.state.statusMessage = "icon = " & $val
-    of bsoHighlightCurrentLine:
-      e.config.highlight.currentLine = val
-      e.state.statusMessage = "highlightcurrentline = " & $val
-    of bsoHighlightCurrentWord:
-      e.config.highlight.currentWord = val
-      e.state.statusMessage = "highlightcurrentword = " & $val
-    of bsoHighlightFullWidthSpace:
-      e.config.highlight.fullWidthSpace = val
-      e.state.statusMessage = "highlightfullspace = " & $val
-    of bsoHighlightPairOfParen:
-      e.config.highlight.pairOfParen = val
-      e.state.statusMessage = "highlightparen = " & $val
-    of bsoHighlightFindChar:
-      e.config.highlight.findCharHighlight = val
-      e.state.statusMessage = "highlightfindchar = " & $val
-    of bsoHighlightColorCode:
-      e.config.highlight.colorCodeHighlight = val
-      e.state.statusMessage = "highlightcolorcode = " & $val
-    of bsoHighlightGitConflict:
-      e.config.highlight.gitConflict = val
-      e.state.statusMessage = "highlightgitconflict = " & $val
-    of bsoHighlightGitConflictTwoColor:
-      e.config.highlight.gitConflictTwoColor = val
-      e.state.statusMessage = "highlightgitconflicttwocolor = " & $val
-    of bsoMultipleStatusLine:
-      e.config.statusLine.multipleStatusLine = val
-      e.state.statusMessage = "multiplestatusline = " & $val
-    of bsoIgnoreCase:
-      e.state.ignorecase = val
-      e.state.statusMessage = "ignorecase = " & $val
-    of bsoSmartCase:
-      e.state.smartcase = val
-      e.state.statusMessage = "smartcase = " & $val
-    of bsoIncSearch:
-      e.state.incsearch = val
-      e.state.statusMessage = "incsearch = " & $val
-    of bsoHlSearch:
-      e.state.input.search.hlsearch = val
-      e.state.showSearchMatches()
-      e.state.statusMessage = "hlsearch = " & $val
-    of bsoBuildOnSave:
-      e.config.buildOnSave.enable = val
-      e.state.statusMessage = "buildonsave = " & $val
-    of bsoShowGitInactive:
-      e.config.statusLine.showGitInactive = val
-      e.state.statusMessage = "showgitinactive = " & $val
-    of bsoLineWrap:
-      e.config.standard.lineWrap = val
-      e.state.statusMessage = "wrap = " & $val
-    of bsoExpandTab:
-      e.state.expandTab = val
-      e.state.statusMessage = "expandtab = " & $e.state.expandTab
-    of bsoScrollbar:
-      e.config.standard.scrollbar = val
-      e.state.statusMessage = "scrollbar = " & $val
-    return true
+    e.setBoolOption(r.boolOption, r.boolValue)
+    e.state.statusMessage = r.boolOption.longName & " = " & $r.boolValue
+  of hrToggleBoolOption:
+    let value = not e.boolOptionValue(r.toggledOption)
+    e.setBoolOption(r.toggledOption, value)
+    e.state.statusMessage = r.toggledOption.longName & " = " & $value
   of hrSetIntOption:
-    let opt = r.intOption
-    let val = r.intValue
-    case opt
-    of isoTabStop:
-      e.state.tabStop = val
-      e.state.statusMessage = "tabstop = " & $e.state.tabStop
-    of isoShiftWidth:
-      e.state.shiftWidth = val
-      e.state.statusMessage = "shiftwidth = " & $e.state.shiftWidth
-    of isoSoftTabStop:
-      e.config.standard.softTabStop = val
-      e.state.statusMessage = "softtabstop = " & $val
-    of isoScrollbarWidth:
-      e.config.standard.scrollbarWidth = val
-      e.state.statusMessage = "scrollbarwidth = " & $val
-    return true
+    e.setIntOption(r.intOption, r.intValue)
+    e.state.statusMessage = r.intOption.longName & " = " & $r.intValue
   of hrSetFloatOption:
-    let opt = r.floatOption
-    let val = r.floatValue
-    case opt
-    of fsoScrollFriction:
-      e.config.smoothScroll.friction = val
-      e.state.statusMessage = "scrollfriction = " & $val
-    of fsoScrollAirDrag:
-      e.config.smoothScroll.airDrag = val
-      e.state.statusMessage = "scrollairdrag = " & $val
-    return true
+    e.setFloatOption(r.floatOption, r.floatValue)
+    e.state.statusMessage = r.floatOption.longName & " = " & $r.floatValue
+  of hrShowOption:
+    e.state.statusMessage = e.shownValue(r.shownOption)
   else:
-    return true # Not a set-option kind; caller misrouted (defensive)
+    discard # Not a set-option kind; caller misrouted (defensive)
+  true

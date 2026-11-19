@@ -852,6 +852,8 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `%s/keyword1/keyword2/` | Replace regex matches as `/` finds them (PCRE style: `(...)` is a group, which `\1` puts back, and Vim's `\(` is a literal `(`), case as in a search or by flag `i`/`I` (normal mode only); a :s that can run makes keyword1 the last search, and an empty keyword1 reuses that search as it matched (a regex after `/`, whole words after `*`), also from the previous session (E35 without one); `\r` in keyword2 breaks the line and `\n` puts a NUL, as in Vim; the cursor lands on the last line changed; flag `n` only counts the matches, `e` makes finding nothing no error, and `c` is refused |
 | `%d` | Delete all lines and copy to register |
 | `1,10d` | Delete lines in range and copy to register; either side may be an address, e.g. `:.,$d` |
+| `set {option}!` or `set inv{option}` | Toggle a boolean option |
+| `set {option}?` | Show an option's value, as `set {option}` alone does for a value option |
 | `set number` or `set nonumber` | Show/hide line numbers (alias: `nu`, `nonu`) |
 | `set relativenumber` or `set norelativenumber` | Show/hide relative line numbers (alias: `rnu`, `nornu`) |
 | `set cursorline` or `set nocursorline` | Highlight the current line (alias: `cul`, `nocul`) |

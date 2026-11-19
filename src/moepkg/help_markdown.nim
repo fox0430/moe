@@ -233,6 +233,9 @@ proc renderSetOptionRows(): string =
   ## Render the `:set xxx` rows that appear inside the Command mode table.
   ## Bool options first, then int/float (value) options — same ordering as
   ## `help_generator.renderSetOptionsSection`.
+  for form in SetOptionForms:
+    result.add "| `" & form.syntax.replace(" / ", "` or `") & "` | " &
+      toMarkdownCell(form.description) & " |\n"
   for spec in SetOptionTable:
     if spec.kind != sokBool:
       continue

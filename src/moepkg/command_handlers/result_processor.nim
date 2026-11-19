@@ -248,7 +248,7 @@ proc processResultWithHost(
   of hrSaveAll:
     e.processSaveAllResult(r)
     return true # Unified: ops-moved kinds keep their own status message
-  of hrSetBoolOption, hrSetIntOption, hrSetFloatOption:
+  of hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrToggleBoolOption, hrShowOption:
     return e.processSetOptionResult(r)
   of hrUndo, hrRedo:
     return e.processHistoryResult(r, activeBuffer)

@@ -974,6 +974,17 @@ const DebugModeCommands*: HelpGroup = HelpGroup(
 const ExitingHelpNames =
   @["w", "q", "wq", "x", "q!", "qa", "qa!", "wqa", "wqa!", "w!", "wq!", "x!", "cq"]
 
+const SetOptionForms*: seq[HelpEntry] = @[
+  HelpEntry(
+    syntax: "set {option}! / set inv{option}", description: "Toggle a boolean option"
+  ),
+  HelpEntry(
+    syntax: "set {option}?",
+    description:
+      "Show an option's value, as `set {option}` alone does for a value option",
+  ),
+]
+
 proc boolSetHead(spec: SetOptionSpec): string =
   result = "set " & spec.longName & " / set no" & spec.longName
   if spec.shortName.len > 0:
@@ -1182,15 +1193,20 @@ proc renderCommandModeTail*(): seq[HelpLine] {.compileTime.} =
     result.add renderEntries(entries)
 
 proc renderSetOptionsSection*(): seq[HelpLine] {.compileTime.} =
-  ## The `set X / set noX (sx/nosx) - desc` block, followed by
-  ## `set X=number (sx) - desc; e.g. set X=N` value options. Both blocks
-  ## are driven by the canonical `SetOptionTable` from `setting_options`.
+  ## The `set X! / set X?` forms and the `set X / set noX (sx/nosx) - desc`
+  ## block, followed by `set X=number (sx) - desc; e.g. set X=N` value
+  ## options. The option rows are driven by the canonical `SetOptionTable`
+  ## from `setting_options`.
   var width = 0
+  for form in SetOptionForms:
+    width = max(width, form.syntax.len)
   for spec in SetOptionTable:
     if spec.kind == sokBool:
       let h = boolSetHead(spec)
       if h.len > width:
         width = h.len
+  for form in SetOptionForms:
+    result.add entryLine(0, form.syntax, width, toPlainText(form.description))
   for spec in SetOptionTable:
     if spec.kind != sokBool:
       continue
