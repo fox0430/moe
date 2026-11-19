@@ -193,6 +193,7 @@ type
     of claSet:
       option*: string
       value*: Option[string]
+      valueAfterSpace*: bool # `:set syntax off` rather than `:set syntax=off`
     of claSubstitute:
       pattern*: string
       match*: SearchMatch # smRegex for a typed pattern, the last search's for none
