@@ -149,6 +149,7 @@ type
     hrChanges # Show change list (:changes)
     hrVersion # Show version information (:version)
     hrChangeDir # Change the current directory (:cd)
+    hrPrintWorkingDir # Show the current directory (:pwd)
     hrConflictNext # Jump to next git conflict block (:conflictnext)
     hrConflictPrev # Jump to previous git conflict block (:conflictprev)
     hrBuild # Build current buffer (:build)
@@ -387,6 +388,8 @@ type
       discard
     of hrChangeDir:
       changeDirPath*: Option[string]
+    of hrPrintWorkingDir:
+      discard
     of hrConflictNext:
       discard
     of hrConflictPrev:
@@ -550,33 +553,33 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
     hrgExitToNewMode
   of hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrNew, hrVnew, hrEdit,
       hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
-      hrVersion, hrChangeDir, hrShellCommand, hrMan, hrBackground, hrSave, hrSaveAll,
-      hrSaveAndQuit, hrSaveAllAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst,
-      hrBufferLast, hrBufferNextTab, hrBufferPrevTab, hrBuffer, hrBufferDelete,
-      hrStripWhitespace, hrOnlyWindow, hrEnterFileTree, hrJumpToBuffer, hrFilerOpenFile,
-      hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile, hrFilerShowInfo,
-      hrFilerQuit, hrLogViewerRefresh, hrHelpViewerQuit, hrReferencesQuit,
-      hrReferencesJumpTo, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
-      hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
-      hrCallHierarchyRequestOutgoing, hrBufferManagerSelectBuffer,
-      hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrBookmarkManagerJump,
-      hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrBackupManagerRestore,
-      hrBackupManagerDelete, hrBackupManagerOpenDiff, hrBackupManagerRefresh,
-      hrBackupManagerQuit, hrRecoveryManagerRestore, hrRecoveryManagerToggleReviewed,
-      hrRecoveryManagerDiscard, hrRecoveryManagerRefresh, hrRecoveryManagerQuit,
-      hrDiffViewerQuit, hrDiffViewerToggleView, hrDiffViewerToggleWord,
-      hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
-      hrMoveWindowLeft, hrMoveWindowDown, hrMoveWindowUp, hrMoveWindowRight,
-      hrMaximizeWindowHeight, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
-      hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow,
-      hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
-      hrLspDocumentSymbol, hrLspCodeLensExecute, hrLspTypeDefinition,
-      hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
-      hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig, hrDebugViewerQuit,
-      hrLogViewerQuit, hrTerminalQuit, hrExecCommand, hrFileTreeOpenFile,
-      hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrRepeatInsert, hrMapAdd, hrMapRemove,
-      hrMapClear, hrMapList, hrUndo, hrRedo, hrJumpList, hrChanges, hrJobs,
-      hrPickerEnter, hrPickerOpen:
+      hrVersion, hrChangeDir, hrPrintWorkingDir, hrShellCommand, hrMan, hrBackground,
+      hrSave, hrSaveAll, hrSaveAndQuit, hrSaveAllAndQuit, hrBufferNext, hrBufferPrev,
+      hrBufferFirst, hrBufferLast, hrBufferNextTab, hrBufferPrevTab, hrBuffer,
+      hrBufferDelete, hrStripWhitespace, hrOnlyWindow, hrEnterFileTree, hrJumpToBuffer,
+      hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile,
+      hrFilerShowInfo, hrFilerQuit, hrLogViewerRefresh, hrHelpViewerQuit,
+      hrReferencesQuit, hrReferencesJumpTo, hrDocumentSymbolQuit,
+      hrDocumentSymbolJumpTo, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
+      hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
+      hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
+      hrBookmarkManagerJump, hrBookmarkManagerDelete, hrBookmarkManagerQuit,
+      hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
+      hrBackupManagerRefresh, hrBackupManagerQuit, hrRecoveryManagerRestore,
+      hrRecoveryManagerToggleReviewed, hrRecoveryManagerDiscard,
+      hrRecoveryManagerRefresh, hrRecoveryManagerQuit, hrDiffViewerQuit,
+      hrDiffViewerToggleView, hrDiffViewerToggleWord, hrRecentFileOpenFile,
+      hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown,
+      hrMoveWindowUp, hrMoveWindowRight, hrMaximizeWindowHeight, hrIncreaseWindowHeight,
+      hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
+      hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition, hrLspGotoDeclaration,
+      hrLspFindReferences, hrLspDocumentSymbol, hrLspCodeLensExecute,
+      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
+      hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig,
+      hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit, hrExecCommand,
+      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrRepeatInsert,
+      hrMapAdd, hrMapRemove, hrMapClear, hrMapList, hrUndo, hrRedo, hrJumpList,
+      hrChanges, hrJobs, hrPickerEnter, hrPickerOpen:
     hrgExitAndResync
 
 proc group*(r: HandlerResult): HandlerResultGroup =

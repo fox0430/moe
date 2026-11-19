@@ -306,6 +306,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claBookmarks)
   of claVersion:
     return CommandLineResult(kind: claVersion)
+  of claPrintWorkingDir:
+    return CommandLineResult(kind: claPrintWorkingDir)
   of claConflictNext:
     return CommandLineResult(kind: claConflictNext)
   of claConflictPrev:

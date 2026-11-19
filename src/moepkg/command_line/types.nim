@@ -63,6 +63,7 @@ type
     claStripWhitespace # :stripwhitespace, :stripws (remove trailing whitespace)
     claFiler # :filer (open file explorer)
     claChangeDir # :cd (change the current directory)
+    claPrintWorkingDir # :pwd (show the current directory)
     claLogViewer # :log (open log viewer)
     claJobs # :jobs (list running external commands), :jobs! (stop them)
     claQuickRun # :run (quick run)
@@ -227,6 +228,8 @@ type
       filerPath*: Option[string] # Optional path to open in filer
     of claChangeDir:
       changeDirPath*: Option[string] # None for the home directory
+    of claPrintWorkingDir:
+      discard
     of claLogViewer:
       discard
     of claJobs:
@@ -369,9 +372,9 @@ const NoArgumentActions* = {
   claVnew, claBufferNext, claBufferPrev, claBufferFirst, claBufferLast,
   claStripWhitespace, claLogViewer, claJobs, claQuickRun, claBufferManager,
   claBackupManager, claRecoveryManager, claRecentFile, claClearSearchHighlight,
-  claBackground, claJumpList, claChanges, claBookmarks, claVersion, claConflictNext,
-  claConflictPrev, claBuild, claDebug, claConfig, claPutConfigFile, claLspLog,
-  claLspFormat, claLspRestart, claLspFold, claLspCallHierarchyIncoming,
+  claBackground, claJumpList, claChanges, claBookmarks, claVersion, claPrintWorkingDir,
+  claConflictNext, claConflictPrev, claBuild, claDebug, claConfig, claPutConfigFile,
+  claLspLog, claLspFormat, claLspRestart, claLspFold, claLspCallHierarchyIncoming,
   claLspCallHierarchyOutgoing, claMapclear, claNmapclear, claImapclear, claVmapclear,
   claRmapclear, claCmapclear, claOnlyWindow, claEditConfigFile, claCquit,
 }

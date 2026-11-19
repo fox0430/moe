@@ -765,6 +765,8 @@ proc handleCommandModeInput*(
     handler.executeFiler(cmdResult.filerPath)
   of claChangeDir:
     HandlerResult(kind: hrChangeDir, changeDirPath: cmdResult.changeDirPath)
+  of claPrintWorkingDir:
+    HandlerResult(kind: hrPrintWorkingDir)
   of claLogViewer:
     HandlerResult(kind: hrEnterLogViewer)
   of claJobs:
