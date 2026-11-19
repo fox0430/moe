@@ -2379,6 +2379,19 @@ suite "Editor - BufferManager delete keeps state.windowDisplay.currentBufferId f
     check e.bufferById(f1Id).isNone
     check e.state.windowDisplay.currentBufferId == f2Id # unchanged
 
+  test "refusing to delete the last buffer fails the command":
+    let e = createTestEditor()
+    require e.buffers.len == 1
+    let onlyId = e.buffers[0].id
+    let beeps = e.state.beepCount
+
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: onlyId)
+    discard e.processResult(r, e.activeBuffer())
+
+    check e.bufferById(onlyId).isSome
+    check e.state.statusMessage == "Cannot delete the last buffer"
+    check e.state.beepCount == beeps + 1
+
 suite "Editor - BufferManager delete refuses a modified buffer":
   test "D keeps a buffer with unsaved changes as :bd does":
     let e = createTestEditor()
@@ -2402,7 +2415,8 @@ suite "Editor - BufferManager delete refuses a modified buffer":
 
     check e.bufferById(f1Buf.id).isSome
     check e.buffers.len == bufferCount
-    check e.state.statusMessage == "No write since last change (add ! to override)"
+    check e.state.statusMessage ==
+      "No write since last change (use :bd! " & $f1Buf.id.int & " to override)"
 
   test "the list keeps the refused entry":
     let e = createTestEditor()

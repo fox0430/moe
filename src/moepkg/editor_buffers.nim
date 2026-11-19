@@ -578,14 +578,27 @@ proc isTerminalBuffer*(e: Editor, id: BufferId): bool =
   else:
     id in e.terminalStates
 
-proc closeBuffer*(e: Editor, id: BufferId): Result[(), string] =
+proc isJobRunning*(e: Editor, id: BufferId): bool =
+  ## Whether `id` names a Terminal session whose job has not ended.
+  when defined(moe.embedded):
+    false
+  else:
+    let session = e.terminalStates.getOrDefault(id)
+    session != nil and session.exitCode.isNone
+
+proc closeBuffer*(e: Editor, id: BufferId, force = false): Result[(), string] =
   ## Close a buffer by stable id while preserving editor lifecycle invariants.
-  ## Modified buffers are rejected; terminal buffers use terminal teardown.
+  ## Modified buffers and running Terminal jobs are rejected, as Vim's `:bd`
+  ## does, unless `force` discards the changes or ends the job as `:bd!`. A
+  ## Terminal session uses terminal teardown.
   let buffer = e.bufferById(id)
   if buffer.isNone:
     return err("Buffer does not exist")
-  if not e.isTerminalBuffer(id) and buffer.get.isModified:
-    return err("No write since last change (add ! to override)")
+  if not force:
+    if e.isJobRunning(id):
+      return err("Job still running (add ! to end the job)")
+    if not e.isTerminalBuffer(id) and buffer.get.isModified:
+      return err("No write since last change (add ! to override)")
   e.deleteBufferById(id)
 
 proc deleteBufferByArg*(
@@ -593,14 +606,13 @@ proc deleteBufferByArg*(
 ): Result[(), string] =
   ## Delete a buffer named by a `:b`-style argument: a stable number as shown
   ## by `:ls`, or the best name match (`:bd N`, `:bd name`). `force` skips the
-  ## modified check as `:bd!` does. Refusals come back as `err`, not a status
-  ## message, so an embedding caller can tell a refusal from a deletion.
+  ## modified and running-job checks as `:bd!` does. Refusals come back as
+  ## `err`, not a status message, so an embedding caller can tell a refusal
+  ## from a deletion.
   let resolved = e.resolveBufferArg(arg)
   if resolved.isErr:
     return err(resolved.error)
-  if force:
-    return e.deleteBufferById(resolved.get)
-  e.closeBuffer(resolved.get)
+  e.closeBuffer(resolved.get, force)
 
 proc moveBuffer*(e: Editor, id: BufferId, destination: Natural): bool =
   ## Move a buffer to a zero-based position in the active window's ordering.
@@ -632,7 +644,8 @@ proc deleteCurrentBuffer*(e: Editor, force: bool = false): Result[(), string] =
   ## `[No Name]` buffer takes its place.
   ##
   ## The target is the window's tab, not `activeBuffer()` — they differ in
-  ## Terminal-Normal. `force` skips the modified check as `:bd!` does.
+  ## Terminal-Normal. `force` skips the modified and running-job checks as
+  ## `:bd!` does.
   ##
   ## Refusals come back as `err`, not a status message, so an embedding caller
   ## can tell a refusal from a deletion.
@@ -643,10 +656,7 @@ proc deleteCurrentBuffer*(e: Editor, force: bool = false): Result[(), string] =
   if win.isSidebar:
     e.closeFileTree()
     return ok(())
-  let target = e.tabBuffer(win)
-  if force:
-    return e.deleteBufferById(target.id)
-  e.closeBuffer(target.id)
+  e.closeBuffer(e.tabBuffer(win).id, force)
 
 proc loadOrCreateBuffer*(
     e: Editor, path: string, origin = roUser

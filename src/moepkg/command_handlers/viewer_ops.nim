@@ -181,18 +181,28 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
       e.state.statusMessage = activated.error
     return true
   of hrBufferManagerDeleteBuffer:
-    # closeBuffer refuses a modified buffer as :bd does and tears down a
-    # Terminal PTY.
+    # closeBuffer refuses a modified buffer or a running job as :bd does, and
+    # tears down the PTY of a Terminal session that has ended.
     let deleteId = r.deleteBufferId
     if e.buffers.len > 1:
       # Can only delete if there's more than one buffer
       if e.bufferIndexById(deleteId) >= 0:
         let deleteResult = e.closeBuffer(deleteId)
         if deleteResult.isErr:
-          e.state.statusMessage = deleteResult.error
+          # There is no `!` here to add; name the command that has one.
+          let force = ":bd! " & $deleteId.int
+          e.state.statusMessage =
+            if e.isJobRunning(deleteId):
+              "Job still running (use " & force & " to end it)"
+            elif e.bufferById(deleteId).get.isModified:
+              "No write since last change (use " & force & " to override)"
+            else:
+              deleteResult.error
+          e.state.beep()
     else:
       # Cannot delete the only buffer
       e.state.statusMessage = "Cannot delete the last buffer"
+      e.state.beep()
     return true
   of hrBookmarkManagerQuit:
     e.leaveViewerMode(EditorMode.BookmarkManager)

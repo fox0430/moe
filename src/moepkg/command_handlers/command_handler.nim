@@ -353,7 +353,8 @@ proc executeBufferDelete*(
 ): HandlerResult =
   ## Execute bdelete command (:bd, :bdelete). `bufferArg` names the target by
   ## number or name; empty means the current buffer. The target resolution and
-  ## modified check live in `deleteCurrentBuffer`/`deleteBufferByArg`.
+  ## the modified and running-job checks live in
+  ## `deleteCurrentBuffer`/`deleteBufferByArg`.
   HandlerResult(
     kind: hrBufferDelete, forceBufferDelete: force, deleteBufferArg: bufferArg
   )

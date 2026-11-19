@@ -21,7 +21,7 @@
 ## result_processor.nim.
 
 when not defined(moe.embedded):
-  import std/[options, sequtils, tables]
+  import std/[options, sequtils]
 
 import pkg/results
 
@@ -33,8 +33,7 @@ when not defined(moe.embedded):
   proc closeSessionOutOfView(e: Editor, id: BufferId, force: bool) =
     ## A Terminal session outlives its windows as a buffer does. As in Vim, one
     ## that has ended goes with the last of them, and `:q!` ends a running one.
-    let session = e.terminalStates.getOrDefault(id)
-    if session == nil or (session.exitCode.isNone and not force):
+    if not e.isTerminalBuffer(id) or (e.isJobRunning(id) and not force):
       return
     for window in e.windowManager.windows:
       if window.tabBufferId == id:
@@ -182,6 +181,8 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
         e.deleteBufferByArg(r.deleteBufferArg, r.forceBufferDelete)
     if deleteResult.isErr:
       e.state.statusMessage = deleteResult.error
+      # As a Vim error, the refusal ends the mapping that ran it.
+      e.state.beep()
     return true
   of hrTerminalQuit:
     when defined(moe.embedded):

@@ -135,6 +135,15 @@ suite "Editor frontend buffers":
     check "No write since last change" in closeResult.error
     check e.bufferById(target.id).isSome
 
+  test "closeBuffer with force discards a modified buffer":
+    let
+      e = createTestEditor()
+      target = e.addWindowBuffer("Modified")
+    target.changeSeq = 1
+
+    check e.closeBuffer(target.id, force = true).isOk
+    check e.bufferById(target.id).isNone
+
   test "closeBuffer removes an inactive buffer without changing selection":
     let
       e = createTestEditor()

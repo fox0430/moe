@@ -840,7 +840,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `bfirst` | Move to the first window by default, or to this window's first tab |
 | `blast` | Move to the last window by default, or to this window's last tab |
 | `bd [number|name]` | Delete buffer |
-| `bd! [number|name]` | Delete buffer, discarding unsaved changes |
+| `bd! [number|name]` | Delete buffer, discarding unsaved changes or ending its job |
 | `vs` | Vertical split window |
 | `vs filename` | Open in a vertical split window |
 | `sp` | Horizontal split window |

@@ -381,7 +381,7 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     check state.texts.contains("ls                - Display all buffers")
     check state.texts.contains("bd [number|name]  - Delete buffer")
     check state.texts.contains(
-      "bd! [number|name] - Delete buffer, discarding unsaved changes"
+      "bd! [number|name] - Delete buffer, discarding unsaved changes or ending its job"
     )
     check state.texts.contains(
       "filetree path     - Toggle FileTree sidebar with specified root path"
