@@ -7775,6 +7775,43 @@ suite "Ctrl-w window commands in special modes":
     check e.activeBuffer().getLine(0).len == 0
     check e.state.mode == EditorMode.Normal
 
+suite "ZQ is :q!":
+  proc typeZQ(e: Editor): bool =
+    ## False when ZQ ended the editor.
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "Z", modifiers: {}))
+    e.handleKeyCombo(KeyCombo(isSpecial: false, char: "Q", modifiers: {}))
+
+  test "closes only its window, keeping the changes":
+    let e = createTestEditorWithBuffer("line0")
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    let buf = e.activeBuffer()
+    require buf.isModified
+    check e.vsplit().isOk
+    check e.windowManager.windows.len == 2
+
+    check e.typeZQ()
+
+    check e.windowManager.windows.len == 1
+    check e.activeBuffer() == buf
+    check buf.isModified
+
+  test "on the last window quits over a modified buffer":
+    let e = createTestEditorWithBuffer("line0")
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    require e.activeBuffer().isModified
+
+    check not e.typeZQ()
+
+  test "quit-force still quits the editor from a split":
+    let e = createTestEditorWithBuffer("line0")
+    check e.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "C-q", "quit-force") ==
+      ""
+    check e.vsplit().isOk
+
+    check not e.handleKeyCombo(
+      KeyCombo(isSpecial: false, char: "q", modifiers: {kmCtrl})
+    )
+
 suite "Ctrl-C in Terminal mode":
   proc fakeTerminalState(): TerminalState =
     TerminalState(
