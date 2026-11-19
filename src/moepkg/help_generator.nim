@@ -1142,7 +1142,8 @@ proc renderCommandModeHead*(): seq[HelpLine] {.compileTime.} =
     helpEntriesFor("ls") & helpEntriesFor("bprev") & helpEntriesFor("bnext") &
       helpEntriesFor("bfirst") & helpEntriesFor("blast") & helpEntriesFor("bd") &
       helpEntriesFor("vs") & helpEntriesFor("sp") & helpEntriesFor("only") &
-      helpEntriesFor("filetree") & helpEntriesFor("filer") & helpEntriesFor("cd"),
+      helpEntriesFor("filetree") & helpEntriesFor("filer") & helpEntriesFor("cd") &
+      helpEntriesFor("pwd"),
     helpEntriesFor("theme") & helpEntriesFor("noh") & helpEntriesFor("stripwhitespace"),
   ]
   for i, entries in groups:

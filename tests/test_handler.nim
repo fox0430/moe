@@ -13940,6 +13940,37 @@ suite "Change directory command":
     e.press("Return")
     check getCurrentDir() == tempRoot / "sub"
 
+suite "Print working directory command":
+  var startDir: string
+  var tempRoot: string
+
+  setup:
+    startDir = getCurrentDir()
+    tempRoot = getTempDir() / "moe_test_pwd_" & $getCurrentProcessId()
+    createDir(tempRoot)
+
+  teardown:
+    setCurrentDir(startDir)
+    removeDir(tempRoot)
+
+  test ":pwd shows the current directory":
+    let e = createTestEditorWithBuffer("hello")
+    check e.executeCommandOverlay(":pwd") == roContinue
+    check e.state.statusMessage == startDir
+
+    check e.executeCommandOverlay(":cd " & tempRoot) == roContinue
+    check e.executeCommandOverlay(":pw") == roContinue
+    check e.state.statusMessage == tempRoot
+
+  test ":pwd in a removed current directory":
+    let e = createTestEditorWithBuffer("hello")
+    createDir(tempRoot / "gone")
+    setCurrentDir(tempRoot / "gone")
+    removeDir(tempRoot / "gone")
+
+    check e.executeCommandOverlay(":pwd") == roContinue
+    check e.state.statusMessage == "E187: Directory unknown"
+
 suite "A middle-click paste below a fold's last line":
   proc press(e: Editor, keys: varargs[string]) =
     for key in keys:

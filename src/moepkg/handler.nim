@@ -219,17 +219,17 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrLspDocumentSymbol, hrLspCodeLensExecute, hrLspCallHierarchyIncoming,
       hrLspCallHierarchyOutgoing, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
       hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrShellCommand, hrFilter,
-      hrBackground, hrJumpList, hrChanges, hrVersion, hrChangeDir, hrBuild, hrDebug,
-      hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile,
-      hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold, hrLspExecuteCommand,
-      hrSubstitute, hrSubstituteNoMatch, hrDeleteLines, hrMan, hrReferencesQuit,
-      hrReferencesJumpTo, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
-      hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
-      hrCallHierarchyRequestOutgoing, hrEnterTerminal, hrTerminalQuit, hrExecCommand,
-      hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri,
-      hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd, hrMapRemove, hrMapClear,
-      hrMapList, hrPlaybackMacro, hrRepeatInsert, hrUndo, hrRedo, hrJobs, hrPickerEnter,
-      hrPickerOpen:
+      hrBackground, hrJumpList, hrChanges, hrVersion, hrChangeDir, hrPrintWorkingDir,
+      hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig,
+      hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold,
+      hrLspExecuteCommand, hrSubstitute, hrSubstituteNoMatch, hrDeleteLines, hrMan,
+      hrReferencesQuit, hrReferencesJumpTo, hrDocumentSymbolQuit,
+      hrDocumentSymbolJumpTo, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
+      hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing, hrEnterTerminal,
+      hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
+      hrFileTreeQuit, hrOpenUri, hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd,
+      hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro, hrRepeatInsert, hrUndo,
+      hrRedo, hrJobs, hrPickerEnter, hrPickerOpen:
     discard # Not expected from RecentFile mode handler
 
   # Route overlay/mode transitions through processResult so a viewer target

@@ -921,6 +921,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `cd path` | Change the current directory |
 | `cd` | Change the current directory to home |
 | `cd -` | Change to the previous directory |
+| `pw[d]` | Show the current directory |
 | `jump` | Open Jump list viewer |
 | `terminal` | Open terminal emulator (default shell) |
 | `terminal command` | Run command in terminal emulator |

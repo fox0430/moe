@@ -1868,6 +1868,13 @@ suite "CommandModeHandler - handleCommandModeInput":
     check result.kind == hrChangeDir
     check result.changeDirPath == some("/tmp")
 
+  test "Handle :pwd command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":pwd")
+    check result.kind == hrPrintWorkingDir
+
   test "Handle :version command":
     let handler = setupHandler()
     let buffer = setupBuffer()

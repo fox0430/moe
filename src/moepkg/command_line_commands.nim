@@ -1095,6 +1095,15 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     completesDirectories: true,
     minAbbrev: 3,
   ),
+  CommandLineCommandSpec(
+    name: "pwd",
+    completionDescription: "Show the current directory",
+    helpEntries:
+      @[HelpEntry(syntax: "pw[d]", description: "Show the current directory")],
+    action: some(claPrintWorkingDir),
+    isCanonicalLong: true,
+    minAbbrev: 2,
+  ),
   # Shell (TOML-only canonical name; help is in CommandLineSpecialHelp)
   CommandLineCommandSpec(
     name: "shell",

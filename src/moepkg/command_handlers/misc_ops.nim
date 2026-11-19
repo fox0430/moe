@@ -102,6 +102,13 @@ proc changeDirectory(e: Editor, path: Option[string]) =
     except OSError:
       target
 
+proc printWorkingDirectory(e: Editor) =
+  e.state.statusMessage =
+    try:
+      getCurrentDir()
+    except OSError:
+      "E187: Directory unknown"
+
 proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Handle misc side-effect kinds. Returns true to continue.
   case r.kind
@@ -185,6 +192,9 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
     return true
   of hrChangeDir:
     e.changeDirectory(r.changeDirPath)
+    return true
+  of hrPrintWorkingDir:
+    e.printWorkingDirectory()
     return true
   else:
     return true # Not a misc kind; caller misrouted (defensive)

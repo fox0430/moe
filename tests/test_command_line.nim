@@ -871,6 +871,7 @@ suite "CommandLine - execute additional commands":
     parser.addAlias("filer", claFiler)
     parser.addAlias("cd", claChangeDir)
     parser.addAlias("chdir", claChangeDir)
+    parser.addAlias("pwd", claPrintWorkingDir)
     parser.addAlias("log", claLogViewer)
     parser.addAlias("run", claQuickRun)
     parser.addAlias("buffers", claBufferManager)
@@ -1052,6 +1053,14 @@ suite "CommandLine - execute additional commands":
     let result = parser.parseAndExecute(":cd a b")
     check result.kind == claUnknown
     check result.errorMessage == "Only one file name allowed"
+
+  test "Execute :pwd":
+    let result = parser.parseAndExecute(":pwd")
+    check result.kind == claPrintWorkingDir
+
+  test ":pwd abbreviations":
+    check parser.parseAndExecute(":pw").kind == claPrintWorkingDir
+    check parser.parseAndExecute(":p").kind == claUnknown
 
   test "Execute :version":
     let result = parser.parseAndExecute(":version")
