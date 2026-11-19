@@ -101,7 +101,7 @@ proc executeQuitAll*(
           "No write since last change: " & $total &
           " buffers modified (add ! to override)",
       )
-  HandlerResult(kind: hrQuit)
+  HandlerResult(kind: hrQuit, endJobs: force)
 
 proc executeSave*(
     handler: CommandModeHandler,
@@ -146,7 +146,11 @@ proc executeSaveIfModifiedAndQuit*(
   if not buffer.isModified:
     # Nothing to write, but the session still ends: check the other buffers
     # exactly as :qa does.
-    return handler.executeQuitAll(buffer, force, otherModifiedCount)
+    result = handler.executeQuitAll(buffer, force, otherModifiedCount)
+    if result.kind == hrQuit:
+      # As in Vim, `:x!` forces past the buffers but not a running job.
+      result.endJobs = false
+    return
   handler.executeSaveAndQuit(buffer, filename, force)
 
 proc executeSaveAllAndQuit*(handler: CommandModeHandler, force: bool): HandlerResult =

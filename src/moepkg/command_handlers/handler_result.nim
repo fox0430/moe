@@ -203,7 +203,9 @@ type
       modeTransition*: Option[EditorMode]
       overlayTransition*: Option[OverlayKind]
       statusMessage*: string
-    of hrQuit, hrCquit:
+    of hrQuit:
+      endJobs*: bool ## `:qa!`: end running Terminal jobs instead of refusing.
+    of hrCquit:
       discard
     of hrCloseWindow:
       forceClose*: bool

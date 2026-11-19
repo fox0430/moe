@@ -182,6 +182,8 @@ proc processResultWithHost(
   # Process the result
   case r.kind
   of hrQuit:
+    if not r.endJobs and e.refuseQuitForRunningJob(show = true):
+      return true
     return false # Signal app should quit
   of hrCquit:
     e.state.exitCode = 1
@@ -1067,8 +1069,10 @@ proc executeCommandOverlay*(
   ## them.
   ## The command line history does not get it: the open command line adds a
   ## typed line once it ran.
-  ## `roAbort` when the command fails or the host takes its result, so the
-  ## keys after it stop as after any replayed key that does.
+  ## `roAbort` when the command fails, errs or beeps, or the host takes its
+  ## result, so the keys and repeats after it stop as after any replayed key
+  ## that does.
+  let beeps = e.state.beepCount
   # 1. pre-teardown (kind-independent)
   # A command line runs outside Visual, as `:` leaves it in Vim; a Visual
   # mapping that runs one directly gets here without the overlay.
@@ -1135,7 +1139,8 @@ proc executeCommandOverlay*(
   if not shouldContinue:
     return roQuit
   result =
-    if e.hostResultRequestCount > queued or r.kind == hrError: roAbort else: roContinue
+    if e.hostResultRequestCount > queued or r.kind == hrError or
+        e.state.beepCount > beeps: roAbort else: roContinue
 
   # 4. teardown
   e.state.exitOverlay(okCommand)
@@ -1147,7 +1152,8 @@ proc executeCommandOverlay*(
 
   case r.group
   of hrgAppExit:
-    return roQuit # unreachable — processResult would have returned false
+    # Only a quit a running Terminal job refused gets here.
+    e.setMode(e.state.mode)
   of hrgExitToNormal:
     e.setMode(EditorMode.Normal)
   of hrgExitToNewMode:
