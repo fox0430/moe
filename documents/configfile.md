@@ -734,6 +734,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | save-and-quit | Save file and quit |
 | quit-force | Quit without saving |
 | close-window | Close current window |
+| close-window-force | Close window without saving (as :q!) |
 | file-new | Create new empty buffer |
 | file-open | Open file (enter filer) |
 | file-close | Close current buffer |

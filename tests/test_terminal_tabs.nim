@@ -558,6 +558,41 @@ suite "Terminal tabs - a running job keeps the editor open":
 
     e.checkRefusedShowing(termBuf, InputQuitHint)
 
+  test "ZQ on the window the job runs in ends it":
+    let e = createTestEditor()
+    discard registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    e.state.statusMessage = ""
+
+    check e.handleKeyCombo(charKey("Z"))
+    check not e.handleKeyCombo(charKey("Q"))
+    check e.state.statusMessage == ""
+
+  test "ZQ in a split ends the job its window shows":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    check e.handleKeyCombo(charKey("Z"))
+    check e.handleKeyCombo(charKey("Q"))
+
+    check e.windowManager.windows.len == 1
+    check not e.terminalStates.hasKey(termBuf.id)
+
+  test "a quit-force key in a split is refused for the job":
+    let e = createTestEditor()
+    check e.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Terminal, "C-q", "quit-force"
+    ) == ""
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "q", modifiers: {kmCtrl}))
+
+    e.checkRefusedShowing(termBuf, InputQuitHint)
+    check e.windowManager.windows.len == 2
+
   test ":q on the window the job runs in is refused":
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")

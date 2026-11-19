@@ -320,4 +320,4 @@ Terminal mode has two sub-modes:
 
 When a command finishes (e.g. `:terminal ls`), the output is displayed in a read-only scrollback view (Terminal-Normal sub-mode). When an interactive shell exits, the terminal window is automatically closed.
 
-While a terminal program is still running, the editor refuses to quit, as quitting would end it: `:q` and `Ctrl-w c` on the last window, `:qa`, `:wq`, `:x` and `ZZ` show the program instead, and `:wqa` reports it. `:wq`, `:x`, `ZZ` and `:wqa` still write the files first. On the last window, `:q!` ends the program the window shows, but is refused for any other. `:qa!`, `:wqa!` and `:cq` end every program and quit.
+While a terminal program is still running, the editor refuses to quit, as quitting would end it: `:q` and `Ctrl-w c` on the last window, `:qa`, `:wq`, `:x` and `ZZ` show the program instead, and `:wqa` reports it. `:wq`, `:x`, `ZZ` and `:wqa` still write the files first. On the last window, `:q!` and `ZQ` end the program the window shows, but are refused for any other. `:qa!`, `:wqa!` and `:cq` end every program and quit.

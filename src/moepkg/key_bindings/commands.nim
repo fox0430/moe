@@ -167,6 +167,7 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("save", "Save file", "file.save"),
   ("save-and-quit", "Save file and quit", "file.save.and.quit"),
   ("quit-force", "Quit without saving", "file.quit.force"),
+  ("close-window-force", "Close window without saving (as :q!)", "window.close.force"),
   ("macro-record", "Start/stop macro recording", "macro.record"),
   ("file-open", "Open file (enter filer)", "file.open"),
   ("file-new", "Create new empty buffer", "file.new"),

@@ -53,6 +53,7 @@ type PassthroughKind* = enum
   ptSwapWindow
   ptNewWindow
   ptCloseWindow
+  ptCloseWindowForce
   # file.*
   ptSave
   ptSaveAndQuit
@@ -129,6 +130,8 @@ proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
     some(ptNewWindow)
   of "window.close":
     some(ptCloseWindow)
+  of "window.close.force":
+    some(ptCloseWindowForce)
   of "file.save":
     some(ptSave)
   of "file.save.and.quit":
@@ -213,6 +216,8 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
     HandlerResult(kind: hrNew)
   of ptCloseWindow:
     HandlerResult(kind: hrCloseWindow, forceClose: false)
+  of ptCloseWindowForce:
+    HandlerResult(kind: hrCloseWindow, forceClose: true)
   of ptSave:
     HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
   of ptSaveAndQuit:
