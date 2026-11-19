@@ -877,6 +877,68 @@ suite "CommandModeHandler - executeSet Boolean Options":
       check result.kind == hrError
       check result.errorMessage == "E474: Invalid argument: " & option & " " & value
 
+suite "CommandModeHandler - executeSet toggle and show forms":
+  test "X!, invX and noX! toggle a boolean option":
+    let handler = setupHandler()
+    for (option, expected) in [
+      ("nu!", bsoNumber),
+      ("number!", bsoNumber),
+      ("invnu", bsoNumber),
+      ("invnumber", bsoNumber),
+      ("nonu!", bsoNumber),
+      ("NU!", bsoNumber),
+      ("invwrap", bsoLineWrap),
+      ("rnu!", bsoRelativeNumber),
+    ]:
+      let result = handler.executeSet(option, none(string))
+      check result.kind == hrToggleBoolOption
+      check result.toggledOption == expected
+
+  test "X? shows an option, whatever its prefix":
+    let handler = setupHandler()
+    for (option, expected) in [
+      ("nu?", "number"),
+      ("nonu?", "number"),
+      ("invnu?", "number"),
+      ("ts?", "tabstop"),
+      ("nots?", "tabstop"),
+      ("invts?", "tabstop"),
+      ("sfr?", "scrollfriction"),
+    ]:
+      let result = handler.executeSet(option, none(string))
+      check result.kind == hrShowOption
+      check result.shownOption.longName == expected
+
+  test "A name followed by anything else is trailing characters":
+    let handler = setupHandler()
+    for (option, value, typed) in [
+      ("nu#", none(string), "nu#"),
+      ("nu!!", none(string), "nu!!"),
+      ("nu&", none(string), "nu&"),
+      ("nu?x", none(string), "nu?x"),
+      ("ts!", none(string), "ts!"),
+      ("nu?", some("1"), "nu?=1"),
+      ("nu!", some("1"), "nu!=1"),
+      ("ts?", some("4"), "ts?=4"),
+    ]:
+      let result = handler.executeSet(option, value)
+      check result.kind == hrError
+      check result.errorMessage == "E488: Trailing characters: " & typed
+
+  test "no or inv before a value option is an invalid argument":
+    let handler = setupHandler()
+    for option in ["invts", "nots", "notabstop", "nosfr", "invts!", "nots!"]:
+      let result = handler.executeSet(option, none(string))
+      check result.kind == hrError
+      check result.errorMessage == "E474: Invalid argument: " & option
+
+  test "A word that names no option is unknown, with what follows it":
+    let handler = setupHandler()
+    for option in ["x?", "foo!", "inv", "no", "invfoo"]:
+      let result = handler.executeSet(option, none(string))
+      check result.kind == hrError
+      check result.errorMessage == "Unknown option: " & option
+
 suite "CommandModeHandler - executeSet Integer Options":
   test "Set tabstop":
     let handler = setupHandler()
@@ -892,11 +954,11 @@ suite "CommandModeHandler - executeSet Integer Options":
     check result.intOption == isoTabStop
     check result.intValue == 8
 
-  test "Set tabstop without value returns error":
+  test "Set tabstop without value shows it":
     let handler = setupHandler()
     let result = handler.executeSet("tabstop", none(string))
-    check result.kind == hrError
-    check result.errorMessage == "tabstop requires a value (e.g., tabstop=4)"
+    check result.kind == hrShowOption
+    check result.shownOption.intOption == isoTabStop
 
   test "Set tabstop with invalid value returns error":
     let handler = setupHandler()
@@ -932,10 +994,11 @@ suite "CommandModeHandler - executeSet shiftWidth":
     check result.intOption == isoShiftWidth
     check result.intValue == 0
 
-  test "Set shiftwidth without value returns error":
+  test "Set shiftwidth without value shows it":
     let handler = setupHandler()
     let result = handler.executeSet("shiftwidth", none(string))
-    check result.kind == hrError
+    check result.kind == hrShowOption
+    check result.shownOption.intOption == isoShiftWidth
 
   test "Set shiftwidth with invalid value returns error":
     let handler = setupHandler()
@@ -969,10 +1032,11 @@ suite "CommandModeHandler - executeSet softTabStop":
     check result.intOption == isoSoftTabStop
     check result.intValue == 0
 
-  test "Set softtabstop without value returns error":
+  test "Set softtabstop without value shows it":
     let handler = setupHandler()
     let result = handler.executeSet("softtabstop", none(string))
-    check result.kind == hrError
+    check result.kind == hrShowOption
+    check result.shownOption.intOption == isoSoftTabStop
 
   test "Set softtabstop with invalid value returns error":
     let handler = setupHandler()
@@ -1013,11 +1077,11 @@ suite "CommandModeHandler - executeSet Scrollbar":
     check result.intOption == isoScrollbarWidth
     check result.intValue == 0
 
-  test "Set scrollbarwidth without value returns error":
+  test "Set scrollbarwidth without value shows it":
     let handler = setupHandler()
     let result = handler.executeSet("scrollbarwidth", none(string))
-    check result.kind == hrError
-    check "requires a value" in result.errorMessage
+    check result.kind == hrShowOption
+    check result.shownOption.intOption == isoScrollbarWidth
 
   test "Set scrollbarwidth with invalid value returns error":
     let handler = setupHandler()
@@ -1046,11 +1110,11 @@ suite "CommandModeHandler - executeSet Float Options":
     check result.floatOption == fsoScrollAirDrag
     check result.floatValue == 2.5
 
-  test "Set scrollfriction without value returns error":
+  test "Set scrollfriction without value shows it":
     let handler = setupHandler()
     let result = handler.executeSet("scrollfriction", none(string))
-    check result.kind == hrError
-    check "requires a value" in result.errorMessage
+    check result.kind == hrShowOption
+    check result.shownOption.floatOption == fsoScrollFriction
 
   test "Set scrollairdrag with negative value returns error":
     let handler = setupHandler()
@@ -1710,6 +1774,19 @@ suite "CommandModeHandler - handleCommandModeInput":
       let result = handler.handleCommandModeInput(buffer, input)
       check result.kind == hrError
       check result.errorMessage == "E474: Invalid argument: " & args
+
+  test "Handle :set nu!, :set invnu, :set nu? and :set ts":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    for input in [":set nu!", ":set invnu"]:
+      let result = handler.handleCommandModeInput(buffer, input)
+      check result.kind == hrToggleBoolOption
+      check result.toggledOption == bsoNumber
+    for (input, expected) in [(":set nu?", "number"), (":set ts", "tabstop")]:
+      let result = handler.handleCommandModeInput(buffer, input)
+      check result.kind == hrShowOption
+      check result.shownOption.longName == expected
 
   test "Handle :help command":
     let handler = setupHandler()

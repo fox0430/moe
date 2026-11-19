@@ -206,18 +206,11 @@ proc executeGotoLine*(
     return HandlerResult(kind: hrError, errorMessage: "E16: Invalid range")
   HandlerResult(kind: hrGotoLine, lineNumber: clamp(line, 1, buffer.len))
 
-proc parseSetIntValue(spec: SetOptionSpec, value: Option[string]): HandlerResult =
+proc parseSetIntValue(spec: SetOptionSpec, value: string): HandlerResult =
   ## Validate and dispatch an integer-typed `:set X=N` option.
   doAssert spec.kind == sokInt, "parseSetIntValue called with non-int spec"
-  if value.isNone:
-    return HandlerResult(
-      kind: hrError,
-      errorMessage:
-        spec.longName & " requires a value (e.g., " & spec.longName & "=" &
-        $spec.intExample & ")",
-    )
   try:
-    let intVal = parseInt(value.get)
+    let intVal = parseInt(value)
     if intBoundOk(spec.intBound, intVal):
       return
         HandlerResult(kind: hrSetIntOption, intOption: spec.intOption, intValue: intVal)
@@ -227,18 +220,11 @@ proc parseSetIntValue(spec: SetOptionSpec, value: Option[string]): HandlerResult
   except ValueError:
     HandlerResult(kind: hrError, errorMessage: "Invalid value for " & spec.longName)
 
-proc parseSetFloatValue(spec: SetOptionSpec, value: Option[string]): HandlerResult =
+proc parseSetFloatValue(spec: SetOptionSpec, value: string): HandlerResult =
   ## Validate and dispatch a float-typed `:set X=N.N` option.
   doAssert spec.kind == sokFloat, "parseSetFloatValue called with non-float spec"
-  if value.isNone:
-    return HandlerResult(
-      kind: hrError,
-      errorMessage:
-        spec.longName & " requires a value (e.g., " & spec.longName & "=" &
-        $spec.floatExample & ")",
-    )
   try:
-    let floatVal = parseFloat(value.get)
+    let floatVal = parseFloat(value)
     if floatVal >= 0:
       return HandlerResult(
         kind: hrSetFloatOption, floatOption: spec.floatOption, floatValue: floatVal
@@ -247,66 +233,91 @@ proc parseSetFloatValue(spec: SetOptionSpec, value: Option[string]): HandlerResu
   except ValueError:
     HandlerResult(kind: hrError, errorMessage: "Invalid value for " & spec.longName)
 
+type SetPrefix = enum
+  spNone
+  spNo ## `noX`
+  spInv ## `invX`
+
+proc isNamed(spec: SetOptionSpec, name: string): bool =
+  name == spec.longName or (spec.shortName.len > 0 and name == spec.shortName)
+
+proc findSetOption(name: string): Option[(SetOptionSpec, SetPrefix)] =
+  ## The option `name` names, and the `no`/`inv` before it.
+  for spec in SetOptionTable:
+    if spec.isNamed(name):
+      return some((spec, spNone))
+  for (prefix, head) in [(spNo, "no"), (spInv, "inv")]:
+    if name.startsWith(head):
+      for spec in SetOptionTable:
+        if spec.isNamed(name[head.len .. ^1]):
+          return some((spec, prefix))
+
 proc executeSet*(
     handler: CommandModeHandler,
     option: string,
     value: Option[string],
     valueAfterSpace = false,
 ): HandlerResult =
-  ## Execute set command (:set option=value). Dispatches via `SetOptionTable`
-  ## so each `:set` option lives in exactly one place (setting_options.nim).
-  template invalidArgument(): HandlerResult =
+  ## Execute `:set X`, `noX`, `invX`, `X!`, `X?` and `X=value`, as in Vim but
+  ## one option at a time. A value option alone shows its value, as `X?` does.
+  ## Dispatches via `SetOptionTable` (setting_options.nim).
+  template rejected(code: string): HandlerResult =
     HandlerResult(
       kind: hrError,
       errorMessage:
-        "E474: Invalid argument: " & option & (if valueAfterSpace: " " else: "=") &
-        value.get,
+        code & ": " & option & (
+          if value.isNone: ""
+          elif valueAfterSpace: " " & value.get
+          else: "=" & value.get
+        ),
     )
 
   let opt = option.toLower
-  for spec in SetOptionTable:
-    case spec.kind
-    of sokBool:
-      let enable =
-        if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
-          some(true)
-        elif opt == "no" & spec.longName or
-          (spec.shortName.len > 0 and opt == "no" & spec.shortName):
-          some(false)
-        else:
-          none(bool)
-      if enable.isNone:
-        continue
-      # Vim's 'syntax' is a string option (`syntax=OFF`); ours is a toggle, so
-      # take on/off and true/false, after `=` or a space.
-      if spec.boolOption == bsoSyntax and enable.get and value.isSome:
-        case value.get.toLower
-        of "on", "true":
-          return
-            HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: true)
-        of "off", "false":
-          return HandlerResult(
-            kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: false
-          )
-        else:
-          discard
-      # Any other value is refused, so that `nu=0` cannot turn it on.
-      if value.isSome:
-        return invalidArgument()
-      return HandlerResult(
-        kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: enable.get
+  var nameEnd = 0
+  while nameEnd < opt.len and opt[nameEnd] in {'a' .. 'z', '0' .. '9'}:
+    nameEnd.inc
+  let found = findSetOption(opt[0 ..< nameEnd])
+  if found.isNone:
+    return HandlerResult(kind: hrError, errorMessage: "Unknown option: " & option)
+  let (spec, prefix) = found.get
+  let suffix = opt[nameEnd .. ^1]
+  if spec.kind != sokBool and prefix != spNone and suffix != "?":
+    return rejected("E474: Invalid argument")
+  if suffix notin ["", "!", "?"] or (suffix == "!" and spec.kind != sokBool) or
+      (suffix.len > 0 and value.isSome and not valueAfterSpace):
+    return rejected("E488: Trailing characters")
+
+  # Vim's 'syntax' is a string option (`syntax=OFF`); ours is a toggle, so
+  # take on/off and true/false, after `=` or a space.
+  if spec.kind == sokBool and spec.boolOption == bsoSyntax and prefix == spNone and
+      suffix == "" and value.isSome:
+    case value.get.toLower
+    of "on", "true":
+      return
+        HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: true)
+    of "off", "false":
+      return
+        HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: false)
+    else:
+      discard
+  # A bool option refuses any other value, so that `nu=0` cannot turn it on.
+  if valueAfterSpace or (spec.kind == sokBool and value.isSome):
+    return rejected("E474: Invalid argument")
+
+  if suffix == "?" or (spec.kind != sokBool and value.isNone):
+    return HandlerResult(kind: hrShowOption, shownOption: spec)
+  case spec.kind
+  of sokBool:
+    if suffix == "!" or prefix == spInv:
+      HandlerResult(kind: hrToggleBoolOption, toggledOption: spec.boolOption)
+    else:
+      HandlerResult(
+        kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: prefix == spNone
       )
-    of sokInt:
-      if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
-        if valueAfterSpace:
-          return invalidArgument()
-        return parseSetIntValue(spec, value)
-    of sokFloat:
-      if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
-        if valueAfterSpace:
-          return invalidArgument()
-        return parseSetFloatValue(spec, value)
-  HandlerResult(kind: hrError, errorMessage: "Unknown option: " & option)
+  of sokInt:
+    parseSetIntValue(spec, value.get)
+  of sokFloat:
+    parseSetFloatValue(spec, value.get)
 
 proc executeHelp*(handler: CommandModeHandler, topic: Option[string]): HandlerResult =
   ## Execute help command (:help, :help topic) - opens the help viewer.

@@ -1579,6 +1579,97 @@ suite "Editor - :set ignorecase/smartcase/incsearch survive Config-mode re-apply
     e.applyConfigSettings(e.config)
     check e.state.input.search.incsearch
 
+suite "Editor - :set toggle and show":
+  proc run(e: Editor, r: HandlerResult) =
+    discard e.processResult(r, e.activeBuffer())
+
+  proc specNamed(name: string): SetOptionSpec =
+    for spec in SetOptionTable:
+      if spec.longName == name:
+        return spec
+    raiseAssert name & " is not in SetOptionTable"
+
+  test "hrToggleBoolOption inverts the option and reports the new value":
+    let e = createTestEditor()
+    e.config.standard.number = true
+
+    e.run(HandlerResult(kind: hrToggleBoolOption, toggledOption: bsoNumber))
+    check not e.config.standard.number
+    check e.state.statusMessage == "number = false"
+
+    e.run(HandlerResult(kind: hrToggleBoolOption, toggledOption: bsoNumber))
+    check e.config.standard.number
+    check e.state.statusMessage == "number = true"
+
+  test "hrToggleBoolOption writes the config behind a search flag":
+    let e = createTestEditor()
+    e.config.standard.ignorecase = false
+    e.state.input.search.ignorecase = false
+
+    e.run(HandlerResult(kind: hrToggleBoolOption, toggledOption: bsoIgnoreCase))
+    check e.config.standard.ignorecase
+    check e.state.input.search.ignorecase
+
+  test "hrShowOption shows the value as Vim does, changing nothing":
+    let e = createTestEditor()
+    e.config.standard.number = true
+    e.config.standard.relativeNumber = false
+    e.config.standard.tabStop = 4
+    e.config.smoothScroll.friction = 80.0
+
+    for (name, expected) in [
+      ("number", "  number"),
+      ("relativenumber", "norelativenumber"),
+      ("tabstop", "  tabstop=4"),
+      ("scrollfriction", "  scrollfriction=80.0"),
+    ]:
+      e.run(HandlerResult(kind: hrShowOption, shownOption: specNamed(name)))
+      check e.state.statusMessage == expected
+    check e.config.standard.number
+    check not e.config.standard.relativeNumber
+
+  test "Every option reads back what was set and toggled":
+    let e = createTestEditor()
+    for spec in SetOptionTable:
+      checkpoint spec.longName
+      let show = HandlerResult(kind: hrShowOption, shownOption: spec)
+      case spec.kind
+      of sokBool:
+        for value in [true, false]:
+          e.run(
+            HandlerResult(
+              kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: value
+            )
+          )
+          e.run(show)
+          check e.state.statusMessage == (if value: "  " else: "no") & spec.longName
+        e.run(HandlerResult(kind: hrToggleBoolOption, toggledOption: spec.boolOption))
+        e.run(show)
+        check e.state.statusMessage == "  " & spec.longName
+      of sokInt:
+        e.run(
+          HandlerResult(kind: hrSetIntOption, intOption: spec.intOption, intValue: 3)
+        )
+        e.run(show)
+        check e.state.statusMessage == "  " & spec.longName & "=3"
+      of sokFloat:
+        e.run(
+          HandlerResult(
+            kind: hrSetFloatOption, floatOption: spec.floatOption, floatValue: 1.5
+          )
+        )
+        e.run(show)
+        check e.state.statusMessage == "  " & spec.longName & "=1.5"
+
+  test "The status message names the option as :set does":
+    let e = createTestEditor()
+    e.run(
+      HandlerResult(
+        kind: hrSetBoolOption, boolOption: bsoMultipleStatusLine, boolValue: false
+      )
+    )
+    check e.state.statusMessage == "multistatusline = false"
+
 suite "Startup window - FileTree":
   ## These tests simulate handleStartUpWindows: viewport height is set to
   ## termHeight - StatusLineReserve (reserving the command line row) and
