@@ -828,6 +828,55 @@ suite "CommandModeHandler - executeSet Boolean Options":
     check result.kind == hrError
     check result.errorMessage == "Unknown option: unknownoption"
 
+  test "Set boolean option with a value returns error":
+    let handler = setupHandler()
+    for (option, value) in [
+      ("syntax", "1"),
+      ("syntax", "yes"),
+      ("syntax", ""),
+      ("syn", "1"),
+      ("nosyntax", "true"),
+      ("nosyntax", "off"),
+      ("nu", "0"),
+      ("nu", "off"),
+      ("nonu", "1"),
+    ]:
+      let result = handler.executeSet(option, some(value))
+      check result.kind == hrError
+      check result.errorMessage == "E474: Invalid argument: " & option & "=" & value
+
+  test "Set syntax to on/off or true/false, after = or a space":
+    let handler = setupHandler()
+    for valueAfterSpace in [false, true]:
+      for (option, value, expected) in [
+        ("syntax", "on", true),
+        ("syntax", "ON", true),
+        ("syntax", "true", true),
+        ("syn", "on", true),
+        ("syntax", "off", false),
+        ("syntax", "OFF", false),
+        ("syntax", "false", false),
+        ("syn", "off", false),
+      ]:
+        let result = handler.executeSet(option, some(value), valueAfterSpace)
+        check result.kind == hrSetBoolOption
+        check result.boolOption == bsoSyntax
+        check result.boolValue == expected
+
+  test "Set any other option with a value after a space returns error":
+    let handler = setupHandler()
+    for (option, value) in [
+      ("syntax", "1"),
+      ("nosyntax", "off"),
+      ("nu", "rnu"),
+      ("nu", "off"),
+      ("tabstop", "4"),
+      ("ts", "4"),
+    ]:
+      let result = handler.executeSet(option, some(value), valueAfterSpace = true)
+      check result.kind == hrError
+      check result.errorMessage == "E474: Invalid argument: " & option & " " & value
+
 suite "CommandModeHandler - executeSet Integer Options":
   test "Set tabstop":
     let handler = setupHandler()
@@ -1633,6 +1682,34 @@ suite "CommandModeHandler - handleCommandModeInput":
     check result.kind == hrSetBoolOption
     check result.boolOption == bsoRelativeNumber
     check result.boolValue == false
+
+  test "Handle :set syntax=off":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":set syntax=off")
+    check result.kind == hrSetBoolOption
+    check result.boolOption == bsoSyntax
+    check result.boolValue == false
+
+  test "Handle :set syntax off and :set syntax false":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    for input in [":set syntax off", ":set syntax false", ":set syntax=false"]:
+      let result = handler.handleCommandModeInput(buffer, input)
+      check result.kind == hrSetBoolOption
+      check result.boolOption == bsoSyntax
+      check result.boolValue == false
+
+  test "Handle :set with a second word on another option":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    for (input, args) in [(":set nu rnu", "nu rnu"), (":set tabstop 4", "tabstop 4")]:
+      let result = handler.handleCommandModeInput(buffer, input)
+      check result.kind == hrError
+      check result.errorMessage == "E474: Invalid argument: " & args
 
   test "Handle :help command":
     let handler = setupHandler()

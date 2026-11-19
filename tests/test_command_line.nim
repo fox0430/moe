@@ -615,6 +615,23 @@ suite "CommandLine - execute":
     let result = parser.parseAndExecute(":set")
     check result.kind == claUnknown
 
+  test "Execute :set syntax off":
+    let result = parser.parseAndExecute(":set syntax off")
+    check result.kind == claSet
+    check result.option == "syntax"
+    check result.value == some("off")
+    check result.valueAfterSpace
+
+  test "Execute :set with a word too many returns error":
+    for (input, args) in [
+      (":set nu rnu cul", "nu rnu cul"),
+      (":set tabstop= 4", "tabstop= 4"),
+      (":set syntax = off", "syntax = off"),
+    ]:
+      let result = parser.parseAndExecute(input)
+      check result.kind == claUnknown
+      check result.errorMessage == "E474: Invalid argument: " & args
+
   test "Execute substitute :s/foo/bar/":
     let result = parser.parseAndExecute(":s/foo/bar/")
     check result.kind == claSubstitute

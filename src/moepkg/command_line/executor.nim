@@ -141,16 +141,23 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     # `:1,5` moves to the last address, as in vim.
     return CommandLineResult(kind: claGoto, gotoAddress: cmd.range.last)
   of claSet:
-    if cmd.args.len > 0:
-      let option = cmd.args[0]
-      # Parse set command (e.g., "set number", "set tabstop=4")
-      if "=" in option:
-        let parts = option.split("=", 1)
-        return CommandLineResult(kind: claSet, option: parts[0], value: some(parts[1]))
-      else:
-        return CommandLineResult(kind: claSet, option: option, value: none(string))
-    else:
+    if cmd.args.len == 0:
       return CommandLineResult(kind: claUnknown, errorMessage: "No option specified")
+    let option = cmd.args[0]
+    # One option per `:set`. A second word goes on as the value, which
+    # executeSet takes only for `:set syntax off`.
+    if cmd.args.len > 2 or (cmd.args.len == 2 and "=" in option):
+      return CommandLineResult(
+        kind: claUnknown, errorMessage: "E474: Invalid argument: " & cmd.args.join(" ")
+      )
+    if cmd.args.len == 2:
+      return CommandLineResult(
+        kind: claSet, option: option, value: some(cmd.args[1]), valueAfterSpace: true
+      )
+    if "=" in option:
+      let parts = option.split("=", 1)
+      return CommandLineResult(kind: claSet, option: parts[0], value: some(parts[1]))
+    return CommandLineResult(kind: claSet, option: option, value: none(string))
   of claDeleteLines:
     return CommandLineResult(kind: claDeleteLines, deleteRange: cmd.range)
   of claSubstitute:

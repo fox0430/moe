@@ -244,32 +244,63 @@ proc parseSetFloatValue(spec: SetOptionSpec, value: Option[string]): HandlerResu
     HandlerResult(kind: hrError, errorMessage: "Invalid value for " & spec.longName)
 
 proc executeSet*(
-    handler: CommandModeHandler, option: string, value: Option[string]
+    handler: CommandModeHandler,
+    option: string,
+    value: Option[string],
+    valueAfterSpace = false,
 ): HandlerResult =
   ## Execute set command (:set option=value). Dispatches via `SetOptionTable`
   ## so each `:set` option lives in exactly one place (setting_options.nim).
+  template invalidArgument(): HandlerResult =
+    HandlerResult(
+      kind: hrError,
+      errorMessage:
+        "E474: Invalid argument: " & option & (if valueAfterSpace: " " else: "=") &
+        value.get,
+    )
+
   let opt = option.toLower
   for spec in SetOptionTable:
     case spec.kind
     of sokBool:
-      if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
-        return HandlerResult(
-          kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: true
-        )
-      let noLong = "no" & spec.longName
-      if opt == noLong:
-        return HandlerResult(
-          kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: false
-        )
-      if spec.shortName.len > 0 and opt == "no" & spec.shortName:
-        return HandlerResult(
-          kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: false
-        )
+      let enable =
+        if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
+          some(true)
+        elif opt == "no" & spec.longName or
+          (spec.shortName.len > 0 and opt == "no" & spec.shortName):
+          some(false)
+        else:
+          none(bool)
+      if enable.isNone:
+        continue
+      # Vim's 'syntax' is a string option (`syntax=OFF`); ours is a toggle, so
+      # take on/off and true/false, after `=` or a space.
+      if spec.boolOption == bsoSyntax and enable.get and value.isSome:
+        case value.get.toLower
+        of "on", "true":
+          return
+            HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: true)
+        of "off", "false":
+          return HandlerResult(
+            kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: false
+          )
+        else:
+          discard
+      # Any other value is refused, so that `nu=0` cannot turn it on.
+      if value.isSome:
+        return invalidArgument()
+      return HandlerResult(
+        kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: enable.get
+      )
     of sokInt:
       if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
+        if valueAfterSpace:
+          return invalidArgument()
         return parseSetIntValue(spec, value)
     of sokFloat:
       if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
+        if valueAfterSpace:
+          return invalidArgument()
         return parseSetFloatValue(spec, value)
   HandlerResult(kind: hrError, errorMessage: "Unknown option: " & option)
 
@@ -697,7 +728,7 @@ proc handleCommandModeInput*(
   of claGoto:
     handler.executeGotoLine(buffer, cmdResult.gotoAddress, currentLine)
   of claSet:
-    handler.executeSet(cmdResult.option, cmdResult.value)
+    handler.executeSet(cmdResult.option, cmdResult.value, cmdResult.valueAfterSpace)
   of claHelp:
     handler.executeHelp(cmdResult.topic)
   of claUndo:
