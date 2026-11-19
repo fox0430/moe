@@ -26,7 +26,9 @@ import std/[unittest, options, posix, tables, strutils]
 import pkg/results
 
 import ../src/moe {.all.}
-import ../src/moepkg/[editor, config, types, modes, handler, key_bindings]
+import
+  ../src/moepkg/
+    [editor, config, types, modes, handler, key_bindings, viewer_mode, buffer_manager]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/buffer/core
 
@@ -222,6 +224,30 @@ suite "pollTerminalSessions - sub-mode round trip":
 
     check not e.terminalStates.hasKey(termBuf.id)
 
+  test "An exited shell stays while a viewer covers the window browsing it":
+    ## Closing the viewer goes back to the scrollback the window was browsing.
+    let e = createTestEditor()
+    let w = e.windowManager.windows[0]
+    let termBuf = e.registerExitedTerminalInWindow(w, "bash")
+    w.modeState.scrollbackSnapshot = newTextBuffer("")
+    w.mode = EditorMode.Normal
+    e.syncActiveWindow()
+    let bmState = newBufferManagerState()
+    require e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    ).isOk
+
+    e.pollTerminalSessions()
+    check e.terminalStates.hasKey(termBuf.id)
+
+    e.closeLiveViewer()
+    check w.isBrowsingTerminal
+    e.pollTerminalSessions()
+    check e.terminalStates.hasKey(termBuf.id)
+
 suite "pollTerminalSessions - PTY size":
   test "the PTY follows the smallest window showing the session":
     ## Several windows can share one session; the size must fit them all.
@@ -317,7 +343,9 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
 
     check session.pty.pendingWriteBytes < pendingBefore
 
-  test "a backgrounded session that exited keeps its tab until it is visited":
+  test "a backgrounded session that exited is torn down":
+    ## As Vim wipes out a hidden shell that exits, rather than keeping a tab
+    ## that a visit would only close.
     let e = createTestEditor()
     let w = e.windowManager.windows[0]
     let termBuf = e.registerExitedTerminalInWindow(w, "bash")
@@ -329,12 +357,34 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
     check e.tryActivateBuffer(other.id).isOk
 
     e.pollTerminalSessions()
-    # Not torn down behind the user's back.
-    check e.terminalStates.hasKey(termBufId)
 
-    check e.tryActivateBuffer(termBufId).isOk
-    e.pollTerminalSessions()
     check not e.terminalStates.hasKey(termBufId)
+    check e.bufferIndexById(termBufId) < 0
+    check termBufId notin w.bufferIds
+    check w.tabBufferId == other.id
+
+  test "leaving the scrollback of an exited shell tears it down":
+    let e = createTestEditor()
+    let w = e.windowManager.windows[0]
+    let termBuf = e.registerExitedTerminalInWindow(w, "bash")
+    let termBufId = termBuf.id
+    w.modeState.scrollbackSnapshot = newTextBuffer("")
+    w.mode = EditorMode.Normal
+    e.syncActiveWindow()
+
+    e.pollTerminalSessions()
+    require e.terminalStates.hasKey(termBufId)
+
+    let other = newTextBuffer("")
+    e.addBuffer(other)
+    e.addBufferToWindowList(other)
+    check e.tryActivateBuffer(other.id).isOk
+
+    e.pollTerminalSessions()
+
+    check not e.terminalStates.hasKey(termBufId)
+    check termBufId notin w.bufferIds
+    check w.tabBufferId == other.id
 
   test "a backgrounded session is not resized":
     ## No window shows the session, so the grid must stay as it was.
