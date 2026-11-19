@@ -123,13 +123,9 @@ proc isCodeBlockLine*(b: TextBuffer, line: int): bool =
   let exitInBlock = states[line].lang.markdown.inCodeBlock
   enterInBlock or exitInBlock
 
-proc scanAndApplyUriUnderlines*(
-    b: TextBuffer, startLine, endLine: int, applyToCache = true
-): bool =
-  ## Batch-apply URI Underline in `[startLine, endLine]` to `b.highlight` and
-  ## (when `applyToCache`) to `b.incrementalHighlight.segments`. Applying to
-  ## the cache directly, not via `b.highlight`, keeps transient diagnostic
-  ## styling out of it. Returns true if any URI was applied.
+proc scanAndApplyUriUnderlines*(b: TextBuffer, startLine, endLine: int): bool =
+  ## Batch-apply URI Underline in `[startLine, endLine]` to `b.highlight`.
+  ## Returns true if any URI was applied.
   var ranges: seq[tuple[row, firstCol, lastCol: int]]
   for lineIdx in startLine .. endLine:
     let line = b.getLine(lineIdx)
@@ -137,10 +133,17 @@ proc scanAndApplyUriUnderlines*(
       ranges.add((row: lineIdx, firstCol: m.start, lastCol: m.finish))
   if ranges.len == 0:
     return false
-  if applyToCache and b.incrementalHighlight != nil:
-    b.incrementalHighlight.segments.addUnderlineRanges(ranges)
   b.highlight.addUnderlineRanges(ranges)
   return true
+
+proc ensureHighlight(b: TextBuffer) =
+  ## Give `b` an empty highlight if it has none and schedule a rebuild. The
+  ## parse cache describes the highlight's segments, so it goes too; code
+  ## that swaps in another highlight must drop the cache the same way.
+  if b.highlight == nil:
+    b.highlight = Highlight(colorSegments: @[])
+    b.incrementalHighlight = nil
+    b.highlightNeedsUpdate = true
 
 proc continueIncrementalHighlight*(
     b: TextBuffer, budgetLines: int, parsedLines: var int
@@ -148,11 +151,12 @@ proc continueIncrementalHighlight*(
   ## Resume a budgeted re-parse started by `updateHighlight`; returns true
   ## while work remains. `parsedLines` receives the actual lines consumed.
   parsedLines = 0
-  let incr = b.incrementalHighlight
-  if b.isUtilityBuffer or incr == nil or incr.pendingReparse == nil:
+  if b.isUtilityBuffer:
     return false
-  if b.highlight == nil:
-    b.highlight = Highlight(colorSegments: @[])
+  b.ensureHighlight()
+  let incr = b.incrementalHighlight
+  if incr == nil or incr.pendingReparse == nil:
+    return false
   let pr = incr.pendingReparse
   # A restart below rebuilds the segments without URI underlines, so rewind
   # the URI scan as `updateHighlight` does.
@@ -163,6 +167,7 @@ proc continueIncrementalHighlight*(
     proc(i: int): string =
       buf.getLine(i),
     b.incrementalHighlight,
+    b.highlight.colorSegments,
     b.lastChangedLines,
     b.reservedWords,
     b.language,
@@ -171,7 +176,6 @@ proc continueIncrementalHighlight*(
     b.contentVersion,
     parsedLines,
   )
-  b.highlight.colorSegments = b.incrementalHighlight.segments
   if restarting:
     let newPr = b.incrementalHighlight.pendingReparse
     if newPr != nil:
@@ -196,7 +200,10 @@ proc continueInitialHighlight*(
   const ChunkSize = 1000
 
   parsedLines = 0
-  if b.incrementalHighlight == nil or b.isUtilityBuffer:
+  if b.isUtilityBuffer:
+    return false
+  b.ensureHighlight()
+  if b.incrementalHighlight == nil:
     return false
   if b.incrementalHighlight.pendingReparse != nil:
     return b.continueIncrementalHighlight(budgetLines, parsedLines)
@@ -243,9 +250,6 @@ proc continueInitialHighlight*(
     # than the buffer and `segments` unsorted, breaking the sorted-input
     # contracts of `segmentCutIndex` and the splice's binary search.
     b.incrementalHighlight.lineStates.states.setLen(startLine)
-    b.incrementalHighlight.segments.setLen(
-      b.incrementalHighlight.segments.segmentCutIndex(startLine)
-    )
     b.highlight.colorSegments.setLen(
       b.highlight.colorSegments.segmentCutIndex(startLine)
     )
@@ -264,12 +268,10 @@ proc continueInitialHighlight*(
     bufferStr, startLine, endLine, lastState, b.reservedWords, b.language, tails
   )
 
-  b.incrementalHighlight.segments.add(newSegments)
   b.incrementalHighlight.lineStates.states.add(newLineStates)
   b.incrementalHighlight.parsedUpTo = endLine
 
-  # Append new segments to the existing highlight (preserving earlier URI
-  # underlines) rather than rebuilding from incrementalHighlight.segments.
+  # Append, keeping the URI underlines already on earlier rows.
   b.highlight.colorSegments.add(newSegments)
 
   parsedLines = endLine - startLine + 1
@@ -293,6 +295,7 @@ proc continueUriScan*(b: TextBuffer, budgetLines: int, scannedLines: var int): b
   # Skip raw buffers: URI scan would parse binary.
   if b.isUtilityBuffer or not b.allowsTextTransforms or b.uriScanParsedUpTo >= b.len - 1:
     return false
+  b.ensureHighlight()
 
   let startLine = b.uriScanParsedUpTo + 1
   let chunkEnd =
@@ -344,8 +347,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
     # Keep the Highlight ref alive across reparse so the LSP semantic overlay
     # (living in the same object) does not need saving. Only colorSegments
     # is rewritten below.
-    if b.highlight == nil:
-      b.highlight = Highlight(colorSegments: @[])
+    b.ensureHighlight()
 
     # Fallback: drop a stale overlay the forward-edit path missed (undo/redo,
     # reload, ckSnapshot).
@@ -384,6 +386,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           proc(i: int): string =
             buf.getLine(i),
           b.incrementalHighlight,
+          b.highlight.colorSegments,
           b.lastChangedLines,
           b.reservedWords,
           b.language,
@@ -392,8 +395,6 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           b.contentVersion,
           parsedLines,
         )
-
-        b.highlight.colorSegments = b.incrementalHighlight.segments
         highlightRebuilt = false
       else:
         # Cache invalid or first time: with a budget, let
@@ -407,7 +408,6 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           b.incrementalHighlight = IncrementalHighlight(
             backend: b.effectiveHighlightBackend,
             initialState: b.newBufferTokenizerState(),
-            segments: @[],
             lineStates: LineStateCache(states: @[]),
             parsedUpTo: -1,
           )
@@ -433,7 +433,6 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           b.incrementalHighlight = IncrementalHighlight(
             backend: b.effectiveHighlightBackend,
             initialState: b.newBufferTokenizerState(),
-            segments: segments,
             lineStates: LineStateCache(states: lineStates),
             parsedUpTo: b.len - 1,
           )
@@ -467,9 +466,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
         if pr != nil and uriEnd > pr.reparseEnd:
           uriEnd = pr.reparseEnd
       if uriEnd >= uriStart:
-        discard scanAndApplyUriUnderlines(
-          b, uriStart, uriEnd, applyToCache = not highlightRebuilt
-        )
+        discard scanAndApplyUriUnderlines(b, uriStart, uriEnd)
 
     # Only LSP diagnostics are underlined; skip the rebuild when an edit moved
     # none.
@@ -484,7 +481,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
       # full file from the beginning.
       b.uriScanParsedUpTo = -1
     elif reparseOngoing:
-      # The re-parse trimmed the cached segments (URI underlines included)
+      # The re-parse trimmed the segments (URI underlines included)
       # from `reparseStart` on; rewind the scan to re-cover them as chunks
       # are appended. Only when THIS call trimmed — a plain resume touches
       # no covered rows, so rewinding would re-crawl them on every trigger.

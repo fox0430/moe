@@ -126,10 +126,10 @@ when defined(moe.matter) or defined(features.moe.matter):
       let (oldSegments, oldStates) = initHighlightIncremental(
         lines, 0, lines.high, seed, @[], SourceLanguage.langNim
       )
+      var segs = oldSegments
       var incremental = IncrementalHighlight(
         backend: hbMatter,
         initialState: seed,
-        segments: oldSegments,
         lineStates: LineStateCache(states: oldStates),
         parsedUpTo: lines.high,
       )
@@ -140,6 +140,7 @@ when defined(moe.matter) or defined(features.moe.matter):
         proc(i: int): string =
           lines[i],
         incremental,
+        segs,
         0,
         @[],
         SourceLanguage.langNim,
@@ -156,6 +157,7 @@ when defined(moe.matter) or defined(features.moe.matter):
           proc(i: int): string =
             lines[i],
           incremental,
+          segs,
           0,
           @[],
           SourceLanguage.langNim,
@@ -167,7 +169,7 @@ when defined(moe.matter) or defined(features.moe.matter):
       let (freshSegments, freshStates) = initHighlightIncremental(
         lines, 0, lines.high, seed, @[], SourceLanguage.langNim
       )
-      check incremental.segments == freshSegments
+      check segs == freshSegments
       check incremental.lineStates.states == freshStates
 
     test "progressive Matter load survives an edit before completion":
@@ -207,7 +209,7 @@ when defined(moe.matter) or defined(features.moe.matter):
         @[],
         SourceLanguage.langNim,
       )
-      check buffer.incrementalHighlight.segments == freshSegments
+      check buffer.highlight.colorSegments == freshSegments
       check buffer.incrementalHighlight.lineStates.states == freshStates
 
     test "default config preserves a progressive builtin load cache":
@@ -230,10 +232,10 @@ when defined(moe.matter) or defined(features.moe.matter):
       let (segments, states) = initHighlightIncremental(
         lines, 0, lines.high, seed, @[], SourceLanguage.langNim
       )
+      var segs = segments
       var incremental = IncrementalHighlight(
         backend: hbMatter,
         initialState: seed,
-        segments: segments,
         lineStates: LineStateCache(states: states),
         parsedUpTo: lines.high,
       )
@@ -245,6 +247,7 @@ when defined(moe.matter) or defined(features.moe.matter):
         proc(i: int): string =
           lines[i],
         incremental,
+        segs,
         150,
         @[],
         SourceLanguage.langNim,
@@ -265,10 +268,10 @@ when defined(moe.matter) or defined(features.moe.matter):
       let (segments, states) = initHighlightIncremental(
         lines, 0, lines.high, seed, @[], SourceLanguage.langNim
       )
+      var segs = segments
       var incremental = IncrementalHighlight(
         backend: hbMatter,
         initialState: seed,
-        segments: segments,
         lineStates: LineStateCache(states: states),
         parsedUpTo: lines.high,
       )
@@ -281,6 +284,7 @@ when defined(moe.matter) or defined(features.moe.matter):
         proc(i: int): string =
           lines[i],
         incremental,
+        segs,
         5,
         @[],
         SourceLanguage.langNim,
