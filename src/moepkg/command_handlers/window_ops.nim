@@ -21,13 +21,25 @@
 ## result_processor.nim.
 
 when not defined(moe.embedded):
-  import std/tables
+  import std/[options, sequtils, tables]
 
 import pkg/results
 
 import ../[editor, types, viewer_mode, window_manager, fold_open]
 
 import editor_ops, handler_result
+
+when not defined(moe.embedded):
+  proc closeSessionOutOfView(e: Editor, id: BufferId, force: bool) =
+    ## A Terminal session outlives its windows as a buffer does. As in Vim, one
+    ## that has ended goes with the last of them, and `:q!` ends a running one.
+    let session = e.terminalStates.getOrDefault(id)
+    if session == nil or (session.exitCode.isNone and not force):
+      return
+    for window in e.windowManager.windows:
+      if window.tabBufferId == id:
+        return
+    e.closeTerminalBuffer(id)
 
 proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Handle buffer / window switching and layout kinds. Returns true to continue.
@@ -88,12 +100,12 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
       # A split viewer closed its own window as part of teardown.
       return true
     when not defined(moe.embedded):
-      let termBufId = activeWin.tabBufferId
-      if e.terminalStates.hasKey(termBufId):
-        e.closeTerminalBuffer(termBufId)
+      let tab = activeWin.tabBufferId
     let shouldQuit = e.closeWindow()
     if shouldQuit:
       return false
+    when not defined(moe.embedded):
+      e.closeSessionOutOfView(tab, r.forceClose)
     return true
   of hrNextWindow:
     e.switchToNextWindow()
@@ -135,6 +147,9 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     e.swapWindow()
     return true
   of hrOnlyWindow:
+    when not defined(moe.embedded):
+      let closedTabs =
+        e.windowManager.windows.filterIt(it != e.activeWindow).mapIt(it.tabBufferId)
     for win in e.windowManager.windows:
       if win != e.activeWindow:
         e.releaseTabLines(win)
@@ -142,6 +157,9 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     e.syncActiveWindow()
     if e.windowManager.windows.len > 0:
       e.setActiveWindowScreenCursor(e.activeWindow)
+    when not defined(moe.embedded):
+      for tab in closedTabs:
+        e.closeSessionOutOfView(tab, force = false)
     return true
   of hrBufferDelete:
     let deleteResult =
