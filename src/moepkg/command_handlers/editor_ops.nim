@@ -122,8 +122,7 @@ proc runningJob*(e: Editor, spare = none(BufferId)): Option[BufferId] =
     for buf in e.buffers:
       ids.add buf.id
     for id in ids:
-      let session = e.terminalStates.getOrDefault(id)
-      if session != nil and session.exitCode.isNone and some(id) != spare:
+      if e.isJobRunning(id) and some(id) != spare:
         return some(id)
     none(BufferId)
 

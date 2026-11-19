@@ -653,7 +653,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
       HelpEntry(syntax: "bd [number|name]", description: "Delete buffer"),
       HelpEntry(
         syntax: "bd! [number|name]",
-        description: "Delete buffer, discarding unsaved changes",
+        description: "Delete buffer, discarding unsaved changes or ending its job",
       ),
     ],
     action: some(claBufferDelete),

@@ -94,6 +94,10 @@ proc registerFakeTerminal(
     command,
   )
 
+proc endJob(e: Editor, id: BufferId) =
+  ## Mark the session's job as ended, as the poll does once the shell exits.
+  e.terminalStates[id].exitCode = some(0)
+
 proc enterNormal(e: Editor): TextBuffer =
   ## Ctrl-\ Ctrl-N through the real key path: the dispatcher sets the sub-mode,
   ## the result epilogue derives the view from it. Returns the scrollback
@@ -275,13 +279,13 @@ suite "Terminal tabs - closeTerminalBuffer":
     check e.activeWindow.modeState.kind == mskTerminal
 
 suite "Terminal tabs - deleteCurrentBuffer":
-  test ":bd on a Terminal buffer routes through closeTerminalBuffer":
+  test ":bd! on a Terminal buffer routes through closeTerminalBuffer":
     let e = createTestEditor()
     let originalBuf = e.activeWindow.buffer
     let termBuf = registerFakeTerminal(e, "bash")
     let termBufId = termBuf.id
 
-    check e.deleteCurrentBuffer().isOk
+    check e.deleteCurrentBuffer(force = true).isOk
 
     # PTY state and buffer registration were torn down.
     check not e.terminalStates.hasKey(termBufId)
@@ -289,6 +293,65 @@ suite "Terminal tabs - deleteCurrentBuffer":
     # Active buffer rolled back to the file tab in Normal mode.
     check e.activeWindow.buffer == originalBuf
     check e.activeWindow.mode == EditorMode.Normal
+
+  test ":bd refuses a running job, as Vim's E948":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+
+    let deleted = e.deleteCurrentBuffer()
+
+    check deleted.isErr
+    check deleted.error == "Job still running (add ! to end the job)"
+    check e.terminalStates.hasKey(termBuf.id)
+    checkOnSession(e, e.activeWindow, termBuf)
+
+  test ":bd N refuses a running job out of view":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    require e.tryActivateBuffer(textBuf.id).isOk
+
+    let beeps = e.state.beepCount
+
+    e.runCommand("bd " & $termBuf.id.int)
+
+    check e.state.statusMessage == "Job still running (add ! to end the job)"
+    check e.state.beepCount == beeps + 1
+    check e.terminalStates.hasKey(termBuf.id)
+    check e.activeWindow.tabBufferId == textBuf.id
+
+    e.runCommand("bd! " & $termBuf.id.int)
+
+    check not e.terminalStates.hasKey(termBuf.id)
+    check e.bufferById(termBuf.id).isNone
+
+  test "a refused :bd drops the rest of the mapping":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    check textBuf.insertText(BufferPosition(line: 0, column: 0), "ab").isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    require e.tryActivateBuffer(textBuf.id).isOk
+    let keys = ": b d Space " & ($termBuf.id.int).mapIt($it).join(" ") & " Enter x"
+    check e.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Normal, "Q", keys, noremap = true
+    ).len == 0
+
+    check e.handleKeyCombo(charKey("Q"))
+
+    check e.state.statusMessage == "Job still running (add ! to end the job)"
+    check e.terminalStates.hasKey(termBuf.id)
+    check textBuf.getLine(0) == "ab"
+
+  test ":bd closes a session whose job has ended":
+    let e = createTestEditor()
+    let originalBuf = e.activeWindow.buffer
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.endJob(termBuf.id)
+
+    check e.deleteCurrentBuffer().isOk
+
+    check not e.terminalStates.hasKey(termBuf.id)
+    check e.activeWindow.buffer == originalBuf
 
 suite "Terminal tabs - cleanupAllTerminals":
   test "Tears down every live terminal PTY and clears the state map":
@@ -1264,6 +1327,7 @@ suite "Terminal tabs - Terminal-Normal browses an unregistered snapshot":
     let termBuf = registerFakeTerminal(e, "bash")
     let termBufId = termBuf.id
     let snapshot = e.enterNormal()
+    e.endJob(termBufId)
 
     check snapshot.id != termBufId
 
@@ -1444,11 +1508,42 @@ suite "Terminal tabs - the view is derived from the sub-mode":
 
     require e.bufferById(termId).isSome
 
+    e.endJob(termId)
     let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termId)
     discard e.processResult(r, textBuf)
 
     check not e.terminalStates.hasKey(termId)
     check e.bufferById(termId).isNone
+    check termState.pty.closed
+
+  test "BufferManager delete refuses a running job as :bd does":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termState = safeOpenFakeTerminalState()
+    let termBuf = registerFakeTerminal(e, "bash", termState)
+    defer:
+      termState.cleanup()
+
+    let beeps = e.state.beepCount
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termBuf.id)
+    discard e.processResult(r, textBuf)
+
+    check e.state.statusMessage ==
+      "Job still running (use :bd! " & $termBuf.id.int & " to end it)"
+    check e.state.beepCount == beeps + 1
+    check e.terminalStates.hasKey(termBuf.id)
+    check not termState.pty.closed
+
+  test "a host's closeBuffer with force ends a running job":
+    let e = createTestEditor()
+    let termState = safeOpenFakeTerminalState()
+    let termBuf = registerFakeTerminal(e, "bash", termState)
+    require e.closeBuffer(termBuf.id).isErr
+
+    check e.closeBuffer(termBuf.id, force = true).isOk
+
+    check not e.terminalStates.hasKey(termBuf.id)
+    check e.bufferById(termBuf.id).isNone
     check termState.pty.closed
 
   test "BufferManager overlay survives delete of its origin Terminal tab":
@@ -1469,6 +1564,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     require e.activeWindow.modeState.kind == mskBufferManager
     require e.bufferById(termId).isSome
 
+    e.endJob(termId)
     let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termId)
     discard e.processResult(r, textBuf)
 
@@ -1509,6 +1605,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     require e.activeWindow.tabBufferId == termId
     require e.bufferById(termId).isSome
 
+    e.endJob(termId)
     let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termId)
     discard e.processResult(r, textBuf)
     require e.bufferById(termId).isNone
@@ -1705,6 +1802,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     e.runCommand("ls")
     require e.state.mode == EditorMode.BufferManager
 
+    e.endJob(termBuf.id)
     let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termBuf.id)
     discard e.processResult(r, e.activeBuffer)
     require e.bufferById(termBuf.id).isNone
