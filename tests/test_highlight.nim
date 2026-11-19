@@ -17,11 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, unicode, os, strutils, json, tables, random]
+import std/[unittest, unicode, os, strutils, json, tables, random, importutils]
 
 import pkg/celina
 
-import ../src/moepkg/highlight
+import ../src/moepkg/highlight {.all.}
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
@@ -160,8 +160,7 @@ suite "Highlight - Incremental Update":
       buffer, 0, 2, TokenizerState(), @[], SourceLanguage.langRust
     )
     var segs = segments
-    var incrHighlight =
-      IncrementalHighlight(lineStates: LineStateCache(states: lineStates))
+    var incrHighlight = IncrementalHighlight(lineStates: initLineStateCache(lineStates))
 
     # Update after editing line 1 (no size change)
     updateHighlightIncremental(
@@ -176,7 +175,7 @@ suite "Highlight - Incremental Update":
     )
 
     check segs.len > 0
-    check incrHighlight.lineStates.states.len == 3
+    check incrHighlight.lineStates.len == 3
 
   test "updateHighlightIncremental with buffer size increase":
     var buffer = @["line1", "line2", "line3"]
@@ -186,8 +185,7 @@ suite "Highlight - Incremental Update":
       buffer, 0, 2, TokenizerState(), @[], SourceLanguage.langRust
     )
     var segs = segments
-    var incrHighlight =
-      IncrementalHighlight(lineStates: LineStateCache(states: lineStates))
+    var incrHighlight = IncrementalHighlight(lineStates: initLineStateCache(lineStates))
 
     # Add a line
     buffer.add("line4")
@@ -205,7 +203,7 @@ suite "Highlight - Incremental Update":
     )
 
     # Line states should be resized to match buffer
-    check incrHighlight.lineStates.states.len == 4
+    check incrHighlight.lineStates.len == 4
 
   test "updateHighlightIncremental with buffer size decrease":
     var buffer = @["line1", "line2", "line3", "line4"]
@@ -215,8 +213,7 @@ suite "Highlight - Incremental Update":
       buffer, 0, 3, TokenizerState(), @[], SourceLanguage.langRust
     )
     var segs = segments
-    var incrHighlight =
-      IncrementalHighlight(lineStates: LineStateCache(states: lineStates))
+    var incrHighlight = IncrementalHighlight(lineStates: initLineStateCache(lineStates))
 
     # Remove a line
     buffer.delete(2)
@@ -234,7 +231,7 @@ suite "Highlight - Incremental Update":
     )
 
     # Line states should be resized to match buffer
-    check incrHighlight.lineStates.states.len == 3
+    check incrHighlight.lineStates.len == 3
 
   test "updateHighlightIncremental re-parses all lines from change point":
     let buffer = @["line0", "line1", "line2", "line3", "line4"]
@@ -244,8 +241,7 @@ suite "Highlight - Incremental Update":
       buffer, 0, 4, TokenizerState(), @[], SourceLanguage.langRust
     )
     var segs = segments
-    var incrHighlight =
-      IncrementalHighlight(lineStates: LineStateCache(states: lineStates))
+    var incrHighlight = IncrementalHighlight(lineStates: initLineStateCache(lineStates))
 
     # Edit line 2 - should re-parse from line 0 (margin of 2) to end of file
     updateHighlightIncremental(
@@ -260,7 +256,7 @@ suite "Highlight - Incremental Update":
     )
 
     check segs.len > 0
-    check incrHighlight.lineStates.states.len == 5
+    check incrHighlight.lineStates.len == 5
 
 suite "Highlight - Rust Language Specific":
   test "Rust keywords highlighted correctly":
@@ -363,7 +359,7 @@ suite "Highlight - Edge Cases":
   test "updateHighlightIncremental with empty buffer":
     let buffer: seq[string] = @[]
     var segs: seq[ColorSegment]
-    var incrHighlight = IncrementalHighlight(lineStates: LineStateCache(states: @[]))
+    var incrHighlight = IncrementalHighlight(lineStates: LineStateCache())
 
     # Should not crash
     updateHighlightIncremental(
@@ -377,7 +373,7 @@ suite "Highlight - Edge Cases":
       SourceLanguage.langRust,
     )
 
-    check incrHighlight.lineStates.states.len == 0
+    check incrHighlight.lineStates.len == 0
 
 suite "Highlight - Multi-line Constructs":
   test "Multi-line comment state preservation":
@@ -473,8 +469,7 @@ suite "Highlight - Incremental Update After Edit":
       buffer, 0, 2, TokenizerState(), @[], SourceLanguage.langRust
     )
     var segs = segments
-    var incrHighlight =
-      IncrementalHighlight(lineStates: LineStateCache(states: lineStates))
+    var incrHighlight = IncrementalHighlight(lineStates: initLineStateCache(lineStates))
 
     # Simulate dw: delete "x = " from line 0 → "let \"hello\";"
     buffer[0] = "let \"hello\";"
@@ -492,7 +487,7 @@ suite "Highlight - Incremental Update After Edit":
     )
 
     # All lines should have valid segments
-    check incrHighlight.lineStates.states.len == 3
+    check incrHighlight.lineStates.len == 3
 
     # Segments must cover all 3 lines
     var coveredLines: set[uint16]
@@ -514,7 +509,7 @@ suite "Highlight - Incremental Update After Edit":
     )
     var segs = segments0
     var incrHighlight =
-      IncrementalHighlight(lineStates: LineStateCache(states: lineStates0))
+      IncrementalHighlight(lineStates: initLineStateCache(lineStates0))
 
     # Simulate editing line 1: "    let x = 5;" → "    let z = 5;"
     buffer[1] = "    let z = 5;"
@@ -554,7 +549,7 @@ suite "Highlight - Incremental Update After Edit":
     )
     var segs = segments0
     var incrHighlight =
-      IncrementalHighlight(lineStates: LineStateCache(states: lineStates0))
+      IncrementalHighlight(lineStates: initLineStateCache(lineStates0))
 
     # Within-line edit in the template body, well below the closing fence.
     buffer[4] = "  body { color: var(--cc); }"
@@ -587,7 +582,7 @@ suite "Highlight - Incremental Update After Edit":
     )
     var segs = segments0
     var incrHighlight =
-      IncrementalHighlight(lineStates: LineStateCache(states: lineStates0))
+      IncrementalHighlight(lineStates: initLineStateCache(lineStates0))
 
     # Verify line 3 has keyword highlighting before the edit
     var hadKeywordBefore = false
@@ -633,7 +628,7 @@ suite "Highlight - Incremental Update After Edit":
     )
     var segs = segments0
     var incrHighlight =
-      IncrementalHighlight(lineStates: LineStateCache(states: lineStates0))
+      IncrementalHighlight(lineStates: initLineStateCache(lineStates0))
 
     # Edit line 5 (well within the buffer, far from end)
     buffer[5] = "let changed = 999;"
@@ -649,7 +644,7 @@ suite "Highlight - Incremental Update After Edit":
       SourceLanguage.langRust,
     )
 
-    check incrHighlight.lineStates.states.len == 300
+    check incrHighlight.lineStates.len == 300
 
     # Result must match full parse
     let incrResult = Highlight(colorSegments: segs)
@@ -681,7 +676,7 @@ suite "Highlight - budgeted incremental update":
   ): tuple[ih: IncrementalHighlight, segs: seq[ColorSegment]] =
     let (segments, lineStates) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
-    (IncrementalHighlight(lineStates: LineStateCache(states: lineStates)), segments)
+    (IncrementalHighlight(lineStates: initLineStateCache(lineStates)), segments)
 
   proc rustLines(n: int): seq[string] =
     result = newSeq[string](n)
@@ -727,7 +722,7 @@ suite "Highlight - budgeted incremental update":
     check calls >= 2
     check ih.pendingReparse == nil
     checkMatchesFullParse(buffer, segs, SourceLanguage.langRust)
-    check ih.lineStates.states.len == buffer.len
+    check ih.lineStates.len == buffer.len
 
   test "mid-re-parse segments stay sorted across calls":
     var buffer = rustLines(250)
@@ -857,7 +852,7 @@ suite "Highlight - budgeted incremental update":
       discard
     check ih.pendingReparse == nil
     checkMatchesFullParse(buffer, segs, SourceLanguage.langRust)
-    check ih.lineStates.states.len == buffer.len
+    check ih.lineStates.len == buffer.len
 
   test "empty buffer with a budget completes immediately":
     var (ih, segs) = parseFullIncremental(@[], SourceLanguage.langRust)
@@ -1001,7 +996,7 @@ suite "Highlight - budgeted incremental update":
       buffer.len, getLine, ih, segs, 1, @[], SourceLanguage.langYaml, 0, 50, 1
     )
     check ih.pendingReparse != nil
-    check ih.lineStates.states.len == 0
+    check ih.lineStates.len == 0
 
     # A second edit below the cache while the flight is live: the restart
     # must rewind to the top of the available cache.
@@ -1043,7 +1038,7 @@ suite "Highlight - budgeted incremental update":
     discard buf.commitTransaction()
     check buf.updateHighlight(50)
     check buf.incrementalHighlight.pendingReparse != nil
-    check buf.incrementalHighlight.lineStates.states.len == 0
+    check buf.incrementalHighlight.lineStates.len == 0
 
     # A second edit must restart the budgeted flight, not rebuild the whole
     # file in one call (which would leave no flight to resume).
@@ -1245,7 +1240,7 @@ suite "Highlight - budgeted incremental update":
       inc frames
     check frames > 1
     check buf.incrementalHighlight.pendingReparse == nil
-    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    check buf.incrementalHighlight.lineStates.len == buf.len
     var lines = newSeq[string](buf.len)
     for i in 0 ..< buf.len:
       lines[i] = buf.getLine(i)
@@ -1957,7 +1952,7 @@ suite "Highlight - budgeted incremental update":
     # caches in a state that diverges from a full parse.
     while buf.continueInitialHighlight():
       discard
-    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    check buf.incrementalHighlight.lineStates.len == buf.len
     var lines = newSeq[string](buf.len)
     for i in 0 ..< buf.len:
       lines[i] = buf.getLine(i)
@@ -2250,7 +2245,7 @@ suite "Highlight - Nim Incremental Comment/String":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langNim)
 
     # Insert comment before proc bar
@@ -2274,7 +2269,7 @@ suite "Highlight - Nim Incremental Comment/String":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langNim)
 
     # Insert comment after the multiline string
@@ -2298,7 +2293,7 @@ suite "Highlight - Nim Incremental Comment/String":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langNim)
 
     # Insert empty line at 3
@@ -2389,7 +2384,7 @@ suite "Highlight - Block Comment Multiline State":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langC
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
 
     buffer.insert("int z = 3;", 5)
     updateHighlightIncremental(
@@ -2411,7 +2406,7 @@ suite "Highlight - Block Comment Multiline State":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langRust
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
 
     buffer.insert("let z = 2;", 4)
     updateHighlightIncremental(
@@ -2433,7 +2428,7 @@ suite "Highlight - Block Comment Multiline State":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langJavaScript
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
 
     buffer.insert("let z = 3;", 4)
     updateHighlightIncremental(
@@ -2456,7 +2451,7 @@ suite "Highlight - Block Comment Multiline State":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langTypeScript
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
 
     buffer.insert("let z: number = 3;", 4)
     updateHighlightIncremental(
@@ -2479,7 +2474,7 @@ suite "Highlight - Block Comment Multiline State":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langHaskell
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
 
     buffer.insert("foo = 1", 4)
     updateHighlightIncremental(
@@ -2501,7 +2496,7 @@ suite "Highlight - Block Comment Multiline State":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langToml
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
 
     buffer.insert("other = 1", 4)
     updateHighlightIncremental(
@@ -2546,7 +2541,7 @@ suite "Highlight - YAML internal chunk boundary handoff":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langYaml
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
 
     if insertLine:
       # A line-count change disables convergence: everything below is
@@ -2706,7 +2701,7 @@ suite "Highlight - YAML internal chunk boundary handoff":
     var (segs, ls) = initHighlightIncremental(
       lines, 0, lines.high, TokenizerState(), @[], SourceLanguage.langYaml
     )
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls))
     lines[0] = "    a: 1"
     updateHighlightIncremental(
       lines.len,
@@ -2863,7 +2858,7 @@ suite "Highlight - YAML internal chunk boundary handoff":
       discard
 
     check buf.incrementalHighlight.parsedUpTo == buf.len - 1
-    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    check buf.incrementalHighlight.lineStates.len == buf.len
     var sorted = true
     for i in 1 ..< buf.highlight.colorSegments.len:
       if buf.highlight.colorSegments[i].firstRow <
@@ -2900,7 +2895,7 @@ suite "Highlight - early tokenizer stop keeps the line-state cache consistent":
     )
     check ls0.len == buffer.len
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
 
     buffer[0] = buffer[0] & "x"
     updateHighlightIncremental(
@@ -2913,7 +2908,7 @@ suite "Highlight - early tokenizer stop keeps the line-state cache consistent":
       @[],
       SourceLanguage.langYaml,
     )
-    check ih.lineStates.states.len == buffer.len
+    check ih.lineStates.len == buffer.len
 
   test "interior NUL: progressive initial load completes":
     # Reproduces the per-tick IndexDefect: the first chunk's parse stopped at
@@ -2935,7 +2930,7 @@ suite "Highlight - early tokenizer stop keeps the line-state cache consistent":
     while buf.continueInitialHighlight():
       discard
     check buf.incrementalHighlight.parsedUpTo == buf.len - 1
-    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    check buf.incrementalHighlight.lineStates.len == buf.len
 
   test "markdown early stop pads every row with a resumable state":
     # Regression: the boundary normalization used to fire only for a
@@ -3074,7 +3069,7 @@ suite "Highlight - JS/TS String Line Bounding":
     let (seg0, ls0) =
       initHighlightIncremental(buffer, 0, buffer.high, TokenizerState(), @[], lang)
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     buffer[editRow] = newLine
     updateHighlightIncremental(
       buffer.len,
@@ -3097,7 +3092,7 @@ suite "Highlight - JS/TS String Line Bounding":
     let (seg0, ls0) =
       initHighlightIncremental(buffer, 0, buffer.high, TokenizerState(), @[], lang)
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     # Introduce the colon after the closing quote on row 4
     buffer[4] = "q\": 1"
     updateHighlightIncremental(
@@ -3977,7 +3972,7 @@ suite "Highlight - Progressive Initial Highlighting":
     # After loadFile, only first 1000 lines should be parsed
     check buf.incrementalHighlight != nil
     check buf.incrementalHighlight.parsedUpTo == 999
-    check buf.incrementalHighlight.lineStates.states.len == 1000
+    check buf.incrementalHighlight.lineStates.len == 1000
 
     # First call should parse next 1000 lines (1000..1999)
     check buf.continueInitialHighlight() == true
@@ -4239,7 +4234,7 @@ suite "Highlight - Markdown Incremental":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langMarkdown)
 
     # Edit a line in the middle of the frontmatter block.
@@ -4263,7 +4258,7 @@ suite "Highlight - Markdown Incremental":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langMarkdown)
 
     buffer[5] = "more text edited"
@@ -4286,7 +4281,7 @@ suite "Highlight - Markdown Incremental":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     buffer[3] = "    code line TWO"
     updateHighlightIncremental(
       buffer.len,
@@ -4307,7 +4302,7 @@ suite "Highlight - Markdown Incremental":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     buffer[5] = "line FIVE"
     updateHighlightIncremental(
       buffer.len,
@@ -4327,7 +4322,7 @@ suite "Highlight - Markdown Incremental":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langMarkdown)
 
     buffer[3] = "import std/strutils"
@@ -4349,7 +4344,7 @@ suite "Highlight - Markdown Incremental":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langMarkdown)
 
     buffer[2] = "````"
@@ -4374,7 +4369,7 @@ suite "Highlight - Markdown Incremental":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langMarkdown)
 
     # Inside the open string, then the fence itself: four spaces stop it
@@ -4399,7 +4394,7 @@ suite "Highlight - Markdown Incremental":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langMarkdown)
 
     # Without the marker the 4-space fence no longer closes the block, and
@@ -4424,7 +4419,7 @@ suite "Highlight - Markdown Incremental":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     checkMatchesFullParse(buffer, segs, SourceLanguage.langMarkdown)
 
     # Unindented, the opening fence no longer lets the 4-space fence close the
@@ -4525,7 +4520,7 @@ suite "Highlight - Markdown isCodeBlockLine during multi-frame flight":
     # in the cache semantics; consumers of per-language state fields must
     # gate on `parsedUpTo` for rows in this band.
     let gapRow = loadFrontier + 100
-    let states = buf.incrementalHighlight.lineStates.states
+    let states = buf.incrementalHighlight.lineStates
     check gapRow < states.len
     check states[gapRow] == TokenizerState()
     # And the current Markdown consumer keeps returning the safe default.
@@ -4542,13 +4537,136 @@ suite "Highlight - updateHighlight cache reuse":
 
     check buf.incrementalHighlight != nil
     check buf.highlight.colorSegments.len == 0
-    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    check buf.incrementalHighlight.lineStates.len == buf.len
 
     let cached = buf.incrementalHighlight
     buf.markLineChanged(0)
     buf.updateHighlight()
 
     check buf.incrementalHighlight == cached
+
+suite "Highlight - line state cache":
+  privateAccess(LineStateCache)
+  privateAccess(StateEntry)
+
+  proc depthState(depth: int): TokenizerState =
+    result.lang.rust.commentDepth = depth
+
+  proc liveCount(c: LineStateCache): int =
+    c.entries.len - c.free.len
+
+  template checkCounts(c: LineStateCache) =
+    ## Each entry counts the lines using it, and each live one is indexed.
+    var lines = newSeq[int32](c.entries.len)
+    for id in c.ids:
+      inc lines[id]
+    var free = 0
+    for id, entry in c.entries:
+      check entry.lines == lines[id]
+      if entry.lines > 0:
+        check c.find(entry.state, entry.hash) == id
+      else:
+        inc free
+    check free == c.free.len
+
+  test "lines with equal states share one entry":
+    var states: seq[TokenizerState]
+    for i in 0 ..< 1000:
+      states.add(depthState(i mod 3))
+    let cache = initLineStateCache(states)
+
+    check cache.len == 1000
+    check cache.entries.len == 3
+    for i, state in states:
+      check cache[i] == state
+
+  test "overwriting lines frees the states they no longer use":
+    var
+      expected = newSeq[TokenizerState](10)
+      cache = initLineStateCache(expected)
+    for i in 1 .. 10_000:
+      cache[i mod 10] = depthState(i)
+      expected[i mod 10] = depthState(i)
+      check cache.liveCount <= 10
+      check cache.entries.len <= 11
+    cache.checkCounts()
+
+    for line, state in expected:
+      check cache[line] == state
+
+  test "shrinking frees the states only the cut lines used":
+    var states: seq[TokenizerState]
+    for i in 0 ..< 1000:
+      states.add(depthState(i))
+    var cache = initLineStateCache(states)
+    check cache.liveCount == 1000
+
+    cache.setLen(10)
+    check cache.liveCount == 10
+    for id in cache.free:
+      check cache.entries[id].state == TokenizerState()
+    for line in 0 ..< 10:
+      check cache[line] == states[line]
+    cache.checkCounts()
+
+  test "setLen pads with the default state and an empty cache drops the table":
+    var cache = initLineStateCache([depthState(1), depthState(2)])
+    cache.setLen(5)
+    check cache.len == 5
+    check cache[1] == depthState(2)
+    check cache[4] == TokenizerState()
+
+    cache.setLen(0)
+    check cache.len == 0
+    check cache.entries.len == 0
+    cache.add(depthState(7))
+    check cache[0] == depthState(7)
+
+  test "reads back what a plain seq would hold under random edits":
+    var
+      rng = initRand(20261120)
+      cache: LineStateCache
+      model: seq[TokenizerState]
+    for step in 0 ..< 20_000:
+      let state = depthState(rng.rand(200))
+      case rng.rand(9)
+      of 0 .. 5:
+        if model.len > 0:
+          let line = rng.rand(model.high)
+          cache[line] = state
+          model[line] = state
+      of 6, 7:
+        cache.add(state)
+        model.add(state)
+      else:
+        let newLen = rng.rand(model.len + 20)
+        cache.setLen(newLen)
+        model.setLen(newLen)
+      check cache.len == model.len
+      if step mod 50 == 0:
+        cache.checkCounts()
+        for line, expected in model:
+          check cache[line] == expected
+    cache.checkCounts()
+    var line = 0
+    for state in cache:
+      check state == model[line]
+      inc line
+
+  test "a highlighted file keeps a few distinct states":
+    var lines: seq[string]
+    for i in 0 ..< 500:
+      lines.add("/* a comment")
+      lines.add("   spanning lines */")
+      lines.add("int f" & $i & "(void) { return \"s\"; }")
+    let buf = newTextBuffer(lines.join("\n"))
+    buf.language = SourceLanguage.langC
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    let cache = buf.incrementalHighlight.lineStates
+    check cache.len == buf.len
+    check cache.liveCount <= 3
 
 suite "Highlight - line-length cap (synmaxcol)":
   test "buildBufferStrCapped truncates long lines and emits a default tail":
@@ -4636,7 +4754,7 @@ suite "Highlight - line-length cap (synmaxcol)":
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim, cap
     )
     var segs = seg0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: ls0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
     # Edit a non-capped line; the capped line above must remain consistent.
     buffer[1] = "let x = 100"
     updateHighlightIncremental(

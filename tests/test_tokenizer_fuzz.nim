@@ -43,7 +43,7 @@
 ##   MOE_FUZZ_TOKENIZER_SEED           default 42
 ##   MOE_FUZZ_TOKENIZER_TRACE          unset
 
-import std/[os, random, strutils, unicode, unittest]
+import std/[os, random, sequtils, strutils, unicode, unittest]
 
 import ../src/moepkg/celina_backend except defaultStyle
 import ../src/moepkg/highlight
@@ -173,7 +173,7 @@ proc checkEditedRow(language: SourceLanguage, src: string): string =
       let full = Highlight(colorSegments: segments)
       for row in 0 .. lines.high:
         var segs = segments
-        var incr = IncrementalHighlight(lineStates: LineStateCache(states: states))
+        var incr = IncrementalHighlight(lineStates: initLineStateCache(states))
         updateHighlightIncremental(
           lines.len, getLine, incr, segs, row, @ReservedWords, language, maxLineLen
         )
@@ -182,7 +182,7 @@ proc checkEditedRow(language: SourceLanguage, src: string): string =
           return
             "edit on row " & $row & " changes the colors or styles of row " & $differing &
             " (maxLineLen " & $maxLineLen & ")"
-        if incr.lineStates.states != states:
+        if toSeq(incr.lineStates) != states:
           return
             "edit on row " & $row & " changes the cached line states (maxLineLen " &
             $maxLineLen & ")"

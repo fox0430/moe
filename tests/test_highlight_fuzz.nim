@@ -1073,7 +1073,7 @@ proc runFuzz(
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
     var segs = segs0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(states0))
 
     var history: seq[Edit]
     let nEdits = 5 + rng.rand(8) # 5..12 inclusive
@@ -1167,7 +1167,7 @@ proc runFuzzBudgeted(
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
     var segs = segs0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(states0))
 
     var history: seq[Edit]
     var callLog: seq[string]
@@ -1226,8 +1226,7 @@ proc runFuzzBudgeted(
                 &"tail={ih.pendingReparse.staleTail.len}"
             else:
               "nil"
-          echo "segments=",
-            segs.len, " states=", ih.lineStates.states.len, " buf=", buf.len
+          echo "segments=", segs.len, " states=", ih.lineStates.len, " buf=", buf.len
           dumpFailure(lang, seed, it, history, buf, r, c, incr, full)
           return false
     except Exception as exc:
@@ -1411,7 +1410,7 @@ suite "Incremental Highlight Chunk Boundary":
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
     var segs = segs0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(states0))
 
     buf[2] = "<![CDATA["
     let getLine = proc(i: int): string =
@@ -1438,7 +1437,7 @@ suite "Incremental Highlight Chunk Boundary":
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
     var segs = segs0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(states0))
 
     # Close the comment early: everything at and below line 110 changes
     # color from comment to markup — but only if the reparse reaches it.
@@ -1479,7 +1478,7 @@ suite "Incremental Highlight Line-Bounded Strings":
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
     var segs = segs0
-    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
+    var ih = IncrementalHighlight(lineStates: initLineStateCache(states0))
 
     buf[editRow] = editText
     let getLine = proc(i: int): string =

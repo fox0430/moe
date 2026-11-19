@@ -5,7 +5,7 @@
 when not (defined(moe.matter) or defined(features.moe.matter)):
   {.error: "moepkg/syntax/matter_backend requires the Matter feature".}
 
-import std/[sets, strutils, tables]
+import std/[hashes, sets, strutils, tables]
 import matter/[engine, grammarpackages, rawgrammar, selectors]
 
 import tokenizer
@@ -86,9 +86,6 @@ type
     stack*: StateStack
     failed*: bool
 
-proc `==`*(a, b: MatterLineState): bool =
-  a.failed == b.failed and a.grammar == b.grammar and a.stack == b.stack
-
 proc `==`*(a, b: MatterGrammarSet): bool =
   ## Runtime caches do not participate in configuration value equality.
   if cast[pointer](a) == cast[pointer](b):
@@ -98,6 +95,20 @@ proc `==`*(a, b: MatterGrammarSet): bool =
   if b.isNil:
     return a.sources.len == 0 and a.scopeRules.len == 0
   a.sources == b.sources and a.scopeRules == b.scopeRules
+
+proc `==`*(a, b: MatterLineState): bool =
+  ## Equal states parse the next line alike: the grammar set's scope rules
+  ## categorise its spans.
+  a.failed == b.failed and a.grammar == b.grammar and a.grammars == b.grammars and
+    a.stack == b.stack
+
+proc hash*(state: MatterLineState): Hash =
+  ## Agrees with `==`. Equal stacks may be distinct objects, so hash the
+  ## structure: equal stacks have the same depth and active scopes.
+  !$(
+    hash(state.failed) !& hash(cast[pointer](state.grammar)) !& hash(state.stack.depth) !&
+    hash(state.stack.activeScopes)
+  )
 
 func scopeMatches(scope, prefix: string): bool =
   scope == prefix or

@@ -1,7 +1,8 @@
 when defined(moe.matter) or defined(features.moe.matter):
-  import std/[sequtils, strutils, unicode, unittest]
+  import std/[importutils, sequtils, strutils, unicode, unittest]
   import pkg/results
-  import ../src/moepkg/[config, highlight, highlight_config, syntax/tokenizer]
+  import ../src/moepkg/[config, highlight_config, syntax/tokenizer]
+  import ../src/moepkg/highlight {.all.}
   import ../src/moepkg/buffer {.all.}
   import ../src/moepkg/types/highlight_types
   import ../src/moepkg/syntax/matter_backend
@@ -130,7 +131,7 @@ when defined(moe.matter) or defined(features.moe.matter):
       var incremental = IncrementalHighlight(
         backend: hbMatter,
         initialState: seed,
-        lineStates: LineStateCache(states: oldStates),
+        lineStates: initLineStateCache(oldStates),
         parsedUpTo: lines.high,
       )
       lines[0] = "# ordinary comment"
@@ -170,7 +171,7 @@ when defined(moe.matter) or defined(features.moe.matter):
         lines, 0, lines.high, seed, @[], SourceLanguage.langNim
       )
       check segs == freshSegments
-      check incremental.lineStates.states == freshStates
+      check toSeq(incremental.lineStates) == freshStates
 
     test "progressive Matter load survives an edit before completion":
       var content = ""
@@ -210,7 +211,7 @@ when defined(moe.matter) or defined(features.moe.matter):
         SourceLanguage.langNim,
       )
       check buffer.highlight.colorSegments == freshSegments
-      check buffer.incrementalHighlight.lineStates.states == freshStates
+      check toSeq(buffer.incrementalHighlight.lineStates) == freshStates
 
     test "default config preserves a progressive builtin load cache":
       var content = ""
@@ -236,10 +237,10 @@ when defined(moe.matter) or defined(features.moe.matter):
       var incremental = IncrementalHighlight(
         backend: hbMatter,
         initialState: seed,
-        lineStates: LineStateCache(states: states),
+        lineStates: initLineStateCache(states),
         parsedUpTo: lines.high,
       )
-      incremental.lineStates.states[147] = TokenizerState()
+      incremental.lineStates[147] = TokenizerState()
       lines[150] = "# edited"
       var parsed: int
       while updateHighlightIncremental(
@@ -258,7 +259,22 @@ when defined(moe.matter) or defined(features.moe.matter):
       )
       :
         discard
-      check incremental.lineStates.states[148 .. ^1].allIt(it.backend == hbMatter)
+      check toSeq(incremental.lineStates)[148 .. ^1].allIt(it.backend == hbMatter)
+
+    test "line states equal in structure share one entry":
+      privateAccess(LineStateCache)
+      var lines: seq[string]
+      for i in 0 ..< 50:
+        lines.add("let value" & $i & " = " & $i)
+        lines.add("#[ a block")
+        lines.add("   comment ]#")
+      let seed = newTokenizerState(hbMatter, langNim, newTestMatterGrammarSet())
+      let (_, states) = initHighlightIncremental(
+        lines, 0, lines.high, seed, @[], SourceLanguage.langNim
+      )
+      let cache = initLineStateCache(states)
+      check cache.len == lines.len
+      check cache.entries.len - cache.free.len == 2
 
     test "a fresh Matter reparse retries a cached failed state":
       var lines = newSeq[string](20)
@@ -272,11 +288,13 @@ when defined(moe.matter) or defined(features.moe.matter):
       var incremental = IncrementalHighlight(
         backend: hbMatter,
         initialState: seed,
-        lineStates: LineStateCache(states: states),
+        lineStates: initLineStateCache(states),
         parsedUpTo: lines.high,
       )
-      for i in 2 ..< incremental.lineStates.states.len:
-        incremental.lineStates.states[i].matterState.failed = true
+      for i in 2 ..< incremental.lineStates.len:
+        var state = incremental.lineStates[i]
+        state.matterState.failed = true
+        incremental.lineStates[i] = state
       lines[5] = "# edited"
       var parsed: int
       while updateHighlightIncremental(
@@ -295,7 +313,7 @@ when defined(moe.matter) or defined(features.moe.matter):
       )
       :
         discard
-      check incremental.lineStates.states[3 .. ^1].allIt(not it.matterState.failed)
+      check toSeq(incremental.lineStates)[3 .. ^1].allIt(not it.matterState.failed)
 else:
   static:
     doAssert true

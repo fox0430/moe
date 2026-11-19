@@ -574,7 +574,7 @@ suite "updateForFrame - split buffer re-parse budget":
       inc frames
     check frames < 100
     check buf.incrementalHighlight.pendingReparse == nil
-    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    check buf.incrementalHighlight.lineStates.len == buf.len
     # The per-frame URI scan keeps the inactive buffer's underlines current;
     # it is clamped to the syntax progress, so the loop must also drive the
     # initial-load resume, or the tail rows never get scanned.
@@ -633,7 +633,7 @@ suite "updateForFrame - split buffer re-parse budget":
       inc frames
     check frames < 100
     check buf.incrementalHighlight.pendingReparse == nil
-    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    check buf.incrementalHighlight.lineStates.len == buf.len
 
   test "advances the active buffer's in-flight re-parse across frames":
     # The active-buffer branch (updateHighlight / continueIncrementalHighlight
@@ -687,7 +687,7 @@ suite "updateForFrame - split buffer re-parse budget":
       inc frames
     check frames < 100
     check buf.incrementalHighlight.pendingReparse == nil
-    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    check buf.incrementalHighlight.lineStates.len == buf.len
     # The frame that completed the flight changed no content: the overlay
     # caches stay valid.
     check e.state.lspCache.inlayHintCache.isValid
