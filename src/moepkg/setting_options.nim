@@ -422,14 +422,16 @@ template optionNames(Option: typedesc, optionKind: SetOptionKind, field): untype
       doAssert name.len > 0, "SetOptionTable has no entry for " & $option
     names
 
+const
+  boolOptionNames = optionNames(BoolSettingOption, sokBool, boolOption)
+  intOptionNames = optionNames(IntSettingOption, sokInt, intOption)
+  floatOptionNames = optionNames(FloatSettingOption, sokFloat, floatOption)
+
 proc longName*(option: BoolSettingOption): string =
-  const names = optionNames(BoolSettingOption, sokBool, boolOption)
-  names[option]
+  boolOptionNames[option]
 
 proc longName*(option: IntSettingOption): string =
-  const names = optionNames(IntSettingOption, sokInt, intOption)
-  names[option]
+  intOptionNames[option]
 
 proc longName*(option: FloatSettingOption): string =
-  const names = optionNames(FloatSettingOption, sokFloat, floatOption)
-  names[option]
+  floatOptionNames[option]
