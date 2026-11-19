@@ -44,15 +44,22 @@ proc toCursorStyle(ct: CursorType): CursorStyle =
   of ctNonBlinkIbeam: CursorStyle.SteadyBar
 
 proc isBrowsed(e: Editor, id: BufferId): bool =
-  ## Whether a window on the session parked on `id` is in Terminal-Normal.
+  ## Whether a window on the session parked on `id` is in Terminal-Normal,
+  ## counting one a viewer covers in place: closing the viewer resumes it.
   for window in e.windowManager.windows:
-    if window.tabBufferId == id and window.isBrowsingTerminal:
+    if window.tabBufferId != id:
+      continue
+    if window.isBrowsingTerminal:
       return true
+    if window.viewerEntry.isSome and window.viewerEntry.get.returnTab == id:
+      let covered = window.viewerEntry.get.returnState
+      if covered.kind == mskTerminal and covered.terminalSubMode == tsmNormal:
+        return true
   false
 
 proc pollTerminalSessions*(e: Editor) =
-  ## Drain every live Terminal session's PTY and resize the ones on screen.
-  ## Called on every render frame.
+  ## Drain every live Terminal session's PTY, resize the ones on screen and
+  ## tear down the ones that exited. Called on every render frame.
   ##
   ## Follows `e.terminalStates`, not the windows: a backgrounded session is in
   ## no window, and a child whose output nobody drains blocks in write().
@@ -60,11 +67,18 @@ proc pollTerminalSessions*(e: Editor) =
   for id, session in e.terminalStates:
     discard session.pollOutput()
 
+    # A session that exited takes its tab, on screen or not, as Vim wipes out a
+    # finished shell — but not while the user is browsing its scrollback.
+    if session.exitCode.isSome and not e.isBrowsed(id):
+      # After the loop: teardown mutates the table this one is walking.
+      exited.add(id)
+      continue
+
     # Size to the smallest window showing the session; layout order says
     # nothing about which size fits them all.
     let dimensions = e.minimumTerminalAreaDimensions(id)
     if dimensions.isNone:
-      # Backgrounded: no size to follow, and no teardown behind the user's back.
+      # Backgrounded: no size to follow.
       continue
 
     # Sizing follows the window, not the sub-mode.
@@ -72,12 +86,6 @@ proc pollTerminalSessions*(e: Editor) =
     if expectedCols > 0 and expectedRows > 0 and
         (expectedCols != session.grid.cols or expectedRows != session.grid.rows):
       session.resize(expectedCols, expectedRows)
-
-    # A shell only exits when the user quits it, so the tab always goes — but
-    # not while the user is browsing the scrollback of one that just exited.
-    if session.exitCode.isSome and not e.isBrowsed(id):
-      # After the loop: teardown mutates the table this one is walking.
-      exited.add(id)
 
   for id in exited:
     e.closeTerminalBuffer(id)
