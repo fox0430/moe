@@ -7684,6 +7684,20 @@ suite "Ctrl-w window commands in special modes":
     check e.state.statusMessage ==
       "No write since last change: 2 buffers modified (use :q! to discard)"
 
+  test "Ctrl-w c refused on the last window drops the rest of the mapping":
+    let (e, path) = editorOnTempFile("moe_ctrlw_close_last_mapped.txt")
+    defer:
+      removeFile(path)
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    check e.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Normal, "Q", "C-w c x", noremap = true
+    ).len == 0
+
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "Q", modifiers: {}))
+
+    check e.windowManager.windows.len == 1
+    check e.activeBuffer().getLine(0) == "ine0"
+
   test "Ctrl-w c on the last window quits when nothing is modified":
     let (e, path) = editorOnTempFile("moe_ctrlw_close_last_clean.txt")
     defer:

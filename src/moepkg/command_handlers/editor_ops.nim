@@ -98,6 +98,114 @@ proc closeLastWindowError*(e: Editor, visible: TextBuffer): string =
   "No write since last change: " & $others & " other buffer" &
     (if others > 1: "s" else: "") & " modified" & hint
 
+when not defined(moe.embedded):
+  proc showJob(e: Editor, id: BufferId): Result[void, string] =
+    ## As Vim's check_changed_any: go to a window that shows the job, else
+    ## show it in the active one.
+    for i, win in e.windowManager.windows:
+      if e.isShowingTab(win, id):
+        e.focusWindow(i)
+        return ok()
+    e.tryActivateBuffer(id)
+
+proc runningJob*(e: Editor, spare = none(BufferId)): Option[BufferId] =
+  ## The running Terminal job a quit would kill, found as Vim's E947 does:
+  ## the jobs on screen first, the active window's before all. `spare` is the
+  ## session a `:q!` ends along with its window.
+  when defined(moe.embedded):
+    none(BufferId)
+  else:
+    var ids: seq[BufferId]
+    for win in @[e.activeWindow] & e.windowManager.windows:
+      if e.isShowingTab(win, win.tabBufferId):
+        ids.add win.tabBufferId
+    for buf in e.buffers:
+      ids.add buf.id
+    for id in ids:
+      let session = e.terminalStates.getOrDefault(id)
+      if session != nil and session.exitCode.isNone and some(id) != spare:
+        return some(id)
+    none(BufferId)
+
+proc refuseQuitFor*(e: Editor, job: BufferId, show: bool, wrote = "") =
+  ## Refuse the quit `job` would die with. Checked after any write the quit
+  ## makes, so `:qa!` loses nothing more; `wrote` says what was written.
+  ## `show` brings the job into view. The refusal fails the command, so a
+  ## mapping stops there.
+  when not defined(moe.embedded):
+    let shown =
+      if show:
+        e.showJob(job)
+      else:
+        Result[void, string].ok()
+    # As in Vim, the job is shown taking keys, so a typed `:` would reach it.
+    let keys =
+      if e.activeWindow.mode == EditorMode.Terminal:
+        "Ctrl-\\ Ctrl-n, then :qa!"
+      else:
+        ":qa!"
+    let buffer = e.bufferById(job)
+    let name =
+      if buffer.isSome:
+        buffer.get.displayName.get("")
+      else:
+        ""
+    var message =
+      "Job still running in buffer \"" & name & "\" (use " & keys & " to end it)"
+    if wrote.len > 0:
+      message = wrote & "; " & message
+    if shown.isErr:
+      message &= "; " & shown.error
+    e.state.statusMessage = message
+    e.state.beep()
+
+proc refuseQuitForRunningJob*(e: Editor, show: bool, spare = none(BufferId)): bool =
+  ## Whether a running Terminal job keeps the session from ending, as Vim's
+  ## E947: the quit would kill it. See `runningJob` and `refuseQuitFor`.
+  let job = e.runningJob(spare)
+  if job.isSome:
+    e.refuseQuitFor(job.get, show)
+  job.isSome
+
+proc logSave(e: Editor, path: string, isCopy: bool) =
+  ## The log line a write by command leaves, if the settings ask for it.
+  if e.config.notification.logNotifications and e.config.notification.saveLogNotify:
+    logInfo(
+      "handler",
+      (if isCopy: "Copy written via command: " else: "File saved via command: ") & path,
+    )
+
+proc buildAndCheckOnSave(e: Editor, buffer: TextBuffer, savedPath: string) =
+  ## The buildOnSave and syntaxCheckOnSave jobs a write of `buffer` starts.
+  if e.config.buildOnSave.enable:
+    let customCmd =
+      if e.config.buildOnSave.command.isSome: e.config.buildOnSave.command.get else: ""
+    let workspaceRoot =
+      if e.config.buildOnSave.workspaceRoot.isSome:
+        e.config.buildOnSave.workspaceRoot.get
+      else:
+        parentDir(savedPath)
+    e.submitBuild(
+      (
+        path: savedPath,
+        language: buffer.language.ord,
+        customCmd: customCmd,
+        workspaceRoot: workspaceRoot,
+        automatic: true,
+      )
+    )
+  if e.config.syntaxChecker.enable and
+      syntaxCheckCommand(savedPath, buffer.language).isOk:
+    e.submitSyntaxCheck(
+      (
+        path: savedPath,
+        language: buffer.language.ord,
+        buffer: buffer.id,
+        awaited: buffer.awaitReport(dsrcSyntaxCheck),
+        text: buffer.getTextString(),
+      )
+    )
+
 const ConfigTakesNoFileName =
   "Error: Config saves its settings to the config file and takes no file name"
   ## Config's view is empty, so a copy of it would be too.
@@ -107,28 +215,44 @@ proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
   if e.state.mode == EditorMode.Config and r.saveAndQuitFilename.isSome:
     e.state.statusMessage = ConfigTakesNoFileName
     return true
+  let buffer = e.activeBuffer()
   if not r.forceQuitAfterSave:
     # :wq/:x end the session, not just the window, so the other buffers go too.
-    let discardErr = e.quitDiscardsBuffersError(e.activeBuffer())
+    let discardErr = e.quitDiscardsBuffersError(buffer)
     if discardErr.len > 0:
       e.state.statusMessage = discardErr
+      e.state.beep()
       return true
-  let saveResult =
-    e.saveFile(e.activeBuffer(), r.saveAndQuitFilename, r.forceQuitAfterSave)
+  let saveResult = e.saveFile(buffer, r.saveAndQuitFilename, r.forceQuitAfterSave)
   if saveResult.isErr:
     logError("handler", "Save and quit failed: " & saveResult.error)
     e.state.statusMessage = "Error: " & saveResult.error
     return true
-  # The session ends with the write, so stderr is where these are read.
-  for warning in saveResult.get.warnings:
-    e.state.exitReports.add warning
-  if not r.forceQuitAfterSave and saveResult.get.kind == wkCopy and
-      e.activeBuffer().isModified:
+  let saved = saveResult.get
+  let isCopy = saved.kind == wkCopy
+  if not r.forceQuitAfterSave and isCopy and buffer.isModified:
     # `:wq {file}` wrote a copy; the buffer's own changes are still unsaved.
     e.state.statusMessage =
-      "Saved a copy: " & saveResult.get.path &
-      "; No write since last change (add ! to override)"
+      "Saved a copy: " & saved.path & "; No write since last change (add ! to override)"
+    for warning in saved.warnings:
+      e.appendStatus(warning)
     return true
+  # As in Vim, after the write. `:wq!` forces the write, not the job.
+  let job = e.runningJob()
+  if job.isSome:
+    if not isCopy:
+      # The editor stays, so the write starts what a `:w` would. Before the
+      # refusal, which a build announcing itself would hide.
+      e.buildAndCheckOnSave(buffer, saved.path)
+    e.logSave(saved.path, isCopy)
+    let wrote = (if isCopy: "Saved a copy: " else: "Saved: ") & saved.path
+    e.refuseQuitFor(job.get, show = true, wrote)
+    for warning in saved.warnings:
+      e.appendStatus(warning)
+    return true
+  # The session ends with the write, so stderr is where these are read.
+  for warning in saved.warnings:
+    e.state.exitReports.add warning
   logInfo("handler", "File saved, quitting editor")
   return false
 
@@ -185,6 +309,15 @@ proc saveAllStatusMessage(saveResult: SaveAllBuffersResult): string =
     )
   msg & leftUnsaved
 
+proc logSaveAll(e: Editor, saveResult: SaveAllBuffersResult) =
+  ## The log line `:wa` leaves, if the settings ask for it.
+  if e.config.notification.logNotifications and e.config.notification.saveLogNotify and
+      saveResult.savedCount > 0:
+    if saveResult.savedCount == 1:
+      logInfo("handler", "Saved file via :wa: " & saveResult.savedPaths[0])
+    else:
+      logInfo("handler", "Saved " & $saveResult.savedCount & " files via :wa")
+
 proc processSaveAllResult*(e: Editor, r: HandlerResult) =
   ## Save all modified buffers and report the outcome.
   ## buildOnSave / syntaxCheckOnSave are skipped: :wa is a batch operation.
@@ -199,22 +332,34 @@ proc processSaveAllResult*(e: Editor, r: HandlerResult) =
     e.state.statusMessage = msg
   for warning in saveResult.warnings:
     e.appendStatus(warning)
-  if e.config.notification.logNotifications and e.config.notification.saveLogNotify and
-      saveResult.savedCount > 0:
-    if saveResult.savedCount == 1:
-      logInfo("handler", "Saved file via :wa: " & saveResult.savedPaths[0])
-    else:
-      logInfo("handler", "Saved " & $saveResult.savedCount & " files via :wa")
+  e.logSaveAll(saveResult)
 
 proc processSaveAllAndQuitResult*(e: Editor, r: HandlerResult): bool =
   ## Save all and quit: false on full success, true if any save failed or
-  ## was skipped for external modification without force.
+  ## was skipped for external modification without force, or a job runs.
   let saveResult = e.saveAllBuffers(r.forceSaveAllAndQuitAfter)
   # Quitting discards unwritten buffers, so stay without `!` and say why.
   if saveResult.failures.len > 0 or saveResult.skippedExternal.len > 0:
     e.state.statusMessage = saveAllStatusMessage(saveResult)
     logError("handler", "Save all and quit aborted: " & e.state.statusMessage)
     # The editor stays, so the files that were written say what went wrong here.
+    for warning in saveResult.warnings:
+      e.appendStatus(warning)
+    return true
+  # As Vim's E948, after the writes and without bringing the job into view.
+  let job =
+    if r.forceSaveAllAndQuitAfter:
+      none(BufferId)
+    else:
+      e.runningJob()
+  if job.isSome:
+    e.logSaveAll(saveResult)
+    let wrote =
+      if saveResult.savedCount > 0:
+        saveAllStatusMessage(saveResult)
+      else:
+        ""
+    e.refuseQuitFor(job.get, show = false, wrote)
     for warning in saveResult.warnings:
       e.appendStatus(warning)
     return true
@@ -269,12 +414,7 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
       let
         savedPath = saveResult.get.path
         isCopy = saveResult.get.kind == wkCopy
-      if e.config.notification.logNotifications and e.config.notification.saveLogNotify:
-        logInfo(
-          "handler",
-          (if isCopy: "Copy written via command: " else: "File saved via command: ") &
-            savedPath,
-        )
+      e.logSave(savedPath, isCopy)
       if e.config.notification.screenNotifications and
           e.config.notification.saveScreenNotify:
         e.state.statusMessage =
@@ -284,37 +424,7 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
       if isCopy:
         # Not a save of the buffer, so nothing runs on save.
         return
-      if e.config.buildOnSave.enable:
-        let customCmd =
-          if e.config.buildOnSave.command.isSome:
-            e.config.buildOnSave.command.get
-          else:
-            ""
-        let workspaceRoot =
-          if e.config.buildOnSave.workspaceRoot.isSome:
-            e.config.buildOnSave.workspaceRoot.get
-          else:
-            parentDir(savedPath)
-        e.submitBuild(
-          (
-            path: savedPath,
-            language: activeBuffer.language.ord,
-            customCmd: customCmd,
-            workspaceRoot: workspaceRoot,
-            automatic: true,
-          )
-        )
-      if e.config.syntaxChecker.enable and
-          syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
-        e.submitSyntaxCheck(
-          (
-            path: savedPath,
-            language: activeBuffer.language.ord,
-            buffer: activeBuffer.id,
-            awaited: activeBuffer.awaitReport(dsrcSyntaxCheck),
-            text: activeBuffer.getTextString(),
-          )
-        )
+      e.buildAndCheckOnSave(activeBuffer, savedPath)
 
 proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
   ## Move the cursor to the first non-blank of the line, as Vim's

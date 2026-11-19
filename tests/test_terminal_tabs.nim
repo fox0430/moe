@@ -21,7 +21,7 @@
 ## closeTerminalBuffer keep `e.terminalStates`, `bufferIds`, and the
 ## active window's mode in sync as Terminal buffers come and go.
 
-import std/[unittest, options, os, posix, sequtils, tables]
+import std/[unittest, options, os, posix, sequtils, strutils, tables, tempfiles]
 
 import pkg/results
 import pkg/celina
@@ -31,10 +31,10 @@ import
     editor, config, types, modes, terminal_mode, editor_window, editor_window_tab,
     handler, key_bindings, viewer_mode, buffer_manager, window_manager,
     editor_render_views, render_utils, filetree, highlight, editor_window_layout,
-    unicode_utils, frontend_input, config_mode,
+    unicode_utils, frontend_input, config_mode, job_lanes,
   ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
-import ../src/moepkg/buffer/core
+import ../src/moepkg/buffer/[core, edit]
 import
   ../src/moepkg/command_handlers/
     [editor_ops, handler_result, result_processor, visual_handler]
@@ -344,6 +344,18 @@ proc closeWindowWithCtrlW(e: Editor) =
   check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl}))
   check e.handleKeyCombo(charKey("c"))
 
+proc coverWithViewer(e: Editor) =
+  ## An in-place viewer over the active window's tab.
+  let bmState = newBufferManagerState()
+  bmState.updateEntries(e.getBufferInfos(e.commandTab().id))
+  discard e.enterViewerMode(
+    EditorMode.BufferManager,
+    ModeState(kind: mskBufferManager, bufferManager: bmState),
+    bmState.createBufferManagerTextBuffer(),
+    vpInPlace,
+  )
+  require e.activeWindow.viewerEntry.isSome
+
 template checkSessionKept(e: Editor, termBuf: TextBuffer) =
   check e.terminalStates.hasKey(termBuf.id)
   check e.bufferById(termBuf.id).isSome
@@ -436,6 +448,19 @@ suite "Terminal tabs - closing a window keeps its session":
     check e.bufferById(termBuf.id).isNone
     check e.windowManager.windows.len == 1
 
+  test ":q! leaves a running session a viewer covers":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    e.coverWithViewer()
+
+    e.runCommand("q!")
+
+    check e.windowManager.windows.len == 1
+    check e.terminalStates.hasKey(termBuf.id)
+    check e.bufferById(termBuf.id).isSome
+
   test ":q! leaves a session another window shows":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
@@ -473,6 +498,272 @@ suite "Terminal tabs - closing a window keeps its session":
     e.runCommand("only")
 
     e.checkSessionKept(termBuf)
+
+proc quits(e: Editor, command: string): bool =
+  ## Whether the Command line `command` ends the editor.
+  discard e.handleKeyCombo(charKey(":"))
+  for ch in command:
+    discard e.handleKeyCombo(charKey($ch))
+  not e.handleKeyCombo(KeyCombo(isSpecial: true, special: skEnter))
+
+proc hiddenJob(e: Editor): TextBuffer =
+  ## A running session behind the buffer the last window shows.
+  let fileBuf = e.activeBuffer
+  result = registerFakeTerminal(e, "bash")
+  require e.tryActivateBuffer(fileBuf.id).isOk
+  require e.activeWindow.mode == EditorMode.Normal
+
+const
+  JobRunning = "Job still running in buffer \"[Terminal: bash]\""
+  QuitHint = " (use :qa! to end it)"
+  InputQuitHint = " (use Ctrl-\\ Ctrl-n, then :qa! to end it)"
+
+proc editedFile(e: Editor, dir: string): tuple[path: string, buffer: TextBuffer] =
+  ## `dir`/a.txt holding "orig", opened and edited to "A:orig".
+  result.path = dir / "a.txt"
+  writeFile(result.path, "orig\n")
+  require e.loadFile(result.path).isOk
+  result.buffer = e.activeBuffer
+  check result.buffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+
+template checkRefusedShowing(e: Editor, termBuf: TextBuffer, hint: string, wrote = "") =
+  check e.state.statusMessage == wrote & JobRunning & hint
+  check e.terminalStates.hasKey(termBuf.id)
+  checkOnSession(e, e.activeWindow, termBuf)
+
+suite "Terminal tabs - a running job keeps the editor open":
+  for command in ["q", "qa", "x", "x!", "q!"]:
+    test ":" & command & " is refused and shows the job":
+      let e = createTestEditor()
+      let termBuf = e.hiddenJob()
+
+      check not e.quits(command)
+
+      e.checkRefusedShowing(termBuf, InputQuitHint)
+
+  test "Ctrl-w c on the last window is refused":
+    let e = createTestEditor()
+    let termBuf = e.hiddenJob()
+
+    e.closeWindowWithCtrlW()
+
+    e.checkRefusedShowing(termBuf, InputQuitHint)
+
+  test "ZQ is refused":
+    let e = createTestEditor()
+    let termBuf = e.hiddenJob()
+
+    check e.handleKeyCombo(charKey("Z"))
+    check e.handleKeyCombo(charKey("Q"))
+
+    e.checkRefusedShowing(termBuf, InputQuitHint)
+
+  test ":q on the window the job runs in is refused":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    check not e.quits("q")
+
+    check e.state.statusMessage == JobRunning & QuitHint
+    checkOnSession(e, e.activeWindow, termBuf)
+
+  test ":q! on the window the job runs in ends it":
+    let e = createTestEditor()
+    discard registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    check e.quits("q!")
+
+  test ":q! on the last window refuses for the job a viewer covers":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    e.coverWithViewer()
+
+    check not e.quits("q!")
+
+    check e.state.statusMessage.startsWith(JobRunning)
+    check e.terminalStates.hasKey(termBuf.id)
+    checkOnSession(e, e.activeWindow, termBuf)
+
+  test ":q! still refuses for a job another session runs":
+    let e = createTestEditor()
+    let hidden = registerFakeTerminal(e, "bash")
+    discard registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    check not e.quits("q!")
+
+    check e.state.statusMessage ==
+      "Job still running in buffer \"[Terminal: bash]\"" & InputQuitHint
+    check e.activeWindow.tabBufferId == hidden.id
+
+  for command in ["qa!", "wqa!", "cq"]:
+    test ":" & command & " ends the job":
+      let e = createTestEditor()
+      discard e.hiddenJob()
+
+      check e.quits(command)
+
+  test ":wqa writes, then is refused without showing the job":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    let (path, fileBuf) = e.editedFile(dir)
+    discard e.hiddenJob()
+
+    check not e.quits("wqa")
+
+    check e.state.statusMessage == "Saved: " & path & "; " & JobRunning & QuitHint
+    check e.activeWindow.tabBufferId == fileBuf.id
+    check readFile(path) == "A:orig\n"
+    check not fileBuf.isModified
+
+  for command in ["wq", "wq!", "x"]:
+    test ":" & command & " writes, then is refused and shows the job":
+      let dir = createTempDir("moe_quit_job", "")
+      defer:
+        removeDir(dir)
+      let e = createTestEditor()
+      let (path, fileBuf) = e.editedFile(dir)
+      let termBuf = e.hiddenJob()
+
+      check not e.quits(command)
+
+      e.checkRefusedShowing(termBuf, InputQuitHint, "Saved: " & path & "; ")
+      check readFile(path) == "A:orig\n"
+      check not fileBuf.isModified
+
+  test "ZZ writes, then is refused and shows the job":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    let (path, _) = e.editedFile(dir)
+    let termBuf = e.hiddenJob()
+
+    check e.handleKeyCombo(charKey("Z"))
+    check e.handleKeyCombo(charKey("Z"))
+
+    e.checkRefusedShowing(termBuf, InputQuitHint, "Saved: " & path & "; ")
+    check readFile(path) == "A:orig\n"
+
+  test ":wq refused starts the build a :w would":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    defer:
+      discard e.jobLanes.stopAll()
+    e.config.buildOnSave.enable = true
+    e.config.buildOnSave.command = some("true")
+    let (path, _) = e.editedFile(dir)
+    let termBuf = e.hiddenJob()
+
+    check not e.quits("wq")
+
+    check toSeq(e.jobLanes.jobs).anyIt(it.label == "Build" and it.path == path)
+    e.checkRefusedShowing(termBuf, InputQuitHint, "Saved: " & path & "; ")
+
+  test "a modified buffer is reported before the job":
+    let e = createTestEditor()
+    let fileBuf = e.activeBuffer
+    check fileBuf.insertText(BufferPosition(line: 0, column: 0), "edit").isOk
+    discard e.hiddenJob()
+
+    check not e.quits("qa")
+
+    check e.state.statusMessage.startsWith("No write since last change")
+    check e.activeWindow.tabBufferId == fileBuf.id
+
+  test "an ended job does not hold the quit":
+    let e = createTestEditor()
+    let termBuf = e.hiddenJob()
+    e.terminalStates[termBuf.id].exitCode = some(0)
+
+    check e.quits("q")
+
+  test "the job another window shows is gone to, before a hidden one":
+    let e = createTestEditor()
+    let fileBuf = e.activeBuffer
+    discard registerFakeTerminal(e, "top")
+    require e.tryActivateBuffer(fileBuf.id).isOk
+    require e.vsplit().isOk
+    let fileWin = e.activeWindow
+    let termWin = e.windowManager.windows.filterIt(it != fileWin)[0]
+    e.focusWindow(termWin)
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.focusWindow(fileWin)
+
+    check not e.quits("qa")
+
+    check e.activeWindow == termWin
+    check fileWin.tabBufferId == fileBuf.id
+    e.checkRefusedShowing(termBuf, InputQuitHint)
+
+  test "a job a viewer covers waits behind one on screen":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let coveredWin = e.activeWindow
+    let termWin = e.windowManager.windows.filterIt(it != coveredWin)[0]
+    e.focusWindow(termWin)
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.focusWindow(coveredWin)
+    discard registerFakeTerminal(e, "top")
+    discard e.enterNormal()
+    e.coverWithViewer()
+
+    check not e.quits("qa")
+
+    check e.activeWindow == termWin
+    e.checkRefusedShowing(termBuf, InputQuitHint)
+    check coveredWin.viewerEntry.isSome
+
+  test "a job the file tree cannot show is still named":
+    let e = createTestEditor()
+    discard e.hiddenJob()
+    e.toggleFileTree(none(string), e.activeBuffer)
+    require e.focusFileTreeWindow()
+    let tree = e.activeWindow
+
+    check not e.quits("qa")
+
+    check e.activeWindow == tree
+    check e.state.statusMessage ==
+      JobRunning & QuitHint & "; E1513: Cannot switch buffer in the file tree"
+
+  test "a refused quit stops the repeats of @:":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    discard e.editedFile(dir)
+    discard e.hiddenJob()
+    check not e.quits("wqa")
+    let beeps = e.state.beepCount
+
+    for key in "3@:":
+      check e.handleKeyCombo(charKey($key))
+
+    check e.state.beepCount == beeps + 1
+
+  test "a refused quit drops the rest of the mapping":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    let (path, fileBuf) = e.editedFile(dir)
+    discard e.hiddenJob()
+    check e.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Normal, "Q", ": w q a Enter x", noremap = true
+    ).len == 0
+
+    check e.handleKeyCombo(charKey("Q"))
+
+    check e.state.statusMessage == "Saved: " & path & "; " & JobRunning & QuitHint
+    check fileBuf.getLine(0) == "A:orig"
 
 proc browsing(e: Editor, output: string): tuple[termBuf, snapshot: TextBuffer] =
   ## Terminal-Normal over a screen `output` drew.

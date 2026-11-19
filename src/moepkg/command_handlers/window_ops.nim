@@ -89,12 +89,25 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     return true
   of hrCloseWindow:
     let activeWin = e.activeWindow
-    if not r.forceClose and e.windowManager.windows.len <= 1:
+    when not defined(moe.embedded):
+      # `:q!` ends the job its window shows, not one a viewer covers.
+      let endsTabJob = r.forceClose and e.isShowingTab(activeWin, activeWin.tabBufferId)
+    if e.windowManager.windows.len <= 1:
       # Closing the last window quits the editor, every buffer included.
-      let discardErr = e.closeLastWindowError(activeWin.buffer)
-      if discardErr.len > 0:
-        e.state.statusMessage = discardErr
-        return true
+      if not r.forceClose:
+        let discardErr = e.closeLastWindowError(activeWin.buffer)
+        if discardErr.len > 0:
+          e.state.statusMessage = discardErr
+          e.state.beep()
+          return true
+      when not defined(moe.embedded):
+        let spare =
+          if endsTabJob:
+            some(activeWin.tabBufferId)
+          else:
+            none(BufferId)
+        if e.refuseQuitForRunningJob(show = true, spare):
+          return true
     e.closeLiveViewer()
     if e.activeWindow != activeWin:
       # A split viewer closed its own window as part of teardown.
@@ -105,7 +118,7 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     if shouldQuit:
       return false
     when not defined(moe.embedded):
-      e.closeSessionOutOfView(tab, r.forceClose)
+      e.closeSessionOutOfView(tab, endsTabJob)
     return true
   of hrNextWindow:
     e.switchToNextWindow()
