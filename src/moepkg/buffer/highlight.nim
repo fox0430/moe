@@ -112,7 +112,9 @@ proc isCodeBlockLine*(b: TextBuffer, line: int): bool =
   ## and every interior line.
   if b.language != SourceLanguage.langMarkdown or b.incrementalHighlight == nil:
     return false
-  let states = b.incrementalHighlight.lineStates.states
+  template states(): untyped =
+    b.incrementalHighlight.lineStates
+
   if line < 0 or line >= states.len:
     return false
   when defined(moe.matter) or defined(features.moe.matter):
@@ -218,10 +220,8 @@ proc continueInitialHighlight*(
   # header), so rewind to a safe line and re-parse the previous chunk's tail
   # together with the new one.
   while startLine > 0 and
-      b.incrementalHighlight.lineStates.states[startLine - 1].backend == hbBuiltin and
-      chunkHandoffUnsafe(
-        b.language, b.incrementalHighlight.lineStates.states[startLine - 1]
-      )
+      b.incrementalHighlight.lineStates[startLine - 1].backend == hbBuiltin and
+      chunkHandoffUnsafe(b.language, b.incrementalHighlight.lineStates[startLine - 1])
   :
     dec startLine
 
@@ -239,17 +239,17 @@ proc continueInitialHighlight*(
 
   var lastState = b.newBufferTokenizerState()
   if startLine > 0:
-    lastState = b.incrementalHighlight.lineStates.states[startLine - 1]
+    lastState = b.incrementalHighlight.lineStates[startLine - 1]
 
-  if b.incrementalHighlight.lineStates.states.len > startLine:
+  if b.incrementalHighlight.lineStates.len > startLine:
     # Drop cached results from `startLine` on. Covers the rewound lines
     # (re-parsed below) and rows beyond the frontier: an edit during the
     # progressive load runs `updateHighlightIncremental`, which fills the
     # caches to EOF without advancing `parsedUpTo`, and the unconditional
-    # appends below would then duplicate those rows — leaving `states` longer
+    # appends below would then duplicate those rows — leaving `lineStates` longer
     # than the buffer and `segments` unsorted, breaking the sorted-input
     # contracts of `segmentCutIndex` and the splice's binary search.
-    b.incrementalHighlight.lineStates.states.setLen(startLine)
+    b.incrementalHighlight.lineStates.setLen(startLine)
     b.highlight.colorSegments.setLen(
       b.highlight.colorSegments.segmentCutIndex(startLine)
     )
@@ -268,7 +268,7 @@ proc continueInitialHighlight*(
     bufferStr, startLine, endLine, lastState, b.reservedWords, b.language, tails
   )
 
-  b.incrementalHighlight.lineStates.states.add(newLineStates)
+  b.incrementalHighlight.lineStates.add(newLineStates)
   b.incrementalHighlight.parsedUpTo = endLine
 
   # Append, keeping the URI underlines already on earlier rows.
@@ -372,7 +372,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
       # next edit would fall back to a one-call full rebuild.
       let cacheValid =
         b.incrementalHighlight != nil and (
-          b.incrementalHighlight.lineStates.states.len > 0 or
+          b.incrementalHighlight.lineStates.len > 0 or
           b.incrementalHighlight.pendingReparse != nil
         )
 
@@ -408,7 +408,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           b.incrementalHighlight = IncrementalHighlight(
             backend: b.effectiveHighlightBackend,
             initialState: b.newBufferTokenizerState(),
-            lineStates: LineStateCache(states: @[]),
+            lineStates: LineStateCache(),
             parsedUpTo: -1,
           )
           discard continueInitialHighlight(b, reparseBudget, parsedLines)
@@ -433,7 +433,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           b.incrementalHighlight = IncrementalHighlight(
             backend: b.effectiveHighlightBackend,
             initialState: b.newBufferTokenizerState(),
-            lineStates: LineStateCache(states: lineStates),
+            lineStates: initLineStateCache(lineStates),
             parsedUpTo: b.len - 1,
           )
           # Charge the shared frame budget by the actual rebuild work.

@@ -1,6 +1,7 @@
 when defined(moe.matter) or defined(features.moe.matter):
-  import std/[sequtils, strutils, unittest]
-  import ../src/moepkg/syntax/[matter_backend, tokenizer]
+  import std/[importutils, sequtils, strutils, unittest]
+  import ../src/moepkg/syntax/tokenizer
+  import ../src/moepkg/syntax/matter_backend {.all.}
   import ../src/moepkg/types/highlight_types
   import matter_test_grammars
 
@@ -572,6 +573,19 @@ when defined(moe.matter) or defined(features.moe.matter):
           check span.firstByte >= 0
           check span.lastByte <= line.len
           check span.firstByte < span.lastByte
+
+    test "line states differ when only their grammar sets differ":
+      privateAccess(MatterLineState)
+      let parsed = tokenizeMatterLine(
+        "let x = 1", langNim, timeLimitMs = 0, grammars = newTestMatterGrammarSet()
+      )
+      require not parsed.nextState.failed
+      var other = parsed.nextState
+      check other == parsed.nextState
+      check hash(other) == hash(parsed.nextState)
+
+      other.grammars = nil
+      check other != parsed.nextState
 else:
   static:
     doAssert true

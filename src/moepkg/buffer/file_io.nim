@@ -528,7 +528,7 @@ proc loadFileWithDecoded*(
       b.incrementalHighlight = IncrementalHighlight(
         backend: b.effectiveHighlightBackend,
         initialState: b.newBufferTokenizerState(),
-        lineStates: LineStateCache(states: lineStates),
+        lineStates: initLineStateCache(lineStates),
         parsedUpTo: chunkEnd,
       )
     else:

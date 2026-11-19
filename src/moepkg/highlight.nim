@@ -18,7 +18,9 @@
 #[############################################################################]#
 
 import
-  std/[sequtils, os, strutils, strformat, unicode, algorithm, options, tables, json]
+  std/[
+    sequtils, os, strutils, strformat, unicode, algorithm, options, tables, json, hashes
+  ]
 
 import celina_backend as celina
 
@@ -107,8 +109,21 @@ type
     when defined(moe.matter) or defined(features.moe.matter):
       matterState*: MatterLineState
 
-  LineStateCache* = object ## Cache of tokenizer states for each line
-    states*: seq[TokenizerState]
+  StateEntry = object
+    state: TokenizerState
+    hash: Hash
+    lines: int32 ## Lines using this entry; 0 = free.
+
+  LineStateCache* = object
+    ## For each line, the tokenizer state at its end (entering the next line).
+    ## Lines hold ids of distinct states: a file has few of them, and each one
+    ## carries every language's fields. A state no line uses is freed at once.
+    ids: seq[int32]
+    entries: seq[StateEntry]
+    free: seq[int32] ## Ids of free entries.
+    slots: seq[int32]
+      ## Open-addressing index over `entries`: id + 1, `EmptySlot` or `Tombstone`.
+    tombstones: int
 
   PendingReparse* = ref object
     ## Progress of a budgeted re-parse that could not finish in one call.
@@ -253,6 +268,154 @@ when defined(moe.matter) or defined(features.moe.matter):
     if effective == hbMatter:
       result.matterState = initialMatterState(grammars, language)
 
+proc `==`*(a, b: TokenizerState): bool =
+  ## Keep engine-specific equality at this boundary so clients comparing
+  ## cached states do not need to import Matter's structural stack operator.
+  if a.backend != b.backend:
+    return false
+  when defined(moe.matter) or defined(features.moe.matter):
+    if a.backend == hbMatter:
+      return a.matterState == b.matterState
+  a.state == b.state and a.lang == b.lang
+
+proc hash*(s: TokenizerState): Hash =
+  ## Agrees with `==`.
+  let h = hash(s.backend)
+  when defined(moe.matter) or defined(features.moe.matter):
+    if s.backend == hbMatter:
+      return !$(h !& hash(s.matterState))
+  !$(h !& hash(s.state) !& hash(s.lang))
+
+const
+  EmptySlot = 0'i32
+  Tombstone = -1'i32
+
+proc find(c: LineStateCache, value: TokenizerState, h: Hash): int32 =
+  ## Id of the live entry equal to `value`, or -1.
+  if c.slots.len == 0:
+    return -1
+  let mask = c.slots.high
+  var i = h and mask
+  while c.slots[i] != EmptySlot:
+    let id = c.slots[i] - 1
+    if id >= 0 and c.entries[id].hash == h and c.entries[id].state == value:
+      return id
+    i = (i + 1) and mask
+  -1
+
+proc rebuildSlots(c: var LineStateCache, live: int) =
+  ## Size the index to a quarter full and drop its tombstones.
+  var size = 8
+  while size < 4 * live:
+    size *= 2
+  c.slots = newSeq[int32](size)
+  c.tombstones = 0
+  let mask = size - 1
+  for id, entry in c.entries:
+    if entry.lines > 0:
+      var i = entry.hash and mask
+      while c.slots[i] != EmptySlot:
+        i = (i + 1) and mask
+      c.slots[i] = int32(id + 1)
+
+proc acquire(c: var LineStateCache, value: sink TokenizerState): int32 =
+  ## Id of an entry holding `value`, with one more line counted on it.
+  let h = hash(value)
+  result = c.find(value, h)
+  if result >= 0:
+    inc c.entries[result].lines
+    return
+  var entry = StateEntry(state: value, hash: h, lines: 1)
+  if c.free.len > 0:
+    result = c.free.pop
+    c.entries[result] = move entry
+  else:
+    result = int32(c.entries.len)
+    c.entries.add(move entry)
+
+  let live = c.entries.len - c.free.len
+  if (live + c.tombstones) * 2 > c.slots.len:
+    c.rebuildSlots(live)
+  else:
+    let mask = c.slots.high
+    var i = h and mask
+    while c.slots[i] > 0:
+      i = (i + 1) and mask
+    if c.slots[i] == Tombstone:
+      dec c.tombstones
+    c.slots[i] = result + 1
+
+proc share(c: var LineStateCache, id: int32): int32 =
+  ## `id`, with one more line counted on it.
+  inc c.entries[id].lines
+  id
+
+proc release(c: var LineStateCache, id: int32) =
+  ## Count one line fewer on entry `id`, and free it once no line uses it.
+  dec c.entries[id].lines
+  if c.entries[id].lines > 0:
+    return
+  let mask = c.slots.high
+  var i = c.entries[id].hash and mask
+  while c.slots[i] != id + 1:
+    i = (i + 1) and mask
+  c.slots[i] = Tombstone
+  inc c.tombstones
+  c.entries[id] = StateEntry()
+  c.free.add(id)
+
+proc len*(c: LineStateCache): int =
+  c.ids.len
+
+proc `[]`*(c: LineStateCache, line: int): lent TokenizerState =
+  c.entries[c.ids[line]].state
+
+proc `[]=`*(c: var LineStateCache, line: int, value: sink TokenizerState) =
+  let old = c.ids[line]
+  if c.entries[old].state == value:
+    return
+  let id =
+    if line > 0 and c.entries[c.ids[line - 1]].state == value:
+      c.share(c.ids[line - 1])
+    else:
+      c.acquire(value)
+  c.release(old)
+  c.ids[line] = id
+
+proc add*(c: var LineStateCache, value: sink TokenizerState) =
+  if c.ids.len > 0 and c.entries[c.ids[^1]].state == value:
+    c.ids.add(c.share(c.ids[^1]))
+  else:
+    c.ids.add(c.acquire(value))
+
+proc add*(c: var LineStateCache, values: openArray[TokenizerState]) =
+  for value in values:
+    c.add(value)
+
+proc setLen*(c: var LineStateCache, newLen: int) =
+  ## Lines added at the end take a default `TokenizerState()`.
+  if newLen == 0:
+    c = LineStateCache()
+  elif newLen < c.ids.len:
+    for line in newLen ..< c.ids.len:
+      c.release(c.ids[line])
+    c.ids.setLen(newLen)
+  elif newLen > c.ids.len:
+    let
+      oldLen = c.ids.len
+      id = c.acquire(TokenizerState())
+    c.entries[id].lines += int32(newLen - oldLen - 1)
+    c.ids.setLen(newLen)
+    for line in oldLen ..< newLen:
+      c.ids[line] = id
+
+iterator items*(c: LineStateCache): lent TokenizerState =
+  for id in c.ids:
+    yield c.entries[id].state
+
+proc initLineStateCache*(states: openArray[TokenizerState]): LineStateCache =
+  result.add(states)
+
 proc freshTokenizerState(
     incrHighlight: IncrementalHighlight, language: SourceLanguage
 ): TokenizerState =
@@ -268,21 +431,11 @@ proc cachedTokenizerState(
   ## Return the cached state entering `startLine`, or a fresh state when that
   ## row is outside the cache or belongs to another syntax backend. Default
   ## states may fill a gap below an in-flight reparse's frontier.
-  if startLine > 0 and startLine - 1 < incrHighlight.lineStates.states.len:
-    let cached = incrHighlight.lineStates.states[startLine - 1]
+  if startLine > 0 and startLine - 1 < incrHighlight.lineStates.len:
+    let cached = incrHighlight.lineStates[startLine - 1]
     if cached.backend == incrHighlight.backend:
       return cached
   incrHighlight.freshTokenizerState(language)
-
-proc `==`*(a, b: TokenizerState): bool =
-  ## Keep engine-specific equality at this boundary so clients comparing
-  ## cached states do not need to import Matter's structural stack operator.
-  if a.backend != b.backend:
-    return false
-  when defined(moe.matter) or defined(features.moe.matter):
-    if a.backend == hbMatter:
-      return a.matterState == b.matterState
-  a.state == b.state and a.lang == b.lang
 
 proc matches*(
     pr: PendingReparse,
@@ -1779,11 +1932,11 @@ proc updateHighlightIncremental*(
       # never re-parsed; restart from the old start line instead.
       reparseStart = oldReparseStart
       initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
-    elif oldReparseStart >= 0 and reparseStart - 1 >= incrHighlight.lineStates.states.len:
+    elif oldReparseStart >= 0 and reparseStart - 1 >= incrHighlight.lineStates.len:
       # The discarded flight's trim left no seed state below the new anchor;
       # restart from the top of the available cache (fresh flights always
-      # have `states.len >= reparseStart`).
-      reparseStart = incrHighlight.lineStates.states.len
+      # have `lineStates.len >= reparseStart`).
+      reparseStart = incrHighlight.lineStates.len
       initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
 
     when defined(moe.matter) or defined(features.moe.matter):
@@ -1804,9 +1957,9 @@ proc updateHighlightIncremental*(
 
     # Line-count change: the pre-edit tail states describe shifted rows, so
     # drop them until `refreshStateCache` refills.
-    if incrHighlight.lineStates.states.len != lineCount and
-        incrHighlight.lineStates.states.len > reparseStart:
-      incrHighlight.lineStates.states.setLen(reparseStart)
+    if incrHighlight.lineStates.len != lineCount and
+        incrHighlight.lineStates.len > reparseStart:
+      incrHighlight.lineStates.setLen(reparseStart)
 
     currentStart = reparseStart
     currentState = initialState
@@ -1818,7 +1971,7 @@ proc updateHighlightIncremental*(
   # Convergence is only sound when the line count matches the cache; while a
   # re-parse is in flight the cache only grows, so equality means no rows
   # have shifted.
-  let canConverge = lineCount == incrHighlight.lineStates.states.len
+  let canConverge = lineCount == incrHighlight.lineStates.len
 
   var reparseDone = false
   var convergedHandoff = -1
@@ -1873,10 +2026,10 @@ proc updateHighlightIncremental*(
     # above the load frontier, the gap is filled with default
     # `TokenizerState()`; consumers in that band must gate on `parsedUpTo`.
     template refreshStateCache() =
-      if incrHighlight.lineStates.states.len < handoff:
-        incrHighlight.lineStates.states.setLen(min(lineCount, handoff))
+      if incrHighlight.lineStates.len < handoff:
+        incrHighlight.lineStates.setLen(min(lineCount, handoff))
       for i in currentStart ..< handoff:
-        incrHighlight.lineStates.states[i] = newLineStates[i - currentStart]
+        incrHighlight.lineStates[i] = newLineStates[i - currentStart]
 
     if chunkEnd >= lastLine:
       refreshStateCache()
@@ -1892,7 +2045,7 @@ proc updateHighlightIncremental*(
     # matches) and past the barrier holding original tail segments.
     if canConverge and tailAligned and reparseEnd >= changedStartLine and
         (convergeBarrier < 0 or handoff - 1 > convergeBarrier) and
-        currentState == incrHighlight.lineStates.states[handoff - 1]:
+        currentState == incrHighlight.lineStates[handoff - 1]:
       convergedHandoff = handoff
       refreshStateCache()
       reparseDone = true
@@ -1929,7 +2082,7 @@ proc updateHighlightIncremental*(
     for i in tailStart ..< staleTail.len:
       segments.add(staleTail[i])
 
-  incrHighlight.lineStates.states.setLen(lineCount)
+  incrHighlight.lineStates.setLen(lineCount)
 
   # If the flight started at or before the load frontier, advance it (else an
   # edit during an incomplete load would re-parse the tail twice); otherwise
