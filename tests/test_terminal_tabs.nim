@@ -340,20 +340,139 @@ suite "Terminal tabs - cleanupAllTerminals":
     check s.pty.closed
     check e.terminalStates.len == 0
 
-suite "Terminal tabs - hrCloseWindow via processResult":
-  test "processResult(hrCloseWindow) cleans up terminal state":
+proc closeWindowWithCtrlW(e: Editor) =
+  check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl}))
+  check e.handleKeyCombo(charKey("c"))
+
+template checkSessionKept(e: Editor, termBuf: TextBuffer) =
+  check e.terminalStates.hasKey(termBuf.id)
+  check e.bufferById(termBuf.id).isSome
+  check e.windowManager.windows.len == 1
+  check e.activeWindow.mode != EditorMode.Terminal
+  # Back in a window with :b N, as from any buffer a window was closed on.
+  require e.tryActivateBuffer(termBuf.id).isOk
+  checkOnSession(e, e.activeWindow, termBuf)
+
+suite "Terminal tabs - closing a window keeps its session":
+  test "Ctrl-w c in Terminal-Input":
     let e = createTestEditor()
+    require e.vsplit().isOk
     let termBuf = registerFakeTerminal(e, "bash")
-    let termBufId = termBuf.id
+    require e.activeWindow.modeState.terminalSubMode == tsmInput
 
-    check e.terminalStates.hasKey(termBufId)
-    check e.terminalStates.len == 1
+    e.closeWindowWithCtrlW()
 
-    discard e.processResult(HandlerResult(kind: hrCloseWindow), e.activeBuffer())
+    e.checkSessionKept(termBuf)
+    check e.activeWindow.modeState.terminalSubMode == tsmInput
 
-    check e.terminalStates.len == 0
-    check not e.terminalStates.hasKey(termBufId)
+  test "Ctrl-w c in Terminal-Normal":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    e.closeWindowWithCtrlW()
+
+    e.checkSessionKept(termBuf)
+
+  test ":q":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    e.runCommand("q")
+
+    e.checkSessionKept(termBuf)
+
+  test "another window on the session stays live":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (other, closing) = e.twoWindowsOnSession(textBuf, termBuf)
+    require e.activeWindow == closing
+
+    e.closeWindowWithCtrlW()
+
+    check e.windowManager.windows == @[other]
+    checkOnSession(e, other, termBuf)
+    check other.modeState.terminalSubMode == tsmInput
+
+  test "an ended session goes with its last window":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    e.terminalStates[termBuf.id].exitCode = some(0)
+
+    e.closeWindowWithCtrlW()
+
+    check not e.terminalStates.hasKey(termBuf.id)
+    check e.bufferById(termBuf.id).isNone
+    check e.windowManager.windows.len == 1
     check e.activeWindow.mode != EditorMode.Terminal
+
+  test "an ended session another window shows stays":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (other, _) = e.twoWindowsOnSession(textBuf, termBuf)
+    e.terminalStates[termBuf.id].exitCode = some(0)
+
+    e.closeWindowWithCtrlW()
+
+    check e.windowManager.windows == @[other]
+    checkOnSession(e, other, termBuf)
+
+  test ":q! ends a running session":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    e.runCommand("q!")
+
+    check not e.terminalStates.hasKey(termBuf.id)
+    check e.bufferById(termBuf.id).isNone
+    check e.windowManager.windows.len == 1
+
+  test ":q! leaves a session another window shows":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (other, _) = e.twoWindowsOnSession(textBuf, termBuf)
+    discard e.enterNormal()
+
+    e.runCommand("q!")
+
+    check e.windowManager.windows == @[other]
+    checkOnSession(e, other, termBuf)
+
+  test ":only takes an ended session with the windows it closes":
+    let e = createTestEditor()
+    let fileWin = e.activeWindow
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    e.terminalStates[termBuf.id].exitCode = some(0)
+    e.focusWindow(fileWin)
+
+    e.runCommand("only")
+
+    check e.windowManager.windows == @[fileWin]
+    check not e.terminalStates.hasKey(termBuf.id)
+    check e.bufferById(termBuf.id).isNone
+
+  test ":only leaves a running session in the background":
+    let e = createTestEditor()
+    let fileWin = e.activeWindow
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.focusWindow(fileWin)
+
+    e.runCommand("only")
+
+    e.checkSessionKept(termBuf)
 
 proc browsing(e: Editor, output: string): tuple[termBuf, snapshot: TextBuffer] =
   ## Terminal-Normal over a screen `output` drew.

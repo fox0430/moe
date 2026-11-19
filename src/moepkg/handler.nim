@@ -958,8 +958,8 @@ proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
 
 proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## Handle Ctrl-W window command second key. Runs the same result as the file
-  ## edit modes (see `WindowSecondKeyCommands`), so closing a viewer or
-  ## Terminal window tears it down too.
+  ## edit modes (see `WindowSecondKeyCommands`), so closing a viewer window
+  ## tears the viewer down too.
   ## Returns some(true) if handled, some(false) if last window closed (quit),
   ## none if not a window command key.
   if e.state.pendingInput.pendingCommand == PendingWindowCmd:
