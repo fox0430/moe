@@ -1072,8 +1072,8 @@ proc runFuzz(
     # Build initial incremental cache from a clean slate.
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
-    var ih =
-      IncrementalHighlight(segments: segs0, lineStates: LineStateCache(states: states0))
+    var segs = segs0
+    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
 
     var history: seq[Edit]
     let nEdits = 5 + rng.rand(8) # 5..12 inclusive
@@ -1086,9 +1086,9 @@ proc runFuzz(
 
         let getLine = proc(i: int): string =
           buf[i]
-        updateHighlightIncremental(buf.len, getLine, ih, changedLine, @[], lang)
+        updateHighlightIncremental(buf.len, getLine, ih, segs, changedLine, @[], lang)
 
-        let incr = Highlight(colorSegments: ih.segments)
+        let incr = Highlight(colorSegments: segs)
         let full = fullHighlight(buf, lang)
         let (ok, r, c) = firstDivergence(buf, incr, full)
         if not ok:
@@ -1166,8 +1166,8 @@ proc runFuzzBudgeted(
 
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
-    var ih =
-      IncrementalHighlight(segments: segs0, lineStates: LineStateCache(states: states0))
+    var segs = segs0
+    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
 
     var history: seq[Edit]
     var callLog: seq[string]
@@ -1185,7 +1185,7 @@ proc runFuzzBudgeted(
           buf[i]
         let budget = Budgets[rng.rand(Budgets.high)]
         var ongoing = updateHighlightIncremental(
-          buf.len, getLine, ih, changedLine, @[], lang, 0, budget, version
+          buf.len, getLine, ih, segs, changedLine, @[], lang, 0, budget, version
         )
         callLog.add &"[{ei}] anchor={changedLine} budget={budget} v={version} ongoing={ongoing}"
         # A flight left in flight after the previous edit is restarted here
@@ -1209,10 +1209,10 @@ proc runFuzzBudgeted(
               echo &"  {i:>3}: {line}"
             return false
           ongoing = updateHighlightIncremental(
-            buf.len, getLine, ih, changedLine, @[], lang, 0, budget, version
+            buf.len, getLine, ih, segs, changedLine, @[], lang, 0, budget, version
           )
 
-        let incr = Highlight(colorSegments: ih.segments)
+        let incr = Highlight(colorSegments: segs)
         let full = fullHighlight(buf, lang)
         let (ok, r, c) = firstDivergence(buf, incr, full)
         if not ok:
@@ -1227,7 +1227,7 @@ proc runFuzzBudgeted(
             else:
               "nil"
           echo "segments=",
-            ih.segments.len, " states=", ih.lineStates.states.len, " buf=", buf.len
+            segs.len, " states=", ih.lineStates.states.len, " buf=", buf.len
           dumpFailure(lang, seed, it, history, buf, r, c, incr, full)
           return false
     except Exception as exc:
@@ -1410,16 +1410,16 @@ suite "Incremental Highlight Chunk Boundary":
     let lang = SourceLanguage.langXml
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
-    var ih =
-      IncrementalHighlight(segments: segs0, lineStates: LineStateCache(states: states0))
+    var segs = segs0
+    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
 
     buf[2] = "<![CDATA["
     let getLine = proc(i: int): string =
       buf[i]
-    updateHighlightIncremental(buf.len, getLine, ih, 2, @[], lang)
+    updateHighlightIncremental(buf.len, getLine, ih, segs, 2, @[], lang)
 
     check checkChunkEquivalence(
-      buf, Highlight(colorSegments: ih.segments), fullHighlight(buf, lang), "CDATA open"
+      buf, Highlight(colorSegments: segs), fullHighlight(buf, lang), "CDATA open"
     )
 
   test "XML: edit >100 lines below a comment opening is not skipped by convergence":
@@ -1437,19 +1437,19 @@ suite "Incremental Highlight Chunk Boundary":
     let lang = SourceLanguage.langXml
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
-    var ih =
-      IncrementalHighlight(segments: segs0, lineStates: LineStateCache(states: states0))
+    var segs = segs0
+    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
 
     # Close the comment early: everything at and below line 110 changes
     # color from comment to markup — but only if the reparse reaches it.
     buf[110] = "--> <root attr=\"v\">"
     let getLine = proc(i: int): string =
       buf[i]
-    updateHighlightIncremental(buf.len, getLine, ih, 110, @[], lang)
+    updateHighlightIncremental(buf.len, getLine, ih, segs, 110, @[], lang)
 
     check checkChunkEquivalence(
       buf,
-      Highlight(colorSegments: ih.segments),
+      Highlight(colorSegments: segs),
       fullHighlight(buf, lang),
       "comment early close",
     )
@@ -1478,16 +1478,16 @@ suite "Incremental Highlight Line-Bounded Strings":
     var buf = lines
     let (segs0, states0) =
       initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
-    var ih =
-      IncrementalHighlight(segments: segs0, lineStates: LineStateCache(states: states0))
+    var segs = segs0
+    var ih = IncrementalHighlight(lineStates: LineStateCache(states: states0))
 
     buf[editRow] = editText
     let getLine = proc(i: int): string =
       buf[i]
-    updateHighlightIncremental(buf.len, getLine, ih, editRow, @[], lang)
+    updateHighlightIncremental(buf.len, getLine, ih, segs, editRow, @[], lang)
 
     checkChunkEquivalence(
-      buf, Highlight(colorSegments: ih.segments), fullHighlight(buf, lang), what
+      buf, Highlight(colorSegments: segs), fullHighlight(buf, lang), what
     )
 
   const MultiLineString =

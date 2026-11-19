@@ -142,11 +142,12 @@ type
       ## to this line have refreshed states but original tail segments. -1 for
       ## fresh flights.
 
-  IncrementalHighlight* = ref object ## Incremental highlighting information
+  IncrementalHighlight* = ref object
+    ## Parse cache for incremental highlighting. The segments it describes are
+    ## not kept here; the caller owns them and passes them to each update.
     backend*: HighlightBackend
     initialState*: TokenizerState
       ## Fresh state for this cache's backend, including its opted-in grammar.
-    segments*: seq[ColorSegment]
     lineStates*: LineStateCache
     parsedUpTo*: int ## Last line parsed during initial load. -1 = not started.
     pendingReparse*: PendingReparse
@@ -1678,6 +1679,7 @@ proc updateHighlightIncremental*(
     lineCount: int,
     getLine: proc(i: int): string,
     incrHighlight: var IncrementalHighlight,
+    segments: var seq[ColorSegment],
     changedStartLine: int,
     reservedWords: seq[ReservedWord],
     language: SourceLanguage,
@@ -1688,7 +1690,8 @@ proc updateHighlightIncremental*(
 ): bool =
   ## Re-parse highlighting from `changedStartLine` in chunks, stopping when
   ## the tokenizer state converges with the cached state; re-parses to EOF
-  ## otherwise (e.g. after a line-count change).
+  ## otherwise (e.g. after a line-count change). `segments` are the ones
+  ## `incrHighlight` was built with, updated in place.
   ##
   ## `budgetLines` bounds per-call work (chunks are atomic, so one may
   ## slightly exceed it); `<= 0` = unlimited. Returns true while the re-parse
@@ -1746,7 +1749,7 @@ proc updateHighlightIncremental*(
     tailAligned = pr.tailAligned
     convergeBarrier = pr.convergeBarrier
   else:
-    # Fresh re-parse: trim cached segments from `reparseStart` on (stashing
+    # Fresh re-parse: trim the segments from `reparseStart` on (stashing
     # them for a possible early-convergence splice) so the display never
     # shows un-re-parsed rows.
 
@@ -1789,10 +1792,10 @@ proc updateHighlightIncremental*(
         # but a later edit starts a new flight and gets one recovery attempt.
         initialState.matterState.failed = false
 
-    let trimIdx = incrHighlight.segments.segmentCutIndex(reparseStart)
-    if trimIdx < incrHighlight.segments.len:
-      staleTail = incrHighlight.segments[trimIdx .. ^1]
-    incrHighlight.segments.setLen(trimIdx)
+    let trimIdx = segments.segmentCutIndex(reparseStart)
+    if trimIdx < segments.len:
+      staleTail = segments[trimIdx .. ^1]
+    segments.setLen(trimIdx)
     if inheritedTail.len > 0:
       # Drop the stale fresh chunks; the inherited tail covers every row from
       # `oldReparseStart`.
@@ -1860,9 +1863,9 @@ proc updateHighlightIncremental*(
           break
         continue
 
-    # Keep lines currentStart .. handoff - 1; the cache stays sorted.
+    # Keep lines currentStart .. handoff - 1; segments stay sorted.
     let segCut = newSegments.segmentCutIndex(handoff)
-    incrHighlight.segments.add(newSegments[0 ..< segCut])
+    segments.add(newSegments[0 ..< segCut])
     reparseEnd = handoff - 1
 
     # Keep the per-line state cache fresh up to the frontier for render-side
@@ -1924,7 +1927,7 @@ proc updateHighlightIncremental*(
   if canConverge and convergedHandoff >= 0:
     let tailStart = staleTail.segmentCutIndex(convergedHandoff)
     for i in tailStart ..< staleTail.len:
-      incrHighlight.segments.add(staleTail[i])
+      segments.add(staleTail[i])
 
   incrHighlight.lineStates.states.setLen(lineCount)
 
@@ -1941,6 +1944,7 @@ proc updateHighlightIncremental*(
     lineCount: int,
     getLine: proc(i: int): string,
     incrHighlight: var IncrementalHighlight,
+    segments: var seq[ColorSegment],
     changedStartLine: int,
     reservedWords: seq[ReservedWord],
     language: SourceLanguage,
@@ -1951,8 +1955,8 @@ proc updateHighlightIncremental*(
   ## Overload without the parsed-line reporting.
   var parsedLines: int
   result = updateHighlightIncremental(
-    lineCount, getLine, incrHighlight, changedStartLine, reservedWords, language,
-    maxLineLen, budgetLines, contentVersion, parsedLines,
+    lineCount, getLine, incrHighlight, segments, changedStartLine, reservedWords,
+    language, maxLineLen, budgetLines, contentVersion, parsedLines,
   )
 
 proc detectLanguage*(filename: string): SourceLanguage =

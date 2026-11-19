@@ -172,14 +172,12 @@ proc checkEditedRow(language: SourceLanguage, src: string): string =
       )
       let full = Highlight(colorSegments: segments)
       for row in 0 .. lines.high:
-        var incr = IncrementalHighlight(
-          segments: segments, lineStates: LineStateCache(states: states)
-        )
+        var segs = segments
+        var incr = IncrementalHighlight(lineStates: LineStateCache(states: states))
         updateHighlightIncremental(
-          lines.len, getLine, incr, row, @ReservedWords, language, maxLineLen
+          lines.len, getLine, incr, segs, row, @ReservedWords, language, maxLineLen
         )
-        let differing =
-          firstRowDiffering(lines, Highlight(colorSegments: incr.segments), full)
+        let differing = firstRowDiffering(lines, Highlight(colorSegments: segs), full)
         if differing >= 0:
           return
             "edit on row " & $row & " changes the colors or styles of row " & $differing &
