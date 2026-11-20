@@ -27,9 +27,9 @@ const
   AppExitKinds = {hrQuit, hrCquit}
   HandledGenericKinds = {hrHandled, hrUnhandled, hrError, hrSubstituteNoMatch}
   ExitToNormalKinds = {
-    hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrConflictNext,
-    hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat, hrLspRestart, hrLspFold,
-    hrLspExecuteCommand, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
+    hrQuickRun, hrSubstitute, hrDeleteLines, hrFilter, hrConflictNext, hrConflictPrev,
+    hrLspFormat, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
+    hrLspCallHierarchyOutgoing,
   }
   ExitToNewModeKinds = {
     hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
@@ -48,7 +48,7 @@ suite "HandlerResult - group() classification":
     for k in HandledGenericKinds:
       check group(k) == hrgHandledGeneric
 
-  test "hrgExitToNormal covers Command-mode one-shot actions":
+  test "hrgExitToNormal covers kinds that move the cursor, edit or open a window":
     for k in ExitToNormalKinds:
       check group(k) == hrgExitToNormal
 

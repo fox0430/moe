@@ -13779,6 +13779,32 @@ suite "List commands in a viewer":
     check e.currentMode == EditorMode.Filer
     check e.state.statusMessage == "No external commands are running"
 
+suite "One-shot commands in a viewer":
+  for (cmd, message) in [
+    (":theme default", "Theme changed to: default"),
+    (":lsprestart", "LSP is not enabled"),
+    (":putconfigfile", "Config written: "),
+    (":theme nonexistent", "Theme not found: nonexistent"),
+    (":build", "Build error: File not saved"),
+    (":lspfold", "LSP not enabled"),
+  ]:
+    test cmd & " keeps the viewer it was typed from":
+      withTempHome(tmpDir):
+        let e = createFilerEditor(2)
+        e.activeWindow.mode = EditorMode.Filer
+        e.config.theme.kind = tkDefault
+        e.config.theme.path = ""
+
+        check e.executeCommandOverlay(cmd) == roContinue
+
+        check e.state.statusMessage.startsWith(message)
+        check e.currentMode == EditorMode.Filer
+
+        check e.handleKeyCombo(parseKeyCombo("j").get)
+
+        check e.currentMode == EditorMode.Filer
+        check e.activeWindow.modeState.filer.selectedIndex == 1
+
 suite "Change directory command":
   var startDir: string
   var tempRoot: string
