@@ -1786,6 +1786,27 @@ suite "Editor - highlight line-length cap on load":
       check e.activeBuffer.incrementalHighlight != nil
       check e.activeBuffer.incrementalHighlight.parsedUpTo < e.activeBuffer.len - 1
 
+  test "a split takes the configured highlight backend before its load":
+    # Set after the load, a backend other than the buffer's nils the
+    # progressive cache the load seeded, and the whole file is parsed on open.
+    # A backend Matter is not built into still differs from the default.
+    var config = newEditorConfig()
+    config.highlight.backend = hbMatter
+
+    let testFile = getTempDir() / "moe_test_backend_split.nim"
+    var content = ""
+    for i in 0 ..< 1500: # > InitialChunkSize so progressive load is in play
+      content.add("let x" & $i & " = " & $i & "\n")
+    writeFile(testFile, content)
+    defer:
+      removeFile(testFile)
+
+    let e = createTestEditorWithConfig(config)
+    check e.vsplit(some(testFile)).isOk
+    check e.activeBuffer.highlightBackend == hbMatter
+    check e.activeBuffer.incrementalHighlight != nil
+    check e.activeBuffer.incrementalHighlight.parsedUpTo < e.activeBuffer.len - 1
+
 suite "Editor - invalid bytes roundtrip":
   template invalidByteRoundtripScenario(makeEditor: untyped, tag: string) =
     test "Basic 6 contamination patterns roundtrip" & tag:

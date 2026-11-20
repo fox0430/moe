@@ -989,7 +989,9 @@ prompt has no history yet.
 <!-- AUTO-GEN:start PickerIntro -->
 `:picker` lists what a source has, the best match of the query first, as Vim's
 fuzzy matching ranks it: `buffers` the buffers, `oldfiles` the files edited
-before. The query is edited as the command line is, but for these keys.
+before. Beside the list, or under it on a narrow screen, the selected item's
+file shows: its buffer as it is, or the start of the file once the selection
+rests on it. The query is edited as the command line is, but for these keys.
 <!-- AUTO-GEN:end PickerIntro -->
 
 <details open>
@@ -1005,6 +1007,8 @@ before. The query is edited as the command line is, but for these keys.
 | <kbd>**Up**</kbd> OR <kbd>**Ctrl**</kbd> <kbd>**p**</kbd> | Select the previous item |
 | <kbd>**Page Down**</kbd> | Select the item a page down |
 | <kbd>**Page Up**</kbd> | Select the item a page up |
+| <kbd>**Shift**</kbd> <kbd>**Down**</kbd> | Scroll the preview down half its height |
+| <kbd>**Shift**</kbd> <kbd>**Up**</kbd> | Scroll the preview up half its height |
 | <kbd>**Ctrl**</kbd> <kbd>**Up**</kbd> | Recall an older query that starts with the text before the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**Down**</kbd> | Recall a newer query that starts with the same text, or that text after the newest |
 | <kbd>**Ctrl**</kbd> <kbd>**q**</kbd> | Insert the next key as it is, or a character by its code |

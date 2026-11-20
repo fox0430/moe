@@ -29,6 +29,7 @@ import
   render_utils,
   editorconfig_helper,
   highlight_config,
+  buffer_load_config,
   editor_window_layout,
   editor_window_tab,
   editor_mode,
@@ -211,20 +212,12 @@ proc loadSplitBuffer(e: Editor, path: string): Result[TextBuffer, string] =
     return ok(existing.get)
 
   let buf = newTextBuffer()
-  # Inherit the highlight cap from the current buffer BEFORE loadFile builds
-  # the first chunk; otherwise the applyHighlightConfig below nils the
-  # progressive cache when the cap differs, forcing a full reparse on open
-  # (mirrors the :e seed-before-load).
-  buf.maxHighlightLineLength = e.activeBuffer.maxHighlightLineLength
-  e.addBuffer(buf)
-
-  let loadResult = buf.loadFile(path)
-  if loadResult.isErr:
-    e.unregisterBufferNoLsp(buf)
-    return err(loadResult.error)
-
-  applyHighlightConfig(buf, e.config)
-  applyEditorConfigToBuffer(buf, e.config)
+  buf.loadWithConfig(e.config):
+    e.addBuffer(buf)
+    let loadResult = buf.loadFile(path)
+    if loadResult.isErr:
+      e.unregisterBufferNoLsp(buf)
+      return err(loadResult.error)
   e.initLoadedBuffer(buf, roUser)
   ok(buf)
 

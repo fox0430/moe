@@ -909,7 +909,9 @@ const LogViewerModeCommands*: HelpGroup = HelpGroup(
 const PickerIntro* =
   "`:picker` lists what a source has, the best match of the query first, as Vim's\n" &
   "fuzzy matching ranks it: `buffers` the buffers, `oldfiles` the files edited\n" &
-  "before. The query is edited as the command line is, but for these keys.\n"
+  "before. Beside the list, or under it on a narrow screen, the selected item's\n" &
+  "file shows: its buffer as it is, or the start of the file once the selection\n" &
+  "rests on it. The query is edited as the command line is, but for these keys.\n"
   ## What comes before the keys of PickerCommands.
 
 const PickerCommands*: HelpGroup = HelpGroup(
@@ -924,6 +926,10 @@ const PickerCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "Up or Ctrl-p", description: "Select the previous item"),
     HelpEntry(syntax: "Page Down", description: "Select the item a page down"),
     HelpEntry(syntax: "Page Up", description: "Select the item a page up"),
+    HelpEntry(
+      syntax: "Shift-Down", description: "Scroll the preview down half its height"
+    ),
+    HelpEntry(syntax: "Shift-Up", description: "Scroll the preview up half its height"),
     HelpEntry(
       syntax: "Ctrl-Up",
       description: "Recall an older query that starts with the text before the cursor",

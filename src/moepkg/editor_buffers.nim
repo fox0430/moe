@@ -40,9 +40,8 @@ import
   viewer_mode,
   buffer_listings,
   git_cache,
-  editorconfig_helper,
+  buffer_load_config,
   highlight,
-  highlight_config,
   logger,
   path_key,
   buffer,
@@ -671,35 +670,30 @@ proc loadOrCreateBuffer*(
     return ok(e.buffers[existingIndex])
 
   let newBuffer = newTextBuffer()
-  # Seed the highlight cap before loadFile builds the first chunk, so the cap
-  # is not changed afterwards (which would nil the progressive-load cache).
-  newBuffer.applyHighlightCap(e.config)
-  # Register before loading so the load announces itself through the hook
-  # `addBuffer` installs. A failed load is unregistered again.
-  e.addBuffer(newBuffer)
-  # Stamp before the existence check, as loadFile does.
-  var stamp = captureFileStamp(path)
-  if fileExists(path):
-    let loadResult = newBuffer.loadFile(path)
-    if loadResult.isErr:
-      e.unregisterBufferNoLsp(newBuffer)
-      return err(loadResult.error)
-  else:
-    newBuffer.filePath = some(path)
-    newBuffer.language = detectLanguage(path)
-    if stamp.observed == fileObservedPresent:
-      # File vanished between stat and check; fail closed so unread bytes are not truncated.
-      let again = captureFileStamp(path)
-      stamp =
-        if again.observed == fileObservedPresent:
-          FileStamp(observed: fileNeverObserved)
-        else:
-          again
-    # Baseline absent so a later appearing file reads as created externally.
-    newBuffer.applyFileStamp(stamp)
-
-  applyEditorConfigToBuffer(newBuffer, e.config)
-  applyHighlightConfig(newBuffer, e.config)
+  newBuffer.loadWithConfig(e.config):
+    # Register before loading so the load announces itself through the hook
+    # `addBuffer` installs. A failed load is unregistered again.
+    e.addBuffer(newBuffer)
+    # Stamp before the existence check, as loadFile does.
+    var stamp = captureFileStamp(path)
+    if fileExists(path):
+      let loadResult = newBuffer.loadFile(path)
+      if loadResult.isErr:
+        e.unregisterBufferNoLsp(newBuffer)
+        return err(loadResult.error)
+    else:
+      newBuffer.filePath = some(path)
+      newBuffer.language = detectLanguage(path)
+      if stamp.observed == fileObservedPresent:
+        # File vanished between stat and check; fail closed so unread bytes are not truncated.
+        let again = captureFileStamp(path)
+        stamp =
+          if again.observed == fileObservedPresent:
+            FileStamp(observed: fileNeverObserved)
+          else:
+            again
+      # Baseline absent so a later appearing file reads as created externally.
+      newBuffer.applyFileStamp(stamp)
 
   # Mirror loadFile's per-buffer initialisation (bookmarks, git diff, conflict
   # markers, LSP didOpen) so files reached via :e, the FileTree opener and

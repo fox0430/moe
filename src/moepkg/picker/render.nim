@@ -17,15 +17,22 @@
 #                                                                              #
 #[############################################################################]#
 
-## What an open picker shows (`pickerView`), and the drawing of it, which
-## reads nothing else.
+## What an open picker shows (`pickerView`, `pickerPreviewView`), and the
+## drawing of it, which reads nothing else.
 
 import std/options
 
 import ../celina_backend as celina
 
-import ../[types, color, unicode_utils, popup_render, render_utils]
-import session, layout
+import ../types/editor_types
+import
+  ../[
+    types, color, unicode_utils, popup_render, render_utils, editor_render_window,
+    wanted_column,
+  ]
+import session, layout, preview
+
+export preview
 
 type
   PickerRowView* = object
@@ -68,8 +75,14 @@ proc pickerView*(state: EditorState, height: int): PickerView =
     result.rows.add view
 
 proc pickerScreenLayout*(state: EditorState, width, height: int): PickerLayout =
-  let countWidth = if state.picker.isNil: 0 else: state.picker.pickerCount.len
-  pickerLayout(width, height, state.bottomAreaHeight(width), countWidth)
+  let s = state.picker
+  pickerLayout(
+    width,
+    height,
+    state.bottomAreaHeight(width),
+    countWidth = (if s.isNil: 0 else: s.pickerCount.len),
+    preview = not s.isNil and s.previews,
+  )
 
 proc drawText(
     buffer: var Buffer,
@@ -99,7 +112,15 @@ proc drawText(
       cellX += w
     inc column
 
-proc renderPicker*(buffer: var Buffer, layout: PickerLayout, view: PickerView) =
+proc rule(left, right: string, width: int): string =
+  result = left
+  for _ in 0 ..< width - 2:
+    result.add "─"
+  result.add right
+
+proc renderPicker*(
+    buffer: var Buffer, layout: PickerLayout, view: PickerView, previewTitle = ""
+) =
   let
     frame = layout.frame
     normal = getThemeStyle(EditorColorPairIndex.popupWindow)
@@ -114,9 +135,16 @@ proc renderPicker*(buffer: var Buffer, layout: PickerLayout, view: PickerView) =
   for y in frame.y ..< frame.y + frame.height:
     if y >= 0 and y < buffer.area.height:
       discard buffer.fillCells(frame.x, y, frame.x + frame.width, normal)
+  let preview = layout.preview
+  # Where the list's side of the box ends: at the rule before the preview.
+  let listRight =
+    if layout.previewBeside:
+      preview.x - 1
+    else:
+      right
   buffer.drawBorder(frame.x, frame.y, frame.width, frame.height, border)
   if view.title.len > 0:
-    buffer.drawText(frame.x + 2, frame.y, right - 1, " " & view.title & " ", border)
+    buffer.drawText(frame.x + 2, frame.y, listRight - 1, " " & view.title & " ", border)
 
   let promptY = layout.prompt.y
   buffer.drawText(frame.x + 1, promptY, layout.prompt.x, PromptMark, detail)
@@ -132,11 +160,30 @@ proc renderPicker*(buffer: var Buffer, layout: PickerLayout, view: PickerView) =
   buffer.drawText(layout.countX, promptY, right, view.count, detail)
 
   if layout.separatorY < frame.y + frame.height - 1:
-    var rule = "├"
-    for _ in frame.x + 1 ..< right:
-      rule.add "─"
-    rule.add "┤"
-    buffer.drawText(frame.x, layout.separatorY, right + 1, rule, border)
+    buffer.drawText(
+      frame.x,
+      layout.separatorY,
+      listRight + 1,
+      rule("├", "┤", listRight - frame.x + 1),
+      border,
+    )
+  if preview.height > 0:
+    if layout.previewBeside:
+      let bottom = frame.y + frame.height - 1
+      buffer.drawText(listRight, frame.y, listRight + 1, "┬", border)
+      buffer.drawText(listRight, bottom, listRight + 1, "┴", border)
+      for y in frame.y + 1 ..< bottom:
+        if y != layout.separatorY:
+          buffer.drawText(listRight, y, listRight + 1, "│", border)
+      if previewTitle.len > 0:
+        buffer.drawText(
+          listRight + 2, frame.y, right - 1, " " & previewTitle & " ", border
+        )
+    else:
+      let y = preview.y - 1
+      buffer.drawText(frame.x, y, right + 1, rule("├", "┤", frame.width), border)
+      if previewTitle.len > 0:
+        buffer.drawText(frame.x + 2, y, right - 1, " " & previewTitle & " ", border)
 
   let list = layout.list
   if view.rows.len == 0 and view.message.len > 0 and list.height > 0:
@@ -161,3 +208,65 @@ proc renderPicker*(buffer: var Buffer, layout: PickerLayout, view: PickerView) =
       marked = row.matched,
       markStyle = mark,
     )
+
+proc renderPickerPreview*(
+    e: Editor, buffer: var Buffer, rect: PickerRect, view: PickerPreviewView
+) =
+  ## The preview's rows: the lines from `view.topLine` as a window not the
+  ## active one draws them, with no cursor line and no line numbers, or why
+  ## the item shows none.
+  if rect.width <= 0 or rect.height <= 0:
+    return
+  let right = rect.x + rect.width
+  if view.buffer.isNil:
+    let normal = getThemeStyle(EditorColorPairIndex.popupWindow)
+    for y in rect.y ..< rect.y + rect.height:
+      discard buffer.fillCells(rect.x, y, right, normal)
+    if view.message.len > 0:
+      buffer.drawText(
+        rect.x + 1,
+        rect.y,
+        right,
+        view.message,
+        getThemeStyle(EditorColorPairIndex.popupWindowDetail),
+      )
+    return
+  let
+    lines = view.buffer
+    blank = getThemeStyle(EditorColorPairIndex.default)
+    ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      cursorDisplayCol: -1,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: right,
+      isActiveWindow: false,
+    )
+  for i in 0 ..< rect.height:
+    let
+      y = rect.y + i
+      line = view.topLine + i
+    if y < 0 or y >= buffer.area.height:
+      continue
+    # A column of margin after the border, as the list has.
+    discard buffer.fillCells(rect.x, y, min(right, rect.x + 1), blank)
+    if line < lines.len and rect.width > 1:
+      # Only the cells the row shows are styled one by one, as a window's are:
+      # a minified file's line is long. The line's style context still scans
+      # all of it, as a window's does.
+      let
+        text = lines.getLine(line)
+        shown = text.shownFrom(0, rect.width - 1, e.tabStop)
+      e.renderLineSegmentWithSelection(
+        lines,
+        buffer,
+        text[shown.startByte ..< shown.endByte],
+        rect.x + 1,
+        y,
+        line,
+        shown.column,
+        ctx,
+        startCell = shown.cell,
+      )
+    else:
+      discard buffer.fillCells(rect.x, y, right, blank)
