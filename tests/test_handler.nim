@@ -13805,6 +13805,29 @@ suite "One-shot commands in a viewer":
         check e.currentMode == EditorMode.Filer
         check e.activeWindow.modeState.filer.selectedIndex == 1
 
+  for (cmd, message) in [
+    (":conflictnext", "No next git conflict"),
+    (":conflictprev", "No previous git conflict"),
+    (":lspformat", "LSP not enabled"),
+    (":lspcallhierarchyincoming", "LSP is not enabled"),
+    (":lspcallhierarchyoutgoing", "LSP is not enabled"),
+    (":quickrun", "QuickRun error: Unknown language"),
+  ]:
+    test cmd & " that does nothing keeps the viewer it was typed from":
+      withTempHome(tmpDir):
+        let e = createFilerEditor(2)
+        e.activeWindow.mode = EditorMode.Filer
+
+        discard e.executeCommandOverlay(cmd)
+
+        check e.state.statusMessage.startsWith(message)
+        check e.currentMode == EditorMode.Filer
+
+        check e.handleKeyCombo(parseKeyCombo("j").get)
+
+        check e.currentMode == EditorMode.Filer
+        check e.activeWindow.modeState.filer.selectedIndex == 1
+
 suite "Change directory command":
   var startDir: string
   var tempRoot: string

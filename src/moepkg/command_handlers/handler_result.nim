@@ -44,7 +44,8 @@ type
     hrgAppExit ## App is quitting; skip further teardown.
     hrgHandledGeneric ## Generic Handled/Unhandled/Error; consult modeTransition.
     hrgExitToNormal
-      ## Text-buffer commands (edit, cursor jump, LSP edit/window); exits to Normal.
+      ## Text-buffer commands (edit, cursor jump, LSP edit/window); exits to
+      ## Normal, or stays in the viewer they were typed from.
     hrgExitToNewMode ## Kind proc already set the target mode; overlay just exits.
     hrgExitAndResync ## Overlay exits and the wrapper resyncs to the current mode.
 

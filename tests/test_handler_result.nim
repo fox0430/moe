@@ -48,7 +48,7 @@ suite "HandlerResult - group() classification":
     for k in HandledGenericKinds:
       check group(k) == hrgHandledGeneric
 
-  test "hrgExitToNormal covers kinds that move the cursor, edit or open a window":
+  test "hrgExitToNormal covers the text-buffer commands":
     for k in ExitToNormalKinds:
       check group(k) == hrgExitToNormal
 
