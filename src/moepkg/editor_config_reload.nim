@@ -123,6 +123,9 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   if loadedThemeConfig != some(newConfig.theme):
     initTheme(newConfig)
 
+  # Files opened from now on detect their language through it.
+  setFiletypeExtensions(newConfig.filetypeExtensions)
+
   # Update sidebar bookmark marker
   setBookmarkMarker(newConfig.standard.bookmarkMarker)
 

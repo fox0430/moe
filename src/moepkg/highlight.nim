@@ -2148,6 +2148,27 @@ proc updateHighlightIncremental*(
     language, maxLineLen, budgetLines, contentVersion, parsedLines,
   )
 
+var
+  filetypeExtensions: Table[string, SourceLanguage]
+    ## `[Filetype.Extension]`: extension without the dot -> language.
+  installedFiletypeExtensions: Table[string, string]
+    ## The names `filetypeExtensions` was built from.
+
+proc setFiletypeExtensions*(extensions: Table[string, string]) =
+  ## Install `[Filetype.Extension]`: extension -> filetype name, or `none` for
+  ## plain text. Unknown names are skipped.
+  if extensions == installedFiletypeExtensions:
+    return
+  installedFiletypeExtensions = extensions
+  filetypeExtensions.clear()
+  for ext, name in extensions:
+    if cmpIgnoreStyle(name, NoFiletype) == 0:
+      filetypeExtensions[ext] = SourceLanguage.langNone
+    else:
+      let language = getSourceLanguage(name)
+      if language != SourceLanguage.langNone:
+        filetypeExtensions[ext] = language
+
 proc detectLanguage*(filename: string): SourceLanguage =
   # Check basename (takes precedence over the extension)
   let basename = filename.extractFilename
@@ -2174,9 +2195,12 @@ proc detectLanguage*(filename: string): SourceLanguage =
     if basename.startsWith("Dockerfile"):
       return SourceLanguage.langDockerfile
 
-  # TODO: use settings file
-  # Otherwise, determine the language by the file extension (case-sensitive)
+  # Otherwise, determine the language by the file extension (case-sensitive),
+  # the user's mapping first as in Neovim's `vim.filetype.add`.
   let ext = filename.splitFile.ext
+  if ext.len > 1:
+    filetypeExtensions.withValue(ext[1 ..^ 1], language):
+      return language[]
   case ext
   of ".astro":
     return SourceLanguage.langAstro

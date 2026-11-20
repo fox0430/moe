@@ -109,6 +109,7 @@ const HandWrittenSections = [
   ("KeyMapping", "Key mappings per mode"),
   ("CommandAliases", "User-defined command aliases"),
   ("ShellCommands", "User-defined shell commands"),
+  ("Filetype.Extension", "File extensions mapped to a file type"),
 ]
 
 proc derivedSections(): seq[ConfigSchemaSection] =

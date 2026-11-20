@@ -208,6 +208,13 @@ timeout = 30                           # Timeout in seconds
 # filter      = "/scratch/"        # Regex over the path. Default: every path
 # workingDir  = ".."               # Relative to the file's directory. Default: that directory
 
+# File types by extension, in place of the built-in ones. The value is a
+# filetype name (as in ${filetype}) or "none" for plain text.
+#
+# [Filetype.Extension]
+# foo = "java"
+# h   = "cpp"
+
 [Notification]
 
 popupNotifications = false             # Show notifications as floating popups

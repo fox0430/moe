@@ -2845,6 +2845,8 @@ suite "Config Validation - Hand-dispatched section types":
       ("ShellCommands = \"x\"\n", "ShellCommands"),
       ("Hook = \"x\"\n", "Hook"),
       ("DisabledCommandAliases = \"x\"\n", "DisabledCommandAliases"),
+      ("Filetype = \"x\"\n", "Filetype"),
+      ("[Filetype]\nExtension = \"x\"\n", "Filetype.Extension"),
     ]
     for (tomlStr, wantName) in wrongTypes:
       let (config, vr) = loadFromTomlString(tomlStr)
@@ -2882,6 +2884,8 @@ suite "Config Validation - Hand-dispatched section types":
         check config.hooks.entries.len == 0
       of "DisabledCommandAliases":
         check config.disabledCommandAliases.len == 0
+      of "Filetype", "Filetype.Extension":
+        check config.filetypeExtensions.len == 0
       else:
         check false
 
@@ -4618,3 +4622,55 @@ suite "Config - Lsp server settings round-trip":
     let parsed = parseJson(result)
     check parsed{"keep"} == newJInt(1)
     check parsed{"drop"} == nil
+
+suite "Config Validation - Filetype section":
+  test "[Filetype.Extension] maps extensions to canonical filetype names":
+    let (config, vr) = loadFromTomlString(
+      "[Filetype.Extension]\nfoo = \"java\"\nbar = \"C++\"\nh = \"none\"\n"
+    )
+    check not vr.hasErrors
+    check config.filetypeExtensions.len == 3
+    check config.filetypeExtensions["foo"] == "java"
+    check config.filetypeExtensions["bar"] == "cpp"
+    check config.filetypeExtensions["h"] == "none"
+
+  test "Invalid entries are reported and skipped":
+    let (config, vr) = loadFromTomlString(
+      "[Filetype.Extension]\n" & "\".foo\" = \"java\"\n" & "\"tar.gz\" = \"java\"\n" &
+        "baz = 1\n" & "qux = \"nosuchlang\"\n" & "\"a\\\\b\" = \"java\"\n" &
+        "\" \" = \"java\"\n" & "\"foo \" = \"java\"\n" & "\"f\\u001Bo\" = \"java\"\n" &
+        "ok = \"nim\"\n"
+    )
+    check vr.errors.anyIt(it.name == "Filetype.Extension..foo")
+    check vr.errors.anyIt(it.name == "Filetype.Extension.tar.gz")
+    check vr.errors.anyIt(it.name == "Filetype.Extension.baz")
+    check vr.errors.anyIt(it.name == "Filetype.Extension.qux")
+    check vr.errors.anyIt(it.name == "Filetype.Extension.a\\b")
+    check vr.errors.anyIt(it.name == "Filetype.Extension. ")
+    check vr.errors.anyIt(it.name == "Filetype.Extension.foo ")
+    check config.filetypeExtensions.len == 1
+    check config.filetypeExtensions["ok"] == "nim"
+
+  test "Unknown [Filetype] sub-table is reported":
+    let (_, vr) = loadFromTomlString("[Filetype.Pattern]\nx = \"java\"\n")
+    check vr.errors.anyIt(it.kind == sikUnknownKey and it.name == "Filetype.Pattern")
+
+  test "[Filetype.Extension] round-trip":
+    inc testFileCounter
+    let testFile = getTempDir() / "moe_test_filetype_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.filetypeExtensions["foo"] = "java"
+    config.filetypeExtensions["h"] = "none"
+
+    check saveConfigToToml(config, testFile).isOk
+    check "\nfoo = \"java\"\n" in readFile(testFile)
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.filetypeExtensions == config.filetypeExtensions

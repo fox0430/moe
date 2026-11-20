@@ -2211,7 +2211,8 @@ suite "ConfigMode - descriptor completeness":
       "editorConfig", "log", "theme", "lsp", "hooks",
     ].toHashSet
     let excluded = [
-      "debug", "keyMapping", "shellCommands", "commandAliases", "disabledCommandAliases"
+      "debug", "keyMapping", "shellCommands", "commandAliases",
+      "disabledCommandAliases", "filetypeExtensions",
     ].toHashSet
 
     var cfg = newEditorConfig()

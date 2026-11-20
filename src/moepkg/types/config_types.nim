@@ -982,6 +982,8 @@ type
     commandAliases*: Table[string, UserCommandEntry] ## User-defined command aliases
     disabledCommandAliases*: seq[string] ## Built-in command aliases disabled by the user
     hooks*: HookConfig ## User commands attached to editor events
+    filetypeExtensions*: Table[string, string]
+      ## `[Filetype.Extension]`: extension without the dot -> filetype name
 
 proc isWritePreHook*(entry: HookEntry): bool =
   ## Whether the write waits for the entry and takes its output.

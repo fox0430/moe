@@ -106,6 +106,14 @@ suite "Config schema - drift against the loader":
         offered.add parts[1]
     check offered.sorted == (@StartUpSubSectionNames).sorted
 
+  test "[Filetype] sub-tables match the ones the loader accepts":
+    var offered: seq[string] = @[]
+    for s in ConfigSchema:
+      let parts = s.name.split('.')
+      if parts.len == 2 and parts[0] == FiletypeSectionName and parts[1] notin offered:
+        offered.add parts[1]
+    check offered.sorted == (@FiletypeSubSectionNames).sorted
+
   test "[Theme] keys match the loader":
     let sec = findSection("Theme")
     check sec.isSome
