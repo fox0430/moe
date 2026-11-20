@@ -40,7 +40,7 @@ moe [arguments] [file ..]
 | `+N` | Start the first file at line N (the last line if it has fewer) |
 | `+` | Start the first file at the last line |
 | `+/pat` or `+/pat/` | Start the first file at the next line matching `pat`. `pat` becomes the last search, so `n` goes on to the next match. `+/` repeats the last search |
-| `+{command}` | Run an Ex command on the first file, as `:{command}` does (`+$-5`, `+set number`) |
+| `+{command}` | Run an Ex command on the first file, as `:{command}` does (`+$-5`, `+set number`, `+set syntax=java`) |
 | `--` | Every argument after this is a file name, even one that starts with `+` or `-` |
 | `-R` | Readonly mode |
 
@@ -859,7 +859,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `set cursorline` or `set nocursorline` | Highlight the current line (alias: `cul`, `nocul`) |
 | `set cursorcolumn` or `set nocursorcolumn` | Highlight the current column (alias: `cuc`, `nocuc`) |
 | `set statusline` or `set nostatusline` | Show/hide status line (alias: `stl`, `nostl`) |
-| `set syntax` or `set nosyntax` | Enable/disable syntax highlighting (alias: `syn`, `nosyn`) |
+| `set syntax` or `set nosyntax` | Enable/disable syntax highlighting; `set syntax={language}` highlights the current buffer as that language, e.g. `set syntax=java`, and `set syntax=none` highlights it as nothing (alias: `syn`, `nosyn`) |
 | `set indentationlines` or `set noindentationlines` | Enable/disable indentation guide lines (alias: `indl`, `noindl`) |
 | `set autoindent` or `set noautoindent` | Enable/disable auto indent (alias: `ai`, `noai`) |
 | `set autocloseparen` or `set noautocloseparen` | Enable/disable auto close paren (alias: `acp`, `noacp`) |

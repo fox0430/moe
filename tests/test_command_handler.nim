@@ -21,6 +21,7 @@ import std/[unittest, options, strutils, sets, os]
 import pkg/results
 import ../src/moepkg/[buffer, command_line, command_config, command_registry, modes]
 import ../src/moepkg/command_handlers/[command_handler, handler_result]
+import ../src/moepkg/syntax/tokenizer
 
 proc setupHandler(): CommandModeHandler =
   ## Create a handler with default configuration
@@ -833,7 +834,6 @@ suite "CommandModeHandler - executeSet Boolean Options":
     for (option, value) in [
       ("syntax", "1"),
       ("syntax", "yes"),
-      ("syntax", ""),
       ("syn", "1"),
       ("nosyntax", "true"),
       ("nosyntax", "off"),
@@ -862,6 +862,44 @@ suite "CommandModeHandler - executeSet Boolean Options":
         check result.kind == hrSetBoolOption
         check result.boolOption == bsoSyntax
         check result.boolValue == expected
+
+  test "Set syntax to a language, after = or a space":
+    let handler = setupHandler()
+    for valueAfterSpace in [false, true]:
+      for (option, value, expected) in [
+        ("syntax", "java", langJava),
+        ("syntax", "Java", langJava),
+        ("syntax", "JAVA", langJava),
+        ("syn", "java", langJava),
+        ("syntax", "c++", langCpp),
+        ("syntax", "cpp", langCpp),
+        ("syntax", "js", langJavaScript),
+        ("syntax", "typescriptreact", langTsx),
+      ]:
+        let result = handler.executeSet(option, some(value), valueAfterSpace)
+        check result.kind == hrSetSyntaxLanguage
+        check result.highlightLanguage == expected
+
+  test "Set syntax to none or nothing, as Vim's syntax=":
+    let handler = setupHandler()
+    for value in ["none", "NONE", ""]:
+      let result = handler.executeSet("syntax", some(value))
+      check result.kind == hrSetSyntaxLanguage
+      check result.highlightLanguage == langNone
+
+  test "Set syntax to an unknown language returns error":
+    let handler = setupHandler()
+    for value in ["nosuchlang", "javaa"]:
+      let result = handler.executeSet("syntax", some(value))
+      check result.kind == hrError
+      check result.errorMessage == "E474: Invalid argument: syntax=" & value
+    for (option, value) in [("nosyntax", "java"), ("invsyntax", "java")]:
+      let result = handler.executeSet(option, some(value))
+      check result.kind == hrError
+      check result.errorMessage == "E474: Invalid argument: " & option & "=" & value
+    let result = handler.executeSet("syntax!", some("java"))
+    check result.kind == hrError
+    check result.errorMessage == "E488: Trailing characters: syntax!=java"
 
   test "Set any other option with a value after a space returns error":
     let handler = setupHandler()
@@ -1765,6 +1803,15 @@ suite "CommandModeHandler - handleCommandModeInput":
       check result.kind == hrSetBoolOption
       check result.boolOption == bsoSyntax
       check result.boolValue == false
+
+  test "Handle :set syntax=java and :set syn java":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    for input in [":set syntax=java", ":set syntax java", ":set syn=java"]:
+      let result = handler.handleCommandModeInput(buffer, input)
+      check result.kind == hrSetSyntaxLanguage
+      check result.highlightLanguage == langJava
 
   test "Handle :set with a second word on another option":
     let handler = setupHandler()

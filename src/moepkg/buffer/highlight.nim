@@ -23,7 +23,7 @@
 ## - Incremental re-highlight on edit
 ## - Reserved-word configuration (TODO/NOTE/FIXME etc.)
 
-import std/tables
+import std/[options, tables]
 
 import ../[highlight, uri_utils]
 import ../types/highlight_types
@@ -39,15 +39,15 @@ proc effectiveHighlightBackend*(b: TextBuffer): HighlightBackend =
   ## requests fall back to builtin when unavailable or for Diff/Log. This
   ## query does not report per-line tokenizer failures or change buffer state.
   when defined(moe.matter) or defined(features.moe.matter):
-    effectiveHighlightBackend(b.highlightBackend, b.language, b.matterGrammarSet)
+    effectiveHighlightBackend(b.highlightBackend, b.syntaxLanguage, b.matterGrammarSet)
   else:
-    effectiveHighlightBackend(b.highlightBackend, b.language)
+    effectiveHighlightBackend(b.highlightBackend, b.syntaxLanguage)
 
 proc newBufferTokenizerState*(b: TextBuffer): TokenizerState =
   when defined(moe.matter) or defined(features.moe.matter):
-    newTokenizerState(b.highlightBackend, b.language, b.matterGrammarSet)
+    newTokenizerState(b.highlightBackend, b.syntaxLanguage, b.matterGrammarSet)
   else:
-    newTokenizerState(b.highlightBackend, b.language)
+    newTokenizerState(b.highlightBackend, b.syntaxLanguage)
 
 proc matches*(pr: PendingReparse, b: TextBuffer): bool =
   ## TextBuffer-scoped overload of `PendingReparse.matches`.
@@ -61,6 +61,22 @@ proc setHighlightBackend*(b: TextBuffer, backend: HighlightBackend) =
   ## engine. Use effectiveHighlightBackend to inspect compile/language fallback.
   if b.highlightBackend != backend:
     b.highlightBackend = backend
+    b.incrementalHighlight = nil
+    b.uriScanParsedUpTo = -1
+    b.highlightNeedsUpdate = true
+
+proc setSyntaxLanguage*(b: TextBuffer, language: SourceLanguage) =
+  ## Highlight `b` as `language` from now on, reloads included, as Vim's
+  ## `:set syntax=` does; `langNone` highlights nothing. The file's `language`
+  ## stays, and picking it drops the override. Syntax-derived caches are
+  ## dropped as in `setHighlightBackend`.
+  let before = b.syntaxLanguage
+  b.syntaxOverride =
+    if language == b.language:
+      none(SourceLanguage)
+    else:
+      some(language)
+  if language != before:
     b.incrementalHighlight = nil
     b.uriScanParsedUpTo = -1
     b.highlightNeedsUpdate = true
@@ -110,7 +126,7 @@ proc isCodeBlockLine*(b: TextBuffer, line: int): bool =
   ## the state exiting it has `markdown.inCodeBlock` set. The exiting state
   ## covers the opening fence; the entering state covers the closing fence
   ## and every interior line.
-  if b.language != SourceLanguage.langMarkdown or b.incrementalHighlight == nil:
+  if b.syntaxLanguage != SourceLanguage.langMarkdown or b.incrementalHighlight == nil:
     return false
   template states(): untyped =
     b.incrementalHighlight.lineStates
@@ -172,7 +188,7 @@ proc continueIncrementalHighlight*(
     b.highlight.colorSegments,
     b.lastChangedLines,
     b.reservedWords,
-    b.language,
+    b.syntaxLanguage,
     b.maxHighlightLineLength,
     budgetLines,
     b.contentVersion,
@@ -221,7 +237,9 @@ proc continueInitialHighlight*(
   # together with the new one.
   while startLine > 0 and
       b.incrementalHighlight.lineStates[startLine - 1].backend == hbBuiltin and
-      chunkHandoffUnsafe(b.language, b.incrementalHighlight.lineStates[startLine - 1])
+      chunkHandoffUnsafe(
+        b.syntaxLanguage, b.incrementalHighlight.lineStates[startLine - 1]
+      )
   :
     dec startLine
 
@@ -265,7 +283,7 @@ proc continueInitialHighlight*(
   let (bufferStr, tails) =
     buildBufferStrCapped(chunkLines, 0, chunkLines.high, b.maxHighlightLineLength)
   let (newSegments, newLineStates) = initHighlightIncrementalFromStr(
-    bufferStr, startLine, endLine, lastState, b.reservedWords, b.language, tails
+    bufferStr, startLine, endLine, lastState, b.reservedWords, b.syntaxLanguage, tails
   )
 
   b.incrementalHighlight.lineStates.add(newLineStates)
@@ -366,7 +384,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
     # rewind below needs its start.
     var prevPr: PendingReparse
 
-    if b.language != SourceLanguage.langNone:
+    if b.syntaxLanguage != SourceLanguage.langNone:
       # An empty state cache is a valid transient flight state (a top
       # line-count change trims it), so gate on the live flight too, or the
       # next edit would fall back to a one-call full rebuild.
@@ -389,7 +407,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           b.highlight.colorSegments,
           b.lastChangedLines,
           b.reservedWords,
-          b.language,
+          b.syntaxLanguage,
           b.maxHighlightLineLength,
           reparseBudget,
           b.contentVersion,
@@ -425,7 +443,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
             lines.high,
             b.newBufferTokenizerState(),
             b.reservedWords,
-            b.language,
+            b.syntaxLanguage,
             b.maxHighlightLineLength,
           )
 

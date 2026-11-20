@@ -46,7 +46,9 @@ import
   ]
 import ../src/moepkg/handler {.all.}
 from ../src/moepkg/types/background_process_types import BackgroundProcessCommand
-from ../src/moepkg/command_completion import isActive, getSelectedCommand
+from ../src/moepkg/command_completion import
+  isActive, getSelectedCommand, CompletionMode
+from ../src/moepkg/syntax/tokenizer import SourceLanguage
 import ../src/moepkg/editor_build_jobs {.all.}
 import ../src/moepkg/job_lanes
 import ../src/moepkg/terminal_mode
@@ -6750,6 +6752,22 @@ suite "The prompts edit their line as Vim's getcmdline":
       check mgr.menu.selectedIndex == count - 1
       e.press([next])
       check e.state.input.line.text == "se"
+
+  test "Tab completes the language after :set syntax= and Enter runs it":
+    let e = createEditorForLine()
+    e.press([":", "s", "e", "t", "Space", "s", "y", "n", "t", "a", "x", "="])
+    let mgr = e.state.commandCompletionManager
+    check mgr.isActive()
+    check mgr.mode == cmSetValue
+
+    e.press(["j", "a", "v", "Tab"])
+    check e.state.input.line.text == "set syntax=java"
+    e.press(["Tab"])
+    check e.state.input.line.text == "set syntax=javascript"
+
+    e.press(["Return"])
+    check not e.state.isCommandOverlay
+    check e.activeBuffer.syntaxLanguage == langJavaScript
 
   test "PageUp and PageDown page the completions while one is selected":
     let e = createEditorForLine()

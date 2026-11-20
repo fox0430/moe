@@ -230,7 +230,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
       hrFileTreeQuit, hrOpenUri, hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd,
       hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro, hrRepeatInsert, hrUndo,
-      hrRedo, hrJobs, hrPickerEnter, hrPickerOpen:
+      hrRedo, hrJobs, hrPickerEnter, hrPickerOpen, hrSetSyntaxLanguage:
     discard # Not expected from RecentFile mode handler
 
   # Route overlay/mode transitions through processResult so a viewer target

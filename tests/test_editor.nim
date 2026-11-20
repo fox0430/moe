@@ -1620,6 +1620,7 @@ suite "Editor - :set toggle and show":
     for (name, expected) in [
       ("number", "  number"),
       ("relativenumber", "norelativenumber"),
+      ("syntax", "  syntax=none"),
       ("tabstop", "  tabstop=4"),
       ("scrollfriction", "  scrollfriction=80.0"),
     ]:
@@ -1642,10 +1643,13 @@ suite "Editor - :set toggle and show":
             )
           )
           e.run(show)
-          check e.state.statusMessage == (if value: "  " else: "no") & spec.longName
+          check e.state.statusMessage ==
+            (if value: "  " else: "no") & spec.longName &
+            (if value and spec.boolOption == bsoSyntax: "=none" else: "")
         e.run(HandlerResult(kind: hrToggleBoolOption, toggledOption: spec.boolOption))
         e.run(show)
-        check e.state.statusMessage == "  " & spec.longName
+        check e.state.statusMessage ==
+          "  " & spec.longName & (if spec.boolOption == bsoSyntax: "=none" else: "")
       of sokInt:
         e.run(
           HandlerResult(kind: hrSetIntOption, intOption: spec.intOption, intValue: 3)
@@ -1669,6 +1673,45 @@ suite "Editor - :set toggle and show":
       )
     )
     check e.state.statusMessage == "multistatusline = false"
+
+  test "hrSetSyntaxLanguage highlights only the current buffer as the language":
+    let e = createTestEditor()
+    let other = newTextBuffer("class B {}")
+    e.addBuffer(other)
+    let current = e.activeBuffer()
+    check current.id != other.id
+
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: langCpp))
+    check current.syntaxLanguage == langCpp
+    check current.language == langNone
+    check current.highlightNeedsUpdate
+    check other.syntaxLanguage == langNone
+    check e.state.statusMessage == "syntax = cpp"
+
+  test "hrSetSyntaxLanguage is refused on a listing and a raw buffer":
+    let e = createTestEditor()
+    let current = e.activeBuffer()
+    for raw in [false, true]:
+      current.isUtilityBuffer = not raw
+      current.keepRaw = raw
+      current.highlightNeedsUpdate = false
+      e.run(HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: langCpp))
+      check current.syntaxOverride.isNone
+      check not current.highlightNeedsUpdate
+      check e.state.statusMessage == "Cannot highlight this buffer: syntax=cpp"
+
+  test "syntax? shows the language picked, or nosyntax while off":
+    let e = createTestEditor()
+    let current = e.activeBuffer()
+    let show = HandlerResult(kind: hrShowOption, shownOption: specNamed("syntax"))
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: langJava))
+    e.run(show)
+    check e.state.statusMessage == "  syntax=java"
+    check current.language == langNone
+
+    e.run(HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: false))
+    e.run(show)
+    check e.state.statusMessage == "nosyntax"
 
 suite "Startup window - FileTree":
   ## These tests simulate handleStartUpWindows: viewport height is set to

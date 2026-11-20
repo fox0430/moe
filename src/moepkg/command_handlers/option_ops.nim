@@ -21,6 +21,8 @@
 ## result_processor.nim so the set-option arms live next to setting_options.
 
 import ../[editor, setting_options, types]
+import ../buffer/highlight as buffer_highlight
+from ../syntax/tokenizer import sourceLanguageToFiletype
 
 import handler_result
 
@@ -157,19 +159,27 @@ proc setFloatOption(e: Editor, option: FloatSettingOption, value: float) =
   of fsoScrollAirDrag:
     e.config.smoothScroll.airDrag = value
 
-proc shownValue(e: Editor, spec: SetOptionSpec): string =
-  ## Vim's `:set X?` wording: `  number`, `nonumber`, `  tabstop=4`.
+proc shownValue(e: Editor, spec: SetOptionSpec, buffer: TextBuffer): string =
+  ## Vim's `:set X?` wording: `  number`, `nonumber`, `  tabstop=4`. With
+  ## highlighting on, `syntax` shows the buffer's language, `  syntax=java`.
   case spec.kind
   of sokBool:
-    (if e.boolOptionValue(spec.boolOption): "  " else: "no") & spec.longName
+    let on = e.boolOptionValue(spec.boolOption)
+    if on and spec.boolOption == bsoSyntax:
+      "  syntax=" & sourceLanguageToFiletype[buffer.syntaxLanguage]
+    else:
+      (if on: "  " else: "no") & spec.longName
   of sokInt:
     "  " & spec.longName & "=" & $e.intOptionValue(spec.intOption)
   of sokFloat:
     "  " & spec.longName & "=" & $e.floatOptionValue(spec.floatOption)
 
-proc processSetOptionResult*(e: Editor, r: HandlerResult): bool =
+proc processSetOptionResult*(
+    e: Editor, r: HandlerResult, activeBuffer: TextBuffer
+): bool =
   ## Apply hrSetBoolOption / hrSetIntOption / hrSetFloatOption /
-  ## hrToggleBoolOption / hrShowOption. Returns true to continue.
+  ## hrToggleBoolOption / hrShowOption / hrSetSyntaxLanguage. Returns true to
+  ## continue.
   case r.kind
   of hrSetBoolOption:
     e.setBoolOption(r.boolOption, r.boolValue)
@@ -185,7 +195,15 @@ proc processSetOptionResult*(e: Editor, r: HandlerResult): bool =
     e.setFloatOption(r.floatOption, r.floatValue)
     e.state.statusMessage = r.floatOption.longName & " = " & $r.floatValue
   of hrShowOption:
-    e.state.statusMessage = e.shownValue(r.shownOption)
+    e.state.statusMessage = e.shownValue(r.shownOption, activeBuffer)
+  of hrSetSyntaxLanguage:
+    let name = sourceLanguageToFiletype[r.highlightLanguage]
+    # Listings and raw bytes are never highlighted, so a pick would not show.
+    if activeBuffer.isUtilityBuffer or not activeBuffer.allowsTextTransforms:
+      e.state.statusMessage = "Cannot highlight this buffer: syntax=" & name
+    else:
+      activeBuffer.setSyntaxLanguage(r.highlightLanguage)
+      e.state.statusMessage = "syntax = " & name
   else:
     discard # Not a set-option kind; caller misrouted (defensive)
   true
