@@ -288,19 +288,16 @@ proc executeSet*(
       (suffix.len > 0 and value.isSome and not valueAfterSpace):
     return rejected("E488: Trailing characters")
 
-  # Vim's 'syntax' is the buffer's language (`syntax=java`). Ours is also a
-  # toggle, so take on/off and true/false too, after `=` or a space.
+  # Vim's 'syntax' is the buffer's language (`syntax=java`), and `syntax=OFF`
+  # and `syntax=ON` are its values too: off highlights nothing, on goes back to
+  # the file's language. Unlike Vim, where `syntax=ON` loads nothing after
+  # `:syntax off`, ours also turns the global switch (`:set nosyntax`) back on.
   if spec.kind == sokBool and spec.boolOption == bsoSyntax and prefix == spNone and
       suffix == "" and value.isSome:
     case value.get.toLower
     of "on", "true":
-      return
-        HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: true)
-    of "off", "false":
-      return
-        HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: false)
-    of "", "none":
-      # Vim highlights nothing for these, as there is no such syntax file.
+      return HandlerResult(kind: hrSetSyntaxLanguage, followFiletype: true)
+    of "off", "false", "", "none":
       return HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: langNone)
     else:
       # Vim takes an unknown name and highlights nothing; ours is refused

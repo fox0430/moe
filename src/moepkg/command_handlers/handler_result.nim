@@ -246,6 +246,9 @@ type
       shownOption*: SetOptionSpec
     of hrSetSyntaxLanguage:
       highlightLanguage*: SourceLanguage
+      followFiletype*: bool
+        ## `:set syntax=on`: turn highlighting on and go back to the file's
+        ## language, ignoring `highlightLanguage`.
     of hrClearSearchHighlight:
       discard
     of hrSave:

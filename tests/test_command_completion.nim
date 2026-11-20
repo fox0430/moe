@@ -113,13 +113,15 @@ suite "CommandCompletion - collectSetOptions":
       check options[0].matchScore >= options[1].matchScore
 
 suite "CommandCompletion - collectSyntaxLanguages":
-  test "Every language but none, by its filetype name, alphabetically":
+  test "on, off and every language but none, by its filetype name, alphabetically":
     let entries = collectSyntaxLanguages("")
-    check entries.len == SourceLanguage.high.ord
+    check entries.len == SourceLanguage.high.ord + 2
     var names: seq[string]
     for entry in entries:
       names.add entry.command
     check "none" notin names
+    check "on" in names
+    check "off" in names
     check "java" in names
     check "cpp" in names
     check names == names.sorted

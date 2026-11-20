@@ -859,7 +859,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `set cursorline` or `set nocursorline` | Highlight the current line (alias: `cul`, `nocul`) |
 | `set cursorcolumn` or `set nocursorcolumn` | Highlight the current column (alias: `cuc`, `nocuc`) |
 | `set statusline` or `set nostatusline` | Show/hide status line (alias: `stl`, `nostl`) |
-| `set syntax` or `set nosyntax` | Enable/disable syntax highlighting; `set syntax={language}` highlights the current buffer as that language, e.g. `set syntax=java`, and `set syntax=none` highlights it as nothing (alias: `syn`, `nosyn`) |
+| `set syntax` or `set nosyntax` | Enable/disable syntax highlighting; `set syntax={language}` highlights the current buffer as that language, e.g. `set syntax=java`, and `set syntax=off` (or `none`) highlights it as nothing and `set syntax=on` turns highlighting on with its file type (alias: `syn`, `nosyn`) |
 | `set indentationlines` or `set noindentationlines` | Enable/disable indentation guide lines (alias: `indl`, `noindl`) |
 | `set autoindent` or `set noautoindent` | Enable/disable auto indent (alias: `ai`, `noai`) |
 | `set autocloseparen` or `set noautocloseparen` | Enable/disable auto close paren (alias: `acp`, `noacp`) |

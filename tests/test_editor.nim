@@ -1688,6 +1688,89 @@ suite "Editor - :set toggle and show":
     check other.syntaxLanguage == langNone
     check e.state.statusMessage == "syntax = cpp"
 
+  test "syntax=off then a language highlights the buffer again":
+    let e = createTestEditor()
+    let current = e.activeBuffer()
+    current.language = langPython
+
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: langNone))
+    check current.syntaxLanguage == langNone
+    check e.config.standard.syntax
+
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: langPython))
+    check current.syntaxLanguage == langPython
+    check current.syntaxOverride.isNone
+    check e.state.statusMessage == "syntax = python"
+
+  test "syntax=on goes back to the file's language and turns highlighting on":
+    let e = createTestEditor()
+    e.config.standard.syntax = false
+    let current = e.activeBuffer()
+    current.language = langPython
+    current.setSyntaxLanguage(langCpp)
+
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, followFiletype: true))
+    check current.syntaxLanguage == langPython
+    check current.syntaxOverride.isNone
+    check e.config.standard.syntax
+    check e.state.statusMessage == "syntax = python"
+
+  test "syntax=on in a listing turns highlighting on; syntax=off says how":
+    let e = createTestEditor()
+    let current = e.activeBuffer()
+    current.isUtilityBuffer = true
+
+    e.config.standard.syntax = false
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, followFiletype: true))
+    check e.config.standard.syntax
+    check current.syntaxOverride.isNone
+    check e.state.statusMessage == "syntax = on"
+
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: langNone))
+    check e.config.standard.syntax
+    check current.syntaxOverride.isNone
+    check e.state.statusMessage ==
+      "Cannot highlight this buffer: syntax=none (:set nosyntax turns highlighting off everywhere)"
+
+  test "syntax=on drops a pick on raw bytes, so a decoding reload keeps it off":
+    let e = createTestEditor()
+    let current = e.activeBuffer()
+    current.language = langPython
+    current.setSyntaxLanguage(langCpp)
+    current.keepRaw = true
+
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, followFiletype: true))
+    check current.syntaxOverride.isNone
+    current.keepRaw = false
+    check current.syntaxLanguage == langPython
+
+  test "syntax=on on a buffer with no file type says on, not none":
+    let e = createTestEditor()
+    check e.activeBuffer().language == langNone
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, followFiletype: true))
+    check e.state.statusMessage == "syntax = on"
+
+  test "syntax? on raw bytes shows the language as set":
+    let e = createTestEditor()
+    let current = e.activeBuffer()
+    let show = HandlerResult(kind: hrShowOption, shownOption: specNamed("syntax"))
+    current.setSyntaxLanguage(langJava)
+    current.keepRaw = true
+
+    e.run(show)
+    check e.state.statusMessage == "  syntax=java"
+    e.config.standard.syntax = false
+    e.run(show)
+    check e.state.statusMessage == "nosyntax (syntax=java)"
+
+  test "Picking a language with highlighting off says how to turn it on":
+    let e = createTestEditor()
+    e.config.standard.syntax = false
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: langCpp))
+    check e.activeBuffer().syntaxLanguage == langCpp
+    check not e.config.standard.syntax
+    check e.state.statusMessage == "syntax = cpp (highlighting is off: :set syntax)"
+
   test "hrSetSyntaxLanguage is refused on a listing and a raw buffer":
     let e = createTestEditor()
     let current = e.activeBuffer()
@@ -1700,7 +1783,7 @@ suite "Editor - :set toggle and show":
       check not current.highlightNeedsUpdate
       check e.state.statusMessage == "Cannot highlight this buffer: syntax=cpp"
 
-  test "syntax? shows the language picked, or nosyntax while off":
+  test "syntax? shows the language picked, while off too":
     let e = createTestEditor()
     let current = e.activeBuffer()
     let show = HandlerResult(kind: hrShowOption, shownOption: specNamed("syntax"))
@@ -1710,6 +1793,11 @@ suite "Editor - :set toggle and show":
     check current.language == langNone
 
     e.run(HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: false))
+    e.run(show)
+    check e.state.statusMessage == "nosyntax (syntax=java)"
+
+    e.run(HandlerResult(kind: hrSetSyntaxLanguage, followFiletype: true))
+    e.config.standard.syntax = false
     e.run(show)
     check e.state.statusMessage == "nosyntax"
 

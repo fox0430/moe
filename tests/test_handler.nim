@@ -6769,6 +6769,31 @@ suite "The prompts edit their line as Vim's getcmdline":
     check not e.state.isCommandOverlay
     check e.activeBuffer.syntaxLanguage == langJavaScript
 
+  test ":set syntax off then :set syntax python highlights the buffer again":
+    let e = createEditorForLine()
+    e.activeBuffer.language = langPython
+    proc runLine(line: string) =
+      e.press([":"])
+      for c in line:
+        e.press(
+          [
+            if c == ' ':
+              "Space"
+            else:
+              $c
+          ]
+        )
+      e.press(["Return"])
+
+    runLine("set syntax off")
+    check e.activeBuffer.syntaxLanguage == langNone
+    check e.showSyntax
+    runLine("set syntax python")
+    check e.activeBuffer.syntaxLanguage == langPython
+    runLine("set syntax=off")
+    runLine("set syntax=on")
+    check e.activeBuffer.syntaxLanguage == langPython
+
   test "PageUp and PageDown page the completions while one is selected":
     let e = createEditorForLine()
     e.setHistory(":", @["set number"])
