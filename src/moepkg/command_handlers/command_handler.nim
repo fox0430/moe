@@ -31,6 +31,7 @@ import pkg/results
 import ../[modes, command_line, command_config, command_registry, config_loader]
 import ../buffer/[core, edit, fold, search, undo]
 import ../setting_options
+from ../syntax/tokenizer import SourceLanguage, getSourceLanguage
 import handler_types, handler_result
 export setting_options, handler_types
 
@@ -287,8 +288,8 @@ proc executeSet*(
       (suffix.len > 0 and value.isSome and not valueAfterSpace):
     return rejected("E488: Trailing characters")
 
-  # Vim's 'syntax' is a string option (`syntax=OFF`); ours is a toggle, so
-  # take on/off and true/false, after `=` or a space.
+  # Vim's 'syntax' is the buffer's language (`syntax=java`). Ours is also a
+  # toggle, so take on/off and true/false too, after `=` or a space.
   if spec.kind == sokBool and spec.boolOption == bsoSyntax and prefix == spNone and
       suffix == "" and value.isSome:
     case value.get.toLower
@@ -298,8 +299,15 @@ proc executeSet*(
     of "off", "false":
       return
         HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: false)
+    of "", "none":
+      # Vim highlights nothing for these, as there is no such syntax file.
+      return HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: langNone)
     else:
-      discard
+      # Vim takes an unknown name and highlights nothing; ours is refused
+      # below, as the languages are built in.
+      let language = getSourceLanguage(value.get)
+      if language != langNone:
+        return HandlerResult(kind: hrSetSyntaxLanguage, highlightLanguage: language)
   # A bool option refuses any other value, so that `nu=0` cannot turn it on.
   if valueAfterSpace or (spec.kind == sokBool and value.isSome):
     return rejected("E474: Invalid argument")

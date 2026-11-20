@@ -497,6 +497,24 @@ suite "Editor - startup + arguments":
     check e.config.standard.tabStop == 7
     check e.state.input.commandState.history.len == historyBefore
 
+  test "+set syntax={language} highlights the first file as that language":
+    let (e, path) = startOn("class A {}\n", "moe_test_startup_syntax.txt")
+    defer:
+      removeFile(path)
+    check e.activeBuffer.syntaxLanguage == langNone
+    e.runStartupCommands([ex("set syntax=java")])
+    check e.activeBuffer.syntaxLanguage == langJava
+    check e.activeBuffer.language == langNone
+    check e.state.statusMessage == "syntax = java"
+
+  test "+set syntax= with an unknown language is refused":
+    let (e, path) = startOn("class A {}\n", "moe_test_startup_syntax_unknown.txt")
+    defer:
+      removeFile(path)
+    e.runStartupCommands([ex("set syntax=nosuchlang")])
+    check e.activeBuffer.syntaxLanguage == langNone
+    check e.state.statusMessage == "E474: Invalid argument: syntax=nosuchlang"
+
   test "A command that quits decides the quit and ends the run":
     let (e, path) = startOn(Text, "moe_test_startup_quit.txt")
     defer:

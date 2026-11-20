@@ -5143,6 +5143,105 @@ suite "Buffer - Markdown fenced code block detection":
     for i in 0 ..< buf.len:
       check not buf.isCodeBlockLine(i)
 
+suite "Buffer - :set syntax= picks the highlight language":
+  const JavaText = "class A {\n  int x = 1; // c\n}\n"
+
+  template loaded(name: string): TextBuffer =
+    ## A buffer read from a file named `name` holding `JavaText`.
+    let path = getTempDir() / name
+    writeFile(path, JavaText)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    removeFile(path)
+    buf
+
+  test "A .txt file highlights as Java, keeping its own language":
+    let java = loaded("moe_test_syntax_ref.java")
+    let buf = loaded("moe_test_syntax_override.txt")
+    check buf.language == langNone
+    check buf.highlight.colorSegments != java.highlight.colorSegments
+
+    buf.setSyntaxLanguage(langJava)
+    check buf.language == langNone
+    check buf.syntaxLanguage == langJava
+    check buf.highlightNeedsUpdate
+    check buf.incrementalHighlight.isNil
+
+    buf.updateHighlight()
+    check buf.highlight.colorSegments == java.highlight.colorSegments
+
+  test "A reload keeps the language picked, as Vim's :e! does":
+    let java = loaded("moe_test_syntax_reload_ref.java")
+    let path = getTempDir() / "moe_test_syntax_reload.txt"
+    writeFile(path, JavaText)
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    buf.setSyntaxLanguage(langJava)
+    buf.updateHighlight()
+
+    check buf.loadFile(path).isOk
+    check buf.language == langNone
+    check buf.syntaxLanguage == langJava
+    check buf.highlight.colorSegments == java.highlight.colorSegments
+
+  test "Picking the language already in use keeps the caches":
+    let buf = loaded("moe_test_syntax_same.java")
+    buf.updateHighlight()
+    let cache = buf.incrementalHighlight
+    check cache != nil
+
+    buf.setSyntaxLanguage(langJava)
+    check buf.syntaxLanguage == langJava
+    check buf.incrementalHighlight == cache
+    check not buf.highlightNeedsUpdate
+
+  test "none highlights nothing, and the file's language drops the pick":
+    let buf = loaded("moe_test_syntax_none.java")
+    let plain = loaded("moe_test_syntax_none_ref.txt")
+    buf.updateHighlight()
+
+    buf.setSyntaxLanguage(langNone)
+    check buf.syntaxLanguage == langNone
+    check buf.language == langJava
+    buf.updateHighlight()
+    check buf.highlight.colorSegments == plain.highlight.colorSegments
+
+    buf.setSyntaxLanguage(langJava)
+    check buf.syntaxOverride.isNone
+    check buf.syntaxLanguage == langJava
+
+  test "A raw buffer stays unhighlighted, reloads included":
+    let path = getTempDir() / "moe_test_syntax_raw.c"
+    let raw = "int x = 1; \xC3\x28\n"
+    writeFile(path, raw)
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check not buf.allowsTextTransforms
+    let segments = buf.highlight.colorSegments
+
+    buf.syntaxOverride = some(langC)
+    check buf.syntaxLanguage == langNone
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+    check buf.highlight.colorSegments == segments
+
+    check buf.loadFile(path).isOk
+    check buf.syntaxLanguage == langNone
+    check buf.highlight.colorSegments == segments
+
+  test "Markdown code blocks follow the language picked":
+    let buf = newTextBuffer("intro\n```nim\nlet x = 1\n```\nafter\n")
+    buf.setSyntaxLanguage(langMarkdown)
+    buf.updateHighlight()
+
+    check not buf.isCodeBlockLine(0)
+    check buf.isCodeBlockLine(2)
+    check not buf.isCodeBlockLine(4)
+
 suite "Buffer - Backend selection":
   teardown:
     # These are process-wide, so restore the stock defaults for later suites.

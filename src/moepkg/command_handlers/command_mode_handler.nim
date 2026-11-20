@@ -238,6 +238,10 @@ proc applyCompletion(e: Editor): bool =
   of cmSetOption, cmPickerSource:
     # Replace only the argument part
     line.text = parseCommandLine(e.state.commandLine).cmd & " " & selected
+  of cmSetValue:
+    # Replace only what follows the `=`
+    let (cmd, arg) = parseCommandLine(e.state.commandLine)
+    line.text = cmd & " " & arg[0 .. arg.find('=')] & selected
   line.cursor = line.text.charLen
 
 proc selectCompletion(e: Editor, next: bool) =
@@ -303,7 +307,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): ReplayOutcome =
       let isWholeArgument = isFile or (isDir and mgr.baseCommand.completesDirectories)
       # Check if it's an action that should execute immediately
       let shouldExecuteNow =
-        isWholeArgument or mgr.mode in {cmSetOption, cmPickerSource} or (
+        isWholeArgument or mgr.mode in {cmSetOption, cmSetValue, cmPickerSource} or (
           mgr.mode == cmCommand and
           e.commandLineParser.isNoArgumentAction(mgr.getSelectedCommand())
         )

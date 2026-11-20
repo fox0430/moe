@@ -32,6 +32,8 @@ import
 
 import types/command_completion_types
 import picker/catalog
+from syntax/tokenizer import
+  SourceLanguage, sourceLanguageToFiletype, sourceLanguageToStr
 export command_completion_types
 
 const
@@ -281,6 +283,14 @@ proc collectFilePaths*(
   except OSError as e:
     logDebug "command_completion", "Failed to scan directory for completion: " & e.msg
 
+proc sortByScore(entries: var seq[CommandCompletionEntry]) =
+  ## Best match first, then alphabetically.
+  entries.sort do(a, b: CommandCompletionEntry) -> int:
+    if a.matchScore != b.matchScore:
+      b.matchScore - a.matchScore
+    else:
+      cmp(a.command, b.command)
+
 proc collectSetOptions*(prefix: string): seq[CommandCompletionEntry] =
   ## Collect :set options for completion
   result = @[]
@@ -296,12 +306,26 @@ proc collectSetOptions*(prefix: string): seq[CommandCompletionEntry] =
         CommandCompletionEntry(command: option, description: desc, matchScore: score)
       )
 
-  # Sort by score (descending) then alphabetically
-  result.sort do(a, b: CommandCompletionEntry) -> int:
-    if a.matchScore != b.matchScore:
-      b.matchScore - a.matchScore
-    else:
-      cmp(a.command, b.command)
+  result.sortByScore()
+
+proc namesSyntaxOption(name: string): bool =
+  ## Whether `name` is the `syntax` option, long or short.
+  for spec in SetOptionTable:
+    if spec.kind == sokBool and spec.boolOption == bsoSyntax:
+      return name == spec.longName or name == spec.shortName
+
+proc collectSyntaxLanguages*(prefix: string): seq[CommandCompletionEntry] =
+  ## The languages `:set syntax=` takes that `prefix` matches, by their
+  ## `${filetype}` names.
+  for language in succ(langNone) .. high(SourceLanguage):
+    let name = sourceLanguageToFiletype[language]
+    if fuzzyMatch(prefix, name):
+      result.add CommandCompletionEntry(
+        command: name,
+        description: sourceLanguageToStr[language],
+        matchScore: matchScore(prefix, name),
+      )
+  result.sortByScore()
 
 proc collectPickerSources*(prefix: string): seq[CommandCompletionEntry] =
   ## The sources `:picker` takes, and `resume`, that `prefix` begins.
@@ -401,11 +425,21 @@ proc triggerArgumentCompletion*(
 
   let name = cmd.fullCommandName
 
+  # What the menu filters by; a `:set` value leaves its option out.
+  var prefix = arg
+
   # Determine completion mode based on command
   if cmd == "set":
-    mgr.mode = cmSetOption
-    mgr.menu.entries = collectSetOptions(arg)
-    mgr.argStartX = baseArgX
+    let eq = arg.find('=')
+    if eq >= 0 and arg[0 ..< eq].toLowerAscii.namesSyntaxOption:
+      mgr.mode = cmSetValue
+      prefix = arg[eq + 1 .. ^1]
+      mgr.menu.entries = collectSyntaxLanguages(prefix)
+      mgr.argStartX = baseArgX + arg[0 .. eq].charLen
+    else:
+      mgr.mode = cmSetOption
+      mgr.menu.entries = collectSetOptions(arg)
+      mgr.argStartX = baseArgX
     mgr.originalDirPrefix = ""
   elif name == "picker":
     # Only the source: what follows it is the source's own.
@@ -432,7 +466,7 @@ proc triggerArgumentCompletion*(
     mgr.state = ccsIdle
     return
 
-  mgr.menu.prefix = arg
+  mgr.menu.prefix = prefix
   mgr.menu.selectedIndex = -1 # No selection initially
   mgr.menu.scrollOffset = 0
 

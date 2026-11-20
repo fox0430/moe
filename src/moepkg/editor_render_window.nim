@@ -92,8 +92,10 @@ template decorates(ctx: RenderContext, lineCtx: LineStyleContext): bool =
 template hasSyntaxHighlight(
     e: Editor, buffer: TextBuffer, windowMode: EditorMode
 ): bool =
-  not buffer.highlight.isNil and (e.showSyntax or buffer.highlight.literalColors) and
-    (windowMode.isFileEditMode or buffer.language != langNone or buffer.isUtilityBuffer)
+  not buffer.highlight.isNil and (e.showSyntax or buffer.highlight.literalColors) and (
+    windowMode.isFileEditMode or buffer.syntaxLanguage != langNone or
+    buffer.isUtilityBuffer
+  )
 
 proc resolveLineConflict(
     e: Editor, textBuffer: TextBuffer, lineIndex: int

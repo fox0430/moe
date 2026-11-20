@@ -29,6 +29,7 @@ import std/options
 
 import ../[modes, setting_options]
 import ../buffer/core
+from ../syntax/tokenizer import SourceLanguage
 import ../types/key_combo_types
 from ../command_line/types import ExecLine
 import ../lsp/protocol/types as lspTypes
@@ -63,6 +64,7 @@ type
     hrSetFloatOption # Set float option
     hrToggleBoolOption # Invert a boolean option (:set X!, :set invX)
     hrShowOption # Show an option's value (:set X?)
+    hrSetSyntaxLanguage # Highlight the current buffer as a language (:set syntax=java)
     hrClearSearchHighlight # Clear search highlighting
     hrSave # Save file
     hrSaveAll # Save all modified buffers (:wa)
@@ -240,6 +242,8 @@ type
       toggledOption*: BoolSettingOption
     of hrShowOption:
       shownOption*: SetOptionSpec
+    of hrSetSyntaxLanguage:
+      highlightLanguage*: SourceLanguage
     of hrClearSearchHighlight:
       discard
     of hrSave:
@@ -586,7 +590,7 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrLogViewerQuit, hrTerminalQuit, hrExecCommand, hrFileTreeOpenFile,
       hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrRepeatInsert, hrMapAdd, hrMapRemove,
       hrMapClear, hrMapList, hrUndo, hrRedo, hrJumpList, hrChanges, hrJobs,
-      hrPickerEnter, hrPickerOpen:
+      hrPickerEnter, hrPickerOpen, hrSetSyntaxLanguage:
     hrgExitAndResync
 
 proc group*(r: HandlerResult): HandlerResultGroup =

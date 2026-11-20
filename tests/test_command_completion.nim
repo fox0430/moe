@@ -23,6 +23,7 @@ import pkg/celina
 
 import ../src/moepkg/[command_line, command_config, fuzzy_match]
 import ../src/moepkg/command_completion {.all.}
+import ../src/moepkg/syntax/tokenizer
 
 suite "CommandCompletion - extractCommandPrefix":
   test "Extract prefix from simple command :wq":
@@ -110,6 +111,28 @@ suite "CommandCompletion - collectSetOptions":
     # Check that options starting with "no" come first
     if options.len >= 2:
       check options[0].matchScore >= options[1].matchScore
+
+suite "CommandCompletion - collectSyntaxLanguages":
+  test "Every language but none, by its filetype name, alphabetically":
+    let entries = collectSyntaxLanguages("")
+    check entries.len == SourceLanguage.high.ord
+    var names: seq[string]
+    for entry in entries:
+      names.add entry.command
+    check "none" notin names
+    check "java" in names
+    check "cpp" in names
+    check names == names.sorted
+
+  test "The best match first, with the display name as the description":
+    let entries = collectSyntaxLanguages("jav")
+    check entries.len >= 2
+    check entries[0].command == "java"
+    check entries[0].description == "Java"
+    check entries[1].command == "javascript"
+
+  test "Nothing matches an unknown name":
+    check collectSyntaxLanguages("xyz123").len == 0
 
 suite "CommandCompletion - newCommandCompletionManager":
   test "Create idle manager":
@@ -652,6 +675,34 @@ suite "CommandCompletion - triggerArgumentCompletion":
     mgr.triggerArgumentCompletion(":set num")
 
     check mgr.menu.selectedIndex == -1
+
+  test "After :set syntax= the languages complete, past the =":
+    for (line, prefix) in [
+      (":set syntax=", ""),
+      (":set syntax=ja", "ja"),
+      (":set syn=ja", "ja"),
+      (":set SYNTAX=ja", "ja"),
+    ]:
+      checkpoint line
+      let mgr = newCommandCompletionManager()
+      mgr.triggerArgumentCompletion(line)
+
+      check mgr.state == ccsActive
+      check mgr.mode == cmSetValue
+      check mgr.baseCommand == "set"
+      check mgr.menu.prefix == prefix
+      check mgr.menu.entries == collectSyntaxLanguages(prefix)
+      # argStartX = 1 (":") + 3 ("set") + 1 (space) + the option and its "="
+      check mgr.argStartX == line.find('=') + 1
+
+  test "Any other option with = completes the options as before":
+    for line in [":set nosyntax=ja", ":set tabstop=4"]:
+      checkpoint line
+      let mgr = newCommandCompletionManager()
+      mgr.triggerArgumentCompletion(line)
+
+      check mgr.mode == cmSetOption
+      check mgr.menu.entries == collectSetOptions(line[5 .. ^1])
 
 suite "CommandCompletion - calculateMaxCommandWidth":
   test "Calculate max width":

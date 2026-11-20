@@ -505,7 +505,7 @@ proc loadFileWithDecoded*(
     else:
       detectLanguage(path)
 
-  if b.language != SourceLanguage.langNone:
+  if b.syntaxLanguage != SourceLanguage.langNone:
     if b.len > 0:
       const InitialChunkSize = 1000
       let chunkEnd = min(InitialChunkSize - 1, b.len - 1)
@@ -520,7 +520,7 @@ proc loadFileWithDecoded*(
         chunkEnd,
         b.newBufferTokenizerState(),
         @[],
-        b.language,
+        b.syntaxLanguage,
         b.maxHighlightLineLength,
       )
 

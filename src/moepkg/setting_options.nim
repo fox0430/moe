@@ -155,7 +155,8 @@ const SetOptionTable*: seq[SetOptionSpec] = @[
   SetOptionSpec(
     longName: "syntax",
     shortName: "syn",
-    description: "Enable/disable syntax highlighting",
+    description:
+      "Enable/disable syntax highlighting; `set syntax={language}` highlights the current buffer as that language, e.g. `set syntax=java`, and `set syntax=none` highlights it as nothing",
     kind: sokBool,
     boolOption: bsoSyntax,
   ),

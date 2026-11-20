@@ -621,7 +621,12 @@ type
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
-    language*: SourceLanguage # Programming language for syntax highlighting
+    language*: SourceLanguage
+      ## The file's language (Vim's 'filetype'): hooks, indent and QuickRun
+      ## go by it, and highlighting too unless `syntaxOverride` is set.
+    syntaxOverride*: Option[SourceLanguage]
+      ## The language `:set syntax=` picked, as Vim's buffer-local 'syntax'.
+      ## Change it through `setSyntaxLanguage`, which drops the stale caches.
     highlightNeedsUpdate*: bool # Flag to track if highlight needs regeneration
     incrementalHighlight*: IncrementalHighlight # Incremental highlighting cache
     lastChangedLines*: int # First changed line for incremental highlight
@@ -684,6 +689,14 @@ proc allowsTextTransforms*(b: TextBuffer): bool =
   ## Whether text transforms are safe. False for raw buffers.
   ## Use this instead of checking `keepRaw` directly.
   not b.keepRaw
+
+proc syntaxLanguage*(b: TextBuffer): SourceLanguage =
+  ## The language highlighting uses: `:set syntax=`'s, else the file's. A raw
+  ## buffer has none, whatever was picked.
+  if b.allowsTextTransforms:
+    b.syntaxOverride.get(b.language)
+  else:
+    SourceLanguage.langNone
 
 proc unusualContentKind*(b: TextBuffer): UnusualContentKind =
   ## Content kind of `b` derived from load result.
