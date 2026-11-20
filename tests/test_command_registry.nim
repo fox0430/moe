@@ -643,6 +643,23 @@ suite "CommandRegistry - Command execution with context":
     check probe.args == @["3"]
     check probe.count == 3
 
+  test "givenCount takes a mapping's own count over a typed one":
+    let ctx = createTestContext(newTextBuffer("hello"))
+    ctx.count = 3
+    check ctx.givenCount(@["10"]) == 10
+    check ctx.countGiven(@["10"])
+
+  test "givenCount falls back to the typed count, then the default":
+    let ctx = createTestContext(newTextBuffer("hello"))
+    ctx.count = 3
+    check ctx.givenCount(@[]) == 3
+    check ctx.countGiven(@[])
+
+    ctx.count = 0
+    check ctx.givenCount(@[]) == 1
+    check ctx.givenCount(@[], default = 0) == 0
+    check not ctx.countGiven(@[])
+
 suite "CommandRegistry - Edge cases":
   test "execute with exact min args":
     let registry = newCommandRegistry()

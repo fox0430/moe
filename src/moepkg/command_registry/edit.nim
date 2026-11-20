@@ -1025,32 +1025,28 @@ proc registerEditCommands*(registry: CommandRegistry) =
       # it: `dw` then `3.` is `3dw`. A mapping's own count
       # (`repeat-last-change 3`) is used over a typed one. An Insert change
       # takes it below.
-      let givenCount =
-        if args.len > 0:
-          parseCount(args)
-        else:
-          ctx.count
-      if givenCount > 0:
+      let typedCount = ctx.givenCount(args, default = 0)
+      if typedCount > 0:
         case lastCmd.kind
         of lecOperatorMotion:
-          lastCmd.operand.count = givenCount
+          lastCmd.operand.count = typedCount
           lastCmd.operand.countGiven = true
         of lecReplaceChar:
-          lastCmd.replaceCount = givenCount
+          lastCmd.replaceCount = typedCount
         of lecDeleteChar:
-          lastCmd.deleteCount = givenCount
+          lastCmd.deleteCount = typedCount
         of lecPaste:
-          lastCmd.pasteCount = givenCount
+          lastCmd.pasteCount = typedCount
         of lecToggleCase:
-          lastCmd.toggleCaseCount = givenCount
+          lastCmd.toggleCaseCount = typedCount
         of lecJoinLines:
-          lastCmd.joinLinesCount = givenCount
+          lastCmd.joinLinesCount = typedCount
         of lecAddToNumber:
           lastCmd.addDelta =
             if lastCmd.addDelta < 0:
-              -givenCount
+              -typedCount
             else:
-              givenCount
+              typedCount
         of lecInsert, lecVisualReplace, lecVisualOperator:
           discard
       ctx.state.editState.lastEditCommand = some(lastCmd)
@@ -1080,7 +1076,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         # The command that entered Insert runs again, with the count given to
         # `.`, and the caller types the record after it.
         let record = ctx.state.editState.insertRecord
-        let count = if givenCount > 0: givenCount else: record.count
+        let count = if typedCount > 0: typedCount else: record.count
         case record.entry.kind
         of ieInsert, ieAppend, ieAppendEnd, ieInsertNonBlank, ieOpenBelow, ieOpenAbove:
           return ctx.handleInsertAt(record.entry.kind, count)
@@ -1088,7 +1084,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
           return handleSubstituteChar(registry, ctx, count)
         of ieChange:
           var operand = record.entry.operand
-          if givenCount > 0:
+          if typedCount > 0:
             operand.count = count
             operand.countGiven = true
           ctx.startOperator(OpChange)
@@ -1128,9 +1124,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete Operator",
     "Delete operator - waits for motion (d2w, d$, etc.) or dd for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(ctx, OpDelete, parseCount(args), args.len > 0, "d"),
+      registry.operatorKey(
+        ctx, OpDelete, ctx.givenCount(args), ctx.countGiven(args), "d"
+      ),
     0,
     1, # Accept optional count
+    countFromContext = true,
   )
 
   registry.register(
@@ -1138,9 +1137,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Change Operator",
     "Change operator - waits for motion (c2w, c$, etc.) or cc for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(ctx, OpChange, parseCount(args), args.len > 0, "c"),
+      registry.operatorKey(
+        ctx, OpChange, ctx.givenCount(args), ctx.countGiven(args), "c"
+      ),
     0,
     1, # Accept optional count
+    countFromContext = true,
   )
 
   registry.register(
@@ -1148,9 +1150,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Yank Operator",
     "Yank operator - waits for motion (y2w, y$, etc.) or yy for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(ctx, OpYank, parseCount(args), args.len > 0, "y"),
+      registry.operatorKey(ctx, OpYank, ctx.givenCount(args), ctx.countGiven(args), "y"),
     0,
     1, # Accept optional count
+    countFromContext = true,
   )
 
   registry.register(
@@ -1158,9 +1161,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Indent Operator",
     "Indent operator - waits for motion (>w, >$, etc.) or >> for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(ctx, OpIndent, parseCount(args), args.len > 0, ">"),
+      registry.operatorKey(
+        ctx, OpIndent, ctx.givenCount(args), ctx.countGiven(args), ">"
+      ),
     0,
     1, # Accept optional count
+    countFromContext = true,
   )
 
   registry.register(
@@ -1168,9 +1174,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Outdent Operator",
     "Outdent operator - waits for motion (<w, <$, etc.) or << for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(ctx, OpOutdent, parseCount(args), args.len > 0, "<"),
+      registry.operatorKey(
+        ctx, OpOutdent, ctx.givenCount(args), ctx.countGiven(args), "<"
+      ),
     0,
     1, # Accept optional count
+    countFromContext = true,
   )
 
   registry.register(
@@ -1178,9 +1187,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Lowercase Operator",
     "Lowercase operator - waits for motion (guw, gu$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(ctx, OpLowerCase, parseCount(args), args.len > 0, "gu"),
+      registry.operatorKey(
+        ctx, OpLowerCase, ctx.givenCount(args), ctx.countGiven(args), "gu"
+      ),
     0,
     1, # Accept optional count
+    countFromContext = true,
   )
 
   registry.register(
@@ -1188,9 +1200,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Uppercase Operator",
     "Uppercase operator - waits for motion (gUw, gU$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(ctx, OpUpperCase, parseCount(args), args.len > 0, "gU"),
+      registry.operatorKey(
+        ctx, OpUpperCase, ctx.givenCount(args), ctx.countGiven(args), "gU"
+      ),
     0,
     1, # Accept optional count
+    countFromContext = true,
   )
 
   registry.register(
@@ -1198,9 +1213,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Toggle Case Operator",
     "Toggle case operator - waits for motion (g~w, g~$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(ctx, OpSwapCase, parseCount(args), args.len > 0, "g~"),
+      registry.operatorKey(
+        ctx, OpSwapCase, ctx.givenCount(args), ctx.countGiven(args), "g~"
+      ),
     0,
     1, # Accept optional count
+    countFromContext = true,
   )
 
   # D - Delete to end of line (equivalent to d$)
@@ -1209,9 +1227,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete To End Of Line",
     "Delete from cursor to end of line (D command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.handleDeleteToEnd(ctx, parseCount(args)),
+      registry.handleDeleteToEnd(ctx, ctx.givenCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   # C - Change to end of line (equivalent to c$)
@@ -1220,9 +1239,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Change To End Of Line",
     "Change from cursor to end of line (C command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.handleChangeToEnd(ctx, parseCount(args)),
+      registry.handleChangeToEnd(ctx, ctx.givenCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   # Text object commands (i, a) - wait for text object kind
@@ -1231,11 +1251,14 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Inner Text Object",
     "Select inner text object (iw, i\", i(, etc.) or enter Insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      # When `i` resolves to Insert mode, args[0] (present for count > 1) carries
-      # the [count] prefix for replay; as a text object the count is ignored.
-      handleTextObjectInner(ctx, parseCount(args), countGiven = args.len > 0),
+      # Plain `i` replays the count; as a text object it is the object's
+      # count (`v2iw`, `d2i(`).
+      handleTextObjectInner(
+        ctx, ctx.givenCount(args), countGiven = ctx.countGiven(args)
+      ),
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
@@ -1243,9 +1266,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Around Text Object",
     "Select around text object (aw, a\", a(, etc.) or enter Append mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleTextObjectAround(ctx, parseCount(args), countGiven = args.len > 0),
+      handleTextObjectAround(
+        ctx, ctx.givenCount(args), countGiven = ctx.countGiven(args)
+      ),
     0,
     1,
+    countFromContext = true,
   )
 
   # Text object kind commands (w, ", (, etc.)
