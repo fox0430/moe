@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 ## TOML loader and serializer for `[Filetype]`: the user's file type detection,
-## as Neovim's `vim.filetype.add`. Only `[Filetype.extension]` exists so far.
+## as Neovim's `vim.filetype.add`. Only `[Filetype.Extension]` exists so far.
 
 import std/[algorithm, options, sequtils, strutils, tables]
 
@@ -31,8 +31,11 @@ import base, save_base
 
 const FiletypeSectionName* = "Filetype"
 
+const ExtensionTableName = "Extension"
+const ExtensionSectionName = FiletypeSectionName & "." & ExtensionTableName
+
 # The sub-tables of [Filetype].
-const FiletypeSubSectionNames* = ["extension"]
+const FiletypeSubSectionNames* = [ExtensionTableName]
 
 proc canonicalFiletype(name: string): string =
   ## The `${filetype}` spelling of `name`, `none` for plain text, or "" when
@@ -47,14 +50,13 @@ proc canonicalFiletype(name: string): string =
 proc loadFiletypeConfig*(
     table: TomlTableRef, extensions: var Table[string, string], vr: var ValidationResult
 ) =
-  ## Load `[Filetype.extension]`. Value format: `foo = "java"`; the key is the
+  ## Load `[Filetype.Extension]`. Value format: `foo = "java"`; the key is the
   ## extension without the dot, matched case-sensitively.
   checkUnknownKeys(table, FiletypeSubSectionNames, FiletypeSectionName, vr)
-  const section = FiletypeSectionName & ".extension"
-  if not expectTable(table, "extension", vr, FiletypeSectionName):
+  if not expectTable(table, ExtensionTableName, vr, FiletypeSectionName):
     return
-  for ext, value in table["extension"].getTable():
-    let key = fullKey(section, ext)
+  for ext, value in table[ExtensionTableName].getTable():
+    let key = fullKey(ExtensionSectionName, ext)
     if ext.len == 0 or ext.contains({'\0' .. ' ', '.', '/', '\\', '\x7F'}):
       vr.addError(key, ext, "file extension without the dot")
       continue
@@ -69,7 +71,7 @@ proc loadFiletypeConfig*(
 
 proc appendFiletypeToml*(lines: var seq[string], extensions: Table[string, string]) =
   if extensions.len > 0:
-    lines.add "[Filetype.extension]"
+    lines.add "[" & ExtensionSectionName & "]"
     for ext in toSeq(extensions.keys).sorted:
       lines.add toTomlKey(ext) & " = " & toTomlString(extensions[ext])
     lines.add ""

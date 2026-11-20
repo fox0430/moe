@@ -3152,7 +3152,7 @@ suite "Highlight - JS/TS String Line Bounding":
   test "TS: isKey lookahead must not see a colon on a later line":
     runColonBelowString(SourceLanguage.langTypeScript)
 
-suite "Highlight - detectLanguage with [Filetype.extension]":
+suite "Highlight - detectLanguage with [Filetype.Extension]":
   teardown:
     setFiletypeExtensions(initTable[string, string]())
 

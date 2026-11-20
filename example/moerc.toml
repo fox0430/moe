@@ -211,7 +211,7 @@ timeout = 30                           # Timeout in seconds
 # File types by extension, in place of the built-in ones. The value is a
 # filetype name (as in ${filetype}) or "none" for plain text.
 #
-# [Filetype.extension]
+# [Filetype.Extension]
 # foo = "java"
 # h   = "cpp"
 

@@ -2114,12 +2114,12 @@ proc updateHighlightIncremental*(
 
 var
   filetypeExtensions: Table[string, SourceLanguage]
-    ## `[Filetype.extension]`: extension without the dot -> language.
+    ## `[Filetype.Extension]`: extension without the dot -> language.
   installedFiletypeExtensions: Table[string, string]
     ## The names `filetypeExtensions` was built from.
 
 proc setFiletypeExtensions*(extensions: Table[string, string]) =
-  ## Install `[Filetype.extension]`: extension -> filetype name, or `none` for
+  ## Install `[Filetype.Extension]`: extension -> filetype name, or `none` for
   ## plain text. Unknown names are skipped.
   if extensions == installedFiletypeExtensions:
     return

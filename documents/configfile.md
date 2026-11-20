@@ -1558,7 +1558,7 @@ Usage:
 - `:nimbuild --release` runs `nimble build --release`
 
 
-### Filetype.extension table
+### Filetype.Extension table
 
 Pick the file type of files by their extension, as Neovim's
 `vim.filetype.add({ extension = ... })`. The file type decides the syntax
@@ -1573,7 +1573,7 @@ again (`:e!`). Language servers still go by `extensions` in
 
 Example:
 ```toml
-[Filetype.extension]
+[Filetype.Extension]
 foo = "java"
 h = "cpp"
 txt = "markdown"
