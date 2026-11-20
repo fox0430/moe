@@ -1092,6 +1092,22 @@ suite "NormalModeHandler - Undo/Redo":
       check buf.lines == c.after
       check state.cursor == c.want
 
+  test "2u undoes two changes and 2C-r redoes them":
+    let buf = newTextBuffer("abc")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard handler.typeKeys(buf, state, viewport, "x", "x")
+    check buf.getLine(0) == "c"
+
+    check handler.typeKeys(buf, state, viewport, "2", "u").kind == nmrHandled
+    check buf.getLine(0) == "abc"
+
+    check handler.typeKeys(buf, state, viewport, "2", "C-r").kind == nmrHandled
+    check buf.getLine(0) == "c"
+
 suite "NormalModeHandler - Text Object Handling":
   test "Text object word (w) with pending operator":
     let buf = newTextBuffer()

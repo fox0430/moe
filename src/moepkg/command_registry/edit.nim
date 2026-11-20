@@ -688,9 +688,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete Line",
     "Delete current line(s)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operateOnLines(ctx, OpDelete, parseCount(args, default = 1)),
+      registry.operateOnLines(ctx, OpDelete, ctx.givenCount(args)),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -698,10 +699,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete Character",
     "Delete character(s) at cursor (x command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
+      let count = ctx.givenCount(args)
       handleDeleteChar(registry, ctx, count),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -709,10 +711,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete Character Before",
     "Delete character(s) before cursor (X command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
+      let count = ctx.givenCount(args)
       handleDeleteCharBefore(ctx, count),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -720,10 +723,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Substitute Character",
     "Substitute character(s) at cursor (s command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
+      let count = ctx.givenCount(args)
       handleSubstituteChar(registry, ctx, count),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -731,9 +735,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Substitute Line",
     "Substitute line(s) (S command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operateOnLines(ctx, OpChange, parseCount(args, default = 1)),
+      registry.operateOnLines(ctx, OpChange, ctx.givenCount(args)),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -741,10 +746,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Toggle Case",
     "Toggle case of character(s) at cursor (~ command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
+      let count = ctx.givenCount(args)
       handleToggleCase(ctx, count),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -752,9 +758,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Yank Line",
     "Yank (copy) current line(s) to the selected register",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operateOnLines(ctx, OpYank, parseCount(args, default = 1)),
+      registry.operateOnLines(ctx, OpYank, ctx.givenCount(args)),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -762,9 +769,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Paste After",
     "Paste clipboard content after cursor (p command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handlePut(ctx, parseCount(args, default = 1), forward = true),
+      handlePut(ctx, ctx.givenCount(args), forward = true),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -772,9 +780,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Paste Before",
     "Paste clipboard content before cursor (P command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handlePut(ctx, parseCount(args, default = 1), forward = false),
+      handlePut(ctx, ctx.givenCount(args), forward = false),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -782,9 +791,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Paste After End",
     "Paste clipboard content after cursor and leave cursor after pasted text (gp)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handlePut(ctx, parseCount(args, default = 1), forward = true, cursorEnd = true),
+      handlePut(ctx, ctx.givenCount(args), forward = true, cursorEnd = true),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -792,9 +802,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Paste Before End",
     "Paste clipboard content before cursor and leave cursor after pasted text (gP)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handlePut(ctx, parseCount(args, default = 1), forward = false, cursorEnd = true),
+      handlePut(ctx, ctx.givenCount(args), forward = false, cursorEnd = true),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -803,9 +814,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Indent current line (>> command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       # Count is a line count, like vim's [count]>>
-      registry.operateOnLines(ctx, OpIndent, parseCount(args, default = 1)),
+      registry.operateOnLines(ctx, OpIndent, ctx.givenCount(args)),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -813,9 +825,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Dedent Line",
     "Dedent current line (<< command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operateOnLines(ctx, OpOutdent, parseCount(args, default = 1)),
+      registry.operateOnLines(ctx, OpOutdent, ctx.givenCount(args)),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -884,10 +897,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Join Lines",
     "Join count lines, at least two, from the current line (J command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
+      let count = ctx.givenCount(args)
       handleJoinLines(ctx, count),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -917,26 +931,19 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Undo",
     "Undo the last change(s)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      var lastCursorPos: Option[BufferPosition] = none(BufferPosition)
-      for i in 1 .. count:
-        let r = ctx.buffer.undo()
-        if r.isErr:
-          if i == 1:
-            return err(r.error)
-          else:
-            break # Stop if we can't undo anymore
-        lastCursorPos = some(r.value)
+      let r = ctx.buffer.undo(ctx.givenCount(args))
+      if r.isErr:
+        return err(r.error)
 
-      if lastCursorPos.isSome:
-        ctx.cursor = lastCursorPos.get
-        ctx.cursor.line = min(ctx.cursor.line, max(0, ctx.buffer.len - 1))
-        ctx.state.openCursorFolds()
-        clampCursorToBuffer(ctx)
+      ctx.cursor = r.value
+      ctx.cursor.line = min(ctx.cursor.line, max(0, ctx.buffer.len - 1))
+      ctx.state.openCursorFolds()
+      clampCursorToBuffer(ctx)
 
       return Result[(), string].ok (),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -944,26 +951,19 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Redo",
     "Redo the last undone change(s)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      var lastCursorPos: Option[BufferPosition] = none(BufferPosition)
-      for i in 1 .. count:
-        let r = ctx.buffer.redo()
-        if r.isErr:
-          if i == 1:
-            return err(r.error)
-          else:
-            break # Stop if we can't redo anymore
-        lastCursorPos = some(r.value)
+      let r = ctx.buffer.redo(ctx.givenCount(args))
+      if r.isErr:
+        return err(r.error)
 
-      if lastCursorPos.isSome:
-        ctx.cursor = lastCursorPos.get
-        ctx.cursor.line = min(ctx.cursor.line, max(0, ctx.buffer.len - 1))
-        ctx.state.openCursorFolds()
-        clampCursorToBuffer(ctx)
+      ctx.cursor = r.value
+      ctx.cursor.line = min(ctx.cursor.line, max(0, ctx.buffer.len - 1))
+      ctx.state.openCursorFolds()
+      clampCursorToBuffer(ctx)
 
       return Result[(), string].ok (),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   # Increment/Decrement number commands
