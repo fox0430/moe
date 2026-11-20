@@ -43,7 +43,8 @@ type
     ## instead of inspecting individual kinds.
     hrgAppExit ## App is quitting; skip further teardown.
     hrgHandledGeneric ## Generic Handled/Unhandled/Error; consult modeTransition.
-    hrgExitToNormal ## One-shot Command-mode action; overlay exits to Normal.
+    hrgExitToNormal
+      ## Text-buffer commands (edit, cursor jump, LSP edit/window); exits to Normal.
     hrgExitToNewMode ## Kind proc already set the target mode; overlay just exits.
     hrgExitAndResync ## Overlay exits and the wrapper resyncs to the current mode.
 
@@ -553,9 +554,9 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
     hrgAppExit
   of hrHandled, hrUnhandled, hrError, hrSubstituteNoMatch:
     hrgHandledGeneric
-  of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrConflictNext,
-      hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat, hrLspRestart, hrLspFold,
-      hrLspExecuteCommand, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing:
+  of hrQuickRun, hrSubstitute, hrDeleteLines, hrFilter, hrConflictNext, hrConflictPrev,
+      hrLspFormat, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
+      hrLspCallHierarchyOutgoing:
     hrgExitToNormal
   of hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
       hrEnterBufferManager, hrEnterBackupManager, hrEnterRecoveryManager, hrRecentFile,
@@ -590,7 +591,8 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrLogViewerQuit, hrTerminalQuit, hrExecCommand, hrFileTreeOpenFile,
       hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrRepeatInsert, hrMapAdd, hrMapRemove,
       hrMapClear, hrMapList, hrUndo, hrRedo, hrJumpList, hrChanges, hrJobs,
-      hrPickerEnter, hrPickerOpen, hrSetSyntaxLanguage:
+      hrPickerEnter, hrPickerOpen, hrSetSyntaxLanguage, hrTheme, hrPutConfigFile,
+      hrLspRestart, hrBuild, hrLspFold:
     hrgExitAndResync
 
 proc group*(r: HandlerResult): HandlerResultGroup =

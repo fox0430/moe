@@ -85,7 +85,6 @@ proc processConfigResult*(e: Editor, r: HandlerResult): bool =
       except CatchableError as ex:
         e.state.statusMessage = "Error: Failed to backup config: " & ex.msg
         logError("config", "Failed to backup config: " & ex.msg)
-        e.setMode(EditorMode.Normal)
         return true
 
     let saveResult = saveConfig(e.config)
@@ -95,7 +94,6 @@ proc processConfigResult*(e: Editor, r: HandlerResult): bool =
     else:
       e.state.statusMessage = "Failed to write config: " & saveResult.error
       logError("config", "Failed to write config: " & saveResult.error)
-    e.setMode(EditorMode.Normal)
     return true
   else:
     return true # Not a config kind; caller misrouted (defensive)
