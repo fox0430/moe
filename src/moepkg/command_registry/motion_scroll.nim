@@ -200,7 +200,7 @@ proc keepCursorInScrolledViewport(
 proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Scroll viewport down by screen rows (Ctrl-E). Keeps cursor visible.
   let
-    count = parseCount(args)
+    count = ctx.givenCount(args)
     visibleHeight = ctx.scrollVisibleHeight()
     layout = ctx.scrollRowLayout()
     viewport = ctx.motionController.viewportManager.viewport
@@ -221,7 +221,7 @@ proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), s
 proc handleScrollLineUp*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Scroll viewport up by screen rows (Ctrl-Y). Keeps cursor visible.
   let
-    count = parseCount(args)
+    count = ctx.givenCount(args)
     visibleHeight = ctx.scrollVisibleHeight()
     layout = ctx.scrollRowLayout()
     viewport = ctx.motionController.viewportManager.viewport
@@ -252,7 +252,7 @@ proc scrollPage(
     startCursor = ctx.cursor
     scroll =
       if half:
-        let count = parseCount(args, default = 0)
+        let count = ctx.givenCount(args, default = 0)
         if count > 0:
           viewport.keepHalfPageRows(min(visibleHeight, count))
         layout.halfPage(
@@ -263,7 +263,7 @@ proc scrollPage(
           forward,
         )
       else:
-        layout.page(start, ctx.cursor, visibleHeight, parseCount(args), forward)
+        layout.page(start, ctx.cursor, visibleHeight, ctx.givenCount(args), forward)
   let
     smooth = ctx.smoothScrollConfig.animates
     down = start < scroll.top
@@ -532,6 +532,7 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollLineDown,
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
@@ -541,6 +542,7 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollLineUp,
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
@@ -550,6 +552,7 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollPageDown,
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
@@ -559,6 +562,7 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollPageUp,
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
@@ -568,6 +572,7 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollHalfPageDown,
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
@@ -577,6 +582,7 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollHalfPageUp,
     0,
     1,
+    countFromContext = true,
   )
 
   # Fold commands

@@ -9442,3 +9442,60 @@ suite "executeCommand - count from the context":
 
       check registry.executeCommand(ctx, countedKey(id, 4, @["2"])).isOk
       check ctx.state.editState.insertRecord.count == 2
+
+  test "3 Ctrl-E and 2 Ctrl-Y scroll by the typed count":
+    let ctx = createTestContext(newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9"))
+    ctx.cursor = BufferPosition(line: 2, column: 0)
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("scroll.line.down", 3)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 3
+    check registry.executeCommand(ctx, countedKey("scroll.line.up", 2)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 1
+
+  test "2 Ctrl-F and 2 Ctrl-B scroll two pages":
+    proc pagedTop(id: string, count: int): int =
+      var lines: seq[string]
+      for i in 0 ..< 60:
+        lines.add($i)
+      let ctx = createTestContext(newTextBuffer(lines.join("\n")))
+      ctx.state.config.smoothScroll.enable = false
+      ctx.motionController.viewportManager.viewport.height = 10
+      ctx.motionController.viewportManager.viewport.topLine = 30
+      ctx.cursor = BufferPosition(line: 30, column: 0)
+      ctx.state.windowDisplay.viewportReservedLines = 0
+      check createTestRegistry().executeCommand(ctx, countedKey(id, count)).isOk
+      ctx.motionController.viewportManager.viewport.topLine
+
+    for id in ["scroll.page.down", "scroll.page.up"]:
+      let (one, two) = (pagedTop(id, 0), pagedTop(id, 2))
+      check one != 30
+      check abs(two - 30) == 2 * abs(one - 30)
+
+  test "3 Ctrl-D scrolls three rows and keeps them for the next Ctrl-D":
+    var lines: seq[string]
+    for i in 0 ..< 30:
+      lines.add($i)
+    let ctx = createTestContext(newTextBuffer(lines.join("\n")))
+    ctx.state.config.smoothScroll.enable = false
+    ctx.motionController.viewportManager.viewport.height = 10
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("scroll.halfpage.down", 3)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 3
+    check registry.executeCommand(ctx, countedKey("scroll.halfpage.down", 0)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 6
+    check registry.executeCommand(ctx, countedKey("scroll.halfpage.up", 2)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 4
+
+  test "a scroll command takes its mapping's own count over a typed one":
+    let ctx = createTestContext(newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9"))
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("scroll.line.down", 4, @["2"])).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 2
