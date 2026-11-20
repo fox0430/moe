@@ -9403,3 +9403,19 @@ suite "executeCommand - count from the context":
     check pending.isSome
     check pending.get.count == 2
     check pending.get.countGiven
+
+  test "3J joins three lines":
+    let buffer = newTextBuffer("a\nb\nc\nd")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("join.lines", 3)).isOk
+    check buffer.lines == @["a b c", "d"]
+
+  test "a line command takes its mapping's own count over a typed one":
+    let buffer = newTextBuffer("1\n2\n3\n4\n5")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("delete.line", 4, @["2"])).isOk
+    check buffer.lines == @["3", "4", "5"]

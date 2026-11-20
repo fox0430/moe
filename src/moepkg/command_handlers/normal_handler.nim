@@ -521,42 +521,6 @@ proc handleNormalModeKey*(
     of "edit.repeat":
       return handler.repeatLastChange(buffer, state, viewport, cmd)
     # dd, yy, cc are handled by operator doubling in command_registry
-    of "edit.undo":
-      let r = buffer.undo()
-      if r.isOk:
-        state.cursor = r.value
-        # Clamp cursor to valid buffer range
-        if buffer.len > 0:
-          if state.cursor.line >= buffer.len:
-            state.cursor.line = buffer.len - 1
-          let line = buffer.getLine(state.cursor.line)
-          let maxCol = max(0, line.charLen - 1)
-          if state.cursor.column > maxCol:
-            state.cursor.column = maxCol
-        else:
-          state.cursor = BufferPosition(line: 0, column: 0)
-        state.openCursorFolds()
-        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-      else:
-        return NormalModeResult(kind: nmrError, errorMessage: r.error)
-    of "edit.redo":
-      let r = buffer.redo()
-      if r.isOk:
-        state.cursor = r.value
-        # Clamp cursor to valid buffer range
-        if buffer.len > 0:
-          if state.cursor.line >= buffer.len:
-            state.cursor.line = buffer.len - 1
-          let line = buffer.getLine(state.cursor.line)
-          let maxCol = max(0, line.charLen - 1)
-          if state.cursor.column > maxCol:
-            state.cursor.column = maxCol
-        else:
-          state.cursor = BufferPosition(line: 0, column: 0)
-        state.openCursorFolds()
-        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-      else:
-        return NormalModeResult(kind: nmrError, errorMessage: r.error)
     of "changelist.prev":
       # g; - Jump to older change position
       if buffer.changeList.len == 0:

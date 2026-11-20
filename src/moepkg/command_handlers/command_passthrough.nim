@@ -28,8 +28,8 @@
 ##     mode bindings
 ##
 ## Stateful commandIds (changelist.*, bookmark.*, jump.*, editor.open.uri,
-## insert.*, edit.{undo,redo}) are NOT handled here and remain in
-## normal_handler.nim with full editor context.
+## insert.*) are NOT handled here and remain in normal_handler.nim with full
+## editor context.
 
 import std/[options, sequtils]
 
