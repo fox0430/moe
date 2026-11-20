@@ -9499,3 +9499,50 @@ suite "executeCommand - count from the context":
 
     check registry.executeCommand(ctx, countedKey("scroll.line.down", 4, @["2"])).isOk
     check ctx.motionController.viewportManager.viewport.topLine == 2
+
+  test "2n and 2N jump to the second match":
+    for (id, column, want) in [("search.next", 0, 6), ("search.prev", 9, 3)]:
+      checkpoint id
+      let ctx = createTestContext(newTextBuffer("ab ab ab ab ab"))
+      ctx.setCursor(0, column)
+      ctx.state.input.search.last.pattern = "ab"
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 2)).isOk
+      check ctx.cursor == BufferPosition(line: 0, column: want)
+
+  test "2* and 2# jump to the second match of the word":
+    for (id, column, want) in [
+      ("search.word.forward", 0, 6),
+      ("search.word.backward", 9, 3),
+      ("search.word.forward.partial", 0, 6),
+      ("search.word.backward.partial", 9, 3),
+    ]:
+      checkpoint id
+      let ctx = createTestContext(newTextBuffer("ab ab ab ab ab"))
+      ctx.setCursor(0, column)
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 2)).isOk
+      check ctx.cursor == BufferPosition(line: 0, column: want)
+
+  test "a search command takes its mapping's own count over a typed one":
+    for id in ["search.next", "search.word.forward", "search.word.forward.partial"]:
+      checkpoint id
+      let ctx = createTestContext(newTextBuffer("ab ab ab ab ab"))
+      ctx.state.input.search.last.pattern = "ab"
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 4, @["1"])).isOk
+      check ctx.cursor == BufferPosition(line: 0, column: 3)
+
+  test "a backward search command takes its mapping's own count over a typed one":
+    for id in ["search.prev", "search.word.backward", "search.word.backward.partial"]:
+      checkpoint id
+      let ctx = createTestContext(newTextBuffer("ab ab ab ab ab"))
+      ctx.setCursor(0, 12)
+      ctx.state.input.search.last.pattern = "ab"
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 4, @["1"])).isOk
+      check ctx.cursor == BufferPosition(line: 0, column: 9)

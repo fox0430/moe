@@ -296,9 +296,10 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Next",
     "Repeat the last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.moveToMatch(ctx.findNextMatch(parseCount(args))),
+      ctx.moveToMatch(ctx.findNextMatch(ctx.givenCount(args))),
     0,
     1,
+    countFromContext = true,
   )
   registry.registerTarget("search.next", searchTarget(findNextMatch))
 
@@ -307,9 +308,10 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Previous",
     "Repeat the last search the other way",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.moveToMatch(ctx.findPrevMatch(parseCount(args))),
+      ctx.moveToMatch(ctx.findPrevMatch(ctx.givenCount(args))),
     0,
     1,
+    countFromContext = true,
   )
   registry.registerTarget("search.prev", searchTarget(findPrevMatch))
 
@@ -399,9 +401,10 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       name,
       description,
       proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-        ctx.moveToMatch(ctx.find(parseCount(args))),
+        ctx.moveToMatch(ctx.find(ctx.givenCount(args))),
       0,
       1,
+      countFromContext = true,
     )
     registry.registerTarget(commandId, searchTarget(find))
 
