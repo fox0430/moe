@@ -22,7 +22,7 @@
 
 import ../[editor, setting_options, types]
 import ../buffer/highlight as buffer_highlight
-from ../syntax/tokenizer import sourceLanguageToFiletype
+from ../syntax/tokenizer import SourceLanguage, sourceLanguageToFiletype
 
 import handler_result
 
@@ -160,13 +160,20 @@ proc setFloatOption(e: Editor, option: FloatSettingOption, value: float) =
     e.config.smoothScroll.airDrag = value
 
 proc shownValue(e: Editor, spec: SetOptionSpec, buffer: TextBuffer): string =
-  ## Vim's `:set X?` wording: `  number`, `nonumber`, `  tabstop=4`. With
-  ## highlighting on, `syntax` shows the buffer's language, `  syntax=java`.
+  ## Vim's `:set X?` wording: `  number`, `nonumber`, `  tabstop=4`. `syntax`
+  ## shows the buffer's language as set, `  syntax=java`, even where it is not
+  ## highlighted, and with highlighting off still names one `:set syntax=`
+  ## picked, `nosyntax (syntax=java)`.
   case spec.kind
   of sokBool:
     let on = e.boolOptionValue(spec.boolOption)
-    if on and spec.boolOption == bsoSyntax:
-      "  syntax=" & sourceLanguageToFiletype[buffer.syntaxLanguage]
+    if spec.boolOption == bsoSyntax and (on or buffer.syntaxOverride.isSome):
+      let value =
+        "syntax=" & sourceLanguageToFiletype[buffer.syntaxOverride.get(buffer.language)]
+      if on:
+        "  " & value
+      else:
+        "nosyntax (" & value & ")"
     else:
       (if on: "  " else: "no") & spec.longName
   of sokInt:
@@ -197,13 +204,34 @@ proc processSetOptionResult*(
   of hrShowOption:
     e.state.statusMessage = e.shownValue(r.shownOption, activeBuffer)
   of hrSetSyntaxLanguage:
-    let name = sourceLanguageToFiletype[r.highlightLanguage]
+    # `syntax=on` is a request to see highlighting, so it turns the global
+    # switch on too; even a buffer that is never highlighted can ask that.
+    # Drop the pick even on raw bytes, so it does not come back on a reload
+    # that decodes them.
+    if r.followFiletype:
+      e.setBoolOption(bsoSyntax, true)
+      activeBuffer.setSyntaxLanguage(activeBuffer.language)
+    let
+      language = if r.followFiletype: activeBuffer.language else: r.highlightLanguage
+      name = sourceLanguageToFiletype[language]
     # Listings and raw bytes are never highlighted, so a pick would not show.
     if activeBuffer.isUtilityBuffer or not activeBuffer.allowsTextTransforms:
-      e.state.statusMessage = "Cannot highlight this buffer: syntax=" & name
+      e.state.statusMessage =
+        if r.followFiletype:
+          "syntax = on"
+        elif language == langNone:
+          "Cannot highlight this buffer: syntax=none (:set nosyntax turns highlighting off everywhere)"
+        else:
+          "Cannot highlight this buffer: syntax=" & name
     else:
-      activeBuffer.setSyntaxLanguage(r.highlightLanguage)
-      e.state.statusMessage = "syntax = " & name
+      activeBuffer.setSyntaxLanguage(language)
+      e.state.statusMessage =
+        if r.followFiletype and language == langNone:
+          "syntax = on"
+        elif e.boolOptionValue(bsoSyntax) or language == langNone:
+          "syntax = " & name
+        else:
+          "syntax = " & name & " (highlighting is off: :set syntax)"
   else:
     discard # Not a set-option kind; caller misrouted (defensive)
   true

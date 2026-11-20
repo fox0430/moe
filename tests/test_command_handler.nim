@@ -848,20 +848,19 @@ suite "CommandModeHandler - executeSet Boolean Options":
   test "Set syntax to on/off or true/false, after = or a space":
     let handler = setupHandler()
     for valueAfterSpace in [false, true]:
-      for (option, value, expected) in [
-        ("syntax", "on", true),
-        ("syntax", "ON", true),
-        ("syntax", "true", true),
-        ("syn", "on", true),
-        ("syntax", "off", false),
-        ("syntax", "OFF", false),
-        ("syntax", "false", false),
-        ("syn", "off", false),
+      for (option, value) in [
+        ("syntax", "on"), ("syntax", "ON"), ("syntax", "true"), ("syn", "on")
       ]:
         let result = handler.executeSet(option, some(value), valueAfterSpace)
-        check result.kind == hrSetBoolOption
-        check result.boolOption == bsoSyntax
-        check result.boolValue == expected
+        check result.kind == hrSetSyntaxLanguage
+        check result.followFiletype
+      for (option, value) in [
+        ("syntax", "off"), ("syntax", "OFF"), ("syntax", "false"), ("syn", "off")
+      ]:
+        let result = handler.executeSet(option, some(value), valueAfterSpace)
+        check result.kind == hrSetSyntaxLanguage
+        check not result.followFiletype
+        check result.highlightLanguage == langNone
 
   test "Set syntax to a language, after = or a space":
     let handler = setupHandler()
@@ -1785,24 +1784,20 @@ suite "CommandModeHandler - handleCommandModeInput":
     check result.boolOption == bsoRelativeNumber
     check result.boolValue == false
 
-  test "Handle :set syntax=off":
+  test "Handle :set syntax off, false and on":
     let handler = setupHandler()
     let buffer = setupBuffer()
 
-    let result = handler.handleCommandModeInput(buffer, ":set syntax=off")
-    check result.kind == hrSetBoolOption
-    check result.boolOption == bsoSyntax
-    check result.boolValue == false
-
-  test "Handle :set syntax off and :set syntax false":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    for input in [":set syntax off", ":set syntax false", ":set syntax=false"]:
+    for input in [
+      ":set syntax=off", ":set syntax off", ":set syntax false", ":set syntax=false"
+    ]:
       let result = handler.handleCommandModeInput(buffer, input)
-      check result.kind == hrSetBoolOption
-      check result.boolOption == bsoSyntax
-      check result.boolValue == false
+      check result.kind == hrSetSyntaxLanguage
+      check result.highlightLanguage == langNone
+    for input in [":set syntax=on", ":set syntax on"]:
+      let result = handler.handleCommandModeInput(buffer, input)
+      check result.kind == hrSetSyntaxLanguage
+      check result.followFiletype
 
   test "Handle :set syntax=java and :set syn java":
     let handler = setupHandler()

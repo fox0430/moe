@@ -315,15 +315,16 @@ proc namesSyntaxOption(name: string): bool =
       return name == spec.longName or name == spec.shortName
 
 proc collectSyntaxLanguages*(prefix: string): seq[CommandCompletionEntry] =
-  ## The languages `:set syntax=` takes that `prefix` matches, by their
-  ## `${filetype}` names.
+  ## The values `:set syntax=` takes that `prefix` matches: `on`, `off` and the
+  ## languages by their `${filetype}` names.
+  var candidates =
+    @[("on", "The file's language, with highlighting on"), ("off", "No highlighting")]
   for language in succ(langNone) .. high(SourceLanguage):
-    let name = sourceLanguageToFiletype[language]
+    candidates.add (sourceLanguageToFiletype[language], sourceLanguageToStr[language])
+  for (name, description) in candidates:
     if fuzzyMatch(prefix, name):
       result.add CommandCompletionEntry(
-        command: name,
-        description: sourceLanguageToStr[language],
-        matchScore: matchScore(prefix, name),
+        command: name, description: description, matchScore: matchScore(prefix, name)
       )
   result.sortByScore()
 
