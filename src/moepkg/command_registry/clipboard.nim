@@ -19,13 +19,14 @@
 
 ## Clipboard command handlers (copy/paste/cut).
 
+import std/options
+
 import pkg/results
 
-import ../[types, clipboard_backend, registers, visual_selection]
-import ../buffer/edit
+import ../[types, clipboard_backend, modes, registers, visual_selection]
 import ../command_handlers/visual_commands
 
-import core
+import core, edit, visual
 
 proc copySelection(ctx: CommandContext, sel: VisualSelection): Result[(), string] =
   ## Copy `sel` to the system clipboard.
@@ -54,30 +55,18 @@ proc handleClipboardCopy*(ctx: CommandContext): Result[(), string] =
 
   copySelection(ctx, ctx.state.operandSelection)
 
-proc handleClipboardPaste*(ctx: CommandContext): Result[(), string] =
-  ## Paste text from system clipboard at cursor position
+proc handleClipboardPaste*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## `"+P`: put the system clipboard before the cursor, or over the selection
+  ## in Visual, as one undo step. A typed register gives way to `+`, as in a
+  ## mapping to `"+P`.
   if not ctx.clipboardConfig.enable:
     return err("Clipboard integration is disabled")
 
-  # Read from clipboard
-  let readResult = readFromClipboardSync(ctx.clipboardConfig.tool)
-  if readResult.isErr:
-    return err(readResult.error)
-
-  let clipboardText = readResult.value
-  if clipboardText.len == 0:
-    return Result[(), string].ok () # Nothing to paste
-
-  # Insert text at cursor position
-  let insertResult = ctx.buffer.insertText(ctx.cursor, clipboardText)
-  if insertResult.isErr:
-    return err(insertResult.error)
-
-  # Update cursor position to end of pasted text
-  # Note: For simplicity, we'll keep cursor at original position for now
-  # A more sophisticated implementation would move cursor to end of paste
-
-  return Result[(), string].ok ()
+  ctx.register = some('+')
+  if ctx.state.mode.isVisualAllMode:
+    handleVisualPaste(ctx, args, before = true)
+  else:
+    handlePut(ctx, parseCount(args, default = 1), forward = false)
 
 proc handleClipboardCut*(ctx: CommandContext): Result[(), string] =
   ## Cut selected text to system clipboard (copy + delete)
@@ -110,11 +99,11 @@ proc registerClipboardCommands*(registry: CommandRegistry) =
   registry.register(
     builtin(bcEditPaste),
     "Paste",
-    "Paste text from system clipboard",
+    "Paste the system clipboard before the cursor or over the selection (as \"+P)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleClipboardPaste(ctx),
+      handleClipboardPaste(ctx, args),
     0,
-    0,
+    1, # Accept optional count argument
   )
 
   registry.register(

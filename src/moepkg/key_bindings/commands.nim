@@ -162,7 +162,11 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("bookmark-prev", "Jump to previous bookmark", "bookmark.prev"),
   ("bookmark-clear", "Clear all bookmarks in current buffer", "bookmark.clear"),
   ("clipboard-copy", "Copy selected text to system clipboard", "edit.copy"),
-  ("clipboard-paste", "Paste text from system clipboard", "edit.paste"),
+  (
+    "clipboard-paste",
+    "Paste the system clipboard before the cursor or over the selection (as \"+P)",
+    "edit.paste",
+  ),
   ("clipboard-cut", "Cut selected text to system clipboard", "edit.cut"),
   ("save", "Save file", "file.save"),
   ("save-and-quit", "Save file and quit", "file.save.and.quit"),
