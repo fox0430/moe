@@ -19,7 +19,8 @@
 
 import
   std/[
-    sequtils, os, strutils, strformat, unicode, algorithm, options, tables, json, hashes
+    sequtils, os, strutils, strformat, unicode, algorithm, options, tables, json,
+    hashes, typetraits,
   ]
 
 import celina_backend as celina
@@ -148,7 +149,8 @@ type
       ## reset after each accepted chunk.
     staleTail*: seq[ColorSegment]
       ## Segments trimmed at `reparseStart`; spliced back if the re-parse
-      ## converges early, dropped at EOF or restart.
+      ## converges early, dropped at EOF or restart. Empty while the flight
+      ## cannot converge.
     tailAligned*: bool
       ## False after a line-count change mid-flight: the shifted tail no
       ## longer aligns, so convergence stays disabled until EOF.
@@ -738,48 +740,57 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
       )
     )
 
+proc replaceSegments*(
+    segs: var seq[ColorSegment], first, last: int, repl: openArray[ColorSegment]
+) =
+  ## Replace `segs[first ..< last]` with `repl`, shifting the segments after
+  ## it in place. A buffer's segments are one large seq: building a new one
+  ## per change costs a copy of all of them, and the allocator keeps the old
+  ## block.
+  static:
+    doAssert supportsCopyMem(ColorSegment)
+  let
+    oldLen = segs.len
+    delta = repl.len - (last - first)
+  if delta > 0:
+    segs.setLen(oldLen + delta)
+  if delta != 0 and last < oldLen:
+    moveMem(
+      addr segs[last + delta], addr segs[last], (oldLen - last) * sizeof(ColorSegment)
+    )
+  if delta < 0:
+    segs.setLen(oldLen + delta)
+  if repl.len > 0:
+    copyMem(addr segs[first], unsafeAddr repl[0], repl.len * sizeof(ColorSegment))
+
+proc rowWindow(segs: openArray[ColorSegment], firstRow, lastRow: int): (int, int) =
+  ## Index range of the segments that touch rows `firstRow .. lastRow`.
+  ## Segments are sorted and disjoint, so both `firstRow` and `lastRow` grow
+  ## along the seq.
+  let first = segs.lowerBound(firstRow) do(seg: ColorSegment, row: int) -> int:
+    if seg.lastRow < row: -1 else: 1
+  let last = segs.lowerBound(lastRow) do(seg: ColorSegment, row: int) -> int:
+    if seg.firstRow <= row: -1 else: 1
+  (first, last)
+
 proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
   ## Overwrite `highlight` with colorSegment.
   ##
   ## Segments are sorted by (firstRow, firstColumn), so the affected window
-  ## is found via binary search on `firstRow`/`lastRow`; segments fully
-  ## before or after `colorSegment` are copied without inspection. Same
-  ## pattern as [[addModifier]] / [[addUnderlineRanges]]. This brings
-  ## per-call cost from O(N) to O(log N + affected), which matters for
-  ## large files (40k-line JSON → hundreds of thousands of segments) where
-  ## overwrite is hot: visual block selection, diagnostic application,
-  ## semantic-token apply, filetree search.
-
-  let segs = highlight.colorSegments
-  if segs.len == 0:
-    return
-
-  # First segment that could overlap: one whose lastRow >= colorSegment.firstRow.
-  let startIdx = segs.lowerBound(colorSegment.firstRow) do(
-    seg: ColorSegment, row: int
-  ) -> int:
-    if seg.lastRow < row: -1 else: 1
-
-  # First segment fully after colorSegment: one whose firstRow > colorSegment.lastRow.
-  let endIdx = segs.lowerBound(colorSegment.lastRow) do(
-    seg: ColorSegment, row: int
-  ) -> int:
-    if seg.firstRow <= row: -1 else: 1
-
+  ## is found via binary search on `firstRow`/`lastRow` and replaced in
+  ## place; the segments around it are not touched. Same pattern as
+  ## [[addModifier]] / [[addUnderlineRanges]].
+  let (startIdx, endIdx) =
+    highlight.colorSegments.rowWindow(colorSegment.firstRow, colorSegment.lastRow)
   if startIdx >= endIdx:
     # No segment overlaps the row range — nothing to do.
     return
 
   # Worst case: each affected segment splits into 3 (s contains t).
-  var newSegments = newSeqOfCap[ColorSegment](segs.len + (endIdx - startIdx) * 2)
-  for i in 0 ..< startIdx:
-    newSegments.add(segs[i])
+  var repl = newSeqOfCap[ColorSegment]((endIdx - startIdx) * 3)
   for i in startIdx ..< endIdx:
-    newSegments.add(segs[i].overwrite(colorSegment))
-  for i in endIdx ..< segs.len:
-    newSegments.add(segs[i])
-
-  highlight.colorSegments = newSegments
+    repl.add(highlight.colorSegments[i].overwrite(colorSegment))
+  highlight.colorSegments.replaceSegments(startIdx, endIdx, repl)
 
 proc addModifier*(
     highlight: var Highlight,
@@ -791,53 +802,37 @@ proc addModifier*(
   ## receives the modifier.
   ##
   ## Segments are sorted by (firstRow, firstColumn), so the affected window
-  ## is found via binary search: segments fully before or after the range
-  ## are skipped without inspection. This brings per-call cost from
-  ## O(segment count) to O(log N + affected), which matters for large files
-  ## (40k-line JSON → hundreds of thousands of segments) where many
-  ## modifier calls happen per frame during URI scans.
+  ## is found via binary search and replaced in place: segments fully before
+  ## or after the range are not touched.
 
   let rangeFirst: Position = (firstRow, firstCol)
   let rangeLast: Position = (lastRow, lastCol)
 
-  let segs = highlight.colorSegments
-
-  # First segment that could overlap: one whose lastRow >= firstRow.
-  # lowerBound returns the first index where cmp(seg, key) is not < 0.
-  let startIdx = segs.lowerBound(firstRow) do(seg: ColorSegment, row: int) -> int:
-    if seg.lastRow < row: -1 else: 1
-
-  # First segment fully after the range: one whose firstRow > lastRow.
-  let endIdx = segs.lowerBound(lastRow) do(seg: ColorSegment, row: int) -> int:
-    if seg.firstRow <= row: -1 else: 1
-
+  let (startIdx, endIdx) = highlight.colorSegments.rowWindow(firstRow, lastRow)
   if startIdx >= endIdx:
     # No segment overlaps the row range — nothing to do.
     return
 
-  var newSegments = newSeqOfCap[ColorSegment](segs.len + 2)
-  for i in 0 ..< startIdx:
-    newSegments.add(segs[i])
-
+  var repl = newSeqOfCap[ColorSegment](endIdx - startIdx + 2)
   for i in startIdx ..< endIdx:
-    let cs = segs[i]
+    let cs = highlight.colorSegments[i]
     let csFirst: Position = (cs.firstRow, cs.firstColumn)
     let csLast: Position = (cs.lastRow, cs.lastColumn)
 
     if csLast < rangeFirst or csFirst > rangeLast:
       # No overlap (possible for column-range checks within the same row).
-      newSegments.add(cs)
+      repl.add(cs)
     elif csFirst >= rangeFirst and csLast <= rangeLast:
       # Fully contained — add modifier to whole segment
       var modified = cs
       modified.style.modifiers.incl(modifier)
-      newSegments.add(modified)
+      repl.add(modified)
     else:
       # Partial overlap — split the segment
       if csFirst < rangeFirst:
         # Part before the range: no modifier
         if rangeFirst.column > 0:
-          newSegments.add(
+          repl.add(
             ColorSegment(
               firstRow: cs.firstRow,
               firstColumn: cs.firstColumn,
@@ -851,7 +846,7 @@ proc addModifier*(
           # Range starts at column 0 on a later row. End the before-segment
           # at the previous row using the segment's own lastColumn as an
           # estimate (exact line length is unavailable here).
-          newSegments.add(
+          repl.add(
             ColorSegment(
               firstRow: cs.firstRow,
               firstColumn: cs.firstColumn,
@@ -867,7 +862,7 @@ proc addModifier*(
       let overlapLast = if csLast < rangeLast: csLast else: rangeLast
       var modifiedStyle = cs.style
       modifiedStyle.modifiers.incl(modifier)
-      newSegments.add(
+      repl.add(
         ColorSegment(
           firstRow: overlapFirst.row,
           firstColumn: overlapFirst.column,
@@ -880,7 +875,7 @@ proc addModifier*(
 
       if csLast > rangeLast:
         # Part after the range: no modifier
-        newSegments.add(
+        repl.add(
           ColorSegment(
             firstRow: rangeLast.row,
             firstColumn: rangeLast.column + 1,
@@ -891,10 +886,7 @@ proc addModifier*(
           )
         )
 
-  for i in endIdx ..< segs.len:
-    newSegments.add(segs[i])
-
-  highlight.colorSegments = newSegments
+  highlight.colorSegments.replaceSegments(startIdx, endIdx, repl)
 
 proc addUnderlineRanges*(
     segs: var seq[ColorSegment], ranges: openArray[tuple[row, firstCol, lastCol: int]]
@@ -904,19 +896,21 @@ proc addUnderlineRanges*(
   ## (row, firstCol) and non-overlapping.
   ##
   ## Equivalent to repeatedly calling `addModifier(..., Underline)` for each
-  ## range, but rebuilds the segment seq **once** instead of per-range. URI
-  ## scanning over a 1000-line chunk in a 40k-line file typically hits ~140
-  ## URIs against ~300k segments; the per-range rebuild is O(N) memcpy of
-  ## several MB, so per-call addModifier adds hundreds of ms per chunk. A
-  ## batched rebuild brings that down to a single O(N + M) pass.
+  ## range, but replaces the segments between the first and the last range
+  ## **once** instead of per-range. URI scanning over a 1000-line chunk in a
+  ## 40k-line file typically hits ~140 URIs against ~300k segments.
   if ranges.len == 0:
     return
 
+  let (startIdx, endIdx) = segs.rowWindow(ranges[0].row, ranges[^1].row)
+  if startIdx >= endIdx:
+    return
+
   # Allocate for the worst case: each range can split a segment into 3 parts.
-  var newSegs = newSeqOfCap[ColorSegment](segs.len + ranges.len * 2)
+  var repl = newSeqOfCap[ColorSegment](endIdx - startIdx + ranges.len * 2)
   var rIdx = 0
 
-  for cs in segs:
+  for cs in segs.toOpenArray(startIdx, endIdx - 1):
     let csFirst: Position = (cs.firstRow, cs.firstColumn)
     let csLast: Position = (cs.lastRow, cs.lastColumn)
 
@@ -943,7 +937,7 @@ proc addUnderlineRanges*(
 
     if endRange == rIdx:
       # No overlapping range — keep segment as-is.
-      newSegs.add(cs)
+      repl.add(cs)
       continue
 
     # Walk the segment left-to-right, emitting unmodifed parts interleaved
@@ -960,7 +954,7 @@ proc addUnderlineRanges*(
       # Plain part before this range (curStart .. rFirst-1), if any.
       if curStart < rFirst:
         if rFirst.column > 0:
-          newSegs.add(
+          repl.add(
             ColorSegment(
               firstRow: curStart.row,
               firstColumn: curStart.column,
@@ -971,7 +965,7 @@ proc addUnderlineRanges*(
             )
           )
         elif curStart.row < rFirst.row:
-          newSegs.add(
+          repl.add(
             ColorSegment(
               firstRow: curStart.row,
               firstColumn: curStart.column,
@@ -985,7 +979,7 @@ proc addUnderlineRanges*(
       # Overlap part with modifier.
       let overlapFirst = if rFirst > csFirst: rFirst else: csFirst
       let overlapLast = if rLast < csLast: rLast else: csLast
-      newSegs.add(
+      repl.add(
         ColorSegment(
           firstRow: overlapFirst.row,
           firstColumn: overlapFirst.column,
@@ -1000,7 +994,7 @@ proc addUnderlineRanges*(
 
     # Tail part after the last overlapping range.
     if curStart <= csLast:
-      newSegs.add(
+      repl.add(
         ColorSegment(
           firstRow: curStart.row,
           firstColumn: curStart.column,
@@ -1013,7 +1007,7 @@ proc addUnderlineRanges*(
 
     rIdx = endRange
 
-  segs = newSegs
+  segs.replaceSegments(startIdx, endIdx, repl)
 
 proc addUnderlineRanges*(
     highlight: var Highlight, ranges: openArray[tuple[row, firstCol, lastCol: int]]
@@ -1828,6 +1822,18 @@ proc segmentCutIndex*(segs: openArray[ColorSegment], row: int): int =
   segs.lowerBound(row) do(seg: ColorSegment, line: int) -> int:
     cmp(seg.firstRow, line)
 
+proc reserveSegments*(segs: var seq[ColorSegment], need, parsedRows, totalRows: int) =
+  ## Make room for `need` segments covering the first `parsedRows` rows,
+  ## sized for all `totalRows` at that density. Growing by a factor instead
+  ## leaves every outgrown block behind (the allocator keeps it), while
+  ## capacity never written costs no resident memory.
+  if need <= segs.capacity:
+    return
+  let estimate = need * totalRows div max(1, parsedRows)
+  var grown = newSeqOfCap[ColorSegment](max(need, estimate + estimate div 2))
+  grown.add(segs)
+  segs = move grown
+
 proc updateHighlightIncremental*(
     lineCount: int,
     getLine: proc(i: int): string,
@@ -1851,7 +1857,8 @@ proc updateHighlightIncremental*(
   ## is in flight (progress in `incrHighlight.pendingReparse`); call again to
   ## resume, `false` once complete. `parsedLines` receives the actual lines
   ## parsed. While in flight, segments from the re-parse start are trimmed
-  ## and re-appended chunk by chunk, so a render never shows stale colours.
+  ## and re-appended call by call, so a render never shows stale colours.
+  ## A re-parse that ends within one call swaps its rows in place instead.
 
   let lastLine = lineCount - 1
   let budgeted = budgetLines > 0
@@ -1872,7 +1879,7 @@ proc updateHighlightIncremental*(
     # restart can re-attach rows past its frontier. A line-count change
     # misaligns it, so drop it and disable convergence until EOF.
     if pr.lineCount == lineCount:
-      inheritedTail = pr.staleTail
+      inheritedTail = move pr.staleTail
     tailAligned = pr.lineCount == lineCount and pr.tailAligned
     oldReparseStart = pr.reparseStart
     oldFrontier = pr.reparseEnd
@@ -1890,6 +1897,12 @@ proc updateHighlightIncremental*(
     reparseEnd: int
     chunkLen: int
     staleTail: seq[ColorSegment]
+      ## Resumed flight: the segments from before it, from `reparseStart` on.
+    tailIdx = -1
+      ## Fresh flight that may converge: where those segments start in
+      ## `segments`. They stay there until this call ends, so a flight that
+      ## ends here copies none.
+    fresh: seq[ColorSegment] ## Segments re-parsed by this call while `tailIdx >= 0`.
 
   if pr != nil:
     # Resume the in-flight re-parse from where the previous call stopped.
@@ -1898,14 +1911,10 @@ proc updateHighlightIncremental*(
     reparseStart = pr.reparseStart
     reparseEnd = pr.reparseEnd
     chunkLen = pr.chunkLen
-    staleTail = pr.staleTail
+    staleTail = move pr.staleTail
     tailAligned = pr.tailAligned
     convergeBarrier = pr.convergeBarrier
   else:
-    # Fresh re-parse: trim the segments from `reparseStart` on (stashing
-    # them for a possible early-convergence splice) so the display never
-    # shows un-re-parsed rows.
-
     # A small backward margin covers tokens spanning the boundary.
     reparseStart = max(0, changedStartLine - 2)
 
@@ -1945,16 +1954,6 @@ proc updateHighlightIncremental*(
         # but a later edit starts a new flight and gets one recovery attempt.
         initialState.matterState.failed = false
 
-    let trimIdx = segments.segmentCutIndex(reparseStart)
-    if trimIdx < segments.len:
-      staleTail = segments[trimIdx .. ^1]
-    segments.setLen(trimIdx)
-    if inheritedTail.len > 0:
-      # Drop the stale fresh chunks; the inherited tail covers every row from
-      # `oldReparseStart`.
-      staleTail.setLen(staleTail.segmentCutIndex(oldReparseStart))
-      staleTail.add(inheritedTail)
-
     # Line-count change: the pre-edit tail states describe shifted rows, so
     # drop them until `refreshStateCache` refills.
     if incrHighlight.lineStates.len != lineCount and
@@ -1972,6 +1971,23 @@ proc updateHighlightIncremental*(
   # re-parse is in flight the cache only grows, so equality means no rows
   # have shifted.
   let canConverge = lineCount == incrHighlight.lineStates.len
+
+  if pr == nil:
+    if canConverge and tailAligned:
+      if oldReparseStart >= 0:
+        # Put the discarded flight's tail back in place of the rows it
+        # re-parsed from `reparseStart` on: the tail covers every row from
+        # `oldReparseStart`.
+        let keepTo = max(reparseStart, oldReparseStart)
+        segments.setLen(segments.segmentCutIndex(keepTo))
+        let fromIdx = inheritedTail.segmentCutIndex(keepTo)
+        if fromIdx < inheritedTail.len:
+          segments.add(inheritedTail.toOpenArray(fromIdx, inheritedTail.high))
+        inheritedTail = @[]
+      tailIdx = segments.segmentCutIndex(reparseStart)
+    else:
+      # The rows after the flight can never be re-attached.
+      segments.setLen(segments.segmentCutIndex(reparseStart))
 
   var reparseDone = false
   var convergedHandoff = -1
@@ -2018,7 +2034,14 @@ proc updateHighlightIncremental*(
 
     # Keep lines currentStart .. handoff - 1; segments stay sorted.
     let segCut = newSegments.segmentCutIndex(handoff)
-    segments.add(newSegments[0 ..< segCut])
+    if segCut > 0:
+      if tailIdx >= 0:
+        fresh.add(newSegments.toOpenArray(0, segCut - 1))
+      else:
+        # `segments` ends at row `handoff - 1`. A band the load has not
+        # reached yet only makes the estimate low.
+        segments.reserveSegments(segments.len + segCut, handoff, lineCount)
+        segments.add(newSegments.toOpenArray(0, segCut - 1))
     reparseEnd = handoff - 1
 
     # Keep the per-line state cache fresh up to the frontier for render-side
@@ -2058,7 +2081,12 @@ proc updateHighlightIncremental*(
       break
 
   if not reparseDone and currentStart <= lastLine:
-    # Budget exhausted: persist the progress for the next call.
+    # Budget exhausted: persist the progress for the next call. Set the rows
+    # not re-parsed yet aside, so a render shows none of them.
+    if tailIdx >= 0:
+      staleTail = segments[tailIdx .. ^1]
+      segments.setLen(tailIdx)
+      segments.add(fresh)
     incrHighlight.pendingReparse = PendingReparse(
       anchor: changedStartLine,
       lineCount: lineCount,
@@ -2069,18 +2097,26 @@ proc updateHighlightIncremental*(
       currentState: currentState,
       reparseEnd: reparseEnd,
       chunkLen: chunkLen,
-      staleTail: staleTail,
+      staleTail: move staleTail,
       tailAligned: tailAligned,
       convergeBarrier: convergeBarrier,
     )
     return true
 
-  # Re-parse complete: on early convergence, re-attach the stashed tail (the
-  # un-re-parsed rows are unchanged).
-  if canConverge and convergedHandoff >= 0:
+  # Re-parse complete: on early convergence, keep the rows past it (they are
+  # unchanged); otherwise the re-parse reached EOF.
+  let converged = convergedHandoff >= 0
+  if tailIdx >= 0:
+    let tailEnd =
+      if converged:
+        segments.segmentCutIndex(convergedHandoff)
+      else:
+        segments.len
+    segments.replaceSegments(tailIdx, tailEnd, fresh)
+  elif converged:
     let tailStart = staleTail.segmentCutIndex(convergedHandoff)
-    for i in tailStart ..< staleTail.len:
-      segments.add(staleTail[i])
+    if tailStart < staleTail.len:
+      segments.add(staleTail.toOpenArray(tailStart, staleTail.high))
 
   incrHighlight.lineStates.setLen(lineCount)
 

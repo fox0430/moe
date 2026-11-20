@@ -6601,3 +6601,179 @@ suite "Highlight - a missing highlight takes the parse cache with it":
     check not buf.continueUriScan()
     check buf.highlight == nil
     check not buf.highlightNeedsUpdate
+
+suite "Highlight - segments change in place":
+  proc rowSeg(row: int): ColorSegment =
+    ColorSegment(
+      firstRow: row,
+      lastRow: row,
+      color: EditorColorPairIndex.default,
+      style: defaultStyle,
+    )
+
+  proc rows(segs: openArray[ColorSegment]): seq[int] =
+    for s in segs:
+      result.add(s.firstRow)
+
+  proc bufferLines(buf: TextBuffer): seq[string] =
+    for i in 0 ..< buf.len:
+      result.add(buf.getLine(i))
+
+  proc matchesFullParse(lines: seq[string], segs: seq[ColorSegment]): bool =
+    let
+      incremental = Highlight(colorSegments: segs)
+      full = initHighlight(lines, @[], langRust)
+    for row in 0 ..< lines.len:
+      for col in 0 ..< lines[row].len:
+        if incremental.getColorPair(row, col) != full.getColorPair(row, col):
+          return false
+    true
+
+  proc segmentsAddress(buf: TextBuffer): int =
+    cast[int](buf.highlight.colorSegments[0].addr)
+
+  proc loadRust(buf: TextBuffer, name: string, n: int, uriRow = -1): string =
+    result = getTempDir() / name
+    var content = ""
+    for i in 0 ..< n:
+      if i == uriRow:
+        content.add("// see https://example.com/api\n")
+      else:
+        content.add("let v" & $i & " = " & $i & ";\n")
+    writeFile(result, content)
+    discard buf.loadFile(result)
+
+  test "replaceSegments matches slicing and joining":
+    var rng = initRand(3)
+    for _ in 0 ..< 300:
+      var segs: seq[ColorSegment]
+      for i in 0 ..< rng.rand(0 .. 12):
+        segs.add(rowSeg(i))
+      let
+        first = rng.rand(0 .. segs.len)
+        last = rng.rand(first .. segs.len)
+      var repl: seq[ColorSegment]
+      for i in 0 ..< rng.rand(0 .. 6):
+        repl.add(rowSeg(100 + i))
+      let expected = segs[0 ..< first].rows & repl.rows & segs[last .. ^1].rows
+      segs.replaceSegments(first, last, repl)
+      check segs.rows == expected
+
+  test "the progressive load sizes the segments once for the whole buffer":
+    var buf = newTextBuffer()
+    let path = buf.loadRust("moe_test_segments_reserve.rs", 5000)
+    defer:
+      removeFile(path)
+    var
+      capacity = buf.highlight.colorSegments.capacity
+      growths = 0
+    while buf.continueInitialHighlight():
+      if buf.highlight.colorSegments.capacity != capacity:
+        capacity = buf.highlight.colorSegments.capacity
+        inc growths
+    check growths == 1
+    check buf.highlight.colorSegments.len <= capacity
+
+  test "a load finished by a re-parse sizes the segments once":
+    # The editor sets reserved words after `loadFile`, so a re-parse from row
+    # 0 that cannot converge finishes the load.
+    var buf = newTextBuffer()
+    let path = buf.loadRust("moe_test_segments_reserve_flight.rs", 5000)
+    defer:
+      removeFile(path)
+    buf.setReservedWords(toReservedWords(@["TODO"]))
+    var
+      capacity = buf.highlight.colorSegments.capacity
+      growths = 0
+    while buf.updateHighlight(1000) or buf.continueIncrementalHighlight(1000):
+      if buf.highlight.colorSegments.capacity != capacity:
+        capacity = buf.highlight.colorSegments.capacity
+        inc growths
+    check buf.incrementalHighlight.parsedUpTo == buf.len - 1
+    check growths == 1
+    check matchesFullParse(buf.bufferLines, buf.highlight.colorSegments)
+
+  test "an edit that settles within the call splices its rows in place":
+    var buf = newTextBuffer()
+    let path = buf.loadRust("moe_test_segments_edit.rs", 2500)
+    defer:
+      removeFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    let before = buf.segmentsAddress
+
+    discard buf.beginTransaction()
+    discard buf.replaceLine(1500, "let v1500 = 15 + 00;")
+    discard buf.commitTransaction()
+    check not buf.updateHighlight(1000)
+
+    check buf.segmentsAddress == before
+    check matchesFullParse(buf.bufferLines, buf.highlight.colorSegments)
+
+  test "URI underlines move no segments to new storage":
+    var buf = newTextBuffer()
+    let path = buf.loadRust("moe_test_segments_uri.rs", 2500, uriRow = 2000)
+    defer:
+      removeFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    let before = buf.segmentsAddress
+
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+
+    check buf.segmentsAddress == before
+    check Underline in buf.highlight.getSegmentModifiers(2000, "// see ".len)
+
+  proc rustLines(n: int): seq[string] =
+    for i in 0 ..< n:
+      result.add("let value" & $i & " = " & $i & ";")
+
+  proc parse(
+      lines: seq[string]
+  ): tuple[ih: IncrementalHighlight, segs: seq[ColorSegment]] =
+    let (segments, lineStates) =
+      initHighlightIncremental(lines, 0, lines.high, TokenizerState(), @[], langRust)
+    (IncrementalHighlight(lineStates: initLineStateCache(lineStates)), segments)
+
+  test "a flight that cannot converge keeps none of the old segments":
+    var lines = rustLines(500)
+    var (ih, segs) = parse(lines)
+    lines.insert("let inserted = 1;", 10)
+    let getLine = proc(i: int): string =
+      lines[i]
+
+    check updateHighlightIncremental(
+      lines.len, getLine, ih, segs, 10, @[], langRust, 0, 100
+    )
+    check ih.pendingReparse.staleTail.len == 0
+    while updateHighlightIncremental(
+      lines.len, getLine, ih, segs, 10, @[], langRust, 0, 100
+    )
+    :
+      discard
+    check matchesFullParse(lines, segs)
+
+  test "a flight that can converge keeps the old segments aside":
+    var lines = rustLines(500)
+    var (ih, segs) = parse(lines)
+    # A comment opened at row 10 and closed at row 250 flips every row
+    # between, so the first 100-line call cannot converge.
+    lines[10] = "/* opened"
+    lines[250] = "closed */"
+    let getLine = proc(i: int): string =
+      lines[i]
+
+    check updateHighlightIncremental(
+      lines.len, getLine, ih, segs, 10, @[], langRust, 0, 100
+    )
+    check ih.pendingReparse.staleTail.len > 0
+    for seg in segs:
+      check seg.firstRow <= ih.pendingReparse.reparseEnd
+    while updateHighlightIncremental(
+      lines.len, getLine, ih, segs, 10, @[], langRust, 0, 100
+    )
+    :
+      discard
+    check ih.lastReparseStart <= 10
+    check matchesFullParse(lines, segs)

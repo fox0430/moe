@@ -290,6 +290,9 @@ proc continueInitialHighlight*(
   b.incrementalHighlight.parsedUpTo = endLine
 
   # Append, keeping the URI underlines already on earlier rows.
+  b.highlight.colorSegments.reserveSegments(
+    b.highlight.colorSegments.len + newSegments.len, endLine + 1, b.len
+  )
   b.highlight.colorSegments.add(newSegments)
 
   parsedLines = endLine - startLine + 1
@@ -422,7 +425,8 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
           b.highlight.colorSegments = @[]
           b.incrementalHighlight = nil
         elif reparseBudget > 0:
-          b.highlight.colorSegments = @[]
+          # Keep the capacity for the rebuild.
+          b.highlight.colorSegments.setLen(0)
           b.incrementalHighlight = IncrementalHighlight(
             backend: b.effectiveHighlightBackend,
             initialState: b.newBufferTokenizerState(),
