@@ -52,7 +52,7 @@ import
   signature_help, hover_popup, modes, notification_popup, unicode_utils, motion, buffer,
   lsp_integration, editor_window_layout, editor_notify, macro_recording, page_scroll,
   search_ops
-import picker/[session, render]
+import picker/[session, render, layout]
 
 export editor_notify
 
@@ -490,36 +490,12 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
         continue
       if frameBudget <= 0:
         break
-      # Charge by the ACTUAL lines consumed (lookahead growth, rewinds and
-      # clamps make nominal chunks differ).
-      var consumed = 0
-      # Run on a live flight or any flag-only edit (LSP diagnostics,
-      # setReservedWords, etc.); gating on `pendingReparse` alone would
-      # leave those unprocessed until the buffer reactivates.
-      let hasFlight =
-        buf.incrementalHighlight != nil and
-        buf.incrementalHighlight.pendingReparse != nil
-      if hasFlight or buf.highlightNeedsUpdate:
-        let reparseOngoing = buf.updateHighlight(min(1000, frameBudget), consumed)
-        # Only continue when the trigger left work behind; else the
-        # continuation resets `consumed` to 0 and under-charges the budget.
-        if not reparseOngoing and buf.incrementalHighlight != nil and
-            buf.incrementalHighlight.pendingReparse != nil:
-          discard buf.continueIncrementalHighlight(min(1000, frameBudget), consumed)
-      frameBudget -= consumed
-      if frameBudget <= 0:
-        break
-      var loadLines = 0
-      # Skip while a flight is pending (mirrors the active-buffer branch).
-      if buf.incrementalHighlight == nil or
-          buf.incrementalHighlight.pendingReparse == nil:
-        discard buf.continueInitialHighlight(min(1000, frameBudget), loadLines)
-        frameBudget -= loadLines
-      if frameBudget <= 0:
-        break
-      var uriLines = 0
-      discard buf.continueUriScan(min(1000, frameBudget), uriLines)
-      frameBudget -= uriLines
+      frameBudget -= buf.advanceUndrawnHighlight(frameBudget)
+
+  # The preview of an open picker: a file it read is a buffer of no window.
+  if e.state.isPickerOverlay:
+    let layout = e.state.pickerScreenLayout(buffer.area.width, buffer.area.height)
+    e.advancePickerPreview(getMonoTime(), onScreen = layout.preview.height > 0)
 
   result = e.updateViewportSize(buffer)
   e.advanceLayoutForFrame(buffer, result)
@@ -617,8 +593,12 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
     renderHoverPopup(buffer, hoverMgr, popupPos, true)
 
   if e.state.isPickerOverlay:
-    let layout = e.state.pickerScreenLayout(buffer.area.width, buffer.area.height)
-    buffer.renderPicker(layout, e.state.pickerView(layout.list.height))
+    let
+      layout = e.state.pickerScreenLayout(buffer.area.width, buffer.area.height)
+      preview = e.pickerPreviewView
+    buffer.renderPicker(layout, e.state.pickerView(layout.list.height), preview.title)
+    if layout.shown:
+      e.renderPickerPreview(buffer, layout.preview, preview)
 
   # Render notification popups: float above the (possibly grown)
   # command-line area and the status line

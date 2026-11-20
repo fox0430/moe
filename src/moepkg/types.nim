@@ -541,6 +541,8 @@ type
     origin*: EditorWindow ## The window it is open over; nil once it closed
     matches*: PickerMatches
     query*: string
+    previews*: bool ## Whether its items have something to preview
+    preview*: PickerPreview
 
   CallHierarchyRequestKind* = enum
     chrkNone
@@ -1896,6 +1898,8 @@ proc exitOverlay*(state: EditorState, kind: OverlayKind) =
       state.picker.query = state.input.line.text
       # A resume takes the window it is run in, so the closed one can go.
       state.picker.origin = nil
+      # Nor are the files read for the preview kept: a resume reads again.
+      state.picker.preview.reads = @[]
       state.lastPicker = state.picker
       state.picker = nil
     state.overlay = none(OverlayKind)

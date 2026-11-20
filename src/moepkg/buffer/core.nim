@@ -53,6 +53,7 @@ type
     ## `BufferId(0)` is reserved as the "unassigned" sentinel — `genBufferId`
     ## starts handing out ids from 1 so that the zero-initialized default of
     ## `state.windowDisplay.currentBufferId` can't accidentally collide with a real buffer.
+    ## A detached buffer (`newTextBuffer`) takes one from -1 down.
 
   UnusualContentKind* = enum
     ## Content kind for warning control; kind change triggers re-warning.
@@ -676,6 +677,9 @@ const AutoBackendLargeFileThreshold* = 10 * 1024 * 1024
 var nextBufferId = 1
   ## Starts at 1 so `BufferId(0)` is reserved as a sentinel for the
   ## zero-initialized default of `state.windowDisplay.currentBufferId`. See `BufferId`.
+var nextDetachedBufferId = -1
+  ## Counts down for buffers the editor's list never holds, so they use up none
+  ## of the numbers `:ls` and `:b N` go by.
 
 var configuredBackend: BufferBackend = GapBuffer
 var autoBackendMode: bool = false
@@ -776,9 +780,13 @@ template backendKind*(b: TextBuffer): BufferBackend =
   ## variant moved off TextBuffer into the embedded `storage` field.
   b.storage.kind
 
-proc genBufferId(): BufferId =
-  result = BufferId(nextBufferId)
-  inc nextBufferId
+proc genBufferId(detached: bool): BufferId =
+  if detached:
+    result = BufferId(nextDetachedBufferId)
+    dec nextDetachedBufferId
+  else:
+    result = BufferId(nextBufferId)
+    inc nextBufferId
 
 proc setConfiguredBackend*(backend: BufferBackend) =
   configuredBackend = backend
@@ -1122,11 +1130,14 @@ proc newTextBuffer*(
     content: sink string = "",
     filePath: Option[string] = none(string),
     backend: BufferBackend = chooseBackend(),
+    detached = false,
 ): TextBuffer =
+  ## A `detached` buffer, one the editor's list never holds (a picker's
+  ## preview), takes an id below zero instead of the next buffer number.
   result = TextBuffer(storage: newBufferStorage(backend, move content))
 
   let lineCount = result.len
-  result.id = genBufferId()
+  result.id = genBufferId(detached)
   result.filePath = filePath
   result.lineEnding = LF
   result.encoding = utf8

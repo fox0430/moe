@@ -37,7 +37,7 @@ import
   editor_mode,
   editor_notify,
   highlight,
-  highlight_config,
+  buffer_load_config,
   persist,
   editor_persist,
   editor_window_tab,
@@ -79,21 +79,13 @@ proc refreshGitDiff*(e: Editor) =
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file
   logDebug("editor", "Loading file: " & path)
-  # Seed the highlight cap before loadFile builds the first chunk, so the cap
-  # is not changed afterwards (which would nil the progressive-load cache).
-  e.activeBuffer.applyHighlightCap(e.config)
-  let r = e.activeBuffer.loadFile(path)
-  if r.isErr:
-    logError("editor", "Failed to load file " & path & ": " & r.error)
-    return err r.error
+  e.activeBuffer.loadWithConfig(e.config):
+    let r = e.activeBuffer.loadFile(path)
+    if r.isErr:
+      logError("editor", "Failed to load file " & path & ": " & r.error)
+      return err r.error
 
   logInfo("editor", "Successfully loaded file: " & path)
-
-  # Apply config-derived highlight settings (reserved words + line-length cap)
-  applyHighlightConfig(e.activeBuffer, e.config)
-
-  # Apply EditorConfig settings if enabled
-  applyEditorConfigToBuffer(e.activeBuffer, e.config)
 
   e.restoreCursorPosition(e.activeBuffer)
   e.placeInTab(e.activeWindow, e.activeBuffer)

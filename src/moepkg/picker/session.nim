@@ -124,19 +124,6 @@ proc matchItems(s: PickerSession, deadline: Option[MonoTime]) =
       inc m.upTo
   m.ranks.merge(batch)
 
-proc advancePicker*(s: PickerSession, query: string, budget = none(Duration)) =
-  ## Bring the list up to `query`: a new query puts the selection back on the
-  ## best, then the items are matched, for `budget` at most.
-  if not s.matches.valid or s.matches.query != query:
-    s.selected = none(int)
-    s.restartMatches(query)
-  let deadline =
-    if budget.isSome:
-      some(getMonoTime() + budget.get)
-    else:
-      none(MonoTime)
-  s.matchItems(deadline)
-
 proc selectedRow*(s: PickerSession): int =
   ## The row of the selection, the first while it follows the best; -1 with no
   ## rows.
@@ -153,6 +140,26 @@ proc selectedRow*(s: PickerSession): int =
       return row
   0
 
+proc advancePicker*(s: PickerSession, query: string, budget = none(Duration)) =
+  ## Bring the list up to `query`: a new query puts the selection back on the
+  ## best, then the items are matched, for `budget` at most.
+  if not s.matches.valid or s.matches.query != query:
+    s.selected = none(int)
+    s.restartMatches(query)
+  let deadline =
+    if budget.isSome:
+      some(getMonoTime() + budget.get)
+    else:
+      none(MonoTime)
+  s.matchItems(deadline)
+  # A query that moved the selection off the scrolled item drops its scroll,
+  # as `moveSelection` does.
+  let scrolled = s.preview.scrollItem
+  if scrolled.isSome:
+    let row = s.selectedRow
+    if row < 0 or s.rowItem(row) != scrolled.get:
+      s.preview.scrollItem = none(int)
+
 proc selectedItem*(s: PickerSession): Option[PickerItem] =
   let row = s.selectedRow
   if row < 0:
@@ -161,10 +168,16 @@ proc selectedItem*(s: PickerSession): Option[PickerItem] =
     some(s.items[s.rowItem(row)])
 
 proc moveSelection*(s: PickerSession, rows: int) =
+  ## Move the selection `rows` down, up when negative. The item it lands on
+  ## shows its preview from the start, also one scrolled before, as
+  ## telescope's does.
   let row = s.selectedRow
   if row < 0:
     return
-  s.selected = some(s.rowItem(clamp(row + rows, 0, s.rowCount - 1)))
+  let item = s.rowItem(clamp(row + rows, 0, s.rowCount - 1))
+  if item != s.rowItem(row):
+    s.preview.scrollItem = none(int)
+  s.selected = some(item)
 
 proc keepSelectionVisible*(s: PickerSession, height: int) =
   ## Scroll the list so the selection shows in `height` rows, which the list

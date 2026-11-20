@@ -222,14 +222,18 @@ proc decodeFileContent(
   elif bomLen > 0:
     result.text = result.text[bomLen .. ^1]
 
-proc decodeForBuffer*(content: string): DecodedText =
+proc decodeForBuffer*(
+    content: string, expected = CharacterEncoding.unknown
+): DecodedText =
   ## Turn file bytes into buffer content: BOM stripped, UTF-16/32 decoded to
   ## UTF-8, every line ending style normalized, and a trailing newline read as
-  ## terminating the last line rather than starting an empty one.
+  ## terminating the last line rather than starting an empty one. `expected`
+  ## names the encoding when it was decided from more of the file than
+  ## `content`, the start of it.
   ##
   ## The one reader: a load and a whole-file replacement both come through
   ## here, so neither can drift from the other.
-  var decoded = decodeFileContent(content)
+  var decoded = decodeFileContent(content, expected)
   result.text = move decoded.text
   result.shape.encoding = decoded.encoding
   result.shape.hasBom = decoded.hasBom

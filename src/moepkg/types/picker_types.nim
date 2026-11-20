@@ -20,6 +20,8 @@
 ## What a picker lists and what opening an item does. Free of chronos, as
 ## `types` is.
 
+import std/[monotimes, options]
+
 import ../buffer/core
 import ../picker/[catalog, matcher]
 
@@ -53,6 +55,8 @@ type
     paPageUp
     paSplit ## Open the item in a split
     paVSplit ## Open the item in a vertical split
+    paPreviewDown ## Scroll the preview down half its height
+    paPreviewUp ## Scroll the preview up half its height
 
   PickerMatches* = object
     ## The items the query matches, best first, as the list shows them. Built
@@ -67,3 +71,40 @@ type
     pendingAt*: int
     upTo*: int
     scratch*: FuzzyMatcher
+
+  PreviewSubjectKind* = enum
+    pvNone ## Nothing to show
+    pvBuffer ## A buffer of the editor, shown as it is
+    pvFile ## A file no buffer holds, read for the preview
+
+  PreviewSubject* = object
+    ## What the preview shows: a file or a buffer, whichever item named it.
+    case kind*: PreviewSubjectKind
+    of pvNone:
+      discard
+    of pvBuffer:
+      buffer*: BufferId
+    of pvFile:
+      path*: string
+
+  PreviewRead* = object
+    ## A file read for the preview, into a buffer the editor does not hold, so
+    ## no window, hook or language server hears of it; or why it is not shown.
+    path*: string
+    stamp*: FileStamp ## The file as it was read
+    buffer*: TextBuffer ## Nil when it is not shown
+    message*: string ## Why it is not shown
+    cut*: bool ## Only the start of the file was read
+
+  PickerPreview* = object
+    ## The preview of the selected item. `subject` is worked out again only
+    ## when the selection moves to another item, as finding a file's buffer
+    ## asks the file system.
+    item*: Option[int] ## The item `subject` is for
+    subject*: PreviewSubject
+    since*: MonoTime ## When the selection came to `item`
+    scroll*: int ## Lines scrolled down from the start
+    scrollItem*: Option[int]
+      ## The item `scroll` is for; another starts at the top, as the selection
+      ## moving to it scrolled nothing
+    reads*: seq[PreviewRead] ## Files read, the last shown first

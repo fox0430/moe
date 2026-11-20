@@ -41,10 +41,17 @@ proc processPickerEnter*(e: Editor, r: HandlerResult): bool =
       e.state.statusMessage = "No picker to resume"
       e.state.beep()
       return true
+    # A buffer may hold the selected item's file now, and with no selection
+    # the last subject would stay.
+    e.state.picker.preview.item = none(int)
+    e.state.picker.preview.subject = PreviewSubject(kind: pvNone)
   else:
     let contents = e.collectPickerItems(spec)
     let session = PickerSession(
-      title: contents.title, items: contents.items, message: contents.message
+      title: contents.title,
+      items: contents.items,
+      message: contents.message,
+      previews: contents.previews,
     )
     e.state.enterPickerOverlay(session, spec.query.get(""), e.activeWindow)
   # The picker covers the window the popups belong to.

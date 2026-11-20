@@ -31,6 +31,7 @@ type PickerContents* = object
   title*: string
   items*: seq[PickerItem]
   message*: string ## Why there are no items, when it is not that none matched
+  previews*: bool ## Whether the items name files or buffers to preview
 
 proc item(prefix, name: string, target: PickerTarget): PickerItem =
   ## An item showing `name` after `prefix`, matched on `name`.
@@ -41,6 +42,7 @@ proc bufferItems(e: Editor, current: BufferId): PickerContents =
   ## The buffers, as `:ls` lists them: the number, `%` for the window's own and
   ## `+` for a modified one, and the name.
   result.title = "Buffers"
+  result.previews = true
   var width = 0
   for b in e.buffers:
     width = max(width, ($b.id.int).len)
@@ -57,6 +59,7 @@ proc oldfileItems(e: Editor): PickerContents =
   ## Vim's `:oldfiles`: what the file held when the picker opened, without the
   ## files of this session it has yet to save.
   result.title = "Old files"
+  result.previews = true
   if not e.config.persist.cursorPosition:
     result.message = "Cursor positions are not saved ([Persist] cursorPosition)"
     return

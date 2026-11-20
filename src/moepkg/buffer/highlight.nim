@@ -513,6 +513,41 @@ proc continueIncrementalHighlight*(b: TextBuffer, budgetLines: int = 0): bool =
   var parsedLines: int
   result = continueIncrementalHighlight(b, budgetLines, parsedLines)
 
+proc advanceUndrawnHighlight*(b: TextBuffer, budget: int): int =
+  ## Advance the highlight of a buffer that has no frame of its own by about
+  ## `budget` lines: a re-parse in flight or asked for (an edit, LSP
+  ## diagnostics, `setReservedWords`), then the initial load, then the URI
+  ## scan. Returns the lines charged, those each call actually consumed
+  ## (lookahead growth, rewinds and clamps make nominal chunks differ).
+  var
+    left = budget
+    consumed = 0
+  # Gating on `pendingReparse` alone would leave flag-only edits unprocessed.
+  let hasFlight =
+    b.incrementalHighlight != nil and b.incrementalHighlight.pendingReparse != nil
+  if hasFlight or b.highlightNeedsUpdate:
+    let reparseOngoing = b.updateHighlight(min(1000, left), consumed)
+    # Only continue when the trigger left work behind; else the continuation
+    # resets `consumed` to 0 and under-charges the budget.
+    if not reparseOngoing and b.incrementalHighlight != nil and
+        b.incrementalHighlight.pendingReparse != nil:
+      discard b.continueIncrementalHighlight(min(1000, left), consumed)
+  left -= consumed
+  if left <= 0:
+    return budget - left
+  # Not while a flight is pending: the delegation inside would advance it
+  # twice.
+  if b.incrementalHighlight == nil or b.incrementalHighlight.pendingReparse == nil:
+    var loadLines = 0
+    discard b.continueInitialHighlight(min(1000, left), loadLines)
+    left -= loadLines
+  if left <= 0:
+    return budget - left
+  var uriLines = 0
+  discard b.continueUriScan(min(1000, left), uriLines)
+  left -= uriLines
+  budget - left
+
 proc setReservedWords*(b: TextBuffer, words: seq[ReservedWord]) =
   ## Set reserved words for syntax highlighting (e.g., TODO, NOTE, FIXME)
   ## This will trigger a re-highlight on the next update
