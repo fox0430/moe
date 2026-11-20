@@ -4598,6 +4598,125 @@ suite "Handler - Clipboard operations":
       finally:
         removeFakeClipboardTool(fakeDir)
 
+  test "clipboard paste puts CLIPBOARD before the cursor as one undo step":
+    # As `"+P`: the cursor ends on the last pasted character, undo takes the
+    # whole paste back, and `.` reads CLIPBOARD again.
+    let fakeDir = installFakeClipboardTool("XY")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("abc")
+        let ctx = createTestContext(buffer)
+        ctx.cursor = BufferPosition(line: 0, column: 1)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        ctx.state.registers.setClipboardTool(cbtXclip)
+        let registry = createTestRegistry()
+
+        check registry.execute(ctx, builtin(bcEditPaste)).isOk
+        check buffer[0] == "aXYbc"
+        check ctx.cursor == BufferPosition(line: 0, column: 2)
+
+        writeFile(clipboardFilePath(fakeDir), "Z")
+        ctx.register = none(char)
+        check registry.execute(ctx, custom("edit.repeat")).isOk
+        check buffer[0] == "aXZYbc"
+        check ctx.cursor == BufferPosition(line: 0, column: 2)
+
+        check buffer.undo().isOk
+        check buffer[0] == "aXYbc"
+        check buffer.undo().isOk
+        check buffer[0] == "abc"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard paste in Visual replaces the selection and keeps the registers":
+    let fakeDir = installFakeClipboardTool("XY")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("abcd")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 1, 0, 2)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        ctx.state.registers.setClipboardTool(cbtXclip)
+        ctx.state.registers.storeYanked(some('a'), "kept", false)
+        # The yank writes CLIPBOARD too; copy over it as another app would.
+        writeFile(clipboardFilePath(fakeDir), "XY")
+        let registry = createTestRegistry()
+
+        let cmd = Command(kind: ctCustom, commandId: "edit.paste", count: 1)
+        check registry.executeCommand(ctx, cmd).isOk
+        check buffer[0] == "aXYd"
+        check ctx.state.mode == EditorMode.Normal
+        check ctx.state.registers.getRegister('a').getContent() == "kept"
+        check readFile(clipboardFilePath(fakeDir)) == "XY"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard paste in Visual on a read-only buffer leaves it untouched":
+    let fakeDir = installFakeClipboardTool("XY")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("abcd")
+        buffer.readOnly = true
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 1, 0, 2)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        ctx.state.registers.setClipboardTool(cbtXclip)
+        let registry = createTestRegistry()
+
+        let cmd = Command(kind: ctCustom, commandId: "edit.paste", count: 1)
+        check registry.executeCommand(ctx, cmd).isOk
+        check buffer[0] == "abcd"
+        check ctx.state.mode == EditorMode.Normal
+        check ctx.state.statusMessage == "Buffer is read-only"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard paste of an empty CLIPBOARD fails as \"+P does":
+    let fakeDir = installFakeClipboardTool("")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("abc")
+        let ctx = createTestContext(buffer)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        ctx.state.registers.setClipboardTool(cbtXclip)
+        let registry = createTestRegistry()
+
+        let r = registry.execute(ctx, builtin(bcEditPaste))
+        check r.isErr
+        check "register +" in r.error
+        check buffer[0] == "abc"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard paste puts a CLIPBOARD line above the cursor line":
+    let fakeDir = installFakeClipboardTool("new\n")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("one\ntwo")
+        let ctx = createTestContext(buffer)
+        ctx.cursor = BufferPosition(line: 1, column: 2)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        ctx.state.registers.setClipboardTool(cbtXclip)
+        let registry = createTestRegistry()
+
+        check registry.execute(ctx, builtin(bcEditPaste)).isOk
+        check buffer.len == 3
+        check buffer[1] == "new"
+        check buffer[2] == "two"
+        check ctx.cursor == BufferPosition(line: 1, column: 0)
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
   test "clipboard copy on V-line keeps the linewise type on unnamed put":
     # A linewise copy writes the line break that ends its last line, as a
     # linewise yank does, and the put keeps the linewise type.

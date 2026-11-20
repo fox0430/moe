@@ -75,6 +75,7 @@ const VisualEditCommandIds = [
   "visual.change.to.end", "visual.block.append", "visual.paste", "visual.paste.before",
   "visual.paste.end", "visual.paste.before.end", "visual.increment", "visual.decrement",
   "visual.increment.progressive", "visual.decrement.progressive", "edit.cut",
+  "edit.paste",
 ]
   ## Visual-mode command ids that modify the selection, gated on read-only
   ## buffers.

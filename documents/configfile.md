@@ -901,7 +901,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | paste-after-end | Paste after cursor and leave cursor after pasted text |
 | paste-before-end | Paste before cursor and leave cursor after pasted text |
 | clipboard-copy | Copy selected text to system clipboard |
-| clipboard-paste | Paste text from system clipboard |
+| clipboard-paste | Paste the system clipboard before the cursor or over the selection (as "+P) |
 | clipboard-cut | Cut selected text to system clipboard |
 
 ##### Search
