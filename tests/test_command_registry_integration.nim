@@ -9343,3 +9343,63 @@ suite "Doubled operators over lines":
     check registry.executeCommand(ctx, motionCommand(Motion.Down)).isOk
     check buffer.lines == @["2", "3"]
     check ctx.state.statusMessage == "Deleted 2 line(s)"
+
+suite "executeCommand - count from the context":
+  proc countedKey(id: string, count: int, args: seq[string] = @[]): Command =
+    Command(
+      kind: ctCustom,
+      commandId: id,
+      count: max(1, count),
+      hasCount: count > 0,
+      args: args,
+    )
+
+  proc lines(buffer: TextBuffer): seq[string] =
+    for i in 0 ..< buffer.len:
+      result.add buffer[i]
+
+  test "3dd deletes three lines":
+    let buffer = newTextBuffer("1\n2\n3\n4\n5")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("operator.delete", 3)).isOk
+    check registry.executeCommand(ctx, countedKey("operator.delete", 0)).isOk
+    check buffer.lines == @["4", "5"]
+
+  test "a mapping's own count is used over a typed one":
+    let buffer = newTextBuffer("1\n2\n3\n4\n5\n6")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("operator.delete", 5, @["2"])).isOk
+    check registry.executeCommand(ctx, countedKey("operator.delete", 0)).isOk
+    check buffer.lines == @["3", "4", "5", "6"]
+
+  test "2D deletes to the end of the next line too":
+    let buffer = newTextBuffer("abc\ndef\nghi")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 1)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("operator.delete.to.end", 2)).isOk
+    check buffer.lines == @["a", "ghi"]
+
+  test "3i records the count to replay the typed text":
+    let ctx = createTestContext(newTextBuffer("hello"))
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("textobject.inner", 3)).isOk
+    check ctx.state.mode == EditorMode.Insert
+    check ctx.state.editState.insertRecord.count == 3
+
+  test "d2i gives the text object its count":
+    let ctx = createTestContext(newTextBuffer("hello world"))
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("operator.delete", 0)).isOk
+    check registry.executeCommand(ctx, countedKey("textobject.inner", 2)).isOk
+    let pending = ctx.state.pendingInput.pendingTextObject
+    check pending.isSome
+    check pending.get.count == 2
+    check pending.get.countGiven

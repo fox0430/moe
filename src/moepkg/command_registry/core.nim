@@ -445,6 +445,19 @@ proc parseCount*(
     logDebug("parse", "parseCount returning default (no args): " & $default)
     return default
 
+proc givenCount*(ctx: CommandContext, args: seq[string], default = 1): int =
+  ## A mapping's own count (`args[0]`), else the count typed before the
+  ## command, else `default`
+  if args.len > 0:
+    parseCount(args, default)
+  elif ctx.count > 0:
+    ctx.count
+  else:
+    default
+
+proc countGiven*(ctx: CommandContext, args: seq[string]): bool =
+  args.len > 0 or ctx.count > 0
+
 proc amountTimesCount*(ctx: CommandContext, args: seq[string]): int =
   ## A mapping's own amount (`args[0]`, 1 if none) times the count typed
   ## before the command
