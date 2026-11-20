@@ -1558,6 +1558,31 @@ Usage:
 - `:nimbuild --release` runs `nimble build --release`
 
 
+### Filetype.extension table
+
+Pick the file type of files by their extension, as Neovim's
+`vim.filetype.add({ extension = ... })`. The file type decides the syntax
+highlighting and is what `filetype` in `[[QuickRun.entries]]` and
+`[[Hook.entries]]` matches. Each key is an extension without the dot, matched
+case-sensitively, and each value is a [Filetype](#filetype) name, or `none` for
+plain text. It takes precedence over the built-in extensions, but not over the
+built-in file names such as `Dockerfile` or `.bashrc`. Files opened after a
+change pick it up; open buffers keep their file type until the file is read
+again (`:e!`). Language servers still go by `extensions` in
+`[Lsp.{languageId}]`.
+
+Example:
+```toml
+[Filetype.extension]
+foo = "java"
+h = "cpp"
+txt = "markdown"
+log = "none"
+```
+
+To change the highlighting of one buffer only, use `:set syntax={name}`.
+
+
 ### Hook table
 
 Run a command when an editor event happens: lint on save, regenerate

@@ -3152,6 +3152,37 @@ suite "Highlight - JS/TS String Line Bounding":
   test "TS: isKey lookahead must not see a colon on a later line":
     runColonBelowString(SourceLanguage.langTypeScript)
 
+suite "Highlight - detectLanguage with [Filetype.extension]":
+  teardown:
+    setFiletypeExtensions(initTable[string, string]())
+
+  test "A mapped extension takes the configured language":
+    setFiletypeExtensions({"foo": "java", "h": "cpp"}.toTable)
+    check detectLanguage("/src/a.foo") == SourceLanguage.langJava
+    check detectLanguage("a.h") == SourceLanguage.langCpp
+
+  test "none maps an extension to plain text":
+    setFiletypeExtensions({"c": "none"}.toTable)
+    check detectLanguage("a.c") == SourceLanguage.langNone
+
+  test "Unknown names are skipped":
+    setFiletypeExtensions({"c": "nosuchlang"}.toTable)
+    check detectLanguage("a.c") == SourceLanguage.langC
+
+  test "Extensions match case-sensitively":
+    setFiletypeExtensions({"foo": "java"}.toTable)
+    check detectLanguage("a.FOO") == SourceLanguage.langNone
+
+  test "File name rules still win over the mapping":
+    setFiletypeExtensions({"prod": "yaml"}.toTable)
+    check detectLanguage("Dockerfile.prod") == SourceLanguage.langDockerfile
+
+  test "Installing a new mapping drops the old one":
+    setFiletypeExtensions({"foo": "java"}.toTable)
+    setFiletypeExtensions({"bar": "nim"}.toTable)
+    check detectLanguage("a.foo") == SourceLanguage.langNone
+    check detectLanguage("a.bar") == SourceLanguage.langNim
+
 suite "Highlight - detectLanguage":
   # Check basename for special files (no extension)
   test "detectLanguage for COMMIT_EDITMSG":

@@ -463,6 +463,8 @@ static:
         cmpIgnoreStyle(alias, sourceLanguageToFiletype[named]) != 0,
         "alias repeats a name: " & alias
 
+const NoFiletype* = "none" ## The filetype name for plain text in `[Filetype.extension]`.
+
 proc getSourceLanguage*(name: string): SourceLanguage =
   for i in countup(succ(low(SourceLanguage)), high(SourceLanguage)):
     if cmpIgnoreStyle(name, sourceLanguageToStr[i]) == 0 or
