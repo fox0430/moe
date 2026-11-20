@@ -1157,7 +1157,11 @@ proc executeCommandOverlay*(
     # Only a quit a running Terminal job refused gets here.
     e.setMode(e.state.mode)
   of hrgExitToNormal:
-    e.setMode(EditorMode.Normal)
+    # Text-buffer commands: a viewer they are typed from keeps its own mode.
+    if e.state.mode.isFileEditMode:
+      e.setMode(EditorMode.Normal)
+    else:
+      e.setMode(e.state.mode)
   of hrgExitToNewMode:
     discard # processResult already set the target mode
   of hrgExitAndResync:
