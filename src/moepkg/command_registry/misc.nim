@@ -199,9 +199,10 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Insert Line Below",
     "Insert new line below current line and switch to insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.handleInsertAt(ieOpenBelow, parseCount(args)),
+      ctx.handleInsertAt(ieOpenBelow, ctx.givenCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   # Insert new line above and switch to insert mode (O command)
@@ -210,9 +211,10 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Insert Line Above",
     "Insert new line above current line and switch to insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.handleInsertAt(ieOpenAbove, parseCount(args)),
+      ctx.handleInsertAt(ieOpenAbove, ctx.givenCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   # Append command (a) - move cursor right and enter insert mode
@@ -221,9 +223,10 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Append",
     "Move cursor right and enter insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.handleInsertAt(ieAppend, parseCount(args)),
+      ctx.handleInsertAt(ieAppend, ctx.givenCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   # Insert at first non-blank (I)
@@ -232,9 +235,10 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Insert at First Non-blank",
     "Move to the first non-blank character and enter insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.handleInsertAt(ieInsertNonBlank, parseCount(args)),
+      ctx.handleInsertAt(ieInsertNonBlank, ctx.givenCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   # Append at line end (A) - move to end of line and enter insert mode
@@ -243,9 +247,10 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Append at End",
     "Move to end of line and enter insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      ctx.handleInsertAt(ieAppendEnd, parseCount(args)),
+      ctx.handleInsertAt(ieAppendEnd, ctx.givenCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   proc moveToMatch(

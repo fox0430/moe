@@ -9419,3 +9419,26 @@ suite "executeCommand - count from the context":
 
     check registry.executeCommand(ctx, countedKey("delete.line", 4, @["2"])).isOk
     check buffer.lines == @["3", "4", "5"]
+
+  test "3o, 3O, 3a, 3A and 3I record the count to replay the typed text":
+    for id in [
+      "insert.line.below", "insert.line.above", "insert.append", "insert.append.end",
+      "insert.first.non.blank",
+    ]:
+      let ctx = createTestContext(newTextBuffer("hello"))
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 3)).isOk
+      check ctx.state.mode == EditorMode.Insert
+      check ctx.state.editState.insertRecord.count == 3
+
+  test "an insert command takes its mapping's own count over a typed one":
+    for id in [
+      "insert.line.below", "insert.line.above", "insert.append", "insert.append.end",
+      "insert.first.non.blank",
+    ]:
+      let ctx = createTestContext(newTextBuffer("hello"))
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 4, @["2"])).isOk
+      check ctx.state.editState.insertRecord.count == 2
