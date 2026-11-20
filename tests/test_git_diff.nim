@@ -617,6 +617,40 @@ suite "GitDiff - Integration tests with git repository":
       removeDir(testDir)
 
   when defined(posix):
+    test "metadata process honors a symlinked Git shim on PATH":
+      let realGit = findExe("git", followSymlinks = false)
+      require realGit.len > 0
+      let shimDir = createTempDir("moe_git_shim_", "")
+      defer:
+        removeDir(shimDir)
+      let shim = shimDir / "shim"
+      writeFile(
+        shim,
+        """
+#!/bin/sh
+[ "${0##*/}" = git ] || exit 1
+exec """ & quoteShell(realGit) &
+          " \"$@\"\n",
+      )
+      setFilePermissions(shim, {fpUserRead, fpUserWrite, fpUserExec})
+      createSymlink(shim, shimDir / "git")
+
+      let originalPath = getEnv("PATH")
+      putEnv("PATH", shimDir & PathSep & originalPath)
+      defer:
+        putEnv("PATH", originalPath)
+
+      var child = startGitMetadataProcess(testDir, ["rev-parse", "--show-toplevel"])
+      defer:
+        releaseGitProcess(child)
+      let deadline = getMonoTime() + initDuration(seconds = 5)
+      var exitCode = child.peekExitCode()
+      while exitCode == -1 and getMonoTime() < deadline:
+        sleep(1)
+        exitCode = child.peekExitCode()
+      require exitCode == 0
+      check child.drainExitedProcessOutput().strip() == expandFilename(testDir)
+
     test "buffer diff uses its repo config and each Git stage owns distinct pipes":
       let testFile = testDir / "file ' $(not-a-command).txt"
       writeFile(testFile, "original\n")

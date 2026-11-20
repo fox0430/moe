@@ -121,22 +121,15 @@ proc closeSafely(p: Process) =
 proc startGitMetadataProcess*(directory: string, args: openArray[string]): Process =
   ## Capture short Git metadata output without aliasing osproc's pipe handles.
   when defined(posix):
-    # The shell owns stderr redirection; osproc must own two distinct pipes.
-    # Avoid workingDir: Nim 2.2's posix_spawn temporarily changes parent cwd.
+    # Keep stdout and stderr on distinct pipes.
+    # Git -C avoids changing the parent cwd in Nim 2.2's POSIX launcher.
     if directory.len > 0 and not dirExists(directory):
       raise newException(OSError, "Git working directory does not exist: " & directory)
-    let git = findExe("git")
-    if git.len == 0:
-      raise newException(OSError, "Could not find git executable")
-    let command =
-      "git=$1; directory=$2; shift 2; exec \"$git\" -C \"$directory\" \"$@\" 2>/dev/null"
-    result = startProcess(
-      "sh", args = @["-c", command, "sh", git, directory] & @args, options = {poUsePath}
-    )
+    const processOptions = {poUsePath}
   else:
-    result = startProcess(
-      "git", args = @["-C", directory] & @args, options = {poUsePath, poStdErrToStdOut}
-    )
+    const processOptions = {poUsePath, poStdErrToStdOut}
+  result =
+    startProcess("git", args = @["-C", directory] & @args, options = processOptions)
 
 proc releaseGitProcess*(process: var Process) =
   ## Reap and close a Git child exactly once. Give termination 100ms before
