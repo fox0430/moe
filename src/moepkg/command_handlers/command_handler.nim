@@ -290,8 +290,8 @@ proc executeSet*(
 
   # Vim's 'syntax' is the buffer's language (`syntax=java`), and `syntax=OFF`
   # and `syntax=ON` are its values too: off highlights nothing, on goes back to
-  # the file's language and turns the global switch on, which the toggle
-  # `:set nosyntax` turns off.
+  # the file's language. Unlike Vim, where `syntax=ON` loads nothing after
+  # `:syntax off`, ours also turns the global switch (`:set nosyntax`) back on.
   if spec.kind == sokBool and spec.boolOption == bsoSyntax and prefix == spNone and
       suffix == "" and value.isSome:
     case value.get.toLower
