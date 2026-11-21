@@ -1256,7 +1256,20 @@ template autoSaveTrimRevertScenario(makeEditor: untyped, tag: string) =
     check e.activeBuffer.getLine(0) == before
     check e.activeBuffer.changeList.len == ChangeListMaxLen
     check e.activeBuffer.changeListIndex == ChangeListMaxLen - 1
+    check e.activeBuffer.changeListPos == ChangeListMaxLen
     check e.activeBuffer.redo().isErr
+
+  test "Auto save trim revert keeps where g; stood" & tag:
+    let e = makeEditor
+    autoSaveFailing(e, "trim_changelist_pos", "hello   \nworld   \n"):
+      check e.activeBuffer.beginTransaction("edit 1").isOk
+      discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x")
+      check e.activeBuffer.commitTransaction().isOk
+      check e.activeBuffer.beginTransaction("edit 2").isOk
+      discard e.activeBuffer.insertText(BufferPosition(line: 1, column: 0), "y")
+      check e.activeBuffer.commitTransaction().isOk
+      e.activeBuffer.changeListPos = 0
+    check e.activeBuffer.changeListPos == 0
 
 suite "Editor - saveAllBuffers":
   saveAllBuffersTrimRevertScenario(createTestEditor(), " [GapBuffer]")

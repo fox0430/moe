@@ -253,7 +253,13 @@ proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer): Result[(), string] 
 proc trimTrailingWhitespaceTracked(
     buffer: TextBuffer
 ): Result[
-    tuple[didTrim: bool, changeList: seq[BufferPosition], changeListIndex: int], string
+    tuple[
+      didTrim: bool,
+      changeList: seq[BufferPosition],
+      changeListIndex: int,
+      changeListPos: int,
+    ],
+    string,
 ] =
   ## Trim and report whether anything changed plus a pre-trim snapshot of the
   ## changelist, for exact revert on save failure. A failed rollback is an
@@ -261,6 +267,7 @@ proc trimTrailingWhitespaceTracked(
   let prevChangeId = buffer.currentChangeId
   let changeListBefore = buffer.changeList
   let changeListIndexBefore = buffer.changeListIndex
+  let changeListPosBefore = buffer.changeListPos
   let trimResult =
     try:
       trimTrailingWhitespaceIfConfigured(buffer)
@@ -273,6 +280,7 @@ proc trimTrailingWhitespaceTracked(
       didTrim: buffer.currentChangeId != prevChangeId,
       changeList: changeListBefore,
       changeListIndex: changeListIndexBefore,
+      changeListPos: changeListPosBefore,
     )
   )
 
@@ -281,6 +289,7 @@ proc revertTrimIfNeeded(
     didTrim: bool,
     changeListBefore: seq[BufferPosition],
     changeListIndexBefore: int,
+    changeListPosBefore: int,
 ): Result[(), string] =
   ## Undo the trim after a failed save. No-op when nothing was trimmed.
   if not didTrim:
@@ -302,6 +311,7 @@ proc revertTrimIfNeeded(
   # evicted at the ChangeListMaxLen cap, so an exact snapshot is required.
   buffer.changeList = changeListBefore
   buffer.changeListIndex = changeListIndexBefore
+  buffer.changeListPos = changeListPosBefore
   ok(())
 
 proc writtenLanguage(buffer: TextBuffer, writtenPath: string): SourceLanguage =
@@ -664,12 +674,14 @@ proc autoSave*(e: Editor) =
         "editor", "Auto save trim failed for " & savePath & ": " & didTrimRes.error
       )
       continue
-    let (didTrim, changeListBefore, changeListIndexBefore) = didTrimRes.get
+    let (didTrim, changeListBefore, changeListIndexBefore, changeListPosBefore) =
+      didTrimRes.get
 
     let saveResult = buffer.saveFile(savePath, checkExternalMod = true)
     if saveResult.isErr:
-      let revertRes =
-        revertTrimIfNeeded(buffer, didTrim, changeListBefore, changeListIndexBefore)
+      let revertRes = revertTrimIfNeeded(
+        buffer, didTrim, changeListBefore, changeListIndexBefore, changeListPosBefore
+      )
       if revertRes.isErr:
         logError(
           "editor",

@@ -25,8 +25,8 @@
 
 import std/[unittest, options, tables, os, osproc, times, posix]
 from std/strutils import
-  contains, continuesWith, count, endsWith, escape, join, repeat, split, startsWith,
-  strip
+  align, contains, continuesWith, count, endsWith, escape, join, repeat, split,
+  startsWith, strip
 
 import pkg/chronos
 import ../src/moepkg/celina_backend
@@ -13774,6 +13774,122 @@ suite "Version command":
     check e.state.ui.tempMessages.len == 0
     check e.currentMode == EditorMode.Filer
     check e.activeWindow.modeState.filer.selectedIndex == 1
+
+suite "Changes command":
+  proc changeRow(marker: string, n, line, col: int, text: string): string =
+    marker & ($n).align(4) & " " & ($line).align(5) & " " & ($col).align(4) & "  " & text
+
+  proc press(e: Editor, keys: varargs[string]) =
+    for key in keys:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+  proc twoChanges(): Editor =
+    result = createTestEditorWithBuffer("onex\ntwo\nxthree")
+    result.activeBuffer.changeList =
+      @[BufferPosition(line: 0, column: 3), BufferPosition(line: 2, column: 0)]
+    result.activeBuffer.changeListIndex = 1
+    result.activeBuffer.changeListPos = 2
+
+  test ":changes numbers each change from the end and ends with a bare marker":
+    let e = twoChanges()
+    e.activeWindow.cursor = BufferPosition(line: 1, column: 2)
+
+    check e.executeCommandOverlay(":changes") == roContinue
+
+    check e.state.ui.tempMessages ==
+      @[
+        "change  line  col  text",
+        changeRow(" ", 2, 1, 4, "onex"),
+        changeRow(" ", 1, 3, 1, "xthree"),
+        ">",
+      ]
+
+  test ":changes after g; marks the change it went to and numbers from there":
+    let e = twoChanges()
+    e.press("g", ";")
+    require e.activeWindow.cursor == BufferPosition(line: 2, column: 0)
+
+    check e.executeCommandOverlay(":changes") == roContinue
+
+    check e.state.ui.tempMessages ==
+      @[
+        "change  line  col  text",
+        changeRow(" ", 1, 1, 4, "onex"),
+        changeRow(">", 0, 3, 1, "xthree"),
+      ]
+
+  test ":changes after g; reaches the oldest change marks that one":
+    let e = twoChanges()
+    e.press("g", ";", "g", ";")
+    require e.activeWindow.cursor == BufferPosition(line: 0, column: 3)
+
+    check e.executeCommandOverlay(":changes") == roContinue
+
+    check e.state.ui.tempMessages ==
+      @[
+        "change  line  col  text",
+        changeRow(">", 0, 1, 4, "onex"),
+        changeRow(" ", 1, 3, 1, "xthree"),
+      ]
+
+  test ":changes after g; to the only change marks it":
+    let e = createTestEditorWithBuffer("onex")
+    e.activeBuffer.changeList = @[BufferPosition(line: 0, column: 3)]
+    e.activeBuffer.changeListIndex = 0
+    e.activeBuffer.changeListPos = 1
+    e.press("g", ";")
+
+    check e.executeCommandOverlay(":changes") == roContinue
+
+    check e.state.ui.tempMessages ==
+      @["change  line  col  text", changeRow(">", 0, 1, 4, "onex")]
+
+  test ":changes after undo lists only the changes undo left":
+    let e = createTestEditorWithBuffer("one\ntwo")
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    check e.activeBuffer.insertText(BufferPosition(line: 1, column: 0), "b").isOk
+    check e.activeBuffer.undo().isOk
+
+    check e.executeCommandOverlay(":changes") == roContinue
+
+    check e.state.ui.tempMessages ==
+      @["change  line  col  text", changeRow(" ", 1, 1, 1, "aone"), ">"]
+
+  test ":changes after every change is undone has none to list":
+    let e = createTestEditorWithBuffer("one\ntwo")
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    check e.activeBuffer.undo().isOk
+
+    check e.executeCommandOverlay(":changes") == roContinue
+
+    check e.state.statusMessage == "No changes"
+    check e.state.ui.tempMessages.len == 0
+
+  test ":changes after 2g; marks the change two back":
+    let e = twoChanges()
+    e.press("2", "g", ";")
+
+    check e.executeCommandOverlay(":changes") == roContinue
+
+    check e.state.ui.tempMessages ==
+      @[
+        "change  line  col  text",
+        changeRow(">", 0, 1, 4, "onex"),
+        changeRow(" ", 1, 3, 1, "xthree"),
+      ]
+
+  test ":changes in a viewer leaves out the viewer's cursor":
+    let e = createFilerEditor(8, selectedIndex = 5)
+    e.activeWindow.mode = EditorMode.Filer
+    e.activeWindow.cursor = BufferPosition(line: 5, column: 0)
+    e.activeBuffer.changeList = @[BufferPosition(line: 0, column: 0)]
+    e.activeBuffer.changeListIndex = 0
+    e.activeBuffer.changeListPos = 1
+
+    check e.executeCommandOverlay(":changes") == roContinue
+
+    check e.state.ui.tempMessages ==
+      @["change  line  col  text", changeRow(" ", 1, 1, 1, ""), ">"]
 
 suite "List commands in a viewer":
   for cmd in [":changes", ":jump"]:

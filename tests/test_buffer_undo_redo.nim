@@ -1414,13 +1414,14 @@ suite "Buffer - Change List":
     discard b.redo()
     check b.changeListIndex == 1
 
-  test "changeListIndex does not go below 0 on undo":
+  test "undoing the only change leaves none in effect":
     let b = newTextBuffer("hello")
     discard b.insertText(BufferPosition(line: 0, column: 5), "!")
     check b.changeListIndex == 0
 
     discard b.undo()
-    check b.changeListIndex == 0
+    check b.changeListIndex == -1
+    check b.changeListLiveLen == 0
 
   test "changeListIndex does not exceed len-1 on redo":
     let b = newTextBuffer("hello")
@@ -2322,7 +2323,7 @@ suite "Buffer - joined undo entries":
       check b.changeList == @[BufferPosition(line: 1, column: 0)]
       check b.undo().isOk
       check b.text == "a\nb\nc"
-      check b.changeListIndex == 0
+      check b.changeListIndex == -1
       check b.redo().isOk
       check b.text == "0a\n1b\n2c"
       check b.changeListIndex == 0

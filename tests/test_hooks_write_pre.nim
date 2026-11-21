@@ -1186,7 +1186,7 @@ template oneUndoScenarios(backend: BufferBackendKind, tag: string) =
     check buf.changeList[0].line == 0
     check buf.undo().isOk
     check buf.lines == @["b", "a"]
-    check buf.changeListIndex == 0
+    check buf.changeListIndex == -1
 
 suite "BufWritePre - one write is one undo":
   oneUndoScenarios(bbcGapBuffer, " [GapBuffer]")

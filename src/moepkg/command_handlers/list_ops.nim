@@ -62,32 +62,31 @@ proc processChangeResult*(e: Editor, r: HandlerResult): bool =
   case r.kind
   of hrChanges:
     let buf = e.activeBuffer()
-    if buf.changeList.len == 0:
+    let live = buf.changeListLiveLen
+    if live == 0:
       e.state.statusMessage = "No changes"
     else:
       e.state.ui.tempMessages = @[]
       e.state.ui.tempMessages.add("change  line  col  text")
-      for i in 0 ..< buf.changeList.len:
+      let current = buf.changeListCurrent
+      for i in 0 ..< live:
         let pos = buf.changeList[i]
         let lineNum = pos.line + 1
         let colNum = pos.column + 1
-        let marker = if i == buf.changeListIndex + 1: ">" else: " "
+        let marker = if i == current: ">" else: " "
         let text =
           if pos.line < buf.len:
             buf.getLine(pos.line).truncateToCharsWithSuffix(40)
           else:
             ""
-        let changeNum = buf.changeList.len - i
+        let changeNum = abs(current - i)
         e.state.ui.tempMessages.add(
           marker & ($changeNum).align(4) & " " & ($lineNum).align(5) & " " &
             ($colNum).align(4) & "  " & text
         )
-      let w = e.activeWindow
-      let curMarker = if buf.changeListIndex == buf.changeList.len - 1: ">" else: " "
-      e.state.ui.tempMessages.add(
-        curMarker & "0".align(4) & " " & ($(w.cursor.line + 1)).align(5) & " " &
-          ($(w.cursor.column + 1)).align(4) & "  "
-      )
+      # As Vim's ex_changes, the end of the list is a bare marker.
+      if current >= live:
+        e.state.ui.tempMessages.add(">")
     return true
   else:
     return true # Not the change-list kind; caller misrouted (defensive)

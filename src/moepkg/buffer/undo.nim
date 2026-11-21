@@ -596,6 +596,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   let initialChangeListIndex = b.changeListIndex
   let initialChangeList = b.changeList
   let initialLastVisual = b.lastVisual
+  var changeListMoved = false
 
   # Undo 'count' changes
   for i in 0 ..< count:
@@ -662,8 +663,12 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     b.advanceContentVersion()
 
     # Adjust changelist index, unless this entry recorded no position
-    if not change.noChangeListPosition and b.changeListIndex > 0:
-      b.changeListIndex.dec
+    if not change.noChangeListPosition:
+      changeListMoved = true
+      if b.changeListIndex >= 0:
+        b.changeListIndex.dec
+  if changeListMoved:
+    b.changeListPos = b.changeListLiveLen
 
   # Add all undone changes to redo stack in the order they were undone
   # This ensures redo applies them in the correct reverse order
@@ -799,6 +804,7 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   let initialChangeListIndex = b.changeListIndex
   let initialChangeList = b.changeList
   let initialLastVisual = b.lastVisual
+  var changeListMoved = false
 
   # Redo 'count' changes
   for i in 0 ..< count:
@@ -863,8 +869,12 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     b.advanceContentVersion()
 
     # Adjust changelist index, unless this entry recorded no position
-    if not change.noChangeListPosition and b.changeListIndex < b.changeList.len - 1:
-      b.changeListIndex.inc
+    if not change.noChangeListPosition:
+      changeListMoved = true
+      if b.changeListIndex < b.changeList.len - 1:
+        b.changeListIndex.inc
+  if changeListMoved:
+    b.changeListPos = b.changeListLiveLen
 
   # Symmetric with undo(): push in the order the changes were redone so the
   # last-applied change sits on top of undoStack.
