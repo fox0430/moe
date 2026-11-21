@@ -174,6 +174,11 @@ proc processResultWithHost(
   # A mapping's next key runs with no frame in between.
   defer:
     e.syncBufferListings()
+    # Terminal views follow the session's sub-mode the dispatcher set, also
+    # when the host takes the result.
+    when not defined(moe.embedded):
+      if e.activeWindow.modeState.kind == mskTerminal:
+        e.syncTerminalWindows(e.activeWindow.modeState.terminal)
 
   if e.interceptHostResult(r):
     hostHandled = true
@@ -405,10 +410,6 @@ proc processResultEpilogue(
             "handler",
             "Cursor adjusted: " & $oldColumn & " → " & $e.activeWindow.cursor.column,
           )
-
-  # Terminal view follows the window's sub-mode, which the dispatcher set.
-  when not defined(moe.embedded):
-    e.syncTerminalView(e.activeWindow)
 
   # Filer buffer regeneration after state changes (e.g. enterDirectory, toggleHidden)
   if e.state.mode == EditorMode.Filer:

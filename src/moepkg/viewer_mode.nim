@@ -121,9 +121,10 @@ proc resumeCoveredMode(
   if win.tabBufferId != entry.returnTab:
     win.modeState = ModeState(kind: mskNone)
     e.setMode(EditorMode.Normal)
+    # Placed before the mode: it reads the tab, not the view.
+    e.placeInTab(win, e.tabBuffer(win))
     e.deriveTabMode(win)
     e.syncTabView(win)
-    e.placeInTab(win, e.tabBuffer(win))
     e.centerCursorLine(win)
     return
 
@@ -135,7 +136,13 @@ proc resumeCoveredMode(
       entry.returnMode
   )
   e.syncTabView(win)
-  e.restoreViewerPosition(win, entry)
+  if entry.returnState.kind == mskTerminal and win.buffer.id != entry.originView:
+    # The session's text changed under the viewer, so the position is in none
+    # it shows now. The window never left the tab, so its use is not renewed.
+    e.placeCursorInTab(win, e.tabBuffer(win))
+    e.centerCursorLine(win)
+  else:
+    e.restoreViewerPosition(win, entry)
 
 proc undoViewer(
     e: Editor, win: EditorWindow, entry: ViewerEntry, textMode: Option[EditorMode]
@@ -226,6 +233,7 @@ proc enterViewerMode*(
         returnMode: win.mode,
         returnState: win.modeState,
         returnTab: win.tabBufferId,
+        originView: win.buffer.id,
         originCursor: win.cursor,
         originTopLine: win.viewport.topLine,
         originTopWrapOffset: win.viewport.topWrapOffset,

@@ -27,8 +27,10 @@ import pkg/results
 
 import ../src/moe {.all.}
 import
-  ../src/moepkg/
-    [editor, config, types, modes, handler, key_bindings, viewer_mode, buffer_manager]
+  ../src/moepkg/[
+    editor, config, types, modes, handler, key_bindings, viewer_mode, buffer_manager,
+    window_manager,
+  ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/buffer/core
 
@@ -196,7 +198,8 @@ suite "pollTerminalSessions - sub-mode round trip":
     let e = createTestEditor()
     let w = e.windowManager.windows[0]
     let termBuf = e.registerExitedTerminalInWindow(w, "bash")
-    w.modeState.scrollbackSnapshot = newTextBuffer("")
+    w.modeState.terminal.lastSnapshot = newTextBuffer("")
+    w.modeState.terminal.inTerminalNormal = true
     w.mode = EditorMode.Visual
 
     e.pollTerminalSessions()
@@ -208,18 +211,16 @@ suite "pollTerminalSessions - sub-mode round trip":
     let w1 = e.windowManager.windows[0]
     let termBuf = e.registerExitedTerminalInWindow(w1, "bash")
     let w2 = e.addSecondWindow()
-    w2.modeState = ModeState(
-      kind: mskTerminal,
-      terminal: e.terminalStates[termBuf.id],
-      scrollbackSnapshot: newTextBuffer(""),
-    )
+    w2.modeState = ModeState(kind: mskTerminal, terminal: e.terminalStates[termBuf.id])
+    w2.modeState.terminal.lastSnapshot = newTextBuffer("")
+    w2.modeState.terminal.inTerminalNormal = true
     w2.mode = EditorMode.Terminal
 
     e.pollTerminalSessions()
 
     check e.terminalStates.hasKey(termBuf.id)
 
-    w2.modeState.scrollbackSnapshot = nil
+    w2.modeState.terminal.inTerminalNormal = false
     e.pollTerminalSessions()
 
     check not e.terminalStates.hasKey(termBuf.id)
@@ -229,7 +230,8 @@ suite "pollTerminalSessions - sub-mode round trip":
     let e = createTestEditor()
     let w = e.windowManager.windows[0]
     let termBuf = e.registerExitedTerminalInWindow(w, "bash")
-    w.modeState.scrollbackSnapshot = newTextBuffer("")
+    w.modeState.terminal.lastSnapshot = newTextBuffer("")
+    w.modeState.terminal.inTerminalNormal = true
     w.mode = EditorMode.Normal
     e.syncActiveWindow()
     let bmState = newBufferManagerState()
@@ -247,6 +249,33 @@ suite "pollTerminalSessions - sub-mode round trip":
     check w.isBrowsingTerminal
     e.pollTerminalSessions()
     check e.terminalStates.hasKey(termBuf.id)
+
+  test "A viewer's own split does not keep an exited shell":
+    ## It only copied the tab of the window it split from.
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let w = e.windowManager.windows[0]
+    let termBuf = e.registerExitedTerminalInWindow(w, "bash")
+    w.modeState.terminal.lastSnapshot = newTextBuffer("")
+    w.modeState.terminal.inTerminalNormal = true
+    w.mode = EditorMode.Normal
+    e.syncActiveWindow()
+    let bmState = newBufferManagerState()
+    require e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpVSplit,
+    ).isOk
+    require e.activeWindow != w
+    require e.activeWindow.tabBufferId == termBuf.id
+    e.windowManager.activateWindow(e.windowManager.windows.find(w))
+    e.syncActiveWindow()
+    require e.tryActivateBuffer(textBuf.id).isOk
+
+    e.pollTerminalSessions()
+
+    check not e.terminalStates.hasKey(termBuf.id)
 
 suite "pollTerminalSessions - PTY size":
   test "the PTY follows the smallest window showing the session":
@@ -284,7 +313,8 @@ suite "pollTerminalSessions - PTY size":
 
     # w2 enters Terminal-Normal. Were browsing windows skipped, the size
     # would jump to 80x20 on every sub-mode round trip.
-    w2.modeState.scrollbackSnapshot = newTextBuffer("")
+    w2.modeState.terminal.lastSnapshot = newTextBuffer("")
+    w2.modeState.terminal.inTerminalNormal = true
     e.pollTerminalSessions()
     check session.grid.cols == 60
     check session.grid.rows == 11
@@ -364,11 +394,13 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
     check w.tabBufferId == other.id
 
   test "leaving the scrollback of an exited shell tears it down":
+    ## As Vim's 'nohidden' unloads a finished terminal no window shows.
     let e = createTestEditor()
     let w = e.windowManager.windows[0]
     let termBuf = e.registerExitedTerminalInWindow(w, "bash")
     let termBufId = termBuf.id
-    w.modeState.scrollbackSnapshot = newTextBuffer("")
+    w.modeState.terminal.lastSnapshot = newTextBuffer("")
+    w.modeState.terminal.inTerminalNormal = true
     w.mode = EditorMode.Normal
     e.syncActiveWindow()
 

@@ -137,7 +137,8 @@ proc refuseQuitFor*(e: Editor, job: BufferId, show: bool, wrote = "") =
         e.showJob(job)
       else:
         Result[void, string].ok()
-    # As in Vim, the job is shown taking keys, so a typed `:` would reach it.
+    # The job is shown in its session's sub-mode; taking keys, a typed `:`
+    # would reach it.
     let keys =
       if e.activeWindow.mode == EditorMode.Terminal:
         "Ctrl-\\ Ctrl-n, then :qa!"

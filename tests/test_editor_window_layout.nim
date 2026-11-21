@@ -240,7 +240,8 @@ suite "minimumTerminalAreaDimensions":
       win.tabBufferId,
       ViewPort(topLine: 0, leftCell: 0, width: 60, height: 12, x: 0, y: 20),
     )
-    browsing.modeState.scrollbackSnapshot = newTextBuffer("")
+    browsing.modeState.terminal.lastSnapshot = newTextBuffer("")
+    browsing.modeState.terminal.inTerminalNormal = true
 
     let dimensions = e.minimumTerminalAreaDimensions(win.tabBufferId)
     require dimensions.isSome

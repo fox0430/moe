@@ -212,9 +212,6 @@ type
         discard
       else:
         terminal*: TerminalState
-        scrollbackSnapshot*: TextBuffer
-          ## This window's Terminal-Normal copy of the session; nil while its
-          ## keys go to the session. Leaving the tab drops it with the variant.
 
   ViewerPlacement* = enum
     ## Where a viewer's listing goes or a jump lands: the active window, or a
@@ -237,6 +234,9 @@ type
     returnTab*: BufferId
       ## The tab the viewer covered. What it covered resumes only while the
       ## window is still on it.
+    originView*: BufferId
+      ## What the window showed: the tab, or a session's Terminal-Normal copy.
+      ## The origin position is in it, and in nothing taken since.
     originCursor*: BufferPosition
     originTopLine*: int
     originTopWrapOffset*: int
@@ -1157,6 +1157,7 @@ type
     ## and comes back from a saved entry.
     window*: EditorWindow
     bufferId*: BufferId
+      ## The text the line is in: a buffer, or a session's Terminal-Normal copy.
     line*: int
     column*: int
     saved*: bool
@@ -1996,9 +1997,11 @@ proc baseMode*(state: EditorState): EditorMode =
   state.mode
 
 when not defined(moe.embedded):
+  import std/sequtils
+
   func terminalSubMode*(state: ModeState): TerminalSubMode =
-    ## Only for an `mskTerminal` state.
-    if state.scrollbackSnapshot == nil: tsmInput else: tsmNormal
+    ## Only for an `mskTerminal` state. The session's, as in Vim.
+    if state.terminal.inTerminalNormal: tsmNormal else: tsmInput
 
   func isBrowsingTerminal*(win: EditorWindow): bool =
     ## Terminal-Normal: Normal mode, as in Vim, on a copy of the session's
@@ -2011,14 +2014,21 @@ when not defined(moe.embedded):
     win.isBrowsingTerminal and win.modeState.terminal.exitCode.isNone
 
   proc returnToTerminalJob*(state: EditorState): bool =
-    ## Insert in Terminal-Normal goes back to the job, as Vim's edit(). False
-    ## when there is none to go back to. `syncTerminalView` follows.
+    ## Insert in Terminal-Normal goes back to the job, as Vim's edit(), in
+    ## every window on the session. False when there is none to go back to.
+    ## `syncTerminalWindows` follows.
     let win = state.activeWindow
     result = win.hasTerminalJob
     if result:
-      win.modeState.scrollbackSnapshot = nil
+      win.modeState.terminal.inTerminalNormal = false
+      # Lines left in the copy are in none shown again.
+      let copy = win.modeState.terminal.lastSnapshot
+      if copy != nil:
+        state.tabLines.keepItIf(it.bufferId != copy.id)
       win.setMode(EditorMode.Terminal)
       win.cursor = BufferPosition(line: 0, column: 0)
+      win.viewport.resetViewportTop()
+      win.viewport.leftCell = 0
 
 proc shownMode*(win: EditorWindow): EditorMode =
   ## The mode the status line names: Terminal-Normal is Terminal's to users.

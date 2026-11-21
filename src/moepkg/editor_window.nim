@@ -236,24 +236,34 @@ proc viewerOrigin*(
     min(entry.originTopLine, max(0, buf.len - 1)),
   )
 
-proc splitOrigin(e: Editor): tuple[viewport: ViewPort, cursor: BufferPosition] =
+proc splitOrigin(
+    e: Editor
+): tuple[viewport: ViewPort, cursor: BufferPosition, fresh: bool] =
   ## Where a split of the active window's tab starts. A viewer's own position
   ## is in its listing; the tab's is in its entry while the window is still on
-  ## that tab.
+  ## that tab. `fresh` when it has none and comes to the tab anew.
   let win = e.activeWindow
   if win.viewerEntry.isNone:
-    return (win.viewport, win.cursor)
+    return (win.viewport, win.cursor, false)
   let entry = win.viewerEntry.get
-  if win.tabBufferId != entry.returnTab:
-    return (ViewPort(), BufferPosition(line: 0, column: 0))
+  let tab = e.tabBuffer(win)
+  let text = e.tabText(tab)
+  if win.tabBufferId != entry.returnTab or
+      (entry.returnState.kind == mskTerminal and text.id != entry.originView):
+    # The tab, or the session's text, changed under the viewer.
+    return (ViewPort(), text.freshPosition(tab), true)
   # A split starts in Normal.
-  let origin = e.viewerOrigin(entry, e.tabBuffer(win), EditorMode.Normal)
-  (ViewPort(topLine: origin.topLine, leftCell: entry.originLeftCell), origin.cursor)
+  let origin = e.viewerOrigin(entry, text, EditorMode.Normal)
+  (
+    ViewPort(topLine: origin.topLine, leftCell: entry.originLeftCell),
+    origin.cursor,
+    false,
+  )
 
-proc startSplitWindow(e: Editor, newWindow, origin: EditorWindow) =
+proc startSplitWindow(e: Editor, newWindow, origin: EditorWindow, fresh: bool) =
   ## Bring up the window a split of `origin` made: in the mode its tab derives,
   ## and on the same buffer wanting the column `origin` wants, as Vim's
-  ## win_init copies curswant.
+  ## win_init copies curswant. `fresh` centers it as any arrival on a tab.
   if newWindow.buffer == origin.buffer:
     newWindow.takeWantedColumn(origin)
   let anotherTab = newWindow.tabBufferId != origin.tabBufferId
@@ -262,7 +272,7 @@ proc startSplitWindow(e: Editor, newWindow, origin: EditorWindow) =
   e.syncActiveWindow(checkCursor = false)
   e.deriveTabMode(newWindow)
   newWindow.previousMode = EditorMode.Normal
-  if anotherTab:
+  if anotherTab or fresh:
     e.centerCursorLine(newWindow)
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -341,7 +351,8 @@ proc openWindowBesideSidebar*(e: Editor, buf: TextBuffer): Result[void, string] 
   e.windowManager.activeWindowIndex = sideIndex + 1
 
   e.placeInTab(win, buf)
-  e.syncActiveWindow()
+  # Placed in what the tab shows, which may not be `buf`: a Terminal-Normal copy.
+  e.syncActiveWindow(checkCursor = false)
   e.deriveTabMode(win)
   e.centerCursorLine(win)
   e.state.previousMode = EditorMode.Normal
@@ -395,7 +406,7 @@ proc vsplitWithBuffer*(
   # Add the new buffer to the buffer list if it's not already there
   e.registerSplitBuffer(newBuffer, applyConfig = false, context = "vsplitWithBuffer")
 
-  e.startSplitWindow(e.activeWindow, originWindow)
+  e.startSplitWindow(e.activeWindow, originWindow, origin.fresh)
 
   ok(())
 
@@ -465,7 +476,7 @@ proc hsplitWithBuffer*(
     e.windowManager.activateWindow(e.windowManager.windows.find(originWindow))
     e.windowManager.previousWindow = previousWindow
 
-  e.startSplitWindow(newWindow, originWindow)
+  e.startSplitWindow(newWindow, originWindow, origin.fresh)
 
   ok(())
 
@@ -662,7 +673,8 @@ proc closeFileTree*(e: Editor) =
   e.windowManager.activateWindow(e.windowManager.windows.high)
   e.windowManager.onlyWindow(e.screenSize.width, e.screenSize.height)
   e.placeInTab(win, buf)
-  e.syncActiveWindow()
+  # Placed in what the tab shows, which may not be `buf`: a Terminal-Normal copy.
+  e.syncActiveWindow(checkCursor = false)
   e.deriveTabMode(win)
   e.centerCursorLine(win)
   e.setActiveWindowScreenCursor(win)

@@ -44,18 +44,40 @@ when not defined(moe.embedded):
 
 when not defined(moe.embedded):
   proc syncTerminalView*(e: Editor, win: EditorWindow) =
-    ## What a Terminal window shows, derived from its sub-mode. The only place
-    ## that decides it, so the two cannot drift apart.
+    ## What a Terminal window shows and its mode, derived from the session's
+    ## sub-mode. The only place that decides them, so they cannot drift apart.
     if win.modeState.kind != mskTerminal:
       return
     case win.modeState.terminalSubMode
     of tsmNormal:
-      win.setView(win.modeState.scrollbackSnapshot)
+      let snapshot = win.modeState.terminal.lastSnapshot
+      let wasLive = win.mode == EditorMode.Terminal
+      win.setView(snapshot)
+      if wasLive:
+        # The session left the job under this window: start at the end of the
+        # copy, where the job's screen was.
+        win.setMode(EditorMode.Normal)
+        win.cursor = BufferPosition(line: max(0, snapshot.len - 1), column: 0)
+        win.viewport.resetViewportTop(max(0, snapshot.len - win.viewport.height))
+        win.viewport.leftCell = 0
     of tsmInput:
+      # Left on the copy: a Visual area there is saved in it.
+      if win.mode != EditorMode.Terminal:
+        win.setMode(EditorMode.Terminal)
+        win.cursor = BufferPosition(line: 0, column: 0)
+        win.viewport.resetViewportTop()
+        win.viewport.leftCell = 0
       # View is only for the status line/tab list; `renderTerminal` draws the grid.
       win.setView(e.tabBuffer(win))
     if win == e.activeWindow:
       e.motionController.bindToWindow(win)
+
+  proc syncTerminalWindows*(e: Editor, session: TerminalState) =
+    ## Follow a sub-mode change of `session` in every window that shows it.
+    ## Covered ones follow when their viewer ends.
+    for win in e.windowManager.windows:
+      if win.modeState.kind == mskTerminal and win.modeState.terminal == session:
+        e.syncTerminalView(win)
 
 proc syncTabView*(e: Editor, win: EditorWindow) =
   ## Show what `win`'s tab and `modeState` make it show when no viewer covers
@@ -73,7 +95,8 @@ proc applyTabMode(e: Editor, win: EditorWindow, tabId: BufferId) =
   when not defined(moe.embedded):
     let session = e.terminalStates.getOrDefault(tabId)
     if session != nil:
-      # First arrival starts live; staying keeps the browsing state.
+      # The sub-mode is the session's: arriving in Terminal-Normal browses
+      # its copy from where `placeInTab` put the cursor.
       if win.modeState.kind != mskTerminal or win.modeState.terminal != session:
         win.modeState = ModeState(kind: mskTerminal, terminal: session)
       win.mode = if win.isBrowsingTerminal: EditorMode.Normal else: EditorMode.Terminal
@@ -150,36 +173,63 @@ type TabMove* = enum
   tabAlreadyShown ## It already did; nothing changed.
   tabSwitchRefused ## The window keeps its own tab; nothing changed.
 
+proc spotInTab(
+    win: EditorWindow, covered: Option[ViewerEntry]
+): Option[tuple[text: BufferId, position: BufferPosition]] =
+  ## Where `win` stands in its tab, with the text that position is in: the tab
+  ## itself, or a session's Terminal-Normal copy. `covered` is the viewer over
+  ## that tab, if any. Other views hold no position of the tab, nor does a
+  ## viewer's own split: it only copied the window it split from.
+  if covered.isSome and covered.get.returnTab == win.tabBufferId and
+      covered.get.placement == vpInPlace:
+    let text =
+      if covered.get.returnState.kind == mskTerminal:
+        covered.get.originView
+      else:
+        win.tabBufferId
+    return some((text, covered.get.originCursor))
+  var inTab = win.buffer.id == win.tabBufferId
+  when not defined(moe.embedded):
+    inTab = inTab or win.isBrowsingTerminal
+  if inTab:
+    some((win.buffer.id, win.cursor))
+  else:
+    none(tuple[text: BufferId, position: BufferPosition])
+
 proc cursorInTab(
     win: EditorWindow, covered: Option[ViewerEntry]
 ): Option[BufferPosition] =
-  ## Where `win` stands in its tab; `covered` is the viewer over that tab, if
-  ## any. Other views hold no position of the tab, nor does a viewer's own
-  ## split: it only copied the window it split from.
-  if covered.isSome and covered.get.returnTab == win.tabBufferId and
-      covered.get.placement == vpInPlace:
-    some(covered.get.originCursor)
-  elif win.buffer.id == win.tabBufferId:
-    some(win.cursor)
+  ## Where `win` stands in the tab's own text.
+  let spot = win.spotInTab(covered)
+  if spot.isSome and spot.get.text == win.tabBufferId:
+    some(spot.get.position)
   else:
     none(BufferPosition)
 
 proc leaveTabLine(e: Editor, win: EditorWindow, covered: Option[ViewerEntry]) =
-  ## Remember where `win` stands in its tab. A deleted tab has no line left to
-  ## come back to.
+  ## Remember where `win` stands in its tab, keyed by the text the line is in
+  ## so a later copy of a session does not take it. A deleted tab has no line
+  ## left to come back to.
   if e.bufferIndexById(win.tabBufferId) < 0:
     return
-  let position = win.cursorInTab(covered)
-  if position.isNone:
+  let spot = win.spotInTab(covered)
+  if spot.isNone:
     return
-  let bufferId = win.tabBufferId
-  e.state.tabLines.keepItIf(not (it.window == win and it.bufferId == bufferId))
+  let text = spot.get.text
+  when not defined(moe.embedded):
+    # A copy the session has replaced is in none shown again.
+    if text != win.tabBufferId:
+      let session = e.terminalStates.getOrDefault(win.tabBufferId)
+      if session == nil or not session.inTerminalNormal or session.lastSnapshot == nil or
+          session.lastSnapshot.id != text:
+        return
+  e.state.tabLines.keepItIf(not (it.window == win and it.bufferId == text))
   e.state.tabLines.insert(
     TabLine(
       window: win,
-      bufferId: bufferId,
-      line: position.get.line,
-      column: position.get.column,
+      bufferId: text,
+      line: spot.get.position.line,
+      column: spot.get.position.column,
     ),
     0,
   )
@@ -222,23 +272,46 @@ proc noteUse(e: Editor, buf: TextBuffer) =
   inc e.bufferUse.clock
   e.bufferUse.shown[buf.id] = e.bufferUse.clock
 
-proc placeInTab*(e: Editor, win: EditorWindow, buf: TextBuffer) =
-  ## Put `win`, new on `buf`'s tab, where it left the tab. The column does not
-  ## come back, as with Vim's 'startofline', unless the file was just read: the
-  ## first window takes that position, and no other does. `buf` becomes the
-  ## most recently used, as Vim's enter_buffer stamps b_last_used.
-  e.noteUse(buf)
-  let spot = e.tabLineFor(win, buf)
-  var position = BufferPosition(line: 0, column: 0)
+proc tabText*(e: Editor, buf: TextBuffer): TextBuffer =
+  ## What a window on `buf`'s tab moves in: a session's Terminal-Normal copy,
+  ## or else `buf`.
+  when not defined(moe.embedded):
+    let session = e.terminalStates.getOrDefault(buf.id)
+    if session != nil and session.inTerminalNormal:
+      return session.lastSnapshot
+  buf
+
+proc freshPosition*(text, tab: TextBuffer): BufferPosition =
+  ## Where a window starts in `text` with no line to come back to: the top of
+  ## a tab, the end of a Terminal-Normal copy, where the job's screen was, as
+  ## Ctrl-\ Ctrl-n does.
+  if text == tab:
+    BufferPosition(line: 0, column: 0)
+  else:
+    BufferPosition(line: max(0, text.len - 1), column: 0)
+
+proc placeCursorInTab*(e: Editor, win: EditorWindow, buf: TextBuffer) =
+  ## Put `win`'s cursor where it left `buf`'s tab. The column does not come
+  ## back, as with Vim's 'startofline', unless the file was just read: the
+  ## first window takes that position, and no other does.
+  let text = e.tabText(buf)
+  let spot = e.tabLineFor(win, text)
+  var position = text.freshPosition(buf)
   if spot.isSome:
     position = BufferPosition(
       line: spot.get.line, column: if spot.get.saved: spot.get.column else: 0
-    ).keptInside(buf)
+    ).keptInside(text)
     if spot.get.saved:
-      e.state.tabLines.keepItIf(not (it.saved and it.bufferId == buf.id))
+      e.state.tabLines.keepItIf(not (it.saved and it.bufferId == text.id))
   win.cursor = position
   win.viewport.resetViewportTop()
   win.viewport.leftCell = 0
+
+proc placeInTab*(e: Editor, win: EditorWindow, buf: TextBuffer) =
+  ## Put `win`, new on `buf`'s tab, where it left the tab. `buf` becomes the
+  ## most recently used, as Vim's enter_buffer stamps b_last_used.
+  e.noteUse(buf)
+  e.placeCursorInTab(win, buf)
 
 proc releaseTabLines*(e: Editor, win: EditorWindow) =
   ## `win` closes: its lines stay for the other windows, as Vim's close_buffer
