@@ -5848,9 +5848,10 @@ suite "Handler - Basic Motion Commands":
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
     ctx.setCursor(4, 2)
+    ctx.count = 3
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcMotionFirstLine), @["3"]).isOk
+    check registry.execute(ctx, builtin(bcMotionFirstLine)).isOk
     check ctx.cursor.line == 2
 
   test "motion last line (G)":
@@ -5862,10 +5863,6 @@ suite "Handler - Basic Motion Commands":
 
     check registry.execute(ctx, builtin(bcMotionLastLine)).isOk
     check ctx.cursor.line == 2
-
-  # Note: bcMotionWord, bcMotionWordBack, bcMotionWordEnd are not registered as
-  # builtin commands - they are tested via ctMotion Command type in the
-  # "executeCommand - Motion commands" suite above.
 
   test "motion match bracket (%)":
     let buffer = newTextBuffer("(hello world)")
@@ -9715,3 +9712,30 @@ suite "executeCommand - count from the context":
 
       check registry.executeCommand(ctx, countedKey(id, 4, @["1"])).isOk
       check buffer[0] == want
+
+  test "3j, 3w, 3gg and 3G move by the typed count":
+    for (id, want) in [
+      ("motion.down", 3),
+      ("motion.word", 3),
+      ("motion.firstline", 2),
+      ("motion.lastline", 2),
+    ]:
+      checkpoint id
+      let ctx = createTestContext(newTextBuffer("1\n2\n3\n4\n5"))
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 3)).isOk
+      check ctx.cursor.line == want
+
+  test "bare G goes to the last line":
+    let ctx = createTestContext(newTextBuffer("1\n2\n3\n4\n5"))
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("motion.lastline", 0)).isOk
+    check ctx.cursor.line == 4
+
+  test "a motion command takes no arguments":
+    let ctx = createTestContext(newTextBuffer("1\n2\n3"))
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcMotionDown), @["2"]).isErr

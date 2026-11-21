@@ -44,8 +44,6 @@ proc registerMotionCommand*(
 ) =
   ## Register a motion command with common handler pattern
   ## If shouldRecordJump is true, the current position will be recorded in the jump list
-  let maxArgs = if acceptsCount: 1 else: 0
-
   registry.register(
     builtin(id),
     name,
@@ -56,18 +54,19 @@ proc registerMotionCommand*(
         recordJump(ctx.state)
 
       let count =
-        if acceptsCount:
-          # LastLine treats "no arg" as bare G (go to last line); moveLastLine
-          # takes count=0 as that sentinel and count>=1 as an explicit line.
-          let defaultCount = if motion == Motion.LastLine: 0 else: 1
-          parseCount(args, default = defaultCount)
-        else:
+        if not acceptsCount:
           1
+        elif motion == Motion.LastLine:
+          # Bare G goes to the last line; moveLastLine takes 0 for that.
+          ctx.count
+        else:
+          ctx.count1
       let cmd = MotionCommand(motion: motion, count: count)
       ctx.moveByMotion(cmd)
       return Result[(), string].ok (),
     0,
-    maxArgs,
+    0,
+    countFromContext = true,
   )
 
 ## Scroll commands
