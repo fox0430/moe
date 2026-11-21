@@ -751,10 +751,10 @@ suite "NormalModeHandler - Motion Commands":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 5)
 
-    let result =
-      handler.executeCommand(buf, state, createTestViewport(), "motion.left", @["3"])
+    let ctx = handler.newContext(buf, state, createTestViewport())
+    ctx.count = 3
 
-    check result.kind == nmrHandled
+    check handler.commandRegistry.execute(ctx, "motion.left").isOk
     check state.cursor.column == 2
 
   test "Execute down motion":
