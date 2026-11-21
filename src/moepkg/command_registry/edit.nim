@@ -690,8 +690,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       registry.operateOnLines(ctx, OpDelete, ctx.givenCount(args)),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -702,8 +701,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
       let count = ctx.givenCount(args)
       handleDeleteChar(registry, ctx, count),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -714,8 +712,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
       let count = ctx.givenCount(args)
       handleDeleteCharBefore(ctx, count),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -726,8 +723,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
       let count = ctx.givenCount(args)
       handleSubstituteChar(registry, ctx, count),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -737,8 +733,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       registry.operateOnLines(ctx, OpChange, ctx.givenCount(args)),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -749,8 +744,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
       let count = ctx.givenCount(args)
       handleToggleCase(ctx, count),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -760,8 +754,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       registry.operateOnLines(ctx, OpYank, ctx.givenCount(args)),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -771,8 +764,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handlePut(ctx, ctx.givenCount(args), forward = true),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -782,8 +774,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handlePut(ctx, ctx.givenCount(args), forward = false),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -793,8 +784,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handlePut(ctx, ctx.givenCount(args), forward = true, cursorEnd = true),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -804,8 +794,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handlePut(ctx, ctx.givenCount(args), forward = false, cursorEnd = true),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -816,8 +805,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
       # Count is a line count, like vim's [count]>>
       registry.operateOnLines(ctx, OpIndent, ctx.givenCount(args)),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -827,8 +815,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       registry.operateOnLines(ctx, OpOutdent, ctx.givenCount(args)),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -900,8 +887,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
       let count = ctx.givenCount(args)
       handleJoinLines(ctx, count),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -942,8 +928,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
       return Result[(), string].ok (),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -962,8 +947,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
       return Result[(), string].ok (),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   # Increment/Decrement number commands
@@ -974,7 +958,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
     handleIncrementNumber,
     0,
     1, # A mapping's own amount
-    countFromContext = true,
   )
 
   registry.register(
@@ -984,7 +967,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
     handleDecrementNumber,
     0,
     1, # A mapping's own amount
-    countFromContext = true,
   )
 
   registry.register(
@@ -1115,7 +1097,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
         return addToNumberAtCursor(ctx, lastCmd.addDelta),
     0,
     1, # A mapping's own count
-    countFromContext = true,
   )
 
   # Operator commands (d, c, y) - these wait for motion/text object
@@ -1128,8 +1109,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx, OpDelete, ctx.givenCount(args), ctx.countGiven(args), "d"
       ),
     0,
-    1, # Accept optional count
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -1141,8 +1121,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx, OpChange, ctx.givenCount(args), ctx.countGiven(args), "c"
       ),
     0,
-    1, # Accept optional count
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -1152,8 +1131,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       registry.operatorKey(ctx, OpYank, ctx.givenCount(args), ctx.countGiven(args), "y"),
     0,
-    1, # Accept optional count
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -1165,8 +1143,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx, OpIndent, ctx.givenCount(args), ctx.countGiven(args), ">"
       ),
     0,
-    1, # Accept optional count
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -1178,8 +1155,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx, OpOutdent, ctx.givenCount(args), ctx.countGiven(args), "<"
       ),
     0,
-    1, # Accept optional count
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -1191,8 +1167,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx, OpLowerCase, ctx.givenCount(args), ctx.countGiven(args), "gu"
       ),
     0,
-    1, # Accept optional count
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -1204,8 +1179,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx, OpUpperCase, ctx.givenCount(args), ctx.countGiven(args), "gU"
       ),
     0,
-    1, # Accept optional count
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -1217,8 +1191,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx, OpSwapCase, ctx.givenCount(args), ctx.countGiven(args), "g~"
       ),
     0,
-    1, # Accept optional count
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   # D - Delete to end of line (equivalent to d$)
@@ -1230,7 +1203,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
       registry.handleDeleteToEnd(ctx, ctx.givenCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   # C - Change to end of line (equivalent to c$)
@@ -1242,7 +1214,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
       registry.handleChangeToEnd(ctx, ctx.givenCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   # Text object commands (i, a) - wait for text object kind
@@ -1258,7 +1229,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
       ),
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -1271,7 +1241,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
       ),
     0,
     1,
-    countFromContext = true,
   )
 
   # Text object kind commands (w, ", (, etc.)

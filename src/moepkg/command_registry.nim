@@ -188,8 +188,7 @@ proc executeCommand*(
 
     # Bare G targets the last line, so a missing count is the 0 sentinel;
     # bare gg and 1gg both target line 1, so FirstLine needs no such case.
-    let motionCount =
-      if cmd.motion == Motion.LastLine and not cmd.hasCount: 0 else: cmd.count
+    let motionCount = if cmd.motion == Motion.LastLine: ctx.count else: cmd.count
     let motionCmd = MotionCommand(motion: cmd.motion, count: motionCount)
     logDebug(
       "command",
@@ -352,25 +351,14 @@ proc executeCommand*(
     # First try as alias, then as custom command
     let cmdResult = registry.findCommand(cmd.commandId)
 
-    # Pass count as arg when explicitly typed, so `1G` (visual) reaches the
-    # handler as count=1 instead of falling back to the "no count" default.
-    # Only prepend for handlers that accept an argument (maxArgs >= 1);
-    # maxArgs=0 handlers (e.g. visual.yank, scroll.cursor.*) reject the
-    # prefixed count with "Too many arguments". A mapping that carries its own
-    # args already fixed them, so a count would only shift them. A handler
-    # that reads `ctx.count` takes none.
-    var finalArgs = cmd.args
-    if cmd.args.len == 0 and cmdResult.isSome and not cmdResult.get.countFromContext and
-        cmdResult.get.maxArgs >= 1 and ctx.count > 0:
-      finalArgs = @[$ctx.count] & cmd.args
-    logDebug("command", "finalArgs (count=" & $ctx.count & "): " & $finalArgs)
+    # The count stays in `ctx.count`; the args are the mapping's own.
 
     if cmdResult.isSome:
       # Found via alias or existing command
-      return registry.execute(ctx, cmdResult.get.id, finalArgs)
+      return registry.execute(ctx, cmdResult.get.id, cmd.args)
     else:
       # Try as custom command
-      return registry.execute(ctx, custom(cmd.commandId), finalArgs)
+      return registry.execute(ctx, custom(cmd.commandId), cmd.args)
 
 ## Register built-in commands
 proc registerBuiltinCommands*(registry: CommandRegistry) =

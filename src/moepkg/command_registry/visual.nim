@@ -237,7 +237,6 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualOperator(ctx, voIndent, ctx.givenCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -248,7 +247,6 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualOperator(ctx, voDedent, ctx.givenCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -359,8 +357,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualPaste(ctx, args),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -370,8 +367,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualPaste(ctx, args, before = true),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -392,7 +388,6 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualOperator(ctx, voIncrement, ctx.amountTimesCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -403,7 +398,6 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualOperator(ctx, voDecrement, ctx.amountTimesCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -414,7 +408,6 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualOperator(ctx, voIncrementProgressive, ctx.amountTimesCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -425,7 +418,6 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualOperator(ctx, voDecrementProgressive, ctx.amountTimesCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -435,8 +427,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualPaste(ctx, args, cursorAfter = true),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
 
   registry.register(
@@ -446,6 +437,5 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualPaste(ctx, args, cursorAfter = true, before = true),
     0,
-    1, # Accept optional count argument
-    countFromContext = true,
+    1, # A mapping's own count
   )
