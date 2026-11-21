@@ -20,12 +20,30 @@ const
   DefaultTimeoutSec = 120
   DefaultCompileTimeoutSec = 600
 
-  # Flaky tests that must be run sequentially after the parallel batch
-  # so concurrent file/clipboard/etc. usage cannot perturb them.
+  # Tests run one at a time after the parallel batch: flaky ones that
+  # concurrent file/clipboard/etc. usage can perturb, and ones that need the
+  # display the parallel batch runs without. Adding a test here moves it to
+  # the shard its index picks, a one-time reshard of its ccache.
   SequentialTests = [
     "test_registers.nim", "test_terminal_handler.nim", "test_pty.nim",
     "test_deadly_signals.nim", "test_signal_watcher.nim", "test_terminal_command.nim",
-    "test_exit_sequence.nim",
+    "test_exit_sequence.nim", "test_clipboard.nim",
+  ]
+
+  # Display variables the parallel batch runs without: an editor a test creates
+  # sends its yanks and deletes to the X11/Wayland selections, which every test
+  # process shares and the user's desktop owns. WAYLAND_DISPLAY points at a
+  # socket that does not exist instead of being unset, since libwayland falls
+  # back to wayland-0 without it. Tests of the real tools run in the sequential
+  # batch, which gets the variables back. pbcopy and win32yank.exe need no
+  # display and stay shared. The stand-in WAYLAND_DISPLAY also makes clipboard
+  # detection see a Wayland session, so a parallel test detects wl-copy
+  # wherever wl-clipboard is installed, even on an X11 desktop; with no
+  # display left, every detected tool fails alike.
+  HiddenDisplayVars = [
+    ("DISPLAY", ""),
+    ("WAYLAND_SOCKET", ""),
+    ("WAYLAND_DISPLAY", "moe-test-no-wayland-display"),
   ]
 
 proc defaultJobs(): int =
@@ -166,15 +184,31 @@ proc main() =
     if code != 0:
       failedTests.add((parallelFiles[idx], code))
 
-  var exitCode = execProcesses(
-    commands,
-    n = jobs,
-    options = {poParentStreams, poUsePath},
-    afterRunEvent = afterTest,
-  )
+  var savedDisplay: seq[(string, string)]
+  for (name, standIn) in HiddenDisplayVars:
+    if existsEnv(name):
+      savedDisplay.add((name, getEnv(name)))
+    if standIn.len > 0:
+      putEnv(name, standIn)
+    else:
+      delEnv(name)
+
+  var exitCode: int
+  try:
+    exitCode = execProcesses(
+      commands,
+      n = jobs,
+      options = {poParentStreams, poUsePath},
+      afterRunEvent = afterTest,
+    )
+  finally:
+    for (name, _) in HiddenDisplayVars:
+      delEnv(name)
+    for (name, value) in savedDisplay:
+      putEnv(name, value)
 
   if sequentialFiles.len > 0:
-    echo "\nRunning ", sequentialFiles.len, " flaky test(s) sequentially..."
+    echo "\nRunning ", sequentialFiles.len, " isolated test(s) sequentially..."
     for file in sequentialFiles:
       let code = execCmd(buildCommand(file))
       if code != 0:

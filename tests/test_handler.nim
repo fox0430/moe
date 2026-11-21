@@ -23,7 +23,7 @@
 ## - Background process management
 ## - Search mode event handling helpers
 
-import std/[unittest, options, tables, os, osproc, times, posix]
+import std/[unittest, options, tables, os, times, posix]
 from std/strutils import
   align, contains, continuesWith, count, endsWith, escape, join, repeat, split,
   startsWith, strip
@@ -40,9 +40,9 @@ from vim_like_test_helper import foldRanges, keysOf
 import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
-    render_utils, clipboard, message_log, frontend_input, pending_input, key_router,
-    completion, signature_help, macro_recording, wanted_column, hover_popup,
-    editor_window_layout, config_mode, viewer_mode, keybind_config,
+    render_utils, message_log, frontend_input, pending_input, key_router, completion,
+    signature_help, macro_recording, wanted_column, hover_popup, editor_window_layout,
+    config_mode, viewer_mode, keybind_config,
   ]
 import ../src/moepkg/handler {.all.}
 from ../src/moepkg/types/background_process_types import BackgroundProcessCommand
@@ -4101,49 +4101,32 @@ suite "adjustCursorAfterInsertExit":
     adjustCursorAfterInsertExit(cursor, 1)
     check cursor.column == 0
 
-proc isClipboardToolAvailable(): bool =
-  try:
-    let (_, exitCode) = execCmdEx("which xsel")
-    if exitCode == 0 and existsEnv("DISPLAY"):
-      return true
-    let (_, exitCode2) = execCmdEx("which xclip")
-    if exitCode2 == 0 and existsEnv("DISPLAY"):
-      return true
-    let (_, exitCode3) = execCmdEx("which wl-copy")
-    if exitCode3 == 0 and existsEnv("WAYLAND_DISPLAY"):
-      return true
-  except CatchableError:
-    discard
-  return false
-
-proc getAvailableClipboardTool(): ClipboardTool =
-  if existsEnv("WAYLAND_DISPLAY"):
+template withFakePrimary(text: string, body: untyped) =
+  ## Run `body` with a fake xclip whose PRIMARY holds `text`, so the test never
+  ## touches the real selection that other test processes write to. A middle
+  ## click with nothing to paste is a no-op by design, so each paste assertion
+  ## needs a selection behind it. `body` must not `require`: its quit skips
+  ## the cleanup.
+  let fakeDir = installFakeClipboardTool(text)
+  if fakeDir.len == 0:
+    skip()
+  else:
     try:
-      let (_, exitCode) = execCmdEx("which wl-copy")
-      if exitCode == 0:
-        return cbtWlClipboard
-    except CatchableError:
-      discard
-  if existsEnv("DISPLAY"):
-    try:
-      let (_, exitCode) = execCmdEx("which xsel")
-      if exitCode == 0:
-        return cbtXsel
-    except CatchableError:
-      discard
-    try:
-      let (_, exitCode) = execCmdEx("which xclip")
-      if exitCode == 0:
-        return cbtXclip
-    except CatchableError:
-      discard
-  return cbtXsel # fallback
+      # Shown only when a check fails: each read spawns /bin/sh, which a
+      # loaded box can starve past the paste's single 500 ms read.
+      checkpoint(
+        "PRIMARY is served by a fake xclip; a 'Timed out' paste failure " &
+          "means its shell spawn was starved"
+      )
+      body
+    finally:
+      removeFakeClipboardTool(fakeDir)
 
 proc createTestEditorForMiddleClick(content: string): Editor =
   let config = newEditorConfig()
   config.standard.mouse = true
   config.clipboard.enable = true
-  config.clipboard.tool = getAvailableClipboardTool()
+  config.clipboard.tool = cbtXclip
   result = newEditor(config)
   let buf = newTextBuffer(content)
   result.windowManager.windows[0].setTab(buf)
@@ -4335,15 +4318,8 @@ suite "middleClickPaste":
     check getMessageLog()[0].contains("Paste failed")
 
   test "Insert mode - paste from clipboard":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "middle_click_test"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "middle_click_test"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("hello")
       e.state.mode = EditorMode.Insert
       discard e.activeBuffer.beginTransaction("Insert mode edit")
@@ -4355,15 +4331,8 @@ suite "middleClickPaste":
       check $line == "hello" & testText
 
   test "Insert mode - invalid UTF-8 in selection is sanitized":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      # 0xC0 is an invalid UTF-8 leading byte; 0x41 is ASCII 'A'
-      let writeResult = writeToPrimarySelectionSync(tool, "\xC0\x41")
-      check writeResult.isOk
-      sleep(100)
-
+    # 0xC0 is an invalid UTF-8 leading byte; 0x41 is ASCII 'A'
+    withFakePrimary("\xC0\x41"):
       let e = createTestEditorForMiddleClick("hello")
       e.state.mode = EditorMode.Insert
       discard e.activeBuffer.beginTransaction("Insert mode edit")
@@ -4375,15 +4344,8 @@ suite "middleClickPaste":
       check $line == "hello" & "\xEF\xBF\xBD" & "A"
 
   test "Normal mode - auto enter Insert mode and paste":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "normal_paste"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "normal_paste"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("hello")
       e.state.mode = EditorMode.Normal
       e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
@@ -4395,15 +4357,8 @@ suite "middleClickPaste":
       check $line == testText & "hello"
 
   test "Normal mode - failed insert rolls back and returns to Normal":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "normal_fail_paste"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "normal_fail_paste"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("hello")
       e.state.mode = EditorMode.Normal
       # Out-of-bounds line makes insertText fail, hitting the rollback path
@@ -4422,14 +4377,7 @@ suite "middleClickPaste":
     # The paste puts "-- INSERT --" on the status row before inserting. With
     # popups enabled the failure never overwrites it, so the row would keep
     # advertising Insert while the editor is back in Normal.
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let writeResult = writeToPrimarySelectionSync(tool, "indicator_paste")
-      check writeResult.isOk
-      sleep(100)
-
+    withFakePrimary("indicator_paste"):
       let e = createTestEditorForMiddleClick("hello")
       e.config.notification.popupNotifications = true
       e.state.mode = EditorMode.Normal
@@ -4446,15 +4394,8 @@ suite "middleClickPaste":
       check e.state.notificationPopup.queue[0].message.contains("Paste failed")
 
   test "Insert mode - failed insert leaves joined session transaction open":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "insert_fail_paste"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "insert_fail_paste"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("hello")
       e.state.mode = EditorMode.Insert
       discard e.activeBuffer.beginTransaction("Insert mode edit")
@@ -4468,15 +4409,8 @@ suite "middleClickPaste":
       check e.state.statusMessage == "Paste failed: Line position out of bounds: 5"
 
   test "Insert mode without transaction - failed insert rolls back the paste's own transaction":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "insert_own_txn_fail_paste"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "insert_own_txn_fail_paste"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("hello")
       e.state.mode = EditorMode.Insert
       # No beginTransaction here, so middleClickPaste opens its own. The
@@ -4495,15 +4429,8 @@ suite "middleClickPaste":
       check e.state.statusMessage == "Paste failed: Line position out of bounds: 5"
 
   test "Insert mode - multiline paste":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "line1\nline2"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "line1\nline2"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("")
       e.state.mode = EditorMode.Insert
       discard e.activeBuffer.beginTransaction("Insert mode edit")
@@ -4517,15 +4444,8 @@ suite "middleClickPaste":
       check e.windowManager.windows[0].cursor.column == 5
 
   test "Command overlay - paste first line only":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "hello world"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "hello world"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("")
       e.state.enterCommandOverlay()
 
@@ -4535,15 +4455,8 @@ suite "middleClickPaste":
       check e.state.input.line.cursor == testText.len
 
   test "Command overlay - multiline paste keeps only first line":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "first\nsecond"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "first\nsecond"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("")
       e.state.enterCommandOverlay()
 
@@ -4553,15 +4466,8 @@ suite "middleClickPaste":
       check e.state.input.line.cursor == 5
 
   test "Search overlay - paste appends first line":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "needle\nignored"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "needle\nignored"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("haystack needle")
       e.state.enterSearchOverlay(SearchDirection.Forward)
 
@@ -4570,15 +4476,8 @@ suite "middleClickPaste":
       check e.state.input.line.text == "needle"
 
   test "handleEvent dispatches middle-click even when mouse config disabled":
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let tool = getAvailableClipboardTool()
-      let testText = "event_test"
-      let writeResult = writeToPrimarySelectionSync(tool, testText)
-      check writeResult.isOk
-      sleep(100)
-
+    let testText = "event_test"
+    withFakePrimary(testText):
       let e = createTestEditorForMiddleClick("hello")
       e.config.standard.mouse = false # Mouse disabled
       e.state.mode = EditorMode.Normal
@@ -8198,27 +8097,14 @@ suite "middleClickPaste - the click picks the target":
     )
     e
 
-  proc primarySelectionHolds(text: string): bool =
-    ## Put `text` in PRIMARY. False when this environment has no clipboard
-    ## tool: a middle click with nothing to paste is a no-op by design, so a
-    ## focus assertion needs a real selection behind it.
-    if not isClipboardToolAvailable():
-      return false
-    if writeToPrimarySelectionSync(getAvailableClipboardTool(), text).isErr:
-      return false
-    sleep(100)
-    true
-
   test "a click in another split does not reach the terminal's child":
     ## Regression: the Terminal branch ran before any hit test, so a click
     ## meant for another split queued the selection to the shell, which runs it
     ## (newlines are normalized to CR and the shell has no bracketed paste).
-    if not primarySelectionHolds("split"):
-      skip()
-    else:
-      let (e, term) = editorWithTerminalAndSplit()
-      require term.pty.pendingWriteBytes == 0
+    let (e, term) = editorWithTerminalAndSplit()
+    require term.pty.pendingWriteBytes == 0
 
+    withFakePrimary("split"):
       # Inside the bottom window.
       e.middleClickPaste(row = 15, col = 10)
 
@@ -8270,9 +8156,7 @@ suite "middleClickPaste - the click picks the target":
     ## which aliases the window losing the focus, so the terminal window's mode
     ## stopped matching its modeState: it rendered as an empty buffer and its
     ## session was no longer resized or reaped.
-    if not primarySelectionHolds("split"):
-      skip()
-    else:
+    withFakePrimary("split"):
       let (e, _) = editorWithTerminalAndSplit()
 
       e.middleClickPaste(row = 15, col = 10)
@@ -8282,9 +8166,7 @@ suite "middleClickPaste - the click picks the target":
       check e.windowManager.windows[0].modeState.kind == mskTerminal
 
   test "a click in another split still rewinds an edit mode to Normal":
-    if not primarySelectionHolds("split"):
-      skip()
-    else:
+    withFakePrimary("split"):
       let e = editorWithTwoBufferWindows()
       e.state.mode = EditorMode.Insert
 
@@ -8297,14 +8179,7 @@ suite "middleClickPaste - the click picks the target":
     ## Regression: the flag was cleared on the window that had the focus, while
     ## the click pastes into the window under the pointer. A wheel-scrolled
     ## split kept its detached viewport, leaving the cursor off-screen.
-    if not isClipboardToolAvailable():
-      skip()
-    else:
-      let writeResult =
-        writeToPrimarySelectionSync(getAvailableClipboardTool(), "reattach")
-      check writeResult.isOk
-      sleep(100)
-
+    withFakePrimary("reattach"):
       let e = editorWithTwoBufferWindows()
       e.windowManager.windows[1].viewport.detachedFromCursor = true
 
@@ -8343,17 +8218,15 @@ suite "middleClickPaste - the click picks the target":
     check e.state.statusMessage == "Buffer is read-only"
 
   test "a click in the terminal delivers the selection to the child":
-    if not primarySelectionHolds("term-ok"):
-      skip()
-    else:
-      var fds: array[2, cint]
-      require pipe(fds) == 0
-      # Non-blocking read so a failed paste cannot hang the suite.
-      discard fcntl(fds[0], F_SETFL, O_NONBLOCK)
-      defer:
-        discard close(fds[0])
-        discard close(fds[1])
+    var fds: array[2, cint]
+    require pipe(fds) == 0
+    # Non-blocking read so a failed paste cannot hang the suite.
+    discard fcntl(fds[0], F_SETFL, O_NONBLOCK)
+    defer:
+      discard close(fds[0])
+      discard close(fds[1])
 
+    withFakePrimary("term-ok"):
       let e = createTestEditorForMiddleClick("")
       let win = e.windowManager.windows[0]
       win.viewport =
@@ -8377,8 +8250,8 @@ suite "middleClickPaste - the click picks the target":
 
       var buf = newString(64)
       let n = read(fds[0], addr buf[0], cint(buf.len))
-      require n > 0
-      buf.setLen(n)
+      check n > 0
+      buf.setLen(max(n, 0))
       check buf == "term-ok"
       check e.activeBuffer().getLine(0).len == 0
       check e.state.mode == EditorMode.Terminal

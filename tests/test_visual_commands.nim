@@ -19,13 +19,13 @@
 
 ## Tests for visual_commands.nim
 
-import std/[unittest, options, tables, strutils, os, osproc, unicode]
+import std/[unittest, options, tables, strutils, os, unicode]
 
 import pkg/results
 
-import ../src/moepkg/[buffer, types, modes, registers, config, clipboard]
+import ../src/moepkg/[buffer, types, modes, registers, config]
 import ../src/moepkg/command_handlers/visual_commands
-import visual_test_helper
+import visual_test_helper, clipboard_test_helper
 
 # The operators over the window's own selection, as the Visual keys run them.
 
@@ -86,45 +86,6 @@ proc createTestState(): EditorState =
     ),
     registers: initRegisters(),
   )
-
-proc isToolAvailable(cmd: string): bool =
-  try:
-    let (_, exitCode) = execCmdEx("which " & cmd)
-    result = exitCode == 0
-  except CatchableError:
-    result = false
-
-proc getAvailableClipboardTool(): (bool, ClipboardTool) =
-  if existsEnv("WAYLAND_DISPLAY") and isToolAvailable("wl-copy"):
-    return (true, cbtWlClipboard)
-  elif existsEnv("DISPLAY") and isToolAvailable("xsel"):
-    return (true, cbtXsel)
-  elif existsEnv("DISPLAY") and isToolAvailable("xclip"):
-    return (true, cbtXclip)
-  return (false, cbtXsel)
-
-proc readClipboardWithRetry(
-    tool: ClipboardTool, expected: string, maxRetries: int = 10, delayMs: int = 100
-): Result[string, string] =
-  ## Retry reading CLIPBOARD until the write is visible (may lag in CI).
-  for i in 0 ..< maxRetries:
-    result = readFromClipboardSync(tool)
-    if result.isOk and result.get() == expected:
-      return
-    sleep(delayMs)
-  return readFromClipboardSync(tool)
-
-proc cleanupClipboardProcs(tool: ClipboardTool) =
-  ## Kill lingering async clipboard-writer children spawned by this test proc.
-  let pid = getCurrentProcessId()
-  case tool
-  of cbtXsel:
-    discard execCmdEx("pkill -P " & $pid & " xsel")
-  of cbtXclip:
-    discard execCmdEx("pkill -P " & $pid & " xclip")
-  else:
-    discard
-  sleep(100)
 
 suite "Visual Commands - getSelectionRange":
   test "Get selection range when start equals current":
@@ -1627,45 +1588,42 @@ suite "Visual Commands - visualPaste":
     check state.visualSelection.active == false
 
   test "visualPaste falls back to system clipboard when register empty":
-    let (available, tool) = getAvailableClipboardTool()
-    if not available:
+    # A fake xclip, so the read never sees what other test processes write to
+    # the real CLIPBOARD.
+    let fakeDir = installFakeClipboardTool("FROM_CLIPBOARD")
+    if fakeDir.len == 0:
       skip()
     else:
-      let testText = "FROM_CLIPBOARD"
-      check writeToClipboardSync(tool, testText).isOk
-      let ready = readClipboardWithRetry(tool, testText)
-      check ready.isOk and ready.get() == testText
+      try:
+        # visualPaste runs its own bounded read, and a loaded box can starve the
+        # fake tool's shell past that budget. Retry the whole paste so a slow
+        # spawn is not reported as a missing fallback.
+        var
+          buf: TextBuffer
+          state: EditorState
+          pasted = Result[(), string].ok(())
+        for _ in 0 ..< 10:
+          buf = newTextBuffer()
+          discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+          state = createTestState()
+          # No register set — unnamed register is empty.
+          state.selectVisual(
+            BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
+          )
 
-      # visualPaste runs its own bounded clipboard read, and a loaded CI box can
-      # starve the X round trip past that budget. Retry the whole paste the way
-      # the read above is retried, so a slow tool is not reported as a missing
-      # fallback.
-      let cfg = ClipboardConfig(enable: true, tool: tool)
-      var
-        buf: TextBuffer
-        state: EditorState
-        pasted = Result[(), string].ok(())
-      for _ in 0 ..< 10:
-        buf = newTextBuffer()
-        discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-        state = createTestState()
-        # No register set — unnamed register is empty.
-        state.selectVisual(
-          BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 4)
-        )
+          pasted =
+            visualPaste(buf, state, ClipboardConfig(enable: true, tool: cbtXclip))
+          if pasted.isOk and buf.getLine(0) == "FROM_CLIPBOARD world":
+            break
+          sleep(100)
 
-        pasted = visualPaste(buf, state, cfg)
-        if pasted.isOk and buf.getLine(0) == "FROM_CLIPBOARD world":
-          break
-        sleep(100)
-
-      if pasted.isErr:
-        checkpoint("visualPaste failed: " & pasted.error)
-      check pasted.isOk
-      check buf.getLine(0) == "FROM_CLIPBOARD world"
-      check state.visualSelection.active == false
-
-      cleanupClipboardProcs(tool)
+        if pasted.isErr:
+          checkpoint("visualPaste failed: " & pasted.error)
+        check pasted.isOk
+        check buf.getLine(0) == "FROM_CLIPBOARD world"
+        check state.visualSelection.active == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
 
   test "visualPaste reports clipboard read failure and leaves buffer unchanged":
     let buf = newTextBuffer()
