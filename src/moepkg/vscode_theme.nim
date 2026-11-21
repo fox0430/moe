@@ -47,6 +47,7 @@ static:
 const TokenColorIndexes =
   {
     EditorColorPairIndex.keyword .. EditorColorPairIndex.property,
+    EditorColorPairIndex.markdownHeading .. EditorColorPairIndex.markdownFrontmatter,
     EditorColorPairIndex.namespace .. EditorColorPairIndex.unresolvedReference,
   } - {
     EditorColorPairIndex.whitespace, EditorColorPairIndex.logError,
@@ -55,9 +56,12 @@ const TokenColorIndexes =
   }
 
 static:
-  # Between the two blocks is only markdownCodeBlock, a block background.
+  # Left out between the blocks is only markdownCodeBlock, a block background.
   doAssert succ(EditorColorPairIndex.property) == EditorColorPairIndex.markdownCodeBlock
-  doAssert succ(EditorColorPairIndex.markdownCodeBlock) == EditorColorPairIndex.namespace
+  doAssert succ(EditorColorPairIndex.markdownCodeBlock) ==
+    EditorColorPairIndex.markdownHeading
+  doAssert succ(EditorColorPairIndex.markdownFrontmatter) ==
+    EditorColorPairIndex.namespace
 
 type I = EditorColorPairIndex
 
@@ -96,6 +100,17 @@ const TokenScopes = [
   (I.date, @["constant.other.time", "constant.numeric"]),
   (I.operator, @["keyword.operator"]),
   (I.property, @["variable.other.property"]),
+  # The Markdown grammar's scopes, then those of the keys moe used before.
+  (I.markdownHeading, @["markup.heading", "support.function"]),
+  (I.markdownCode, @["markup.inline.raw", "markup.fenced_code", "variable.language"]),
+  (I.markdownLinkUrl, @["markup.underline.link", "variable.language"]),
+  (
+    I.markdownListMarker,
+    @["punctuation.definition.list.begin.markdown", "keyword.operator"],
+  ),
+  # Not "meta.embedded.block.frontmatter": the parent walk stops at
+  # "meta.embedded", which Dark+ colors as plain text.
+  (I.markdownFrontmatter, @["meta.preprocessor", "keyword.control.directive"]),
   (I.namespace, @["entity.name.namespace"]),
   (I.className, @["entity.name.type.class", "support.class"]),
   (I.enumName, @["entity.name.type.enum"]),

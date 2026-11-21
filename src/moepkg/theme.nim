@@ -232,6 +232,11 @@ const DefaultColors*: ThemeColors = [
 
   # Syntax highlighting - Markdown
   EditorColorPairIndex.markdownCodeBlock: makeColorPair("#dadada", "#1a1a2e"),
+  EditorColorPairIndex.markdownHeading: makeColorPairDefaultBg("#2ac3de"),
+  EditorColorPairIndex.markdownCode: makeColorPairDefaultBg("#c678dd"),
+  EditorColorPairIndex.markdownLinkUrl: makeColorPairDefaultBg("#c678dd"),
+  EditorColorPairIndex.markdownListMarker: makeColorPairDefaultBg("#89ddff"),
+  EditorColorPairIndex.markdownFrontmatter: makeColorPairDefaultBg("#c678dd"),
 
   # Syntax highlighting - Extended (LSP semantic tokens)
   EditorColorPairIndex.namespace: makeColorPairDefaultBg("#2ac3de"),
@@ -614,6 +619,11 @@ const LightColors*: ThemeColors = [
 
   # Syntax highlighting - Markdown
   EditorColorPairIndex.markdownCodeBlock: makeColorPair("#1e1e1e", "#e8e8e8"),
+  EditorColorPairIndex.markdownHeading: makeColorPair("#0067c0", "#ffffff"),
+  EditorColorPairIndex.markdownCode: makeColorPair("#008000", "#ffffff"),
+  EditorColorPairIndex.markdownLinkUrl: makeColorPair("#008000", "#ffffff"),
+  EditorColorPairIndex.markdownListMarker: makeColorPair("#0040ff", "#ffffff"),
+  EditorColorPairIndex.markdownFrontmatter: makeColorPair("#808080", "#ffffff"),
 
   # Syntax highlighting - Extended (LSP semantic tokens)
   EditorColorPairIndex.namespace: makeColorPair("#0040ff", "#ffffff"),

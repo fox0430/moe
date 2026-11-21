@@ -1133,6 +1133,16 @@ proc getEditorColorPair(
     EditorColorPairIndex.logUuid
   of gtKey:
     EditorColorPairIndex.property
+  of gtHeading:
+    EditorColorPairIndex.markdownHeading
+  of gtInlineCode, gtCodeFence:
+    EditorColorPairIndex.markdownCode
+  of gtHyperlink:
+    EditorColorPairIndex.markdownLinkUrl
+  of gtListMarker:
+    EditorColorPairIndex.markdownListMarker
+  of gtFrontmatter:
+    EditorColorPairIndex.markdownFrontmatter
   else:
     EditorColorPairIndex.default
 
@@ -1638,8 +1648,8 @@ proc initHighlightIncrementalFromStr*(
 
     codeBlockSegStyle =
       if language == langMarkdown and token.lang.markdown.inCodeBlock and
-          token.kind notin {gtSpecialVar, gtWhitespace} and
-          not (token.kind == gtKeyword and token.state == gtSpecialVar):
+          token.kind notin {gtCodeFence, gtWhitespace} and
+          not (token.kind == gtKeyword and token.state == gtCodeFence):
         Style(bg: getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg)
       else:
         defaultStyle

@@ -144,6 +144,11 @@ logUuid = { fg = "#008080" }
 operator = { fg = "#0040ff" }
 
 markdownCodeBlock = { fg = "#1e1e1e", bg = "#e8e8e8" }
+markdownHeading = { fg = "#0067c0" }
+markdownCode = { fg = "#008000" }
+markdownLinkUrl = { fg = "#008000" }
+markdownListMarker = { fg = "#0040ff" }
+markdownFrontmatter = { fg = "#808080" }
 
 namespace = { fg = "#0040ff" }
 className = { fg = "#0040ff" }

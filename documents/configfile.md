@@ -1921,6 +1921,25 @@ The `statusLineQuickRunMode*` keys (the QuickRun mode no longer exists) are
 no longer recognized; if a theme file still contains them, they are skipped
 with an unknown-key warning and can be removed.
 
+#### Markdown colors
+
+The `markdownHeading`, `markdownCode`, `markdownLinkUrl`,
+`markdownListMarker` and `markdownFrontmatter` keys were added after the
+generic syntax keys. If a theme does not set `fg` or `bg` for one of them,
+that color comes from the generic key Markdown used before:
+
+| Markdown key | Falls back to |
+|:---|:---|
+| markdownHeading | builtin |
+| markdownCode | specialVar |
+| markdownLinkUrl | specialVar |
+| markdownListMarker | operator |
+| markdownFrontmatter | preprocessor |
+
+These keys apply only to the `builtin` syntax backend. With
+`Highlight.backend = "matter"`, Markdown is colored by the generic keys
+instead.
+
 <!-- AUTO-GEN:start Colors -->
 | Name | Description |
 |:---|:---|
@@ -2033,6 +2052,11 @@ with an unknown-key warning and can be removed.
 | operator | Syntax: operator |
 | property | Syntax: property |
 | markdownCodeBlock | Markdown code block |
+| markdownHeading | Markdown heading marker |
+| markdownCode | Markdown inline code and code fence |
+| markdownLinkUrl | Markdown link URL |
+| markdownListMarker | Markdown list marker |
+| markdownFrontmatter | Markdown frontmatter |
 | namespace | LSP semantic token: namespace |
 | className | LSP semantic token: class name |
 | enumName | LSP semantic token: enum name |

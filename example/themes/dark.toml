@@ -145,6 +145,11 @@ operator = { fg = "#89ddff" }
 property = { fg = "#61afef" }
 
 markdownCodeBlock = { fg = "#dadada", bg = "#1a1a2e" }
+markdownHeading = { fg = "#2ac3de" }
+markdownCode = { fg = "#c678dd" }
+markdownLinkUrl = { fg = "#c678dd" }
+markdownListMarker = { fg = "#89ddff" }
+markdownFrontmatter = { fg = "#c678dd" }
 
 namespace = { fg = "#2ac3de" }
 className = { fg = "#2ac3de" }

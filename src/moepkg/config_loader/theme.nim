@@ -86,6 +86,14 @@ proc loadThemeConfig*(
 
 # Standalone theme file loader (the [Colors] table)
 
+const MarkdownFallbackColors = [
+  (EditorColorPairIndex.markdownHeading, EditorColorPairIndex.builtin),
+  (EditorColorPairIndex.markdownCode, EditorColorPairIndex.specialVar),
+  (EditorColorPairIndex.markdownLinkUrl, EditorColorPairIndex.specialVar),
+  (EditorColorPairIndex.markdownListMarker, EditorColorPairIndex.operator),
+  (EditorColorPairIndex.markdownFrontmatter, EditorColorPairIndex.preprocessor),
+]
+
 proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
   ## Convert a TOML theme key to its `EditorColorPairIndex` by reverse
   ## lookup against `toTomlColorKey`. Most TOML keys match the enum name
@@ -186,6 +194,7 @@ proc loadThemeFromToml*(
   # user's top-level `background`; for entries with a non-#000000 bundled
   # default (e.g. statusLine*, tab, markdownCodeBlock), that bundled bg is
   # preserved. An entry may also set bg only (e.g. `currentLine = { bg = ... }`).
+  var fgSet, bgSet: set[EditorColorPairIndex]
   for key, value in colorsTable:
     if key == "foreground" or key == "background":
       continue
@@ -221,10 +230,20 @@ proc loadThemeFromToml*(
           continue
         if subkey == "fg":
           colors[index].foreground = ThemeColor(rgb: parsed.get)
+          fgSet.incl index
         else:
           colors[index].background = ThemeColor(rgb: parsed.get)
+          bgSet.incl index
       else:
         vr.addUnknownKey(fullKey(section, key & "." & subkey))
+
+  # Themes written before the Markdown keys colored these with the generic
+  # keys; keep that look for whichever of fg/bg the theme does not set.
+  for (markdown, generic) in MarkdownFallbackColors:
+    if markdown notin fgSet:
+      colors[markdown].foreground = colors[generic].foreground
+    if markdown notin bgSet:
+      colors[markdown].background = colors[generic].background
 
   return Result[ThemeColors, string].ok(colors)
 

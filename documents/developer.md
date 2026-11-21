@@ -242,6 +242,9 @@ TextMate scopes select the existing Moe theme slots. Common mappings include:
 | C/C++ macro names | `preprocessor` |
 | Markdown headings and section names | `builtin` |
 
+The Markdown color keys (`markdownHeading` and the others) are used only by
+the builtin backend. The Matter backend does not map any scope to them.
+
 The most specific recognized scope wins, including expressions embedded in
 strings and quoted mapping keys. Comment scopes take priority so reserved-word
 highlighting stays available inside documentation comments. Unknown scopes and

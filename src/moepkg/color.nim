@@ -214,6 +214,11 @@ type
 
     # Syntax highlighting - Markdown
     markdownCodeBlock
+    markdownHeading
+    markdownCode
+    markdownLinkUrl
+    markdownListMarker
+    markdownFrontmatter
 
     # Syntax highlighting - Extended (LSP semantic tokens)
     namespace
@@ -582,6 +587,11 @@ const
     EditorColorPairIndex.operator: "Syntax: operator",
     EditorColorPairIndex.property: "Syntax: property",
     EditorColorPairIndex.markdownCodeBlock: "Markdown code block",
+    EditorColorPairIndex.markdownHeading: "Markdown heading marker",
+    EditorColorPairIndex.markdownCode: "Markdown inline code and code fence",
+    EditorColorPairIndex.markdownLinkUrl: "Markdown link URL",
+    EditorColorPairIndex.markdownListMarker: "Markdown list marker",
+    EditorColorPairIndex.markdownFrontmatter: "Markdown frontmatter",
     EditorColorPairIndex.namespace: "LSP semantic token: namespace",
     EditorColorPairIndex.className: "LSP semantic token: class name",
     EditorColorPairIndex.enumName: "LSP semantic token: enum name",

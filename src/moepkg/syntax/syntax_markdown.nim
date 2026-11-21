@@ -151,8 +151,8 @@ proc codeBlockDelegate*(lexer: GeneralTokenizer): SourceLanguage =
     else:
       langNone
   else:
-    # gtSpecialVar: the language name after the opening fence.
-    if lexer.state == gtSpecialVar or lexer.atClosingFence(lexer.pos):
+    # gtCodeFence: the language name after the opening fence.
+    if lexer.state == gtCodeFence or lexer.atClosingFence(lexer.pos):
       langNone
     else:
       md.codeBlockLang
@@ -201,13 +201,13 @@ template lexCodeBlockBody*(lexer: var GeneralTokenizer, lexToken: untyped) =
 proc openCodeBlock(
     lexer: var GeneralTokenizer, position: var int, fence: tuple[len, baseCol: int]
 ) =
-  lexer.kind = gtSpecialVar
+  lexer.kind = gtCodeFence
   lexer.lang.markdown.inCodeBlock = true
   lexer.lang.markdown.fenceChar = lexer.buf[position]
   lexer.lang.markdown.fenceLen = fence.len
   lexer.lang.markdown.fenceBaseCol = fence.baseCol
   # Signals that the language name may follow.
-  lexer.state = gtSpecialVar
+  lexer.state = gtCodeFence
   inc position, fence.len
 
 proc closeCodeBlock(lexer: var GeneralTokenizer) =
@@ -374,12 +374,12 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       while lexer.buf[position] in wsChars:
         if lexer.buf[position] == '\n':
           lexer.state = gtWhitespace
-        elif lexer.state != gtSpecialVar:
+        elif lexer.state != gtCodeFence:
           lexer.state = gtNone
         inc position
     else:
       # Check if this is the language name (right after opening ```)
-      if lexer.state == gtSpecialVar:
+      if lexer.state == gtCodeFence:
         lexer.kind = gtKeyword
         var langName = ""
         while lexer.buf[position] notin wsChars and lexer.buf[position] notin eolChars:
@@ -391,7 +391,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           lexer.lang.vim.vim9 = true
         lexer.state = gtNone
       elif lexer.atClosingFence(position):
-        lexer.kind = gtSpecialVar
+        lexer.kind = gtCodeFence
         position = lexer.endLine(position)
         lexer.closeCodeBlock()
       else:
@@ -405,7 +405,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     lexer.pos = position
     return
 
-  # Inside frontmatter (---...---): emit each line as gtPreprocessor until the
+  # Inside frontmatter (---...---): emit each line as gtFrontmatter until the
   # closing `---` line. Tracked line-by-line via `mdInFrontmatter` (rather than
   # consumed greedily in one token) so the state is captured at line boundaries
   # and incremental re-parsing can resume correctly from inside the block.
@@ -424,7 +424,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       # the opening one: exactly `---` closes the block, while a 4th `-` makes
       # it a frontmatter content line (matching the `buf[position] != '-'`
       # opening check in the `of '-'` branch, which rejects `----`).
-      lexer.kind = gtPreprocessor
+      lexer.kind = gtFrontmatter
       if lexer.buf[position] == '-' and lexer.buf[position + 1] == '-' and
           lexer.buf[position + 2] == '-' and lexer.buf[position + 3] != '-':
         lexer.lang.markdown.inFrontmatter = false
@@ -448,7 +448,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     elif lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
       # Not a fence (mid-line, or ```abc```): inline code with a triple
       # backtick delimiter (```...```).
-      lexer.kind = gtSpecialVar
+      lexer.kind = gtInlineCode
       inc position, 3
       while true:
         case lexer.buf[position]
@@ -467,7 +467,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       # line: an unclosed span must not bleed into the following line. This
       # matches the triple-backtick inline case above and keeps the token
       # single-line, so incremental re-parsing from a later line stays correct.
-      lexer.kind = gtSpecialVar
+      lexer.kind = gtInlineCode
       inc position
       while true:
         case lexer.buf[position]
@@ -482,8 +482,8 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     if lexer.isLineStart:
       # Emit only the leading `#` run so inline markers on the heading line
       # (`~~`, `**`, `` ` ``, ...) are still tokenized.
-      lexer.kind = gtBuiltin
-      lexer.state = gtBuiltin
+      lexer.kind = gtHeading
+      lexer.state = gtHeading
       while lexer.buf[position] == '#':
         inc position
     else:
@@ -502,7 +502,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           # delimiter line is emitted here; the `mdInFrontmatter` branch near
           # the top of this proc handles the body and the closing delimiter so
           # that the multi-line state survives incremental re-parsing.
-          lexer.kind = gtPreprocessor
+          lexer.kind = gtFrontmatter
           lexer.lang.markdown.inFrontmatter = true
           position = lexer.endLine(position)
         else:
@@ -512,7 +512,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
             inc position
       elif lexer.buf[position + 1] == ' ':
         # `- ` list marker
-        lexer.kind = gtOperator
+        lexer.kind = gtListMarker
         inc position, 2
       else:
         lexer.kind = gtBuiltin
@@ -578,7 +578,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
   of '*':
     if lexer.isLineStart and lexer.buf[position + 1] == ' ':
       # `* ` list marker
-      lexer.kind = gtOperator
+      lexer.kind = gtListMarker
       inc position, 2
     elif lexer.buf[position + 1] == '*' and
         lexer.buf[position + 2] notin {' ', '\t', '\0', '\n', '\r'}:
@@ -727,7 +727,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
   of '(':
     # Check if this follows ] (link URL part)
     if lexer.start > 0 and lexer.buf[lexer.start - 1] == ']':
-      lexer.kind = gtSpecialVar
+      lexer.kind = gtHyperlink
       inc position
       while true:
         case lexer.buf[position]
@@ -744,7 +744,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
   of '+':
     if lexer.isLineStart and lexer.buf[position + 1] == ' ':
       # `+ ` list marker
-      lexer.kind = gtOperator
+      lexer.kind = gtListMarker
       inc position, 2
     else:
       lexer.kind = gtNone
@@ -756,7 +756,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         inc numEnd
       if lexer.buf[numEnd] == '.' and lexer.buf[numEnd + 1] == ' ':
         # Ordered list marker: `1. `
-        lexer.kind = gtOperator
+        lexer.kind = gtListMarker
         position = numEnd + 2
       else:
         lexer.kind = gtNone

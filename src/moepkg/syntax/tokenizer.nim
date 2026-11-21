@@ -116,6 +116,12 @@ type
     gtLogWarning
     gtLogInfo
     gtLogUuid
+    # Markdown only, so their colors don't reach code block bodies.
+    gtHeading
+    gtInlineCode
+    gtCodeFence
+    gtListMarker
+    gtFrontmatter
 
   JsLikeState* = object ## Shared JS/TS/JSX/TSX tokenizer state.
     templateLiteralDepth*: int

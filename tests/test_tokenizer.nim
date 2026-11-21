@@ -26,7 +26,7 @@ import
 suite "tokenizer - TokenClass enum":
   test "TokenClass has expected values":
     check gtEof == low(TokenClass)
-    check gtLogUuid == high(TokenClass)
+    check gtFrontmatter == high(TokenClass)
 
   test "TokenClass ordering":
     check gtEof < gtNone
@@ -641,15 +641,15 @@ suite "tokenizer - getNextToken with langMarkdown":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("# Heading")
     g.getNextToken(langMarkdown)
-    # Markdown tokenizer returns gtBuiltin for `#` at line start (heading)
-    check g.kind == gtBuiltin
+    # Markdown tokenizer returns gtHeading for `#` at line start
+    check g.kind == gtHeading
 
   test "getNextToken tokenizes Markdown code block marker":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("```code```")
     g.getNextToken(langMarkdown)
-    # First token in code block is gtSpecialVar
-    check g.kind == gtSpecialVar
+    # Not a fence: the info string holds a backtick, so it is inline code
+    check g.kind == gtInlineCode
 
 suite "tokenizer - getNextToken iteration":
   test "getNextToken iterates through all tokens":
@@ -1196,7 +1196,7 @@ suite "tokenizer - getNextToken dispatch":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("`code`")
     g.getNextToken(langMarkdown)
-    check g.kind == gtSpecialVar
+    check g.kind == gtInlineCode
     check g.length == 6
 
   test "langMarkdown inline code matches markdownNextToken":
