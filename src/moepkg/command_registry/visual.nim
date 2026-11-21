@@ -153,7 +153,7 @@ proc handleVisualSwapSelection*(ctx: CommandContext): Result[(), string] =
 proc handleVisualPaste*(
     ctx: CommandContext, args: seq[string], cursorAfter: bool = false, before = false
 ): Result[(), string] =
-  ## Paste over selection (p) as many times as the count in `args` says.
+  ## Paste over selection (p) as many times as the given count says.
   ## `cursorAfter` is gp/gP, `before` is P/gP; P also keeps the registers.
   result = visualPaste(
     ctx.buffer,
@@ -163,7 +163,7 @@ proc handleVisualPaste*(
     ctx.register,
     keepRegisters = before and not cursorAfter,
     before = before,
-    count = parseCount(args, default = 1),
+    count = ctx.givenCount(args),
   )
   ctx.cursor = ctx.state.cursor
 
@@ -234,10 +234,10 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Indent",
     "Indent visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleVisualOperator(ctx, voIndent, count),
+      handleVisualOperator(ctx, voIndent, ctx.givenCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
@@ -245,10 +245,10 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Visual Dedent",
     "Dedent visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      handleVisualOperator(ctx, voDedent, count),
+      handleVisualOperator(ctx, voDedent, ctx.givenCount(args)),
     0,
     1,
+    countFromContext = true,
   )
 
   registry.register(
@@ -360,6 +360,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualPaste(ctx, args),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -370,6 +371,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualPaste(ctx, args, before = true),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -434,6 +436,7 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualPaste(ctx, args, cursorAfter = true),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )
 
   registry.register(
@@ -444,4 +447,5 @@ proc registerVisualCommands*(registry: CommandRegistry) =
       handleVisualPaste(ctx, args, cursorAfter = true, before = true),
     0,
     1, # Accept optional count argument
+    countFromContext = true,
   )

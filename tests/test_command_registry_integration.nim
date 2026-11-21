@@ -9665,3 +9665,53 @@ suite "executeCommand - count from the context":
 
       check registry.executeCommand(ctx, countedKey(id, 4, @["1"])).isOk
       check ctx.cursor == BufferPosition(line: 0, column: 9)
+
+  test "2> and 2< shift the selection twice":
+    for (id, text, want) in [
+      ("visual.indent", "a", "\t\ta"), ("visual.dedent", "\t\t\ta", "\ta")
+    ]:
+      checkpoint id
+      let buffer = newTextBuffer(text)
+      let ctx = createTestContext(buffer)
+      ctx.setupVisual(0, 0, 0, 0, vskLine)
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 2)).isOk
+      check buffer[0] == want
+
+  test "2p pastes over the selection twice":
+    for id in [
+      "visual.paste", "visual.paste.before", "visual.paste.end",
+      "visual.paste.before.end",
+    ]:
+      checkpoint id
+      let buffer = newTextBuffer("hello world")
+      let ctx = createTestContext(buffer)
+      ctx.setupVisual(0, 0, 0, 4)
+      ctx.state.registers.storeYanked(none(char), "XYZ", false)
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 2)).isOk
+      check buffer[0] == "XYZXYZ world"
+
+  test "a Visual command takes its mapping's own count over a typed one":
+    for (id, text, want) in [
+      ("visual.indent", "a", "\ta"),
+      ("visual.dedent", "\t\t\ta", "\t\ta"),
+      ("visual.paste", "hello world", "XYZ world"),
+      ("visual.paste.before", "hello world", "XYZ world"),
+      ("visual.paste.end", "hello world", "XYZ world"),
+      ("visual.paste.before.end", "hello world", "XYZ world"),
+    ]:
+      checkpoint id
+      let buffer = newTextBuffer(text)
+      let ctx = createTestContext(buffer)
+      if id.startsWith("visual.paste"):
+        ctx.setupVisual(0, 0, 0, 4)
+      else:
+        ctx.setupVisual(0, 0, 0, 0, vskLine)
+      ctx.state.registers.storeYanked(none(char), "XYZ", false)
+      let registry = createTestRegistry()
+
+      check registry.executeCommand(ctx, countedKey(id, 4, @["1"])).isOk
+      check buffer[0] == want
