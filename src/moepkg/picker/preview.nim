@@ -27,7 +27,7 @@ import std/[monotimes, options, os, strutils, times]
 import pkg/results
 
 import ../types/editor_types
-import ../[types, buffer, encoding, buffer_load_config, display_path, unicode_utils]
+import ../[types, buffer, encoding, buffer_load_config, unicode_utils]
 import session
 
 const
@@ -36,6 +36,7 @@ const
     ## How long the selection rests on a file before it is read
   PreviewReadsKept = 8
   PreviewHighlightBudget = 2000 ## Lines highlighted a frame
+  Title = "Preview"
 
 type PickerPreviewView* = object
   title*: string
@@ -241,7 +242,7 @@ proc advancePickerPreview*(e: Editor, now: MonoTime, onScreen: bool) =
 
 proc shownBuffer(
     e: Editor, subject: PreviewSubject
-): tuple[buffer: TextBuffer, title, message: string, cut: bool] =
+): tuple[buffer: TextBuffer, message: string, cut: bool] =
   ## What `subject` shows now, from the buffers and the files read only.
   case subject.kind
   of pvNone:
@@ -252,13 +253,7 @@ proc shownBuffer(
       result.message = "Buffer no longer available"
     else:
       result.buffer = b.get
-      result.title =
-        if b.get.filePath.isSome:
-          b.get.filePath.get.homeReplace.forDisplay
-        else:
-          b.get.canonicalLabel.forDisplay
   of pvFile:
-    result.title = subject.path.homeReplace.forDisplay
     let i = e.state.picker.preview.reads.findRead(subject.path)
     if i >= 0:
       let read = e.state.picker.preview.reads[i]
@@ -303,8 +298,10 @@ proc pickerPreviewView*(e: Editor): PickerPreviewView =
   let item = s.selectedItemIndex
   if item != s.preview.item:
     return
+  if s.preview.subject.kind == pvNone:
+    return
   let shown = e.shownBuffer(s.preview.subject)
-  result.title = shown.title
+  result.title = Title
   if shown.cut:
     result.title.add " (first " & $(PreviewMaxBytes div (1024 * 1024)) & " MiB)"
   result.message = shown.message

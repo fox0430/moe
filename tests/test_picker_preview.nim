@@ -233,7 +233,7 @@ suite "picker preview: in the picker":
     e.advancePickerPreview(now, onScreen = true)
     check e.state.picker.preview.reads.len == 0
     check e.pickerPreviewView.buffer.isNil
-    check e.pickerPreviewView.title.endsWith("a.txt")
+    check e.pickerPreviewView.title == "Preview"
     e.advancePickerPreview(now + PreviewSettle, onScreen = true)
     check e.state.picker.preview.reads.len == 1
     check e.pickerPreviewView.buffer.getLine(0) == "a 0"
@@ -394,7 +394,7 @@ suite "picker preview: in the picker":
     check e.handleKeyCombo(ShiftUp)
     check e.pickerPreviewView.topLine == max(0, 4 - e.halfPreview)
 
-  test "The preview draws the file's lines and its name":
+  test "The preview draws the file's lines and its title":
     let e = newPreviewEditor()
     let a = dir / "a.txt"
     writeFile(a, numbered("line", 3))
@@ -407,7 +407,7 @@ suite "picker preview: in the picker":
     let p = layout.preview
     check screen.row(p.y, p.x, p.x + p.width).strip == "line 0"
     check screen.row(p.y + 2, p.x, p.x + p.width).strip == "line 2"
-    check "a.txt" in screen.row(layout.frame.y, p.x, p.x + p.width)
+    check " Preview " in screen.row(layout.frame.y, p.x, p.x + p.width)
 
   test "A closed picker keeps no file read for it, and a resume reads again":
     let e = newPreviewEditor()
@@ -430,7 +430,7 @@ suite "picker preview: in the picker":
     writeFile(a, "a\n")
     e.openFilePicker([a])
     e.settlePreview()
-    check e.pickerPreviewView.title.endsWith("a.txt")
+    check e.pickerPreviewView.title == "Preview"
     # Closed with a query that matches nothing before a frame took it.
     e.typeKeys("zzz<C-c>")
     check not e.state.isPickerOverlay
@@ -515,7 +515,7 @@ suite "picker preview: in the picker":
     check e.state.picker.preview.reads.len == 0
     require e.pickerPreviewView.buffer != nil
     check e.pickerPreviewView.buffer.id == aId
-    check e.pickerPreviewView.title.endsWith("a.txt")
+    check e.pickerPreviewView.title == "Preview"
     e.typeKeys("<C-c>")
     check e.closeBuffer(aId).isOk
     e.typeKeys(":picker resume<Enter>")
@@ -531,10 +531,10 @@ suite "picker preview: in the picker":
     check getFileSize(a) > PreviewMaxBytes
     e.openFilePicker([a, b])
     e.settlePreview()
-    check e.pickerPreviewView.title.endsWith("big.txt (first 1 MiB)")
+    check e.pickerPreviewView.title == "Preview (first 1 MiB)"
     e.typeKeys("<C-n>")
     e.settlePreview()
-    check e.pickerPreviewView.title.endsWith("small.txt")
+    check e.pickerPreviewView.title == "Preview"
 
   test "Under the list, the preview has its title on the rule above it":
     let e = newPreviewEditor()
@@ -550,7 +550,7 @@ suite "picker preview: in the picker":
     let rule = screen.row(p.y - 1, layout.frame.x, layout.frame.x + layout.frame.width)
     check rule.startsWith("├")
     check rule.endsWith("┤")
-    check "a.txt" in rule
+    check " Preview " in rule
     check screen.row(p.y, p.x, p.x + p.width).strip == "line 0"
     check screen.row(p.y + 2, p.x, p.x + p.width).strip == "line 2"
 
