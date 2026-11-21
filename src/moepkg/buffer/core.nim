@@ -643,7 +643,11 @@ type
 
     # Change list (tracks positions where changes were made, like Vim's changelist)
     changeList*: seq[BufferPosition]
-    changeListIndex*: int
+    changeListIndex*: int ## The newest change undo left; -1 when it left none.
+    changeListPos*: int
+      ## Where `g;` / `g,` stand, like Vim's w_changelistidx but one per
+      ## buffer: the change they went to, or one past the newest change undo
+      ## left after a change. Read it through `changeListCurrent`.
     changeListMode*: ChangeListMode
 
     # Line folding state (vim-like manual folding)
@@ -2197,6 +2201,15 @@ proc recordChangePosition*(b: TextBuffer, pos: BufferPosition) =
   if b.changeList.len > ChangeListMaxLen:
     b.changeList.delete(0)
     b.changeListIndex = b.changeList.len - 1
+  b.changeListPos = b.changeList.len
+
+proc changeListLiveLen*(b: TextBuffer): int =
+  ## How many changelist entries undo left; the rest wait for redo.
+  clamp(b.changeListIndex + 1, 0, b.changeList.len)
+
+proc changeListCurrent*(b: TextBuffer): int =
+  ## Where `g;` / `g,` stand, within the entries undo left.
+  min(b.changeListPos, b.changeListLiveLen)
 
 proc noteChangePosition*(b: TextBuffer, pos: BufferPosition): bool =
   ## Put a change at `pos` on the changelist; whether its undo entry holds a
@@ -2207,6 +2220,7 @@ proc noteChangePosition*(b: TextBuffer, pos: BufferPosition): bool =
   of clmBlockHeld:
     if b.changeList.len > 0:
       b.changeList[^1] = pos
+      b.changeListPos = b.changeListLiveLen
       return false
   of clmBlock:
     b.changeListMode = clmBlockHeld

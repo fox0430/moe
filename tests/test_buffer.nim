@@ -4306,6 +4306,34 @@ suite "Buffer - an external reload lands as an edit":
     check buf.undo().isOk
     check buf.changeListIndex == 0
 
+  test "A reload keeps where g; stood":
+    let path = getTempDir() / "moe_test_reload_changelist_pos.txt"
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 0, column: 0), "one ").isOk
+    check buf.insertText(BufferPosition(line: 2, column: 0), "two ").isOk
+    buf.changeListPos = 0
+
+    writeFile(path, "one alpha\nBETA\ntwo gamma\n")
+    check buf.reloadFileIfContentChanged().isOk
+
+    check buf.changeListPos == 0
+
+    # Undoing or redoing the reload moves no change, so it keeps the position.
+    check buf.undo().isOk
+    check buf.getLine(1) == "beta"
+    check buf.changeListPos == 0
+    check buf.redo().isOk
+    check buf.changeListPos == 0
+
+    # The user's own undo moves the changelist, so it goes back to the end.
+    check buf.undo().isOk
+    check buf.undo().isOk
+    check buf.changeListPos == buf.changeListLiveLen
+
   test "A reload undone past an evicted changelist position keeps the index":
     let path = getTempDir() / "moe_test_reload_changelist_evicted.txt"
     defer:

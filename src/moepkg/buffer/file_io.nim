@@ -494,6 +494,7 @@ proc loadFileWithDecoded*(
   b.lastChangedLines = 0
   b.changeList.setLen(0)
   b.changeListIndex = 0
+  b.changeListPos = 0
 
   b.foldState.clampFoldsToLineCount(b.len)
   while b.bookmarks.len > 0 and b.bookmarks[^1] >= b.len:
@@ -937,6 +938,7 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
     let
       changeListBefore = b.changeList
       changeListIndexBefore = b.changeListIndex
+      changeListPosBefore = b.changeListPos
     # Transaction rollback failure falls back to a wholesale load; a Defect
     # still propagates (the process is already unsound).
     let newestEntryBefore = b.currentChangeId
@@ -961,6 +963,7 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
         b.chargeReloadUndoBudget(chargedLines, chargedBytes)
         b.changeList = changeListBefore
         b.changeListIndex = changeListIndexBefore
+        b.changeListPos = changeListPosBefore
         b.dropChangeListFuture()
         let changeListOnOldLines = b.changeList
         b.changeList = b.remapThroughHunks(changeListOnOldLines, replaced.get.hunks)

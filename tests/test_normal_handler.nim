@@ -2042,7 +2042,7 @@ suite "NormalModeHandler - Change List Navigation":
 
     let result = pressGSemicolon(handler, buf, state, viewport)
     check result.kind == nmrError
-    check result.errorMessage == "Change list is empty"
+    check result.errorMessage == "E664: Changelist is empty"
 
   test "g, with empty change list returns error":
     let buf = newTextBuffer()
@@ -2055,96 +2055,136 @@ suite "NormalModeHandler - Change List Navigation":
 
     let result = pressGComma(handler, buf, state, viewport)
     check result.kind == nmrError
-    check result.errorMessage == "Change list is empty"
+    check result.errorMessage == "E664: Changelist is empty"
 
-  test "g; jumps to current change position and decrements index":
+  proc threeChanges(): (NormalModeHandler, TextBuffer, EditorState, ViewPort) =
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-    state.windowDisplay.currentBufferId = BufferId(0)
-
-    buf.changeList = @[
-      BufferPosition(line: 0, column: 3),
-      BufferPosition(line: 1, column: 5),
-      BufferPosition(line: 2, column: 1),
-    ]
-    buf.changeListIndex = 2
-
-    let result = pressGSemicolon(handler, buf, state, viewport)
-    check result.kind == nmrHandled
-    check state.cursor.line == 2
-    check state.cursor.column == 1
-    check buf.changeListIndex == 1
-
-  test "g; at index 0 jumps and stays at 0":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-    state.windowDisplay.currentBufferId = BufferId(0)
-
-    buf.changeList =
-      @[BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 2)]
-    buf.changeListIndex = 0
-
-    let result = pressGSemicolon(handler, buf, state, viewport)
-    check result.kind == nmrHandled
-    check state.cursor.line == 0
-    check state.cursor.column == 3
-    check buf.changeListIndex == 0
-
-  test "g, at newest change returns error":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-    state.windowDisplay.currentBufferId = BufferId(0)
-
-    buf.changeList =
-      @[BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 2)]
-    buf.changeListIndex = 1
-
-    let result = pressGComma(handler, buf, state, viewport)
-    check result.kind == nmrError
-    check result.errorMessage == "Already at newest change"
-
-  test "g; then g, navigates back and forth":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-    state.windowDisplay.currentBufferId = BufferId(0)
-
     buf.changeList = @[
       BufferPosition(line: 0, column: 0),
       BufferPosition(line: 1, column: 3),
       BufferPosition(line: 2, column: 5),
     ]
     buf.changeListIndex = 2
+    buf.changeListPos = 3
+    let state = createTestState()
+    state.windowDisplay.currentBufferId = BufferId(0)
+    (createTestHandler(buf), buf, state, createTestViewport())
 
-    # g; - jump to index 2 position, index becomes 1
-    let r1 = pressGSemicolon(handler, buf, state, viewport)
-    check r1.kind == nmrHandled
-    check state.cursor.line == 2
-    check buf.changeListIndex == 1
+  test "g; goes to the newest change, then each older one":
+    let (handler, buf, state, viewport) = threeChanges()
 
-    # g; - jump to index 1 position, index becomes 0
-    let r2 = pressGSemicolon(handler, buf, state, viewport)
-    check r2.kind == nmrHandled
-    check state.cursor.line == 1
-    check buf.changeListIndex == 0
+    check pressGSemicolon(handler, buf, state, viewport).kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (2, 5)
+    check pressGSemicolon(handler, buf, state, viewport).kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (1, 3)
+    check pressGSemicolon(handler, buf, state, viewport).kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (0, 0)
+    check buf.changeListPos == 0
 
-    # g, - index becomes 1, jump to index 1 position
-    let r3 = pressGComma(handler, buf, state, viewport)
-    check r3.kind == nmrHandled
-    check state.cursor.line == 1
-    check state.cursor.column == 3
-    check buf.changeListIndex == 1
+  test "g; at the oldest change errs and stays, as Vim's E662":
+    let (handler, buf, state, viewport) = threeChanges()
+    for _ in 0 ..< 3:
+      discard pressGSemicolon(handler, buf, state, viewport)
+
+    let result = pressGSemicolon(handler, buf, state, viewport)
+
+    check result.kind == nmrError
+    check result.errorMessage == "E662: At start of changelist"
+    check buf.changeListPos == 0
+
+  test "g, at the newest change errs, as Vim's E663":
+    let (handler, buf, state, viewport) = threeChanges()
+    discard pressGSemicolon(handler, buf, state, viewport)
+
+    let result = pressGComma(handler, buf, state, viewport)
+
+    check result.kind == nmrError
+    check result.errorMessage == "E663: At end of changelist"
+    check buf.changeListPos == 2
+
+  test "g, goes back the way g; came":
+    let (handler, buf, state, viewport) = threeChanges()
+    for _ in 0 ..< 3:
+      discard pressGSemicolon(handler, buf, state, viewport)
+
+    check pressGComma(handler, buf, state, viewport).kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (1, 3)
+    check pressGComma(handler, buf, state, viewport).kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (2, 5)
+
+  test "g, at the end goes to the newest change, as Vim's get_changelist":
+    let (handler, buf, state, viewport) = threeChanges()
+
+    check pressGComma(handler, buf, state, viewport).kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (2, 5)
+    check buf.changeListPos == 2
+
+  test "a count moves g; and g, that many changes, stopping at the ends":
+    let (handler, buf, state, viewport) = threeChanges()
+    proc counted(keys: string): NormalModeResult =
+      for k in keys:
+        result = handler.handleNormalModeKey(
+          buf, state, viewport, KeyCombo(isSpecial: false, char: $k)
+        )
+
+    check counted("2g;").kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (1, 3)
+    check counted("5g;").kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (0, 0)
+    check counted("5g,").kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (2, 5)
+    check counted("2g,").kind == nmrError
+
+  test "g; and g, leave the changelist an edit adds to":
+    let (handler, buf, state, viewport) = threeChanges()
+    for _ in 0 ..< 3:
+      discard pressGSemicolon(handler, buf, state, viewport)
+
+    check buf.insertText(BufferPosition(line: 1, column: 0), "x").isOk
+
+    check buf.changeList.len == 4
+    check buf.changeListPos == 4
+
+  test "g; after undo starts from the newest change undo left":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    buf.changeList = @[]
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    check buf.insertText(BufferPosition(line: 1, column: 0), "b").isOk
+    check buf.undo().isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.windowDisplay.currentBufferId = BufferId(0)
+    let viewport = createTestViewport()
+
+    check pressGSemicolon(handler, buf, state, viewport).kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (0, 0)
+    check pressGComma(handler, buf, state, viewport).kind == nmrError
+
+  test "g; after every change is undone finds none, and redo brings one back":
+    let buf = newTextBuffer("Line 1\nLine 2")
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    check buf.insertText(BufferPosition(line: 1, column: 0), "b").isOk
+    check buf.undo().isOk
+    check buf.undo().isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.windowDisplay.currentBufferId = BufferId(0)
+    let viewport = createTestViewport()
+
+    let none = pressGSemicolon(handler, buf, state, viewport)
+    check none.kind == nmrError
+    check none.errorMessage == "E664: Changelist is empty"
+
+    check buf.redo().isOk
+    check buf.changeListLiveLen == 1
+    check pressGSemicolon(handler, buf, state, viewport).kind == nmrHandled
+    check (state.cursor.line, state.cursor.column) == (0, 0)
+
+    check buf.insertText(BufferPosition(line: 1, column: 0), "c").isOk
+    check buf.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0)]
 
   test "g; with single change jumps to that position":
     let buf = newTextBuffer()
@@ -2156,6 +2196,7 @@ suite "NormalModeHandler - Change List Navigation":
 
     buf.changeList = @[BufferPosition(line: 0, column: 5)]
     buf.changeListIndex = 0
+    buf.changeListPos = 1
 
     let result = pressGSemicolon(handler, buf, state, viewport)
     check result.kind == nmrHandled

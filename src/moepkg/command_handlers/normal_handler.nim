@@ -521,40 +521,37 @@ proc handleNormalModeKey*(
     of "edit.repeat":
       return handler.repeatLastChange(buffer, state, viewport, cmd)
     # dd, yy, cc are handled by operator doubling in command_registry
-    of "changelist.prev":
-      # g; - Jump to older change position
-      if buffer.changeList.len == 0:
-        return NormalModeResult(kind: nmrError, errorMessage: "Change list is empty")
-
-      if buffer.changeListIndex < 0:
+    of "changelist.prev", "changelist.next":
+      # g; / g, - As Vim's get_changelist: `count` steps, stopping at the ends.
+      let live = buffer.changeListLiveLen
+      if live == 0:
         return
-          NormalModeResult(kind: nmrError, errorMessage: "Already at oldest change")
-
-      let pos = buffer.changeList[buffer.changeListIndex]
-      buffer.changeListIndex = max(0, buffer.changeListIndex - 1)
+          NormalModeResult(kind: nmrError, errorMessage: "E664: Changelist is empty")
+      let
+        current = buffer.changeListCurrent
+        step = max(1, cmd.count)
+        target =
+          if cmd.commandId == "changelist.prev":
+            current - step
+          else:
+            current + step
+      if target < 0 and current == 0:
+        return
+          NormalModeResult(kind: nmrError, errorMessage: "E662: At start of changelist")
+      if target >= live and current == live - 1:
+        return
+          NormalModeResult(kind: nmrError, errorMessage: "E663: At end of changelist")
+      let landing = clamp(target, 0, live - 1)
+      let pos = buffer.changeList[landing]
       let jumpPos = JumpPosition(
         bufferId: state.windowDisplay.currentBufferId,
         line: pos.line,
         column: pos.column,
       )
-      return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
-    of "changelist.next":
-      # g, - Jump to newer change position
-      if buffer.changeList.len == 0:
-        return NormalModeResult(kind: nmrError, errorMessage: "Change list is empty")
-
-      if buffer.changeListIndex >= buffer.changeList.len - 1:
-        return
-          NormalModeResult(kind: nmrError, errorMessage: "Already at newest change")
-
-      buffer.changeListIndex += 1
-      let pos = buffer.changeList[buffer.changeListIndex]
-      let jumpPos = JumpPosition(
-        bufferId: state.windowDisplay.currentBufferId,
-        line: pos.line,
-        column: pos.column,
-      )
-      return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
+      let jumped = handler.updateCursorToJumpPosition(buffer, state, jumpPos)
+      if jumped.kind != nmrError:
+        buffer.changeListPos = landing
+      return jumped
     of "bookmark.toggle":
       buffer.toggleBookmark(state.cursor.line)
       return NormalModeResult(kind: nmrHandled)
