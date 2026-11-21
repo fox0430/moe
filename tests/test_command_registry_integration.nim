@@ -8923,15 +8923,12 @@ suite "executeCommand - read-only gate allowlists stay in sync":
       check id in VisualEditCommandIds or id in EditCommandIds or
         id in VisualNonEditCommandIds
 
-suite "executeCommand - count prefix respects handler maxArgs":
-  # executeCommand prepends an explicit count to the handler args so commands
-  # like `3x` reach the handler as args=["3"]. Handlers registered with
-  # maxArgs=0 (visual.yank, scroll.cursor.*, ...) reject that prefixed arg
-  # with "Too many arguments", so the prefix must only apply when the target
-  # handler accepts an argument. An explicitly typed count of 1 (hasCount)
-  # still counts: `1G` must reach the handler as count=1, not as "no count".
+suite "executeCommand - a typed count and handler maxArgs":
+  # A typed count reaches the handler through `ctx.count`, never its args, so
+  # a maxArgs=0 handler (visual.yank, scroll.cursor.*, ...) still accepts it.
+  # An explicitly typed count of 1 (hasCount) still counts.
 
-  test "count is not prefixed for a maxArgs=0 handler (2y visual yank)":
+  test "a count does not reach a maxArgs=0 handler as an arg (2y visual yank)":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 0, 4)
@@ -8942,7 +8939,7 @@ suite "executeCommand - count prefix respects handler maxArgs":
     check registry.executeCommand(ctx, cmd).isOk
     check "hello" in ctx.state.registers.getNoNamedRegister().getContent()
 
-  test "count is not prefixed for a maxArgs=0 scroll handler (2zz)":
+  test "a count does not reach a maxArgs=0 scroll handler as an arg (2zz)":
     let buffer = newTextBuffer(
       "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25"
     )
@@ -8959,7 +8956,7 @@ suite "executeCommand - count prefix respects handler maxArgs":
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.motionController.viewportManager.viewport.topLine == 12 - (23 div 2)
 
-  test "count is still prefixed for a maxArgs>=1 handler (3x)":
+  test "a count reaches a maxArgs>=1 handler (3x)":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
@@ -8970,9 +8967,7 @@ suite "executeCommand - count prefix respects handler maxArgs":
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "lo"
 
-  test "count 1 with hasCount is still prefixed for a maxArgs>=1 handler (1d)":
-    # Without the prefix, operator.delete takes no count, so this asserts the
-    # hasCount + count 1 branch.
+  test "count 1 with hasCount is a count (1d)":
     let buffer = newTextBuffer("line1\nline2\nline3")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
@@ -8983,7 +8978,7 @@ suite "executeCommand - count prefix respects handler maxArgs":
     check ctx.state.pendingInput.pendingOperator.isSome
     check ctx.state.pendingInput.pendingOperator.get.countGiven
 
-  test "count 1 with hasCount is not prefixed for a maxArgs=0 handler (1y)":
+  test "count 1 with hasCount does not reach a maxArgs=0 handler as an arg (1y)":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 0, 4)
@@ -9739,3 +9734,30 @@ suite "executeCommand - count from the context":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcMotionDown), @["2"]).isErr
+
+  test "a count before edit.paste puts CLIPBOARD that many times":
+    let fakeDir = installFakeClipboardTool("XY")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        for (args, want) in [(newSeq[string](), "XYXYabc"), (@["1"], "XYabc")]:
+          checkpoint $args
+          let buffer = newTextBuffer("abc")
+          let ctx = createTestContext(buffer)
+          ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+          ctx.state.registers.setClipboardTool(cbtXclip)
+          let registry = createTestRegistry()
+
+          check registry.executeCommand(ctx, countedKey("edit.paste", 2, args)).isOk
+          check buffer[0] == want
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "a count does not become insert.char's character":
+    let buffer = newTextBuffer("abc")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    check registry.executeCommand(ctx, countedKey("insert.char", 3)).isErr
+    check buffer[0] == "abc"

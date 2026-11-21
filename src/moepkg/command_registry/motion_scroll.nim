@@ -66,7 +66,6 @@ proc registerMotionCommand*(
       return Result[(), string].ok (),
     0,
     0,
-    countFromContext = true,
   )
 
 ## Scroll commands
@@ -531,7 +530,6 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollLineDown,
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -541,7 +539,6 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollLineUp,
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -551,7 +548,6 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollPageDown,
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -561,7 +557,6 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollPageUp,
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -571,7 +566,6 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollHalfPageDown,
     0,
     1,
-    countFromContext = true,
   )
 
   registry.register(
@@ -581,7 +575,6 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollHalfPageUp,
     0,
     1,
-    countFromContext = true,
   )
 
   # Fold commands

@@ -202,7 +202,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       ctx.handleInsertAt(ieOpenBelow, ctx.givenCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   # Insert new line above and switch to insert mode (O command)
@@ -214,7 +213,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       ctx.handleInsertAt(ieOpenAbove, ctx.givenCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   # Append command (a) - move cursor right and enter insert mode
@@ -226,7 +224,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       ctx.handleInsertAt(ieAppend, ctx.givenCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   # Insert at first non-blank (I)
@@ -238,7 +235,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       ctx.handleInsertAt(ieInsertNonBlank, ctx.givenCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   # Append at line end (A) - move to end of line and enter insert mode
@@ -250,7 +246,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       ctx.handleInsertAt(ieAppendEnd, ctx.givenCount(args)),
     0,
     1,
-    countFromContext = true,
   )
 
   proc moveToMatch(
@@ -299,7 +294,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       ctx.moveToMatch(ctx.findNextMatch(ctx.givenCount(args))),
     0,
     1,
-    countFromContext = true,
   )
   registry.registerTarget("search.next", searchTarget(findNextMatch))
 
@@ -311,7 +305,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       ctx.moveToMatch(ctx.findPrevMatch(ctx.givenCount(args))),
     0,
     1,
-    countFromContext = true,
   )
   registry.registerTarget("search.prev", searchTarget(findPrevMatch))
 
@@ -404,7 +397,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
         ctx.moveToMatch(ctx.find(ctx.givenCount(args))),
       0,
       1,
-      countFromContext = true,
     )
     registry.registerTarget(commandId, searchTarget(find))
 

@@ -176,9 +176,6 @@ type
     handler*: CommandHandler
     minArgs*: int
     maxArgs*: int
-    countFromContext*: bool
-      ## Reads the count from `CommandContext.count`, so a typed count does not
-      ## go before the args, which are a mapping's own
 
   ## Central command registry
   CommandRegistry* = ref object
@@ -293,7 +290,6 @@ proc register*(
     handler: CommandHandler,
     minArgs = 0,
     maxArgs = 100,
-    countFromContext = false,
 ) =
   ## Register a new command
   let cmd = RegisteredCommand(
@@ -303,7 +299,6 @@ proc register*(
     handler: handler,
     minArgs: minArgs,
     maxArgs: maxArgs,
-    countFromContext: countFromContext,
   )
 
   # Store in appropriate location

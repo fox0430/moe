@@ -66,7 +66,7 @@ proc handleClipboardPaste*(ctx: CommandContext, args: seq[string]): Result[(), s
   if ctx.state.mode.isVisualAllMode:
     handleVisualPaste(ctx, args, before = true)
   else:
-    handlePut(ctx, parseCount(args, default = 1), forward = false)
+    handlePut(ctx, ctx.givenCount(args), forward = false)
 
 proc handleClipboardCut*(ctx: CommandContext): Result[(), string] =
   ## Cut selected text to system clipboard (copy + delete)
@@ -103,7 +103,7 @@ proc registerClipboardCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleClipboardPaste(ctx, args),
     0,
-    1, # Accept optional count argument
+    1, # A mapping's own count
   )
 
   registry.register(
