@@ -150,6 +150,11 @@ logUuid = { fg = "#098658" }
 operator = { fg = "#000000" }
 
 markdownCodeBlock = { fg = "#800000", bg = "#f3f3f3" }
+markdownHeading = { fg = "#800000" }
+markdownCode = { fg = "#800000" }
+markdownLinkUrl = { fg = "#0000ff" }
+markdownListMarker = { fg = "#0451a5" }
+markdownFrontmatter = { fg = "#0000ff" }
 
 # ---- LSP semantic tokens ----
 # light_vs only defines a few semantic colors; the rest inherit the

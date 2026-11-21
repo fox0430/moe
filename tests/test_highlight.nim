@@ -310,6 +310,35 @@ suite "Highlight - Rust Language Specific":
         break
     check foundNumber
 
+suite "Highlight - Markdown colors":
+  proc colorAt(h: Highlight, row, column: int): EditorColorPairIndex =
+    for seg in h.colorSegments:
+      if seg.firstRow == row and seg.firstColumn <= column and column <= seg.lastColumn:
+        return seg.color
+    EditorColorPairIndex.default
+
+  test "Markdown constructs take the Markdown keys":
+    let buffer = @[
+      "---", "title: t", "---", "# Head", "- item", "1. item",
+      "see `code` and [a](url)", "```nim", "result = 1", "```",
+    ]
+    let h = initHighlight(buffer, @[], SourceLanguage.langMarkdown)
+    check h.colorAt(0, 0) == EditorColorPairIndex.markdownFrontmatter
+    check h.colorAt(1, 0) == EditorColorPairIndex.markdownFrontmatter
+    check h.colorAt(3, 0) == EditorColorPairIndex.markdownHeading
+    check h.colorAt(4, 0) == EditorColorPairIndex.markdownListMarker
+    check h.colorAt(5, 0) == EditorColorPairIndex.markdownListMarker
+    check h.colorAt(6, 4) == EditorColorPairIndex.markdownCode
+    check h.colorAt(6, 18) == EditorColorPairIndex.markdownLinkUrl
+    check h.colorAt(7, 0) == EditorColorPairIndex.markdownCode
+    check h.colorAt(9, 0) == EditorColorPairIndex.markdownCode
+
+  test "a code block body keeps its language's colors":
+    let h =
+      initHighlight(@["```nim", "result = 1", "```"], @[], SourceLanguage.langMarkdown)
+    check h.colorAt(1, 0) == EditorColorPairIndex.specialVar
+    check h.colorAt(1, 7) == EditorColorPairIndex.operator
+
 suite "Highlight - Edge Cases":
   test "getColorPair with empty highlight":
     let buffer: seq[string] = @[]

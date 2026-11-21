@@ -2078,6 +2078,64 @@ suite "Config - loadThemeFromToml":
     check result.isOk
     check not vr.hasErrors
 
+  test "Markdown keys a theme leaves out take the keys they replace":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_markdown_fallback_" & $testFileCounter & ".toml"
+    writeFile(
+      testFile,
+      "[Colors]\n" & "builtin = { fg = \"#111111\" }\n" &
+        "specialVar = { fg = \"#222222\" }\n" & "operator = { fg = \"#333333\" }\n" &
+        "preprocessor = { fg = \"#444444\" }\n" & "markdownCode = { fg = \"#555555\" }\n",
+    )
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    require result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.markdownHeading].foreground.rgb == rgb("#111111")
+    check colors[EditorColorPairIndex.markdownLinkUrl].foreground.rgb == rgb("#222222")
+    check colors[EditorColorPairIndex.markdownListMarker].foreground.rgb ==
+      rgb("#333333")
+    check colors[EditorColorPairIndex.markdownFrontmatter].foreground.rgb ==
+      rgb("#444444")
+    check colors[EditorColorPairIndex.markdownCode].foreground.rgb == rgb("#555555")
+
+  test "Markdown keys without a valid fg take the replaced key's fg":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_markdown_partial_" & $testFileCounter & ".toml"
+    writeFile(
+      testFile,
+      "[Colors]\n" & "builtin = { fg = \"#111111\", bg = \"#121212\" }\n" &
+        "specialVar = { fg = \"#222222\", bg = \"#232323\" }\n" &
+        "operator = { fg = \"#333333\" }\n" & "markdownHeading = { bg = \"#f0f0f0\" }\n" &
+        "markdownCode = {}\n" & "markdownLinkUrl = { fg = \"#55555\" }\n" &
+        "markdownListMarker = { fg = \"#666666\" }\n",
+    )
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let result = loadThemeFromToml(testFile, vr)
+    require result.isOk
+    check vr.hasErrors
+    let colors = result.get
+
+    check colors[EditorColorPairIndex.markdownHeading].foreground.rgb == rgb("#111111")
+    check colors[EditorColorPairIndex.markdownHeading].background.rgb == rgb("#f0f0f0")
+
+    check colors[EditorColorPairIndex.markdownCode].foreground.rgb == rgb("#222222")
+    check colors[EditorColorPairIndex.markdownCode].background.rgb == rgb("#232323")
+
+    check colors[EditorColorPairIndex.markdownLinkUrl].foreground.rgb == rgb("#222222")
+
+    check colors[EditorColorPairIndex.markdownListMarker].foreground.rgb ==
+      rgb("#666666")
+    check colors[EditorColorPairIndex.markdownListMarker].background ==
+      colors[EditorColorPairIndex.operator].background
+
 suite "Config - loadTheme":
   test "tkDefault returns DefaultColors":
     var config = newEditorConfig()

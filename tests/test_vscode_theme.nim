@@ -717,6 +717,43 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.dir].foreground.rgb.red == 0x37
     check result[EditorColorPairIndex.pcLink].foreground.rgb.red == 0x37
 
+  test "Markdown keys take the Markdown grammar's scopes":
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [
+        {"scope": "markup.heading", "settings": {"foreground": "#111111"}},
+        {"scope": "markup.inline.raw", "settings": {"foreground": "#222222"}},
+        {"scope": "markup.underline.link", "settings": {"foreground": "#333333"}},
+        {
+          "scope": "punctuation.definition.list.begin.markdown",
+          "settings": {"foreground": "#444444"},
+        },
+        {"scope": "support.function", "settings": {"foreground": "#555555"}},
+      ],
+    }
+    let result = makeColorThemeFromVSCodeThemeFile(themeJson)
+
+    check result[EditorColorPairIndex.markdownHeading].foreground.rgb == rgb("#111111")
+    check result[EditorColorPairIndex.markdownCode].foreground.rgb == rgb("#222222")
+    check result[EditorColorPairIndex.markdownLinkUrl].foreground.rgb == rgb("#333333")
+    check result[EditorColorPairIndex.markdownListMarker].foreground.rgb ==
+      rgb("#444444")
+    check result[EditorColorPairIndex.builtin].foreground.rgb == rgb("#555555")
+
+  test "Markdown frontmatter skips the plain meta.embedded color":
+    # Dark+ colors meta.embedded as plain text.
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [
+        {"scope": "meta.embedded", "settings": {"foreground": "#d4d4d4"}},
+        {"scope": "meta.preprocessor", "settings": {"foreground": "#569cd6"}},
+      ],
+    }
+    let result = makeColorThemeFromVSCodeThemeFile(themeJson)
+
+    check result[EditorColorPairIndex.markdownFrontmatter].foreground.rgb ==
+      rgb("#569cd6")
+
   test "blank highlights keep moe's own, visible on the editor background":
     # Dark Modern's tab.activeBorder is its editor background.
     let themeJson = %*{
