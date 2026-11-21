@@ -1440,6 +1440,13 @@ when defined(moe.matter) or defined(features.moe.matter):
         inc tailIndex
       result.lineStates.add(TokenizerState(backend: hbMatter, matterState: state))
 
+const MultiLineKinds* =
+  {gtLongComment, gtDocLongComment, gtLongStringLit, gtStringLit, gtKey, gtCharLit}
+  ## States of a token running over a line boundary. A state captured there
+  ## holds the depth where the token ended (nested comments), so a parse may
+  ## not start from it. `gtStringLit`/`gtKey`/`gtCharLit` cover strings that
+  ## span lines; `gtCData` has no auxiliary state.
+
 proc chunkHandoffUnsafe*(language: SourceLanguage, state: TokenizerState): bool =
   ## True when a chunked parse must not hand `state` to a fresh chunk. The
   ## single dispatch point for all chunked drivers (the entry rewind and the
@@ -1938,12 +1945,7 @@ proc updateHighlightIncremental*(
     initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
 
     # Multi-line tokens record the depth at their completion, so restarting
-    # mid-token restores a stale depth (e.g. nested comments); rewind to the
-    # token's opening line. `gtStringLit`/`gtKey`/`gtCharLit` cover strings
-    # that span lines; `gtCData` is excluded (no auxiliary state).
-    const MultiLineKinds =
-      {gtLongComment, gtDocLongComment, gtLongStringLit, gtStringLit, gtKey, gtCharLit}
-
+    # mid-token restores a stale depth; rewind to the token's opening line.
     # Also rewind across chunk-handoff hazards (see `chunkHandoffUnsafe`);
     # rewinding early is safe: the re-parse restarts from a cached state.
     while initialState.backend == hbBuiltin and reparseStart > 0 and (

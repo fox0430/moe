@@ -143,16 +143,21 @@ proc autoPairActionAt(
 proc stepOver(state: EditorState, buffer: TextBuffer) =
   state.cursor.column = buffer.getLine(state.cursor.line).stepRight(state.cursor.column)
 
+const TypedClosers = [")", "]", "}"]
+
 proc typedPair(action: AutoPairAction, text: string): seq[TypedInput] =
   ## What `.` types again for a bracket or quote: what it did, not the key,
-  ## which would be judged again where it is typed.
+  ## which would be judged again where it is typed. The indent a closer takes
+  ## is judged again, as Vim types the closer again.
   case action
   of apNone:
-    @[]
+    discard
   of apInsert, apPair:
-    @[TypedInput(kind: tiText, text: action.insertedText(text), cursorAt: 1)]
+    result = @[TypedInput(kind: tiText, text: action.insertedText(text), cursorAt: 1)]
+    if text in TypedClosers:
+      result.add TypedInput(kind: tiReindent)
   of apStepOver:
-    @[TypedInput(kind: tiRight)]
+    result = @[TypedInput(kind: tiRight)]
 
 proc handleCharacterInsertion*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, text: string
@@ -171,6 +176,10 @@ proc handleCharacterInsertion*(
     if insertResult.isErr:
       return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
     state.cursor.column = insertResult.get.cursor.column
+    if text in TypedClosers:
+      let reindented = buffer.reindentTypedCloser(state)
+      if reindented.isErr:
+        state.statusMessage = reindented.error
 
   InsertModeResult(
     kind: imrHandled,
@@ -331,6 +340,25 @@ proc remapAfterEdit*(
         stop.pos.column += newEnd.column - oldEnd.column
       stop.pos.line += newEnd.line - oldEnd.line
 
+proc remapIndentChange*(session: var SnippetSession, line, before, after: int) =
+  ## Shift the session's tabstops after `line`'s indent went from `before` to
+  ## `after` columns. A stop in the indent stays in it, and keeps the text past
+  ## the indent it covered.
+  let delta = after - before
+  for stop in session.stops.mitems:
+    if stop.pos.line != line:
+      continue
+    if stop.pos.column >= before:
+      stop.pos.column += delta
+    else:
+      let stopEnd = stop.pos.column + stop.len
+      stop.pos.column = min(stop.pos.column, after)
+      stop.len =
+        if stopEnd > before:
+          stopEnd + delta - stop.pos.column
+        else:
+          max(0, min(stopEnd, after) - stop.pos.column)
+
 proc deletePendingDefault(
     buffer: TextBuffer, state: EditorState
 ): Result[seq[TypedInput], string] =
@@ -431,6 +459,15 @@ proc insertCharInSession(
     state.snippetSession.stops[idx].pos = before
   state.snippetSession.stops[idx].len =
     max(0, state.snippetSession.stops[idx].len + gained)
+  if text in TypedClosers:
+    let reindented = buffer.reindentTypedCloser(state)
+    if reindented.isErr:
+      state.statusMessage = reindented.error
+    elif reindented.get.isSome:
+      let (indentBefore, indentAfter) = reindented.get.get
+      remapIndentChange(
+        state.snippetSession, state.cursor.line, indentBefore, indentAfter
+      )
   return InsertModeResult(
     kind: imrHandled,
     modeTransition: none(EditorMode),

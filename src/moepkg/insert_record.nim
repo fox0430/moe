@@ -152,6 +152,15 @@ proc noteTyped*(state: EditorState, typed: openArray[TypedInput], at: BufferPosi
   for t in typed:
     state.editState.insertRecord.addTyped(t)
 
+proc noteReindent*(state: EditorState) =
+  ## Add that the closer just typed has its indent judged again. The judgement
+  ## changes nothing by itself: a reindent it makes moved where typing starts
+  ## already.
+  if state.editState.typing.repeating:
+    return
+  state.openTypedRecord()
+  state.editState.insertRecord.addTyped(TypedInput(kind: tiReindent))
+
 proc noteRight*(state: EditorState) =
   ## Add a step right that stays in the typing, as Vim's <C-g>U<Right>: it is
   ## no change and no move, so where typing starts stays put. After a move it
@@ -230,8 +239,11 @@ proc noteKey*(
     return
   if typedBefore.len > 0:
     for typed in typedBefore:
-      if typed.kind == tiRight:
+      case typed.kind
+      of tiRight:
         state.noteRight()
+      of tiReindent:
+        state.noteReindent()
       else:
         state.noteTyped([typed], cursorBefore)
     if not keyConsumed:

@@ -68,12 +68,15 @@ type
     tiRight
       # A step right that stays in the typing, as Vim's <C-g>U<Right> (a
       # closing character stepped over)
+    tiReindent
+      # The cursor's line takes its closer's indent again, as smartIndent does
+      # for a closer typed first on the line
 
   TypedInput* = object ## One thing typed in Insert mode
     case kind*: TypedInputKind
     of tiKey:
       key*: KeyCombo
-    of tiRight:
+    of tiRight, tiReindent:
       discard
     of tiText:
       removeBefore*: int # Characters before the cursor the text replaces

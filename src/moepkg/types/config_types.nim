@@ -149,9 +149,9 @@ type
     smartIndent* {.
       cfg,
       cfgDocDescription:
-        "Language-aware extra indent on Enter " &
-        "(Nim: var/let/const/type, trailing or/and/object/tuple/enum, " &
-        "trailing `:` or `=`, unclosed brackets)"
+        "Language-aware indent on Enter, o, O and a typed closer: by brackets in " &
+        "code languages, plus var/let/const/type, trailing or/and/object/" &
+        "tuple/enum and trailing `:` or `=` in Nim"
     .}: bool
     ignorecase* {.cfg, cfgDocDescription: "Enable ignorecase when searching".}: bool
     smartcase* {.cfg, cfgDocDescription: "Enable smartcase when searching".}: bool

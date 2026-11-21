@@ -103,7 +103,7 @@ suite "Insert Commands - rebuiltIndent":
       state.expandTab = c.et
 
       checkpoint $c
-      check state.rebuiltIndent(c.indent, deeper = true) == c.want
+      check state.rebuiltIndent(c.indent, steps = 1) == c.want
 
   test "an indent keeps its width and is rebuilt":
     type Case = tuple[ts: int, et: bool, indent, want: string]

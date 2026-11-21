@@ -141,6 +141,39 @@ proc isCodeBlockLine*(b: TextBuffer, line: int): bool =
   let exitInBlock = states[line].lang.markdown.inCodeBlock
   enterInBlock or exitInBlock
 
+proc upToDateStateRows(b: TextBuffer): int =
+  ## How many leading lines have a cached exit state that matches the text:
+  ## edits since the last update and an unfinished re-parse leave the rest
+  ## stale or shifted, and lines the initial load has not reached hold default
+  ## states.
+  let incr = b.incrementalHighlight
+  if incr == nil:
+    return 0
+  result = min(incr.lineStates.len, incr.parsedUpTo + 1)
+  if b.highlightNeedsUpdate:
+    result = min(result, b.lastChangedLines)
+  if incr.pendingReparse != nil:
+    result = min(result, incr.pendingReparse.reparseEnd + 1)
+
+proc resumePoint*(
+    b: TextBuffer, line, reach: int
+): Option[tuple[line: int, state: TokenizerState]] =
+  ## Where the builtin tokenizer can start and read `line` as a full parse
+  ## does, with the state to start from: the nearest line at most `reach` above
+  ## `line` whose cached entering state is up to date and outside any token
+  ## running over lines, or line 0 (start fresh there). None when there is no
+  ## such line, as with another backend's cache or edits the highlight has not
+  ## caught up with far from the top.
+  let upToDate = b.upToDateStateRows
+  for start in countdown(line, max(0, line - reach)):
+    if start == 0:
+      return some((0, TokenizerState()))
+    if start - 1 < upToDate:
+      let s = b.incrementalHighlight.lineStates[start - 1]
+      if s.backend == hbBuiltin and s.state notin MultiLineKinds and
+          not chunkHandoffUnsafe(b.syntaxLanguage, s):
+        return some((start, s))
+
 proc scanAndApplyUriUnderlines*(b: TextBuffer, startLine, endLine: int): bool =
   ## Batch-apply URI Underline in `[startLine, endLine]` to `b.highlight`.
   ## Returns true if any URI was applied.
