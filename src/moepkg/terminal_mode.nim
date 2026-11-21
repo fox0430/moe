@@ -338,8 +338,8 @@ proc addRowSegments(
 
 proc snapshotScrollback*(state: TerminalState): TextBuffer =
   ## A read-only copy of the scrollback and screen for Terminal-Normal
-  ## browsing, in the colors they were drawn. The session keeps running; the
-  ## window browsing holds the copy.
+  ## browsing, in the colors they were drawn. The session keeps running and
+  ## keeps the copy as `lastSnapshot`.
   var
     lines: seq[string]
     segments: seq[ColorSegment]

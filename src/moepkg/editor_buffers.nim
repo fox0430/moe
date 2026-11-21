@@ -24,7 +24,7 @@
 import std/[math, strutils, strformat, options, os]
 
 when not defined(moe.embedded):
-  import std/tables
+  import std/[sequtils, tables]
 
 import pkg/results
 
@@ -197,6 +197,9 @@ when not defined(moe.embedded):
     ## must go through `deleteCurrentBuffer`/`removeBufferAt` instead.
     if not e.terminalStates.hasKey(bufId):
       return
+    let copy = e.terminalStates[bufId].lastSnapshot
+    if copy != nil:
+      e.state.tabLines.keepItIf(it.bufferId != copy.id)
     e.terminalStates[bufId].cleanup()
     e.terminalStates.del(bufId)
 

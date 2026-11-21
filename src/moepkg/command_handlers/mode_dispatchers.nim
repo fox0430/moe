@@ -1066,7 +1066,6 @@ when not defined(moe.embedded):
       termState: TerminalState,
       state: EditorState,
       keyCombo: KeyCombo,
-      window: EditorWindow,
   ): HandlerResult =
     ## Handle Terminal mode input
     case handleTerminalModeKey(termState, keyCombo)
@@ -1075,16 +1074,11 @@ when not defined(moe.embedded):
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
     of trSwitchToNormal:
-      # Terminal-Normal: snapshot grid to TextBuffer.
+      # Terminal-Normal: snapshot grid to TextBuffer, for the whole session.
       # Terminal windows hold no Insert session, so no finalization is needed.
-      # Sub-mode and placement only; `syncTerminalView` derives the view.
-      let snapshotBuffer = termState.snapshotScrollback()
-      window.modeState.scrollbackSnapshot = snapshotBuffer
-      window.setMode(EditorMode.Normal)
-      window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)
-      window.viewport.resetViewportTop(
-        max(0, snapshotBuffer.len - window.viewport.height)
-      )
+      # `syncTerminalWindows` derives every window's mode, view and placement.
+      discard termState.snapshotScrollback()
+      termState.inTerminalNormal = true
       return HandlerResult(
         kind: hrHandled,
         modeTransition: none(EditorMode),
@@ -1199,11 +1193,9 @@ proc dispatchSubStateMode*(
         kind: hrError, errorMessage: "Terminal mode is unavailable in embedded builds"
       )
     else:
-      # Non-standard handler signature: takes `window` instead of viewport height.
       if activeWindow.modeState.kind == mskTerminal:
-        return manager.handleTerminalMode(
-          activeWindow.modeState.terminal, state, keyCombo, activeWindow
-        )
+        return
+          manager.handleTerminalMode(activeWindow.modeState.terminal, state, keyCombo)
       else:
         return
           HandlerResult(kind: hrError, errorMessage: "Terminal state not initialized")

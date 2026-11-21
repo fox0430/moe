@@ -7869,21 +7869,16 @@ suite "Ctrl-C in Terminal mode":
     result = createTestEditorWithBuffer("")
     let termState = fakeTerminalState()
     result.terminalStates[result.activeWindow.buffer.id] = termState
-    result.activeWindow.modeState = ModeState(
-      kind: mskTerminal,
-      terminal: termState,
-      scrollbackSnapshot:
-        if subMode == tsmNormal:
-          termState.snapshotScrollback()
-        else:
-          nil,
-    )
+    result.activeWindow.modeState = ModeState(kind: mskTerminal, terminal: termState)
+    if subMode == tsmNormal:
+      discard termState.snapshotScrollback()
+      termState.inTerminalNormal = true
     result.activeWindow.mode =
       if subMode == tsmNormal: EditorMode.Normal else: EditorMode.Terminal
 
   test "a snapshot gives no words to completion":
     let e = createTerminalEditor(tsmNormal)
-    e.activeWindow.setView(e.activeWindow.modeState.scrollbackSnapshot)
+    e.activeWindow.setView(e.activeWindow.modeState.terminal.lastSnapshot)
 
     e.syncCompletionOtherBuffers(newTextBuffer(""))
 

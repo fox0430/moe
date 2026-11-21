@@ -100,11 +100,11 @@ proc endJob(e: Editor, id: BufferId) =
 
 proc enterNormal(e: Editor): TextBuffer =
   ## Ctrl-\ Ctrl-N through the real key path: the dispatcher sets the sub-mode,
-  ## the result epilogue derives the view from it. Returns the scrollback
-  ## snapshot the window ends up showing.
+  ## the result epilogue derives the views from it. Returns the scrollback
+  ## snapshot the windows end up showing.
   discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "\\", modifiers: {kmCtrl}))
   discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "n", modifiers: {kmCtrl}))
-  e.activeWindow.modeState.scrollbackSnapshot
+  e.activeWindow.modeState.terminal.lastSnapshot
 
 proc charKey(c: string): KeyCombo =
   KeyCombo(isSpecial: false, char: c, modifiers: {})
@@ -124,7 +124,7 @@ template checkOnSession(e: Editor, win: EditorWindow, termBuf: TextBuffer) =
     case win.modeState.terminalSubMode
     of tsmNormal:
       check win.mode == EditorMode.Normal
-      check win.buffer == win.modeState.scrollbackSnapshot
+      check win.buffer == win.modeState.terminal.lastSnapshot
     of tsmInput:
       check win.mode == EditorMode.Terminal
       check win.buffer == termBuf
@@ -1426,13 +1426,12 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     check e.activeWindow.buffer == termBuf
     check e.activeWindow.tabBufferId == termBuf.id
 
-  test "a backgrounded Terminal-Normal tab resumes live":
-    # Regression: the sub-mode was per-session state that survived a tab
-    # switch while the view was rebuilt from scratch, so the window came back
-    # in TERMINAL mode showing neither the live grid nor the snapshot.
+  test "a backgrounded Terminal-Normal tab resumes in Terminal-Normal":
+    # Vim keeps Terminal-Normal on the terminal buffer across `:b`. The view
+    # comes back with the sub-mode, not a TERMINAL mode over neither.
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")
-    discard e.enterNormal()
+    let snapshot = e.enterNormal()
     require e.activeWindow.modeState.terminalSubMode == tsmNormal
 
     let other = newTextBuffer("")
@@ -1440,20 +1439,252 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     e.addBufferToWindowList(other)
     check e.tryActivateBuffer(other.id).isOk
 
-    # Leaving the tab ends the browsing session; nothing is carried across.
     check e.activeWindow.modeState.kind == mskNone
+    check e.activeWindow.mode == EditorMode.Normal
 
     check e.tryActivateBuffer(termBuf.id).isOk
-    check e.activeWindow.mode == EditorMode.Terminal
-    check e.activeWindow.modeState.kind == mskTerminal
-    check e.activeWindow.modeState.terminalSubMode == tsmInput
-    check e.activeWindow.buffer == termBuf
+    checkOnSession(e, e.activeWindow, termBuf)
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
+    check e.activeWindow.buffer == snapshot
     check e.activeWindow.tabBufferId == termBuf.id
 
-  test "enew from Terminal-Normal ends the browsing session too":
+  test "coming back to Terminal-Normal keeps the cursor line":
     let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.terminalStates[termBuf.id].grid.processOutput("one\r\ntwo\r\nthree")
+    let snapshot = e.enterNormal()
+    require snapshot.len >= 2
+    e.activeWindow.cursor = BufferPosition(line: 1, column: 0)
+
+    require e.tryActivateBuffer(textBuf.id).isOk
+    require e.tryActivateBuffer(termBuf.id).isOk
+
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
+    check e.activeWindow.cursor.line == 1
+
+  test "a backgrounded Terminal-Normal tab resumes live after i":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
     discard e.enterNormal()
+    require e.tryActivateBuffer(textBuf.id).isOk
+    require e.tryActivateBuffer(termBuf.id).isOk
+
+    discard e.handleKeyCombo(plainKey("i"))
+
+    checkOnSession(e, e.activeWindow, termBuf)
+    check e.activeWindow.modeState.terminalSubMode == tsmInput
+    check e.activeWindow.buffer == termBuf
+
+  test "a viewer whose tab closed under it resumes Terminal-Normal at its line":
+    let e = createTestEditor()
+    let termA = registerFakeTerminal(e, "bash")
+    e.terminalStates[termA.id].grid.processOutput("one\r\ntwo\r\nthree")
+    discard e.enterNormal()
+    e.activeWindow.cursor = BufferPosition(line: 1, column: 0)
+    let termB = registerFakeTerminal(e, "bash")
+    require e.activeWindow.tabBufferId == termB.id
+    discard e.enterNormal()
+    e.runCommand("ls")
+    require e.state.mode == EditorMode.BufferManager
+
+    e.closeTerminalBuffer(termB.id)
+    require e.activeWindow.tabBufferId == termA.id
+    discard e.handleKeyCombo(charKey("q"))
+
+    checkOnSession(e, e.activeWindow, termA)
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
+    check e.activeWindow.cursor.line == 1
+
+  test "another window comes to a session in Terminal-Normal":
+    # The sub-mode is the session's, as Vim's is the terminal buffer's.
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let snapshot = e.enterNormal()
+    let first = e.activeWindow
+    require e.tryActivateBuffer(textBuf.id).isOk
+    require e.vsplit().isOk
+    let second = e.activeWindow
+    require second != first
+
+    require e.tryActivateBuffer(termBuf.id).isOk
+
+    checkOnSession(e, second, termBuf)
+    check second.modeState.terminalSubMode == tsmNormal
+    check second.buffer == snapshot
+
+  test "Ctrl-\\ Ctrl-n in one window browses in every window on the session":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (other, active) = e.twoWindowsOnSession(textBuf, termBuf)
+    require other.mode == EditorMode.Terminal
+
+    let snapshot = e.enterNormal()
+
+    for win in [other, active]:
+      checkOnSession(e, win, termBuf)
+      check win.mode == EditorMode.Normal
+      check win.buffer == snapshot
+      check win.cursor.line == snapshot.len - 1
+
+  test "i in one window takes every window on the session back to the job":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (other, active) = e.twoWindowsOnSession(textBuf, termBuf)
+    let snapshot = e.enterNormal()
+    other.setMode(EditorMode.Visual)
+
+    discard e.handleKeyCombo(plainKey("i"))
+
+    for win in [other, active]:
+      checkOnSession(e, win, termBuf)
+      check win.mode == EditorMode.Terminal
+      check win.buffer == termBuf
+    # The Visual area is the copy's, not the tab's.
+    check snapshot.lastVisual.isSome
+    check termBuf.lastVisual.isNone
+
+  test "a window that left the job comes back to a browsed session at its end":
+    # The job's screen holds no line, so the one left there is not reused.
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.terminalStates[termBuf.id].grid.processOutput("one\r\ntwo\r\nthree")
+    let (other, active) = e.twoWindowsOnSession(textBuf, termBuf)
+    e.focusWindow(other)
+    require e.tryActivateBuffer(textBuf.id).isOk
+    e.focusWindow(active)
+    let snapshot = e.enterNormal()
+    require snapshot.len >= 3
+    e.focusWindow(other)
+
+    require e.tryActivateBuffer(termBuf.id).isOk
+
+    check other.modeState.terminalSubMode == tsmNormal
+    check other.cursor.line == snapshot.len - 1
+
+  test "a split from a viewer over Terminal-Normal starts at the covered line":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.terminalStates[termBuf.id].grid.processOutput("one\r\ntwo\r\nthree")
+    discard e.enterNormal()
+    e.activeWindow.cursor = BufferPosition(line: 1, column: 0)
+    e.runCommand("ls")
+    require e.state.mode == EditorMode.BufferManager
+
+    let origin = e.activeWindow
+    require e.vsplit().isOk
+
+    var opened: EditorWindow
+    for w in e.windowManager.windows:
+      if w != origin:
+        opened = w
+    checkOnSession(e, opened, termBuf)
+    check opened.modeState.terminalSubMode == tsmNormal
+    check opened.cursor.line == 1
+
+  test "a host taking the result still sees every window browse":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      r.kind == hrHandled
+
+    let snapshot = e.enterNormal()
+
+    checkOnSession(e, e.activeWindow, termBuf)
+    check e.activeWindow.mode == EditorMode.Normal
+    check e.activeWindow.buffer == snapshot
+
+  test "a viewer over the job comes back to a browsed session at its end":
+    # The covered position is on the job's screen, not in the copy.
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.terminalStates[termBuf.id].grid.processOutput("one\r\ntwo\r\nthree")
+    let (covered, browsing) = e.twoWindowsOnSession(textBuf, termBuf)
+    e.focusWindow(covered)
+    e.coverWithViewer()
+    e.focusWindow(browsing)
+    let snapshot = e.enterNormal()
+    require snapshot.len >= 3
+    e.focusWindow(covered)
+    require e.tryActivateBuffer(textBuf.id).isOk
+
+    require e.tryActivateBuffer(termBuf.id).isOk
+
+    check covered.modeState.terminalSubMode == tsmNormal
+    check covered.cursor.line == snapshot.len - 1
+
+  test "a line left in an earlier copy is not taken in a later one":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.terminalStates[termBuf.id].grid.processOutput("one\r\ntwo\r\nthree")
+    let (left, other) = e.twoWindowsOnSession(textBuf, termBuf)
+    discard e.enterNormal()
+    e.focusWindow(left)
+    left.cursor = BufferPosition(line: 1, column: 0)
+    require e.tryActivateBuffer(textBuf.id).isOk
+    e.focusWindow(other)
+    discard e.handleKeyCombo(plainKey("i"))
+    let snapshot = e.enterNormal()
+    require snapshot.len >= 3
+    e.focusWindow(left)
+
+    require e.tryActivateBuffer(termBuf.id).isOk
+
+    check left.buffer == snapshot
+    check left.cursor.line == snapshot.len - 1
+
+  test "a viewer closed over a later copy starts at its end":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.terminalStates[termBuf.id].grid.processOutput("one\r\ntwo\r\nthree")
+    let (covered, other) = e.twoWindowsOnSession(textBuf, termBuf)
+    discard e.enterNormal()
+    e.focusWindow(covered)
+    covered.cursor = BufferPosition(line: 1, column: 0)
+    e.coverWithViewer()
+    e.focusWindow(other)
+    discard e.handleKeyCombo(plainKey("i"))
+    let snapshot = e.enterNormal()
+    require snapshot.len >= 3
+    e.focusWindow(covered)
+
+    discard e.handleKeyCombo(charKey("q"))
+
+    checkOnSession(e, covered, termBuf)
+    check covered.buffer == snapshot
+    check covered.cursor.line == snapshot.len - 1
+
+  test "a window opened beside a lone sidebar keeps the line in the copy":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    e.terminalStates[termBuf.id].grid.processOutput("one\r\ntwo\r\nthree")
+    discard e.enterNormal()
+    let fileWin = e.activeWindow
+    fileWin.cursor = BufferPosition(line: 1, column: 0)
+    e.toggleFileTree(none(string), e.activeBuffer())
+    require e.focusFileTreeWindow()
+    e.focusWindow(fileWin)
+    require not e.closeWindow()
+    require e.windowManager.windows.len == 1
+
+    require e.openWindowBesideSidebar(termBuf).isOk
+
+    checkOnSession(e, e.activeWindow, termBuf)
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
+    check e.activeWindow.cursor.line == 1
+
+  test "enew from Terminal-Normal keeps it for the way back":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let snapshot = e.enterNormal()
     require e.activeWindow.modeState.terminalSubMode == tsmNormal
 
     discard e.enew()
@@ -1465,7 +1696,82 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
-    check e.activeWindow.buffer == termBuf
+    check e.activeWindow.buffer == snapshot
+
+  test "a viewer closed over a later copy leaves the order of use alone":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (covered, other) = e.twoWindowsOnSession(textBuf, termBuf)
+    e.focusWindow(covered)
+    e.coverWithViewer()
+    e.focusWindow(other)
+    let snapshot = e.enterNormal()
+    require e.tryActivateBuffer(textBuf.id).isOk
+    e.focusWindow(covered)
+    let before = e.bufferUse.shown.getOrDefault(termBuf.id)
+    require before < e.bufferUse.shown.getOrDefault(textBuf.id)
+
+    discard e.handleKeyCombo(charKey("q"))
+
+    require covered.buffer == snapshot
+    check e.bufferUse.shown.getOrDefault(termBuf.id) == before
+
+  test "going back to the job drops the lines left in the copy":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (left, other) = e.twoWindowsOnSession(textBuf, termBuf)
+    let snapshot = e.enterNormal()
+    e.focusWindow(left)
+    require e.tryActivateBuffer(textBuf.id).isOk
+    require e.state.tabLines.anyIt(it.bufferId == snapshot.id)
+    e.focusWindow(other)
+
+    discard e.handleKeyCombo(plainKey("i"))
+
+    check e.state.tabLines.allIt(it.bufferId != snapshot.id)
+
+  test "a viewer over a copy the session left leaves no line in it":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (covered, other) = e.twoWindowsOnSession(textBuf, termBuf)
+    let snapshot = e.enterNormal()
+    e.focusWindow(covered)
+    e.coverWithViewer()
+    e.focusWindow(other)
+    discard e.handleKeyCombo(plainKey("i"))
+    e.focusWindow(covered)
+
+    require e.tryActivateBuffer(textBuf.id).isOk
+
+    check e.state.tabLines.allIt(it.bufferId != snapshot.id)
+
+  test "a split of a viewer retabbed onto a browsed session starts at the copy's end":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    var output = ""
+    for i in 1 .. 200:
+      output &= $i & "\r\n"
+    e.terminalStates[termBuf.id].grid.processOutput(output)
+    require e.tryActivateBuffer(termBuf.id).isOk
+    let snapshot = e.enterNormal()
+    require snapshot.len >= 200
+    require e.tryActivateBuffer(textBuf.id).isOk
+    e.coverWithViewer()
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: textBuf.id)
+    discard e.processResult(r, textBuf)
+    require e.activeWindow.tabBufferId == termBuf.id
+    require e.activeWindow.viewerEntry.isSome
+
+    require e.vsplit().isOk
+
+    check e.activeWindow.buffer == snapshot
+    check e.activeWindow.cursor.line == snapshot.len - 1
+    # Centered, as any arrival on the copy.
+    check e.activeWindow.viewport.topLine > 0
 
   test "closing the only Terminal tab under a viewer leaves it on the survivor":
     # Only-tab case: after prune the window has no sibling to switch to. The
@@ -1728,11 +2034,11 @@ suite "Terminal tabs - the window's mode follows its tab":
     check e.activeWindow.modeState.terminalSubMode == tsmInput
     check e.activeWindow.buffer == termBuf
 
-  test "picking another tab from a viewer over Terminal-Normal leaves the session live":
+  test "picking another tab from a viewer over Terminal-Normal keeps it for the way back":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
-    discard e.enterNormal()
+    let snapshot = e.enterNormal()
     e.runCommand("ls")
     require e.state.mode == EditorMode.BufferManager
 
@@ -1743,13 +2049,13 @@ suite "Terminal tabs - the window's mode follows its tab":
     require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
-    check e.activeWindow.buffer == termBuf
+    check e.activeWindow.buffer == snapshot
 
-  test "switching tabs while a viewer holds a Terminal-Normal tab leaves the session live":
+  test "switching tabs while a viewer holds a Terminal-Normal tab keeps it for the way back":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
-    discard e.enterNormal()
+    let snapshot = e.enterNormal()
     e.runCommand("ls")
     require e.state.mode == EditorMode.BufferManager
 
@@ -1760,7 +2066,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
-    check e.activeWindow.buffer == termBuf
+    check e.activeWindow.buffer == snapshot
 
   test "a split opened from a Filer over Terminal-Normal leaves the origin window on the session":
     let e = createTestEditor()
@@ -1835,7 +2141,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     check e.activeWindow.buffer == textBuf
     check e.activeWindow.cursor.line < textBuf.len
 
-  test "closing a window in Terminal-Normal leaves the session live":
+  test "closing a window in Terminal-Normal leaves the session in it":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
@@ -1851,9 +2157,10 @@ suite "Terminal tabs - the window's mode follows its tab":
     require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
-    check e.activeWindow.buffer == termBuf
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
+    check e.activeWindow.buffer == e.terminalStates[termBuf.id].lastSnapshot
 
-  test ":only closing a window in Terminal-Normal leaves the session live":
+  test ":only closing a window in Terminal-Normal leaves the session in it":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
@@ -1874,7 +2181,8 @@ suite "Terminal tabs - the window's mode follows its tab":
     require e.tryActivateBuffer(termBuf.id).isOk
 
     checkOnSession(e, e.activeWindow, termBuf)
-    check e.activeWindow.buffer == termBuf
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
+    check e.activeWindow.buffer == e.terminalStates[termBuf.id].lastSnapshot
 
   test "closing a session takes it off a Buffer Manager":
     let e = createTestEditor()
@@ -1951,8 +2259,8 @@ suite "Terminal tabs - the window's mode follows its tab":
       check helpWin.mode == EditorMode.Normal
       check helpWin.buffer == e.tabBuffer(helpWin)
 
-suite "Terminal tabs - browsing belongs to the window":
-  test "browsing in one window leaves another window on the session live":
+suite "Terminal tabs - browsing belongs to the session":
+  test "browsing in one window browses in another window on the session":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
@@ -1961,13 +2269,13 @@ suite "Terminal tabs - browsing belongs to the window":
     require browsing.modeState.terminalSubMode == tsmNormal
 
     checkOnSession(e, live, termBuf)
-    check live.modeState.terminalSubMode == tsmInput
+    check live.modeState.terminalSubMode == tsmNormal
 
     require e.tryActivateBuffer(textBuf.id).isOk
     e.focusWindow(live)
 
     checkOnSession(e, live, termBuf)
-    check live.modeState.terminalSubMode == tsmInput
+    check live.modeState.terminalSubMode == tsmNormal
 
   test "leaving a session another window browses keeps that browsing":
     let e = createTestEditor()
@@ -1982,7 +2290,7 @@ suite "Terminal tabs - browsing belongs to the window":
     checkOnSession(e, browsing, termBuf)
     check browsing.buffer == snapshot
 
-  test "closing a viewer while another window browses the session resumes live":
+  test "closing a viewer while another window browses the session resumes browsing":
     let e = createTestEditor()
     let textBuf = e.buffers[0]
     let termBuf = registerFakeTerminal(e, "bash")
@@ -1997,7 +2305,25 @@ suite "Terminal tabs - browsing belongs to the window":
     discard e.handleKeyCombo(charKey("q"))
 
     checkOnSession(e, covered, termBuf)
-    check covered.modeState.terminalSubMode == tsmInput
+    check covered.modeState.terminalSubMode == tsmNormal
+
+  test "a viewer over a replaced copy leaves no line in it":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (covered, other) = e.twoWindowsOnSession(textBuf, termBuf)
+    let first = e.enterNormal()
+    e.focusWindow(covered)
+    e.coverWithViewer()
+    e.focusWindow(other)
+    e.press("i")
+    let second = e.enterNormal()
+    require second != first
+    e.focusWindow(covered)
+
+    require e.tryActivateBuffer(textBuf.id).isOk
+
+    check e.state.tabLines.allIt(it.bufferId != first.id)
 
 suite "Terminal tabs - cursor belongs to the active window":
   proc createTestBuffer(): Buffer =
@@ -2082,7 +2408,7 @@ suite "Terminal tabs - cursor belongs to the active window":
     check e.state.cursorVisible
 
 suite "Terminal tabs - splitting off a session":
-  test "a vertical split opens the session live and leaves the origin browsing":
+  test "a vertical split opens the session browsing, as the origin is":
     # Regression: the split used `e.activeBuffer` (the browsing snapshot), so
     # the snapshot was registered as a real buffer and the new window came up
     # in Normal mode, showing neither the grid nor the session.
@@ -2102,17 +2428,17 @@ suite "Terminal tabs - splitting off a session":
     let opened = e.activeWindow
     check opened != origin
     checkOnSession(e, opened, termBuf)
-    check opened.modeState.terminalSubMode == tsmInput
+    check opened.modeState.terminalSubMode == tsmNormal
 
     # The origin window keeps its tab and its browsing position.
     check origin.tabBufferId == termBuf.id
     check origin.modeState.terminalSubMode == tsmNormal
     check origin.buffer == snapshot
 
-  test "a horizontal split opens the session live and leaves the origin browsing":
+  test "a horizontal split opens the session browsing, as the origin is":
     # Same regression as the vertical split above, through `hsplit` (which
     # also takes `e.multiStatusLine`): the browsing snapshot must not be
-    # registered as a buffer, and the new window starts live on the session.
+    # registered as a buffer, and the new window browses the session too.
     let e = createTestEditor()
     let termBuf = registerFakeTerminal(e, "bash")
     let snapshot = e.enterNormal()
@@ -2129,7 +2455,7 @@ suite "Terminal tabs - splitting off a session":
     let opened = e.activeWindow
     check opened != origin
     checkOnSession(e, opened, termBuf)
-    check opened.modeState.terminalSubMode == tsmInput
+    check opened.modeState.terminalSubMode == tsmNormal
 
     # The origin window keeps its tab and its browsing position.
     check origin.tabBufferId == termBuf.id
@@ -2170,7 +2496,7 @@ suite "Terminal tabs - splitting off a session":
 
     check e.activeWindow.viewerEntry.isNone
     checkOnSession(e, e.activeWindow, termBuf)
-    check e.activeWindow.modeState.terminalSubMode == tsmInput
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
 
 suite "Terminal tabs - a session with no command":
   test "The shell it runs names the session":

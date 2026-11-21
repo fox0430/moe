@@ -45,6 +45,9 @@ type
     lastSnapshot*: TextBuffer
       ## The latest Terminal-Normal copy, whose marks and last Visual area the
       ## next one takes: in Vim they belong to the one terminal buffer.
+    inTerminalNormal*: bool
+      ## Terminal-Normal: every window on the session browses `lastSnapshot`
+      ## and keys no longer go to the job. Vim's per-buffer tl_normal_mode.
     responseFlushBlocked*: bool
       ## Set while a query answer is stuck unwritten, so the retry each poll
       ## makes is not logged once per render frame.

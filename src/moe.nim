@@ -44,17 +44,16 @@ proc toCursorStyle(ct: CursorType): CursorStyle =
   of ctNonBlinkIbeam: CursorStyle.SteadyBar
 
 proc isBrowsed(e: Editor, id: BufferId): bool =
-  ## Whether a window on the session parked on `id` is in Terminal-Normal,
-  ## counting one a viewer covers in place: closing the viewer resumes it.
+  ## Whether the session parked on `id` is in Terminal-Normal with a window on
+  ## it, counting one a viewer covers in place: closing the viewer resumes it.
+  ## A viewer's own split only copied the tab. Without one the session goes as
+  ## Vim's 'nohidden' unloads a finished terminal.
+  if not e.terminalStates[id].inTerminalNormal:
+    return false
   for window in e.windowManager.windows:
-    if window.tabBufferId != id:
-      continue
-    if window.isBrowsingTerminal:
+    if window.tabBufferId == id and
+        (window.viewerEntry.isNone or window.viewerEntry.get.placement == vpInPlace):
       return true
-    if window.viewerEntry.isSome and window.viewerEntry.get.returnTab == id:
-      let covered = window.viewerEntry.get.returnState
-      if covered.kind == mskTerminal and covered.terminalSubMode == tsmNormal:
-        return true
   false
 
 proc pollTerminalSessions*(e: Editor) =
@@ -68,7 +67,7 @@ proc pollTerminalSessions*(e: Editor) =
     discard session.pollOutput()
 
     # A session that exited takes its tab, on screen or not, as Vim wipes out a
-    # finished shell — but not while the user is browsing its scrollback.
+    # finished shell — but not while a window browses it in Terminal-Normal.
     if session.exitCode.isSome and not e.isBrowsed(id):
       # After the loop: teardown mutates the table this one is walking.
       exited.add(id)
