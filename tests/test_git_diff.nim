@@ -616,6 +616,86 @@ suite "GitDiff - Integration tests with git repository":
     if dirExists(testDir):
       removeDir(testDir)
 
+  when defined(posix):
+    test "metadata process honors a symlinked Git shim on PATH":
+      let realGit = findExe("git", followSymlinks = false)
+      require realGit.len > 0
+      let shimDir = createTempDir("moe_git_shim_", "")
+      defer:
+        removeDir(shimDir)
+      let shim = shimDir / "shim"
+      writeFile(
+        shim,
+        """
+#!/bin/sh
+[ "${0##*/}" = git ] || exit 1
+exec """ & quoteShell(realGit) &
+          " \"$@\"\n",
+      )
+      setFilePermissions(shim, {fpUserRead, fpUserWrite, fpUserExec})
+      createSymlink(shim, shimDir / "git")
+
+      let originalPath = getEnv("PATH")
+      putEnv("PATH", shimDir & PathSep & originalPath)
+      defer:
+        putEnv("PATH", originalPath)
+
+      var child = startGitMetadataProcess(testDir, ["rev-parse", "--show-toplevel"])
+      defer:
+        releaseGitProcess(child)
+      let deadline = getMonoTime() + initDuration(seconds = 5)
+      var exitCode = child.peekExitCode()
+      while exitCode == -1 and getMonoTime() < deadline:
+        sleep(1)
+        exitCode = child.peekExitCode()
+      require exitCode == 0
+      check child.drainExitedProcessOutput().strip() == expandFilename(testDir)
+
+    test "buffer diff uses its repo config and each Git stage owns distinct pipes":
+      let testFile = testDir / "file ' $(not-a-command).txt"
+      writeFile(testFile, "original\n")
+      require execCmdEx("git config color.diff never", workingDir = testDir).exitCode ==
+        0
+      require execCmdEx("git add -A", workingDir = testDir).exitCode == 0
+      require execCmdEx("git commit -m initial", workingDir = testDir).exitCode == 0
+
+      let otherRepo = createTempDir("moe_git_diff_other_", "")
+      defer:
+        removeDir(otherRepo)
+      require execCmdEx("git init", workingDir = otherRepo).exitCode == 0
+      require execCmdEx("git config color.diff always", workingDir = otherRepo).exitCode ==
+        0
+      let originalDir = getCurrentDir()
+      setCurrentDir(otherRepo)
+      defer:
+        setCurrentDir(originalDir)
+
+      let buffer = newTextBuffer()
+      require buffer.loadFile(testFile).isOk
+      discard buffer.insertText(BufferPosition(line: 0, column: 0), "modified ")
+
+      let started = startGitDiffFromBufferAsync(buffer)
+      require started.isOk
+      let pipeline = started.get
+      defer:
+        abandonGitDiffProcess(pipeline)
+      var seen: set[GitDiffStage]
+      var completed = false
+      let deadline = getMonoTime() + initDuration(seconds = 60)
+      while not completed and getMonoTime() < deadline:
+        if pipeline.stage notin seen:
+          seen.incl pipeline.stage
+          check pipeline.process.outputHandle() != pipeline.process.errorHandle()
+        let outcome = checkGitDiffComplete(pipeline)
+        if outcome.isSome:
+          completed = true
+          require outcome.get.isOk
+          check outcome.get.get.lines.len > 0
+        else:
+          sleep(1)
+      check completed
+      check seen == {gdsGitRoot, gdsGitShow, gdsGitDiff}
+
   test "startGitDiffFromBufferAsync with unchanged buffer (LF, no trailing newline) returns no diff":
     let testFile = testDir / "test.txt"
     writeFile(testFile, "line 1\nline 2\nline 3")
