@@ -1164,3 +1164,12 @@ suite "syntax_c - cNextToken doc comments":
     g.initGeneralTokenizer("/**\n * @param x\n */")
     g.cNextToken()
     check g.kind == gtDocLongComment
+
+suite "syntax_c - carried over states":
+  test "a raw string state resumes as code without raw strings":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("x)\"")
+    g.state = gtLongStringLit
+    g.cNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 1

@@ -146,10 +146,10 @@ proc codeBlockDelegate*(lexer: GeneralTokenizer): SourceLanguage =
   of '\0':
     langNone
   of ' ', '\t' .. '\r':
-    if lexer.state in SubLanguageCarryStates and not lexer.atClosingFence(lexer.pos):
-      md.codeBlockLang
-    else:
-      langNone
+    # A pending heredoc starts its body with the line break, which the shell
+    # lexes.
+    if (lexer.state in SubLanguageCarryStates or lexer.lang.shell.heredocMarker.len > 0) and
+        not lexer.atClosingFence(lexer.pos): md.codeBlockLang else: langNone
   else:
     # gtCodeFence: the language name after the opening fence.
     if lexer.state == gtCodeFence or lexer.atClosingFence(lexer.pos):

@@ -43,6 +43,7 @@ type
     hasHashHeadings
     hasNestedComments
     hasPreprocessor
+    hasRawStrings
     hasSharpBangDoubleDashComments
     hasSharpFunction
     hasSharpOperator

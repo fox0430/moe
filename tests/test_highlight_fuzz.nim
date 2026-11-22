@@ -459,6 +459,10 @@ proc cppCorpus(): seq[seq[string]] =
       "    return \"Hello, \" + name + '!';", "}", "",
       "std::vector<int> xs = {1, 2, 3};",
     ],
+    @[
+      "auto s = R\"x(", "  { )\" still in", ")x\";", "auto t = u8R\"(one)\";",
+      "int R = 1; auto q = R\"bad delim\";", "}",
+    ],
   ]
 
 proc htmlCorpus(): seq[seq[string]] =
@@ -632,6 +636,36 @@ proc shellCorpus(): seq[seq[string]] =
     ],
     @["long=\"part one \\", "part two\"", "for i in 1 2 3; do", "  echo $i", "done"],
     @["# a comment line", "export VAR='value'", "unset OTHER", "func() { return 0; }"],
+    @[
+      "cat <<EOF > out", "  { \"not code\"", "EOF not yet", "}", "EOF", "echo done",
+      "x=$((1 << 2))",
+    ],
+    @["cat <<-'END' # comment", "\t{ $x", "", "\tEND", "tr a b <<< \"{\"", "if x; then"],
+    @[
+      "python3 -c '", "x = 1 << n", "'", "n=$(( ${#a[@]} - 1 ))", "y=$[a<<n]",
+      "cat <<EOF \\", "| sort", "{", "EOF", "z=$'a\\'b' # c",
+    ],
+    @[
+      "msg=\"$(gettext \"Don't\")\"", "x=\"$(cat <<EOF", "it's {", "EOF", ")\"",
+      "echo It\\'s", "y=\"`echo \"a'b\"`\"", "python3 -<<EOF", "it's", "EOF",
+    ],
+    @[
+      "ftp <<!", "it's", "!", "x=\"${y:-\"don't\"}\"", "z=$(cat <<EOF", "it's", "EOF)",
+      "w=\"$(echo {)\" 'b'", "echo foo\\ #bar",
+    ],
+    @[
+      "echo foo \\", "#bar", "echo \\\xC3\xA9 ok", "x=\"`echo {`\" 'b'",
+      "y=\"${z%%(*}\" 'c'", "echo $$'a\\' b",
+    ],
+    @["x=\"$(case $y in", "  a) echo \"it's\";;", "  (b) :;;", "esac)\"", "ls 'q'"],
+    @[
+      "echo \"${case}\" 'x'", "x=\"${line%% #*}\"", "v=\"$(echo ${x%)})\"; echo 'a'",
+      "cat <<EOF\\", "X", "it's", "EOFX", "ls 'q'",
+    ],
+    @[
+      "x=\"$(case $y in a) echo esac;; b) :;; esac)\" 'ok'", "cat <<''", "it's", "",
+      "y=`#note it's` 'a'", "cat <<-\"\"", "\t", "ls 'q'",
+    ],
   ]
 
 proc zshCorpus(): seq[seq[string]] =
@@ -650,6 +684,7 @@ proc zshCorpus(): seq[seq[string]] =
       "integer x=0xAB",
     ],
     @["cont=\"a \\", "b\"", "for f in *.txt; do", "  echo $f", "done"],
+    @["cat <<\"EOF\"", "  }", "EOF", "print ok"],
   ]
 
 proc fishCorpus(): seq[seq[string]] =

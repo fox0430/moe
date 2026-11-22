@@ -10,4 +10,4 @@ const cppKeywords* = [
 ]
 
 proc cppNextToken*(g: var GeneralTokenizer) =
-  clikeNextToken(g, cppKeywords, {hasPreprocessor})
+  clikeNextToken(g, cppKeywords, {hasPreprocessor, hasRawStrings})

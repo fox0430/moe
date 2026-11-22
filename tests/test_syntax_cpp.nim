@@ -19,7 +19,7 @@
 
 import std/unittest
 
-import ../src/moepkg/syntax/[tokenizer, syntax_cpp]
+import ../src/moepkg/syntax/[tokenizer, syntax_c, syntax_cpp]
 
 suite "syntax_cpp - cppKeywords constant":
   test "cppKeywords contains C++ specific keywords":
@@ -802,3 +802,42 @@ suite "syntax_cpp - cppNextToken doc comments":
     g.initGeneralTokenizer("/**/")
     g.cppNextToken()
     check g.kind == gtLongComment
+
+suite "syntax_cpp - raw strings":
+  proc kinds(text: string): seq[(TokenClass, string)] =
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(text)
+    while true:
+      g.cppNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind != gtWhitespace:
+        result.add (g.kind, text[g.start ..< g.start + g.length])
+
+  test "a raw string runs over lines to its delimiter":
+    check kinds("s = R\"x(\n  {\n)\"\n)x\";}") ==
+      @[
+        (gtIdentifier, "s"),
+        (gtOperator, "="),
+        (gtStringLit, "R\"x(\n"),
+        (gtLongStringLit, "  {\n"),
+        (gtLongStringLit, ")\"\n"),
+        (gtLongStringLit, ")x\""),
+        (gtPunctuation, ";"),
+        (gtPunctuation, "}"),
+      ]
+
+  test "every prefix opens one, on one line too":
+    for prefix in ["R", "LR", "uR", "UR", "u8R"]:
+      check kinds(prefix & "\"(a\\b)\";") ==
+        @[(gtStringLit, prefix & "\"(a\\b)\""), (gtPunctuation, ";")]
+
+  test "without a valid delimiter, `R` is a name":
+    check kinds("R\"a b(x)a b\"")[0] == (gtIdentifier, "R")
+    check kinds("R \"(x)\"")[0] == (gtIdentifier, "R")
+
+  test "C has no raw strings":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("R\"(x)\"")
+    g.cNextToken()
+    check g.kind == gtIdentifier
