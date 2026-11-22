@@ -268,9 +268,9 @@ let Invariants = @[
     skipFiles: @[],
     match: matchSessionBeginTransaction,
     allow: @[
-      ("moepkg/command_handlers/handler_manager.nim", 1),
-      # beginInsertModeSession, which every Insert entry shares.
-      ("moepkg/command_handlers/insert_commands.nim", 1),
+      # beginInsertModeSession and beginReplaceModeSession, which every Insert
+      # and Replace entry shares.
+      ("moepkg/command_handlers/insert_commands.nim", 2)
     ],
   ),
 ]

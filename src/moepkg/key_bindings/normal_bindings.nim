@@ -134,7 +134,7 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("g l", "lsp-document-link"),
   ("g f", "open-uri"),
   # Save and quit
-  ("Z Z", "save-and-quit"),
+  ("Z Z", "save-if-modified-and-quit"),
   ("Z Q", "close-window-force"),
   # Window management entries come from WindowSecondKeyCommands
   # and are bound as `C-w <key>` in bindNormalMode.

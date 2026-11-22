@@ -273,7 +273,7 @@ suite "CommandCompletion - filterAndSortEntries":
       CommandCompletionEntry(command: "quit", description: "Quit", matchScore: 0),
       CommandCompletionEntry(command: "write", description: "Write file", matchScore: 0),
       CommandCompletionEntry(
-        command: "wq", description: "Write and quit", matchScore: 0
+        command: "wq", description: "Write and close the window", matchScore: 0
       ),
     ]
 
@@ -1206,7 +1206,7 @@ suite "CommandCompletion - edge cases":
       if cmd.command == "w":
         check cmd.description == "Write file"
       if cmd.command == "wq":
-        check cmd.description == "Write and quit"
+        check cmd.description == "Write and close the window"
 
   test "Abbreviations are not listed":
     let config = newCommandConfig()

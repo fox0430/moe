@@ -330,7 +330,7 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     ),
     HelpEntry(syntax: "z.", description: "Center the screen on the cursor"),
     HelpEntry(syntax: "zz", description: "Center the screen on the cursor"),
-    HelpEntry(syntax: "ZZ", description: "Write current file and exit"),
+    HelpEntry(syntax: "ZZ", description: "Same as :x"),
     HelpEntry(syntax: "ZQ", description: "Same as :q!"),
     HelpEntry(syntax: "/", description: "Search forwards"),
     HelpEntry(syntax: "?", description: "Search backwards"),

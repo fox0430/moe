@@ -35,7 +35,8 @@ import ../src/moepkg/editor_hooks {.all.}
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/handler {.all.}
 import
-  ../src/moepkg/command_handlers/[handler_result, editor_ops, viewer_ops, backup_ops]
+  ../src/moepkg/command_handlers/
+    [handler_result, editor_ops, viewer_ops, backup_ops, result_processor]
 
 proc testDir(name: string): string =
   ## A directory of this run's own. The pid is in the name because the suite
@@ -1294,12 +1295,13 @@ suite "Hooks - quitting":
     ]
 
     check not editor.noteQuit(
-      editor.processSaveAndQuitResult(
+      editor.processResult(
         HandlerResult(
           kind: hrSaveAndQuit,
           saveAndQuitFilename: none(string),
           forceQuitAfterSave: false,
-        )
+        ),
+        editor.activeBuffer,
       )
     )
     check not editor.readyToExit()

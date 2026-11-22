@@ -34,6 +34,8 @@ import
     unicode_utils, frontend_input, config_mode, job_lanes,
   ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
+import config_test_helper
+from ../src/moepkg/config_loader import getConfigPath
 import ../src/moepkg/buffer/[core, edit]
 import
   ../src/moepkg/command_handlers/
@@ -643,6 +645,128 @@ suite "Terminal tabs - a running job keeps the editor open":
     check e.windowManager.windows.len == 1
     check not e.terminalStates.hasKey(termBuf.id)
 
+  for command in ["x!", "x", "wq!", "wq"]:
+    test ":" & command & " in a split is refused on the job its window shows":
+      let e = createTestEditor()
+      require e.vsplit().isOk
+      let termBuf = registerFakeTerminal(e, "bash")
+      discard e.enterNormal()
+
+      check not e.quits(command)
+
+      check e.state.statusMessage == JobRunning & " (use :q! to end it)"
+      check e.windowManager.windows.len == 2
+      check e.terminalStates.hasKey(termBuf.id)
+
+  test ":wq {file} in a split writes the job's output and closes the window":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    let path = dir / "out.txt"
+
+    check not e.quits("wq " & path)
+
+    check fileExists(path)
+    check e.windowManager.windows.len == 1
+    check e.terminalStates.hasKey(termBuf.id)
+
+  test ":x {file} in a split writes the job's output, as a running job counts as changed":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    let path = dir / "out.txt"
+
+    check not e.quits("x " & path)
+
+    check fileExists(path)
+    check e.windowManager.windows.len == 1
+    check e.terminalStates.hasKey(termBuf.id)
+
+  test ":wq where another window shows the job names :bd!, as :q! leaves it running":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    require e.vsplit().isOk
+    discard e.enterNormal()
+
+    check not e.quits("wq")
+
+    check e.state.statusMessage == JobRunning & " (use :bd! to end it)"
+    check e.windowManager.windows.len == 2
+    check e.terminalStates.hasKey(termBuf.id)
+
+  test "ZQ ends the job beside a split Help viewer opened from its window":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    let termWin = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    require e.windowManager.windows.len == 3
+    e.focusWindow(e.windowManager.windows.find(termWin))
+    require e.activeWindow == termWin
+
+    check e.handleKeyCombo(charKey("Z"))
+    check e.handleKeyCombo(charKey("Q"))
+
+    # The Help split only copied the window's tab; it does not keep the job.
+    check e.windowManager.windows.len == 2
+    check not e.terminalStates.hasKey(termBuf.id)
+
+  test ":wq! {file} in a split writes the job's output and keeps the job":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    let path = dir / "out.txt"
+    writeFile(path, "old\n")
+
+    check not e.quits("wq! " & path)
+
+    check readFile(path) != "old\n"
+    check e.windowManager.windows.len == 1
+    check e.terminalStates.hasKey(termBuf.id)
+
+  test ":wq! {file} on the last window writes, then is refused for the job it shows":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    let path = dir / "out.txt"
+    writeFile(path, "old\n")
+
+    check not e.quits("wq! " & path)
+
+    check readFile(path) != "old\n"
+    check e.terminalStates.hasKey(termBuf.id)
+    check e.state.statusMessage.startsWith("Saved a copy: " & path & "; " & JobRunning)
+
+  test "ZZ in a split is refused on the job its window shows":
+    let e = createTestEditor()
+    require e.vsplit().isOk
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    check e.handleKeyCombo(charKey("Z"))
+    check e.handleKeyCombo(charKey("Z"))
+
+    check e.state.statusMessage == JobRunning & " (use :q! to end it)"
+    check e.windowManager.windows.len == 2
+    check e.terminalStates.hasKey(termBuf.id)
+
   test "a quit-force key in a split is refused for the job":
     let e = createTestEditor()
     check e.keyBindingRegistry.addRuntimeMapping(
@@ -734,6 +858,34 @@ suite "Terminal tabs - a running job keeps the editor open":
       check readFile(path) == "A:orig\n"
       check not fileBuf.isModified
 
+  test ":wq after Ctrl-o writes, then shows the job without a typing group left open":
+    let dir = createTempDir("moe_quit_job", "")
+    defer:
+      removeDir(dir)
+    let e = createTestEditor()
+    let (path, fileBuf) = e.editedFile(dir)
+    let termBuf = e.hiddenJob()
+    check e.handleKeyCombo(charKey("i"))
+    check e.handleKeyCombo(charKey("B"))
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl}))
+
+    check not e.quits("wq")
+
+    e.checkRefusedShowing(termBuf, InputQuitHint, "Saved: " & path & "; ")
+    check readFile(path) == "BA:orig\n"
+    check not fileBuf.inTransaction
+    check not fileBuf.isModified
+
+  test ":wq on the last window showing a job names :qa! while another job runs":
+    let e = createTestEditor()
+    discard registerFakeTerminal(e, "bash")
+    discard registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    check not e.quits("wq")
+
+    check e.state.statusMessage.endsWith(QuitHint)
+
   test "ZZ writes, then is refused and shows the job":
     let dir = createTempDir("moe_quit_job", "")
     defer:
@@ -747,6 +899,41 @@ suite "Terminal tabs - a running job keeps the editor open":
 
     e.checkRefusedShowing(termBuf, InputQuitHint, "Saved: " & path & "; ")
     check readFile(path) == "A:orig\n"
+
+  for command in ["wq", "x"]:
+    test ":" & command & " in a split closes the window and keeps the job":
+      let dir = createTempDir("moe_quit_job", "")
+      defer:
+        removeDir(dir)
+      let e = createTestEditor()
+      let (path, _) = e.editedFile(dir)
+      let termBuf = e.hiddenJob()
+      require e.vsplit().isOk
+
+      check not e.quits(command)
+
+      check e.windowManager.windows.len == 1
+      check readFile(path) == "A:orig\n"
+      check e.terminalStates.hasKey(termBuf.id)
+
+  test ":wq in Config on the last window saves and leaves the viewer, as :q there":
+    withTempHome(tmpDir):
+      let e = createTestEditor()
+      let termBuf = e.hiddenJob()
+      let fileWin = e.activeWindow
+      check e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
+      let configWin = e.activeWindow
+      e.focusWindow(e.windowManager.windows.find(fileWin))
+      require not e.closeWindow()
+      require e.activeWindow == configWin
+      require e.state.mode == EditorMode.Config
+
+      check not e.quits("wq")
+
+      check e.state.statusMessage.startsWith("Config saved: ")
+      check fileExists(getConfigPath())
+      check e.state.mode != EditorMode.Config
+      check e.terminalStates.hasKey(termBuf.id)
 
   test ":wq refused starts the build a :w would":
     let dir = createTempDir("moe_quit_job", "")

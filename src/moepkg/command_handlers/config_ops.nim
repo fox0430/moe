@@ -28,6 +28,34 @@ import ../[config_loader, config_mode, editor, logger, types, viewer_mode]
 
 import handler_result
 
+type ConfigWriteError* = object
+  backupFailed*: bool ## The copy of the old file failed, so nothing was written.
+  reason*: string
+
+proc writeConfigFile*(e: Editor): Result[string, ConfigWriteError] =
+  ## Write the settings to the config file, backing up the one there first.
+  ## The path written, or why nothing was.
+  let configPath = getConfigPath()
+  if fileExists(configPath):
+    let backupPath = configPath & ".bac"
+    try:
+      copyFile(configPath, backupPath)
+      logInfo("config", "Backed up existing config to: " & backupPath)
+    except CatchableError as ex:
+      logError("config", "Failed to backup config: " & ex.msg)
+      return err(ConfigWriteError(backupFailed: true, reason: ex.msg))
+  let saveResult = saveConfig(e.config)
+  if saveResult.isErr:
+    return err(ConfigWriteError(reason: saveResult.error))
+  ok(configPath)
+
+proc saveFailedMessage*(error: ConfigWriteError): string =
+  ## Why saving the settings failed, as Config's `:w` says it.
+  if error.backupFailed:
+    return "Failed to backup config: " & error.reason
+  logError("config", "Failed to save config: " & error.reason)
+  "Failed to save config: " & error.reason
+
 proc processConfigResult*(e: Editor, r: HandlerResult): bool =
   ## Handle hrConfig* kinds (entry/exit, save, putConfigFile).
   ## Returns true to continue.
@@ -50,50 +78,24 @@ proc processConfigResult*(e: Editor, r: HandlerResult): bool =
     e.leaveViewerMode(EditorMode.Config)
     return true
   of hrConfigSaveConfig:
-    # Save configuration to TOML file
-    let configPath = getConfigPath()
-
-    # Backup existing config file if it exists
-    if fileExists(configPath):
-      let backupPath = configPath & ".bac"
-      try:
-        copyFile(configPath, backupPath)
-        logInfo("config", "Backed up existing config to: " & backupPath)
-      except CatchableError as ex:
-        e.state.statusMessage = "Failed to backup config: " & ex.msg
-        logError("config", "Failed to backup config: " & ex.msg)
-        return true
-
-    let saveResult = saveConfig(e.config)
-    if saveResult.isOk:
-      e.state.statusMessage = "Config saved: " & configPath
-      logInfo("config", "Config saved: " & configPath)
+    let written = e.writeConfigFile()
+    if written.isOk:
+      e.state.statusMessage = "Config saved: " & written.get
+      logInfo("config", "Config saved: " & written.get)
     else:
-      e.state.statusMessage = "Failed to save config: " & saveResult.error
-      logError("config", "Failed to save config: " & saveResult.error)
+      e.state.statusMessage = written.error.saveFailedMessage
     return true
   of hrPutConfigFile:
     # Write current configuration to file (:putConfigFile)
-    let configPath = getConfigPath()
-
-    # Backup existing config file if it exists
-    if fileExists(configPath):
-      let backupPath = configPath & ".bac"
-      try:
-        copyFile(configPath, backupPath)
-        logInfo("config", "Backed up existing config to: " & backupPath)
-      except CatchableError as ex:
-        e.state.statusMessage = "Error: Failed to backup config: " & ex.msg
-        logError("config", "Failed to backup config: " & ex.msg)
-        return true
-
-    let saveResult = saveConfig(e.config)
-    if saveResult.isOk:
-      e.state.statusMessage = "Config written: " & configPath
-      logInfo("config", "Config written: " & configPath)
+    let written = e.writeConfigFile()
+    if written.isOk:
+      e.state.statusMessage = "Config written: " & written.get
+      logInfo("config", "Config written: " & written.get)
+    elif written.error.backupFailed:
+      e.state.statusMessage = "Error: Failed to backup config: " & written.error.reason
     else:
-      e.state.statusMessage = "Failed to write config: " & saveResult.error
-      logError("config", "Failed to write config: " & saveResult.error)
+      e.state.statusMessage = "Failed to write config: " & written.error.reason
+      logError("config", "Failed to write config: " & written.error.reason)
     return true
   else:
     return true # Not a config kind; caller misrouted (defensive)

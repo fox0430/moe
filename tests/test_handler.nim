@@ -24,6 +24,7 @@
 ## - Search mode event handling helpers
 
 import std/[unittest, options, tables, os, times, posix]
+from std/tempfiles import createTempDir
 from std/strutils import
   align, contains, continuesWith, count, endsWith, escape, join, repeat, split,
   startsWith, strip
@@ -55,6 +56,10 @@ import ../src/moepkg/terminal_mode
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/command_handlers/result_processor
 import ../src/moepkg/command_handlers/[handler_result, misc_ops]
+from ../src/moepkg/help_viewer import newHelpViewerState
+from ../src/moepkg/log_viewer import newLogViewerState
+from ../src/moepkg/command_handlers/editor_ops import
+  toggleFileTree, focusFileTreeWindow
 from ../src/moepkg/app_info import generateVersionInfoMessage
 
 proc createTestViewport(x, y, width, height, topLine, leftCell: int): ViewPort =
@@ -3040,7 +3045,7 @@ suite "handleCommandModeEvent - all command mode commands execute":
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
-    # Save fails (no file path), processSaveAndQuitResult returns true (continue).
+    # Save fails (no file path), processResult returns true (continue).
     # The overlay must still be exited so the editor isn't stuck in command mode.
     check cont == true
     check not e.state.isCommandOverlay
@@ -3088,7 +3093,7 @@ suite "handleCommandModeEvent - all command mode commands execute":
     check "other buffer" in e.state.statusMessage
     check background.isModified
 
-  test ":q! quits despite a modified background buffer":
+  test ":q! refuses over a modified background buffer, as Vim's E162":
     let e = createTestEditorWithBuffer("hello")
     e.activeBuffer.markSaved()
     let background = newTextBuffer("world")
@@ -3097,20 +3102,9 @@ suite "handleCommandModeEvent - all command mode commands execute":
     e.state.enterCommandOverlay()
     e.state.input.line.text = "q!"
 
-    check handleCommandModeEvent(e, makeEnterEvent()) == false
-
-  test ":wq refuses to quit while a background buffer is modified":
-    let e = createTestEditorWithBuffer("hello")
-    let background = newTextBuffer("world")
-    e.addBuffer(background)
-    discard background.insertText(BufferPosition(line: 0, column: 5), "!")
-    e.state.enterCommandOverlay()
-    e.state.input.line.text = "wq"
-
-    let cont = handleCommandModeEvent(e, makeEnterEvent())
-
-    check cont == true
-    check "other buffer" in e.state.statusMessage
+    check handleCommandModeEvent(e, makeEnterEvent()) == true
+    check "No write since last change for buffer \"[No Name]\"" in e.state.statusMessage
+    check background.isModified
 
   test ":x on a clean buffer refuses while a background buffer is modified":
     let e = createTestEditorWithBuffer("hello")
@@ -7624,7 +7618,7 @@ suite "Ctrl-w window commands in special modes":
 
     check e.windowManager.windows.len == 1
     check e.state.statusMessage ==
-      "No write since last change: 2 buffers modified (use :q! to discard)"
+      "No write since last change: 2 buffers modified (use :qa! to discard)"
 
   test "Ctrl-w c refused on the last window drops the rest of the mapping":
     let (e, path) = editorOnTempFile("moe_ctrlw_close_last_mapped.txt")
@@ -7753,6 +7747,881 @@ suite "ZQ is :q!":
     check not e.handleKeyCombo(
       KeyCombo(isSpecial: false, char: "q", modifiers: {kmCtrl})
     )
+
+proc typeKeys(e: Editor, keys: string): bool =
+  ## False when any key ended the editor.
+  for ch in keys:
+    if not e.handleKeyCombo(KeyCombo(isSpecial: false, char: $ch, modifiers: {})):
+      return false
+  true
+
+proc typeCommand(e: Editor, command: string): bool =
+  ## False when the Command line `command` ended the editor.
+  if not e.typeKeys(":" & command):
+    return false
+  e.handleKeyCombo(KeyCombo(isSpecial: true, special: skEnter))
+
+proc openFile(e: Editor, dir, name: string): string =
+  result = dir / name
+  writeFile(result, "orig\n")
+  require e.loadFile(result).isOk
+
+suite ":wq, :x and ZZ close only their window":
+  for command in ["wq", "x"]:
+    test ":" & command & " in a split writes and closes the window":
+      let dir = createTempDir("moe_wq_split", "")
+      defer:
+        removeDir(dir)
+      let e = newEditor(newEditorConfig())
+      let path = e.openFile(dir, "a.txt")
+      check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+      require e.vsplit().isOk
+
+      check e.typeCommand(command)
+
+      check e.windowManager.windows.len == 1
+      check readFile(path) == "A:orig\n"
+      check not e.activeBuffer.isModified
+
+  test "ZZ in a split writes and closes the window":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    let path = e.openFile(dir, "a.txt")
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    require e.vsplit().isOk
+
+    check e.typeKeys("ZZ")
+
+    check e.windowManager.windows.len == 1
+    check readFile(path) == "A:orig\n"
+
+  for keys in ["x", "ZZ"]:
+    let name = (if keys == "ZZ": keys else: ":" & keys)
+    test name & " in a split does not write an unmodified buffer":
+      let dir = createTempDir("moe_wq_split", "")
+      defer:
+        removeDir(dir)
+      let e = newEditor(newEditorConfig())
+      let path = e.openFile(dir, "a.txt")
+      removeFile(path)
+      require e.vsplit().isOk
+
+      if keys == "ZZ":
+        check e.typeKeys(keys)
+      else:
+        check e.typeCommand(keys)
+
+      check e.windowManager.windows.len == 1
+      check not fileExists(path)
+
+  test "ZZ on the last window quits without writing an unmodified buffer":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    let path = e.openFile(dir, "a.txt")
+    removeFile(path)
+
+    check not e.typeKeys("ZZ")
+
+    check not fileExists(path)
+
+  test ":wq in a split leaves another modified buffer alone":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    let other = e.activeBuffer
+    check other.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    require e.vsplit().isOk
+    let path = dir / "b.txt"
+    writeFile(path, "orig\n")
+    require e.editFile(path).isOk
+    require e.activeBuffer != other
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "B:").isOk
+
+    check e.typeCommand("wq")
+
+    check e.windowManager.windows.len == 1
+    check readFile(path) == "B:orig\n"
+    check other.isModified
+
+  test ":wq after Ctrl-o in a split leaves the written buffer unmodified":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    require e.vsplit().isOk
+    let path = dir / "b.txt"
+    writeFile(path, "orig\n")
+    require e.editFile(path).isOk
+    let written = e.activeBuffer
+
+    check e.typeKeys("iB:")
+    check e.handleKeyCombo(parseKeyCombo("C-o").get)
+    check e.typeCommand("wq")
+
+    check e.windowManager.windows.len == 1
+    check readFile(path) == "B:orig\n"
+    check not written.isModified
+    # As Vim, Insert that Ctrl-o waits for goes on in the window left.
+    check e.state.mode == EditorMode.Insert
+    check e.handleKeyCombo(KeyCombo(isSpecial: true, special: skEscape))
+    check not e.typeCommand("qa")
+
+  test ":wq from a Visual-block insert in a split writes the copied lines":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    require e.vsplit().isOk
+    let path = dir / "b.txt"
+    writeFile(path, "abc\ndef\n")
+    require e.editFile(path).isOk
+    for key in ["C-v", "j", "I", "x"]:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+    require e.state.editState.visualBlockInsertContext.isSome
+
+    # As an Insert-mode binding of save-and-quit gives it.
+    check e.processResult(HandlerResult(kind: hrSaveAndQuit), e.activeBuffer)
+
+    check e.windowManager.windows.len == 1
+    check readFile(path) == "xabc\nxdef\n"
+    check e.state.editState.visualBlockInsertContext.isNone
+
+  test "a refused :wq from Insert drops the auto-indent, as Ctrl-o, and goes on typing":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "b.txt")
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "B:").isOk
+    let path = dir / "a.txt"
+    writeFile(path, "  foo\n")
+    require e.editFile(path).isOk
+    check e.typeKeys("o")
+    require e.activeBuffer.getLine(1) == "  "
+
+    # As an Insert-mode binding of save-and-quit gives it.
+    check e.processResult(HandlerResult(kind: hrSaveAndQuit), e.activeBuffer)
+
+    check e.state.statusMessage.startsWith("Saved: " & path & "; No write since last change")
+    check readFile(path) == "  foo\n\n"
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(1) == ""
+    check e.activeWindow.cursor == BufferPosition(line: 1, column: 0)
+
+  test "a :wq from Insert whose write fails drops the auto-indent and goes on typing":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    let path = dir / "a.txt"
+    writeFile(path, "  foo\n")
+    require e.editFile(path).isOk
+    require e.vsplit().isOk
+    let existing = dir / "taken.txt"
+    writeFile(existing, "taken\n")
+    check e.typeKeys("o")
+    require e.activeBuffer.getLine(1) == "  "
+
+    # A copy onto an existing file needs `!`.
+    check e.processResult(
+      HandlerResult(kind: hrSaveAndQuit, saveAndQuitFilename: some(existing)),
+      e.activeBuffer,
+    )
+
+    check e.windowManager.windows.len == 2
+    check readFile(existing) == "taken\n"
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.getLine(1) == ""
+    check e.activeWindow.cursor == BufferPosition(line: 1, column: 0)
+
+  test "a refused :wq from a Visual-block insert ends the block insert, as Ctrl-o":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "b.txt")
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "B:").isOk
+    let path = dir / "a.txt"
+    writeFile(path, "abc\ndef\n")
+    require e.editFile(path).isOk
+    for key in ["C-v", "j", "I", "x"]:
+      check e.handleKeyCombo(parseKeyCombo(key).get)
+
+    check e.processResult(HandlerResult(kind: hrSaveAndQuit), e.activeBuffer)
+
+    check e.state.statusMessage.contains("No write since last change")
+    check readFile(path) == "xabc\nxdef\n"
+    check e.state.editState.visualBlockInsertContext.isNone
+    check e.state.mode == EditorMode.Insert
+    # As in Vim, what is typed after is not copied.
+    check e.typeKeys("y")
+    check e.handleKeyCombo(KeyCombo(isSpecial: true, special: skEscape))
+    check e.activeBuffer.getLine(1) == "xdef"
+
+  test "a :wq from Replace refused by the write goes on in Replace":
+    let e = newEditor(newEditorConfig())
+    check e.typeKeys("Rab")
+    require e.state.mode == EditorMode.Replace
+    let beeps = e.state.beepCount
+
+    check e.processResult(
+      HandlerResult(kind: hrSaveAndQuit, saveAndQuitFilename: none(string)),
+      e.activeBuffer,
+    )
+
+    check e.state.beepCount > beeps
+    check e.state.mode == EditorMode.Replace
+    check e.activeBuffer.inTransaction
+
+  test ":wq from Insert drops an untouched auto-indent before the write":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    let path = dir / "a.txt"
+    writeFile(path, "  orig\n")
+    require e.loadFile(path).isOk
+    require e.vsplit().isOk
+    check e.typeKeys("o")
+    require e.state.mode == EditorMode.Insert
+    require e.activeBuffer.getLine(1) == "  "
+    let written = e.activeBuffer
+
+    check e.processResult(
+      HandlerResult(kind: hrSaveAndQuit, saveAndQuitFilename: none(string)),
+      e.activeBuffer,
+    )
+
+    check e.windowManager.windows.len == 1
+    check readFile(path) == "  orig\n\n"
+    check not written.isModified
+
+  test ":wq from Insert in a split ends the session with the window":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    let e = newEditor(config)
+    let path = e.openFile(dir, "a.txt")
+    e.syncActiveWindow()
+    e.enforceModePolicy()
+    require e.vsplit().isOk
+    e.enforceModePolicy()
+    require e.state.mode == EditorMode.Insert
+    check e.typeKeys("A:")
+    e.state.snippetSession = SnippetSession(
+      active: true,
+      stops: @[SnippetStop(num: 0, pos: BufferPosition(line: 0, column: 2))],
+    )
+
+    check e.processResult(
+      HandlerResult(kind: hrSaveAndQuit, saveAndQuitFilename: none(string)),
+      e.activeBuffer,
+    )
+
+    check e.windowManager.windows.len == 1
+    check readFile(path) == "A:orig\n"
+    check not e.state.snippetSession.active
+    check not e.activeBuffer.isModified
+
+  test ":wq on the last window writes, then refuses over another modified buffer":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    let path = e.openFile(dir, "a.txt")
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    let background = newTextBuffer("world")
+    e.addBuffer(background)
+    discard background.insertText(BufferPosition(line: 0, column: 5), "!")
+
+    check e.typeCommand("wq")
+
+    check readFile(path) == "A:orig\n"
+    check e.state.statusMessage.startsWith("Saved: " & path & "; ")
+    check "other buffer" in e.state.statusMessage
+    check background.isModified
+
+  test ":wq in a split keeps the window when the write fails":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    let path = e.openFile(dir, "a.txt")
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    e.activeBuffer.applyFileStamp(
+      presentStamp(getTime() - initDuration(seconds = 2), 0)
+    )
+    writeFile(path, "Externally modified")
+    require e.vsplit().isOk
+    let beeps = e.state.beepCount
+
+    check e.typeCommand("wq")
+
+    check e.state.beepCount > beeps
+    check e.windowManager.windows.len == 2
+    check e.state.statusMessage.startsWith("Error: ")
+    check readFile(path) == "Externally modified"
+
+  test "ZZ beside a split Help viewer quits, as Vim does":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    let path = e.openFile(dir, "a.txt")
+    let fileWin = e.activeWindow
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    require e.windowManager.windows.len == 2
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.activeWindow == fileWin
+
+    check not e.typeKeys("ZZ")
+
+    check readFile(path) == "A:orig\n"
+
+  test ":wq beside the FileTree sidebar quits, as Vim does":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    let path = e.openFile(dir, "a.txt")
+    let fileWin = e.activeWindow
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    e.toggleFileTree(none(string), e.activeBuffer())
+    require e.focusFileTreeWindow()
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.activeWindow == fileWin
+
+    check not e.typeCommand("wq")
+
+    check readFile(path) == "A:orig\n"
+
+  test ":wq beside a split viewer still refuses over another modified buffer":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    let other = e.activeBuffer
+    check other.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    let path = dir / "b.txt"
+    writeFile(path, "orig\n")
+    require e.editFile(path).isOk
+    require e.activeBuffer != other
+    let fileWin = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.activeWindow == fileWin
+
+    check e.typeCommand("wq")
+
+    check e.state.statusMessage.contains("other buffer")
+    check other.isModified
+
+  test ":x in a split Help viewer closes only that window":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    let fileWin = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    require e.state.mode == EditorMode.Help
+
+    check e.typeCommand("x")
+
+    check e.windowManager.windows.len == 1
+    check e.activeWindow == fileWin
+    check e.state.mode == EditorMode.Normal
+
+  test ":x in a split Config viewer saves the settings, as :wq, and leaves it":
+    withTempHome(tmpDir):
+      let e = createTestEditorWithBuffer("hello")
+      let fileWin = e.activeWindow
+      check e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
+      require e.state.mode == EditorMode.Config
+      require e.windowManager.windows.len == 2
+
+      check e.typeCommand("x")
+
+      check fileExists(getConfigPath())
+      check e.windowManager.windows.len == 1
+      check e.activeWindow == fileWin
+      check e.state.mode == EditorMode.Normal
+
+  test ":x in a split Config viewer keeps it when the save fails":
+    withTempHome(tmpDir):
+      let e = createTestEditorWithBuffer("hello")
+      e.config.theme.kind = tkConfig
+      e.config.theme.path = "/nonexistent/moe_theme.toml"
+      check e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
+      require e.state.mode == EditorMode.Config
+
+      check e.typeCommand("x")
+
+      check e.state.statusMessage.startsWith(
+        "Failed to save config: Theme.path outside moe config dir: "
+      )
+      check e.state.mode == EditorMode.Config
+      check e.windowManager.windows.len == 2
+
+  test ":wq in a split Config viewer saves the settings and leaves it":
+    withTempHome(tmpDir):
+      let e = createTestEditorWithBuffer("hello")
+      e.config.theme.kind = tkDefault
+      e.config.theme.path = ""
+      let fileWin = e.activeWindow
+      check e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
+      require e.state.mode == EditorMode.Config
+
+      check e.typeCommand("wq")
+
+      check fileExists(getConfigPath())
+      check e.windowManager.windows.len == 1
+      check e.activeWindow == fileWin
+      check e.state.mode == EditorMode.Normal
+
+  test ":wq in a split with save notifications off leaves the status line as :w":
+    proc statusAfter(command: string): string =
+      let dir = createTempDir("moe_wq_split", "")
+      defer:
+        removeDir(dir)
+      let e = newEditor(newEditorConfig())
+      e.config.notification.saveScreenNotify = false
+      discard e.openFile(dir, "a.txt")
+      check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+      require e.vsplit().isOk
+      e.state.statusMessage = "Error: an earlier failure"
+      check e.typeCommand(command)
+      check readFile(dir / "a.txt") == "A:orig\n"
+      e.state.statusMessage
+
+    check statusAfter("wq") == statusAfter("w")
+
+  test ":wq {file} in a split closes the window when another window keeps the buffer":
+    let dir = createTempDir("moe_wq_split", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    let buffer = e.activeBuffer
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    require e.vsplit().isOk
+    require e.windowManager.windows[0].buffer == e.windowManager.windows[1].buffer
+
+    check e.typeCommand("wq " & dir / "b.txt")
+
+    check e.windowManager.windows.len == 1
+    check readFile(dir / "b.txt") == "A:orig\n"
+    check buffer.isModified
+
+  test ":wq in a split LogViewer saves the log as :w does and leaves it":
+    let dir = createTempDir("moe_wq_split", "")
+    let cwd = getCurrentDir()
+    setCurrentDir(dir)
+    defer:
+      setCurrentDir(cwd)
+      removeDir(dir)
+    let e = createTestEditorWithBuffer("hello")
+    let fileWin = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterLogViewer), e.activeBuffer())
+    require e.state.mode == EditorMode.LogViewer
+    require e.windowManager.windows.len == 2
+
+    check e.typeCommand("wq")
+
+    check e.state.statusMessage.startsWith("Log saved: ")
+    var saved = 0
+    for _ in walkFiles(dir / "*"):
+      inc saved
+    check saved == 1
+    check e.windowManager.windows.len == 1
+    check e.activeWindow == fileWin
+
+  test ":x in a split LogViewer leaves it without writing the log":
+    let dir = createTempDir("moe_x_split", "")
+    let cwd = getCurrentDir()
+    setCurrentDir(dir)
+    defer:
+      setCurrentDir(cwd)
+      removeDir(dir)
+    let e = createTestEditorWithBuffer("hello")
+    let fileWin = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterLogViewer), e.activeBuffer())
+    require e.state.mode == EditorMode.LogViewer
+    require e.windowManager.windows.len == 2
+
+    check e.typeCommand("x")
+
+    var saved = 0
+    for _ in walkFiles(dir / "*"):
+      inc saved
+    check saved == 0
+    check e.windowManager.windows.len == 1
+    check e.activeWindow == fileWin
+
+  test ":wq foo in Config on the last window says Config takes no file name":
+    withTempHome(tmpDir):
+      let e = createTestEditorWithBuffer("hello")
+      check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+      let fileWin = e.activeWindow
+      check e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
+      let configWin = e.activeWindow
+      e.focusWindow(e.windowManager.windows.find(fileWin))
+      require not e.closeWindow()
+      require e.activeWindow == configWin
+      require e.state.mode == EditorMode.Config
+
+      check e.typeCommand("wq foo")
+
+      check e.state.statusMessage.contains("takes no file name")
+      check not fileExists(getConfigPath())
+
+  test ":x in Config on the last window leaves the viewer, as :q there":
+    withTempHome(tmpDir):
+      let e = createTestEditorWithBuffer("hello")
+      let fileWin = e.activeWindow
+      check e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
+      let configWin = e.activeWindow
+      e.focusWindow(e.windowManager.windows.find(fileWin))
+      require not e.closeWindow()
+      require e.activeWindow == configWin
+      require e.state.mode == EditorMode.Config
+
+      check e.typeCommand("x")
+
+      check fileExists(getConfigPath())
+      check e.state.mode != EditorMode.Config
+      check e.windowManager.windows.len == 1
+
+suite ":q ends the session beside only the sidebar and split Help, as Vim's only_one_window":
+  proc fileBesideHelp(e: Editor, dir: string): EditorWindow =
+    ## A file window, focused, with a split Help viewer beside it.
+    discard e.openFile(dir, "a.txt")
+    result = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    require e.windowManager.windows.len == 2
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.activeWindow == result
+
+  test ":q beside a split Help viewer quits":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.fileBesideHelp(dir)
+
+    check not e.typeCommand("q")
+
+  test "ZQ beside a split Help viewer quits":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.fileBesideHelp(dir)
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+
+    check not e.typeKeys("ZQ")
+
+  test ":q beside the FileTree sidebar quits":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    let fileWin = e.activeWindow
+    e.toggleFileTree(none(string), e.activeBuffer())
+    require e.focusFileTreeWindow()
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.activeWindow == fileWin
+
+    check not e.typeCommand("q")
+
+  test ":q beside a split Help viewer refuses over another modified buffer":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "b.txt")
+    let other = e.activeBuffer
+    check other.insertText(BufferPosition(line: 0, column: 0), "B:").isOk
+    let path = dir / "a.txt"
+    writeFile(path, "orig\n")
+    require e.editFile(path).isOk
+    require e.activeBuffer != other
+    let fileWin = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.activeWindow == fileWin
+
+    check e.typeCommand("q")
+
+    check e.windowManager.windows.len == 2
+    check e.state.statusMessage.contains("No write since last change")
+
+  test "ZQ beside a split Help viewer refuses over a modified buffer no window shows":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "b.txt")
+    let hidden = e.activeBuffer
+    check hidden.insertText(BufferPosition(line: 0, column: 0), "B:").isOk
+    let path = dir / "a.txt"
+    writeFile(path, "orig\n")
+    require e.editFile(path).isOk
+    require e.activeBuffer != hidden
+    let fileWin = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.activeWindow == fileWin
+
+    check e.typeKeys("ZQ")
+
+    # As Vim's E162: `!` discards what the window shows, not hidden changes.
+    check e.windowManager.windows.len == 2
+    check e.state.statusMessage.startsWith("No write since last change for buffer")
+    check e.state.statusMessage.endsWith("(use :qa! to discard)")
+    check not e.typeCommand("qa!")
+
+  test ":q! on the last window discards what it shows and quits":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+
+    check not e.typeCommand("q!")
+
+  test ":q beside a split viewer other than Help closes only the window":
+    let e = createTestEditorWithBuffer("hello")
+    let fileWin = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterLogViewer), e.activeBuffer())
+    require e.windowManager.windows.len == 2
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.activeWindow == fileWin
+
+    check e.typeCommand("q")
+
+    check e.windowManager.windows.len == 1
+    check e.state.mode == EditorMode.LogViewer
+
+  test ":x in Help beside another Help and the sidebar closes only the window":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    let fileWin = e.activeWindow
+    e.toggleFileTree(none(string), e.activeBuffer())
+    e.focusWindow(e.windowManager.windows.find(fileWin))
+    require e.activeWindow == fileWin
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    let helpWin = e.activeWindow
+    e.focusWindow(e.windowManager.windows.find(fileWin))
+    require not e.closeWindow()
+    e.focusWindow(e.windowManager.windows.find(helpWin))
+    require e.state.mode == EditorMode.Help
+    check e.processResult(HandlerResult(kind: hrVSplit), e.activeBuffer())
+    require e.state.mode == EditorMode.Help
+    require e.windowManager.windows.len == 3
+
+    check e.typeCommand("x")
+
+    check e.windowManager.windows.len == 2
+
+  test ":q beside a window showing Help in place quits, as Vim skips any help window":
+    let e = createTestEditorWithBuffer("hello")
+    let fileWin = e.activeWindow
+    require e.vsplit().isOk
+    require e.enterViewerMode(
+      EditorMode.Help,
+      ModeState(kind: mskHelp, help: newHelpViewerState()),
+      newTextBuffer("help"),
+      vpInPlace,
+    ).isOk
+    require e.windowManager.windows.len == 2
+    e.focusWindow(e.windowManager.windows.find(fileWin))
+    require e.activeWindow == fileWin
+
+    check not e.typeCommand("q")
+
+  test ":q! refuses over a modified tab only a split Help viewer sits on":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "f.txt")
+    let covered = e.activeBuffer
+    check covered.insertText(BufferPosition(line: 0, column: 0), "F:").isOk
+    let fileWin = e.activeWindow
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    require e.windowManager.windows.len == 2
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.activeWindow == fileWin
+    let path = dir / "g.txt"
+    writeFile(path, "orig\n")
+    require e.editFile(path).isOk
+    require e.activeBuffer != covered
+
+    check e.typeCommand("q!")
+
+    check e.windowManager.windows.len == 2
+    check e.state.statusMessage.contains("No write since last change for buffer")
+    check covered.isModified
+
+  test ":q! from an in-place viewer on the last window discards the tab it covers":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    require e.enterViewerMode(
+      EditorMode.Help,
+      ModeState(kind: mskHelp, help: newHelpViewerState()),
+      newTextBuffer("help"),
+      vpInPlace,
+    ).isOk
+
+    check not e.processResult(
+      HandlerResult(kind: hrCloseWindow, forceClose: true, asQuit: true),
+      e.activeBuffer(),
+    )
+
+  test ":q! refuses over a modified file only an in-place Help elsewhere covers":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    let fileWin = e.activeWindow
+    require e.vsplit().isOk
+    let path = dir / "y.txt"
+    writeFile(path, "orig\n")
+    require e.editFile(path).isOk
+    let covered = e.activeBuffer
+    check covered.insertText(BufferPosition(line: 0, column: 0), "Y:").isOk
+    require e.enterViewerMode(
+      EditorMode.Help,
+      ModeState(kind: mskHelp, help: newHelpViewerState()),
+      newTextBuffer("help"),
+      vpInPlace,
+    ).isOk
+    e.focusWindow(e.windowManager.windows.find(fileWin))
+    require e.activeWindow == fileWin
+
+    # The Help window goes with the session, so the file would be lost.
+    check e.typeCommand("q!")
+
+    check e.windowManager.windows.len == 2
+    check e.state.statusMessage.contains("No write since last change for buffer")
+    check covered.isModified
+
+  test ":q closes a window on a modified file an in-place viewer elsewhere covers":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    let edited = e.activeBuffer
+    check edited.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    require e.vsplit().isOk
+    require e.enterViewerMode(
+      EditorMode.LogViewer,
+      ModeState(kind: mskLogViewer, logViewer: newLogViewerState()),
+      newTextBuffer("log"),
+      vpInPlace,
+    ).isOk
+    let covering = e.activeWindow
+    e.focusWindow(if e.windowManager.windows[0] == covering: 1 else: 0)
+    require e.activeBuffer == edited
+
+    check e.typeCommand("q")
+
+    # The covering window gets the file back, so the close loses nothing.
+    check e.windowManager.windows.len == 1
+    check edited.isModified
+
+  test ":q from an in-place viewer over the only window on a modified file is refused":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.openFile(dir, "a.txt")
+    let edited = e.activeBuffer
+    check edited.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    let fileWin = e.activeWindow
+    require e.vsplit().isOk
+    let path = dir / "y.txt"
+    writeFile(path, "orig\n")
+    require e.editFile(path).isOk
+    e.focusWindow(e.windowManager.windows.find(fileWin))
+    require e.activeBuffer == edited
+    require e.enterViewerMode(
+      EditorMode.LogViewer,
+      ModeState(kind: mskLogViewer, logViewer: newLogViewerState()),
+      newTextBuffer("log"),
+      vpInPlace,
+    ).isOk
+
+    check e.typeCommand("q")
+
+    check e.windowManager.windows.len == 2
+    check e.state.statusMessage == "No write since last change (add ! to override)"
+    check edited.isModified
+
+  test ":q in a split closes an in-place viewer over Insert without an open typing group":
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    let e = newEditor(config)
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    discard e.openFile(dir, "a.txt")
+    require e.vsplit().isOk
+    let edited = e.activeBuffer
+    check e.typeKeys("x")
+    require e.state.mode == EditorMode.Insert
+    require edited.inTransaction
+    require e.enterViewerMode(
+      EditorMode.Help,
+      ModeState(kind: mskHelp, help: newHelpViewerState()),
+      newTextBuffer("help"),
+      vpInPlace,
+    ).isOk
+    require e.windowManager.windows.len == 2
+
+    check e.processResult(
+      HandlerResult(kind: hrCloseWindow, asQuit: true), e.activeBuffer()
+    )
+
+    check e.windowManager.windows.len == 1
+    check not edited.inTransaction
+
+  test "Ctrl-w c beside a split Help viewer closes only the window, as Vim's :close":
+    let dir = createTempDir("moe_q_aux", "")
+    defer:
+      removeDir(dir)
+    let e = newEditor(newEditorConfig())
+    discard e.fileBesideHelp(dir)
+
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl}))
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "c", modifiers: {}))
+
+    check e.windowManager.windows.len == 1
+    check e.state.mode == EditorMode.Help
 
 suite "Ctrl-C in Terminal mode":
   proc fakeTerminalState(): TerminalState =

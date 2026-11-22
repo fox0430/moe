@@ -37,21 +37,27 @@ import
 when not defined(moe.embedded):
   import ../[editor_window_layout, editor_window_tab, terminal_mode]
 
-import handler_result
+import config_ops, handler_result
 
-proc trySaveLogViewerBuffer*(e: Editor): string =
+proc trySaveLogViewerBuffer*(e: Editor): Option[Result[string, string]] =
   ## Save the log viewer's content to a timestamped file in the current
-  ## directory; returns the status message or "" outside LogViewer mode.
+  ## directory: the path written, or why nothing was. None outside LogViewer.
   let activeWin = e.activeWindow
   if e.state.mode != EditorMode.LogViewer or activeWin.modeState.kind != mskLogViewer:
-    return ""
+    return none(Result[string, string])
   let
     kind = activeWin.modeState.logViewer.contentKind
     path = getCurrentDir() / logViewerSaveFileName(kind, now())
     writeRes = saveLogViewerContentToFile(activeWin.buffer.getTextString(), path)
   if writeRes.isOk:
-    return "Log saved: " & path
-  return "Log save failed: " & writeRes.error
+    return some(Result[string, string].ok(path))
+  some(Result[string, string].err(writeRes.error))
+
+proc logViewerSaveMessage(saved: Result[string, string]): string =
+  if saved.isOk:
+    "Log saved: " & saved.get
+  else:
+    "Log save failed: " & saved.error
 
 proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
   ## Update viewport to follow cursor position
@@ -72,23 +78,36 @@ proc modifiedBufferCountExcept*(e: Editor, exclude: TextBuffer): int =
     if buf != exclude and buf.isModified:
       result.inc
 
-proc quitDiscardsBuffersError*(e: Editor, exclude: TextBuffer): string =
-  ## Error for a quit that would end the session while buffers other than
-  ## `exclude` are still modified, or "" when there are none. Such a buffer
-  ## need not be visible anywhere: an LSP rename edits its targets in buffers
-  ## that join no window.
-  let count = e.modifiedBufferCountExcept(exclude)
-  if count == 0:
-    return ""
-  "No write since last change: " & $count & " other buffer" &
-    (if count > 1: "s" else: "") & " modified (add ! to override)"
+proc hiddenChangesError*(e: Editor): string =
+  ## Error for a forced close of the last window while a modified buffer no
+  ## window shows would go with the session, as Vim's `:q!` (E162), or "".
+  ## A window the session ends with, such as a Help window, holds nothing
+  ## that survives it.
+  for buf in e.buffers:
+    if not buf.isModified:
+      continue
+    var held = false
+    for win in e.windowManager.windows:
+      if e.keepsSession(win) and e.holds(win, buf):
+        held = true
+        break
+    if not held:
+      return "No write since last change for buffer \"" &
+        buf.displayName.get("[No Name]") & "\" (use :qa! to discard)"
+  ""
 
 proc closeLastWindowError*(e: Editor, visible: TextBuffer): string =
   ## Error for closing the last window, which ends the session, while any
   ## buffer is modified, or "" when none is. `visible` counts too: `C-w c`
-  ## reaches the close without the check `:q` makes.
-  let others = e.modifiedBufferCountExcept(visible)
-  const hint = " (use :q! to discard)"
+  ## reaches the close without the check `:q` makes. The hint names `:qa!`
+  ## where `:q!` would refuse too.
+  var others = 0
+  for buf in e.buffers:
+    if buf != visible and buf.isModified:
+      others.inc
+  let hint =
+    if e.hiddenChangesError().len > 0: " (use :qa! to discard)"
+    else: " (use :q! to discard)"
   if visible.isModified:
     if others == 0:
       return "No write since last change" & hint
@@ -126,11 +145,13 @@ proc runningJob*(e: Editor, spare = none(BufferId)): Option[BufferId] =
         return some(id)
     none(BufferId)
 
-proc refuseQuitFor*(e: Editor, job: BufferId, show: bool, wrote = "") =
+proc refuseQuitFor*(
+    e: Editor, job: BufferId, show: bool, wrote = "", endKeys = ":qa!"
+) =
   ## Refuse the quit `job` would die with. Checked after any write the quit
   ## makes, so `:qa!` loses nothing more; `wrote` says what was written.
-  ## `show` brings the job into view. The refusal fails the command, so a
-  ## mapping stops there.
+  ## `show` brings the job into view; `endKeys` is the command the hint names.
+  ## The refusal fails the command, so a mapping stops there.
   when not defined(moe.embedded):
     let shown =
       if show:
@@ -140,9 +161,9 @@ proc refuseQuitFor*(e: Editor, job: BufferId, show: bool, wrote = "") =
     # As in Vim, the job is shown taking keys, so a typed `:` would reach it.
     let keys =
       if e.activeWindow.mode == EditorMode.Terminal:
-        "Ctrl-\\ Ctrl-n, then :qa!"
+        "Ctrl-\\ Ctrl-n, then " & endKeys
       else:
-        ":qa!"
+        endKeys
     let buffer = e.bufferById(job)
     let name =
       if buffer.isSome:
@@ -165,6 +186,103 @@ proc refuseQuitForRunningJob*(e: Editor, show: bool, spare = none(BufferId)): bo
   if job.isSome:
     e.refuseQuitFor(job.get, show)
   job.isSome
+
+type
+  CloseVerdictKind* = enum
+    cvClose ## The window closes and the session goes on.
+    cvEndSession ## The window is the session's last, so the session ends.
+    cvRefuse ## Changes keep the window; `message` says which.
+    cvRefuseJob ## A running job, `job`, keeps the session from ending.
+
+  CloseVerdict* = object
+    ## What closing the active window comes to, decided before anything moves.
+    case kind*: CloseVerdictKind
+    of cvRefuse:
+      message*: string
+    of cvRefuseJob:
+      job*: BufferId
+    of cvClose, cvEndSession:
+      discard
+
+proc closeVerdict*(e: Editor, force, asQuit: bool): CloseVerdict =
+  ## The checks of Vim's `:quit` (`asQuit`) or `:close`, in its order: the
+  ## window's own changes, then those the session would lose, then a running
+  ## job. Touches nothing. `force` ends the job the window shows.
+  let win = e.activeWindow
+  let shown = win.buffer
+  if asQuit and not force:
+    for held in e.heldBuffers(win):
+      if held.isModified and e.holderCount(held) <= 1:
+        return CloseVerdict(
+          kind: cvRefuse, message: "No write since last change (add ! to override)"
+        )
+  let lastWindow =
+    if asQuit:
+      e.isLastSessionWindow()
+    else:
+      e.windowManager.windows.len <= 1
+  if not lastWindow:
+    return CloseVerdict(kind: cvClose)
+  # `!` discards only what a window shows, as Vim's check_changed_any.
+  let discardErr =
+    if force:
+      e.hiddenChangesError()
+    else:
+      e.closeLastWindowError(shown)
+  if discardErr.len > 0:
+    return CloseVerdict(kind: cvRefuse, message: discardErr)
+  var spare = none(BufferId)
+  when not defined(moe.embedded):
+    if force and e.isShowingTab(win, win.tabBufferId):
+      spare = some(win.tabBufferId)
+  let job = e.runningJob(spare)
+  if job.isSome:
+    return CloseVerdict(kind: cvRefuseJob, job: job.get)
+  CloseVerdict(kind: cvEndSession)
+
+proc refuseClose*(e: Editor, verdict: CloseVerdict, wrote = "") =
+  ## Report a refusing `verdict` as Vim's error, which ends a mapping. A job
+  ## is brought into view. `wrote` says what a write before the close wrote.
+  case verdict.kind
+  of cvRefuse:
+    e.state.statusMessage =
+      if wrote.len > 0: wrote & "; " & verdict.message else: verdict.message
+    e.state.beep()
+  of cvRefuseJob:
+    e.refuseQuitFor(verdict.job, show = true, wrote)
+  of cvClose, cvEndSession:
+    discard
+
+proc showsRunningJob*(e: Editor, win: EditorWindow): bool =
+  ## Whether `win` shows a Terminal job that is still running.
+  when defined(moe.embedded):
+    false
+  else:
+    e.isShowingTab(win, win.tabBufferId) and e.isJobRunning(win.tabBufferId)
+
+proc refuseCloseForShownJob(e: Editor): bool =
+  ## Whether `:wq`/`:x`/ZZ, `!` or not, keep a window showing a running job, as
+  ## Vim's write of it under its own name fails (E382) before the window would
+  ## close.
+  when defined(moe.embedded):
+    false
+  else:
+    let win = e.activeWindow
+    let job = win.tabBufferId
+    if not e.showsRunningJob(win):
+      return false
+    # `:q!` ends the job only with the last window holding it, and on the last
+    # window it ends the session, which another job keeps.
+    let jobBuffer = e.bufferById(job)
+    let endKeys =
+      if jobBuffer.isSome and e.holderCount(jobBuffer.get) > 1:
+        ":bd!"
+      elif e.isLastSessionWindow() and e.runningJob(spare = some(job)).isSome:
+        ":qa!"
+      else:
+        ":q!"
+    e.refuseQuitFor(job, show = false, endKeys = endKeys)
+    true
 
 proc logSave(e: Editor, path: string, isCopy: bool) =
   ## The log line a write by command leaves, if the settings ask for it.
@@ -209,51 +327,137 @@ const ConfigTakesNoFileName =
   "Error: Config saves its settings to the config file and takes no file name"
   ## Config's view is empty, so a copy of it would be too.
 
-proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
-  ## Save and quit: return false on success, true on failure.
-  if e.state.mode == EditorMode.Config and r.saveAndQuitFilename.isSome:
-    e.state.statusMessage = ConfigTakesNoFileName
-    return true
-  let buffer = e.activeBuffer()
-  if not r.forceQuitAfterSave:
-    # :wq/:x end the session, not just the window, so the other buffers go too.
-    let discardErr = e.quitDiscardsBuffersError(buffer)
-    if discardErr.len > 0:
-      e.state.statusMessage = discardErr
-      e.state.beep()
-      return true
+type
+  QuitWrite* = object
+    ## The write `:wq`, `:x` and `ZZ` make before the window or session goes.
+    outcome: Option[WriteOutcome] ## The file write, none when there was none.
+    wrote: string ## What the status line says was written, "" for nothing.
+    buffer: TextBuffer ## What was written, which the close may take out of view.
+
+  QuitWriteRefusal = object
+    message: string
+
+proc refuse(e: Editor, refusal: QuitWriteRefusal) =
+  ## As a Vim error, the refusal ends the mapping that ran it.
+  e.state.statusMessage = refusal.message
+  e.state.beep()
+
+type QuitWriteTarget = enum
+  qwNothing ## `:x` and ZZ with nothing to write.
+  qwConfig ## The settings, from Config.
+  qwLog ## The log, from the log viewer, as `:w` there.
+  qwBuffer ## The buffer, to its file or the one named.
+
+proc quitWriteTarget(e: Editor, r: HandlerResult, buffer: TextBuffer): QuitWriteTarget =
+  ## What the write of :wq/:x/ZZ writes.
+  if e.state.mode == EditorMode.Config:
+    # Config keeps no modified state, so its `:x` writes as `:wq` does.
+    return qwConfig
+  # As Vim's bufIsChanged, a running job counts as a change.
+  if r.writeOnlyIfModified and not buffer.isModified and
+      not e.showsRunningJob(e.activeWindow):
+    return qwNothing
+  if e.state.mode == EditorMode.LogViewer and r.saveAndQuitFilename.isNone:
+    # The log is never modified, so `:x` and ZZ write none: each write is a
+    # new file.
+    return qwLog
+  qwBuffer
+
+proc writeBuffer(
+    e: Editor, r: HandlerResult, buffer: TextBuffer
+): Result[QuitWrite, QuitWriteRefusal] =
   let saveResult = e.saveFile(buffer, r.saveAndQuitFilename, r.forceQuitAfterSave)
   if saveResult.isErr:
-    logError("handler", "Save and quit failed: " & saveResult.error)
-    e.state.statusMessage = "Error: " & saveResult.error
-    return true
+    logError("handler", "Write before quit failed: " & saveResult.error)
+    return err(QuitWriteRefusal(message: "Error: " & saveResult.error))
   let saved = saveResult.get
   let isCopy = saved.kind == wkCopy
-  if not r.forceQuitAfterSave and isCopy and buffer.isModified:
-    # `:wq {file}` wrote a copy; the buffer's own changes are still unsaved.
-    e.state.statusMessage =
-      "Saved a copy: " & saved.path & "; No write since last change (add ! to override)"
-    for warning in saved.warnings:
-      e.appendStatus(warning)
+  e.logSave(saved.path, isCopy)
+  let wrote = (if isCopy: "Saved a copy: " else: "Saved: ") & saved.path
+  ok(QuitWrite(outcome: some(saved), wrote: wrote))
+
+proc writeBeforeQuit(
+    e: Editor, r: HandlerResult, buffer: TextBuffer
+): Result[QuitWrite, QuitWriteRefusal] =
+  case e.quitWriteTarget(r, buffer)
+  of qwNothing:
+    ok(QuitWrite())
+  of qwConfig:
+    let written = e.writeConfigFile()
+    if written.isErr:
+      return err(QuitWriteRefusal(message: written.error.saveFailedMessage))
+    ok(QuitWrite(wrote: "Config saved: " & written.get))
+  of qwLog:
+    # Without a log in the window, it writes as any buffer does.
+    let saved = e.trySaveLogViewerBuffer()
+    if saved.isNone:
+      return e.writeBuffer(r, buffer)
+    let msg = logViewerSaveMessage(saved.get)
+    if saved.get.isOk:
+      return ok(QuitWrite(wrote: msg))
+    err(QuitWriteRefusal(message: msg))
+  of qwBuffer:
+    e.writeBuffer(r, buffer)
+
+proc refuseQuitBeforeWrite*(e: Editor, r: HandlerResult): bool =
+  ## Whether :wq/:x/ZZ fail before anything is touched.
+  if r.saveAndQuitFilename.isNone and e.refuseCloseForShownJob():
     return true
-  # As in Vim, after the write. `:wq!` forces the write, not the job.
-  let job = e.runningJob()
-  if job.isSome:
-    if not isCopy:
-      # The editor stays, so the write starts what a `:w` would. Before the
-      # refusal, which a build announcing itself would hide.
-      e.buildAndCheckOnSave(buffer, saved.path)
-    e.logSave(saved.path, isCopy)
-    let wrote = (if isCopy: "Saved a copy: " else: "Saved: ") & saved.path
-    e.refuseQuitFor(job.get, show = true, wrote)
-    for warning in saved.warnings:
-      e.appendStatus(warning)
+  if e.state.mode == EditorMode.Config and r.saveAndQuitFilename.isSome:
+    e.refuse(QuitWriteRefusal(message: ConfigTakesNoFileName))
     return true
-  # The session ends with the write, so stderr is where these are read.
-  for warning in saved.warnings:
-    e.state.exitReports.add warning
-  logInfo("handler", "File saved, quitting editor")
-  return false
+  false
+
+proc writeForQuit*(e: Editor, r: HandlerResult): Option[QuitWrite] =
+  ## The write :wq/:x/ZZ make before the :quit that follows, none when the
+  ## command was refused. Nothing is reported until the close shows whether
+  ## the editor stays: see `reportQuitWrite`.
+  let buffer = e.activeBuffer()
+  let written = e.writeBeforeQuit(r, buffer)
+  if written.isErr:
+    e.refuse(written.error)
+    return none(QuitWrite)
+  var quitWrite = written.get
+  quitWrite.buffer = buffer
+  some(quitWrite)
+
+proc wrote*(written: QuitWrite): string =
+  written.wrote
+
+proc warnings*(written: QuitWrite): seq[string] =
+  if written.outcome.isSome:
+    written.outcome.get.warnings
+  else:
+    @[]
+
+proc startQuitWriteBuild(e: Editor, written: QuitWrite) =
+  ## What a `:w` of the file starts. A copy starts nothing.
+  let outcome = written.outcome
+  if outcome.isSome and outcome.get.kind != wkCopy:
+    e.buildAndCheckOnSave(written.buffer, outcome.get.path)
+
+proc reportQuitWrite*(e: Editor, written: QuitWrite) =
+  ## Report the write of :wq/:x/ZZ when the window closed and the editor stays.
+  # Config and the log viewer report their write as `:w` does there.
+  let notify =
+    written.outcome.isNone or (
+      e.config.notification.screenNotifications and
+      e.config.notification.saveScreenNotify
+    )
+  if notify and written.wrote.len > 0:
+    e.state.statusMessage = written.wrote
+  # After the write's message, which a build announcing itself replaces.
+  e.startQuitWriteBuild(written)
+  for warning in written.warnings:
+    e.appendStatus(warning)
+
+proc reportRefusedQuitWrite*(e: Editor, written: QuitWrite, verdict: CloseVerdict) =
+  ## Report the write of :wq/:x/ZZ and the refusal of the :quit after it.
+  # Before the refusal, which a build announcing itself would hide.
+  e.startQuitWriteBuild(written)
+  e.refuseClose(verdict, written.wrote)
+  for warning in written.warnings:
+    e.appendStatus(warning)
 
 proc skippedSummary(skipped: seq[SkippedSave]): string =
   ## Batch skip reasons, counted per reason.
@@ -378,31 +582,20 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
   ## Save the active buffer (or LogViewer/Config content) and run the
   ## buildOnSave / syntaxCheckOnSave side effects.
   if e.state.mode == EditorMode.LogViewer and r.saveFilename.isNone:
-    let msg = e.trySaveLogViewerBuffer()
-    if msg.len > 0:
-      e.state.statusMessage = msg
-  elif e.state.mode == EditorMode.Config and r.saveFilename.isSome:
+    let saved = e.trySaveLogViewerBuffer()
+    if saved.isSome:
+      e.state.statusMessage = logViewerSaveMessage(saved.get)
+      return
+    # Without a log in the window, it writes as any buffer does, as `:wq`.
+  if e.state.mode == EditorMode.Config and r.saveFilename.isSome:
     e.state.statusMessage = ConfigTakesNoFileName
   elif e.state.mode == EditorMode.Config:
-    let configPath = getConfigPath()
-    var backupOk = true
-    if fileExists(configPath):
-      let backupPath = configPath & ".bac"
-      try:
-        copyFile(configPath, backupPath)
-        logInfo("config", "Backed up existing config to: " & backupPath)
-      except CatchableError as ex:
-        backupOk = false
-        e.state.statusMessage = "Failed to backup config: " & ex.msg
-        logError("config", "Failed to backup config: " & ex.msg)
-    if backupOk:
-      let saveResult = saveConfig(e.config)
-      if saveResult.isOk:
-        e.state.statusMessage = "Config saved: " & configPath
-        logInfo("config", "Config saved: " & configPath)
-      else:
-        e.state.statusMessage = "Failed to save config: " & saveResult.error
-        logError("config", "Failed to save config: " & saveResult.error)
+    let written = e.writeConfigFile()
+    if written.isOk:
+      e.state.statusMessage = "Config saved: " & written.get
+      logInfo("config", "Config saved: " & written.get)
+    else:
+      e.state.statusMessage = written.error.saveFailedMessage
   else:
     let saveResult =
       e.saveFile(activeBuffer, r.saveFilename, r.forceSave, saveAs = r.saveAs)

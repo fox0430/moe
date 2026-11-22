@@ -26,7 +26,7 @@ import
     editor, buffer, config, config_loader, highlight, path_key, editor_persist,
     editor_window_layout,
   ]
-import ../src/moepkg/command_handlers/editor_ops
+import ../src/moepkg/command_handlers/[editor_ops, result_processor]
 import ../src/moepkg/[cmdline, message_log]
 import ../src/moepkg/command_handlers/startup_commands
 import ../src/moepkg/command_handlers/handler_result
@@ -2985,7 +2985,7 @@ suite "Editor - :w {file} writes a copy, as Vim":
     let r = HandlerResult(
       kind: hrSaveAndQuit, saveAndQuitFilename: none(string), forceQuitAfterSave: false
     )
-    check not e.processSaveAndQuitResult(r)
+    check not e.processResult(r, e.activeBuffer)
     check readFile(src) == "A:orig\n"
 
   test "Another spelling of the buffer's own file keeps the buffer's name":
@@ -3101,10 +3101,11 @@ suite "Editor - :w on text no file stands behind":
 
     # `:wq {file}` stays too, rather than writing an empty copy and quitting.
     e.state.statusMessage = ""
-    check e.processSaveAndQuitResult(
+    check e.processResult(
       HandlerResult(
         kind: hrSaveAndQuit, saveAndQuitFilename: some(dst), forceQuitAfterSave: true
-      )
+      ),
+      e.activeBuffer,
     )
     check "takes no file name" in e.state.statusMessage
     check not fileExists(dst)

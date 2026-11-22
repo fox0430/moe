@@ -82,7 +82,7 @@ proc executeQuit*(
   if not force and not isSharedBuffer:
     if buffer.isModified:
       return unsavedChangesErr()
-  return HandlerResult(kind: hrCloseWindow, forceClose: force)
+  return HandlerResult(kind: hrCloseWindow, forceClose: force, asQuit: true)
 
 proc executeQuitAll*(
     handler: CommandModeHandler,
@@ -137,22 +137,15 @@ proc executeSaveAndQuit*(
   )
 
 proc executeSaveIfModifiedAndQuit*(
-    handler: CommandModeHandler,
-    buffer: TextBuffer,
-    filename: Option[string],
-    force: bool,
-    otherModifiedCount: int = 0,
+    handler: CommandModeHandler, filename: Option[string], force: bool
 ): HandlerResult =
   ## Execute :x/:xit, writing only when the buffer is modified.
-  if not buffer.isModified:
-    # Nothing to write, but the session still ends: check the other buffers
-    # exactly as :qa does.
-    result = handler.executeQuitAll(buffer, force, otherModifiedCount)
-    if result.kind == hrQuit:
-      # As in Vim, `:x!` forces past the buffers but not a running job.
-      result.endJobs = false
-    return
-  handler.executeSaveAndQuit(buffer, filename, force)
+  HandlerResult(
+    kind: hrSaveAndQuit,
+    saveAndQuitFilename: filename,
+    forceQuitAfterSave: force,
+    writeOnlyIfModified: true,
+  )
 
 proc executeSaveAllAndQuit*(handler: CommandModeHandler, force: bool): HandlerResult =
   ## Execute save all and quit command (:wqa, :xa, :wqa!)
@@ -738,7 +731,7 @@ proc handleCommandModeInput*(
     )
   of claSaveIfModifiedAndQuit:
     handler.executeSaveIfModifiedAndQuit(
-      buffer, cmdResult.saveFilename, cmdResult.forceSaveAndQuit, otherModifiedCount
+      cmdResult.saveFilename, cmdResult.forceSaveAndQuit
     )
   of claSaveAllAndQuit:
     handler.executeSaveAllAndQuit(cmdResult.forceSaveAllAndQuit)

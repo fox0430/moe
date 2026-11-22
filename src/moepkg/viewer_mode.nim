@@ -45,6 +45,25 @@ proc mainWindowCount*(e: Editor): int =
     if not win.isSidebar:
       inc result
 
+proc keepsSession*(e: Editor, win: EditorWindow): bool =
+  ## Whether `win` keeps the session going. Help does not unless the active
+  ## window shows Help too, as help windows in Vim's only_one_window(). Nor
+  ## does the FileTree sidebar, unlike netrw in Vim: a moe choice. Other
+  ## viewers do, as quickfix windows do in Vim. The active window always
+  ## counts.
+  if win == e.activeWindow:
+    return true
+  let inHelp = e.activeWindow.modeState.kind == mskHelp
+  not (win.isSidebar or (win.modeState.kind == mskHelp and not inHelp))
+
+proc isLastSessionWindow*(e: Editor): bool =
+  ## Whether closing the active window ends the session. See `keepsSession`.
+  var count = 0
+  for win in e.windowManager.windows:
+    if e.keepsSession(win):
+      inc count
+  count <= 1
+
 proc sidebarTab*(e: Editor): Option[TextBuffer] =
   ## The tab the FileTree sidebar serves: that of the window `leaveSidebar`
   ## goes to, or what one opened beside a lone sidebar shows.

@@ -57,6 +57,7 @@ type PassthroughKind* = enum
   # file.*
   ptSave
   ptSaveAndQuit
+  ptSaveIfModifiedAndQuit
   ptQuitForce
   ptBufferDelete
   ptNewFile
@@ -136,6 +137,8 @@ proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
     some(ptSave)
   of "file.save.and.quit":
     some(ptSaveAndQuit)
+  of "file.save.if.modified.and.quit":
+    some(ptSaveIfModifiedAndQuit)
   of "file.quit.force":
     some(ptQuitForce)
   of "file.close":
@@ -217,12 +220,20 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
   of ptCloseWindow:
     HandlerResult(kind: hrCloseWindow, forceClose: false)
   of ptCloseWindowForce:
-    HandlerResult(kind: hrCloseWindow, forceClose: true)
+    # ZQ, which is `:q!`.
+    HandlerResult(kind: hrCloseWindow, forceClose: true, asQuit: true)
   of ptSave:
     HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
   of ptSaveAndQuit:
     HandlerResult(
       kind: hrSaveAndQuit, saveAndQuitFilename: none(string), forceQuitAfterSave: false
+    )
+  of ptSaveIfModifiedAndQuit:
+    HandlerResult(
+      kind: hrSaveAndQuit,
+      saveAndQuitFilename: none(string),
+      forceQuitAfterSave: false,
+      writeOnlyIfModified: true,
     )
   of ptQuitForce:
     HandlerResult(kind: hrQuit)

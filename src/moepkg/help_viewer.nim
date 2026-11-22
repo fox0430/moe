@@ -144,7 +144,7 @@ const UntrimmedHelpLines =
   ) & blank() & prose("Examples:\n") &
   keyTable(
     {
-      ":nmap C-s save-and-quit": "Ctrl-S saves and quits (Normal mode)",
+      ":nmap C-s save-and-quit": "Ctrl-S as :wq (Normal mode)",
       ":imap jj Escape": "jj exits Insert mode",
       ":nmap C-a g g": "Ctrl-A goes to first line (Normal mode)",
       ":vmap C-c Escape": "Ctrl-C exits Visual mode",

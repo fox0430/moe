@@ -731,7 +731,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | Command | Description |
 |:----|:----|
 | save | Save file |
-| save-and-quit | Save file and quit |
+| save-and-quit | Save file and close the window (as :wq) |
+| save-if-modified-and-quit | Save file if modified and close the window (as :x) |
 | quit-force | Quit without saving |
 | close-window | Close current window |
 | close-window-force | Close window without saving (as :q!) |
@@ -1065,8 +1066,8 @@ modified-buffer guard for `:bdelete` / `:quit` apply automatically. The runtime
 | terminal | Open terminal emulator (default shell) |
 | w | Save current buffer |
 | wa / saveall | Save all buffers |
-| wq | Save and quit |
-| x / xit | Save if modified and quit |
+| wq | Save and close the window |
+| x / xit | Save if modified and close the window |
 | wqa | Save all and quit |
 
 Example:
