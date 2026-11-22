@@ -438,7 +438,7 @@ suite "syntax_zsh - zshNextToken string literals":
 suite "syntax_zsh - zshNextToken escape sequences":
   test "escape in double quoted string":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"a\\nb\"")
+    g.initGeneralTokenizer("\"a\\$b\"")
     g.zshNextToken()
     check g.kind == gtStringLit
     g.zshNextToken()
@@ -446,7 +446,8 @@ suite "syntax_zsh - zshNextToken escape sequences":
 
   test "hex escape in string":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"\\xFF\"")
+    g.initGeneralTokenizer("$'\\xFF'")
+    g.zshNextToken() # $
     g.zshNextToken()
     check g.kind == gtStringLit
     g.zshNextToken()
@@ -454,7 +455,8 @@ suite "syntax_zsh - zshNextToken escape sequences":
 
   test "numeric escape in string":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"\\123\"")
+    g.initGeneralTokenizer("$'\\123'")
+    g.zshNextToken() # $
     g.zshNextToken()
     check g.kind == gtStringLit
     g.zshNextToken()
@@ -691,3 +693,42 @@ suite "syntax_zsh - complex code":
     check g.kind == gtOperator # $
     g.zshNextToken()
     check g.kind == gtDecNumber # 1
+
+suite "syntax_zsh - glob flags":
+  test "`(#i)` is a glob flag, not a comment":
+    var g: GeneralTokenizer
+    let text = "x=\"$(ls (#i)*.txt)\"\nls"
+    g.initGeneralTokenizer(text)
+    var comments = 0
+    while true:
+      g.zshNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtComment:
+        inc comments
+    check comments == 0
+    check g.lang.shell.contexts == ""
+
+suite "syntax_zsh - process substitution":
+  proc kinds(text: string): seq[(TokenClass, string)] =
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(text)
+    while true:
+      g.zshNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind != gtWhitespace:
+        result.add (g.kind, text[g.start ..< g.start + g.length])
+
+  test "a heredoc in `=( )` ends with the substitution":
+    check kinds("diff =(cat <<EOF\nx\nEOF) y\nls")[^4 .. ^1] ==
+      @[
+        (gtKeyword, "EOF"),
+        (gtPunctuation, ")"),
+        (gtIdentifier, "y"),
+        (gtIdentifier, "ls"),
+      ]
+
+  test "an `=(` inside a word is not a process substitution":
+    check kinds("arr=(cat <<EOF\nx\nEOF)\nEOF\nls")[^2 .. ^1] ==
+      @[(gtKeyword, "EOF"), (gtIdentifier, "ls")]

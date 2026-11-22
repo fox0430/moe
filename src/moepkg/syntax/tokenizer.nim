@@ -275,6 +275,24 @@ type
       ## Where on the line the lexer is. Reset at each line's first non-blank token
       ## unless that is a `\` continuation.
 
+  ShellState* = object
+    heredocMarker*: string
+      ## End marker of a heredoc whose body is open or starts on the next line,
+      ## after `-` for `<<-` (tabs may come before it) or `=`; empty when none.
+    contexts*: string
+      ## Quoting the lexer is in, innermost last: `"`, `'` and `$` (for `$'`)
+      ## strings, `(` and `` ` `` command substitutions, `e` for a `${`
+      ## expansion, `{` for a brace inside a substitution, `p` for a
+      ## parenthesis inside one, `c` for a `case` inside one, whose
+      ## patterns end with an unmatched `)`, and `a` and `[` for a parenthesis
+      ## and a bracket of `((`, `$((`, `$[` or `name[` arithmetic, where `<<`
+      ## is a shift.
+
+  CLikeState* = object
+    rawDelimiter*: string
+      ## Delimiter of the C++ raw string open, `x` for `R"x(`. Only meaningful
+      ## while `state` is `gtLongStringLit`.
+
   LangState* = object
     ## Per-language tokenizer state, captured/restored as a whole record.
     ## 8-aligned members first, then bool-only, to minimise padding.
@@ -286,6 +304,8 @@ type
     lua*: LuaState
     nim*: NimState
     vim*: VimState
+    shell*: ShellState
+    clike*: CLikeState
     html*: HtmlState
     astro*: AstroState
     yaml*: YamlState

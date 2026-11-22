@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[sequtils, unittest]
 
 import ../src/moepkg/syntax/[tokenizer, dispatch, syntax_markdown]
 
@@ -874,6 +874,26 @@ suite "syntax_markdown - fence lines":
         inc fences
     check fences == 2
     check (gtHeading, "#") in tokens
+
+  test "a heredoc in a ```sh block is a string up to its end marker":
+    let tokens = collectTokens("```sh\ncat <<EOF\n{ x\nEOF\necho }\n```\n# heading")
+    check (gtLongStringLit, "{ x\n") in tokens
+    check (gtKeyword, "EOF") in tokens
+    check (gtKeyword, "}") in tokens
+    check tokens.count((gtCodeFence, "```")) == 2
+    check (gtHeading, "#") in tokens
+
+  test "a heredoc in an indented ```sh block ends at its indented marker":
+    let tokens =
+      collectTokens("- item\n\n  ```sh\n  cat <<EOF\n  x\n  EOF\n  echo a\n  ```")
+    check (gtKeyword, "  EOF") in tokens
+    check (gtKeyword, "echo") in tokens
+
+  test "an unclosed heredoc or string in a ```sh block ends at the closing fence":
+    for body in ["cat <<EOF\n{", "echo 'a\nb"]:
+      let tokens = collectTokens("```sh\n" & body & "\n```\n# heading")
+      check tokens.count((gtCodeFence, "```")) == 2
+      check (gtHeading, "#") in tokens
 
   test "a ```vim9 block is Vim9 script until the closing fence":
     let tokens = collectTokens("```vim9\n# c\nvar x = 1 # t\n```\n```vim\n# n\n```")

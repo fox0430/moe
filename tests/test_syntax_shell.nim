@@ -460,22 +460,31 @@ suite "syntax_shell - shellNextToken string literals":
 
   test "double quoted string with escape":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"hello\\nworld\"")
+    g.initGeneralTokenizer("\"hello\\$world\"")
     g.shellNextToken()
     check g.kind == gtStringLit
     check g.state == gtStringLit
 
-  test "single quoted string with escape":
+  test "a backslash before other characters in a double quoted string is literal":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\nb\\x41\\1\"")
+    g.shellNextToken()
+    check g.kind == gtStringLit
+    check g.length == 12
+    check g.state == gtNone
+
+  test "a backslash in a single quoted string is literal":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("'hello\\nworld'")
     g.shellNextToken()
     check g.kind == gtStringLit
-    check g.state == gtStringLit
+    check g.length == 14
+    check g.state == gtNone
 
 suite "syntax_shell - shellNextToken escape sequences":
   test "escape in double quoted string":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"hello\\nworld\"")
+    g.initGeneralTokenizer("\"hello\\\"world\"")
     g.shellNextToken()
     check g.kind == gtStringLit
     check g.state == gtStringLit
@@ -485,7 +494,8 @@ suite "syntax_shell - shellNextToken escape sequences":
 
   test "hex escape in string":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"\\xFF\"")
+    g.initGeneralTokenizer("$'\\xFF'")
+    g.shellNextToken() # $
     g.shellNextToken()
     check g.kind == gtStringLit
     check g.state == gtStringLit
@@ -495,7 +505,8 @@ suite "syntax_shell - shellNextToken escape sequences":
 
   test "numeric escape in string":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"\\123\"")
+    g.initGeneralTokenizer("$'\\123'")
+    g.shellNextToken() # $
     g.shellNextToken()
     check g.kind == gtStringLit
     check g.state == gtStringLit
@@ -505,7 +516,8 @@ suite "syntax_shell - shellNextToken escape sequences":
 
   test "single hex digit escape":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"\\xA\"")
+    g.initGeneralTokenizer("$'\\xA'")
+    g.shellNextToken() # $
     g.shellNextToken()
     check g.state == gtStringLit
 
@@ -947,16 +959,16 @@ suite "syntax_shell - shellNextToken edge cases":
     g.shellNextToken()
     check g.kind == gtStringLit
 
-  test "escape with null terminator":
+  test "a backslash right before the end of the text stays in the string":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"test\\")
     g.shellNextToken()
     check g.kind == gtStringLit
+    check g.length == 6
     check g.state == gtStringLit
 
     g.shellNextToken()
-    check g.kind == gtEscapeSequence
-    check g.state == gtNone
+    check g.kind == gtEof
 
   test "number with suffix":
     var g: GeneralTokenizer
@@ -993,12 +1005,12 @@ suite "syntax_shell - shellNextToken edge cases":
 suite "syntax_shell - shellNextToken string continuation":
   test "string continuation after escape":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"hello\\nworld\"")
+    g.initGeneralTokenizer("\"hello\\\"world\"")
     g.shellNextToken() # "hello
     check g.kind == gtStringLit
     check g.state == gtStringLit
 
-    g.shellNextToken() # \n
+    g.shellNextToken() # \"
     check g.kind == gtEscapeSequence
 
     g.shellNextToken() # world"
@@ -1007,7 +1019,7 @@ suite "syntax_shell - shellNextToken string continuation":
 
   test "multiple escapes in string":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"a\\nb\\tc\"")
+    g.initGeneralTokenizer("\"a\\$b\\`c\"")
 
     var tokens: seq[TokenClass] = @[]
     while true:
@@ -1089,3 +1101,358 @@ suite "syntax_shell - shellNextToken special shell constructs":
     g.shellNextToken()
     check g.kind == gtKeyword
     check g.length == 1
+
+suite "syntax_shell - heredocs":
+  proc kinds(text: string): seq[(TokenClass, string)] =
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(text)
+    while true:
+      g.shellNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind != gtWhitespace:
+        result.add (g.kind, text[g.start ..< g.start + g.length])
+
+  test "the body is a string up to the end marker":
+    check kinds("cat <<EOF\n  {\n}\nEOF\necho }") ==
+      @[
+        (gtIdentifier, "cat"),
+        (gtOperator, "<<"),
+        (gtIdentifier, "EOF"),
+        (gtLongStringLit, "  {\n"),
+        (gtLongStringLit, "}\n"),
+        (gtKeyword, "EOF"),
+        (gtKeyword, "echo"),
+        (gtKeyword, "}"),
+      ]
+
+  test "the rest of the opening line is code":
+    check kinds("cat <<EOF | sort # c\nx\nEOF")[3 .. ^1] ==
+      @[
+        (gtOperator, "|"),
+        (gtIdentifier, "sort"),
+        (gtComment, "# c"),
+        (gtLongStringLit, "x\n"),
+        (gtKeyword, "EOF"),
+      ]
+
+  test "a quoted or escaped marker ends at its text":
+    check kinds("cat <<'E F'\nx\nE F")[^1] == (gtKeyword, "E F")
+    check kinds("cat <<\"EOF\"\nx\nEOF")[^1] == (gtKeyword, "EOF")
+    check kinds("cat <<\\EOF\nx\nEOF")[^1] == (gtKeyword, "EOF")
+
+  test "with `<<-`, tabs may come before the end marker":
+    check kinds("cat <<-EOF\n\tx\n\tEOF\ny")[^2] == (gtKeyword, "\tEOF")
+    check kinds("cat <<EOF\n\tEOF\nEOF")[^2] == (gtLongStringLit, "\tEOF\n")
+
+  test "a marker with more on its line does not end the body":
+    check kinds("cat <<EOF\nEOF x\n EOF\nEOF")[3 .. ^1] ==
+      @[(gtLongStringLit, "EOF x\n"), (gtLongStringLit, " EOF\n"), (gtKeyword, "EOF")]
+
+  test "a here-string and an arithmetic shift open no body":
+    check kinds("tr a b <<< x\n{")[^1] == (gtKeyword, "{")
+    check kinds("x=$((1<<2))\n{")[^1] == (gtKeyword, "{")
+    check kinds("((x <<= 2))\n{")[^1] == (gtKeyword, "{")
+
+  test "a shift by a variable in arithmetic opens no body":
+    check kinds("mask=$(( (1 << width) - 1 ))\necho }")[^1] == (gtKeyword, "}")
+    check kinds("(( x = y << n ))\n{")[^1] == (gtKeyword, "{")
+    check kinds("x=$((\n  1 << n\n))\n{")[^1] == (gtKeyword, "{")
+    check kinds("(( x << 1 )); cat <<EOF\n{\nEOF")[^2] == (gtLongStringLit, "{\n")
+
+  test "a `#` inside a word in arithmetic does not hide its closing parentheses":
+    check kinds("n=$(( ${#arr[@]} - 1 ))\ncat <<EOF\n{\nEOF")[^2] ==
+      (gtLongStringLit, "{\n")
+    check kinds("n=$(( $# - 1 ))\ncat <<EOF\n{\nEOF")[^2] == (gtLongStringLit, "{\n")
+    check kinds("n=$((10#$x))\ncat <<EOF\n{\nEOF")[^2] == (gtLongStringLit, "{\n")
+
+  test "a shift in `$[ ]` arithmetic opens no body":
+    check kinds("x=$[a<<n]\n{")[^1] == (gtKeyword, "{")
+    check kinds("x=$[a[1]<<n]; cat <<EOF\n{\nEOF")[^2] == (gtLongStringLit, "{\n")
+
+  test "the body starts after a `\\` continuation":
+    check kinds("cat <<EOF \\\n| sort\nbody\nEOF")[3 .. ^1] ==
+      @[
+        (gtOperator, "\\\n"),
+        (gtOperator, "|"),
+        (gtIdentifier, "sort"),
+        (gtLongStringLit, "body\n"),
+        (gtKeyword, "EOF"),
+      ]
+    check kinds("cat <<EOF x\\\\\n{\nEOF")[^2] == (gtLongStringLit, "{\n")
+
+  test "a `#` right after a redirection starts a comment":
+    check kinds("echo a >#b")[^1] == (gtComment, "#b")
+
+  test "a heredoc after a string that spans lines opens after it closes":
+    check kinds("cat <<EOF \"a\nb\"\n{\nEOF")[3 .. ^1] ==
+      @[
+        (gtStringLit, "\"a\n"),
+        (gtStringLit, "b\""),
+        (gtLongStringLit, "{\n"),
+        (gtKeyword, "EOF"),
+      ]
+
+  test "a line resumes inside the body from the state at its start":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("cat <<EOF\n")
+    while true:
+      g.shellNextToken()
+      if g.kind == gtEof:
+        break
+    check g.state == gtLongStringLit
+    var resumed: GeneralTokenizer
+    resumed.initGeneralTokenizer("}\nEOF")
+    resumed.state = g.state
+    resumed.lang = g.lang
+    resumed.shellNextToken()
+    check resumed.kind == gtLongStringLit
+    resumed.shellNextToken()
+    check resumed.kind == gtKeyword
+    check resumed.state == gtNone
+
+suite "syntax_shell - strings across lines":
+  proc kinds(text: string): seq[(TokenClass, string)] =
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(text)
+    while true:
+      g.shellNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind != gtWhitespace:
+        result.add (g.kind, text[g.start ..< g.start + g.length])
+
+  test "a quoted string goes on to its closing quote, one token per line":
+    check kinds("x='a\n# b\n' {") ==
+      @[
+        (gtIdentifier, "x"),
+        (gtOperator, "="),
+        (gtStringLit, "'a\n"),
+        (gtStringLit, "# b\n"),
+        (gtStringLit, "'"),
+        (gtKeyword, "{"),
+      ]
+    check kinds("x=\"a\r\nb\"")[2 .. ^1] ==
+      @[(gtStringLit, "\"a\r\n"), (gtStringLit, "b\"")]
+
+  test "a `<<` inside a string opens no heredoc":
+    check kinds("python3 -c '\nx = 1 << n\n'\n{")[^1] == (gtKeyword, "{")
+    check kinds("x=\"a\nb << EOF c\"\n{")[^1] == (gtKeyword, "{")
+
+  test "escapes work in double quoted and `$'` strings, not single quoted ones":
+    check kinds("\"a\\\"b\" {")[^1] == (gtKeyword, "{")
+    check kinds("$'a\\'b' {")[^1] == (gtKeyword, "{")
+    check kinds("'a\\' {")[^1] == (gtKeyword, "{")
+
+  test "an escaped line break goes on with the string":
+    check kinds("\"a\\\nb\" {") ==
+      @[
+        (gtStringLit, "\"a"),
+        (gtEscapeSequence, "\\\n"),
+        (gtStringLit, "b\""),
+        (gtKeyword, "{"),
+      ]
+
+  test "a line resumes inside the string from the state at its start":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("echo 'a\n")
+    while true:
+      g.shellNextToken()
+      if g.kind == gtEof:
+        break
+    check g.state == gtStringLit
+    var resumed: GeneralTokenizer
+    resumed.initGeneralTokenizer("\"b' {")
+    resumed.state = g.state
+    resumed.lang = g.lang
+    resumed.shellNextToken()
+    check resumed.kind == gtStringLit
+    check resumed.length == 3
+    check resumed.state == gtNone
+
+  test "a backslash quotes the next character outside a string":
+    check kinds("echo It\\'s ok\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("grep \\\"x\\\" f\n{")[^1] == (gtKeyword, "{")
+    check kinds("echo \\$'a\\'b c")[^1] == (gtIdentifier, "c")
+
+  test "a command substitution in a double quoted string holds its own strings":
+    check kinds("msg=\"$(gettext \"Don't\")\"\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("x=\"`echo \"a'b\"`\"\n{")[^1] == (gtKeyword, "{")
+    check kinds("x=\"$(echo $(date) \"(\")\" '\n{")[^1] == (gtStringLit, "{")
+
+  test "a heredoc opened in a command substitution in a string":
+    check kinds("x=\"$(cat <<EOF\nit's {\nEOF\n)\"\necho }")[^6 .. ^1] ==
+      @[
+        (gtLongStringLit, "it's {\n"),
+        (gtKeyword, "EOF"),
+        (gtPunctuation, ")"),
+        (gtStringLit, "\""),
+        (gtKeyword, "echo"),
+        (gtKeyword, "}"),
+      ]
+
+  test "arithmetic in a string is not a heredoc":
+    check kinds("x=\"$((1 << n))\"\n{")[^1] == (gtKeyword, "{")
+
+  test "a `<<` later in an operator run opens a heredoc":
+    check kinds("python3 -<<EOF\nit's\nEOF\nls")[^3 .. ^1] ==
+      @[(gtLongStringLit, "it's\n"), (gtKeyword, "EOF"), (gtIdentifier, "ls")]
+    check kinds("tr a b <<<x\n{")[^1] == (gtKeyword, "{")
+
+  test "a marker may start with any character but a metacharacter":
+    check kinds("ftp -n <<!\nit's\n!\nls")[^3 .. ^1] ==
+      @[(gtLongStringLit, "it's\n"), (gtKeyword, "!"), (gtIdentifier, "ls")]
+    check kinds("cat <<1\nx\n1")[^1] == (gtKeyword, "1")
+
+  test "quotes nest inside `${ }`":
+    check kinds("x=\"${y:-\"don't\"}\"\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("x=${y:-\"a\"} 'b'\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("x=\"$(echo {)\" 'b'\nls")[^1] == (gtIdentifier, "ls")
+
+  test "in a command substitution, the marker may end with the substitution":
+    check kinds("x=$(cat <<EOF\nbody\nEOF)\necho 'a'")[^4 .. ^1] ==
+      @[
+        (gtKeyword, "EOF"),
+        (gtPunctuation, ")"),
+        (gtKeyword, "echo"),
+        (gtStringLit, "'a'"),
+      ]
+    check kinds("echo `cat <<EOF\nit's\nEOF`\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("cat <<EOF\nEOF)\nEOF")[^2 .. ^1] ==
+      @[(gtLongStringLit, "EOF)\n"), (gtKeyword, "EOF")]
+
+  test "a `#` after an escaped space is part of the word":
+    check kinds("echo foo\\ #bar")[^2 .. ^1] ==
+      @[(gtPunctuation, "#"), (gtIdentifier, "bar")]
+
+  test "a `#` at the start of a line after a `\\` continuation is a comment":
+    check kinds("echo foo \\\n#bar")[^1] == (gtComment, "#bar")
+
+  test "an escaped multibyte character is one token":
+    check kinds("echo \\\xC3\xA9 ok")[1 .. ^1] ==
+      @[(gtOperator, "\\\xC3\xA9"), (gtIdentifier, "ok")]
+    check (gtEscapeSequence, "\\\xC3\xA9") in kinds("echo $'\\\xC3\xA9' x")
+
+  test "an unbalanced brace or parenthesis ends with its substitution":
+    check kinds("x=\"`echo {`\" 'b'\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("x=\"${y%%(*}\" 'b'\nls")[^1] == (gtIdentifier, "ls")
+
+  test "`$$'` and `\\$[` are not ANSI-C strings or arithmetic":
+    check kinds("echo $$'a\\' b")[^1] == (gtIdentifier, "b")
+    check kinds("echo \\$[a<<n]\nx\nn]")[^1] == (gtKeyword, "n]")
+
+  test "in a backquoted substitution, a backquote ends the marker":
+    check kinds("x=`cat <<EOF`\necho a\nEOF\nls")[^2 .. ^1] ==
+      @[(gtKeyword, "EOF"), (gtIdentifier, "ls")]
+
+  test "a `<<` in a `${ }` expansion opens no heredoc":
+    check kinds("x=\"${s//<</LT}\"\necho }")[^1] == (gtKeyword, "}")
+    check kinds("x=${y//<<}\n{")[^1] == (gtKeyword, "{")
+    check kinds("x=$(echo ${a:-<<})\n{")[^1] == (gtKeyword, "{")
+
+  test "a heredoc in a command substitution inside arithmetic":
+    check kinds("echo $(( $(cat <<EOF\nit's\nEOF\n) << 1 ))\nls")[^1] ==
+      (gtIdentifier, "ls")
+    check (gtLongStringLit, "it's\n") in kinds("x=$[ $(cat <<EOF\nit's\nEOF\n) ]\nls")
+    check kinds("x=\"$(( $(cat <<EOF\nit's\nEOF\n) ))\"\nls")[^1] == (
+      gtIdentifier, "ls"
+    )
+    check kinds("echo $(( `cat <<EOF\nit's\nEOF\n` << 1 ))\n{")[^1] == (gtKeyword, "{")
+
+  test "arithmetic goes on after a command substitution in it closes":
+    check kinds("echo $(( $(echo 1) << n ))\n{")[^1] == (gtKeyword, "{")
+    check kinds("echo $(( ($(echo 1)) << n ))\n{")[^1] == (gtKeyword, "{")
+
+  test "a shift in a `name[` subscript opens no heredoc":
+    check kinds("a[i<<1]=x\necho }")[^1] == (gtKeyword, "}")
+    check kinds("echo ${a[i<<1]}\necho }")[^1] == (gtKeyword, "}")
+    check kinds("echo a[ cat <<EOF\n{\nEOF")[^2] == (gtLongStringLit, "{\n")
+
+  test "an unbalanced parenthesis in a `${ }` in arithmetic ends with it":
+    check kinds("(( n = ${x%(*} ))\ncat <<EOF\nit's\nEOF\necho }")[^1] ==
+      (gtKeyword, "}")
+    check kinds("x=$[ ${x%[*} ]\ncat <<EOF\nit's\nEOF\necho }")[^1] == (gtKeyword, "}")
+
+  test "a heredoc state without a marker resumes as code":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("x")
+    g.state = gtLongStringLit
+    g.shellNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 1
+
+  test "a `case` pattern's `)` in a substitution does not close it":
+    check kinds("x=\"$(case $y in a) echo \"it's\";; esac)\"\nls")[^1] ==
+      (gtIdentifier, "ls")
+    check kinds("x=\"$(case $y in (a|b) echo 'c';; esac)\" 'd'\nls")[^1] ==
+      (gtIdentifier, "ls")
+
+  test "`case=` is an assignment, which opens no `case`":
+    check kinds("x=$(case=1; echo)\ncat <<EOF\nEOF)\nEOF")[^2 .. ^1] ==
+      @[(gtLongStringLit, "EOF)\n"), (gtKeyword, "EOF")]
+
+  test "in a process substitution, the marker may end with the substitution":
+    check kinds("cat <(cat <<EOF\nhello\nEOF)\necho after")[^4 .. ^1] ==
+      @[
+        (gtKeyword, "EOF"),
+        (gtPunctuation, ")"),
+        (gtKeyword, "echo"),
+        (gtIdentifier, "after"),
+      ]
+    check kinds("diff >(cat <<EOF\nx\nEOF) y\nls")[^1] == (gtIdentifier, "ls")
+
+  test "a quoted command substitution in arithmetic keeps its depth":
+    check kinds("echo $[ \"$(cmd)\" << 2 ]\n{")[^1] == (gtKeyword, "{")
+    check kinds("(( \"$(a)\" + \"$(b)\" << 1 ))\n{")[^1] == (gtKeyword, "{")
+
+  test "ANSI-C `\\u`, `\\U` and `\\c` escapes take their characters":
+    let tokens = kinds("echo $'\\u00e9\\U0001F600\\cAz'")
+    check (gtEscapeSequence, "\\u00e9") in tokens
+    check (gtEscapeSequence, "\\U0001F600") in tokens
+    check (gtEscapeSequence, "\\cA") in tokens
+    check (gtStringLit, "z'") in tokens
+    check kinds("x=\"$(if t; then case $y in\n  a) :;;\nesac; fi)\" 'd'\nls")[^1] ==
+      (gtIdentifier, "ls")
+    check kinds("x=\"$(echo case a)\" 'b'\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("x=$(case $y in a) cat <<EOF;; esac\nit's\nEOF\n)\nls")[^1] ==
+      (gtIdentifier, "ls")
+
+  test "inside `${ }`, no command starts":
+    check kinds("echo \"${case}\" 'x'\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("echo ${!case} 'x'\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("x=\"${line%% #*}\"\necho 'a' ls")[^1] == (gtIdentifier, "ls")
+    check kinds("v=\"$(echo ${x%)})\"; echo 'a'\nls")[^1] == (gtIdentifier, "ls")
+    check kinds("v=\"${x:-{}\" 'a'\nls")[^1] == (gtIdentifier, "ls")
+
+  test "a `case` nested after a pattern in a substitution":
+    check kinds(
+      "x=\"$(case $a in\n a) case $b in\n b) :;;\n esac;;\n c) :;;\nesac)\" 'd'\nls"
+    )[^1] == (gtIdentifier, "ls")
+
+  test "a `\\` line continuation joins the marker with the next line":
+    check kinds("cat <<EOF\\\nX\nbody\nEOFX\necho after")[^3 .. ^1] ==
+      @[(gtKeyword, "EOFX"), (gtKeyword, "echo"), (gtIdentifier, "after")]
+
+  test "an `esac` that is an argument does not end the `case`":
+    check kinds("x=\"$(case $y in a) echo esac;; b) :;; esac)\" 'ok'\nls")[^1] ==
+      (gtIdentifier, "ls")
+
+  test "an empty quoted marker ends the body at its first empty line":
+    check kinds("cat <<''\nit's\n\necho x")[^4 .. ^1] ==
+      @[
+        (gtLongStringLit, "it's\n"),
+        (gtKeyword, "\n"),
+        (gtKeyword, "echo"),
+        (gtIdentifier, "x"),
+      ]
+    check kinds("cat <<-\"\"\nit's\n\t\necho x")[^1] == (gtIdentifier, "x")
+
+  test "a `#` right after an opening backquote is a comment":
+    check kinds("x=`#note it's` 'a'\nls")[^4 .. ^1] ==
+      @[
+        (gtComment, "#note it's"),
+        (gtNone, "`"),
+        (gtStringLit, "'a'"),
+        (gtIdentifier, "ls"),
+      ]
+    check kinds("echo `date`#x")[^1] == (gtIdentifier, "x")

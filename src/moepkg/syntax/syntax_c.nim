@@ -41,6 +41,49 @@ const cKeywords* = [
   "void", "volatile", "while",
 ]
 
+const
+  RawStringPrefixes = ["R", "LR", "uR", "UR", "u8R"]
+  MaxRawDelimiterLen = 16
+
+proc rawStringBody(g: var GeneralTokenizer, position: int): int =
+  ## Scan a C++ raw string's text from `position` to past its `)delim"`, or
+  ## past the end of the line, where it goes on.
+  result = position
+  let delimiter = g.lang.clike.rawDelimiter
+  while g.buf[result] != '\0':
+    if g.buf[result] == '\n':
+      inc(result)
+      g.state = gtLongStringLit
+      return
+    if g.buf[result] == ')':
+      var matched = 0
+      while matched < delimiter.len and g.buf[result + 1 + matched] == delimiter[
+          matched
+      ]
+      :
+        inc(matched)
+      if matched == delimiter.len and g.buf[result + 1 + matched] == '"':
+        result += matched + 2
+        g.state = gtNone
+        g.lang.clike.rawDelimiter = ""
+        return
+    inc(result)
+  g.state = gtLongStringLit
+
+proc rawStringOpen(g: GeneralTokenizer, position: int): int =
+  ## Where the text of a C++ raw string whose `"` is at `position` starts, past
+  ## its `(`; -1 when no valid delimiter follows.
+  var d = position + 1
+  while d - position - 1 <= MaxRawDelimiterLen:
+    case g.buf[d]
+    of '(':
+      return d + 1
+    of ')', '\\', ' ', '\t' .. '\r', '\0':
+      return -1
+    else:
+      inc(d)
+  -1
+
 proc clikeNextToken*(
     g: var GeneralTokenizer, keywords: openArray[string], flags: TokenizerFlags
 ) =
@@ -49,6 +92,9 @@ proc clikeNextToken*(
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
+  if g.state == gtLongStringLit and hasRawStrings notin flags:
+    # Not a state this lexer leaves, as one carried over from another language.
+    g.state = gtNone
   if g.state == gtStringLit and g.buf[pos] notin {'\0', '\r', '\n'}:
     # A backslash at the end of the previous line continued the string here.
     g.kind = gtStringLit
@@ -81,6 +127,13 @@ proc clikeNextToken*(
         break
       else:
         inc(pos)
+  elif g.state == gtLongStringLit:
+    # Inside a C++ raw string, the only kind that spans lines.
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    else:
+      g.kind = gtLongStringLit
+      pos = g.rawStringBody(pos)
   elif g.state in {gtLongComment, gtDocLongComment}:
     if g.buf[pos] == '\0':
       g.kind = gtEof
@@ -174,7 +227,18 @@ proc clikeNextToken*(
       while g.buf[pos] in symChars:
         add(id, g.buf[pos])
         inc(pos)
-      if isKeyword(keywords, id) >= 0:
+      let rawText =
+        if hasRawStrings in flags and g.buf[pos] == '"' and id in RawStringPrefixes:
+          g.rawStringOpen(pos)
+        else:
+          -1
+      if rawText >= 0:
+        g.kind = gtStringLit
+        g.lang.clike.rawDelimiter = ""
+        for i in pos + 1 ..< rawText - 1:
+          g.lang.clike.rawDelimiter.add g.buf[i]
+        pos = g.rawStringBody(rawText)
+      elif isKeyword(keywords, id) >= 0:
         g.kind = gtKeyword
       else:
         g.kind = gtIdentifier
