@@ -7910,7 +7910,9 @@ suite ":wq, :x and ZZ close only their window":
     # As an Insert-mode binding of save-and-quit gives it.
     check e.processResult(HandlerResult(kind: hrSaveAndQuit), e.activeBuffer)
 
-    check e.state.statusMessage.startsWith("Saved: " & path & "; No write since last change")
+    check e.state.statusMessage.startsWith(
+      "Saved: " & path & "; No write since last change"
+    )
     check readFile(path) == "  foo\n\n"
     check e.state.mode == EditorMode.Insert
     check e.activeBuffer.getLine(1) == ""

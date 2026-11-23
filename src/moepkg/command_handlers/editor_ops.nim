@@ -92,8 +92,9 @@ proc hiddenChangesError*(e: Editor): string =
         held = true
         break
     if not held:
-      return "No write since last change for buffer \"" &
-        buf.displayName.get("[No Name]") & "\" (use :qa! to discard)"
+      return
+        "No write since last change for buffer \"" & buf.displayName.get("[No Name]") &
+        "\" (use :qa! to discard)"
   ""
 
 proc closeLastWindowError*(e: Editor, visible: TextBuffer): string =
@@ -106,8 +107,10 @@ proc closeLastWindowError*(e: Editor, visible: TextBuffer): string =
     if buf != visible and buf.isModified:
       others.inc
   let hint =
-    if e.hiddenChangesError().len > 0: " (use :qa! to discard)"
-    else: " (use :q! to discard)"
+    if e.hiddenChangesError().len > 0:
+      " (use :qa! to discard)"
+    else:
+      " (use :q! to discard)"
   if visible.isModified:
     if others == 0:
       return "No write since last change" & hint
@@ -246,7 +249,10 @@ proc refuseClose*(e: Editor, verdict: CloseVerdict, wrote = "") =
   case verdict.kind
   of cvRefuse:
     e.state.statusMessage =
-      if wrote.len > 0: wrote & "; " & verdict.message else: verdict.message
+      if wrote.len > 0:
+        wrote & "; " & verdict.message
+      else:
+        verdict.message
     e.state.beep()
   of cvRefuseJob:
     e.refuseQuitFor(verdict.job, show = true, wrote)

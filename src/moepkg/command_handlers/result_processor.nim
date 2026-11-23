@@ -182,7 +182,9 @@ proc applyCloseVerdict(
     true
   of cvEndSession:
     # The verdict has checked the jobs, sparing the one `!` ends.
-    e.processResultWithHost(HandlerResult(kind: hrQuit, endJobs: true), activeBuffer, hostHandled)
+    e.processResultWithHost(
+      HandlerResult(kind: hrQuit, endJobs: true), activeBuffer, hostHandled
+    )
   of cvClose:
     e.applyClose(force)
 
@@ -299,12 +301,11 @@ proc processResultWithHost(
     e.processGotoLineResult(r, activeBuffer)
     return true # Skip the epilogue's status-line overwrite, like ops-moved kinds
   of hrJumpToBuffer, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
-      hrBufferNextTab, hrBufferPrevTab, hrBuffer, hrNextWindow,
-      hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown, hrMoveWindowUp,
-      hrMoveWindowRight, hrMaximizeWindowHeight, hrIncreaseWindowHeight,
-      hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
-      hrEqualizeWindows, hrSwapWindow, hrOnlyWindow, hrBufferDelete, hrTerminalQuit,
-      hrFileTreeQuit:
+      hrBufferNextTab, hrBufferPrevTab, hrBuffer, hrNextWindow, hrPrevWindow,
+      hrMoveWindowLeft, hrMoveWindowDown, hrMoveWindowUp, hrMoveWindowRight,
+      hrMaximizeWindowHeight, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
+      hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow,
+      hrOnlyWindow, hrBufferDelete, hrTerminalQuit, hrFileTreeQuit:
     return e.processWindowResult(r, activeBuffer)
   of hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFileTreeOpenFile,
       hrFilerDeleteFile, hrOpenUri, hrQuickRun, hrVSplit, hrHSplit, hrNew, hrVnew,
