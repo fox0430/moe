@@ -348,6 +348,7 @@ proc advanceToGitShow(
 ): Option[Result[GitDiffInfo, string]] =
   var gitRoot = gitRootOutput.strip()
   if gitRoot.len == 0:
+    diffProc.head = ghUntracked
     return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
   # Normalize trailing slash (e.g. "/home/x/proj/") except for root "/".
   if gitRoot.len > 1 and gitRoot.endsWith("/"):
@@ -379,11 +380,12 @@ proc advanceToGitShow(
     else:
       tryCanonicalParentPath(resolvedFilePath)
   # Collapse "." / ".." / duplicate separators for the guard and the
-  # `git show HEAD:<path>` argument (git rejects "..").
+  # `HEAD:<path>` argument (git rejects "..").
   let guardEffectivePath = normalizedPath(effectivePath)
   let relativePath = calculateRelativePath(guardEffectivePath, canonGitRoot)
   # Reject paths at the git root itself or outside it (basename fallback).
   if relativePath.len == 0:
+    diffProc.head = ghUntracked
     return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
   let isUnderRoot =
     if canonGitRoot == "/":
@@ -391,10 +393,23 @@ proc advanceToGitShow(
     else:
       guardEffectivePath.startsWith(canonGitRoot & "/")
   if not isUnderRoot:
+    diffProc.head = ghUntracked
     return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
-  # Buffer behind a symlink pointing outside the repo: git show still serves
-  # as the track probe, and there is nothing to diff, so no markers (see
-  # checkGitDiffComplete).
+  diffProc.workingDir = canonGitRoot
+  diffProc.resolvedOutsideRepo = not isUnderCanonRoot
+  # Only a diff reads HEAD's copy. A probe, or a symlink pointing outside
+  # (HEAD holds the link text, so there is nothing to diff), only asks whether
+  # the path is in HEAD.
+  if diffProc.probe or diffProc.resolvedOutsideRepo:
+    try:
+      diffProc.process = startGitMetadataProcess(
+        canonGitRoot, ["cat-file", "-e", "HEAD:" & relativePath]
+      )
+    except OSError as e:
+      return
+        some(Result[GitDiffInfo, string].err("Failed to start git cat-file: " & e.msg))
+    diffProc.stage = gdsGitShow
+    return none(Result[GitDiffInfo, string])
 
   let tempOriginal =
     try:
@@ -432,32 +447,13 @@ proc advanceToGitShow(
 
   diffProc.process = nextProc
   diffProc.stage = gdsGitShow
-  diffProc.workingDir = canonGitRoot
   diffProc.tempOriginal = tempOriginal
-  diffProc.resolvedOutsideRepo = not isUnderCanonRoot
   return none(Result[GitDiffInfo, string])
 
 proc advanceToGitDiff(diffProc: GitDiffProcess): Option[Result[GitDiffInfo, string]] =
-  let tempModified =
-    try:
-      genTempPath("moe_modified_", ".tmp", gitDiffTempDir())
-    except OSError as e:
-      removeTempFileSafely(diffProc.tempOriginal)
-      return some(
-        Result[GitDiffInfo, string].err("Failed to create temp file path: " & e.msg)
-      )
-
-  try:
-    writeFile(tempModified, diffProc.bufferContent)
-  except IOError as e:
-    removeTempFileSafely(diffProc.tempOriginal)
-    removeTempFileSafely(tempModified)
-    return some(
-      Result[GitDiffInfo, string].err("Failed to write modified temp file: " & e.msg)
-    )
-
-  diffProc.tempModified = tempModified
-  diffProc.bufferContent = ""
+  let tempModified = diffProc.tempModified
+  if tempModified.len == 0:
+    return some(Result[GitDiffInfo, string].err("The buffer was not written"))
 
   let tempDiffOut =
     try:
@@ -534,16 +530,17 @@ proc pollGitDiff(
   case diffProc.stage
   of gdsGitRoot:
     if exitCode != 0:
+      diffProc.head = ghUntracked
       return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
     return advanceToGitShow(diffProc, output)
   of gdsGitShow:
     if exitCode != 0:
-      removeTempFileSafely(diffProc.tempOriginal)
+      diffProc.head = ghUntracked
       return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
-    # Symlink points outside: HEAD holds the link blob, not the content, so no
-    # diff. Still counts as tracked (the symlink is in HEAD).
-    if diffProc.resolvedOutsideRepo:
-      removeTempFileSafely(diffProc.tempOriginal)
+    diffProc.head = ghTracked
+    # A probe has its answer. A symlink pointing outside has no diff, and
+    # still counts as tracked (the symlink is in HEAD).
+    if diffProc.probe or diffProc.resolvedOutsideRepo:
       return some(Result[GitDiffInfo, string].ok(GitDiffInfo(lines: @[])))
     return advanceToGitDiff(diffProc)
   of gdsGitDiff:
@@ -566,11 +563,33 @@ proc checkGitDiffComplete*(
   except CatchableError as e:
     abandonGitDiffProcess(diffProc)
     result = some(Result[GitDiffInfo, string].err(e.msg))
+  if result.isSome and not diffProc.isNil:
+    # Whichever stage it ended at, no temp file outlives the pipeline.
+    cleanupTempFiles(diffProc)
 
-proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, string] =
+proc writeBufferForDiff(buffer: TextBuffer): Result[string, string] =
+  ## Write `buffer` as saved to a new temp file and return its path. The copy
+  ## lives only for this call.
+  let path =
+    try:
+      genTempPath("moe_modified_", ".tmp", gitDiffTempDir())
+    except OSError as e:
+      return err("Failed to create temp file path: " & e.msg)
+  try:
+    writeFile(path, buffer.getFileContent())
+  except CatchableError as e:
+    removeTempFileSafely(path)
+    return err("Failed to write the buffer: " & e.msg)
+  ok(path)
+
+proc startGitDiffFromBufferAsync*(
+    buffer: TextBuffer, probe = false
+): Result[GitDiffProcess, string] =
   ## Start the buffer-vs-HEAD diff pipeline as a background state machine.
   ## Returns a `GitDiffProcess` that must be polled with `checkGitDiffComplete`;
   ## every `git` invocation runs in a subprocess so this call never blocks.
+  ## The buffer is read now, so the diff is of the text at this call. With
+  ## `probe`, only ask whether the file is in HEAD and leave the buffer unread.
 
   when defined(moe.embedded) and defined(windows):
     discard buffer
@@ -581,8 +600,12 @@ proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, st
 
   let filePath = buffer.filePath.get
   let fileDir = filePath.parentDir()
-  # Snapshot before starting a child so a buffer read failure cannot orphan it.
-  let content = buffer.getFileContent()
+  # Write before starting a child so a buffer read failure cannot orphan it.
+  let tempModified =
+    if probe:
+      ""
+    else:
+      ?buffer.writeBufferForDiff()
 
   let process =
     try:
@@ -596,15 +619,18 @@ proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, st
           options = {poUsePath, poStdErrToStdOut},
         )
     except OSError as e:
+      removeTempFileSafely(tempModified)
       return err("Failed to start git process: " & e.msg)
 
   let diffProc = GitDiffProcess(
     process: process,
     stage: gdsGitRoot,
+    # After the write, so a large buffer's copy does not eat into the timeout.
     startTime: epochTime(),
     filePath: filePath,
     workingDir: fileDir,
-    bufferContent: content,
+    probe: probe,
+    tempModified: tempModified,
   )
 
   return ok(diffProc)

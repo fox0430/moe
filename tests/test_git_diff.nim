@@ -28,6 +28,11 @@ import pkg/results
 import ../src/moepkg/buffer
 import ../src/moepkg/git_diff {.all.}
 
+proc writtenBuffer(content: string): string =
+  ## A temp file holding `content`, as the pipeline's start writes the buffer.
+  result = genTempPath("moe_modified_", ".tmp")
+  writeFile(result, content)
+
 when defined(posix):
   const outputProbeFlag = "--moe-git-output-probe"
 
@@ -1079,6 +1084,80 @@ exec """ & quoteShell(realGit) &
         leftovers.add(path)
     check leftovers.len == 0
 
+  test "the buffer is written before the first child starts":
+    # The diff is of the text when the pipeline started, and the copy is not
+    # held while the git children run.
+    let testFile = testDir / "early.txt"
+    writeFile(testFile, "line 1\n")
+    require execCmdEx("git add early.txt", workingDir = testDir).exitCode == 0
+    require execCmdEx("git commit -m init", workingDir = testDir).exitCode == 0
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "changed ")
+
+    let diffProc = startGitDiffFromBufferAsync(buf).get
+    check not diffProc.probe
+    check diffProc.stage == gdsGitRoot
+    check readFile(diffProc.tempModified) == buf.getFileContent()
+
+    var finished = none(Result[GitDiffInfo, string])
+    for _ in 0 ..< 500:
+      finished = checkGitDiffComplete(diffProc)
+      if finished.isSome:
+        break
+      sleep(10)
+    check finished.isSome
+    check finished.get.isOk
+    check finished.get.get.lines.len == 1
+    check diffProc.head == ghTracked
+    check not fileExists(diffProc.tempModified)
+
+  test "a probe copies neither the buffer nor HEAD's file":
+    writeFile(testDir / "tracked.txt", "line 1\n")
+    require execCmdEx("git add tracked.txt", workingDir = testDir).exitCode == 0
+    require execCmdEx("git commit -m init", workingDir = testDir).exitCode == 0
+    writeFile(testDir / "untracked.txt", "line 1\n")
+    for (name, head) in [("tracked.txt", ghTracked), ("untracked.txt", ghUntracked)]:
+      let buf = newTextBuffer()
+      check buf.loadFile(testDir / name).isOk
+      let diffProc = startGitDiffFromBufferAsync(buf, probe = true).get
+      check diffProc.probe
+      check diffProc.tempModified.len == 0
+
+      var finished = none(Result[GitDiffInfo, string])
+      for _ in 0 ..< 500:
+        finished = checkGitDiffComplete(diffProc)
+        if finished.isSome:
+          break
+        sleep(10)
+      check finished.isSome
+      check finished.get.isOk == (head == ghTracked)
+      check diffProc.head == head
+      check diffProc.stage == gdsGitShow
+      check diffProc.tempOriginal.len == 0
+
+  test "a pipeline that ends early still removes the written buffer":
+    writeFile(testDir / "tracked.txt", "line 1\n")
+    require execCmdEx("git add tracked.txt", workingDir = testDir).exitCode == 0
+    require execCmdEx("git commit -m init", workingDir = testDir).exitCode == 0
+    let testFile = testDir / "untracked.txt"
+    writeFile(testFile, "line 1\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    let diffProc = startGitDiffFromBufferAsync(buf).get
+    check fileExists(diffProc.tempModified)
+
+    var finished = none(Result[GitDiffInfo, string])
+    for _ in 0 ..< 500:
+      finished = checkGitDiffComplete(diffProc)
+      if finished.isSome:
+        break
+      sleep(10)
+    check finished.isSome
+    check finished.get.isErr
+    check diffProc.head == ghUntracked
+    check not fileExists(diffProc.tempModified)
+
   test "advanceToGitShow with absolute inside path completes pipeline":
     let testFile = testDir / "test.txt"
     writeFile(testFile, "line 1\nline 2\n")
@@ -1090,7 +1169,7 @@ exec """ & quoteShell(realGit) &
       startTime: epochTime(),
       filePath: testFile,
       workingDir: testDir,
-      bufferContent: readFile(testFile),
+      tempModified: writtenBuffer(readFile(testFile)),
     )
 
     # Feed the known root directly, skipping the rev-parse stage.
@@ -1123,7 +1202,7 @@ exec """ & quoteShell(realGit) &
       startTime: epochTime(),
       filePath: testFile,
       workingDir: testDir,
-      bufferContent: readFile(testFile),
+      tempModified: writtenBuffer(readFile(testFile)),
     )
 
     let advanced = advanceToGitShow(diffProc, expandFilename(testDir) & "/")
@@ -1158,7 +1237,7 @@ exec """ & quoteShell(realGit) &
       startTime: epochTime(),
       filePath: dotdotPath,
       workingDir: testDir,
-      bufferContent: readFile(testFile),
+      tempModified: writtenBuffer(readFile(testFile)),
     )
 
     let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
@@ -1198,7 +1277,7 @@ exec """ & quoteShell(realGit) &
       startTime: epochTime(),
       filePath: openedPath,
       workingDir: linkDir,
-      bufferContent: readFile(openedPath),
+      tempModified: writtenBuffer(readFile(openedPath)),
     )
 
     let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
@@ -1247,12 +1326,14 @@ exec """ & quoteShell(realGit) &
       startTime: epochTime(),
       filePath: repoLink / "link.txt",
       workingDir: repoLink,
-      bufferContent: readFile(linkFile),
+      tempModified: writtenBuffer(readFile(linkFile)),
     )
 
     let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
     check advanced.isNone
     check diffProc.stage == gdsGitShow
+    # Nothing to diff, so HEAD's link text is not copied.
+    check diffProc.tempOriginal.len == 0
 
     var completed = false
     var finalInfo = GitDiffInfo(lines: @[])
@@ -1293,7 +1374,7 @@ exec """ & quoteShell(realGit) &
       startTime: epochTime(),
       filePath: repoLink / "untracked_link.txt",
       workingDir: repoLink,
-      bufferContent: readFile(linkFile),
+      tempModified: writtenBuffer(readFile(linkFile)),
     )
 
     let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
@@ -1331,7 +1412,7 @@ exec """ & quoteShell(realGit) &
       startTime: epochTime(),
       filePath: "relpath_in.txt",
       workingDir: testDir,
-      bufferContent: readFile(testFile),
+      tempModified: writtenBuffer(readFile(testFile)),
     )
 
     let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
@@ -1370,7 +1451,6 @@ exec """ & quoteShell(realGit) &
       startTime: epochTime(),
       filePath: "out.txt",
       workingDir: outsideDir,
-      bufferContent: "x\n",
     )
 
     let result = advanceToGitShow(diffProc, expandFilename(testDir))
@@ -1404,7 +1484,6 @@ exec """ & quoteShell(realGit) &
       startTime: epochTime(),
       filePath: "basename_collision.txt",
       workingDir: outsideDir,
-      bufferContent: "different\n",
     )
 
     let result = advanceToGitShow(diffProc, expandFilename(testDir))

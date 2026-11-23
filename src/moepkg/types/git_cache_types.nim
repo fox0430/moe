@@ -34,7 +34,10 @@ type
 
   GitDiffCacheEntry* = object
     counts*: tuple[added, modified, deleted: int]
-    changeSeqAtRefresh*: int
+    contentVersionAtRefresh*: int
+      ## The buffer's `contentVersion` when the last pipeline started; a diff
+      ## reads the buffer then. Unlike `changeSeq` it is never restored by
+      ## undo nor left alone by the no-undo preview, so it names the text.
     lastRefresh*: MonoTime
     retryAfter*: Option[MonoTime] ## Failed starts retry in either refresh mode.
     pending*: Option[GitDiffProcess]
@@ -42,11 +45,17 @@ type
     pathAtRefresh*: string
     repositoryPath*: string
     populated*: bool
-    forced*: bool ## Invalidated by an event that doesn't bump `changeSeq`.
+    forced*: bool
+      ## Run again on the next tick: invalidated by an event that doesn't
+      ## change the content, or a probe found the file tracked.
     gitTracked*: bool
-      ## File exists in HEAD, per the last completed pipeline. Suppresses the
-      ## session "modified lines" gutter fallback, which would otherwise draw
-      ## the same glyphs from history rather than content.
+      ## File exists in HEAD, per the last pipeline git answered. Picks a full
+      ## diff over a probe, and suppresses the session "modified lines" gutter
+      ## fallback, which would otherwise draw the same glyphs from history
+      ## rather than content.
+    resolvedOutsideRepo*: bool
+      ## A tracked symlink pointing outside the repo, per the same answer.
+      ## HEAD holds only the link text, so it stays on probes.
     pendingDiffInfo*: Option[GitDiffInfo]
       ## Latest completed diff, consumed by the tick for the sidebar gutter.
 
