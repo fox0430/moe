@@ -523,12 +523,12 @@ proc handleNormalModeKey*(
     # dd, yy, cc are handled by operator doubling in command_registry
     of "changelist.prev", "changelist.next":
       # g; / g, - As Vim's get_changelist: `count` steps, stopping at the ends.
-      let live = buffer.changeListLiveLen
+      let live = buffer.changeList.len
       if live == 0:
         return
           NormalModeResult(kind: nmrError, errorMessage: "E664: Changelist is empty")
       let
-        current = buffer.changeListCurrent
+        current = min(buffer.changeListPos, live)
         step = max(1, cmd.count)
         target =
           if cmd.commandId == "changelist.prev":

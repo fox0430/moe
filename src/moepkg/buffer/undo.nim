@@ -180,10 +180,8 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     snapshotEdits: change.snapshotEdits,
     snapshotRows: change.snapshotRows,
     namedMarkChanges: change.namedMarkChanges,
-    noChangeListPosition: change.noChangeListPosition,
     isReload: change.isReload,
-    changeListAcross: change.changeListAcross,
-    changeListIndexAcross: change.changeListIndexAcross,
+    reloadChangeList: change.reloadChangeList,
     visualAcross: change.visualAcross,
     reloadChargeLines: change.reloadChargeLines,
     reloadChargeBytes: change.reloadChargeBytes,
@@ -256,7 +254,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
     var touchedMarks: set[char]
     for change in transaction.changes:
       touchedMarks = touchedMarks + changedMarkNames(change)
-    let kept = not b.noteChangePosition(firstChangePos)
+    b.noteChangePosition(firstChangePos)
     if b.pendingSnapshot.isSome:
       # PieceTable: single O(1) snapshot undo entry for entire transaction
       b.undoStack.addLast(
@@ -281,7 +279,6 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
           namedMarkChanges:
             diffNamedMarks(b.pendingSnapshotNamedMarks, b.namedMarks, touchedMarks),
           visualAcross: transaction.lastVisualBefore.boxed,
-          noChangeListPosition: kept,
         )
       )
       # Pending snapshot state is now consumed into the entry; reset it all.
@@ -298,7 +295,6 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
         namedMarkChanges:
           diffNamedMarks(transaction.namedMarksBefore, b.namedMarks, touchedMarks),
         visualAcross: transaction.lastVisualBefore.boxed,
-        noChangeListPosition: kept,
       )
       b.undoStack.addLast(transactionChange)
     # Note: changeSeq was inc'd per inner change in pushUndoChange; preTxnSeq /
@@ -526,25 +522,21 @@ proc joinUndoSince*(b: TextBuffer, point: UndoJoinPoint) =
   ## Fold the undo entries added since `point` into one, as Vim's `:undojoin`
   ## makes one undo block. The changelist is left as the entries made it: a
   ## `withChangeListBlock` around them gives it one position. Entries a reload
-  ## added, which swap the changelist of their own, stay apart, as do snapshot
-  ## and plain entries mixed.
+  ## added, which move the changelist by their own spans, stay apart, as do
+  ## snapshot and plain entries mixed.
   var first = b.undoStack.len
   while first > 0 and b.undoStack[first - 1].id > point.changeId:
     first.dec
   let count = b.undoStack.len - first
   if count < 2:
     return
-  var
-    snapshots = 0
-    positioned = false
+  var snapshots = 0
   for i in first ..< b.undoStack.len:
     let entry = b.undoStack[i]
-    if entry.isReload or entry.changeListAcross.isSome:
+    if entry.isReload:
       return
     if entry.kind == ckSnapshot:
       snapshots.inc
-    if not entry.noChangeListPosition:
-      positioned = true
   if snapshots notin [0, count]:
     return
 
@@ -560,7 +552,6 @@ proc joinUndoSince*(b: TextBuffer, point: UndoJoinPoint) =
     for i in countdown(count - 1, 0):
       entries[i] = b.undoStack.popLast()
     joined = joinedTransaction(move entries)
-  joined.noChangeListPosition = not positioned
   b.undoStack.addLast(joined)
 
 proc firstChangedLine(change: BufferChange): int =
@@ -593,10 +584,8 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   var undoneChanges: seq[BufferChange] = @[]
   var poppedOriginals: seq[BufferChange] = @[]
   let initialChangeSeq = b.changeSeq
-  let initialChangeListIndex = b.changeListIndex
-  let initialChangeList = b.changeList
+  let initialChangeList = b.changeListState
   let initialLastVisual = b.lastVisual
-  var changeListMoved = false
 
   # Undo 'count' changes
   for i in 0 ..< count:
@@ -633,21 +622,16 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
           )
       b.changeSeq = initialChangeSeq
       b.advanceContentVersion()
-      b.changeList = initialChangeList
-      b.changeListIndex = initialChangeListIndex
+      b.restoreChangeListState(initialChangeList)
       b.lastVisual = initialLastVisual
       b.undoStack.addLast(change)
       for j in countdown(poppedOriginals.len - 1, 0):
         b.undoStack.addLast(poppedOriginals[j])
       return err("Undo failed: " & r.error)
 
-    # Swap changeList with the other side of this entry; the index travels
-    # with the list because the two can differ in length.
-    if change.changeListAcross.isSome:
-      redoEntry.changeListAcross = some(b.changeList)
-      redoEntry.changeListIndexAcross = b.changeListIndex
-      b.changeList = change.changeListAcross.get
-      b.changeListIndex = change.changeListIndexAcross
+    if change.reloadChangeList != nil:
+      b.moveChangeListAcrossReload(change.reloadChangeList[], undone = true)
+    b.noteUndoRows(change, redone = false)
 
     if change.visualAcross != nil:
       redoEntry.visualAcross = visualBefore.boxed
@@ -661,14 +645,6 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     # the stale isModified-after-multi-change-undo bug.
     b.changeSeq = change.startSeq
     b.advanceContentVersion()
-
-    # Adjust changelist index, unless this entry recorded no position
-    if not change.noChangeListPosition:
-      changeListMoved = true
-      if b.changeListIndex >= 0:
-        b.changeListIndex.dec
-  if changeListMoved:
-    b.changeListPos = b.changeListLiveLen
 
   # Add all undone changes to redo stack in the order they were undone
   # This ensures redo applies them in the correct reverse order
@@ -801,10 +777,8 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   var redoneChanges: seq[BufferChange] = @[]
   var poppedOriginals: seq[BufferChange] = @[]
   let initialChangeSeq = b.changeSeq
-  let initialChangeListIndex = b.changeListIndex
-  let initialChangeList = b.changeList
+  let initialChangeList = b.changeListState
   let initialLastVisual = b.lastVisual
-  var changeListMoved = false
 
   # Redo 'count' changes
   for i in 0 ..< count:
@@ -841,21 +815,16 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
           )
       b.changeSeq = initialChangeSeq
       b.advanceContentVersion()
-      b.changeList = initialChangeList
-      b.changeListIndex = initialChangeListIndex
+      b.restoreChangeListState(initialChangeList)
       b.lastVisual = initialLastVisual
       b.redoStack.addLast(change)
       for j in countdown(poppedOriginals.len - 1, 0):
         b.redoStack.addLast(poppedOriginals[j])
       return err("Redo failed: " & r.error)
 
-    # Swap changeList with the other side of this entry; the index travels
-    # with the list because the two can differ in length.
-    if change.changeListAcross.isSome:
-      undoEntry.changeListAcross = some(b.changeList)
-      undoEntry.changeListIndexAcross = b.changeListIndex
-      b.changeList = change.changeListAcross.get
-      b.changeListIndex = change.changeListIndexAcross
+    if change.reloadChangeList != nil:
+      b.moveChangeListAcrossReload(change.reloadChangeList[], undone = false)
+    b.noteUndoRows(change, redone = true)
 
     if change.visualAcross != nil:
       undoEntry.visualAcross = visualBefore.boxed
@@ -867,14 +836,6 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     # Restore changeSeq to the post-mutation value (symmetric with undo()).
     b.changeSeq = change.endSeq
     b.advanceContentVersion()
-
-    # Adjust changelist index, unless this entry recorded no position
-    if not change.noChangeListPosition:
-      changeListMoved = true
-      if b.changeListIndex < b.changeList.len - 1:
-        b.changeListIndex.inc
-  if changeListMoved:
-    b.changeListPos = b.changeListLiveLen
 
   # Symmetric with undo(): push in the order the changes were redone so the
   # last-applied change sits on top of undoStack.

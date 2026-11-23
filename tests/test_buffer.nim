@@ -3679,13 +3679,11 @@ suite "Buffer - reload preserves identity across a backend swap":
 
     let buf = newTextBuffer(backend = PieceTable)
     buf.changeList = @[BufferPosition(line: 1, column: 2)]
-    buf.changeListIndex = 0
 
     check buf.loadFile(path).isOk
     check buf.backendKind == GapBuffer # the swap happened
 
     check buf.changeList.len == 0
-    check buf.changeListIndex == 0
 
   test "editorConfig and isUtilityBuffer survive the swap":
     let path = getTempDir() / "moe_test_editorconfig_swap.txt"
@@ -3879,11 +3877,15 @@ suite "Buffer - reload resets stale content-keyed state":
     let buf = newTextBuffer(backend = GapBuffer)
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\n")
     check buf.changeList.len > 0 # edits recorded changelist entries
+    buf.withKeptChangeList:
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "x")
+    check buf.changeListNewChange
 
     check buf.loadFile(path).isOk
     check buf.backendKind == GapBuffer # same-backend path, no swap
     check buf.changeList.len == 0
-    check buf.changeListIndex == 0
+    check buf.changeListAdds == 0
+    check not buf.changeListNewChange
 
   test "shrinking reload clamps stale folds and bookmarks":
     # Folds and bookmarks survive a reload (identity), but a reload that shrinks
@@ -4224,11 +4226,8 @@ suite "Buffer - an external reload lands as an edit":
     check buf.undoStack.len == 2
     # `g;` goes back to where the user typed, not to the line a build touched.
     check buf.changeList == mine
-    check buf.changeListIndex == mine.len - 1
 
-  test "A reload the user has undone past leaves no changelist entry ahead":
-    # The reload clears the redo stack, so the entries an earlier undo left
-    # ahead of the index name changes no history holds any more.
+  test "A reload over an undo keeps the entries the undo left":
     let path = getTempDir() / "moe_test_reload_changelist_future.txt"
     writeFile(path, "alpha\nbeta\ngamma\n")
     defer:
@@ -4239,13 +4238,14 @@ suite "Buffer - an external reload lands as an edit":
     check buf.insertText(BufferPosition(line: 2, column: 0), "two ").isOk
     check buf.changeList.len == 2
     check buf.undo().isOk
-    check buf.changeListIndex == 0
+    check buf.changeList.len == 2
 
     writeFile(path, "one alpha\nBETA\ngamma\n")
     check buf.reloadFileIfContentChanged().isOk
     check buf.redoStack.len == 0
-    check buf.changeList.len == 1
-    check buf.changeListIndex == 0
+    check buf.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)]
+    check buf.changeListPos == 2
 
   test "A write that changes no line leaves the changelist alone":
     # Dropping the trailing newline changes the bytes but no line, so the
@@ -4261,7 +4261,6 @@ suite "Buffer - an external reload lands as an edit":
     check buf.insertText(BufferPosition(line: 2, column: 0), "two ").isOk
     check buf.undo().isOk
     check buf.changeList.len == 2
-    check buf.changeListIndex == 0
     check buf.redoStack.len == 1
 
     writeFile(path, "one alpha\nbeta\ngamma")
@@ -4269,7 +4268,6 @@ suite "Buffer - an external reload lands as an edit":
     check not buf.endOfLine
     check buf.redoStack.len == 1
     check buf.changeList.len == 2
-    check buf.changeListIndex == 0
 
   test "The changelist follows the lines a reload moved":
     let path = getTempDir() / "moe_test_reload_changelist_remap.txt"
@@ -4286,6 +4284,76 @@ suite "Buffer - an external reload lands as an edit":
     check buf.reloadFileIfContentChanged().isOk
     check buf.changeList == @[BufferPosition(line: 2, column: 0)]
 
+  test "A changelist position on a line a reload rewrote comes back with undo":
+    let path = getTempDir() / "moe_test_reload_changelist_rewrite.txt"
+    writeFile(path, "alpha\nbeta\ngamma\ndelta\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 2, column: 3), "!").isOk
+    check buf.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+
+    # A formatter rewrites the two middle lines as one span.
+    writeFile(path, "xalpha\nBETA\nGAM!MA\ndelta\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.changeList ==
+      @[BufferPosition(line: 2, column: 3), BufferPosition(line: 0, column: 0)]
+
+    check buf.undo().isOk
+    check buf.getLine(2) == "gam!ma"
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 2, column: 3),
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 1, column: 0),
+      ]
+    check buf.redo().isOk
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 2, column: 3),
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 1, column: 0),
+      ]
+
+  test "Undoing a reload gives back the exact positions it moved":
+    let path = getTempDir() / "moe_test_reload_changelist_exact.txt"
+    writeFile(path, "alpha\na long line of text\ngamma\ndelta\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 1, column: 15), "!").isOk
+    check buf.insertText(BufferPosition(line: 3, column: 1), "!").isOk
+    check buf.insertText(BufferPosition(line: 2, column: 2), "?").isOk
+    let mine = buf.changeList
+
+    # The long line is cut short and the last one goes, so two positions lose
+    # their place.
+    writeFile(path, "beta\na long\nga?mma\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 1, column: 6),
+        BufferPosition(line: 2, column: 0),
+        BufferPosition(line: 2, column: 2),
+      ]
+
+    check buf.undo().isOk
+    check buf.changeList[0 .. 2] == mine
+    check buf.redo().isOk
+    let afterRedo = buf.changeList
+    check afterRedo[0 .. 2] ==
+      @[
+        BufferPosition(line: 1, column: 6),
+        BufferPosition(line: 2, column: 0),
+        BufferPosition(line: 2, column: 2),
+      ]
+    check buf.undo().isOk
+    check buf.changeList[0 .. 2] == mine
+    check buf.redo().isOk
+    check buf.changeList == afterRedo
+
   test "Undoing a reload puts the changelist back on the lines it names":
     let path = getTempDir() / "moe_test_reload_changelist_undo_remap.txt"
     writeFile(path, "a\nb\nc\nd\ne\n")
@@ -4294,21 +4362,33 @@ suite "Buffer - an external reload lands as an edit":
     let buf = newTextBuffer()
     check buf.loadFile(path).isOk
     check buf.insertText(BufferPosition(line: 4, column: 0), "x ").isOk
-    check buf.changeList == @[BufferPosition(line: 4, column: 0)]
+    check buf.insertText(BufferPosition(line: 3, column: 1), "!").isOk
 
-    writeFile(path, "a\nd\nx e\n")
+    writeFile(path, "a\nd!\nx e\n")
     check buf.reloadFileIfContentChanged().isOk
-    check buf.changeList == @[BufferPosition(line: 2, column: 0)]
+    check buf.changeList ==
+      @[BufferPosition(line: 2, column: 0), BufferPosition(line: 1, column: 1)]
 
-    # The undo brings the lines the reload took back, so the position that
-    # named the edited line has to come back with them.
+    # The undo brings the lines the reload took back, so the positions that
+    # named the edited lines have to come back with them. The reload added no
+    # position, so its undo adds one, as in Vim.
     check buf.undo().isOk
     check buf.len == 5
-    check buf.changeList == @[BufferPosition(line: 4, column: 0)]
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 4, column: 0),
+        BufferPosition(line: 3, column: 1),
+        BufferPosition(line: 1, column: 0),
+      ]
     check buf.getLine(4) == "x e"
 
     check buf.redo().isOk
-    check buf.changeList == @[BufferPosition(line: 2, column: 0)]
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 2, column: 0),
+        BufferPosition(line: 1, column: 1),
+        BufferPosition(line: 1, column: 0),
+      ]
     check buf.getLine(2) == "x e"
 
   test "A changelist position on a line a reload took lands in the buffer":
@@ -4325,12 +4405,13 @@ suite "Buffer - an external reload lands as an edit":
     check buf.reloadFileIfContentChanged().isOk
     check buf.len == 2
     # `:changes` and `g;` read the entry, so it has to name a line that is
-    # there; the text it named went with the write.
-    check buf.changeList.len == 1
+    # there; the text it named went with the write. As Vim's mark_adjust, it
+    # goes to the line above the ones that went.
+    check buf.changeList == @[BufferPosition(line: 1, column: 0)]
     check buf.changeList[0].line < buf.len
     check buf.changeList[0].column <= buf.getLineLen(buf.changeList[0].line)
 
-  test "Undoing a reload leaves the changelist index on the user's change":
+  test "Undoing a reload adds its row to the changelist, as Vim":
     let path = getTempDir() / "moe_test_reload_changelist_undo_index.txt"
     writeFile(path, "alpha\nbeta\ngamma\n")
     defer:
@@ -4339,25 +4420,27 @@ suite "Buffer - an external reload lands as an edit":
     check buf.loadFile(path).isOk
     check buf.insertText(BufferPosition(line: 0, column: 0), "one ").isOk
     check buf.insertText(BufferPosition(line: 2, column: 0), "two ").isOk
-    check buf.changeListIndex == 1
-
     writeFile(path, "one alpha\nBETA\ntwo gamma\n")
     check buf.reloadFileIfContentChanged().isOk
-    check buf.changeListIndex == 1
+    check buf.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)]
 
-    # Undoing the reload steps over an entry that named no position, so `g;`
-    # still points at the newest line the user changed.
     check buf.undo().isOk
     check buf.getLine(1) == "beta"
-    check buf.changeListIndex == 1
-    check buf.changeList[buf.changeListIndex] == BufferPosition(line: 2, column: 0)
-
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 2, column: 0),
+        BufferPosition(line: 1, column: 0),
+      ]
     check buf.redo().isOk
-    check buf.changeListIndex == 1
-    # The next undo is the user's own, and moves the index.
-    check buf.undo().isOk
-    check buf.undo().isOk
-    check buf.changeListIndex == 0
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 2, column: 0),
+        BufferPosition(line: 1, column: 0),
+      ]
+    check buf.changeListPos == 3
 
   test "A reload keeps where g; stood":
     let path = getTempDir() / "moe_test_reload_changelist_pos.txt"
@@ -4375,19 +4458,12 @@ suite "Buffer - an external reload lands as an edit":
 
     check buf.changeListPos == 0
 
-    # Undoing or redoing the reload moves no change, so it keeps the position.
+    # An undo is a change, so `g;` starts from the end again, as in Vim.
     check buf.undo().isOk
     check buf.getLine(1) == "beta"
-    check buf.changeListPos == 0
-    check buf.redo().isOk
-    check buf.changeListPos == 0
+    check buf.changeListPos == buf.changeList.len
 
-    # The user's own undo moves the changelist, so it goes back to the end.
-    check buf.undo().isOk
-    check buf.undo().isOk
-    check buf.changeListPos == buf.changeListLiveLen
-
-  test "A reload undone past an evicted changelist position keeps the index":
+  test "Undoing a reload past the changelist cap keeps the user's positions":
     let path = getTempDir() / "moe_test_reload_changelist_evicted.txt"
     defer:
       removeFile(path)
@@ -4404,20 +4480,20 @@ suite "Buffer - an external reload lands as an edit":
       check buf.insertText(BufferPosition(line: i, column: 0), "x").isOk
       lines[i] = "x" & lines[i]
     check buf.changeList.len == ChangeListMaxLen
-    let newest = buf.changeList[buf.changeListIndex]
 
     lines[^1] = "touched"
     writeFile(path, lines.join("\n") & "\n")
     check buf.reloadFileIfContentChanged().isOk
     check buf.undoStack.len == ChangeListMaxLen + 1
-    # One more edit of the user's evicts the oldest position, so the live list
-    # and the one the reload carries no longer line up index for index.
+    # One more edit of the user's evicts the oldest position.
     check buf.insertText(BufferPosition(line: ChangeListMaxLen, column: 0), "y").isOk
 
     check buf.undo().isOk
     check buf.undo().isOk
-    # `g;` still names the newest change the user made before the reload.
-    check buf.changeList[buf.changeListIndex] == newest
+    check buf.changeList.len == ChangeListMaxLen
+    check buf.changeList[0] == BufferPosition(line: 1, column: 0)
+    check buf.changeList[^2] == BufferPosition(line: ChangeListMaxLen - 1, column: 0)
+    check buf.changeList[^1] == BufferPosition(line: lines.len - 1, column: 0)
 
   test "A reload dropped from the history gives its budget back":
     let path = getTempDir() / "moe_test_reload_budget_refund.txt"
@@ -4582,7 +4658,7 @@ suite "Buffer - an external reload lands as an edit":
   test "Undoing a reload puts the changelist back on the lines it names (PieceTable)":
     # Auto never lands a reload on PieceTable: the per-reload byte cap is 1MB
     # and auto only picks PieceTable at 10MB. Pinning is the only way the
-    # snapshot inverse copy of changeListAcross is exercised.
+    # snapshot inverse copy of reloadChangeList is exercised.
     setAutoBackendMode(false)
     setConfiguredBackend(PieceTable)
     defer:
@@ -4596,25 +4672,34 @@ suite "Buffer - an external reload lands as an edit":
     check buf.loadFile(path).isOk
     check buf.backendKind == PieceTable
     check buf.insertText(BufferPosition(line: 4, column: 0), "x ").isOk
-    check buf.changeList == @[BufferPosition(line: 4, column: 0)]
+    check buf.insertText(BufferPosition(line: 3, column: 1), "!").isOk
 
-    writeFile(path, "a\nd\nx e\n")
+    writeFile(path, "a\nd!\nx e\n")
     check buf.reloadFileIfContentChanged().isOk
     check buf.undoStack[^1].kind == ckSnapshot
-    check buf.changeList == @[BufferPosition(line: 2, column: 0)]
+    check buf.changeList ==
+      @[BufferPosition(line: 2, column: 0), BufferPosition(line: 1, column: 1)]
 
     check buf.undo().isOk
     check buf.len == 5
-    check buf.changeList == @[BufferPosition(line: 4, column: 0)]
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 4, column: 0),
+        BufferPosition(line: 3, column: 1),
+        BufferPosition(line: 1, column: 0),
+      ]
     check buf.getLine(4) == "x e"
 
     check buf.redo().isOk
-    check buf.changeList == @[BufferPosition(line: 2, column: 0)]
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 2, column: 0),
+        BufferPosition(line: 1, column: 1),
+        BufferPosition(line: 1, column: 0),
+      ]
     check buf.getLine(2) == "x e"
 
-  test "Undoing a reload leaves the changelist index on the user's change (PieceTable)":
-    # The snapshot inverse has to copy noChangeListPosition: redo walks the
-    # index unless that flag rides onto the entry it builds.
+  test "Undoing a reload adds its row to the changelist, as Vim (PieceTable)":
     setAutoBackendMode(false)
     setConfiguredBackend(PieceTable)
     defer:
@@ -4629,23 +4714,28 @@ suite "Buffer - an external reload lands as an edit":
     check buf.backendKind == PieceTable
     check buf.insertText(BufferPosition(line: 0, column: 0), "one ").isOk
     check buf.insertText(BufferPosition(line: 2, column: 0), "two ").isOk
-    check buf.changeListIndex == 1
-
     writeFile(path, "one alpha\nBETA\ntwo gamma\n")
     check buf.reloadFileIfContentChanged().isOk
     check buf.undoStack[^1].kind == ckSnapshot
-    check buf.changeListIndex == 1
+    check buf.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)]
 
     check buf.undo().isOk
     check buf.getLine(1) == "beta"
-    check buf.changeListIndex == 1
-    check buf.changeList[buf.changeListIndex] == BufferPosition(line: 2, column: 0)
-
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 2, column: 0),
+        BufferPosition(line: 1, column: 0),
+      ]
     check buf.redo().isOk
-    check buf.changeListIndex == 1
-    check buf.undo().isOk
-    check buf.undo().isOk
-    check buf.changeListIndex == 0
+    check buf.changeList ==
+      @[
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 2, column: 0),
+        BufferPosition(line: 1, column: 0),
+      ]
+    check buf.changeListPos == 3
 
   test "A reload dropped from the history gives its budget back (PieceTable)":
     # Charges live on the entry. Snapshot undo builds a new object for redo,

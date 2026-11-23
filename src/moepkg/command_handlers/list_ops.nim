@@ -62,13 +62,13 @@ proc processChangeResult*(e: Editor, r: HandlerResult): bool =
   case r.kind
   of hrChanges:
     let buf = e.activeBuffer()
-    let live = buf.changeListLiveLen
+    let live = buf.changeList.len
     if live == 0:
       e.state.statusMessage = "No changes"
     else:
       e.state.ui.tempMessages = @[]
       e.state.ui.tempMessages.add("change  line  col  text")
-      let current = buf.changeListCurrent
+      let current = min(buf.changeListPos, live)
       for i in 0 ..< live:
         let pos = buf.changeList[i]
         let lineNum = pos.line + 1

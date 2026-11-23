@@ -1151,7 +1151,7 @@ template oneUndoScenarios(backend: BufferBackendKind, tag: string) =
     check buf.undo().isOk
     check buf.lines == @["b", "a"]
 
-  test "Ex entries leave the change list as it was, as keepjumps does" & tag:
+  test "Ex entries add nothing to the change list, as keepjumps does" & tag:
     let (editor, dir, _) = setupOn(
       backend,
       "one_undo_changelist",
@@ -1163,12 +1163,14 @@ template oneUndoScenarios(backend: BufferBackendKind, tag: string) =
     let buf = editor.activeBuffer
     check editor.saveFile(buf).isOk
     check buf.changeList.len == 0
+    # An undo is a change of its own, as in Vim: the first edit's row on undo,
+    # the last's on redo.
     check buf.undo().isOk
     check buf.lines == @["b", "a"]
-    check buf.changeList.len == 0
+    check buf.changeList == @[BufferPosition(line: 1, column: 0)]
     check buf.redo().isOk
     check buf.lines == @["y", "x"]
-    check buf.changeList.len == 0
+    check buf.changeList == @[BufferPosition(line: 0, column: 0)]
 
   test "The change list gets one entry for a program's change" & tag:
     let (editor, dir, _) = setupOn(
@@ -1186,7 +1188,7 @@ template oneUndoScenarios(backend: BufferBackendKind, tag: string) =
     check buf.changeList[0].line == 0
     check buf.undo().isOk
     check buf.lines == @["b", "a"]
-    check buf.changeListIndex == -1
+    check buf.changeList == @[BufferPosition(line: 1, column: 0)]
 
 suite "BufWritePre - one write is one undo":
   oneUndoScenarios(bbcGapBuffer, " [GapBuffer]")

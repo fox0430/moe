@@ -2035,7 +2035,6 @@ suite "NormalModeHandler - Change List Navigation":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     buf.changeList = @[]
-    buf.changeListIndex = 0
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
@@ -2048,7 +2047,6 @@ suite "NormalModeHandler - Change List Navigation":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     buf.changeList = @[]
-    buf.changeListIndex = 0
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
@@ -2065,7 +2063,6 @@ suite "NormalModeHandler - Change List Navigation":
       BufferPosition(line: 1, column: 3),
       BufferPosition(line: 2, column: 5),
     ]
-    buf.changeListIndex = 2
     buf.changeListPos = 3
     let state = createTestState()
     state.windowDisplay.currentBufferId = BufferId(0)
@@ -2146,7 +2143,7 @@ suite "NormalModeHandler - Change List Navigation":
     check buf.changeList.len == 4
     check buf.changeListPos == 4
 
-  test "g; after undo starts from the newest change undo left":
+  test "g; after undo goes to the undone change, as Vim":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
     buf.changeList = @[]
@@ -2159,32 +2156,34 @@ suite "NormalModeHandler - Change List Navigation":
     let viewport = createTestViewport()
 
     check pressGSemicolon(handler, buf, state, viewport).kind == nmrHandled
-    check (state.cursor.line, state.cursor.column) == (0, 0)
+    check (state.cursor.line, state.cursor.column) == (1, 0)
     check pressGComma(handler, buf, state, viewport).kind == nmrError
 
-  test "g; after every change is undone finds none, and redo brings one back":
+  test "g; after every change is undone goes where the last undo was, as Vim":
     let buf = newTextBuffer("Line 1\nLine 2")
-    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
-    check buf.insertText(BufferPosition(line: 1, column: 0), "b").isOk
+    check buf.insertText(BufferPosition(line: 0, column: 3), "a").isOk
+    check buf.insertText(BufferPosition(line: 1, column: 2), "b").isOk
     check buf.undo().isOk
     check buf.undo().isOk
+    check buf.changeList ==
+      @[BufferPosition(line: 0, column: 3), BufferPosition(line: 0, column: 0)]
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.windowDisplay.currentBufferId = BufferId(0)
+    state.cursor = BufferPosition(line: 1, column: 1)
     let viewport = createTestViewport()
 
-    let none = pressGSemicolon(handler, buf, state, viewport)
-    check none.kind == nmrError
-    check none.errorMessage == "E664: Changelist is empty"
-
-    check buf.redo().isOk
-    check buf.changeListLiveLen == 1
     check pressGSemicolon(handler, buf, state, viewport).kind == nmrHandled
     check (state.cursor.line, state.cursor.column) == (0, 0)
 
-    check buf.insertText(BufferPosition(line: 1, column: 0), "c").isOk
+    check buf.redo().isOk
+    check buf.redo().isOk
     check buf.changeList ==
-      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0)]
+      @[BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 0)]
+    check buf.changeListPos == 2
+
+    check buf.insertText(BufferPosition(line: 0, column: 0), "c").isOk
+    check buf.changeList.len == 3
 
   test "g; with single change jumps to that position":
     let buf = newTextBuffer()
@@ -2195,7 +2194,6 @@ suite "NormalModeHandler - Change List Navigation":
     state.windowDisplay.currentBufferId = BufferId(0)
 
     buf.changeList = @[BufferPosition(line: 0, column: 5)]
-    buf.changeListIndex = 0
     buf.changeListPos = 1
 
     let result = pressGSemicolon(handler, buf, state, viewport)

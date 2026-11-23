@@ -1357,7 +1357,6 @@ suite "Buffer - Change List":
   test "changeList is empty on new buffer":
     let b = newTextBuffer("hello")
     check b.changeList.len == 0
-    check b.changeListIndex == 0
 
   test "insertText records position in changeList":
     let b = newTextBuffer("hello")
@@ -1365,23 +1364,37 @@ suite "Buffer - Change List":
     check b.changeList.len == 1
     check b.changeList[0].line == 0
     check b.changeList[0].column == 5
-    check b.changeListIndex == 0
 
-  test "multiple changes grow changeList":
+  test "changes on other lines grow changeList":
+    let b = newTextBuffer("a\nb\nc")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 1, column: 0), "B")
+    discard b.insertText(BufferPosition(line: 2, column: 0), "C")
+    check b.changeList.len == 3
+    check b.changeListPos == 3
+
+  test "changes near each other on one line move one position, as Vim":
     let b = newTextBuffer("hello")
     discard b.insertText(BufferPosition(line: 0, column: 0), "A")
     discard b.insertText(BufferPosition(line: 0, column: 3), "B")
     discard b.insertText(BufferPosition(line: 0, column: 6), "C")
-    check b.changeList.len == 3
-    check b.changeListIndex == 2
+    check b.changeList == @[BufferPosition(line: 0, column: 6)]
+    check b.changeListPos == 1
+
+  test "a change far along the newest position's line adds one, as Vim":
+    let b = newTextBuffer("x".repeat(100))
+    discard b.insertText(BufferPosition(line: 0, column: 0), "a")
+    discard b.insertText(BufferPosition(line: 0, column: 90), "b")
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 90)]
 
   test "deleteLine records position in changeList":
-    let b = newTextBuffer("")
-    discard b.insert(1, "line2")
+    let b = newTextBuffer("a\nb\nc")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "x")
     let initialLen = b.changeList.len
-    discard b.deleteLine(1)
+    discard b.deleteLine(2)
     check b.changeList.len == initialLen + 1
-    check b.changeList[^1].line == 1
+    check b.changeList[^1].line == 2
 
   test "transaction records single entry in changeList":
     let b = newTextBuffer("hello world")
@@ -1394,88 +1407,178 @@ suite "Buffer - Change List":
     check b.changeList[0].line == 0
     check b.changeList[0].column == 0
 
-  test "undo decrements changeListIndex":
-    let b = newTextBuffer("hello")
+  test "undo moves the newest position to the undone change, as Vim":
+    let b = newTextBuffer("hello\nworld")
     discard b.insertText(BufferPosition(line: 0, column: 5), "!")
-    discard b.insertText(BufferPosition(line: 0, column: 0), "?")
-    check b.changeListIndex == 1
-
+    discard b.insertText(BufferPosition(line: 1, column: 2), "?")
     discard b.undo()
-    check b.changeListIndex == 0
-    check b.changeList.len == 2 # List itself doesn't shrink
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 5), BufferPosition(line: 1, column: 0)]
+    discard b.undo()
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 5), BufferPosition(line: 0, column: 0)]
+    check b.changeListPos == 2
 
-  test "redo increments changeListIndex":
-    let b = newTextBuffer("hello")
+  test "redo moves the newest position to the redone change, as Vim":
+    let b = newTextBuffer("hello\nworld")
     discard b.insertText(BufferPosition(line: 0, column: 5), "!")
-    discard b.insertText(BufferPosition(line: 0, column: 0), "?")
+    discard b.insertText(BufferPosition(line: 1, column: 2), "?")
     discard b.undo()
-    check b.changeListIndex == 0
-
+    discard b.undo()
     discard b.redo()
-    check b.changeListIndex == 1
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 5), BufferPosition(line: 0, column: 0)]
+    discard b.redo()
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 5), BufferPosition(line: 1, column: 0)]
 
-  test "undoing the only change leaves none in effect":
+  test "undo with a count moves the newest position to the oldest undone":
+    let b = newTextBuffer("hello\nworld")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    discard b.insertText(BufferPosition(line: 1, column: 2), "?")
+    discard b.undo(2)
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 5), BufferPosition(line: 0, column: 0)]
+
+  test "undo puts the first position on an empty changelist":
     let b = newTextBuffer("hello")
     discard b.insertText(BufferPosition(line: 0, column: 5), "!")
-    check b.changeListIndex == 0
-
+    b.changeList = @[]
+    b.changeListPos = 0
     discard b.undo()
-    check b.changeListIndex == -1
-    check b.changeListLiveLen == 0
+    check b.changeList == @[BufferPosition(line: 0, column: 0)]
+    check b.changeListPos == 1
 
-  test "changeListIndex does not exceed len-1 on redo":
+  test "a failed redo leaves the changelist alone":
     let b = newTextBuffer("hello")
     discard b.insertText(BufferPosition(line: 0, column: 5), "!")
-    check b.changeListIndex == 0
-
-    # Already at the end, redo should fail but index stays in bounds
-    let r = b.redo()
-    check r.isErr
-    check b.changeListIndex == 0
+    b.changeListPos = 0
+    check b.redo().isErr
+    check b.changeList == @[BufferPosition(line: 0, column: 5)]
+    check b.changeListPos == 0
 
   test "changeList limited to 100 entries":
-    let b = newTextBuffer("hello")
+    let b = newTextBuffer(newSeq[string](111).join("\n"))
     for i in 0 ..< 110:
-      discard b.insertText(BufferPosition(line: 0, column: 0), "x")
+      discard b.insertText(BufferPosition(line: i, column: 0), "x")
     check b.changeList.len == 100
-    check b.changeListIndex == 99
+    check b.changeList[0] == BufferPosition(line: 10, column: 0)
+    check b.changeListPos == 100
 
-  test "new edit truncates changeList after undo":
-    # Regression: pushUndoChange used to leave stale changeList entries past
-    # changeListIndex, so g; / g, could navigate to positions whose undo
-    # entries were already discarded.
+  test "change and undo on one line keep one position, as Vim":
     let b = newTextBuffer("hello")
-    discard b.insertText(BufferPosition(line: 0, column: 0), "a") # idx 0
-    discard b.insertText(BufferPosition(line: 0, column: 1), "b") # idx 1
-    discard b.insertText(BufferPosition(line: 0, column: 2), "c") # idx 2
-    check b.changeList.len == 3
-    check b.changeListIndex == 2
+    for _ in 0 ..< 4:
+      discard b.insertText(BufferPosition(line: 0, column: 1), "x")
+      discard b.undo()
+    check b.changeList == @[BufferPosition(line: 0, column: 0)]
 
-    discard b.undo()
-    discard b.undo()
-    check b.changeListIndex == 0
-
-    # New edit must drop the abandoned changeList tail (idx 1, 2).
-    discard b.insertText(BufferPosition(line: 0, column: 0), "z")
-    check b.changeList.len == 2
-    check b.changeListIndex == 1
-    check b.changeList[^1].column == 0
-
-  test "transaction commit after undo also truncates changeList":
-    let b = newTextBuffer("hello")
+  test "a new edit after undo adds to what the undo left":
+    let b = newTextBuffer("a\nb\nc\nd")
     discard b.insertText(BufferPosition(line: 0, column: 0), "a")
-    discard b.insertText(BufferPosition(line: 0, column: 1), "b")
-    discard b.insertText(BufferPosition(line: 0, column: 2), "c")
+    discard b.insertText(BufferPosition(line: 1, column: 0), "b")
+    discard b.insertText(BufferPosition(line: 2, column: 0), "c")
     discard b.undo()
     discard b.undo()
-    check b.changeListIndex == 0
+    check b.changeList.len == 3
 
-    discard b.beginTransaction("late")
-    discard b.insertText(BufferPosition(line: 0, column: 0), "z")
-    discard b.insertText(BufferPosition(line: 0, column: 1), "y")
-    discard b.commitTransaction()
-    check b.changeList.len == 2
-    check b.changeListIndex == 1
+    discard b.insertText(BufferPosition(line: 3, column: 0), "z")
+    check b.changeList.len == 4
+    check b.changeListPos == 4
+
+suite "Buffer - Change List after undo and redo":
+  # As Vim's u_undoredo: the row of the entry it meets last, column 0.
+  for backend in [GapBuffer, PieceTable]:
+    test $backend & ": undo takes the first edit's row, redo the last's":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb\nc\nd\ne")
+      check b.beginTransaction("s").isOk
+      for line in [0, 2, 4]:
+        check b.insertText(BufferPosition(line: line, column: 1), "X").isOk
+      check b.commitTransaction().isOk
+      check b.undo().isOk
+      check b.changeList == @[BufferPosition(line: 0, column: 0)]
+      check b.redo().isOk
+      check b.changeList == @[BufferPosition(line: 4, column: 0)]
+
+  test "undoing a change kept off the changelist adds its row, as Vim":
+    # As Vim's b_new_change, which a `:keepjumps` change leaves set.
+    let b = newTextBuffer("a\nb\nc\nd\ne")
+    check b.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    b.withKeptChangeList:
+      check b.insertText(BufferPosition(line: 4, column: 0), "y").isOk
+    check b.undo().isOk
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 4, column: 0)]
+    check b.changeListPos == 2
+    # That undo added a position, so the next one moves it.
+    check b.undo().isOk
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0)]
+
+  test "undoing a kept change on the newest position's line moves it":
+    let b = newTextBuffer("abcdef")
+    check b.insertText(BufferPosition(line: 0, column: 3), "x").isOk
+    b.withKeptChangeList:
+      check b.insertText(BufferPosition(line: 0, column: 0), "y").isOk
+    check b.undo().isOk
+    check b.changeList == @[BufferPosition(line: 0, column: 0)]
+
+  test "undoing a kept change far along the newest position's line adds one":
+    let b = newTextBuffer("x".repeat(100))
+    check b.insertText(BufferPosition(line: 0, column: 90), "x").isOk
+    b.withKeptChangeList:
+      check b.insertText(BufferPosition(line: 0, column: 0), "y").isOk
+    check b.undo().isOk
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 90), BufferPosition(line: 0, column: 0)]
+
+  test "undoing two kept changes at once adds one position, the older's":
+    let b = newTextBuffer("a\nb\nc\nd\ne")
+    check b.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    b.withKeptChangeList:
+      check b.insertText(BufferPosition(line: 2, column: 0), "y").isOk
+      check b.insertText(BufferPosition(line: 4, column: 0), "z").isOk
+    check b.undo(2).isOk
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)]
+
+  test "a kept change in a block that has its position leaves it the block's":
+    let b = newTextBuffer("a\nb\nc")
+    b.withChangeListBlock:
+      check b.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+      b.withKeptChangeList:
+        check b.insertText(BufferPosition(line: 2, column: 0), "y").isOk
+    check not b.changeListNewChange
+
+  for backend in [GapBuffer, PieceTable]:
+    test $backend & ": undoing an opened line takes the new line's row, as Vim":
+      setConfiguredBackend(backend)
+      defer:
+        setConfiguredBackend(GapBuffer)
+      let b = newTextBuffer("a\nb\nc")
+      check b.insertText(BufferPosition(line: 0, column: 1), "\nx", openLine = olBelow).isOk
+      check b.undo().isOk
+      check b.changeList == @[BufferPosition(line: 1, column: 0)]
+      check b.redo().isOk
+      check b.changeList == @[BufferPosition(line: 1, column: 0)]
+
+  test "an undo kept off the changelist leaves it alone, as :keepjumps":
+    let b = newTextBuffer("a\nb")
+    check b.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    check b.insertText(BufferPosition(line: 1, column: 0), "y").isOk
+    b.withKeptChangeList:
+      check b.undo().isOk
+    check b.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0)]
+
+  test "an undo whose oldest entry edits nothing takes the row of the one before":
+    let b = newTextBuffer("a\nb")
+    check b.insertText(BufferPosition(line: 1, column: 1), "X").isOk
+    b.undoStack.addFirst(BufferChange(kind: ckTransaction))
+    check b.undo(2).isOk
+    check b.changeList == @[BufferPosition(line: 1, column: 0)]
 
 suite "Buffer - Pending Snapshot Cleanup":
   test "failed insertText does not leak pending modifiedLines snapshot":
@@ -1699,7 +1802,8 @@ suite "Buffer - Batch Partial Failure Recovery (count>1)":
     discard b.insertText(BufferPosition(line: 0, column: 3), " X")
     check b.getLine(0) == "abc X"
     let seqBefore = b.changeSeq
-    let idxBefore = b.changeListIndex
+    let listBefore = b.changeList
+    let posBefore = b.changeListPos
     let preLine = b.getLine(0)
     let redoLenBefore = b.redoStack.len
 
@@ -1722,7 +1826,8 @@ suite "Buffer - Batch Partial Failure Recovery (count>1)":
     check b.undoStack.len == undoLenBefore
     check b.redoStack.len == redoLenBefore
     check b.changeSeq == seqBefore
-    check b.changeListIndex == idxBefore
+    check b.changeList == listBefore
+    check b.changeListPos == posBefore
     # The retry actually retries: a plain undo() now succeeds and pops " X".
     let r2 = b.undo()
     check r2.isOk
@@ -1735,7 +1840,8 @@ suite "Buffer - Batch Partial Failure Recovery (count>1)":
     check b.getLine(0) == "abc"
     check b.redoStack.len == 1
     let seqBefore = b.changeSeq
-    let idxBefore = b.changeListIndex
+    let listBefore = b.changeList
+    let posBefore = b.changeListPos
     let preLine = b.getLine(0)
     let undoLenBefore = b.undoStack.len
 
@@ -1756,7 +1862,8 @@ suite "Buffer - Batch Partial Failure Recovery (count>1)":
     check b.redoStack.len == redoLenBefore
     check b.undoStack.len == undoLenBefore
     check b.changeSeq == seqBefore
-    check b.changeListIndex == idxBefore
+    check b.changeList == listBefore
+    check b.changeListPos == posBefore
     let r2 = b.redo()
     check r2.isOk
     check b.getLine(0) == "abc X"
@@ -1930,10 +2037,10 @@ suite "Buffer - holdsChange":
     check not b.holdsChange(0)
     check not b.holdsChange(b.currentChangeId)
 
-  test "An edit detached from the changelist is not a reload":
+  test "An edit carrying a reload's changelist is not a reload":
     let b = newTextBuffer("hello")
     discard b.insertText(BufferPosition(line: 0, column: 5), "!")
-    b.detachLastEntryFromChangeList(@[], 0)
+    b.markLastEntryReloadChangeList(ReloadChangeList())
     check not b.reloadedSince(0)
 
   test "A load announces the read once the buffer is fully loaded":
@@ -2291,20 +2398,19 @@ suite "Buffer - joined undo entries":
       check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
       check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
       check b.undo().isOk
-      # The undone edit's position is still there for `g,`.
-      check b.changeList.len == 2
+      check b.changeList.len == 1
       let point = b.undoJoinPoint()
       b.withChangeListBlock:
         check b.insertIn(BufferPosition(line: 1, column: 0), "1").isOk
         check b.insertIn(BufferPosition(line: 2, column: 0), "2").isOk
       b.joinUndoSince(point)
-      check b.changeList ==
-        @[BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)]
-      check b.changeListIndex == 1
+      check b.changeList.len == 2
+      check b.changeList[^1] == BufferPosition(line: 2, column: 0)
       check b.undo().isOk
-      check b.changeListIndex == 0
+      check b.changeList.len == 2
+      check b.changeList[^1] == BufferPosition(line: 1, column: 0)
       check b.redo().isOk
-      check b.changeListIndex == 1
+      check b.changeList[^1] == BufferPosition(line: 2, column: 0)
 
     test $backend & ": entries kept off the changelist add no position":
       setConfiguredBackend(backend)
@@ -2323,10 +2429,10 @@ suite "Buffer - joined undo entries":
       check b.changeList == @[BufferPosition(line: 1, column: 0)]
       check b.undo().isOk
       check b.text == "a\nb\nc"
-      check b.changeListIndex == -1
+      check b.changeList == @[BufferPosition(line: 0, column: 0)]
       check b.redo().isOk
       check b.text == "0a\n1b\n2c"
-      check b.changeListIndex == 0
+      check b.changeList == @[BufferPosition(line: 2, column: 0)]
 
     test $backend & ": joined entries all kept off the changelist add nothing":
       setConfiguredBackend(backend)
@@ -2340,12 +2446,16 @@ suite "Buffer - joined undo entries":
         check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
       b.joinUndoSince(point)
       check b.changeList == @[BufferPosition(line: 1, column: 0)]
+      # Nothing the undone entry did added a position, so its undo adds one.
       check b.undo().isOk
-      check b.changeListIndex == 0
+      check b.changeList ==
+        @[BufferPosition(line: 1, column: 0), BufferPosition(line: 0, column: 0)]
       check b.undo().isOk
       check b.text == "a\nb"
+      check b.changeList ==
+        @[BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 0)]
 
-    test $backend & ": a change kept off the changelist still drops its future":
+    test $backend & ": a change kept off the changelist leaves what undo left":
       setConfiguredBackend(backend)
       defer:
         setConfiguredBackend(GapBuffer)
@@ -2356,12 +2466,11 @@ suite "Buffer - joined undo entries":
       check b.changeList.len == 2
       b.withKeptChangeList:
         check b.insertIn(BufferPosition(line: 0, column: 0), "2").isOk
-      # The undone change can no longer be redone: `g,` has nothing to visit.
-      check b.changeList == @[BufferPosition(line: 0, column: 0)]
-      check b.changeListIndex == 0
+      check b.changeList ==
+        @[BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0)]
       check b.changeListMode == clmEach
 
-    test $backend & ": entries of a changelist block left apart keep the index":
+    test $backend & ": entries of a changelist block left apart each move it":
       setConfiguredBackend(backend)
       defer:
         setConfiguredBackend(GapBuffer)
@@ -2372,46 +2481,47 @@ suite "Buffer - joined undo entries":
         check b.insertIn(BufferPosition(line: 2, column: 0), "2").isOk
       check b.changeList ==
         @[BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)]
-      check b.changeListIndex == 1
       check b.undo().isOk
-      check b.changeListIndex == 1
+      check b.changeList[^1] == BufferPosition(line: 2, column: 0)
       check b.undo().isOk
-      check b.changeListIndex == 0
+      check b.changeList[^1] == BufferPosition(line: 1, column: 0)
       check b.redo().isOk
       check b.redo().isOk
-      check b.changeListIndex == 1
+      check b.changeList ==
+        @[BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 0)]
       check b.changeListMode == clmEach
 
     test $backend & ": joined entries at the changelist cap keep the oldest":
       setConfiguredBackend(backend)
       defer:
         setConfiguredBackend(GapBuffer)
-      let b = newTextBuffer("a")
+      let b = newTextBuffer(newSeq[string](ChangeListMaxLen + 2).join("\n"))
       for i in 0 ..< ChangeListMaxLen:
-        check b.insertIn(BufferPosition(line: 0, column: 0), "z").isOk
+        check b.insertIn(BufferPosition(line: i, column: 0), "z").isOk
       let before = b.changeList
       let point = b.undoJoinPoint()
       b.withChangeListBlock:
-        check b.insertIn(BufferPosition(line: 0, column: 1), "1").isOk
-        check b.insertIn(BufferPosition(line: 0, column: 2), "2").isOk
+        check b.insertIn(BufferPosition(line: ChangeListMaxLen, column: 0), "1").isOk
+        check b.insertIn(BufferPosition(line: ChangeListMaxLen, column: 1), "2").isOk
       b.joinUndoSince(point)
-      check b.changeList == before[1 .. ^1] & @[BufferPosition(line: 0, column: 2)]
+      check b.changeList ==
+        before[1 .. ^1] & @[BufferPosition(line: ChangeListMaxLen, column: 1)]
 
     test $backend & ": joining more entries than the changelist holds":
       setConfiguredBackend(backend)
       defer:
         setConfiguredBackend(GapBuffer)
-      let b = newTextBuffer("a")
+      let b = newTextBuffer("a\nb")
       check b.insertIn(BufferPosition(line: 0, column: 0), "0").isOk
       let before = b.changeList
       let point = b.undoJoinPoint()
       b.withChangeListBlock:
         for i in 0 .. ChangeListMaxLen:
-          check b.insertIn(BufferPosition(line: 0, column: 1), "z").isOk
+          check b.insertIn(BufferPosition(line: 1, column: 0), "z").isOk
       b.joinUndoSince(point)
-      check b.changeList == before & @[BufferPosition(line: 0, column: 1)]
+      check b.changeList == before & @[BufferPosition(line: 1, column: 0)]
       check b.undo().isOk
-      check b.text == "0a"
+      check b.text == "0a\nb"
 
     test $backend & ": undo and redo of joined entries put the cursor alike":
       setConfiguredBackend(backend)
@@ -2439,7 +2549,7 @@ suite "Buffer - joined undo entries":
       b.joinUndoSince(point)
       check b.insertIn(BufferPosition(line: 0, column: 0), "1").isOk
       b.joinUndoSince(point)
-      check b.changeList.len == 2
+      check b.changeList.len == 1
       check b.undo().isOk
       check b.text == "0abc"
 
