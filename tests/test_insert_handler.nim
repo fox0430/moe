@@ -40,6 +40,7 @@ import
     lsp_integration,
   ]
 import ../src/moepkg/syntax/tokenizer
+import ../src/moepkg/buffer/highlight
 import ../src/moepkg/command_handlers/[insert_handler, insert_commands]
 import ../src/moepkg/lsp_service {.all.}
 import ../src/moepkg/lsp/protocol/types as lsp_protocol_types
@@ -4506,3 +4507,128 @@ suite "InsertModeHandler - completionItem/resolve gate":
 
     check not worker.resolveSent
     check lrfCompletionResolve notin state.lspCache.pending
+
+suite "Insert Mode Handler - closer typed at the start of a line":
+  proc closerTyped(
+      language: SourceLanguage,
+      text: string,
+      closer: string,
+      smart = true,
+      autoClose = true,
+  ): tuple[line: string, column: int] =
+    ## Types `closer` at the end of `text` with smartIndent and returns the last
+    ## line and the cursor's column.
+    let buf = newTextBuffer()
+    buf.language = language
+    discard buf.insertText(BufferPosition(line: 0, column: 0), text)
+    buf.updateHighlight()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoIndent = true
+    state.smartIndent = smart
+    state.autoCloseParen = autoClose
+    state.expandTab = true
+    state.tabStop = 2
+    let last = buf.len - 1
+    state.cursor = BufferPosition(line: last, column: buf.getLine(last).len)
+    check handler.handleCharacterInsertion(buf, state, closer).kind == imrHandled
+    (buf.getLine(last), state.cursor.column)
+
+  test "a closer takes the indent of its opener's line, as Vim's smartindent":
+    check closerTyped(langC, "int f() {\n  return 0;\n  ", "}") == ("}", 1)
+    check closerTyped(langC, "  if (x) {\n    y;\n    ", "}") == ("  }", 3)
+
+  test "every closer does, as Neovim's indent scripts":
+    check closerTyped(langNim, "proc f() =\n  g(\n    a,\n    ", ")") == ("  )", 3)
+    check closerTyped(langJavaScript, "x = [\n  1,\n  ", "]") == ("]", 1)
+
+  test "a closer after other text stays":
+    check closerTyped(langC, "int f() {\n  x", "}") == ("  x}", 4)
+
+  test "a closer without an opener stays":
+    check closerTyped(langC, "  x;\n  ", "}") == ("  }", 3)
+
+  test "a closer in markup stays":
+    check closerTyped(langLatex, "\\item{\n    ", "}") == ("    }", 5)
+    check closerTyped(langMarkdown, "- [\n    ", "]") == ("    ]", 5)
+
+  test "moved there, typing starts where the closer's indent took it":
+    let buf = newTextBuffer()
+    buf.language = langC
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  if (x) {\n        ")
+    buf.updateHighlight()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoIndent = true
+    state.smartIndent = true
+    state.expandTab = true
+    let start = BufferPosition(line: 0, column: 0)
+    state.insertStart = InsertStart(at: start, stop: start, moved: true)
+    state.cursor = BufferPosition(line: 1, column: 8)
+    check handler.handleCharacterInsertion(buf, state, "}").kind == imrHandled
+    check buf.getLine(1) == "  }"
+    check state.insertStart.at == BufferPosition(line: 1, column: 2)
+    check not state.insertStart.moved
+
+  test "a closer in a heredoc or a raw string stays":
+    check closerTyped(langShell, "if x; then {\n  cat <<EOF\n    ", "}") == ("    }", 5)
+    check closerTyped(langCpp, "int f() {\n  auto s = R\"(\n    ", "}") == ("    }", 5)
+
+  test "a closer inside a long string stays":
+    check closerTyped(langPython, "def f(\n    \"\"\"\n    ", ")") == ("    )", 5)
+
+  test "without autoCloseParen too":
+    check closerTyped(langC, "int f() {\n  ", "}", autoClose = false) == ("}", 1)
+
+  proc recordedCloser(autoClose: bool): InsertModeResult =
+    let buf = newTextBuffer()
+    buf.language = langC
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "int f() {\n  ")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.smartIndent = true
+    state.autoCloseParen = autoClose
+    state.cursor = BufferPosition(line: 1, column: 2)
+    result = handler.handleCharacterInsertion(buf, state, "}")
+    check buf.getLine(1) == "}"
+
+  test "`.` judges the indent again where it types the closer":
+    let r = recordedCloser(autoClose = true)
+    check r.keyConsumed
+    check r.typedBefore.len == 2
+    check r.typedBefore[0].kind == tiText
+    check r.typedBefore[0].text == "}"
+    check r.typedBefore[1].kind == tiReindent
+
+  test "without autoCloseParen, the key is recorded and judged again":
+    let r = recordedCloser(autoClose = false)
+    check not r.keyConsumed
+    check r.typedBefore.len == 0
+
+  test "without smartIndent the closer stays":
+    check closerTyped(langC, "int f() {\n  ", "}", smart = false) == ("  }", 3)
+
+suite "Insert Mode Handler - snippet stops across a closer's reindent":
+  test "a stop in the indent keeps the closer it covered":
+    var session = SnippetSession(
+      active: true,
+      stops: @[
+        SnippetStop(num: 1, pos: BufferPosition(line: 1, column: 0), len: 5),
+        SnippetStop(num: 2, pos: BufferPosition(line: 1, column: 2), len: 1),
+        SnippetStop(num: 0, pos: BufferPosition(line: 1, column: 5), len: 0),
+        SnippetStop(num: 3, pos: BufferPosition(line: 2, column: 1), len: 1),
+      ],
+    )
+    var deeper = session
+    remapIndentChange(session, 1, 4, 0)
+    check session.stops[0].pos.column == 0
+    check session.stops[0].len == 1
+    check session.stops[1].pos.column == 0
+    check session.stops[1].len == 0
+    check session.stops[2].pos.column == 1
+    check session.stops[3].pos == BufferPosition(line: 2, column: 1)
+    remapIndentChange(deeper, 1, 4, 8)
+    check deeper.stops[0].len == 9
+    check deeper.stops[1].pos.column == 2
+    check deeper.stops[1].len == 1
+    check deeper.stops[2].pos.column == 9

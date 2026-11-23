@@ -448,3 +448,37 @@ suite "a step over in a snippet session":
     check not e.state.snippetSession.active
     # The default went, so the text changed.
     check e.handlerManager.insertHandler.autoTrigger.isSome
+
+suite "a closer smartIndent reindents":
+  proc smartPairing(lines: seq[string], line, column: int): Editor =
+    result = pairing(lines, line, column)
+    result.activeBuffer.language = langC
+    result.state.autoIndent = true
+    result.state.smartIndent = true
+    result.state.expandTab = true
+    result.state.tabStop = 4
+
+  test "the record takes the closer typed and the reindent":
+    let e = smartPairing(@["{", "    a"], 1, 0)
+    e.press("I}")
+    check e.lines == @["{", "}a"]
+    check e.typedKinds == @[tiText, tiReindent]
+
+  test "`.` types the closer before a closer and reindents, not steps over":
+    let e = smartPairing(@["{", "    a", "{", "    }b"], 1, 0)
+    e.press("I}<Escape>jj0.")
+    check e.lines == @["{", "}a", "{", "}}b"]
+
+  test "in a snippet session, the stops after the closer move with the indent":
+    let e = smartPairing(@["    xx"], 0, 0)
+    e.press("A")
+    e.offerSnippet("if (a) {\n\t\t$1 $2\n}$0")
+    e.press("<Enter>")
+    check e.lines[1] == "\t\t "
+    e.press("}<Tab>z")
+    check e.lines[1] == "    } z"
+
+  test "a Visual-block insert copies the closer as typed, not reindented":
+    let e = smartPairing(@["if (x) {", "    foo", "    bar", "    baz"], 1, 4)
+    e.press("<C-v>jjI}<Escape>")
+    check e.lines == @["if (x) {", "    }foo", "    }bar", "    }baz"]

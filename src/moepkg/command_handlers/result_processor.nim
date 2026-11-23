@@ -790,6 +790,8 @@ proc typeAgain(e: Editor, typed: TypedInput): ReplayOutcome =
     processReplayedResult(e, e.handlerManager.typeText(e, typed), e.activeBuffer)
   of tiRight:
     processReplayedResult(e, e.handlerManager.typeRight(e), e.activeBuffer)
+  of tiReindent:
+    processReplayedResult(e, e.handlerManager.typeReindent(e), e.activeBuffer)
 
 proc newLineAfterTyped(e: Editor, linesBelow: int): ReplayOutcome =
   ## Enter at the end of what o or O typed, on the line above the last

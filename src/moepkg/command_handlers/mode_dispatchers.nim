@@ -218,6 +218,21 @@ proc typeText*(
   state.settleTyping()
   HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
 
+proc typeReindent*(manager: HandlerManager, editor: Editor): HandlerResult =
+  ## Give the cursor's line its closer's indent again, as typing the closer
+  ## first on the line did (`.` judges it where it types).
+  let state = editor.state
+  state.noteOutsideChange()
+  state.anchorEdits(editor.activeBuffer)
+  let r = reindentTypedCloser(editor.activeBuffer, state)
+  if r.isErr:
+    editor.activeBuffer.dropEditAnchor()
+    return HandlerResult(kind: hrError, errorMessage: r.error)
+  state.openFoldsOfEdits(editor.activeBuffer)
+  state.noteReindent()
+  state.settleTyping()
+  HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
+
 proc typeRight*(manager: HandlerManager, editor: Editor): HandlerResult =
   ## Step right as typed (a closing character `.` steps over again), unless at
   ## the end of the line. Recorded only when the cursor moved, as Vim's
