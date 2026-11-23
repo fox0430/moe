@@ -26,7 +26,7 @@ import pkg/celina
 import std/strutils
 
 import ../src/moepkg/[types, editor, config, message_log, editor_notify, setting_issue]
-import ../src/moepkg/[highlight, editor_window]
+import ../src/moepkg/[highlight, editor_window, hover_popup]
 import ../src/moepkg/editor_frame {.all.}
 import ../src/moepkg/buffer {.all.}
 
@@ -1205,3 +1205,44 @@ suite "updateForFrame - LSP overlay invalidation":
     discard e.updateForFrame(frameBuffer)
 
     check not e.state.lspCache.inlayHintCache.isValid
+
+suite "stepFrame and draw":
+  test "a frame sizes an open hover popup before the draw":
+    let e = newEditor(newEditorConfig())
+    let hover = e.state.lspCache.hoverPopup
+    hover.show("first\nsecond\nthird", 0, 0)
+    hover.display.maxVisibleLines = 0
+    hover.display.maxVisibleWidth = 0
+
+    e.stepFrame(Rect(x: 0, y: 0, width: 80, height: 24))
+
+    check hover.display.maxVisibleLines == 3
+    check hover.display.maxVisibleWidth > 0
+
+  test "the draw leaves the hover popup's size alone":
+    let e = newEditor(newEditorConfig())
+    let hover = e.state.lspCache.hoverPopup
+    hover.show("first\nsecond\nthird", 0, 0)
+    var frameBuffer = newBuffer(80, 24)
+    e.stepFrame(frameBuffer.area)
+    hover.display.maxVisibleLines = 2
+    hover.display.maxVisibleWidth = 30
+
+    e.draw(frameBuffer)
+
+    check hover.display.maxVisibleLines == 2
+    check hover.display.maxVisibleWidth == 30
+
+  test "a frame of no size runs the background work but leaves the layout alone":
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    let e = newEditor(config)
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello").isOk
+    e.cursor = BufferPosition(line: 0, column: 5)
+    e.state.timing.lastInputTime = getMonoTime() - initDuration(milliseconds = 600)
+    let before = e.screenSize
+
+    e.stepFrame(Rect(x: 0, y: 0, width: 0, height: 0))
+
+    check e.activeBuffer.undoStack.len == 1
+    check e.screenSize == before

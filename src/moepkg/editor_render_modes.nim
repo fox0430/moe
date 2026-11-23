@@ -268,15 +268,36 @@ proc renderConfig*(
       e.state.cursorVisible = e.state.hasOverlay
 
 when not defined(moe.embedded):
+  proc placeTerminalCursor*(
+      e: Editor, window: EditorWindow, isBottomWindow: bool, tabLineOffset: int
+  ) =
+    ## Put the screen cursor where the grid of the active Terminal window has
+    ## it, unless an overlay or a temp message owns it, and show or hide it as
+    ## the grid does.
+    if window.modeState.kind != mskTerminal:
+      return
+    let
+      grid = window.modeState.terminal.grid
+      # Same bounds as `renderTerminal` draws the grid in.
+      maxRows = e.terminalContentRows(window, isBottomWindow, tabLineOffset)
+      maxCols = window.viewport.width
+    if grid.cursorVisible and grid.cursorRow < maxRows and grid.cursorCol < maxCols:
+      if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
+        e.state.screenCursor.x = window.viewport.x + grid.cursorCol
+        e.state.screenCursor.y = window.viewport.y + tabLineOffset + grid.cursorRow
+      e.state.cursorVisible = true
+    else:
+      e.state.cursorVisible = false
+
   proc renderTerminal*(
       e: Editor,
       buffer: var Buffer,
       window: EditorWindow,
       isBottomWindow: bool,
-      isActiveWindow: bool,
       tabLineOffset: int,
   ) =
-    ## Render the terminal emulator grid within a window's viewport.
+    ## Render the terminal emulator grid within a window's viewport. The screen
+    ## cursor comes from `placeTerminalCursor`.
     if window.modeState.kind != mskTerminal:
       return
 
@@ -309,15 +330,3 @@ when not defined(moe.embedded):
       let emptyLine = " ".repeat(maxCols)
       for row in grid.rows ..< maxRows:
         buffer.setString(startX, startY + row, emptyLine, normalStyle())
-
-    # Only the active window may write the global screen cursor; a later-painted
-    # inactive window must not steal it. Draw-side exception, idempotent and
-    # deferred to overlay/temp messages when active.
-    if isActiveWindow:
-      if grid.cursorVisible and grid.cursorRow < maxRows and grid.cursorCol < maxCols:
-        if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
-          e.state.screenCursor.x = startX + grid.cursorCol
-          e.state.screenCursor.y = startY + grid.cursorRow
-        e.state.cursorVisible = true
-      else:
-        e.state.cursorVisible = false

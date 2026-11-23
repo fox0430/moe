@@ -60,19 +60,23 @@ type WindowLayout = object
   effectiveLineWrap: bool
   renderMode: EditorMode
 
-proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
-  ## Update screen size from buffer area and return true if resized.
+proc updateViewportSize*(e: Editor, area: Rect): bool =
+  ## Update screen size from the frame's area and return true if resized.
   ## Uses e.screenSize (not e.viewport) to avoid overwriting the active
   ## window's viewport dimensions in split mode.
   ## Stores previous dimensions in prevWidth/prevHeight for resize calculations.
   e.screenSize.prevWidth = e.screenSize.width
   e.screenSize.prevHeight = e.screenSize.height
 
-  e.screenSize.width = buffer.area.width
-  e.screenSize.height = buffer.area.height
+  e.screenSize.width = area.width
+  e.screenSize.height = area.height
 
   (e.screenSize.prevWidth != e.screenSize.width) or
     (e.screenSize.prevHeight != e.screenSize.height)
+
+proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
+  ## `updateViewportSize` for the area of `buffer`.
+  e.updateViewportSize(buffer.area)
 
 proc cursorIsInViewport(e: Editor, window: EditorWindow, layout: WindowLayout): bool =
   if window.buffer.isNil or window.buffer.len == 0:
@@ -234,18 +238,16 @@ proc syncDiffViewerBuffer(e: Editor, window: EditorWindow) =
   else:
     dvState.renderedWidth = textWidth
 
-proc commandAreaTopY(buffer: Buffer, e: Editor): int =
+proc commandAreaTopY(area: Rect, e: Editor): int =
   ## Top row of the command-line area, grown or not.
-  buffer.area.y + buffer.area.height -
-    min(e.state.commandLineAreaHeight(buffer.area.width), buffer.area.height)
+  area.y + area.height - min(e.state.commandLineAreaHeight(area.width), area.height)
 
-proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
+proc advanceLayoutForFrame*(e: Editor, area: Rect, wasResized: bool) =
   ## Advance per-frame window-layout state so the draw pass can be a read-only
   ## projection: rebuild the layout on resize, sync selection-list cursors,
   ## adjust each viewport to follow its cursor, and set the screen cursor and
-  ## visibility. Config / Terminal-Input position their own cursor inline with
-  ## their specialized draw (see renderConfig / renderTerminal), so they are
-  ## skipped here.
+  ## visibility. Config positions its own cursor inline with its specialized
+  ## draw (see renderConfig), so it is skipped here.
 
   # If terminal was resized, rebuild window layout.
   if wasResized and e.screenSize.prevWidth > 0 and e.screenSize.prevHeight > 0 and
@@ -301,9 +303,9 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
 
   # Set screen cursor to active window position.
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    # Terminal-Input manages its own screen cursor from the grid; Config
-    # positions it at the edit field. Both do so during the draw, so skip the
-    # standard buffer-cursor calculation that would overwrite them.
+    # Terminal-Input takes its screen cursor from the grid, below; Config
+    # positions it at the edit field during the draw. Skip the standard
+    # buffer-cursor calculation that would overwrite them.
     let
       isTerminalInput =
         when defined(moe.embedded):
@@ -315,8 +317,8 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
     if not isTerminalInput and not isConfig:
       e.setActiveWindowScreenCursor(e.activeWindow)
 
-    # Set cursor visibility based on mode. Config and Terminal set cursorVisible
-    # in their render functions (the documented draw-side exceptions).
+    # Set cursor visibility based on mode. Terminal sets cursorVisible from the
+    # grid below; Config in its render function (the draw-side exception).
     case e.activeWindow.mode
     of EditorMode.Filer:
       e.state.cursorVisible = e.state.hasOverlay
@@ -336,13 +338,13 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
 
   # Screen-cursor override. Higher-priority owners set the cursor last, so the
   # final precedence is tempMessage > picker > overlay > window (matching the former
-  # draw-order of renderWrappedInput / renderTempMessages). Config / Terminal
-  # defer to these via a guard in their render procs.
-  let width = buffer.area.width
+  # draw-order of renderWrappedInput / renderTempMessages). Config (in its
+  # render proc) and Terminal (below) defer to these.
+  let width = area.width
   if e.state.isPickerOverlay:
     # In the picker's prompt, which its list keeps the selection shown under;
     # hidden with the picker on a screen with no room for it.
-    let layout = e.state.pickerScreenLayout(width, buffer.area.height)
+    let layout = e.state.pickerScreenLayout(width, area.height)
     e.state.picker.keepSelectionVisible(layout.list.height)
     if layout.shown:
       let (query, cursor) = e.state.input.line.shownPromptLine
@@ -353,17 +355,32 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
       e.state.cursorVisible = false
   elif e.state.hasOverlay:
     let
-      areaTopY = buffer.commandAreaTopY(e)
-      areaH = buffer.area.y + buffer.area.height - areaTopY
+      areaTopY = area.commandAreaTopY(e)
+      areaH = area.y + area.height - areaTopY
       (text, cursorChar) = e.state.overlayInput()
       (totalRows, cRow, cCol) = wrappedInputGrid(text, cursorChar, width)
       firstRow = max(0, min(cRow, totalRows - areaH))
-    e.state.screenCursor.x = buffer.area.x + cCol
+    e.state.screenCursor.x = area.x + cCol
     e.state.screenCursor.y = areaTopY + (cRow - firstRow)
 
   if e.state.ui.tempMessages.len > 0:
     e.state.screenCursor.x = 0
-    e.state.screenCursor.y = buffer.area.height - 1
+    e.state.screenCursor.y = area.height - 1
+
+  # Last, as when the draw placed it: the grid's cursor defers to the overlay
+  # and the temp messages placed above.
+  when not defined(moe.embedded):
+    let active = e.windowManager.activeWindowIndex
+    if active < e.windowManager.windows.len:
+      let
+        window = e.windowManager.windows[active]
+        layout = e.computeWindowLayout(window, active, maxBottomY, tabLineOffset)
+      if layout.renderMode == EditorMode.Terminal:
+        e.placeTerminalCursor(window, layout.isBottomWindow, tabLineOffset)
+
+proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
+  ## `advanceLayoutForFrame` for the area of `buffer`.
+  e.advanceLayoutForFrame(buffer.area, wasResized)
 
 proc renderSplitView*(e: Editor, buffer: var Buffer) =
   ## Paint the split window view. Read-only: viewport scrolling, selection-list
@@ -423,9 +440,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
           layout.isActiveWindow, tabLineOffset,
         )
       else:
-        e.renderTerminal(
-          buffer, window, layout.isBottomWindow, layout.isActiveWindow, tabLineOffset
-        )
+        e.renderTerminal(buffer, window, layout.isBottomWindow, tabLineOffset)
     else:
       # Normal buffer rendering (Normal, Insert, Visual, Command, Search, etc.)
       e.renderWindow(
@@ -495,7 +510,7 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   let
     width = buffer.area.width
     screenBottomY = buffer.area.y + buffer.area.height - 1
-    areaTopY = buffer.commandAreaTopY(e)
+    areaTopY = buffer.area.commandAreaTopY(e)
     areaH = screenBottomY - areaTopY + 1
     recording = e.state.pendingInput.macroState.recordingLabel
 

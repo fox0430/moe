@@ -20,6 +20,7 @@
 import std/[unittest, monotimes, options, os, sequtils, strutils, tables]
 
 import pkg/[chronos, results]
+from pkg/celina import Rect
 
 import
   ../src/moepkg/[
@@ -828,9 +829,10 @@ suite "BufWritePre - the wait":
     # An auto save is due.
     editor.state.timing.lastAutoSave = MonoTime()
     proc render(): bool =
+      # What the frame handler runs, as celina's `renderNow` calls it.
       {.cast(gcsafe).}:
         {.cast(raises: []).}:
-          editor.tick()
+          editor.stepFrame(Rect(x: 0, y: 0, width: 80, height: 24))
       true
 
     editor.blockingWait.render = render

@@ -408,12 +408,23 @@ suite "HoverPopup - canScrollLeft":
 
     check mgr.canScrollLeft == false
 
+proc sizeAndPlace(
+    cursorX, cursorY, termWidth, termHeight: int,
+    mgr: HoverPopupManager,
+    bottomReserve: int = 2,
+): HoverPopupPosition =
+  ## As a frame does: size the popup, then place it.
+  mgr.fitHoverPopup(cursorY, termWidth, termHeight, bottomReserve)
+  calculateHoverPopupPosition(
+    cursorX, cursorY, termWidth, termHeight, mgr, bottomReserve
+  )
+
 suite "HoverPopup - calculateHoverPopupPosition":
   test "Positions popup above cursor":
     let mgr = newHoverPopupManager()
     mgr.show("Line 1\nLine 2\nLine 3", 0, 0)
 
-    let pos = calculateHoverPopupPosition(
+    let pos = sizeAndPlace(
       cursorX = 10, cursorY = 20, termWidth = 80, termHeight = 24, mgr = mgr
     )
 
@@ -426,7 +437,7 @@ suite "HoverPopup - calculateHoverPopupPosition":
     let mgr = newHoverPopupManager()
     mgr.show("Line 1\nLine 2\nLine 3", 0, 0)
 
-    let pos = calculateHoverPopupPosition(
+    let pos = sizeAndPlace(
       cursorX = 10,
       cursorY = 2, # Not enough space above (need 5 lines for popup)
       termWidth = 80,
@@ -441,7 +452,7 @@ suite "HoverPopup - calculateHoverPopupPosition":
     let mgr = newHoverPopupManager()
     mgr.show("This is a longer line for testing", 0, 0)
 
-    let pos = calculateHoverPopupPosition(
+    let pos = sizeAndPlace(
       cursorX = 70, cursorY = 12, termWidth = 80, termHeight = 24, mgr = mgr
     )
 
@@ -452,7 +463,7 @@ suite "HoverPopup - calculateHoverPopupPosition":
     let mgr = newHoverPopupManager()
     mgr.show("Hi", 0, 0)
 
-    let pos = calculateHoverPopupPosition(
+    let pos = sizeAndPlace(
       cursorX = 10, cursorY = 12, termWidth = 80, termHeight = 24, mgr = mgr
     )
 
@@ -463,7 +474,7 @@ suite "HoverPopup - calculateHoverPopupPosition":
     let mgr = newHoverPopupManager()
     mgr.show("L1\nL2\nL3\nL4\nL5", 0, 0)
 
-    discard calculateHoverPopupPosition(
+    discard sizeAndPlace(
       cursorX = 10, cursorY = 12, termWidth = 80, termHeight = 24, mgr = mgr
     )
 
@@ -473,7 +484,7 @@ suite "HoverPopup - calculateHoverPopupPosition":
     let mgr = newHoverPopupManager()
     mgr.show("Test content", 0, 0)
 
-    discard calculateHoverPopupPosition(
+    discard sizeAndPlace(
       cursorX = 10, cursorY = 12, termWidth = 80, termHeight = 24, mgr = mgr
     )
 
@@ -487,7 +498,7 @@ suite "HoverPopup - calculateHoverPopupPosition":
       lines.add("Line " & $i & "\n")
     mgr.show(lines, 0, 0)
 
-    discard calculateHoverPopupPosition(
+    discard sizeAndPlace(
       cursorX = 10, cursorY = 12, termWidth = 80, termHeight = 24, mgr = mgr
     )
 
@@ -499,14 +510,14 @@ suite "HoverPopup - calculateHoverPopupPosition":
     mgr.show("Short", 0, 0)
 
     # Cursor at y=0: no space above → placed below.
-    let steady = calculateHoverPopupPosition(
+    let steady = sizeAndPlace(
       cursorX = 10, cursorY = 0, termWidth = 80, termHeight = 24, mgr = mgr
     )
     check steady.y == 1
 
     # A grown bottom area must push the popup back up so it does not overlap
     # the command line.
-    let grown = calculateHoverPopupPosition(
+    let grown = sizeAndPlace(
       cursorX = 10,
       cursorY = 0,
       termWidth = 80,
@@ -524,14 +535,14 @@ suite "HoverPopup - calculateHoverPopupPosition":
     mgr.show(lines, 0, 0)
 
     # Cursor near the top: with default reserve, below-cursor space is used.
-    discard calculateHoverPopupPosition(
+    discard sizeAndPlace(
       cursorX = 10, cursorY = 2, termWidth = 80, termHeight = 24, mgr = mgr
     )
     let steadyLines = mgr.display.maxVisibleLines
 
     # Grow the reserve — below-cursor space shrinks, so the popup should
     # allocate fewer visible lines than in the steady case.
-    discard calculateHoverPopupPosition(
+    discard sizeAndPlace(
       cursorX = 10,
       cursorY = 2,
       termWidth = 80,
@@ -703,7 +714,7 @@ suite "HoverPopup - Unicode support":
     let mgr = newHoverPopupManager()
     mgr.show("あいうえおかきくけこ", 0, 0)
 
-    let pos = calculateHoverPopupPosition(
+    let pos = sizeAndPlace(
       cursorX = 5, cursorY = 12, termWidth = 80, termHeight = 24, mgr = mgr
     )
 
@@ -717,7 +728,7 @@ suite "HoverPopup - Unicode support":
     let mgr = newHoverPopupManager()
     mgr.show("あいうえおかきくけこさしすせそ", 0, 0)
 
-    let pos = calculateHoverPopupPosition(
+    let pos = sizeAndPlace(
       cursorX = 0, cursorY = 12, termWidth = 24, termHeight = 24, mgr = mgr
     )
 
