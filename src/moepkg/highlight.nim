@@ -1455,6 +1455,13 @@ proc chunkHandoffUnsafe*(language: SourceLanguage, state: TokenizerState): bool 
     # `blockScalarActive`). A boundary a finished scalar crossed cannot.
     state.state == gtCommand or
       (state.state == gtLongStringLit and not state.lang.yaml.blockScalarActive)
+  of SourceLanguage.langShell, SourceLanguage.langZsh, SourceLanguage.langMarkdown:
+    # A heredoc's body starts at the line break after its `<<EOF`, which a
+    # window cut on that line never reads, so the marker is still pending. A
+    # `\` continuation leaves the same state where resuming would be right;
+    # rewinding there costs only its lines.
+    state.lang.shell.heredocMarker.len > 0 and
+      state.state notin {gtLongStringLit, gtStringLit}
   else:
     false
 
@@ -2021,8 +2028,9 @@ proc updateHighlightIncremental*(
       budgetRemaining -= attemptedLines
 
     # `newLineStates[i]` is the state entering line `currentStart + i + 1`
-    # (padded on early tokenizer stops). An unsafe handoff (YAML block scalar
-    # header) moves back so the rewound lines re-parse with their context; the
+    # (padded on early tokenizer stops). An unsafe handoff (see
+    # `chunkHandoffUnsafe`, e.g. a YAML block scalar header or a pending heredoc
+    # marker) moves back so the rewound lines re-parse with their context; the
     # final chunk keeps the whole window.
     var handoff = chunkEnd + 1
     if currentState.backend == hbBuiltin and chunkEnd < lastLine:

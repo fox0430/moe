@@ -232,9 +232,10 @@ proc continueInitialHighlight*(
 
   var startLine = parsedUpTo + 1
 
-  # The boundary state may not resume in a fresh chunk (a YAML block scalar
-  # header), so rewind to a safe line and re-parse the previous chunk's tail
-  # together with the new one.
+  # The boundary state may not resume in a fresh chunk (one
+  # `chunkHandoffUnsafe` rejects, e.g. a YAML block scalar header or a shell
+  # heredoc header whose body has not started), so rewind to a safe line and
+  # re-parse the previous chunk's tail together with the new one.
   while startLine > 0 and
       b.incrementalHighlight.lineStates[startLine - 1].backend == hbBuiltin and
       chunkHandoffUnsafe(
