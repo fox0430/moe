@@ -91,12 +91,12 @@ suite "GitCache - entry lifecycle":
     let buf = bufferAt(getTempDir() / NoRepoDir / "a.txt")
 
     gc.scheduleGitRefresh(buf)
-    check gc.diffEntries[buf.id].changeSeqAtRefresh == buf.changeSeq
+    check gc.diffEntries[buf.id].contentVersionAtRefresh == buf.contentVersion
 
-    buf.changeSeq = buf.changeSeq + 1
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "x")
     gc.scheduleGitRefresh(buf)
 
-    check gc.diffEntries[buf.id].changeSeqAtRefresh == buf.changeSeq
+    check gc.diffEntries[buf.id].contentVersionAtRefresh == buf.contentVersion
 
 suite "GitCache - eviction":
   test "evictGitCacheForBuffer removes both diff and branch entries":
@@ -199,23 +199,61 @@ suite "GitCache - pipeline reaping":
     let buf = newTextBuffer()
     check buf.loadFile(testFile).isOk
 
-    gc.scheduleGitRefresh(buf)
-    check gc.gitDiffPendingCount() == 1
+    # The first run asks git whether the file is tracked; the second diffs it.
+    for round in 0 .. 1:
+      gc.scheduleGitRefresh(buf)
+      check gc.gitDiffPendingCount() == 1
+      check gc.diffEntries[buf.id].pending.get.probe == (round == 0)
 
-    var reaped = false
-    for _ in 0 ..< 200:
-      gc.reapGitPipelines()
-      if gc.gitDiffPendingCount() == 0:
-        reaped = true
-        break
-      sleep(50)
-
-    check reaped
+      var reaped = false
+      for _ in 0 ..< 200:
+        gc.reapGitPipelines()
+        if gc.gitDiffPendingCount() == 0:
+          reaped = true
+          break
+        sleep(50)
+      check reaped
     let counts = gc.gitDiffCacheCounts(buf)
     check counts.isSome
     # File is unchanged from HEAD so counts must be zero.
     check counts.get == (added: 0, modified: 0, deleted: 0)
     check gc.isBufferGitTracked(buf)
+
+    gc.clearGitCache()
+
+  test "a tracked symlink pointing outside stays on probes":
+    # HEAD holds only the link text, so there is never a diff to read for.
+    let outsideFile = getTempDir() / "moe_git_cache_outside_target.txt"
+    writeFile(outsideFile, "outside\n")
+    defer:
+      removeFile(outsideFile)
+    createSymlink(outsideFile, testDir / "link.txt")
+    discard execCmdEx("git add link.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m link", workingDir = testDir)
+
+    var gc: GitCacheState
+    let buf = newTextBuffer()
+    check buf.loadFile(testDir / "link.txt").isOk
+
+    for round in 0 .. 1:
+      if round == 1:
+        discard buf.insertText(BufferPosition(line: 0, column: 0), "x")
+      gc.scheduleGitRefresh(buf)
+      check gc.gitDiffPendingCount() == 1
+      check gc.diffEntries[buf.id].pending.get.probe
+
+      var reaped = false
+      for _ in 0 ..< 200:
+        gc.reapGitPipelines()
+        if gc.gitDiffPendingCount() == 0:
+          reaped = true
+          break
+        sleep(50)
+      check reaped
+      check gc.isBufferGitTracked(buf)
+      check gc.diffEntries[buf.id].resolvedOutsideRepo
+      check not gc.diffEntries[buf.id].forced
+      check gc.gitDiffCacheCounts(buf).get == (added: 0, modified: 0, deleted: 0)
 
     gc.clearGitCache()
 

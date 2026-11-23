@@ -25,11 +25,16 @@
 ## (`reapGitPipelines` / `scheduleGitRefresh` / `refreshGitBranch`); the render
 ## path only reads `gitDiffCounts` / `gitBranchName` / `isBufferGitTracked`.
 ##
-## Diffs are refreshed when `changeSeq` moves, when `requestGitRefresh` marks
-## the entry stale, or on a TTL in periodic mode. Embedding hosts may disable
-## successful-query TTLs and notify repository changes themselves. Failures
-## retry after a delay in either mode. Previous counts stay on
+## Diffs are refreshed when `contentVersion` moves, when `requestGitRefresh`
+## marks the entry stale, or on a TTL in periodic mode. Embedding hosts may
+## disable successful-query TTLs and notify repository changes themselves.
+## Failures retry after a delay in either mode. Previous counts stay on
 ## screen until a current (not superseded) pipeline completes.
+##
+## A diff reads the buffer when it is scheduled, on the tick, so the result is
+## of the text at that `contentVersion`. Until git has said the file is in
+## HEAD, a probe runs instead and the buffer is not read: an untracked file is
+## never copied.
 
 import std/[options, tables, monotimes, times, os, osproc, strutils]
 
@@ -107,22 +112,40 @@ proc reapPendingDiff(entry: var GitDiffCacheEntry, retryIntervalMs: int64): bool
   ## fds. On error/timeout keep the last known counts.
   if entry.pending.isNone:
     return
-  let completion = checkGitDiffComplete(entry.pending.get)
+  let diffProc = entry.pending.get
+  let completion = checkGitDiffComplete(diffProc)
   if completion.isNone:
     return
   entry.pending = none(GitDiffProcess)
-  if entry.forced or (
-    not entry.sourceBuffer.isNil and (
-      entry.sourceBuffer.filePath.get("") != entry.pathAtRefresh or
-      entry.sourceBuffer.changeSeq != entry.changeSeqAtRefresh
-    )
-  ):
+  let b = entry.sourceBuffer
+  if entry.forced or (not b.isNil and b.filePath.get("") != entry.pathAtRefresh):
     entry.forced = true
     entry.pendingDiffInfo = none(GitDiffInfo)
     return
-  # The pipeline errors for files not in HEAD, so a successful run doubles as
-  # the "git-tracked" probe for the sidebar.
-  entry.gitTracked = completion.get.isOk
+  # Every pipeline asks git whether the file is in HEAD, which also answers
+  # the sidebar. The answer does not depend on the text, so it stands even
+  # when the diff is stale. A pipeline that ended before git answered leaves
+  # the last answer in place.
+  let wasTracked = entry.gitTracked
+  case diffProc.head
+  of ghTracked:
+    entry.gitTracked = true
+    entry.resolvedOutsideRepo = diffProc.resolvedOutsideRepo
+  of ghUntracked:
+    entry.gitTracked = false
+    entry.resolvedOutsideRepo = false
+  of ghUnknown:
+    discard
+  if diffProc.probe and diffProc.head == ghTracked and not diffProc.resolvedOutsideRepo:
+    # Tracked: read the buffer and diff it on the next tick.
+    entry.forced = true
+    return entry.gitTracked != wasTracked
+  if not diffProc.probe and not b.isNil and
+      b.contentVersion != entry.contentVersionAtRefresh:
+    # The text changed since it was read.
+    entry.forced = true
+    entry.pendingDiffInfo = none(GitDiffInfo)
+    return entry.gitTracked != wasTracked
   if completion.get.isOk:
     let diffInfo = completion.get.get
     entry.counts = countGitChangedLines(diffInfo)
@@ -193,7 +216,8 @@ proc scheduleGitRefresh*(gc: var GitCacheState, b: TextBuffer) =
   let now = getMonoTime()
   let intervalMs = gc.refreshIntervalMs()
   let needsRefresh =
-    entry.forced or not entry.populated or entry.changeSeqAtRefresh != b.changeSeq or
+    entry.forced or not entry.populated or
+    entry.contentVersionAtRefresh != b.contentVersion or
     entry.pathAtRefresh != b.filePath.get or
     (entry.retryAfter.isSome and now >= entry.retryAfter.get) or (
       gc.refreshMode == grmPeriodic and
@@ -206,16 +230,23 @@ proc scheduleGitRefresh*(gc: var GitCacheState, b: TextBuffer) =
   entry.forced = false
   entry.pendingDiffInfo = none(GitDiffInfo)
   entry.sourceBuffer = b
+  if entry.pathAtRefresh != b.filePath.get:
+    # The last answer was about another file: ask again before reading.
+    entry.gitTracked = false
+    entry.resolvedOutsideRepo = false
   entry.pathAtRefresh = b.filePath.get
   entry.repositoryPath = repositoryForFile(entry.pathAtRefresh)
-  entry.changeSeqAtRefresh = b.changeSeq
-  let startResult = startGitDiffFromBufferAsync(b)
+  entry.contentVersionAtRefresh = b.contentVersion
+  # A symlink pointing outside has nothing to diff, so it never needs the text.
+  let startResult = startGitDiffFromBufferAsync(
+    b, probe = not entry.gitTracked or entry.resolvedOutsideRepo
+  )
   if startResult.isOk:
     entry.pending = some(startResult.get)
     entry.retryAfter = none(MonoTime)
   else:
-    entry.gitTracked = false
-    # Back off failed starts even when successful-query TTLs are disabled.
+    # Git did not answer, so the last answer stands. Back off failed starts
+    # even when successful-query TTLs are disabled.
     entry.deferDiffRetry(intervalMs)
 
   gc.diffEntries[key] = entry
@@ -317,8 +348,8 @@ proc gitBranchName*(gc: GitCacheState, b: TextBuffer): string =
     ""
 
 proc isBufferGitTracked*(gc: GitCacheState, b: TextBuffer): bool =
-  ## Whether `b`'s file is present in HEAD, per the most recent scheduling
-  ## attempt. False until the cache has been populated for this buffer.
+  ## Whether `b`'s file is present in HEAD, per the last pipeline git answered.
+  ## False until the cache has been populated for this buffer.
   let entry = gc.diffEntries.getOrDefault(bufferKey(b))
   entry.populated and entry.gitTracked
 
@@ -327,7 +358,7 @@ proc applyPendingGitMarkers*(gc: var GitCacheState, b: TextBuffer) =
   ## nothing new has arrived since the last call.
   gc.diffEntries.withValue(bufferKey(b), entry):
     if entry[].pendingDiffInfo.isSome and not entry[].forced and
-        entry[].changeSeqAtRefresh == b.changeSeq and
+        entry[].contentVersionAtRefresh == b.contentVersion and
         entry[].pathAtRefresh == b.filePath.get(""):
       applyGitDiffToBuffer(b, entry[].pendingDiffInfo.get)
       entry[].pendingDiffInfo = none(GitDiffInfo)

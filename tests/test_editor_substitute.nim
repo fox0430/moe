@@ -19,7 +19,7 @@
 
 ## Tests for editor_substitute.nim
 
-import std/[options, tables, unittest]
+import std/[options, os, tables, unittest]
 
 import pkg/results
 
@@ -34,6 +34,8 @@ import ../src/moepkg/buffer
 import ../src/moepkg/command_line/substitute_parser
 import ../src/moepkg/git_conflict
 import ../src/moepkg/editor_reload
+import ../src/moepkg/editor_frame {.all.}
+import ../src/moepkg/git_cache
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -508,3 +510,20 @@ suite "editor_substitute - what the preview moves":
     e.invalidatePositionStateForBuffer(e.activeBuffer)
     check not e.state.ui.substitutePreview.isActive
     check e.cursor.line == 2
+
+suite "editor_substitute - git refresh":
+  test "a live preview holds its buffer's git refresh until it ends":
+    # A diff reads the buffer when it is scheduled, so none may start while
+    # the preview's text is in it.
+    let e = createTestEditor()
+    defer:
+      e.state.git.clearGitCache()
+    setBufferContent(e, "foo\nbar")
+    e.activeBuffer.filePath = some(getTempDir() / "moe_preview_git.txt")
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview("foo", "x", "".parseSubstituteFlags, smRegex)
+    e.tickGitCache()
+    check e.activeBuffer.id notin e.state.git.diffEntries
+    e.cancelSubstitutePreview()
+    e.tickGitCache()
+    check e.activeBuffer.id in e.state.git.diffEntries

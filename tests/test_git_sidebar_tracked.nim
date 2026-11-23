@@ -39,15 +39,18 @@ proc setupRepo(dir: string) =
   discard execCmdEx("git config user.name 'Test'", workingDir = dir)
 
 proc runDiff(gc: var GitCacheState, b: TextBuffer) =
-  ## Drive one full diff cycle the way the editor tick does, then wait for the
-  ## pipeline to finish.
+  ## Drive the editor ticks until nothing more is due, waiting for each
+  ## pipeline: a probe first while git has not said the file is tracked.
   gc.requestGitRefresh(b)
-  gc.scheduleGitRefresh(b)
-  for _ in 0 ..< 200:
-    gc.reapGitPipelines()
+  for _ in 0 ..< 3:
+    gc.scheduleGitRefresh(b)
     if gc.gitDiffPendingCount() == 0:
       return
-    sleep(10)
+    for _ in 0 ..< 200:
+      gc.reapGitPipelines()
+      if gc.gitDiffPendingCount() == 0:
+        break
+      sleep(10)
 
 proc waitTracked(gc: var GitCacheState, b: TextBuffer): bool =
   gc.runDiff(b)

@@ -314,11 +314,20 @@ proc tickGitCache(e: Editor) =
   let wantsBranch =
     frontendWantsGit or (e.showStatusLine and sl.gitBranchName) or "{gitBranch}" in setup
 
+  # A live `:s` preview rewrites its buffer on every key, and a diff reads the
+  # buffer when scheduled: hold that buffer's refresh until the preview ends.
+  let previewed =
+    if e.state.ui.substitutePreview.isActive:
+      e.state.ui.substitutePreview.buffer
+    else:
+      nil
+
   for i, window in e.windowManager.windows:
     # Inactive windows show git info only under showGitInactive — except
     # through setupText placeholders, which that flag does not gate.
     let isActive = i == e.windowManager.activeWindowIndex
-    if wantsDiff and (isActive or sl.showGitInactive or "{gitChanges}" in setup):
+    if wantsDiff and (isActive or sl.showGitInactive or "{gitChanges}" in setup) and
+        window.buffer != previewed:
       e.state.git.scheduleGitRefresh(window.buffer)
     if wantsBranch and (isActive or sl.showGitInactive or "{gitBranch}" in setup):
       e.state.git.refreshGitBranch(window.buffer)

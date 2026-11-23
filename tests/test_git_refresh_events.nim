@@ -48,6 +48,16 @@ proc drain(gc: var GitCacheState) =
       sleep(1)
   doAssert not gc.pending()
 
+proc settle(gc: var GitCacheState, b: TextBuffer) =
+  ## Run the diff ticks until nothing more is due: a probe first while git has
+  ## not said the file is tracked, then the diff.
+  for _ in 0 ..< 3:
+    gc.scheduleGitRefresh(b)
+    if not gc.pending():
+      return
+    gc.drain()
+  doAssert false, "the diff did not settle"
+
 block event_mode_suppresses_ttl_but_keeps_edits_and_requests:
   let root = repository()
   var gc: GitCacheState
@@ -56,9 +66,8 @@ block event_mode_suppresses_ttl_but_keeps_edits_and_requests:
     removeDir(root)
   let b = load(root / "a.txt")
   gc.setGitRefreshMode(grmEventDriven)
-  gc.scheduleGitRefresh(b)
   gc.refreshGitBranch(b)
-  gc.drain()
+  gc.settle(b)
   doAssert gc.gitBranchName(b) == "main"
   doAssert gc.gitDiffCacheCounts(b).isSome
   doAssert gc.revision > 0
@@ -69,7 +78,7 @@ block event_mode_suppresses_ttl_but_keeps_edits_and_requests:
   gc.refreshGitBranch(b)
   doAssert not gc.pending()
   doAssert gc.revision == revision
-  inc b.changeSeq
+  b.advanceContentVersion()
   gc.scheduleGitRefresh(b)
   doAssert gc.gitDiffPendingCount() == 1
   gc.drain()
@@ -102,9 +111,8 @@ block branch_query_is_shared_and_notifications_are_scoped:
   doAssert gc.repositories.len == 1
   doAssert gc.repositories[root].pending == child
   gc.refreshGitBranch(other)
-  gc.scheduleGitRefresh(a)
-  gc.scheduleGitRefresh(other)
-  gc.drain()
+  gc.settle(a)
+  gc.settle(other)
   discard git(root, ["checkout", "-qb", "updated"])
   gc.notifyGitRepositoryChanged(root)
   doAssert gc.diffEntries[a.id].forced
@@ -130,12 +138,15 @@ block superseded_diffs_never_publish:
     removeDir(root)
   gc.setGitRefreshMode(grmEventDriven)
   let b = load(root / "a.txt")
+  gc.settle(b)
   for reason in 0 .. 2:
+    gc.requestGitRefresh(b)
     gc.scheduleGitRefresh(b)
     doAssert gc.gitDiffPendingCount() == 1
     case reason
     of 0:
-      inc b.changeSeq
+      doAssert not gc.diffEntries[b.id].pending.get.probe
+      b.advanceContentVersion()
     of 1:
       b.filePath = some(root / "sub/b.txt")
     else:
@@ -145,8 +156,8 @@ block superseded_diffs_never_publish:
     doAssert gc.diffEntries[b.id].forced
     doAssert gc.diffEntries[b.id].pendingDiffInfo.isNone
     doAssert gc.revision == revision
-  gc.scheduleGitRefresh(b)
-  gc.drain()
+  # The path moved, so git is asked about the new file before the diff.
+  gc.settle(b)
   doAssert not gc.diffEntries[b.id].forced
   doAssert gc.gitDiffCacheCounts(b).isSome
 
@@ -211,8 +222,7 @@ block notification_discovers_a_new_repository:
   )
   gc.notifyGitRepositoryChanged(root)
   gc.refreshGitBranch(b)
-  gc.scheduleGitRefresh(b)
-  gc.drain()
+  gc.settle(b)
   doAssert gc.repositories.len == 1
   doAssert gc.isBufferGitTracked(b)
 
@@ -228,10 +238,9 @@ block notification_discovers_a_nested_repository:
   let b = load(root / "sub/b.txt")
   let other = load(otherRoot / "a.txt")
   gc.refreshGitBranch(b)
-  gc.scheduleGitRefresh(b)
   gc.refreshGitBranch(other)
-  gc.scheduleGitRefresh(other)
-  gc.drain()
+  gc.settle(b)
+  gc.settle(other)
   doAssert gc.branchEntries[b.id].repositoryPath == root
   doAssert gc.diffEntries[b.id].repositoryPath == root
   doAssert gc.gitBranchName(b) == "main"
@@ -283,8 +292,7 @@ block failed_diff_completion_retries_in_event_mode:
   gc.setGitRefreshMode(grmEventDriven)
   gc.setGitDiffRefreshInterval(50)
   let b = load(root / "a.txt")
-  gc.scheduleGitRefresh(b)
-  gc.drain()
+  gc.settle(b)
   doAssert gc.isBufferGitTracked(b)
 
   let child =
@@ -299,7 +307,8 @@ block failed_diff_completion_retries_in_event_mode:
   )
   gc.reapGitPipelines()
   doAssert not gc.pending()
-  doAssert not gc.isBufferGitTracked(b)
+  # The timeout came before git answered, so the last answer stands.
+  doAssert gc.isBufferGitTracked(b)
   doAssert gc.diffEntries[b.id].retryAfter.isSome
   let retryDeadline = gc.diffEntries[b.id].retryAfter
   gc.scheduleGitRefresh(b)
@@ -312,6 +321,148 @@ block failed_diff_completion_retries_in_event_mode:
   gc.drain()
   doAssert gc.isBufferGitTracked(b)
   doAssert gc.diffEntries[b.id].retryAfter.isNone
+
+block an_untracked_file_is_probed_and_never_written:
+  let root = repository()
+  var gc: GitCacheState
+  defer:
+    gc.clearGitCache()
+    removeDir(root)
+  gc.setGitRefreshMode(grmEventDriven)
+  writeFile(root / "c.txt", "untracked\n")
+  let b = load(root / "c.txt")
+  for edit in 0 .. 1:
+    if edit > 0:
+      doAssert b.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    gc.scheduleGitRefresh(b)
+    doAssert gc.gitDiffPendingCount() == 1
+    let diffProc = gc.diffEntries[b.id].pending.get
+    doAssert diffProc.probe
+    doAssert diffProc.tempModified.len == 0
+    gc.drain()
+    doAssert diffProc.head == ghUntracked
+    doAssert not gc.isBufferGitTracked(b)
+    doAssert not gc.diffEntries[b.id].forced
+
+block a_tracked_file_is_probed_then_diffed:
+  let root = repository()
+  var gc: GitCacheState
+  defer:
+    gc.clearGitCache()
+    removeDir(root)
+  gc.setGitRefreshMode(grmEventDriven)
+  let b = load(root / "a.txt")
+  doAssert b.insertText(BufferPosition(line: 0, column: 0), "new\n").isOk
+  gc.scheduleGitRefresh(b)
+  doAssert gc.diffEntries[b.id].pending.get.probe
+  gc.drain()
+  # Tracked, so the diff is due; nothing is shown until it lands.
+  doAssert gc.diffEntries[b.id].forced
+  doAssert gc.diffEntries[b.id].gitTracked
+  doAssert gc.gitDiffCacheCounts(b).isNone
+  gc.scheduleGitRefresh(b)
+  let diffProc = gc.diffEntries[b.id].pending.get
+  doAssert not diffProc.probe
+  doAssert readFile(diffProc.tempModified) == b.getFileContent()
+  gc.drain()
+  doAssert gc.gitDiffCacheCounts(b) == some((added: 1, modified: 0, deleted: 0))
+  doAssert gc.isBufferGitTracked(b)
+  doAssert not fileExists(diffProc.tempModified)
+
+block a_change_since_the_read_supersedes_even_when_changeSeq_matches:
+  # Undo then a new edit brings `changeSeq` back to the value at the read with
+  # other text, so the result is judged by `contentVersion`.
+  let root = repository()
+  var gc: GitCacheState
+  defer:
+    gc.clearGitCache()
+    removeDir(root)
+  gc.setGitRefreshMode(grmEventDriven)
+  let b = load(root / "a.txt")
+  gc.settle(b)
+  doAssert b.insertText(BufferPosition(line: 0, column: 0), "a\n").isOk
+  let seqAtRead = b.changeSeq
+  gc.scheduleGitRefresh(b)
+  doAssert not gc.diffEntries[b.id].pending.get.probe
+  doAssert b.undo().isOk
+  doAssert b.insertText(BufferPosition(line: 0, column: 0), "b\nb\n").isOk
+  doAssert b.changeSeq == seqAtRead
+  gc.drain()
+  doAssert gc.diffEntries[b.id].forced
+  doAssert gc.diffEntries[b.id].pendingDiffInfo.isNone
+  doAssert gc.gitDiffCacheCounts(b) == some((added: 0, modified: 0, deleted: 0))
+  gc.settle(b)
+  doAssert gc.gitDiffCacheCounts(b) == some((added: 2, modified: 0, deleted: 0))
+
+block a_no_undo_change_since_the_read_supersedes_the_diff:
+  # A live `:s` preview writes without undo and leaves `changeSeq` alone. A
+  # diff read before it must not land on the previewed text.
+  let root = repository()
+  var gc: GitCacheState
+  defer:
+    gc.clearGitCache()
+    removeDir(root)
+  gc.setGitRefreshMode(grmEventDriven)
+  let b = load(root / "a.txt")
+  gc.settle(b)
+  gc.requestGitRefresh(b)
+  gc.scheduleGitRefresh(b)
+  let seqAtRead = b.changeSeq
+  let swap = b.replaceLinesNoUndo(0, 1, @["preview", "preview"])
+  doAssert swap.isSome
+  doAssert b.changeSeq == seqAtRead
+  gc.drain()
+  doAssert gc.diffEntries[b.id].forced
+  gc.applyPendingGitMarkers(b)
+  for i in 0 ..< b.len:
+    doAssert b.lineMarkers[i].isNone
+  doAssert b.revertNoUndo(swap.get)
+  gc.settle(b)
+  doAssert gc.gitDiffCacheCounts(b) == some((added: 0, modified: 0, deleted: 0))
+
+block a_new_path_is_probed_before_the_buffer_is_read:
+  # Whether a file is tracked is an answer about that file, so after
+  # `:saveas` the buffer is not copied until git answers for the new one.
+  let root = repository()
+  var gc: GitCacheState
+  defer:
+    gc.clearGitCache()
+    removeDir(root)
+  gc.setGitRefreshMode(grmEventDriven)
+  let b = load(root / "a.txt")
+  gc.settle(b)
+  doAssert gc.isBufferGitTracked(b)
+  b.filePath = some(root / "c.txt")
+  gc.scheduleGitRefresh(b)
+  doAssert gc.diffEntries[b.id].pending.get.probe
+  doAssert not gc.isBufferGitTracked(b)
+  gc.drain()
+  doAssert not gc.isBufferGitTracked(b)
+
+block a_failed_start_keeps_the_last_answer:
+  let root = repository()
+  let emptyPath = createTempDir("moe-no-git-", "")
+  let savedPath = getEnv("PATH")
+  let savedDirectory = getCurrentDir()
+  var gc: GitCacheState
+  defer:
+    putEnv("PATH", savedPath)
+    setCurrentDir(savedDirectory)
+    gc.clearGitCache()
+    removeDir(emptyPath)
+    removeDir(root)
+  gc.setGitRefreshMode(grmEventDriven)
+  let b = load(root / "a.txt")
+  gc.settle(b)
+  doAssert gc.isBufferGitTracked(b)
+  gc.requestGitRefresh(b)
+  putEnv("PATH", emptyPath)
+  gc.scheduleGitRefresh(b)
+  setCurrentDir(savedDirectory)
+  putEnv("PATH", savedPath)
+  doAssert not gc.pending()
+  doAssert gc.diffEntries[b.id].retryAfter.isSome
+  doAssert gc.isBufferGitTracked(b)
 
 block failed_starts_back_off_and_retry_in_both_modes:
   let root = repository()

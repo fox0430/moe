@@ -42,8 +42,14 @@ type
   GitDiffStage* = enum
     ## Buffer-diff pipeline stage; advances on each `checkGitDiffComplete`.
     gdsGitRoot ## `git rev-parse --show-toplevel`
-    gdsGitShow ## `git show HEAD:<relpath>`
+    gdsGitShow ## `git show HEAD:<relpath>`, or `git cat-file -e` when no diff follows
     gdsGitDiff ## `git diff --no-index <orig> <mod>`
+
+  GitHeadAnswer* = enum
+    ## What a pipeline learned about the file being in HEAD.
+    ghUnknown ## It ended before git answered (a timeout, a failed start)
+    ghTracked ## git found the file in HEAD
+    ghUntracked ## Not in a repository, or not in HEAD
 
   GitDiffProcess* = ref object ## Background git diff pipeline
     process*: Process
@@ -51,8 +57,13 @@ type
     startTime*: float ## Overall pipeline start (for timeout)
     filePath*: string
     workingDir*: string
-    bufferContent*: string ## Held until tempModified is written
+    probe*: bool
+      ## Stop once git answers whether the file is in HEAD. A probe reads
+      ## neither the buffer nor HEAD's copy.
+    head*: GitHeadAnswer
     tempOriginal*: string
     tempModified*: string
+      ## The buffer, written before the first child starts so the copy is
+      ## released at once. Empty for a probe.
     tempDiffOut*: string ## `git diff` stdout is redirected here (avoids pipe deadlock)
     resolvedOutsideRepo*: bool ## Buffer's canonical path escapes the repo root
