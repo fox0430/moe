@@ -6837,3 +6837,126 @@ suite "Highlight - segments change in place":
       discard
     check ih.lastReparseStart <= 10
     check matchesFullParse(lines, segs)
+
+suite "Highlight - shell heredoc at a chunk boundary":
+  # A chunk that ends right after a `<<EOF` line never reads the line break
+  # that starts the body, so the next chunk must not resume from its state.
+  proc sameAsFullParse(
+      lines: seq[string], segs: seq[ColorSegment], lang: SourceLanguage
+  ): bool =
+    let
+      incr = Highlight(colorSegments: segs)
+      full = initHighlight(lines, @[], lang)
+    for row in 0 ..< lines.len:
+      for col in 0 ..< lines[row].len:
+        if incr.getColorPair(row, col) != full.getColorPair(row, col):
+          return false
+    true
+
+  proc placedAt(
+      row: int, tail: openArray[string], head: openArray[string] = []
+  ): seq[string] =
+    ## `tail` placed so that its first line lands on row `row`.
+    result.add head
+    while result.len < row:
+      result.add "echo line" & $result.len
+    result.add tail
+
+  const
+    Heredoc = ["cat <<EOF", "  if (x) {", "EOF", "echo after", "if true; then"]
+    ContinuedHeredoc = ["cat <<EOF \\", "  | grep x", "  if (x) {", "EOF", "echo after"]
+
+  proc reparsedFromTop(lines: seq[string], lang: SourceLanguage): bool =
+    ## Insert a line at the top, which re-parses every chunk below it.
+    var buffer = lines
+    let (seg0, ls0) =
+      initHighlightIncremental(buffer, 0, buffer.high, TokenizerState(), @[], lang)
+    var
+      segs = seg0
+      ih = IncrementalHighlight(lineStates: initLineStateCache(ls0))
+    buffer.insert("echo inserted", 0)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      segs,
+      0,
+      @[],
+      lang,
+    )
+    sameAsFullParse(buffer, segs, lang)
+
+  test "a re-parse chunk ending on the heredoc's first line":
+    for row in ChunkSize - 4 .. ChunkSize:
+      check reparsedFromTop(placedAt(row, Heredoc), langShell)
+      check reparsedFromTop(placedAt(row, ContinuedHeredoc), langShell)
+      check reparsedFromTop(placedAt(row, Heredoc), langZsh)
+
+  test "a heredoc in a Markdown code block at a re-parse chunk's end":
+    for row in ChunkSize - 4 .. ChunkSize:
+      check reparsedFromTop(
+        placedAt(row, @Heredoc & "```", head = ["# title", "```sh"]), langMarkdown
+      )
+
+  proc loaded(lines: seq[string], ext: string): TextBuffer =
+    ## `lines` loaded from a file named with `ext`, before any progressive tick.
+    let path = getTempDir() / ("moe_test_heredoc_chunk" & ext)
+    defer:
+      removeFile(path)
+    writeFile(path, lines.join("\n") & "\n")
+    result = newTextBuffer()
+    discard result.loadFile(path)
+
+  proc frontier(buf: TextBuffer): int =
+    buf.incrementalHighlight.parsedUpTo
+
+  proc finishedAsFullParse(buf: TextBuffer, budget: int, lang: SourceLanguage): bool =
+    ## Runs the progressive load to the end, then compares with a full parse.
+    while buf.continueInitialHighlight(budget):
+      discard
+    var lines = newSeq[string](buf.len)
+    for i in 0 ..< buf.len:
+      lines[i] = buf.getLine(i)
+    buf.syntaxLanguage == lang and
+      sameAsFullParse(lines, buf.highlight.colorSegments, lang)
+
+  let initialFrontier = loaded(placedAt(5000, []), ".sh").frontier
+
+  test "the initial load's chunk ending on the heredoc's first line":
+    for row in initialFrontier - 1 .. initialFrontier + 1:
+      for (lang, ext) in [(langShell, ".sh"), (langZsh, ".zsh")]:
+        let buf = loaded(placedAt(row, Heredoc), ext)
+        check buf.frontier == initialFrontier
+        check buf.finishedAsFullParse(0, lang)
+
+      let buf =
+        loaded(placedAt(row, @Heredoc & "```", head = ["# title", "```sh"]), ".md")
+      check buf.frontier == initialFrontier
+      check buf.finishedAsFullParse(0, langMarkdown)
+
+  test "a budgeted load resuming at a heredoc's pending marker":
+    # The rewind before a tick and the window cap after it; a `\` chain longer
+    # than the budget rewinds deeper than one tick's lines.
+    const Budget = 8
+    var chain = @["cat <<EOF \\"]
+    for _ in 1 .. 3 * Budget:
+      chain.add "  | grep x \\"
+    chain.add ["  | sort", "  if (x) {", "EOF", "echo after", "if true; then"]
+
+    var buf = loaded(placedAt(5000, []), ".sh")
+    discard buf.continueInitialHighlight(Budget)
+    let firstTickEnd = buf.frontier
+
+    for row in initialFrontier - 1 .. firstTickEnd + 1:
+      buf = loaded(placedAt(row, Heredoc), ".sh")
+      check buf.frontier == initialFrontier
+      check buf.finishedAsFullParse(Budget, langShell)
+
+    # Every header row that puts a line of the chain on the initial chunk's
+    # last row, `| sort` (whose line break starts the body) included, plus one
+    # row on either side.
+    for row in initialFrontier - chain.len + 4 .. initialFrontier + 1:
+      buf = loaded(placedAt(row, chain), ".sh")
+      check buf.frontier == initialFrontier
+      check buf.finishedAsFullParse(Budget, langShell)
