@@ -153,8 +153,11 @@ proc markDecodeFailed(
   result.encoding = CharacterEncoding.unknown
   result.hasBom = false
 
+proc fingerprint*(content: string): ContentFingerprint =
+  ContentFingerprint(size: content.len, hash: hash(content))
+
 proc decodeFileContent(
-    content: string, expected = CharacterEncoding.unknown
+    content: sink string, expected = CharacterEncoding.unknown
 ): DecodedFileContent =
   ## Strip BOM and decode `content` to UTF-8. On failure, return raw bytes
   ## with `decodeFailed` set and the reason in `decodeError`. Failure covers
@@ -207,9 +210,10 @@ proc decodeFileContent(
 
   if result.encoding in TranscodedEncodings:
     result.attemptedEncoding = some(result.encoding)
-    let decoded = decodeToUtf8(result.text[bomLen .. ^1], result.encoding)
+    var decoded =
+      decodeToUtf8(result.text.toOpenArray(bomLen, result.text.high), result.encoding)
     if decoded.isOk:
-      result.text = decoded.get
+      result.text = move decoded.get
     else:
       markDecodeFailed(result, decoded.error, result.encoding)
     return
@@ -220,10 +224,16 @@ proc decodeFileContent(
   if result.text.invalidUtf8At != -1:
     markDecodeFailed(result, "invalid UTF-8", CharacterEncoding.utf8)
   elif bomLen > 0:
-    result.text = result.text[bomLen .. ^1]
+    # In place: a slice would hold the whole file a second time.
+    let kept = result.text.len - bomLen
+    if kept > 0:
+      # A literal is shared and read-only until written through `[]=`.
+      prepareMutation(result.text)
+      moveMem(result.text[0].addr, result.text[bomLen].addr, kept)
+    result.text.setLen(kept)
 
 proc decodeForBuffer*(
-    content: string, expected = CharacterEncoding.unknown
+    content: sink string, expected = CharacterEncoding.unknown
 ): DecodedText =
   ## Turn file bytes into buffer content: BOM stripped, UTF-16/32 decoded to
   ## UTF-8, every line ending style normalized, and a trailing newline read as
@@ -233,7 +243,7 @@ proc decodeForBuffer*(
   ##
   ## The one reader: a load and a whole-file replacement both come through
   ## here, so neither can drift from the other.
-  var decoded = decodeFileContent(content, expected)
+  var decoded = decodeFileContent(move content, expected)
   result.text = move decoded.text
   result.shape.encoding = decoded.encoding
   result.shape.hasBom = decoded.hasBom
@@ -263,7 +273,7 @@ func storedLines(text: string): seq[string] =
     result.setLen(result.len - 1)
 
 proc decodeTransformedContent*(
-    b: TextBuffer, raw: string
+    b: TextBuffer, raw: sink string
 ): Result[seq[string], string] =
   ## The lines of a command's answer to `getFilterInput`, read back as this
   ## buffer's encoding. The buffer keeps its own line ending, BOM and
@@ -273,7 +283,7 @@ proc decodeTransformedContent*(
   ## undecodable byte or a NUL leaves the buffer alone.
   if not b.allowsTextTransforms:
     return err(rawBytesRejection("transform"))
-  var decoded = decodeFileContent(raw, b.encoding)
+  var decoded = decodeFileContent(move raw, b.encoding)
   if decoded.decodeFailed:
     let attempted =
       if decoded.attemptedEncoding.isSome: decoded.attemptedEncoding.get else: b.encoding
@@ -335,7 +345,7 @@ proc replaceWithDecodedText*(
 proc loadFileWithDecoded*(
   b: TextBuffer,
   path: string,
-  content: string,
+  raw: ContentFingerprint,
   decoded: var DecodedText,
   fileSize: int64 = -1,
   stamp: Option[FileStamp] = none(FileStamp),
@@ -344,14 +354,15 @@ proc loadFileWithDecoded*(
 proc loadFileWithContent*(
     b: TextBuffer,
     path: string,
-    content: string,
+    content: sink string,
     fileSize: int64 = -1,
     stamp: Option[FileStamp] = none(FileStamp),
 ): Result[(), string] =
   ## Init buffer from pre-read content. `stamp` is identity from before the
   ## read; omitted means stamp against the file as it is now.
-  var decoded = decodeForBuffer(content)
-  b.loadFileWithDecoded(path, content, decoded, fileSize, stamp)
+  let raw = fingerprint(content)
+  var decoded = decodeForBuffer(move content)
+  b.loadFileWithDecoded(path, raw, decoded, fileSize, stamp)
 
 proc captureFileStamp*(path: string): FileStamp =
   ## Current state of `path`. Only a missing-file stat is `fileObservedAbsent`.
@@ -385,9 +396,6 @@ proc applyFileStamp*(b: TextBuffer, stamp: FileStamp) =
 proc noteFileStamp*(b: TextBuffer, path: string) =
   ## Baseline `b` against the file as it is now. A load stamps before reading.
   b.applyFileStamp(captureFileStamp(path))
-
-proc fingerprint*(content: string): ContentFingerprint =
-  ContentFingerprint(size: content.len, hash: hash(content))
 
 proc regularFileSize*(path: string): int64 =
   ## Size of the regular file at `path`, or -1. Anything else, a pipe or a
@@ -444,21 +452,24 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     logDebug("buffer", "File does not exist, creating new: " & path)
     content = ""
 
-  return b.loadFileWithContent(path, content, content.len.int64, some(stamp))
+  let size = content.len.int64
+  return b.loadFileWithContent(path, move content, size, some(stamp))
 
 proc loadFileWithDecoded*(
     b: TextBuffer,
     path: string,
-    content: string,
+    raw: ContentFingerprint,
     decoded: var DecodedText,
     fileSize: int64 = -1,
     stamp: Option[FileStamp] = none(FileStamp),
 ): Result[(), string] =
-  ## Init buffer from `content` already run through `decodeForBuffer`, for a
+  ## Init buffer from file bytes already run through `decodeForBuffer`, for a
   ## caller that had to read the decoded text to decide whether to load at all.
-  ## `decoded.text` is moved into the buffer. `stamp` is identity from before
-  ## the read; omitted means stamp against the file as it is now.
-  let effFileSize = if fileSize >= 0: fileSize else: content.len.int64
+  ## `raw` is the fingerprint of those bytes, taken before they went into the
+  ## decode so the file is not held twice. `decoded.text` is moved into the
+  ## buffer. `stamp` is identity from before the read; omitted means stamp
+  ## against the file as it is now.
+  let effFileSize = if fileSize >= 0: fileSize else: raw.size.int64
 
   if decoded.decodeFailed:
     logWarn(
@@ -483,7 +494,7 @@ proc loadFileWithDecoded*(
     b.applyFileStamp(stamp.get)
   else:
     b.noteFileStamp(path)
-  b.lastLoadedContent = some(fingerprint(content))
+  b.lastLoadedContent = some(raw)
 
   b.changeSeq = 0
   b.savedSeq = 0
@@ -911,7 +922,8 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
     return ok(false)
 
   # Both ways in decode, so decode once and hand the result to whichever runs.
-  var decoded = decodeForBuffer(content)
+  let size = content.len.int64
+  var decoded = decodeForBuffer(move content)
 
   # Prefer a minimal edit so undo history and per-line state survive.
   # Fallback is a wholesale load. Binary content rides no undo entry.
@@ -921,7 +933,7 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
     decoded.lineCount <= UndoableReloadMaxLines and
     decoded.text.len <= UndoableReloadMaxBytes and
     b.reloadUndoLines + oldLineCount + decoded.lineCount <= UndoableReloadBudgetLines and
-    chooseBackendForFile(content.len.int64) == b.backendKind and
+    chooseBackendForFile(size) == b.backendKind and
     decoded.hasBinaryContent == b.hasBinaryContent
   # A replacement refuses bytes no decoding read, so they only enter wholesale.
   if landsAsEdit:
@@ -985,8 +997,7 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
         "; replacing the contents wholesale",
     )
 
-  let loaded =
-    b.loadFileWithDecoded(path, content, decoded, content.len.int64, some(stamp))
+  let loaded = b.loadFileWithDecoded(path, onDisk, decoded, size, some(stamp))
   if loaded.isErr:
     return err(loaded.error)
   ok(true)

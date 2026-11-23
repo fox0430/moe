@@ -151,14 +151,16 @@ proc readPreview*(path: string, config: EditorConfig): PreviewRead =
     head.setLen(PreviewMaxBytes)
     encoding = detectCharacterEncoding(head)
     head = head.cutAtLineEnd(encoding)
-  var decoded = decodeForBuffer(head, encoding)
+  # Taken before the binary check on purpose: hashing a binary head for nothing
+  # costs less than keeping a copy of every text head until after the decode.
+  let raw = fingerprint(head)
+  var decoded = decodeForBuffer(move head, encoding)
   if decoded.hasBinaryContent:
     result.message = "A binary file"
     return
   let b = newTextBuffer(detached = true)
   b.loadWithConfig(config):
-    let loaded =
-      b.loadFileWithDecoded(path, head, decoded, head.len, some(result.stamp))
+    let loaded = b.loadFileWithDecoded(path, raw, decoded, raw.size, some(result.stamp))
     if loaded.isErr:
       result.message = "Cannot read: " & loaded.error.forDisplay
       return

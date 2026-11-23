@@ -372,11 +372,11 @@ template editOutside(e: Editor, buf: TextBuffer, body: untyped) =
   e.keepCursorOnText(window, buf, wanted)
 
 proc takeWritePreOutput(
-    e: Editor, buf: TextBuffer, label, output: string
+    e: Editor, buf: TextBuffer, label: string, output: sink string
 ): Result[void, string] =
   ## Put a command's answer in the buffer as one undoable change, touching only
   ## the lines that differ, so marks and folds on the rest stay.
-  let lines = ?buf.decodeTransformedContent(output)
+  let lines = ?buf.decodeTransformedContent(move output)
   e.editOutside(buf):
     let replaced = buf.replaceAllLines(lines, description = label)
     if replaced.isErr:
@@ -447,15 +447,15 @@ proc runWritePreHook(
         0 # No limit.
       else:
         max(maxOutput, input.len * WritePreOutputFactor)
-    filtered = runFilterBlocking(
-      BackgroundProcessCommand(
-        cmd: hook.cmd, args: hook.args, workingDir: hook.workingDir
-      ),
-      move input,
-      timeoutFromSeconds(hook.timeout),
-      limit,
-      e.writePreTurn(label, interrupted, shown),
-    )
+  var filtered = runFilterBlocking(
+    BackgroundProcessCommand(
+      cmd: hook.cmd, args: hook.args, workingDir: hook.workingDir
+    ),
+    move input,
+    timeoutFromSeconds(hook.timeout),
+    limit,
+    e.writePreTurn(label, interrupted, shown),
+  )
   if filtered.isErr:
     if filtered.error.kind == ffCancelled:
       # Stopped by Ctrl-C, or by a deadly signal the loop is about to answer.
@@ -474,11 +474,11 @@ proc runWritePreHook(
     if not said.anyIt(it.strip.len > 0):
       said = filtered.get.output.firstNonBlankLine
     return err(exitMessage(label, status.get, said, fromEnd = false))
-  let output = filtered.get.output
+  var output = move filtered.get.output
   if output.len == 0 and not blank:
     # A command that answers on a file, or ignored its input: not an emptied file.
     return err(label & " wrote nothing back")
-  let taken = e.takeWritePreOutput(buf, label, output)
+  let taken = e.takeWritePreOutput(buf, label, move output)
   if taken.isErr:
     return err(label & " failed: " & taken.error)
   ok()

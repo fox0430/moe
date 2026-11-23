@@ -22,11 +22,11 @@ import std/[options, strformat, strutils]
 import pkg/[results, chronos]
 import pkg/chronos/asyncproc
 
-import child_process, job_stop, line_queue
+import char_append, child_process, job_stop, line_queue
 
 import types/background_process_types
 export background_process_types, job_stop
-export line_queue except addChars
+export line_queue
 
 proc timeoutFromSeconds*(seconds: int): Duration =
   ## Convert a config timeout to the value the bounded waits expect.
