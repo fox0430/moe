@@ -150,6 +150,39 @@ proc isShowingTab*(e: Editor, win: EditorWindow, tabId: BufferId): bool =
   of wvTabView, wvTabSnapshot: true
   of wvViewer, wvForeignMode: false
 
+proc holds*(e: Editor, win: EditorWindow, buf: TextBuffer): bool =
+  ## Whether `win` holds `buf` as a Vim window holds its buffer, for what a
+  ## close loses: it draws it, or `buf` is the tab an in-place viewer covers
+  ## and gives back. A split viewer only copied its origin's tab, and the
+  ## FileTree sidebar has none.
+  if win.buffer == buf:
+    return true
+  if win.tabBufferId != buf.id:
+    return false
+  case e.windowViewOf(win)
+  of wvTabView, wvTabSnapshot:
+    true
+  of wvViewer:
+    let entry = win.viewerEntry.get
+    entry.placement == vpInPlace and entry.returnTab == buf.id and
+      entry.returnState.kind in {mskNone, mskTerminal}
+  of wvForeignMode:
+    false
+
+proc holderCount*(e: Editor, buf: TextBuffer): int =
+  ## How many windows hold `buf`. See `holds`.
+  for win in e.windowManager.windows:
+    if e.holds(win, buf):
+      inc result
+
+proc heldBuffers*(e: Editor, win: EditorWindow): seq[TextBuffer] =
+  ## The buffers `win` holds: what it draws, and the tab an in-place viewer
+  ## covers. See `holds`.
+  result.add win.buffer
+  let tab = e.bufferById(win.tabBufferId)
+  if tab.isSome and tab.get != win.buffer and e.holds(win, tab.get):
+    result.add tab.get
+
 proc drawnTabs*(e: Editor, win: EditorWindow): seq[TextBuffer] =
   ## The tabs the tab line draws for `win`: its live tabs, or else its view.
   for id in win.bufferIds:

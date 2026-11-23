@@ -59,15 +59,15 @@ With several files and `StartUp.FileOpen.autoSplit` (the default), each file ope
 |:---|:---|
 | <kbd>**:**</kbd> <kbd>**w**</kbd> | Write file |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> | Quit |
-| <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> | Write and quit |
-| <kbd>**:**</kbd> <kbd>**x**</kbd> OR <kbd>**:**</kbd> <kbd>**x**</kbd> <kbd>**i**</kbd> <kbd>**t**</kbd> | Write if modified and quit |
+| <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> | Write and close the window |
+| <kbd>**:**</kbd> <kbd>**x**</kbd> OR <kbd>**:**</kbd> <kbd>**x**</kbd> <kbd>**i**</kbd> <kbd>**t**</kbd> | Write if modified and close the window |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> | Force quit |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> | Quit all windows |
 | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> | Write and quit all windows |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> | Force quit all windows |
 | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**!**</kbd> | Force write |
-| <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> | Force write and quit window |
-| <kbd>**:**</kbd> <kbd>**x**</kbd> <kbd>**!**</kbd> | Force write if modified and quit |
+| <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> | Force write and close the window |
+| <kbd>**:**</kbd> <kbd>**x**</kbd> <kbd>**!**</kbd> | Force write if modified and close the window |
 | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> | Force write and quit all windows |
 | <kbd>**:**</kbd> <kbd>**c**</kbd> <kbd>**q**</kbd> | Quit with non-zero exit code |
 <!-- AUTO-GEN:end Exiting -->
@@ -216,7 +216,7 @@ With several files and `StartUp.FileOpen.autoSplit` (the default), each file ope
 | <kbd>**z**</kbd> <kbd>**b**</kbd> | Scroll the screen so the cursor is at the bottom |
 | <kbd>**z**</kbd> <kbd>**.**</kbd> | Center the screen on the cursor |
 | <kbd>**z**</kbd> <kbd>**z**</kbd> | Center the screen on the cursor |
-| <kbd>**Z**</kbd> <kbd>**Z**</kbd> | Write current file and exit |
+| <kbd>**Z**</kbd> <kbd>**Z**</kbd> | Same as :x |
 | <kbd>**Z**</kbd> <kbd>**Q**</kbd> | Same as :q! |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**w**</kbd> | Move to the next window |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**p**</kbd> | Move to the last accessed window |
@@ -1102,7 +1102,7 @@ names run the `:` command instead. moe's own command names such as `save` and
 **Examples:**
 
 ```
-:nmap C-s save-and-quit       " Ctrl-S saves and quits (Normal mode)
+:nmap C-s save-and-quit       " Ctrl-S as :wq (Normal mode)
 :imap jj Escape               " jj exits Insert mode
 :nmap C-a g g                 " Ctrl-A goes to first line
 :vmap C-c Escape              " Ctrl-C exits Visual mode

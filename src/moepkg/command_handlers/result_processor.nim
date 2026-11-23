@@ -111,25 +111,37 @@ proc modeSwitchEntry(mode: EditorMode): Option[HandlerResult] =
   else:
     none(HandlerResult)
 
+proc closeInsertGroup(e: Editor, buffer: TextBuffer): Result[void, string] =
+  ## Turn the open Insert typing group into an undo entry; Insert goes on.
+  if not buffer.inTransaction:
+    return ok()
+  if e.state.editState.visualBlockInsertContext.isSome:
+    let ending = if e.state.mode == EditorMode.Insert: bieTyping else: bieLeave
+    let finalizeResult = finalizeInsertExit(buffer, e.state, ending)
+    if finalizeResult.isErr:
+      return err(finalizeResult.error)
+    return ok()
+  commitInsertModeBoundary(buffer, e.state)
+
+proc reopenInsertGroup(e: Editor, buffer: TextBuffer) =
+  ## Start the typing group `closeInsertGroup` ended, Insert or Replace still
+  ## going on.
+  if buffer.readOnly or buffer.inTransaction:
+    return
+  let error =
+    if e.state.mode == EditorMode.Replace:
+      beginReplaceModeSession(buffer, e.state).errorOr("")
+    else:
+      beginInsertModeSession(buffer, e.state).errorOr("")
+  if error.len > 0:
+    e.state.statusMessage = "Failed to begin transaction: " & error
+
 proc processHistoryResult(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Execute undo/redo at a committed Insert boundary. Buffer history rejects
   ## open transactions, so commands such as forced-Insert `Ctrl-o :undo` first
   ## turn the current typing group into an ordinary undo entry.
   let resumeInsert = e.state.mode == EditorMode.Insert
-
-  var boundaryResult = Result[void, string].ok()
-  if activeBuffer.inTransaction:
-    boundaryResult =
-      if e.state.editState.visualBlockInsertContext.isSome:
-        let finalizeResult = finalizeInsertExit(
-          activeBuffer, e.state, if resumeInsert: bieTyping else: bieLeave
-        )
-        if finalizeResult.isErr:
-          Result[void, string].err(finalizeResult.error)
-        else:
-          Result[void, string].ok()
-      else:
-        commitInsertModeBoundary(activeBuffer, e.state)
+  let boundaryResult = e.closeInsertGroup(activeBuffer)
 
   if boundaryResult.isErr:
     e.state.statusMessage = boundaryResult.error
@@ -150,12 +162,103 @@ proc processHistoryResult(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     if historyResult.isErr:
       e.state.statusMessage = historyResult.error
 
-  if resumeInsert and not activeBuffer.readOnly and not activeBuffer.inTransaction:
-    let beginResult = beginInsertModeSession(activeBuffer, e.state)
-    if beginResult.isErr:
-      e.state.statusMessage = "Failed to begin transaction: " & beginResult.error
+  if resumeInsert:
+    e.reopenInsertGroup(activeBuffer)
 
   true
+
+proc applyCloseVerdict(
+    e: Editor,
+    verdict: CloseVerdict,
+    force: bool,
+    activeBuffer: TextBuffer,
+    hostHandled: var bool,
+): bool =
+  ## A close that ends the session is the editor's quit, which a host owning
+  ## results sees as such.
+  case verdict.kind
+  of cvRefuse, cvRefuseJob:
+    e.refuseClose(verdict)
+    true
+  of cvEndSession:
+    # The verdict has checked the jobs, sparing the one `!` ends.
+    e.processResultWithHost(
+      HandlerResult(kind: hrQuit, endJobs: true), activeBuffer, hostHandled
+    )
+  of cvClose:
+    e.applyClose(force)
+
+proc processCloseWindow(
+    e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
+): bool =
+  ## Vim's `:quit` or `:close`.
+  e.applyCloseVerdict(
+    e.closeVerdict(r.forceClose, r.asQuit), r.forceClose, activeBuffer, hostHandled
+  )
+
+proc processSaveAndQuit(
+    e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
+): bool =
+  ## As Vim's :wq, the write then :quit, which ends the session only from the
+  ## last window and makes its own checks there.
+  let typingMode = e.state.mode
+  let win = e.activeWindow
+  proc reopen() =
+    # Only where Insert or Replace still goes on in `activeBuffer`: showing a
+    # job the refusal names takes the window or the focus elsewhere.
+    if typingMode in {EditorMode.Insert, EditorMode.Replace} and e.activeWindow == win and
+        e.state.mode == typingMode and e.activeBuffer == activeBuffer:
+      e.reopenInsertGroup(activeBuffer)
+
+  if e.refuseQuitBeforeWrite(r):
+    return true
+  # As Vim's Ctrl-o, the command is typed from out of the typing, whatever
+  # comes of it: an indent nothing was typed after goes, and a Visual-block
+  # insert ends, so the write has what it copies.
+  if typingMode == EditorMode.Insert:
+    clearAutoIndentIfUnedited(activeBuffer, e.state)
+  let closed = e.closeInsertGroup(activeBuffer)
+  if closed.isErr:
+    e.state.statusMessage = closed.error
+    e.state.beep()
+    return true
+  let written = e.writeForQuit(r)
+  if written.isNone:
+    reopen()
+    return true
+  # `!` forces the write, not the end of a job the window shows.
+  let force = r.forceQuitAfterSave and not e.showsRunningJob(win)
+  let close =
+    if e.state.mode == EditorMode.Config:
+      # As `:q` there, the viewer's own quit, wherever the viewer sits.
+      HandlerResult(kind: hrConfigQuit)
+    else:
+      HandlerResult(kind: hrCloseWindow, forceClose: force, asQuit: true)
+  var closeTaken = false
+  if close.kind == hrCloseWindow and e.interceptHostResult(close):
+    closeTaken = true
+    result = true
+  elif close.kind == hrCloseWindow:
+    let verdict = e.closeVerdict(force, asQuit = true)
+    if verdict.kind in {cvRefuse, cvRefuseJob}:
+      # As Vim, the write stands and the :quit after it fails.
+      e.reportRefusedQuitWrite(written.get, verdict)
+      reopen()
+      return true
+    result = e.applyCloseVerdict(verdict, force, activeBuffer, closeTaken)
+  else:
+    result = e.processResultWithHost(close, activeBuffer, closeTaken)
+  hostHandled = hostHandled or closeTaken
+  if not result:
+    # The session ends with the write, so stderr is where these are read.
+    for warning in written.get.warnings:
+      e.state.exitReports.add warning
+    if written.get.wrote.len > 0:
+      logInfo("handler", "Wrote before quitting: " & written.get.wrote)
+    logInfo("handler", "Quitting editor")
+    return
+  e.reportQuitWrite(written.get)
+  reopen()
 
 proc processResultWithHost(
     e: Editor, r: HandlerResult, activeBuffer: TextBuffer, hostHandled: var bool
@@ -194,19 +297,20 @@ proc processResultWithHost(
     e.state.exitCode = 1
     return false # Signal app should quit with non-zero exit code
   of hrSaveAndQuit:
-    return e.processSaveAndQuitResult(r)
+    return e.processSaveAndQuit(r, activeBuffer, hostHandled)
+  of hrCloseWindow:
+    return e.processCloseWindow(r, activeBuffer, hostHandled)
   of hrSaveAllAndQuit:
     return e.processSaveAllAndQuitResult(r)
   of hrGotoLine:
     e.processGotoLineResult(r, activeBuffer)
     return true # Skip the epilogue's status-line overwrite, like ops-moved kinds
   of hrJumpToBuffer, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
-      hrBufferNextTab, hrBufferPrevTab, hrBuffer, hrCloseWindow, hrNextWindow,
-      hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown, hrMoveWindowUp,
-      hrMoveWindowRight, hrMaximizeWindowHeight, hrIncreaseWindowHeight,
-      hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
-      hrEqualizeWindows, hrSwapWindow, hrOnlyWindow, hrBufferDelete, hrTerminalQuit,
-      hrFileTreeQuit:
+      hrBufferNextTab, hrBufferPrevTab, hrBuffer, hrNextWindow, hrPrevWindow,
+      hrMoveWindowLeft, hrMoveWindowDown, hrMoveWindowUp, hrMoveWindowRight,
+      hrMaximizeWindowHeight, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
+      hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow,
+      hrOnlyWindow, hrBufferDelete, hrTerminalQuit, hrFileTreeQuit:
     return e.processWindowResult(r, activeBuffer)
   of hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFileTreeOpenFile,
       hrFilerDeleteFile, hrOpenUri, hrQuickRun, hrVSplit, hrHSplit, hrNew, hrVnew,

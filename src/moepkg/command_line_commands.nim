@@ -229,12 +229,12 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "wq",
-    completionDescription: "Write and quit",
-    helpEntries: @[HelpEntry(syntax: ":wq", description: "Write and quit")],
+    completionDescription: "Write and close the window",
+    helpEntries: @[HelpEntry(syntax: ":wq", description: "Write and close the window")],
     action: some(claSaveAndQuit),
     isCanonicalLong: false,
     takesFilePath: true,
-    keymapBaseDescription: "Save and quit",
+    keymapBaseDescription: "Save and close the window",
   ),
   CommandLineCommandSpec(
     name: "saveandquit",
@@ -248,33 +248,39 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     name: "wq!",
     completionDescription: "",
     helpEntries:
-      @[HelpEntry(syntax: ":wq!", description: "Force write and quit window")],
+      @[HelpEntry(syntax: ":wq!", description: "Force write and close the window")],
     action: none(CommandLineAction),
     isCanonicalLong: false,
   ),
   CommandLineCommandSpec(
     name: "x",
-    completionDescription: "Write if modified and quit",
-    helpEntries:
-      @[HelpEntry(syntax: ":x or :xit", description: "Write if modified and quit")],
+    completionDescription: "Write if modified and close the window",
+    helpEntries: @[
+      HelpEntry(
+        syntax: ":x or :xit", description: "Write if modified and close the window"
+      )
+    ],
     action: some(claSaveIfModifiedAndQuit),
     isCanonicalLong: false,
     takesFilePath: true,
-    keymapBaseDescription: "Save if modified and quit",
+    keymapBaseDescription: "Save if modified and close the window",
   ),
   CommandLineCommandSpec(
     name: "xit",
-    completionDescription: "Write if modified and quit",
+    completionDescription: "Write if modified and close the window",
     helpEntries: @[],
     action: some(claSaveIfModifiedAndQuit),
     isCanonicalLong: true,
-    keymapBaseDescription: "Save if modified and quit",
+    keymapBaseDescription: "Save if modified and close the window",
   ),
   CommandLineCommandSpec(
     name: "x!",
     completionDescription: "",
-    helpEntries:
-      @[HelpEntry(syntax: ":x!", description: "Force write if modified and quit")],
+    helpEntries: @[
+      HelpEntry(
+        syntax: ":x!", description: "Force write if modified and close the window"
+      )
+    ],
     action: none(CommandLineAction),
     isCanonicalLong: false,
   ),

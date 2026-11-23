@@ -35,10 +35,36 @@ when not defined(moe.embedded):
     ## that has ended goes with the last of them, and `:q!` ends a running one.
     if not e.isTerminalBuffer(id) or (e.isJobRunning(id) and not force):
       return
-    for window in e.windowManager.windows:
-      if window.tabBufferId == id:
-        return
+    let buffer = e.bufferById(id)
+    if buffer.isSome and e.holderCount(buffer.get) > 0:
+      return
     e.closeTerminalBuffer(id)
+
+proc applyClose*(e: Editor, force: bool): bool =
+  ## Close the active window that `closeVerdict` lets close with the session
+  ## going on. `force` is the `!` that ends the job the window shows. Returns
+  ## true to continue.
+  let activeWin = e.activeWindow
+  when not defined(moe.embedded):
+    # `:q!` ends the job its window shows, not one a viewer covers.
+    let endsTabJob = force and e.isShowingTab(activeWin, activeWin.tabBufferId)
+  # As a focus move, the mode ends with the window: Insert typed from with
+  # Normal mode off leaves no popup or session behind.
+  e.finalizeModeForFocusMove()
+  e.closeLiveViewer()
+  if e.activeWindow != activeWin:
+    # A split viewer closed its own window as part of teardown.
+    return true
+  if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
+    # An in-place viewer's teardown resumed the Insert it covered.
+    e.finalizeModeForFocusMove()
+  when not defined(moe.embedded):
+    let tab = activeWin.tabBufferId
+  if e.closeWindow():
+    return false
+  when not defined(moe.embedded):
+    e.closeSessionOutOfView(tab, endsTabJob)
+  true
 
 proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Handle buffer / window switching and layout kinds. Returns true to continue.
@@ -85,39 +111,6 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     return true
   of hrBuffer:
     discard e.switchToBuffer(r.bufferArg)
-    return true
-  of hrCloseWindow:
-    let activeWin = e.activeWindow
-    when not defined(moe.embedded):
-      # `:q!` ends the job its window shows, not one a viewer covers.
-      let endsTabJob = r.forceClose and e.isShowingTab(activeWin, activeWin.tabBufferId)
-    if e.windowManager.windows.len <= 1:
-      # Closing the last window quits the editor, every buffer included.
-      if not r.forceClose:
-        let discardErr = e.closeLastWindowError(activeWin.buffer)
-        if discardErr.len > 0:
-          e.state.statusMessage = discardErr
-          e.state.beep()
-          return true
-      when not defined(moe.embedded):
-        let spare =
-          if endsTabJob:
-            some(activeWin.tabBufferId)
-          else:
-            none(BufferId)
-        if e.refuseQuitForRunningJob(show = true, spare):
-          return true
-    e.closeLiveViewer()
-    if e.activeWindow != activeWin:
-      # A split viewer closed its own window as part of teardown.
-      return true
-    when not defined(moe.embedded):
-      let tab = activeWin.tabBufferId
-    let shouldQuit = e.closeWindow()
-    if shouldQuit:
-      return false
-    when not defined(moe.embedded):
-      e.closeSessionOutOfView(tab, endsTabJob)
     return true
   of hrNextWindow:
     e.switchToNextWindow()

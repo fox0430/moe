@@ -1,9 +1,13 @@
 import std/[options, os, strutils, tempfiles, unittest]
 
+import pkg/results
+
 import ../src/moepkg/frontend
-import ../src/moepkg/[editor, key_bindings, keybind_config, types]
+import
+  ../src/moepkg/[buffer, config_loader, editor, key_bindings, keybind_config, types]
 import ../src/moepkg/command_handlers/result_processor
 from vim_like_test_helper import keysOf
+import config_test_helper
 
 proc testEditor(): Editor =
   newEditor(newEditorConfig())
@@ -173,8 +177,11 @@ suite "Host result interception":
     defer:
       e.releaseExternalResources()
     e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
-      r.kind in {hrCloseWindow, hrQuit}
-    for (command, kind) in [(":q", hrCloseWindow), (":qa", hrQuit)]:
+      r.kind in {hrCloseWindow, hrQuit, hrSaveAndQuit}
+    # `:x` is the write and quit, even with nothing to write.
+    for (command, kind) in [
+      (":q", hrCloseWindow), (":qa", hrQuit), (":x", hrSaveAndQuit)
+    ]:
       check e.executeCommandOverlay(command) != roQuit
       check not e.state.isCommandOverlay
       check e.activeWindow.mode == EditorMode.Normal
@@ -182,6 +189,93 @@ suite "Host result interception":
       let request = e.takeHostResultRequest()
       require request.isSome
       check request.get.kind == kind
+
+  test "a :q that ends the session beside split Help is the quit a host owns":
+    let e = testEditor()
+    defer:
+      e.releaseExternalResources()
+    check e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    require e.windowManager.windows.len == 2
+    check e.processResult(HandlerResult(kind: hrNextWindow), e.activeBuffer())
+    require e.state.mode != EditorMode.Help
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      r.kind == hrQuit
+
+    check e.executeCommandOverlay(":q") != roQuit
+
+    let request = e.takeHostResultRequest()
+    require request.isSome
+    check request.get.kind == hrQuit
+    check e.windowManager.windows.len == 2
+
+  test ":wq and :x write, then hand the host the close as :q's":
+    let dir = createTempDir("moe_host_wq", "")
+    defer:
+      removeDir(dir)
+    let e = testEditor()
+    defer:
+      e.releaseExternalResources()
+    let path = dir / "a.txt"
+    writeFile(path, "orig\n")
+    check e.executeCommandOverlay(":e " & path) != roQuit
+    check e.executeCommandOverlay(":split") != roQuit
+    require e.windowManager.windows.len == 2
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      r.kind in {hrCloseWindow, hrQuit}
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+
+    for command in [":wq", ":x"]:
+      check e.executeCommandOverlay(command) != roQuit
+      let request = e.takeHostResultRequest()
+      require request.isSome
+      check request.get.kind == hrCloseWindow
+      check request.get.asQuit
+      check e.windowManager.windows.len == 2
+    check readFile(path) == "A:orig\n"
+
+  test ":wq on the last window reports the write when the host keeps the editor":
+    let dir = createTempDir("moe_host_wq", "")
+    defer:
+      removeDir(dir)
+    let e = testEditor()
+    defer:
+      e.releaseExternalResources()
+    let path = dir / "a.txt"
+    writeFile(path, "orig\n")
+    check e.executeCommandOverlay(":e " & path) != roQuit
+    var closeAsks = 0
+    e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+      if r.kind == hrCloseWindow:
+        inc closeAsks
+      r.kind == hrCloseWindow
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+
+    check e.executeCommandOverlay(":wq") != roQuit
+
+    let request = e.takeHostResultRequest()
+    require request.isSome
+    check request.get.kind == hrCloseWindow
+    check closeAsks == 1
+    check readFile(path) == "A:orig\n"
+    check e.state.statusMessage.startsWith("Saved: ")
+
+  test ":x in Config writes, then hands the host the viewer's quit as :q's":
+    withTempHome(tmpDir):
+      let e = testEditor()
+      defer:
+        e.releaseExternalResources()
+      discard e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
+      require e.state.mode == EditorMode.Config
+      e.hostResultFilter = proc(host: Editor, r: HandlerResult): bool =
+        r.kind == hrConfigQuit
+
+      check e.executeCommandOverlay(":x") != roQuit
+
+      check fileExists(getConfigPath())
+      let request = e.takeHostResultRequest()
+      require request.isSome
+      check request.get.kind == hrConfigQuit
+      check e.state.mode == EditorMode.Config
 
   test "a host-owned quit of :bd is host-owned for the command line too":
     let e = testEditor()

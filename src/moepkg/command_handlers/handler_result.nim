@@ -216,6 +216,9 @@ type
       discard
     of hrCloseWindow:
       forceClose*: bool
+      asQuit*: bool
+        ## Vim's `:quit`, not `:close`: the session ends when only the FileTree
+        ## sidebar and Help windows would remain (see `isLastSessionWindow`).
     of hrGotoLine:
       lineNumber*: int
     of hrVSplit:
@@ -260,6 +263,7 @@ type
     of hrSaveAndQuit:
       saveAndQuitFilename*: Option[string]
       forceQuitAfterSave*: bool
+      writeOnlyIfModified*: bool ## `:x` and `ZZ`: an unmodified buffer is not written.
     of hrSaveAllAndQuit:
       forceSaveAllAndQuitAfter*: bool
     of hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast, hrBufferNextTab,

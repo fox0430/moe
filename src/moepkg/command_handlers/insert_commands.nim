@@ -48,6 +48,15 @@ proc beginInsertModeSession*(
     return err(begun.error)
   ok(true)
 
+proc beginReplaceModeSession*(
+    buffer: TextBuffer, state: EditorState
+): Result[(), string] =
+  ## Begin the transaction a Replace session types into. An open one, which a
+  ## failed commit left, carries on.
+  if buffer.inTransaction:
+    return ok(())
+  buffer.beginTransaction("Replace mode edit", cursorPos = some(state.cursor))
+
 proc markAutoIndented(
     buffer: TextBuffer, state: EditorState, line: int, indented: bool
 ) =

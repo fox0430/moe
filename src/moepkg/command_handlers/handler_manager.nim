@@ -180,15 +180,12 @@ proc applyNormalModeResult(
         if r.insertEntry.isSome:
           state.startInsertRecord(r.insertEntry.get, r.insertCount)
       elif targetMode == EditorMode.Replace:
-        # As for Insert, a transaction a failed commit left open carries on.
-        if not buffer.inTransaction:
-          let transactionResult =
-            buffer.beginTransaction("Replace mode edit", cursorPos = some(state.cursor))
-          if transactionResult.isErr:
-            return HandlerResult(
-              kind: hrError,
-              errorMessage: "Failed to begin transaction: " & transactionResult.error,
-            )
+        let transactionResult = beginReplaceModeSession(buffer, state)
+        if transactionResult.isErr:
+          return HandlerResult(
+            kind: hrError,
+            errorMessage: "Failed to begin transaction: " & transactionResult.error,
+          )
         # Clear replace history when entering Replace mode
         state.editState.replaceHistory = @[]
     return HandlerResult(

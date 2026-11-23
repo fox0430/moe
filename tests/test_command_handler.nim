@@ -169,22 +169,18 @@ suite "CommandModeHandler - executeSaveAndQuit":
     check result.forceQuitAfterSave == true
 
 suite "CommandModeHandler - executeSaveIfModifiedAndQuit":
-  test "Clean buffer quits without entering the save path":
+  test "Asks for a write only if the buffer is modified":
     let handler = setupHandler()
-    let buffer = setupBuffer(@["Hello"])
 
-    let result =
-      handler.executeSaveIfModifiedAndQuit(buffer, none(string), force = false)
+    let result = handler.executeSaveIfModifiedAndQuit(none(string), force = false)
 
-    check result.kind == hrQuit
+    check result.kind == hrSaveAndQuit
+    check result.writeOnlyIfModified
 
-  test "Modified buffer uses the existing save-and-quit path":
+  test "Passes the file name and the !":
     let handler = setupHandler()
-    let buffer = setupBuffer(@["Hello"])
-    discard buffer.insertText(BufferPosition(line: 0, column: 5), "!")
 
-    let result =
-      handler.executeSaveIfModifiedAndQuit(buffer, some("test.txt"), force = true)
+    let result = handler.executeSaveIfModifiedAndQuit(some("test.txt"), force = true)
 
     check result.kind == hrSaveAndQuit
     check result.saveAndQuitFilename == some("test.txt")
@@ -197,6 +193,7 @@ suite "CommandModeHandler - executeSaveIfModifiedAndQuit":
     let result = handler.executeSaveAndQuit(buffer, none(string), force = false)
 
     check result.kind == hrSaveAndQuit
+    check not result.writeOnlyIfModified
 
 suite "CommandModeHandler - executeQuitAll":
   test "Quit all with unmodified buffer":
@@ -1683,8 +1680,8 @@ suite "CommandModeHandler - handleCommandModeInput":
     let handler = setupHandler()
     let buffer = setupBuffer()
 
-    check handler.handleCommandModeInput(buffer, ":x").kind == hrQuit
-    check handler.handleCommandModeInput(buffer, ":xit").kind == hrQuit
+    check handler.handleCommandModeInput(buffer, ":x").writeOnlyIfModified
+    check handler.handleCommandModeInput(buffer, ":xit").writeOnlyIfModified
 
   test "Handle :x on a modified buffer":
     let handler = setupHandler()

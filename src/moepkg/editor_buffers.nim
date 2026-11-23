@@ -498,17 +498,8 @@ proc switchToBuffer*(e: Editor, arg: string): bool =
   return true
 
 proc isBufferShared*(e: Editor, buffer: TextBuffer): bool =
-  ## Check if the given buffer is shared across multiple windows
-  ## Returns true if the buffer is open in more than one window
-  for window in e.windowManager.windows:
-    if window.buffer == buffer:
-      if result:
-        return true
-      else:
-        result = true
-
-  # Buffer is not shared across multiple windows (0 or 1 window)
-  return false
+  ## Whether more than one window holds `buffer`, so closing one loses nothing.
+  e.holderCount(buffer) > 1
 
 proc removeBufferAt*(e: Editor, idx: int): TextBuffer =
   ## Drop the buffer at `idx` from `e.buffers`, evict its git diff/branch cache

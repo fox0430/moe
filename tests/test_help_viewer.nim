@@ -501,7 +501,7 @@ suite "HelpViewer - Mode sections (snapshot)":
     check state.texts.contains("# Exiting")
     check state.texts.contains(":w         - Write file")
     check state.texts.contains(":q         - Quit")
-    check state.texts.contains(":x or :xit - Write if modified and quit")
+    check state.texts.contains(":x or :xit - Write if modified and close the window")
     check state.texts.contains(":wqa!      - Force write and quit all windows")
     check state.texts.contains(":cq        - Quit with non-zero exit code")
 

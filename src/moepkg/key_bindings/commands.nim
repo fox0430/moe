@@ -169,7 +169,11 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ),
   ("clipboard-cut", "Cut selected text to system clipboard", "edit.cut"),
   ("save", "Save file", "file.save"),
-  ("save-and-quit", "Save file and quit", "file.save.and.quit"),
+  ("save-and-quit", "Save file and close the window (as :wq)", "file.save.and.quit"),
+  (
+    "save-if-modified-and-quit", "Save file if modified and close the window (as :x)",
+    "file.save.if.modified.and.quit",
+  ),
   ("quit-force", "Quit without saving", "file.quit.force"),
   ("close-window-force", "Close window without saving (as :q!)", "window.close.force"),
   ("macro-record", "Start/stop macro recording", "macro.record"),
