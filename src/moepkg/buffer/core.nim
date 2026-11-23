@@ -260,6 +260,19 @@ type
     olBelow ## Whole lines opened below that line, which stays as it was: `o`, `p`
     olAbove ## Whole lines opened above it: `O`, `P`
 
+  LineShift* = object
+    ## `delete` rows at `start` became `insert` rows; `start` indexes the
+    ## text before.
+    start*: int
+    delete*: int
+    insert*: int
+
+  ReloadChangeList* = object
+    ## How a reload moved the changelist, for undo/redo to move it back.
+    shifts*: seq[LineShift]
+    before*, after*: seq[BufferPosition] ## The changelist either side of it.
+    adds*: int ## `changeListAdds` when it landed.
+
   LineHunk* = object ## One span of lines a ckReplaceLines change swapped.
     start*: int ## Its first row after the hunks above; the same row after the change.
     oldText*: seq[string]
@@ -282,16 +295,8 @@ type
       ## transaction changes carry 0; only the wrapper that lands on
       ## undoStack gets an id. 0 = initial state.
     namedMarkChanges*: seq[NamedMarkChange]
-    noChangeListPosition*: bool
-      ## Skip `changeListIndex` on undo/redo: this entry recorded no position.
     isReload*: bool ## This entry is a reload that landed as an edit.
-    changeListAcross*: Option[seq[BufferPosition]]
-      ## `changeList` on the other side of this entry. A reload remaps the
-      ## recorded positions; undo/redo swap this with the live list.
-    changeListIndexAcross*: int
-      ## Index for `changeListAcross`. Swapped with the list: an edit after
-      ## this entry can evict the oldest position, so the two can differ in
-      ## length.
+    reloadChangeList*: ref ReloadChangeList ## nil unless a reload.
     reloadChargeLines*: int
       ## Lines this entry holds against the undoable-reload budget, refunded
       ## when it leaves history. Non-zero only for a reload.
@@ -643,11 +648,15 @@ type
 
     # Change list (tracks positions where changes were made, like Vim's changelist)
     changeList*: seq[BufferPosition]
-    changeListIndex*: int ## The newest change undo left; -1 when it left none.
     changeListPos*: int
       ## Where `g;` / `g,` stand, like Vim's w_changelistidx but one per
-      ## buffer: the change they went to, or one past the newest change undo
-      ## left after a change. Read it through `changeListCurrent`.
+      ## buffer: the change they went to, or one past the newest after a
+      ## change.
+    changeListAdds*: int
+      ## Positions ever added, to tell the ones a reload saw from later ones.
+    changeListNewChange*: bool
+      ## As Vim's b_new_change: the newest change added no position, so an
+      ## undo of it adds one rather than moving the newest.
     changeListMode*: ChangeListMode
 
     # Line folding state (vim-like manual folding)
@@ -2193,41 +2202,149 @@ proc getPerformanceStats*(
 
 const ChangeListMaxLen* = 100
 
+type ChangeListState* = object
+  list: seq[BufferPosition]
+  pos, adds: int
+  newChange: bool
+
+proc changeListState*(b: TextBuffer): ChangeListState =
+  ChangeListState(
+    list: b.changeList,
+    pos: b.changeListPos,
+    adds: b.changeListAdds,
+    newChange: b.changeListNewChange,
+  )
+
+proc restoreChangeListState*(b: TextBuffer, state: ChangeListState) =
+  b.changeList = state.list
+  b.changeListPos = state.pos
+  b.changeListAdds = state.adds
+  b.changeListNewChange = state.newChange
+
 proc recordChangePosition*(b: TextBuffer, pos: BufferPosition) =
   ## Add a position to the changelist, keeping it within the max limit.
   b.changeList.add(pos)
-  b.changeListIndex = b.changeList.len - 1
-
+  b.changeListAdds.inc
   if b.changeList.len > ChangeListMaxLen:
     b.changeList.delete(0)
-    b.changeListIndex = b.changeList.len - 1
   b.changeListPos = b.changeList.len
+  b.changeListNewChange = false
 
-proc changeListLiveLen*(b: TextBuffer): int =
-  ## How many changelist entries undo left; the rest wait for redo.
-  clamp(b.changeListIndex + 1, 0, b.changeList.len)
+const ChangeListNearColumns = 79
+  ## As Vim with 'textwidth' 0: a change on the newest position's line within
+  ## this many columns adds no position.
 
-proc changeListCurrent*(b: TextBuffer): int =
-  ## Where `g;` / `g,` stand, within the entries undo left.
-  min(b.changeListPos, b.changeListLiveLen)
+proc putChangePosition(b: TextBuffer, pos: BufferPosition) =
+  ## As Vim's changed_common: a new position while the change has added none
+  ## and `pos` is away from the newest, else the newest moves to `pos`.
+  if b.changeList.len == 0 or (
+    b.changeListNewChange and (
+      b.changeList[^1].line != pos.line or
+      abs(b.changeList[^1].column - pos.column) > ChangeListNearColumns
+    )
+  ):
+    b.recordChangePosition(pos)
+  else:
+    b.changeList[^1] = pos
+    b.changeListPos = b.changeList.len
 
-proc noteChangePosition*(b: TextBuffer, pos: BufferPosition): bool =
-  ## Put a change at `pos` on the changelist; whether its undo entry holds a
-  ## position there. One in a block after the first only moves the block's.
+proc noteChangePosition*(b: TextBuffer, pos: BufferPosition) =
+  ## Put a change at `pos` on the changelist. One in a block after the first
+  ## is part of the block's change.
   case b.changeListMode
   of clmKept:
-    return false
+    b.changeListNewChange = true
+    return
   of clmBlockHeld:
-    if b.changeList.len > 0:
-      b.changeList[^1] = pos
-      b.changeListPos = b.changeListLiveLen
-      return false
+    discard
   of clmBlock:
     b.changeListMode = clmBlockHeld
+    b.changeListNewChange = true
   of clmEach:
-    discard
-  b.recordChangePosition(pos)
-  true
+    b.changeListNewChange = true
+  b.putChangePosition(pos)
+
+proc noteUndoRow(b: TextBuffer, row: int) =
+  ## A row an undo or redo changed. Column 0, as Vim's u_undoredo gives.
+  if b.changeListMode != clmKept:
+    b.putChangePosition(BufferPosition(line: row, column: 0))
+
+proc noteUndoRows*(b: TextBuffer, change: BufferChange, redone: bool) =
+  ## Put the rows `change` edits on the changelist in the order Vim's
+  ## u_undoredo meets them: the newest edit first on undo, the oldest on redo.
+  case change.kind
+  of ckTransaction:
+    if redone:
+      for inner in change.transactionChanges:
+        b.noteUndoRows(inner, redone)
+    else:
+      for i in countdown(change.transactionChanges.high, 0):
+        b.noteUndoRows(change.transactionChanges[i], redone)
+  of ckSnapshot:
+    let edits = change.snapshotEdits
+    if edits.len == 0:
+      b.noteUndoRow(change.snapshotCursorPos.line)
+    elif redone:
+      for i in 0 ..< edits.len:
+        b.noteUndoRow(edits[i].start.line)
+    else:
+      for i in countdown(edits.len - 1, 0):
+        b.noteUndoRow(edits[i].start.line)
+  else:
+    # The rows a snapshot of the same change records, so backends agree.
+    var rows: seq[int]
+    for edit in change.spanEdits:
+      rows.add edit.start.line
+    if rows.len == 0:
+      b.noteUndoRow(getChangePosition(change).line)
+    elif redone:
+      for row in rows:
+        b.noteUndoRow(row)
+    else:
+      for i in countdown(rows.high, 0):
+        b.noteUndoRow(rows[i])
+
+proc shiftedPositions*(
+    b: TextBuffer, positions: seq[BufferPosition], shifts: openArray[LineShift]
+): seq[BufferPosition] =
+  ## Move `positions` across `shifts`. One inside a replaced span keeps its row
+  ## in it while the new span has that row, so shifting back restores it;
+  ## otherwise it goes to the span's last row, or above a span that went, as
+  ## Vim's mark_adjust.
+  result = newSeqOfCap[BufferPosition](positions.len)
+  let lastLine = max(0, b.len - 1)
+  for pos in positions:
+    var
+      line = pos.line
+      column = pos.column
+      offset = 0
+      inside = false
+    for shift in shifts:
+      if pos.line < shift.start:
+        break
+      if pos.line < shift.start + shift.delete:
+        let row = pos.line - shift.start
+        if row < shift.insert:
+          line = shift.start + offset + row
+        else:
+          line = max(0, shift.start + offset + shift.insert - 1)
+          column = 0
+        inside = true
+        break
+      offset += shift.insert - shift.delete
+    if not inside:
+      line = pos.line + offset
+    line = clamp(line, 0, lastLine)
+    result.add BufferPosition(line: line, column: min(column, b.getLineLen(line)))
+
+proc invertedShifts*(shifts: openArray[LineShift]): seq[LineShift] =
+  ## The shifts that take the text after `shifts` back to the text before.
+  var offset = 0
+  for shift in shifts:
+    result.add LineShift(
+      start: shift.start + offset, delete: shift.insert, insert: shift.delete
+    )
+    offset += shift.insert - shift.delete
 
 template withChangeListMode(b: TextBuffer, mode: ChangeListMode, body: untyped) =
   let wasMode = b.changeListMode
@@ -2238,13 +2355,21 @@ template withChangeListMode(b: TextBuffer, mode: ChangeListMode, body: untyped) 
     b.changeListMode = wasMode
 
 template withChangeListBlock*(b: TextBuffer, body: untyped) =
-  ## Run `body` with its changes adding one position to the changelist, the
-  ## last's, as one write's do.
+  ## Run `body` as one change on the changelist, as a write's changes are: as
+  ## Vim's changed_common sees the rows of one undoable change.
   b.withChangeListMode(clmBlock, body)
 
 template withKeptChangeList*(b: TextBuffer, body: untyped) =
   ## Run `body` with its changes kept off the changelist, as Vim's `:keepjumps`.
-  b.withChangeListMode(clmKept, body)
+  ## In a block that has noted its change, they are part of it.
+  let
+    blockHeld = b.changeListMode == clmBlockHeld
+    newChange = b.changeListNewChange
+  try:
+    b.withChangeListMode(clmKept, body)
+  finally:
+    if blockHeld:
+      b.changeListNewChange = newChange
 
 proc shiftLineArraysUnmarked*(b: TextBuffer, change: BufferChange, undone = false) =
   ## Shift `lineMarkers` and `modifiedLines` across `change` (or back when
@@ -2365,21 +2490,34 @@ proc markLineChanged*(b: TextBuffer, line: int) =
     b.lastChangedLines = line
     b.highlightNeedsUpdate = true
 
-proc dropChangeListFuture*(b: TextBuffer) =
-  ## Drop `changeList` entries past the index (left by undo). Once the redo
-  ## stack is gone they name nothing, but `g;` / `g,` would still visit them.
-  if b.changeList.len > 0 and b.changeListIndex < b.changeList.len - 1:
-    b.changeList.setLen(b.changeListIndex + 1)
-
-proc detachLastEntryFromChangeList*(
-    b: TextBuffer, changeListAcross: seq[BufferPosition], changeListIndexAcross: int
-) =
-  ## Mark the newest undo entry as having no changelist position and store the
-  ## pre-entry list for undo/redo to swap back.
+proc markLastEntryReloadChangeList*(b: TextBuffer, reload: ReloadChangeList) =
+  ## Hand the newest undo entry how the reload moved the changelist.
   if b.undoStack.len > 0:
-    b.undoStack[^1].noChangeListPosition = true
-    b.undoStack[^1].changeListAcross = some(changeListAcross)
-    b.undoStack[^1].changeListIndexAcross = changeListIndexAcross
+    b.undoStack[^1].reloadChangeList = new ReloadChangeList
+    b.undoStack[^1].reloadChangeList[] = reload
+
+proc moveChangeListAcrossReload*(
+    b: TextBuffer, reload: ReloadChangeList, undone: bool
+) =
+  ## Move the changelist back across a reload, or forward again. A position
+  ## the reload saw that nothing has moved since gets its exact place back;
+  ## the rest shift through its spans.
+  let
+    (seen, exact) =
+      if undone:
+        (reload.after, reload.before)
+      else:
+        (reload.before, reload.after)
+    added = b.changeListAdds - reload.adds
+    still = clamp(b.changeList.len - added, 0, seen.len)
+    first = seen.len - still
+  var moved = b.shiftedPositions(
+    b.changeList, if undone: reload.shifts.invertedShifts else: reload.shifts
+  )
+  for i in 0 ..< still:
+    if b.changeList[i] == seen[first + i]:
+      moved[i] = exact[first + i]
+  b.changeList = moved
 
 proc markLastEntryReload*(b: TextBuffer) =
   ## Mark the newest undo entry as a reload, for `reloadedSince`.
@@ -2411,8 +2549,6 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange, foldJoin = fjNone) =
   for dropped in b.redoStack:
     b.refundReloadUndoBudget(dropped)
   b.redoStack.clear()
-
-  b.dropChangeListFuture()
 
   # Snapshot changeSeq before and after this mutation so undo()/redo() can
   # restore it by direct assignment instead of inc/dec. Required for transactions
@@ -2466,12 +2602,11 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange, foldJoin = fjNone) =
     if line in 0 ..< b.modifiedLines.len and b.modifiedLines[line] != lmkInserted:
       b.modifiedLines[line] = lmkModified
 
-  # Record change position in changelist
-  let kept = not b.inTransaction and not b.noteChangePosition(changePos)
+  if not b.inTransaction:
+    b.noteChangePosition(changePos)
 
   # Attach pre-mutation modifiedLines snapshot to the change
   var changeWithSnapshot = change
-  changeWithSnapshot.noChangeListPosition = kept
   if needsFoldBookmarkRestore:
     changeWithSnapshot.replaceLinesSavedFolds = foldsBefore
     changeWithSnapshot.replaceLinesSavedBookmarks = bookmarksBefore
@@ -2510,7 +2645,6 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange, foldJoin = fjNone) =
         snapshotRows: b.takePendingSnapshotRows(),
         namedMarkChanges: diffNamedMarks(b.pendingSnapshotNamedMarks, b.namedMarks),
         visualAcross: visualBefore.boxed,
-        noChangeListPosition: kept,
       )
     )
     # Pending snapshot state is now consumed into the entry; reset it all.

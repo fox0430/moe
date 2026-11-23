@@ -73,11 +73,16 @@ template failedWriteKeepsTrimScenario(makeEditor: untyped, tag: string) =
     check e.saveFile(e.activeBuffer()).isErr
     check e.activeBuffer.getLine(0) == "xhello"
     check e.activeBuffer.getLine(1) == "world"
-    check e.activeBuffer.changeList.len == 2
+    # The trim starts on the user's line, so it moves that position, as Vim.
+    check e.activeBuffer.changeList == @[BufferPosition(line: 0, column: 0)]
 
     check e.activeBuffer.undo().isOk
     check e.activeBuffer.getLine(0) == "xhello   "
     check e.activeBuffer.getLine(1) == "world   "
+    # The trim added no position, so its undo adds one where it first meets
+    # another line.
+    check e.activeBuffer.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 0)]
 
 suite "Editor - loadFile":
   test "Load existing file":
@@ -1226,11 +1231,10 @@ template autoSaveTrimRevertScenario(makeEditor: untyped, tag: string) =
       before = e.activeBuffer.getLine(0)
     check e.activeBuffer.getLine(0) == before
     check e.activeBuffer.redo().isErr
-    # No unreachable future changelist entry remains for g, to jump to.
     check e.activeBuffer.changeList.len == 1
-    check e.activeBuffer.changeListIndex == 0
+    check e.activeBuffer.changeListPos == 1
 
-  test "Auto save trim revert keeps the changelist future after an undo" & tag:
+  test "Auto save trim revert keeps the changelist an undo left" & tag:
     let e = makeEditor
     autoSaveFailing(e, "trim_mid_changelist", "hello   \nworld   \n"):
       check e.activeBuffer.beginTransaction("edit 1").isOk
@@ -1241,21 +1245,21 @@ template autoSaveTrimRevertScenario(makeEditor: untyped, tag: string) =
       check e.activeBuffer.commitTransaction().isOk
       check e.activeBuffer.undo().isOk
     check e.activeBuffer.getLine(0) == "xhello   "
-    check e.activeBuffer.changeList.len == 2
-    check e.activeBuffer.changeListIndex == 0
+    check e.activeBuffer.changeList ==
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0)]
+    check e.activeBuffer.changeListPos == 2
 
   test "Auto save trim revert restores the changelist exactly at the cap" & tag:
     let e = makeEditor
     var before = ""
-    autoSaveFailing(e, "trim_cap", "hello   \n"):
+    autoSaveFailing(e, "trim_cap", "hello   \n" & "line\n".repeat(ChangeListMaxLen)):
       for i in 0 ..< ChangeListMaxLen:
         check e.activeBuffer.beginTransaction("fill " & $i).isOk
-        discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "z")
+        discard e.activeBuffer.insertText(BufferPosition(line: i, column: 0), "z")
         check e.activeBuffer.commitTransaction().isOk
       before = e.activeBuffer.getLine(0)
     check e.activeBuffer.getLine(0) == before
     check e.activeBuffer.changeList.len == ChangeListMaxLen
-    check e.activeBuffer.changeListIndex == ChangeListMaxLen - 1
     check e.activeBuffer.changeListPos == ChangeListMaxLen
     check e.activeBuffer.redo().isErr
 

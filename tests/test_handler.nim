@@ -14526,7 +14526,6 @@ suite "Changes command":
     result = createTestEditorWithBuffer("onex\ntwo\nxthree")
     result.activeBuffer.changeList =
       @[BufferPosition(line: 0, column: 3), BufferPosition(line: 2, column: 0)]
-    result.activeBuffer.changeListIndex = 1
     result.activeBuffer.changeListPos = 2
 
   test ":changes numbers each change from the end and ends with a bare marker":
@@ -14574,7 +14573,6 @@ suite "Changes command":
   test ":changes after g; to the only change marks it":
     let e = createTestEditorWithBuffer("onex")
     e.activeBuffer.changeList = @[BufferPosition(line: 0, column: 3)]
-    e.activeBuffer.changeListIndex = 0
     e.activeBuffer.changeListPos = 1
     e.press("g", ";")
 
@@ -14583,26 +14581,22 @@ suite "Changes command":
     check e.state.ui.tempMessages ==
       @["change  line  col  text", changeRow(">", 0, 1, 4, "onex")]
 
-  test ":changes after undo lists only the changes undo left":
+  test ":changes after undo lists the undo as the newest change, as Vim":
     let e = createTestEditorWithBuffer("one\ntwo")
-    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "a").isOk
-    check e.activeBuffer.insertText(BufferPosition(line: 1, column: 0), "b").isOk
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 2), "a").isOk
+    check e.activeBuffer.insertText(BufferPosition(line: 1, column: 2), "b").isOk
+    check e.activeBuffer.undo().isOk
     check e.activeBuffer.undo().isOk
 
     check e.executeCommandOverlay(":changes") == roContinue
 
     check e.state.ui.tempMessages ==
-      @["change  line  col  text", changeRow(" ", 1, 1, 1, "aone"), ">"]
-
-  test ":changes after every change is undone has none to list":
-    let e = createTestEditorWithBuffer("one\ntwo")
-    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "a").isOk
-    check e.activeBuffer.undo().isOk
-
-    check e.executeCommandOverlay(":changes") == roContinue
-
-    check e.state.statusMessage == "No changes"
-    check e.state.ui.tempMessages.len == 0
+      @[
+        "change  line  col  text",
+        changeRow(" ", 2, 1, 3, "one"),
+        changeRow(" ", 1, 1, 1, "one"),
+        ">",
+      ]
 
   test ":changes after 2g; marks the change two back":
     let e = twoChanges()
@@ -14622,7 +14616,6 @@ suite "Changes command":
     e.activeWindow.mode = EditorMode.Filer
     e.activeWindow.cursor = BufferPosition(line: 5, column: 0)
     e.activeBuffer.changeList = @[BufferPosition(line: 0, column: 0)]
-    e.activeBuffer.changeListIndex = 0
     e.activeBuffer.changeListPos = 1
 
     check e.executeCommandOverlay(":changes") == roContinue

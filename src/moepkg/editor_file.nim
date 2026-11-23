@@ -252,22 +252,12 @@ proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer): Result[(), string] 
 
 proc trimTrailingWhitespaceTracked(
     buffer: TextBuffer
-): Result[
-    tuple[
-      didTrim: bool,
-      changeList: seq[BufferPosition],
-      changeListIndex: int,
-      changeListPos: int,
-    ],
-    string,
-] =
+): Result[tuple[didTrim: bool, changeList: ChangeListState], string] =
   ## Trim and report whether anything changed plus a pre-trim snapshot of the
   ## changelist, for exact revert on save failure. A failed rollback is an
   ## error too: the buffer is skipped either way.
   let prevChangeId = buffer.currentChangeId
-  let changeListBefore = buffer.changeList
-  let changeListIndexBefore = buffer.changeListIndex
-  let changeListPosBefore = buffer.changeListPos
+  let changeListBefore = buffer.changeListState
   let trimResult =
     try:
       trimTrailingWhitespaceIfConfigured(buffer)
@@ -275,21 +265,10 @@ proc trimTrailingWhitespaceTracked(
       Result[(), string].err exc.msg
   if trimResult.isErr:
     return err(trimResult.error)
-  ok(
-    (
-      didTrim: buffer.currentChangeId != prevChangeId,
-      changeList: changeListBefore,
-      changeListIndex: changeListIndexBefore,
-      changeListPos: changeListPosBefore,
-    )
-  )
+  ok((didTrim: buffer.currentChangeId != prevChangeId, changeList: changeListBefore))
 
 proc revertTrimIfNeeded(
-    buffer: TextBuffer,
-    didTrim: bool,
-    changeListBefore: seq[BufferPosition],
-    changeListIndexBefore: int,
-    changeListPosBefore: int,
+    buffer: TextBuffer, didTrim: bool, changeListBefore: ChangeListState
 ): Result[(), string] =
   ## Undo the trim after a failed save. No-op when nothing was trimmed.
   if not didTrim:
@@ -306,12 +285,10 @@ proc revertTrimIfNeeded(
       "Failed to discard the reverted trim's redo entry (changeId " & $trimChangeId &
         "); the trim may be re-appliable via redo",
     )
-  # Restore the pre-trim changelist wholesale. Recomputing the trim's footprint
-  # from the current length/index would miss entries the trim's own commit
-  # evicted at the ChangeListMaxLen cap, so an exact snapshot is required.
-  buffer.changeList = changeListBefore
-  buffer.changeListIndex = changeListIndexBefore
-  buffer.changeListPos = changeListPosBefore
+  # Restore the pre-trim changelist wholesale: the undo moved its newest
+  # position, and the trim's own commit may have evicted the oldest at the
+  # ChangeListMaxLen cap.
+  buffer.restoreChangeListState(changeListBefore)
   ok(())
 
 proc writtenLanguage(buffer: TextBuffer, writtenPath: string): SourceLanguage =
@@ -343,7 +320,7 @@ proc settleBeforeWrite(
   ## in Vim. Each step that fails takes back only its own change. A failed
   ## rollback leaves the history as it is: it is not to be built on.
   let joinPoint = buffer.undoJoinPoint()
-  # One position on the changelist for the write, the last change's.
+  # The write is one change on the changelist.
   buffer.withChangeListBlock:
     result = e.runWritePreHooks(buffer, savePath, writtenLanguage(buffer, savePath))
     if result.refusal.len == 0:
@@ -674,14 +651,11 @@ proc autoSave*(e: Editor) =
         "editor", "Auto save trim failed for " & savePath & ": " & didTrimRes.error
       )
       continue
-    let (didTrim, changeListBefore, changeListIndexBefore, changeListPosBefore) =
-      didTrimRes.get
+    let (didTrim, changeListBefore) = didTrimRes.get
 
     let saveResult = buffer.saveFile(savePath, checkExternalMod = true)
     if saveResult.isErr:
-      let revertRes = revertTrimIfNeeded(
-        buffer, didTrim, changeListBefore, changeListIndexBefore, changeListPosBefore
-      )
+      let revertRes = revertTrimIfNeeded(buffer, didTrim, changeListBefore)
       if revertRes.isErr:
         logError(
           "editor",

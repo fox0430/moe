@@ -493,8 +493,9 @@ proc loadFileWithDecoded*(
   b.conflictBlocks.setLen(0)
   b.lastChangedLines = 0
   b.changeList.setLen(0)
-  b.changeListIndex = 0
   b.changeListPos = 0
+  b.changeListAdds = 0
+  b.changeListNewChange = false
 
   b.foldState.clampFoldsToLineCount(b.len)
   while b.bookmarks.len > 0 and b.bookmarks[^1] >= b.len:
@@ -851,33 +852,6 @@ proc undoBytesAtMost(b: TextBuffer, cap: int): int =
     if result > cap:
       return
 
-proc remapThroughHunks(
-    b: TextBuffer, positions: seq[BufferPosition], hunks: seq[LineEdit]
-): seq[BufferPosition] =
-  ## Remap `positions` through `hunks`. A hit inside a rewritten span snaps to
-  ## the span's first line so the changelist index stays valid.
-  result = newSeqOfCap[BufferPosition](positions.len)
-  let lastLine = max(0, b.len - 1)
-  for pos in positions:
-    var
-      line = pos.line
-      column = pos.column
-      offset = 0
-      snapped = false
-    for hunk in hunks:
-      if pos.line < hunk.start:
-        break
-      if pos.line < hunk.start + hunk.delete:
-        line = hunk.start + offset
-        column = 0
-        snapped = true
-        break
-      offset += hunk.insert.len - hunk.delete
-    if not snapped:
-      line = pos.line + offset
-    line = clamp(line, 0, lastLine)
-    result.add BufferPosition(line: line, column: min(column, b.getLineLen(line)))
-
 proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
   ## Reload `b` from disk if the on-disk bytes differ from last load/save.
   ## Compared against stored bytes, not a re-serialize (normalization would
@@ -934,17 +908,14 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
       oldBytes <= UndoableReloadMaxBytes and
       b.reloadUndoBytes + oldBytes + decoded.text.len + 1 <= UndoableReloadBudgetBytes
   if landsAsEdit:
-    # A reload is not a user change, so keep the changelist as-is.
-    let
-      changeListBefore = b.changeList
-      changeListIndexBefore = b.changeListIndex
-      changeListPosBefore = b.changeListPos
     # Transaction rollback failure falls back to a wholesale load; a Defect
     # still propagates (the process is already unsound).
     let newestEntryBefore = b.currentChangeId
     var replaced: Result[LineDiff, string]
     try:
-      replaced = b.replaceWithDecodedText(decoded, "reload", adoptShape = true)
+      # A reload is not a user change: it adds no changelist position.
+      b.withKeptChangeList:
+        replaced = b.replaceWithDecodedText(decoded, "reload", adoptShape = true)
     except CatchableError as e:
       replaced = Result[LineDiff, string].err(e.msg)
     if replaced.isOk:
@@ -961,13 +932,18 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
           for line in hunk.insert:
             chargedBytes += line.len + 1
         b.chargeReloadUndoBudget(chargedLines, chargedBytes)
-        b.changeList = changeListBefore
-        b.changeListIndex = changeListIndexBefore
-        b.changeListPos = changeListPosBefore
-        b.dropChangeListFuture()
-        let changeListOnOldLines = b.changeList
-        b.changeList = b.remapThroughHunks(changeListOnOldLines, replaced.get.hunks)
-        b.detachLastEntryFromChangeList(changeListOnOldLines, b.changeListIndex)
+        var shifts = newSeqOfCap[LineShift](replaced.get.hunks.len)
+        for hunk in replaced.get.hunks:
+          shifts.add LineShift(
+            start: hunk.start, delete: hunk.delete, insert: hunk.insert.len
+          )
+        let before = b.changeList
+        b.changeList = b.shiftedPositions(before, shifts)
+        b.markLastEntryReloadChangeList(
+          ReloadChangeList(
+            shifts: shifts, before: before, after: b.changeList, adds: b.changeListAdds
+          )
+        )
         b.markLastEntryReload()
       b.conflictBlocks.setLen(0)
       b.applyFileStamp(stamp)
