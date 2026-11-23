@@ -405,15 +405,21 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
   # Nothing on a line hidden in a closed fold shows.
   let cursorShown = e.activeBuffer().foldState.getCollapsedFoldAt(e.cursor.line).isNone
 
-  if e.config.highlight.pairOfParen and not isDebugBuffer and cursorShown:
-    e.state.matchingParenPos = findMatchingParenPosition(e.activeBuffer(), e.cursor)
-  else:
-    e.state.matchingParenPos = none(BufferPosition)
-
-  if e.config.highlight.currentWord and not isDebugBuffer and cursorShown:
-    e.state.currentWord = getWordAtPosition(e.activeBuffer(), e.cursor)
-  else:
-    e.state.currentWord = ""
+  let
+    wantParen = e.config.highlight.pairOfParen and not isDebugBuffer and cursorShown
+    wantWord = e.config.highlight.currentWord and not isDebugBuffer and cursorShown
+  e.state.matchingParenPos = none(BufferPosition)
+  e.state.currentWord = ""
+  if (wantParen or wantWord) and e.cursor.line >= 0 and
+      e.cursor.line < e.activeBuffer().len:
+    # Read once for both: a second copy of a line of megabytes every frame
+    # costs as much memory as the line.
+    let cursorLine = e.activeBuffer().getLine(e.cursor.line)
+    if wantParen:
+      e.state.matchingParenPos =
+        e.activeBuffer().findMatchingParenPosition(e.cursor, cursorLine)
+    if wantWord:
+      e.state.currentWord = cursorLine.getWordAtPosition(e.cursor.column)
 
   # Update syntax highlight before rendering (so semantic tokens can be applied
   # on top). The debug buffer is skipped below; the sweep after it still runs.

@@ -594,6 +594,26 @@ suite "Buffer - Word Detection":
     check buf.getWordAtPosition(BufferPosition(line: 0, column: 2)) == "Hello"
     check buf.getWordAtPosition(BufferPosition(line: 0, column: 6)) == "World"
 
+  test "getWordAtPosition counts columns past multibyte characters":
+    let buf = newTextBuffer("ä 日本語abc,\xFFx")
+    check buf.getWordAtPosition(BufferPosition(line: 0, column: 0)) == "ä"
+    check buf.getWordAtPosition(BufferPosition(line: 0, column: 2)) == "日本語abc"
+    check buf.getWordAtPosition(BufferPosition(line: 0, column: 7)) == "日本語abc"
+    check buf.getWordAtPosition(BufferPosition(line: 0, column: 8)) == ""
+    check buf.getWordAtPosition(BufferPosition(line: 0, column: 10)) == "x"
+    check buf.getWordAtPosition(BufferPosition(line: 0, column: 11)) == ""
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 4), "日本語abc")
+    check not buf.isPositionInWord(BufferPosition(line: 0, column: 4), "日本語ab")
+
+  test "getWordAtPosition on a line the caller holds":
+    let line = "ä 日本語abc-x"
+    check line.getWordAtPosition(0) == "ä"
+    check line.getWordAtPosition(4) == "日本語abc"
+    check line.getWordAtPosition(8) == ""
+    check line.getWordAtPosition(9) == "x"
+    check line.getWordAtPosition(10) == ""
+    check line.getWordAtPosition(-1) == ""
+
   test "getWordAtPosition on non-word character":
     let buf = newTextBuffer("Hello World")
     check buf.getWordAtPosition(BufferPosition(line: 0, column: 5)) == ""
@@ -748,6 +768,39 @@ suite "Buffer - Matching Paren":
     let open = buf.findMatchingParenPosition(BufferPosition(line: 0, column: 3))
     check open.isSome
     check open.get.column == 0
+
+  test "findMatchingParenPosition counts columns past multibyte characters":
+    # Columns are characters while the scan goes by bytes: a hit after wide
+    # characters must come back as a character column, on either side.
+    let buf = newTextBuffer("日本(語\xFFa)x\n(\n  ä)")
+    let close = buf.findMatchingParenPosition(BufferPosition(line: 0, column: 2))
+    check close == some(BufferPosition(line: 0, column: 6))
+    let open = buf.findMatchingParenPosition(BufferPosition(line: 0, column: 6))
+    check open == some(BufferPosition(line: 0, column: 2))
+    let below = buf.findMatchingParenPosition(BufferPosition(line: 1, column: 0))
+    check below == some(BufferPosition(line: 2, column: 3))
+    let above = buf.findMatchingParenPosition(BufferPosition(line: 2, column: 3))
+    check above == some(BufferPosition(line: 1, column: 0))
+
+  test "findMatchingParenPosition with the cursor past the line end":
+    let buf = newTextBuffer("(a)")
+    check buf.findMatchingParenPosition(BufferPosition(line: 0, column: 3)).isNone
+    check buf.findMatchingParenPosition(BufferPosition(line: 0, column: -1)).isNone
+
+  test "findMatchingParenPosition with the cursor line the caller holds":
+    let buf = newTextBuffer("a(日\n)(\nx)")
+    let below =
+      buf.findMatchingParenPosition(BufferPosition(line: 0, column: 1), buf.getLine(0))
+    check below == some(BufferPosition(line: 1, column: 0))
+    let above =
+      buf.findMatchingParenPosition(BufferPosition(line: 1, column: 0), buf.getLine(1))
+    check above == some(BufferPosition(line: 0, column: 1))
+    let same =
+      buf.findMatchingParenPosition(BufferPosition(line: 2, column: 1), buf.getLine(2))
+    check same == some(BufferPosition(line: 1, column: 1))
+    check buf.findMatchingParenPosition(
+      BufferPosition(line: 0, column: 0), buf.getLine(0)
+    ).isNone
 
   test "findMatchingParenPosition braces":
     let buf = newTextBuffer("{key: value}")

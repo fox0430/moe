@@ -475,19 +475,26 @@ proc cursorColumn(r: LiteralRange, line: string): int =
     r.startCol
 
 proc findSearchMatchRanges*(
+    line: string, searchText: string, ignorecase = false, match = smRegex
+): seq[ColumnRange] =
+  ## The matches of `searchText` in `line` hlsearch highlights, matching as
+  ## `match` says. Each is half-open [startCol, endCol), empty for an empty
+  ## match. Takes the line its caller already holds: a second copy of a line
+  ## of megabytes per frame costs as much memory as the line.
+  for r in line.matchRanges(searchText, ignorecase, match, mwHighlight):
+    result.add(ColumnRange(startCol: r.startCol, endCol: r.endCol))
+
+proc findSearchMatchRanges*(
     b: TextBuffer,
     lineIndex: int,
     searchText: string,
     ignorecase = false,
     match = smRegex,
 ): seq[ColumnRange] =
-  ## The matches of `searchText` on line `lineIndex` hlsearch highlights,
-  ## matching as `match` says. Each is half-open [startCol, endCol), empty for
-  ## an empty match.
+  ## `findSearchMatchRanges` on line `lineIndex` of `b`.
   if lineIndex < 0 or lineIndex >= b.len:
     return @[]
-  for r in b.getLine(lineIndex).matchRanges(searchText, ignorecase, match, mwHighlight):
-    result.add(ColumnRange(startCol: r.startCol, endCol: r.endCol))
+  b.getLine(lineIndex).findSearchMatchRanges(searchText, ignorecase, match)
 
 type MatchCount* = object ## Where a position stands among a search's matches.
   current*: int ## The matches that start at or before it, as Vim's searchcount()
@@ -946,20 +953,12 @@ template byteSliceEqualsWord(
     eq
 
 proc findWordMatchRanges*(
-    b: TextBuffer, lineIndex: int, word: string, excludeCol: int = -1
+    line: string, word: string, excludeCol: int = -1
 ): seq[ColumnRange] =
-  ## Find all occurrences of `word` on a given line, returning ColumnRange results.
+  ## Find all occurrences of `word` in `line`, returning ColumnRange results.
   ## If `excludeCol` >= 0, the word containing that column is excluded from results.
   ## This allows O(1) per-character lookup instead of O(n) per character.
-
-  if word.len == 0:
-    return @[]
-
-  if lineIndex < 0 or lineIndex >= b.len:
-    return @[]
-
-  let line = b.getLine(lineIndex)
-  if line.len == 0:
+  if word.len == 0 or line.len == 0:
     return @[]
 
   # Scan word runs by column [runStartCol, col) and bytes [runStartByte, bytePos).
@@ -991,6 +990,14 @@ proc findWordMatchRanges*(
   if runStartCol >= 0 and byteSliceEqualsWord(line, runStartByte, bytePos, word) and
       not (excludeCol >= 0 and excludeCol >= runStartCol and excludeCol < col):
     result.add(ColumnRange(startCol: runStartCol, endCol: col))
+
+proc findWordMatchRanges*(
+    b: TextBuffer, lineIndex: int, word: string, excludeCol: int = -1
+): seq[ColumnRange] =
+  ## `findWordMatchRanges` on line `lineIndex` of `b`.
+  if word.len == 0 or lineIndex < 0 or lineIndex >= b.len:
+    return @[]
+  b.getLine(lineIndex).findWordMatchRanges(word, excludeCol)
 
 proc identInLine*(line: string, column: int, ident = true): Option[ColumnRange] =
   ## The text * and # search for, as Vim's find_ident_under_cursor() finds it

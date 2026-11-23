@@ -98,11 +98,12 @@ template hasSyntaxHighlight(
   )
 
 proc resolveLineConflict(
-    e: Editor, textBuffer: TextBuffer, lineIndex: int
+    e: Editor, textBuffer: TextBuffer, lineIndex: int, line: string
 ): ConflictMarkerKind =
-  ## The line's git-conflict kind, none when the highlight is off.
+  ## The git-conflict kind of `line`, line `lineIndex`; none when the highlight
+  ## is off.
   if textBuffer != nil and e.config.highlight.gitConflict:
-    textBuffer.lineConflictKind(lineIndex)
+    textBuffer.lineConflictKind(lineIndex, line)
   else:
     cmkNone
 
@@ -173,7 +174,7 @@ proc newLineStyleContext*(
         BufferId(0),
     isActiveWindow: ctx.isActiveWindow,
     isCursorLine: lineIndex == ctx.cursorLine,
-    lineConflict: e.resolveLineConflict(textBuffer, lineIndex),
+    lineConflict: e.resolveLineConflict(textBuffer, lineIndex, fullLine),
     useTwoColor: e.config.highlight.gitConflictTwoColor,
     trailingSpaceStart: high(int), # disabled: `col >= trailingSpaceStart` never matches
     lineBg: resolveLineBg(e, textBuffer, lineIndex),
@@ -208,14 +209,13 @@ proc newLineStyleContext*(
   if textBuffer != nil and e.state.input.search.hlsearch:
     let spec = e.shownSearch()
     if spec.pattern.len > 0:
-      result.searchRanges = textBuffer.findSearchMatchRanges(
-        lineIndex, spec.pattern, e.state.input.search.ignoresCase(spec), spec.match
+      result.searchRanges = fullLine.findSearchMatchRanges(
+        spec.pattern, e.state.input.search.ignoresCase(spec), spec.match
       )
 
   if textBuffer != nil and not e.state.isSearchOverlay and e.state.currentWord.len > 0:
     let excludeCol = if lineIndex == ctx.cursorLine: ctx.cursorCol else: -1
-    result.wordRanges =
-      textBuffer.findWordMatchRanges(lineIndex, e.state.currentWord, excludeCol)
+    result.wordRanges = fullLine.findWordMatchRanges(e.state.currentWord, excludeCol)
 
 proc linePrecomputed(
     e: Editor,

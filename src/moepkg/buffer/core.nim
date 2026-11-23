@@ -1199,40 +1199,58 @@ proc isSpaceOrBreak*(r: Rune): bool =
   let c = r.int32
   c == ' '.ord or c == '\t'.ord or c == '\n'.ord or c == '\r'.ord
 
-proc getWordAtPosition*(b: TextBuffer, pos: BufferPosition): string =
-  ## Get the word at the given buffer position.
+proc wordBytesAt(line: string, column: int): Slice[int] =
+  ## The bytes of the `isWordChar` run holding character `column` of `line`,
+  ## or an empty slice when that character is not a word character. Walks the
+  ## characters in place: a per-character copy of a line of megabytes would
+  ## cost four bytes per character on every frame.
+  result = 0 .. -1
+  if column < 0:
+    return
+  var
+    col = 0
+    bytePos = 0
+    runStart = -1
+  # Up to the cursor, remember where the current run of word characters began.
+  while bytePos < line.len and col < column:
+    let (r, size) = line.charAtByte(bytePos)
+    if isWordChar(r):
+      if runStart < 0:
+        runStart = bytePos
+    else:
+      runStart = -1
+    bytePos += size
+    inc col
+  if bytePos >= line.len:
+    return
+  let (r, size) = line.charAtByte(bytePos)
+  if not isWordChar(r):
+    return
+  if runStart < 0:
+    runStart = bytePos
+  var endByte = bytePos + size
+  while endByte < line.len:
+    let (next, nextSize) = line.charAtByte(endByte)
+    if not isWordChar(next):
+      break
+    endByte += nextSize
+  result = runStart .. endByte - 1
+
+proc getWordAtPosition*(line: string, column: int): string =
+  ## The word holding character `column` of `line`.
   ## A "word" follows `isWordChar` semantics, so CJK and other Unicode letters
   ## are included alongside ASCII alphanumerics and underscore.
-  ## Returns empty string if cursor is not on a word character.
-  if pos.line < 0 or pos.line >= b.len:
-    return ""
-
-  let line = b.getLine(pos.line)
-  # `pos.column` is a `charLen` column, so the characters have to be indexed in
-  # the same model; `runes` steps by a different rule.
-  let runes = line.toCharRunes()
-
-  if runes.len == 0 or pos.column < 0 or pos.column >= runes.len:
-    return ""
-
-  # Check if cursor is on a word character
-  if not isWordChar(runes[pos.column]):
-    return ""
-
-  # Find start of word
-  var startCol = pos.column
-  while startCol > 0 and isWordChar(runes[startCol - 1]):
-    dec startCol
-
-  # Find end of word
-  var endCol = pos.column
-  while endCol < runes.len - 1 and isWordChar(runes[endCol + 1]):
-    inc endCol
-
+  ## Returns empty string if that character is not a word character.
   # Slice the source bytes rather than re-encoding the runes: a byte that does
   # not decode would come back as the replacement character, and the byte-wise
   # comparison in `findWordMatchRanges` would then never match it.
-  line.charSubStr(startCol, endCol - startCol + 1)
+  line[line.wordBytesAt(column)]
+
+proc getWordAtPosition*(b: TextBuffer, pos: BufferPosition): string =
+  ## `getWordAtPosition` on line `pos.line` of `b`.
+  if pos.line < 0 or pos.line >= b.len:
+    return ""
+  b.getLine(pos.line).getWordAtPosition(pos.column)
 
 proc isPositionInWord*(b: TextBuffer, pos: BufferPosition, word: string): bool =
   ## Check if the position is part of a word that matches the given word.
@@ -1245,28 +1263,12 @@ proc isPositionInWord*(b: TextBuffer, pos: BufferPosition, word: string): bool =
   if pos.line < 0 or pos.line >= b.len:
     return false
 
-  let line = b.getLine(pos.line)
-  let runes = line.toCharRunes()
-
-  if runes.len == 0 or pos.column < 0 or pos.column >= runes.len:
-    return false
-
-  # Check if position is on a word character
-  if not isWordChar(runes[pos.column]):
-    return false
-
-  # Find word boundaries at this position
-  var startCol = pos.column
-  while startCol > 0 and isWordChar(runes[startCol - 1]):
-    dec startCol
-
-  var endCol = pos.column
-  while endCol < runes.len - 1 and isWordChar(runes[endCol + 1]):
-    inc endCol
-
   # Compared byte for byte against the word the cursor produced, so the slice
   # must keep the source bytes rather than re-encode them.
-  return line.charSubStr(startCol, endCol - startCol + 1) == word
+  let line = b.getLine(pos.line)
+  let span = line.wordBytesAt(pos.column)
+  span.len == word.len and
+    line.toOpenArray(span.a, span.b) == word.toOpenArray(0, word.high)
 
 proc `[][]`*(b: TextBuffer, lineIndex, colIndex: int): char =
   ## Bracket operator for accessing character at (line, column)

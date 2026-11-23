@@ -371,6 +371,25 @@ suite "Buffer Search - findSearchMatchRanges":
     let ranges = buf.findSearchMatchRanges(0, "hello", ignorecase = true)
     check ranges.len == 3
 
+  test "findSearchMatchRanges on a line the caller holds":
+    let line = "日本語 abc 日本語"
+    let ranges = line.findSearchMatchRanges("日本語")
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 3
+    check ranges[1].startCol == 8
+    check ranges[1].endCol == 11
+    check "Hello HELLO".findSearchMatchRanges("hello", ignorecase = true).len == 2
+    check "hello".findSearchMatchRanges("").len == 0
+    check "".findSearchMatchRanges("x").len == 0
+
+  test "findSearchMatchRanges on a line gives empty matches as empty ranges":
+    # Half-open [startCol, endCol): an empty match starts and ends together.
+    let ranges = "ab".findSearchMatchRanges("^")
+    check ranges.len == 1
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 0
+
 suite "Buffer Search - findWordMatchRanges":
   test "findWordMatchRanges basic":
     let buf = newTextBuffer("Hello World Hello")
@@ -408,6 +427,17 @@ suite "Buffer Search - findWordMatchRanges":
     let buf = newTextBuffer("")
     let ranges = buf.findWordMatchRanges(0, "Hello")
     check ranges.len == 0
+
+  test "findWordMatchRanges on a line the caller holds":
+    let line = "Hello 世界 Hello"
+    let ranges = line.findWordMatchRanges("Hello", excludeCol = 1)
+    check ranges.len == 1
+    check ranges[0].startCol == 9
+    check ranges[0].endCol == 14
+    check line.findWordMatchRanges("Hello").len == 2
+    check line.findWordMatchRanges("Hell").len == 0
+    check line.findWordMatchRanges("").len == 0
+    check "".findWordMatchRanges("Hello").len == 0
 
   test "findWordMatchRanges walks bytes past an undecodable byte":
     # The byte cursor advances by what each character occupies, not by the

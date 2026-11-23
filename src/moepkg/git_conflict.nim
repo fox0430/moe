@@ -210,11 +210,9 @@ proc refreshConflicts*(buffer: TextBuffer) =
   let blocks = scanBufferForConflicts(buffer)
   applyConflictsToBuffer(buffer, blocks)
 
-proc lineConflictKind*(buffer: TextBuffer, line: int): ConflictMarkerKind =
-  ## Look up the conflict role of a given line. O(K) over conflict blocks,
-  ## which is typically very small. Falls back to a single-line marker check
-  ## so that orphan / half-edited markers still render with the marker
-  ## background instead of silently losing all decoration.
+proc blockConflictKind(buffer: TextBuffer, line: int): ConflictMarkerKind =
+  ## The role of `line` inside a scanned conflict block, `cmkNone` outside
+  ## every block. O(K) over conflict blocks, which is typically very small.
   for b in buffer.conflictBlocks:
     if line < b.startLine:
       continue
@@ -239,10 +237,26 @@ proc lineConflictKind*(buffer: TextBuffer, line: int): ConflictMarkerKind =
       if line < b.separatorLine:
         return cmkOurs
       return cmkTheirs
+  cmkNone
+
+proc lineConflictKind*(
+    buffer: TextBuffer, line: int, text: string
+): ConflictMarkerKind =
+  ## Look up the conflict role of line `line`, whose text is `text`. Falls back
+  ## to a single-line marker check so that orphan / half-edited markers still
+  ## render with the marker background instead of silently losing all
+  ## decoration. Takes the text its caller holds so a renderer does not copy a
+  ## line of megabytes a second time.
+  result = buffer.blockConflictKind(line)
+  if result == cmkNone:
+    result = parseConflictMarkerLine(text)
+
+proc lineConflictKind*(buffer: TextBuffer, line: int): ConflictMarkerKind =
+  ## `lineConflictKind` reading line `line` from `buffer`.
   if line >= 0 and line < buffer.len:
-    parseConflictMarkerLine(buffer.getLine(line))
+    buffer.lineConflictKind(line, buffer.getLine(line))
   else:
-    cmkNone
+    buffer.blockConflictKind(line)
 
 proc findNextConflict*(buffer: TextBuffer, fromLine: int): Option[ConflictBlock] =
   ## Return the first conflict block whose start is strictly after `fromLine`.

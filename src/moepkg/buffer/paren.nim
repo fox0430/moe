@@ -19,17 +19,47 @@
 
 ## Matching paren/bracket/brace navigation (used by `%` and paren-highlight).
 
-import std/[options, unicode]
+import std/options
 
 import ../[primitives, unicode_utils]
 import ./core
 
 const
-  openBrackets = [Rune('('), Rune('['), Rune('{'), Rune('<')]
-  closeBrackets = [Rune(')'), Rune(']'), Rune('}'), Rune('>')]
+  openBrackets = ['(', '[', '{', '<']
+  closeBrackets = [')', ']', '}', '>']
+
+proc scanForward(
+    line: string, fromByte: int, openChar, closeChar: char, depth: var int
+): int =
+  ## The byte in `line` at or after `fromByte` where `depth` drops to zero, or
+  ## -1 when the line ends first.
+  for i in fromByte ..< line.len:
+    if line[i] == openChar:
+      depth.inc
+    elif line[i] == closeChar:
+      depth.dec
+      if depth == 0:
+        return i
+  -1
+
+proc scanBackward(
+    line: string, fromByte: int, openChar, closeChar: char, depth: var int
+): int =
+  ## The byte in `line` at or before `fromByte` where `depth` drops to zero,
+  ## or -1 when the line starts first.
+  var i = min(fromByte, line.high)
+  while i >= 0:
+    if line[i] == closeChar:
+      depth.inc
+    elif line[i] == openChar:
+      depth.dec
+      if depth == 0:
+        return i
+    i.dec
+  -1
 
 proc findMatchingParenPosition*(
-    b: TextBuffer, cursor: BufferPosition, maxScanLines: int = 2000
+    b: TextBuffer, cursor: BufferPosition, cursorLine: string, maxScanLines = 2000
 ): Option[BufferPosition] =
   ## Find the position of the matching parenthesis/bracket/brace
   ## Searches across multiple lines. Returns none if cursor is not on a bracket
@@ -37,21 +67,24 @@ proc findMatchingParenPosition*(
   ## The line limit keeps this bounded for paren-highlight callers running on
   ## every frame against huge files (e.g. 40k-line JSON wrapped in a root
   ## object); matches further than the viewport cannot be seen anyway.
+  ##
+  ## `cursorLine` is the text of the cursor's line, which a per-frame caller
+  ## reads once and shares, so a line of megabytes is not copied again here.
+  ##
+  ## Brackets are ASCII and an ASCII byte is always a character of its own, so
+  ## the lines are scanned as bytes and only a hit is turned into a column.
 
-  if cursor.line < 0 or cursor.line >= b.len:
+  if cursor.line < 0 or cursor.line >= b.len or cursor.column < 0:
     return none(BufferPosition)
 
-  let line = b.getLine(cursor.line)
-  # `cursor.column` is a buffer column, so the runes must be counted the same
-  # way (`runes` steps by a different rule).
-  let runes = line.toCharRunes()
-
-  if runes.len == 0 or cursor.column >= runes.len:
+  # `cursor.column` is a buffer column, so it is counted with `runeSizeAt`.
+  let cursorByte = cursorLine.charToBytePos(cursor.column)
+  if cursorByte >= cursorLine.len:
     return none(BufferPosition)
 
-  let charAtCursor = runes[cursor.column]
+  let charAtCursor = cursorLine[cursorByte]
 
-  var openChar, closeChar: Rune
+  var openChar, closeChar: char
   var searchForward = false
 
   # Check if cursor is on a bracket
@@ -67,41 +100,33 @@ proc findMatchingParenPosition*(
     return none(BufferPosition)
 
   var depth = 1
-  var searchLine = cursor.line
-  var curRunes = runes
   if searchForward:
-    var searchCol = cursor.column + 1
-    let scanUntil = min(b.len - 1, cursor.line + maxScanLines)
-    while searchLine <= scanUntil:
-      while searchCol < curRunes.len:
-        let ch = curRunes[searchCol]
-        if ch == openChar:
-          depth.inc
-        elif ch == closeChar:
-          depth.dec
-          if depth == 0:
-            return some(BufferPosition(line: searchLine, column: searchCol))
-        searchCol.inc
-      searchLine.inc
-      if searchLine <= scanUntil:
-        curRunes = b.getLine(searchLine).toCharRunes()
-        searchCol = 0
+    let hit = cursorLine.scanForward(cursorByte + 1, openChar, closeChar, depth)
+    if hit >= 0:
+      return
+        some(BufferPosition(line: cursor.line, column: cursorLine.byteToCharPos(hit)))
+    for lineIndex in cursor.line + 1 .. min(b.len - 1, cursor.line + maxScanLines):
+      let line = b.getLine(lineIndex)
+      let hit = line.scanForward(0, openChar, closeChar, depth)
+      if hit >= 0:
+        return some(BufferPosition(line: lineIndex, column: line.byteToCharPos(hit)))
   else:
-    var searchCol = cursor.column - 1
-    let scanUntil = max(0, cursor.line - maxScanLines)
-    while searchLine >= scanUntil:
-      while searchCol >= 0:
-        let ch = curRunes[searchCol]
-        if ch == closeChar:
-          depth.inc
-        elif ch == openChar:
-          depth.dec
-          if depth == 0:
-            return some(BufferPosition(line: searchLine, column: searchCol))
-        searchCol.dec
-      searchLine.dec
-      if searchLine >= scanUntil:
-        curRunes = b.getLine(searchLine).toCharRunes()
-        searchCol = curRunes.len - 1
+    let hit = cursorLine.scanBackward(cursorByte - 1, openChar, closeChar, depth)
+    if hit >= 0:
+      return
+        some(BufferPosition(line: cursor.line, column: cursorLine.byteToCharPos(hit)))
+    for lineIndex in countdown(cursor.line - 1, max(0, cursor.line - maxScanLines)):
+      let line = b.getLine(lineIndex)
+      let hit = line.scanBackward(line.high, openChar, closeChar, depth)
+      if hit >= 0:
+        return some(BufferPosition(line: lineIndex, column: line.byteToCharPos(hit)))
 
   return none(BufferPosition)
+
+proc findMatchingParenPosition*(
+    b: TextBuffer, cursor: BufferPosition, maxScanLines = 2000
+): Option[BufferPosition] =
+  ## `findMatchingParenPosition` reading the cursor's line from `b`.
+  if cursor.line < 0 or cursor.line >= b.len:
+    return none(BufferPosition)
+  b.findMatchingParenPosition(cursor, b.getLine(cursor.line), maxScanLines)
