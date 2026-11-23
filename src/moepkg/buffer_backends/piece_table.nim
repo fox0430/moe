@@ -24,6 +24,8 @@
 
 import std/[algorithm, strutils]
 
+import ../char_append
+
 type
   RBColor = enum
     rbRed
@@ -583,7 +585,9 @@ proc substringBytes(pt: PieceTable, start, length: int): string =
       let buf = pt.buffers[cur.bufferIndex]
       let sOff = buf.bufferOffset(cur.start)
       let take = min(remaining, cur.length - localOff)
-      result.add(buf.value[sOff + localOff ..< sOff + localOff + take])
+      result.addChars(
+        buf.value.toOpenArray(sOff + localOff, sOff + localOff + take - 1)
+      )
       remaining -= take
       # Continue in-order: go to right subtree, then pop stack
       cur = cur.right
@@ -605,7 +609,7 @@ proc substringBytes(pt: PieceTable, start, length: int): string =
     let b = pt.buffers[cur.bufferIndex]
     let s = b.bufferOffset(cur.start)
     let tk = min(remaining, cur.length)
-    result.add(b.value[s ..< s + tk])
+    result.addChars(b.value.toOpenArray(s, s + tk - 1))
     remaining -= tk
     cur = cur.right
 
@@ -1090,7 +1094,7 @@ proc `$`*(pt: PieceTable): string =
     let buf = pt.buffers[cur.bufferIndex]
     let sOff = buf.bufferOffset(cur.start)
     let eOff = buf.bufferOffset(cur.endPos)
-    result.add(buf.value[sOff ..< eOff])
+    result.addChars(buf.value.toOpenArray(sOff, eOff - 1))
     cur = cur.right
   # Add trailing newline for multi-line buffer with empty last line
   if pt.cachedLineCount > 1 and result.len > 0 and result[^1] == '\n':
@@ -1148,12 +1152,12 @@ iterator lines*(pt: PieceTable): string =
             nlPos = j
             break
         if nlPos >= 0:
-          currentLine.add(buf.value[pos ..< nlPos])
+          currentLine.addChars(buf.value.toOpenArray(pos, nlPos - 1))
           yield currentLine
           currentLine = ""
           pos = nlPos + 1
         else:
-          currentLine.add(buf.value[pos ..< eOff])
+          currentLine.addChars(buf.value.toOpenArray(pos, eOff - 1))
           break
       cur = cur.right
     yield currentLine

@@ -25,18 +25,11 @@
 
 import std/[deques, options]
 
-import encoding
+import char_append, encoding
 
 proc memchr(
   s: pointer, c: cint, n: csize_t
 ): pointer {.importc: "memchr", header: "<string.h>".}
-
-proc addChars*(s: var string, part: openArray[char]) =
-  ## Append `part` without copying it into a string of its own first.
-  if part.len > 0:
-    let at = s.len
-    s.setLen(at + part.len)
-    copyMem(addr s[at], unsafeAddr part[0], part.len)
 
 const DefaultQueueCapacity* = 1024 * 1024
   ## Bytes queued before the read waits for the taker.

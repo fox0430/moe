@@ -365,20 +365,34 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
 
   return CharacterEncoding.unknown
 
-proc utf16ToUtf8(s: string, littleEndian: bool): Result[string, string] =
+proc utf16ToUtf8(s: openArray[char], littleEndian: bool): Result[string, string] =
   if (s.len mod 2) != 0:
     return Result[string, string].err "byte length is not a multiple of 2"
 
-  var res = newStringOfCap(s.len)
   var i = 0
 
-  proc advance(): int =
-    result =
+  template advance(): int =
+    let unit =
       if littleEndian:
         ord(s[i]) + 256 * ord(s[i + 1])
       else:
         256 * ord(s[i]) + ord(s[i + 1])
     i += 2
+    unit
+
+  # Sized first so the buffer that keeps the text holds no spare room: ASCII
+  # needs half of `s.len`. Each surrogate counts half of its pair's 4 bytes.
+  var size = 0
+  while i < s.len:
+    let unit = advance()
+    if unit < 0x80:
+      size += 1
+    elif unit < 0x800 or (unit >= 0xD800 and unit <= 0xDFFF):
+      size += 2
+    else:
+      size += 3
+  var res = newStringOfCap(size)
+  i = 0
 
   while i < s.len:
     let curr = advance()
@@ -419,15 +433,14 @@ proc utf8ToUtf16(s: string, littleEndian: bool): string =
     else:
       addUnit(0xFFFD)
 
-proc utf32ToUtf8(s: string, littleEndian: bool): Result[string, string] =
+proc utf32ToUtf8(s: openArray[char], littleEndian: bool): Result[string, string] =
   if (s.len mod 4) != 0:
     return Result[string, string].err "byte length is not a multiple of 4"
 
-  var res = newStringOfCap(s.len div 2)
   var i = 0
 
-  proc advance(): uint32 =
-    result =
+  template advance(): uint32 =
+    let point =
       if littleEndian:
         uint32(ord(s[i])) + 0x100'u32 * uint32(ord(s[i + 1])) +
           0x10000'u32 * uint32(ord(s[i + 2])) + 0x1000000'u32 * uint32(ord(s[i + 3]))
@@ -435,6 +448,22 @@ proc utf32ToUtf8(s: string, littleEndian: bool): Result[string, string] =
         0x1000000'u32 * uint32(ord(s[i])) + 0x10000'u32 * uint32(ord(s[i + 1])) +
           0x100'u32 * uint32(ord(s[i + 2])) + uint32(ord(s[i + 3]))
     i += 4
+    point
+
+  # Sized first so the buffer that keeps the text holds no spare room.
+  var size = 0
+  while i < s.len:
+    let point = advance()
+    if point < 0x80'u32:
+      size += 1
+    elif point < 0x800'u32:
+      size += 2
+    elif point < 0x10000'u32:
+      size += 3
+    else:
+      size += 4
+  var res = newStringOfCap(size)
+  i = 0
 
   while i < s.len:
     let point = advance()
@@ -464,11 +493,14 @@ proc utf8ToUtf32(s: string, littleEndian: bool): string =
       result.add char((point shr 8) and 0xFF)
       result.add char(point and 0xFF)
 
-proc decodeToUtf8*(s: string, encoding: CharacterEncoding): Result[string, string] =
+proc decodeToUtf8*(
+    s: openArray[char], encoding: CharacterEncoding
+): Result[string, string] =
   ## Decode raw file bytes (BOM already stripped) to UTF-8 for internal
   ## storage. `utf8`/`unknown` are returned unchanged; the generic
   ## `utf16`/`utf32` values assume big endian (the Unicode default when
-  ## the byte order is unspecified).
+  ## the byte order is unspecified). Takes a view so a caller can skip a BOM
+  ## without copying the bytes after it.
   case encoding
   of CharacterEncoding.utf16Le:
     utf16ToUtf8(s, littleEndian = true)
@@ -479,7 +511,16 @@ proc decodeToUtf8*(s: string, encoding: CharacterEncoding): Result[string, strin
   of CharacterEncoding.utf32Be, CharacterEncoding.utf32:
     utf32ToUtf8(s, littleEndian = false)
   of CharacterEncoding.utf8, CharacterEncoding.unknown:
+    var copied = newString(s.len)
+    if s.len > 0:
+      copyMem(copied[0].addr, s[0].unsafeAddr, s.len)
+    Result[string, string].ok copied
+
+proc decodeToUtf8*(s: string, encoding: CharacterEncoding): Result[string, string] =
+  if encoding in {CharacterEncoding.utf8, CharacterEncoding.unknown}:
     Result[string, string].ok s
+  else:
+    decodeToUtf8(s.toOpenArray(0, s.high), encoding)
 
 proc encodeFromUtf8*(s: string, encoding: CharacterEncoding): string =
   ## Encode internal UTF-8 text to the given on-disk encoding (without BOM).
