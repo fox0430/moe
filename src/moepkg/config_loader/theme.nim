@@ -99,6 +99,15 @@ const MarkdownFallbackColors = [
   (EditorColorPairIndex.markdownFrontmatter, EditorColorPairIndex.preprocessor),
 ]
 
+const StatusLineInactiveFallbacks = block:
+  ## The Inactive color of each mode and the active color it falls back to.
+  var pairs: seq[tuple[inactive, active: EditorColorPairIndex]]
+  for active in EditorColorPairIndex:
+    for inactive in EditorColorPairIndex:
+      if ($active).startsWith("statusLine") and $inactive == $active & "Inactive":
+        pairs.add (inactive, active)
+  pairs
+
 # Named colors from the optional [Palette] table, in file order.
 type ThemePalette* = OrderedTable[string, Rgb]
 
@@ -201,6 +210,34 @@ proc applyMarkdownFallback(
     if markdown in omittedBg:
       colors[markdown].background = colors[generic].background
 
+proc applyStatusLineInactiveFallback(
+    colors: var ThemeColors, omittedFg, omittedBg: set[EditorColorPairIndex]
+) =
+  ## A theme that sets only a mode's active color keeps it in an inactive
+  ## window, rather than mixing in the bundled palette.
+  ## If that would match the channel the theme does set, the active color's other
+  ## channel is used instead.
+  proc sameColor(a, b: ThemeColor): bool =
+    # The terminal's default foreground and background are different colors.
+    a.rgb == b.rgb and not a.rgb.isTermDefaultColor
+
+  for (inactive, active) in StatusLineInactiveFallbacks:
+    if active in omittedFg * omittedBg:
+      continue
+    let
+      fillFg = inactive in omittedFg
+      fillBg = inactive in omittedBg
+    if fillFg:
+      colors[inactive].foreground = colors[active].foreground
+    if fillBg:
+      colors[inactive].background = colors[active].background
+    if fillFg != fillBg and
+        sameColor(colors[inactive].foreground, colors[inactive].background):
+      if fillFg:
+        colors[inactive].foreground = colors[active].background
+      else:
+        colors[inactive].background = colors[active].foreground
+
 proc loadThemeWithSource*(
     path: string, vr: var ValidationResult
 ): Result[(ThemeColors, ThemeSource), string] =
@@ -286,7 +323,8 @@ proc loadThemeWithSource*(
   # colors), the upstream sweep above has already replaced that with the
   # user's top-level `background`; for entries with a non-#000000 bundled
   # default (e.g. statusLine*, tab, markdownCodeBlock), that bundled bg is
-  # preserved. An entry may also set bg only (e.g. `currentLine = { bg = ... }`).
+  # preserved, except as the fallbacks below replace it. An entry may also set
+  # bg only (e.g. `currentLine = { bg = ... }`).
   var fgSet, bgSet: set[EditorColorPairIndex]
   for key, value in colorsTable:
     if key == "foreground" or key == "background":
@@ -336,6 +374,7 @@ proc loadThemeWithSource*(
   source.omittedFg = allIndexes - fgSet - {EditorColorPairIndex.default}
   source.omittedBg = allIndexes - bgSet - {EditorColorPairIndex.default}
   colors.applyMarkdownFallback(source.omittedFg, source.omittedBg)
+  colors.applyStatusLineInactiveFallback(source.omittedFg, source.omittedBg)
 
   return Loaded.ok((colors, source))
 
@@ -503,6 +542,7 @@ proc reloadedColors(colors: ThemeColors, source: ThemeSource): ThemeColors =
     if index notin source.omittedBg:
       result[index].background = colors[index].background
   result.applyMarkdownFallback(source.omittedFg, source.omittedBg)
+  result.applyStatusLineInactiveFallback(source.omittedFg, source.omittedBg)
   result.adaptDiffTintsToBackground(source.explicitEntries)
 
 proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource =
@@ -519,8 +559,8 @@ proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource =
     if name in source.palette and source.palette[name] == color.rgb:
       result.refs[channel] = name
 
-  # Writing one channel can change what another would load as (the Markdown
-  # fallback and the diff tints), so repeat until nothing more is needed.
+  # Writing one channel can change what another would load as (the Markdown and
+  # Inactive fallbacks and the diff tints), so repeat until nothing more is needed.
   while true:
     let reloaded = reloadedColors(colors, result)
     var changedFg, changedBg: set[EditorColorPairIndex]

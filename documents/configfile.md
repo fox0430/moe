@@ -1894,8 +1894,9 @@ And, `termDefault` can be used for both foreground and background to use the ter
 Each entry under `[Colors]` is an inline table that sets `fg` and/or `bg`,
 for example `lineNum = { fg = "#636d83", bg = "#000000" }`. The top-level
 `foreground` and `background` keys override the editor's default text and
-background colors, which all other entries inherit when their `bg` is
-omitted.
+background colors. An entry whose `bg` is omitted inherits the top-level
+`background` if its bundled `bg` is `#000000`; otherwise it keeps the bundled
+`bg`, except for the fallbacks described below.
 
 #### Named colors (`[Palette]`)
 
@@ -1979,6 +1980,17 @@ that color comes from the generic key Markdown used before:
 These keys apply only to the `builtin` syntax backend. With
 `Highlight.backend = "matter"`, Markdown is colored by the generic keys
 instead.
+
+#### Inactive status line colors
+
+If a theme sets `statusLine<Mode>Mode` but not the `fg` or `bg` of
+`statusLine<Mode>ModeInactive`, that color comes from `statusLine<Mode>Mode`. Setting either `fg` or `bg` of
+`statusLine<Mode>Mode` is enough. If the result would give the inactive status
+line the same `fg` and `bg`, and the theme sets one of the two, the other comes
+from the opposite channel of `statusLine<Mode>Mode`.
+
+If a theme sets neither entry, the inactive status line keeps the bundled dark
+colors, as the active one does.
 
 <!-- AUTO-GEN:start Colors -->
 | Name | Description |

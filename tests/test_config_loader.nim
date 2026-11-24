@@ -2078,6 +2078,116 @@ suite "Config - loadThemeFromToml":
     check result.isOk
     check not vr.hasErrors
 
+  test "Inactive status line colors a theme leaves out take the active ones":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_inactive_fallback_" & $testFileCounter & ".toml"
+    writeFile(
+      testFile,
+      """
+[Colors]
+statusLineNormalMode = { fg = "#111111", bg = "#222222" }
+statusLineInsertMode = { fg = "#333333", bg = "#444444" }
+statusLineInsertModeInactive = { bg = "#555555" }
+statusLineVisualModeInactive = { fg = "#666666" }
+""",
+    )
+    defer:
+      removeFile(testFile)
+
+    let loaded = loadThemeFromToml(testFile)
+    check loaded.isOk
+    let colors = loaded.get
+    template checkPair(index: EditorColorPairIndex, fg, bg: Rgb) =
+      check colors[index].foreground.rgb == fg
+      check colors[index].background.rgb == bg
+
+    checkPair EditorColorPairIndex.statusLineNormalModeInactive,
+      rgb("#111111"), rgb("#222222")
+    checkPair EditorColorPairIndex.statusLineInsertModeInactive,
+      rgb("#333333"), rgb("#555555")
+    # The theme leaves the active color alone: keep the bundled one
+    let visual = EditorColorPairIndex.statusLineVisualModeInactive
+    checkPair visual, rgb("#666666"), DefaultColors[visual].background.rgb
+    let filer = EditorColorPairIndex.statusLineFilerModeInactive
+    check colors[filer] == DefaultColors[filer]
+
+  test "A filled in Inactive channel does not match the one a theme sets":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_inactive_inverted_" & $testFileCounter & ".toml"
+    writeFile(
+      testFile,
+      """
+[Colors]
+statusLineNormalMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineNormalModeInactive = { fg = "#61afef" }
+statusLineInsertMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineInsertModeInactive = { bg = "#ffffff" }
+statusLineVisualMode = { fg = "#ffffff", bg = "termDefault" }
+statusLineVisualModeInactive = { fg = "termDefault" }
+""",
+    )
+    defer:
+      removeFile(testFile)
+      removeFile(testFile & ".bac")
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    var (colors, source) = loaded.get
+    for index in [
+      EditorColorPairIndex.statusLineNormalModeInactive,
+      EditorColorPairIndex.statusLineInsertModeInactive,
+    ]:
+      check colors[index].foreground.rgb == rgb("#61afef")
+      check colors[index].background.rgb == rgb("#ffffff")
+    # The terminal's default fg and bg are different colors
+    let visual = EditorColorPairIndex.statusLineVisualModeInactive
+    check colors[visual].background.rgb == TerminalDefaultRgb
+
+    # A save keeps the filled in channels out
+    colors[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: rgb("#777777"))
+    require saveThemeToToml(colors, testFile, source).isOk
+    check "statusLineNormalModeInactive = { fg = \"#61afef\" }" in readFile(testFile)
+    check loadThemeFromToml(testFile).get == colors
+
+  test "A save keeps the Inactive colors a theme leaves out":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_inactive_save_" & $testFileCounter & ".toml"
+    writeFile(
+      testFile,
+      """
+[Colors]
+statusLineNormalMode = { fg = "#111111", bg = "#222222" }
+""",
+    )
+    defer:
+      removeFile(testFile)
+      removeFile(testFile & ".bac")
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    var (colors, source) = loaded.get
+
+    # Still loads as the active color: stays out
+    colors[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: rgb("#777777"))
+    require saveThemeToToml(colors, testFile, source).isOk
+    check "statusLineNormalModeInactive" notin readFile(testFile)
+    check loadThemeFromToml(testFile).get == colors
+
+    # Would follow the edited active color: written
+    colors[EditorColorPairIndex.statusLineNormalMode].background =
+      ThemeColor(rgb: rgb("#888888"))
+    # Would stop loading as the bundled color once the active one is written
+    colors[EditorColorPairIndex.statusLineFilerMode].background =
+      ThemeColor(rgb: rgb("#999999"))
+    require saveThemeToToml(colors, testFile, source).isOk
+    check "statusLineNormalModeInactive = { bg = \"#222222\" }" in readFile(testFile)
+    check loadThemeFromToml(testFile).get == colors
+
   test "Markdown keys a theme leaves out take the keys they replace":
     inc testFileCounter
     let testFile =
