@@ -2225,7 +2225,7 @@ suite "Config - initTheme":
 
       check not vr.hasErrors
       check fileExists(themeFile)
-      check themeColorsFromFile
+      check themeFileColors.isSome
 
       let loaded = loadThemeFromToml(themeFile)
       check loaded.isOk
@@ -2247,7 +2247,7 @@ suite "Config - initTheme":
       config.theme.kind = tkConfig
       config.theme.path = themeFile
       initTheme(config)
-      check not themeColorsFromFile
+      check themeFileColors.isNone
 
   test "Bootstrap failure (unwritable path) is reported in ValidationResult":
     withTempHome(tmpHome):
@@ -3160,7 +3160,7 @@ suite "Config - saveConfigToToml saves theme file":
 
       # Set up global themeColors
       setThemeColors(DefaultColors)
-      themeColorsFromFile = false
+      themeFileColors = none(ThemeColors)
 
       var config = newEditorConfig()
       config.theme.kind = tkConfig
@@ -3234,7 +3234,7 @@ background = "#123456"
     config.theme.path = themeFile
 
     setThemeColors(DefaultColors)
-    themeColorsFromFile = false
+    themeFileColors = none(ThemeColors)
 
     let result = saveConfigToToml(config, configFile)
     check result.isOk
@@ -3267,10 +3267,10 @@ background = "#123456"
     config.theme.kind = tkConfig
     config.theme.path = themeFile
 
-    # A successful load makes `themeColorsFromFile` true, so the save below
+    # A successful load makes `themeFileColors` some, so the save below
     # takes the overwrite branch for the pre-existing file.
     initTheme(config)
-    check themeColorsFromFile
+    check themeFileColors.isSome
 
     setThemeColors(DefaultColors)
 
@@ -3296,12 +3296,222 @@ background = "#123456"
       config.theme.path = themeFile
 
       setThemeColors(DefaultColors)
-      themeColorsFromFile = false
+      themeFileColors = none(ThemeColors)
 
       let result = saveConfigToToml(config, configFile)
       check result.isOk
       check fileExists(themeFile)
       check loadThemeFromToml(themeFile).isOk
+
+suite "Config - theme file is written only when colors changed":
+  setup:
+    let
+      savedThemeColors = themeColors
+      savedThemeFileColors = themeFileColors
+      savedLoadedThemeConfig = loadedThemeConfig
+
+  teardown:
+    setThemeColors(savedThemeColors)
+    themeFileColors = savedThemeFileColors
+    loadedThemeConfig = savedLoadedThemeConfig
+
+  let userThemeToml = """
+# Hand-written layout saveThemeToToml would not reproduce.
+[Colors]
+foreground = "#abcdef"
+
+background = "#123456"
+keyword = { fg = "#010203" }
+"""
+
+  proc initLoadedTheme(): tuple[config: EditorConfig, configFile, themeFile: string] =
+    inc testFileCounter
+    result.configFile =
+      getTempDir() / "moe_test_theme_unchanged_cfg_" & $testFileCounter & ".toml"
+    result.themeFile =
+      getTempDir() / "moe_test_theme_unchanged_colors_" & $testFileCounter & ".toml"
+    writeFile(result.themeFile, userThemeToml)
+
+    result.config = newEditorConfig()
+    result.config.theme.kind = tkConfig
+    result.config.theme.path = result.themeFile
+    initTheme(result.config)
+
+  test "Saving other settings leaves the theme file byte-identical":
+    let (config, configFile, themeFile) = initLoadedTheme()
+    defer:
+      removeFile(configFile)
+      removeFile(themeFile)
+      if fileExists(themeFile & ".bac"):
+        removeFile(themeFile & ".bac")
+
+    check themeFileColors.isSome
+    check not themeColorsEdited()
+
+    check saveConfigToToml(config, configFile).isOk
+    check readFile(themeFile) == userThemeToml
+    check not fileExists(themeFile & ".bac")
+
+  test "Diff tint adaptation does not count as a change":
+    inc testFileCounter
+    let configFile =
+      getTempDir() / "moe_test_theme_unchanged_light_cfg_" & $testFileCounter & ".toml"
+    let themeFile =
+      getTempDir() / "moe_test_theme_unchanged_light_colors_" & $testFileCounter &
+      ".toml"
+    defer:
+      removeFile(configFile)
+      removeFile(themeFile)
+      if fileExists(themeFile & ".bac"):
+        removeFile(themeFile & ".bac")
+
+    let lightThemeToml = """
+[Colors]
+foreground = "#111111"
+background = "#f0f0f0"
+"""
+    writeFile(themeFile, lightThemeToml)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+    initTheme(config)
+
+    # The light background swapped the bundled dark diff tints; that must be
+    # recorded as the loaded state rather than look like a user edit.
+    check themeColors[EditorColorPairIndex.diffViewerAddedLineBg] ==
+      LightColors[EditorColorPairIndex.diffViewerAddedLineBg]
+    check not themeColorsEdited()
+
+    check saveConfigToToml(config, configFile).isOk
+    check readFile(themeFile) == lightThemeToml
+
+  test "A changed color rewrites the file, then a second save is a no-op":
+    let (config, configFile, themeFile) = initLoadedTheme()
+    defer:
+      removeFile(configFile)
+      removeFile(themeFile)
+      if fileExists(themeFile & ".bac"):
+        removeFile(themeFile & ".bac")
+
+    var colors = themeColors
+    colors[EditorColorPairIndex.keyword].foreground =
+      ThemeColor(rgb: Rgb(red: 0x0a, green: 0x0b, blue: 0x0c))
+    setThemeColors(colors)
+    check themeColorsEdited()
+
+    check saveConfigToToml(config, configFile).isOk
+    let afterFirstSave = readFile(themeFile)
+    check afterFirstSave != userThemeToml
+    check "#0a0b0c" in afterFirstSave
+    check not themeColorsEdited()
+
+    # The file now mirrors the in-memory colors, so saving again must not
+    # rewrite it (and must not rotate the backup).
+    check readFile(themeFile & ".bac") == userThemeToml
+    check saveConfigToToml(config, configFile).isOk
+    check readFile(themeFile) == afterFirstSave
+    check readFile(themeFile & ".bac") == userThemeToml
+
+  proc editKeyword(red: int16) =
+    var colors = themeColors
+    colors[EditorColorPairIndex.keyword].foreground =
+      ThemeColor(rgb: Rgb(red: red, green: 0x0b, blue: 0x0c))
+    setThemeColors(colors)
+
+  test "A deleted theme file is recreated even when the colors are unchanged":
+    withTempHome(tmpHome):
+      let themeFile = tmpHome / ".config" / "moe" / "themes" / "deleted.toml"
+      createDir(parentDir(themeFile))
+      writeFile(themeFile, userThemeToml)
+
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
+      initTheme(config)
+      removeFile(themeFile)
+
+      check not themeColorsEdited()
+      check saveConfigToToml(config, tmpHome / "moerc.toml").isOk
+      check fileExists(themeFile)
+
+  test "Edits after a save recreated a broken theme file are saved":
+    withTempHome(tmpHome):
+      let
+        configFile = tmpHome / "moerc.toml"
+        themeFile = tmpHome / ".config" / "moe" / "themes" / "broken.toml"
+      createDir(parentDir(themeFile))
+      writeFile(themeFile, "[Colors\n")
+
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
+      initTheme(config)
+      check themeFileColors.isNone
+
+      # The broken file itself is never overwritten.
+      editKeyword(0x01)
+      check saveConfigToToml(config, configFile).isOk
+      check readFile(themeFile) == "[Colors\n"
+
+      removeFile(themeFile)
+      check saveConfigToToml(config, configFile).isOk
+      check fileExists(themeFile)
+
+      editKeyword(0x0a)
+      check saveConfigToToml(config, configFile).isOk
+      check "#0a0b0c" in readFile(themeFile)
+
+  test "A failed load or another theme kind forgets the loaded colors":
+    let (config, _, themeFile) = initLoadedTheme()
+    check themeFileColors.isSome
+
+    config.theme.kind = tkDefault
+    initTheme(config)
+    check themeFileColors.isNone
+
+    config.theme.kind = tkConfig
+    initTheme(config)
+    check themeFileColors.isSome
+
+    # Missing, outside the moe config dir.
+    removeFile(themeFile)
+    initTheme(config)
+    check themeFileColors.isNone
+
+  test "A failed write keeps the file and the colors still owed":
+    let (config, configFile, themeFile) = initLoadedTheme()
+    defer:
+      setFilePermissions(themeFile, {fpUserRead, fpUserWrite})
+      removeFile(configFile)
+      removeFile(themeFile)
+      if fileExists(themeFile & ".bac"):
+        removeFile(themeFile & ".bac")
+
+    editKeyword(0x0a)
+    setFilePermissions(themeFile, {fpUserRead})
+    check saveConfigToToml(config, configFile).isErr
+    check readFile(themeFile) == userThemeToml
+    check themeColorsEdited()
+
+    setFilePermissions(themeFile, {fpUserRead, fpUserWrite})
+    check saveConfigToToml(config, configFile).isOk
+    check "#0a0b0c" in readFile(themeFile)
+
+  test "Saving through a symlink keeps the link":
+    let (config, configFile, themeFile) = initLoadedTheme()
+    let link = themeFile & ".link"
+    createSymlink(themeFile, link)
+    defer:
+      for f in [configFile, themeFile, link, link & ".bac"]:
+        removeFile(f)
+
+    config.theme.path = link
+    initTheme(config)
+    editKeyword(0x0a)
+    check saveConfigToToml(config, configFile).isOk
+    check symlinkExists(link)
+    check "#0a0b0c" in readFile(themeFile)
 
 suite "Config - Theme path containment (regression)":
   test "isThemePathAllowed accepts only files inside moe config dir":
@@ -3347,7 +3557,7 @@ suite "Config - Theme path containment (regression)":
 
       check not vr.hasErrors
       check fileExists(themeFile)
-      check themeColorsFromFile
+      check themeFileColors.isSome
 
   test "initTheme does not create dirs/files outside config dir (absolute)":
     inc testFileCounter
@@ -3376,7 +3586,7 @@ suite "Config - Theme path containment (regression)":
     check vr.errors.anyIt("Theme.path" in it.name)
     check not dirExists(baseDir)
     check not fileExists(themeFile)
-    check not themeColorsFromFile
+    check themeFileColors.isNone
     check themeColors == DefaultColors
 
   test "initTheme does not create via ../ traversal":
@@ -3399,7 +3609,7 @@ suite "Config - Theme path containment (regression)":
       check vr.hasErrors
       check vr.errors.anyIt("Theme.path" in it.name)
       check not fileExists(resolved)
-      check not themeColorsFromFile
+      check themeFileColors.isNone
 
   test "saveConfigToToml does not bootstrap outside config dir":
     inc testFileCounter
@@ -3420,7 +3630,7 @@ suite "Config - Theme path containment (regression)":
     config.theme.path = themeFile
 
     setThemeColors(DefaultColors)
-    themeColorsFromFile = false
+    themeFileColors = none(ThemeColors)
 
     let result = saveConfigToToml(config, configFile)
     check result.isErr
