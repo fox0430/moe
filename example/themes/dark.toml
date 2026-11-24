@@ -17,87 +17,87 @@ currentLineNum = { fg = "#56b6c2", bg = "#000000" }
 
 statusLineNormalMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineNormalModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineNormalModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineNormalModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineInsertMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineInsertModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineInsertModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineInsertModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineVisualMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineVisualModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineVisualModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineVisualModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineReplaceMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineReplaceModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineReplaceModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineReplaceModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineFilerMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineFilerModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineFilerModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineFilerModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineExMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineExModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineExModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineExModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineLogViewerMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineLogViewerModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineLogViewerModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineLogViewerModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineHelpMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineHelpModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineHelpModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineHelpModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineBufferManagerMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineBufferManagerModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineBufferManagerModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineBufferManagerModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineBookmarkManagerMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineBookmarkManagerModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineBookmarkManagerModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineBookmarkManagerModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineBackupManagerMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineBackupManagerModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineBackupManagerModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineBackupManagerModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineRecoveryManagerMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineRecoveryManagerModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineRecoveryManagerModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineRecoveryManagerModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineDiffViewerMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineDiffViewerModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineDiffViewerModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineDiffViewerModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineRecentFileMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineRecentFileModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineRecentFileModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineRecentFileModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineDebugMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineDebugModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineDebugModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineDebugModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineConfigMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineConfigModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineConfigModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineConfigModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineReferencesMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineReferencesModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineReferencesModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineReferencesModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineDocumentSymbolMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineDocumentSymbolModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineDocumentSymbolModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineDocumentSymbolModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineCallHierarchyMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineCallHierarchyModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineCallHierarchyModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineCallHierarchyModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineTerminalMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineTerminalModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineTerminalModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineTerminalModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineFileTreeMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineFileTreeModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineFileTreeModeInactive = { fg = "#abb2bf", bg = "#3e4452" }
+statusLineFileTreeModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
 
 statusLineGitChangedLines = { fg = "#ffffff", bg = "#3d59a1" }
 statusLineGitBranch = { fg = "#ffffff", bg = "#3d59a1" }

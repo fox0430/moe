@@ -216,10 +216,19 @@ proc applyStatusLineInactiveFallback(
   ## A theme that sets only a mode's active color keeps it in an inactive
   ## window, rather than mixing in the bundled palette.
   ## If that would match the channel the theme does set, the active color's other
-  ## channel is used instead.
+  ## channel is used instead, or black or white when that is the terminal's
+  ## default, whose color is unknown.
   proc sameColor(a, b: ThemeColor): bool =
     # The terminal's default foreground and background are different colors.
     a.rgb == b.rgb and not a.rgb.isTermDefaultColor
+
+  proc otherChannel(candidate, against: ThemeColor): ThemeColor =
+    if not candidate.rgb.isTermDefaultColor:
+      candidate
+    elif against.rgb.isLightColor:
+      ThemeColor(rgb: rgb("#000000"))
+    else:
+      ThemeColor(rgb: rgb("#ffffff"))
 
   for (inactive, active) in StatusLineInactiveFallbacks:
     if active in omittedFg * omittedBg:
@@ -234,9 +243,11 @@ proc applyStatusLineInactiveFallback(
     if fillFg != fillBg and
         sameColor(colors[inactive].foreground, colors[inactive].background):
       if fillFg:
-        colors[inactive].foreground = colors[active].background
+        colors[inactive].foreground =
+          otherChannel(colors[active].background, colors[inactive].background)
       else:
-        colors[inactive].background = colors[active].foreground
+        colors[inactive].background =
+          otherChannel(colors[active].foreground, colors[inactive].foreground)
 
 proc loadThemeWithSource*(
     path: string, vr: var ValidationResult

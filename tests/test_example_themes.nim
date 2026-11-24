@@ -85,6 +85,23 @@ suite "example/themes/*.toml":
         echo "  Missing: ", missing
       check missing.len == 0
 
+suite "example/themes inactive status line":
+  test "stands out from the editor in 8 and 16 colors":
+    for path in walkFiles(ExampleThemesDir / "*.toml"):
+      checkpoint path
+      let loaded = loadThemeFromToml(path)
+      require loaded.isOk
+      let
+        editorBg = loaded.get[EditorColorPairIndex.default].background.rgb
+        bg =
+          loaded.get[EditorColorPairIndex.statusLineNormalModeInactive].background.rgb
+      if editorBg.isTermDefaultColor or bg.isTermDefaultColor:
+        continue
+      check rgbTo8Color(bg.red, bg.green, bg.blue) !=
+        rgbTo8Color(editorBg.red, editorBg.green, editorBg.blue)
+      check rgbTo16Color(bg.red, bg.green, bg.blue) !=
+        rgbTo16Color(editorBg.red, editorBg.green, editorBg.blue)
+
 suite "example/themes/light.toml as the bundled light theme":
   test "loads to LightColors":
     var vr = newValidationResult()

@@ -1987,7 +1987,8 @@ If a theme sets `statusLine<Mode>Mode` but not the `fg` or `bg` of
 `statusLine<Mode>ModeInactive`, that color comes from `statusLine<Mode>Mode`. Setting either `fg` or `bg` of
 `statusLine<Mode>Mode` is enough. If the result would give the inactive status
 line the same `fg` and `bg`, and the theme sets one of the two, the other comes
-from the opposite channel of `statusLine<Mode>Mode`.
+from the opposite channel of `statusLine<Mode>Mode`, or is black or white if that
+channel is `termDefault`.
 
 If a theme sets neither entry, the inactive status line keeps the bundled dark
 colors, as the active one does.

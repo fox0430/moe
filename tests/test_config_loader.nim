@@ -2126,6 +2126,10 @@ statusLineInsertMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineInsertModeInactive = { bg = "#ffffff" }
 statusLineVisualMode = { fg = "#ffffff", bg = "termDefault" }
 statusLineVisualModeInactive = { fg = "termDefault" }
+statusLineFilerMode = { fg = "termDefault", bg = "#000000" }
+statusLineFilerModeInactive = { fg = "#000000" }
+statusLineHelpMode = { fg = "#ffffff", bg = "termDefault" }
+statusLineHelpModeInactive = { bg = "#ffffff" }
 """,
     )
     defer:
@@ -2145,6 +2149,11 @@ statusLineVisualModeInactive = { fg = "termDefault" }
     # The terminal's default fg and bg are different colors
     let visual = EditorColorPairIndex.statusLineVisualModeInactive
     check colors[visual].background.rgb == TerminalDefaultRgb
+    # The terminal's default would be an unknown color: use a contrasting one
+    check colors[EditorColorPairIndex.statusLineFilerModeInactive].background.rgb ==
+      rgb("#ffffff")
+    check colors[EditorColorPairIndex.statusLineHelpModeInactive].foreground.rgb ==
+      rgb("#000000")
 
     # A save keeps the filled in channels out
     colors[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: rgb("#777777"))
