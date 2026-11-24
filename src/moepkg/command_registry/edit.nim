@@ -27,7 +27,7 @@ import pkg/results
 import
   ../[
     types, motion, modes, registers, logger, unicode_utils, visual_selection,
-    visual_block, fold_open,
+    visual_block, fold_open, cursor_util,
   ]
 import ../buffer/[core, edit, fold, undo]
 import ../command_handlers/[number_increment, put_text, visual_commands]
@@ -139,6 +139,12 @@ proc replaceChars*(
   ctx.cursor.column += count - 1
   ok(())
 
+proc settleAfterDeleteChar(ctx: CommandContext) =
+  ## Keep the cursor on the line, except while Insert waits to resume: there it
+  ## may rest past the end.
+  if not ctx.state.resumesInsert:
+    ctx.cursor.clampCursorToLastChar(ctx.buffer.getLine(ctx.cursor.line).charLen)
+
 proc handleDeleteChar*(
     registry: CommandRegistry, ctx: CommandContext, count: int = 1
 ): Result[(), string] =
@@ -202,9 +208,7 @@ proc handleDeleteChar*(
       storeDeletedText(ctx, lineContent.charSubStr(cursorCol, 2), false)
       ctx.recordChange(change)
 
-      let updatedLineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
-      if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
-        ctx.cursor.column = updatedLineLen - 1
+      ctx.settleAfterDeleteChar()
 
       return Result[(), string].ok ()
 
@@ -236,11 +240,7 @@ proc handleDeleteChar*(
 
   ctx.recordChange(change)
 
-  # Adjust cursor if it's now past the end of the line (Vim behavior)
-  let newLineContent = ctx.buffer.getLine(ctx.cursor.line)
-  let newLineLen = newLineContent.charLen
-  if newLineLen > 0 and ctx.cursor.column >= newLineLen:
-    ctx.cursor.column = newLineLen - 1
+  ctx.settleAfterDeleteChar()
 
   return Result[(), string].ok ()
 
@@ -300,6 +300,8 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
       storeDeletedText(ctx, lineContent.charSubStr(cursorCol - 1, 2), false)
       ctx.recordChange(change)
       ctx.cursor.column = cursorCol - 1
+      # The character under the cursor went too, so this may be past the end.
+      ctx.settleAfterDeleteChar()
 
       return Result[(), string].ok ()
 

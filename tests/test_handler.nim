@@ -4816,6 +4816,34 @@ suite "handleKeyCombo - Insert resumes after the Ctrl-o command":
       check e.state.insertResume != irNone
       check not e.activeBuffer.inTransaction
 
+  for (name, content, keys, typed) in [
+    ("x on the last char", "abc", @["$", "i", "C-o", "x"], "abZ"),
+    ("x past the end", "abc", @["A", "C-o", "x"], "abZ"),
+    ("a counted x through the end", "abc", @["l", "i", "C-o", "5", "x"], "aZ"),
+    ("x on the only char", "a", @["i", "C-o", "x"], "Z"),
+    ("x then a repeat", "abcd", @["$", "i", "C-o", "x", "C-o", "."], "abZ"),
+    ("x on a pair at the end", "a()", @["l", "i", "C-o", "x"], "aZ"),
+    ("X in a pair at the end", "a()", @["$", "i", "C-o", "X"], "aZ"),
+    (
+      "X in a pair at the end of a longer line",
+      "foo()",
+      @["$", "i", "C-o", "X"],
+      "fooZ",
+    ),
+    ("X in a pair before text", "a()b", @["l", "l", "i", "C-o", "X"], "aZb"),
+    ("X in a pair alone", "()", @["$", "i", "C-o", "X"], "Z"),
+    ("X past the end", "abc", @["A", "C-o", "X"], "acZ"),
+  ]:
+    test name & " resumes Insert where the text was deleted":
+      let e = createEditorForCtrlO(content)
+      e.state.autoDeleteParen = true
+
+      e.press(keys)
+
+      check e.state.mode == EditorMode.Insert
+      e.press("Z")
+      check e.activeBuffer.getLine(0) == typed
+
   test "a join resumes Insert":
     # J opens its own undo step, which the open Insert session used to refuse.
     let e = createEditorForCtrlO("abc\ndef")
