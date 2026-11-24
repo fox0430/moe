@@ -177,8 +177,17 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "==", description: "Auto indent"),
     HelpEntry(syntax: "J", description: "Join lines"),
     HelpEntry(syntax: "dd", description: "Delete a line"),
-    HelpEntry(syntax: "x", description: "Delete current character"),
-    HelpEntry(syntax: "X or dh", description: "Delete the character before the cursor"),
+    HelpEntry(
+      syntax: "x",
+      description:
+        "Delete current character; with `autoDeleteParen`, both of adjacent matching brackets or quotes when on the first",
+    ),
+    HelpEntry(
+      syntax: "X",
+      description:
+        "Delete the character before the cursor; with `autoDeleteParen`, both of adjacent matching brackets or quotes when between them",
+    ),
+    HelpEntry(syntax: "dh", description: "Delete the character before the cursor"),
     HelpEntry(syntax: "~", description: "Toggle case of character under cursor"),
     HelpEntry(syntax: "gu", description: "Lowercase (operator)"),
     HelpEntry(syntax: "gU", description: "Uppercase (operator)"),
@@ -592,7 +601,8 @@ const InsertModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "Ctrl-i", description: "Insert a Tab"),
     HelpEntry(
       syntax: "Ctrl-h or Backspace",
-      description: "Delete the character before the cursor",
+      description:
+        "Delete the character before the cursor; with `autoDeleteParen`, both of adjacent matching brackets or quotes when between them",
     ),
     HelpEntry(syntax: "Ctrl-t", description: "Add an indent in current line"),
     HelpEntry(syntax: "Ctrl-d", description: "Remove an indent in current line"),

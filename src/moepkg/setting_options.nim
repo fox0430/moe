@@ -184,7 +184,7 @@ const SetOptionTable*: seq[SetOptionSpec] = @[
   SetOptionSpec(
     longName: "autodeleteparen",
     shortName: "adp",
-    description: "Enable/disable auto delete paren",
+    description: "Enable/disable deleting bracket/quote pairs",
     kind: sokBool,
     boolOption: bsoAutoDeleteParen,
   ),

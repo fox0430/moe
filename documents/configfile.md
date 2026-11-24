@@ -170,7 +170,7 @@ ignoring case and `_`. `${filetype}` expands to `Name`.
 | liveReloadOfConf | bool | false | Enable live reload of the configuration file |
 | incrementalSearch | bool | true | Enable incremental search |
 | popupWindowInExmode | bool | true | Show Pop-up window in Command mode |
-| autoDeleteParen | bool | true | Automatic delete brackets |
+| autoDeleteParen | bool | true | Delete adjacent matching brackets or quotes together: Backspace in Insert mode or X between them, or x on the first one (x and X only with a count of 1) |
 | liveReloadOfFile | bool | true | Enable live reload of opening files. A reload is one undoable edit while it fits the reload limits; past them the buffer is replaced and the undo history is cleared |
 | colorMode | string (enum: 8, 16, 256, 24bit, none) | 256 | Terminal color mode |
 | mouse | bool | false | Enable mouse cursor movement |

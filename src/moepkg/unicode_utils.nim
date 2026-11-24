@@ -480,8 +480,8 @@ proc getClosingChar*(openChar: char): char =
   return '\0'
 
 proc isMatchingPair*(openChar, closeChar: char): bool =
-  ## Check if two characters form a matching parenthesis pair
-  ## Returns true if openChar is an opening paren and closeChar is its matching closing paren
+  ## Check if two characters are matching brackets or quotes.
+  ## Returns true if openChar is an opening bracket or a quote and closeChar is its match.
   if openChar in parenPairs:
     return parenPairs[openChar] == closeChar
   return false
@@ -501,9 +501,9 @@ proc singleBytePairAt(line: string, pos: int): (char, char) =
   (line[openByte], line[closeByte])
 
 proc isAdjacentPair*(line: string, pos: int): bool =
-  ## Check if the character at pos and pos+1 form a matching parenthesis pair.
+  ## Check if the character at pos and pos+1 are matching brackets or quotes.
   ## pos is a character index (not byte position).
-  ## Returns true if line[pos] is an opening paren and line[pos+1] is its match.
+  ## Returns true if line[pos] is an opening bracket or a quote and line[pos+1] is its match.
   let (openChar, closeChar) = line.singleBytePairAt(pos)
   openChar != '\0' and isMatchingPair(openChar, closeChar)
 
