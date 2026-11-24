@@ -1930,6 +1930,28 @@ file at all, so its comments and layout stay. A save that does change a color
 rewrites the whole file: comments are lost, and `[Palette]` entries that
 failed validation when the file was read are not written back.
 
+#### Status line colors shared by all modes
+
+`statusLineMode`, `statusLineModeLabel` and `statusLineModeInactive` set the
+status line colors of every mode at once. A per-mode key overrides them, `fg`
+and `bg` separately, wherever it is in the file:
+
+```toml
+[Colors]
+statusLineMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineModeInactive = { fg = "#c0c5d0", bg = "#3e4480" }
+statusLineInsertMode = { bg = "#98c379" }
+```
+
+Theme files written by earlier versions list every per-mode key
+(`statusLineNormalMode`, `statusLineInsertModeLabel` and so on). Remove those
+lines for the shared keys to take effect. Versions that did not draw the
+`Inactive` colors also wrote them out, as `{ fg = "#61afef", bg = "#ffffff" }` in
+the default theme. Remove those lines if inactive windows get a white status
+line. The Config mode edits the per-mode
+colors only.
+
 #### Migrating from the legacy format
 
 Earlier versions used separate flat keys for foreground and background
@@ -1990,6 +2012,9 @@ line the same `fg` and `bg`, and the theme sets one of the two, the other comes
 from the opposite channel of `statusLine<Mode>Mode`, or is black or white if that
 channel is `termDefault`.
 
+A color set by a key shared by all modes counts as set by the theme, for both
+the active and the inactive entry.
+
 If a theme sets neither entry, the inactive status line keeps the bundled dark
 colors, as the active one does.
 
@@ -1998,6 +2023,9 @@ colors, as the active one does.
 |:---|:---|
 | foreground | Default foreground color (overrides `Colors.default.fg`) |
 | background | Default background color (overrides `Colors.default.bg`) |
+| statusLineMode | Status line in every mode (active) whose own key does not set it |
+| statusLineModeLabel | Status line mode label in every mode whose own key does not set it |
+| statusLineModeInactive | Status line in every mode (inactive) whose own key does not set it |
 | lineNum | Line number gutter |
 | currentLineNum | Current line number highlight |
 | sidebarSessionModifiedSign | Sidebar: modified line sign |

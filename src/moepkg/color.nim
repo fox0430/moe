@@ -818,6 +818,29 @@ const ColorBgOnlyEntries* =
   {EditorColorPairIndex.currentLineBg, EditorColorPairIndex.currentColumnBg}
   ## Color pairs that only use their background.
 
+type StatusLineModeColor* = enum
+  ## Theme keys that color the status line of every mode. They are not entries
+  ## of their own: each sets the per-mode entries a theme leaves out.
+  slmLine = "statusLineMode"
+  slmLabel = "statusLineModeLabel"
+  slmInactive = "statusLineModeInactive"
+
+const
+  StatusLineModeEntries*: array[StatusLineModeColor, set[EditorColorPairIndex]] = block:
+    var entries: array[StatusLineModeColor, set[EditorColorPairIndex]]
+    for index in EditorColorPairIndex:
+      for kind in StatusLineModeColor:
+        let suffix = ($kind)["statusLine".len .. ^1]
+        if ($index).startsWith("statusLine") and ($index).endsWith(suffix):
+          entries[kind].incl index
+    entries
+
+  StatusLineModeDescriptions*: array[StatusLineModeColor, string] = [
+    "Status line in every mode (active) whose own key does not set it",
+    "Status line mode label in every mode whose own key does not set it",
+    "Status line in every mode (inactive) whose own key does not set it",
+  ]
+
 proc toTomlColorKey*(index: EditorColorPairIndex): string =
   ## Convert EditorColorPairIndex to its TOML key in the theme file.
   ## Names generally match the enum, with three "Bg"-stripped exceptions

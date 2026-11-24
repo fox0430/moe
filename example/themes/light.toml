@@ -15,89 +15,9 @@ lineNum = { fg = "#8a8a8a", bg = "#000000" }
 
 currentLineNum = { fg = "#ffffff", bg = "#000000" }
 
-statusLineNormalMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineNormalModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineNormalModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineInsertMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineInsertModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineInsertModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineVisualMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineVisualModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineVisualModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineReplaceMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineReplaceModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineReplaceModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineFilerMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineFilerModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineFilerModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineExMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineExModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineExModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineLogViewerMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineLogViewerModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineLogViewerModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineHelpMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineHelpModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineHelpModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineBufferManagerMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineBufferManagerModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineBufferManagerModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineBookmarkManagerMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineBookmarkManagerModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineBookmarkManagerModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineBackupManagerMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineBackupManagerModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineBackupManagerModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineRecoveryManagerMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineRecoveryManagerModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineRecoveryManagerModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineDiffViewerMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineDiffViewerModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineDiffViewerModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineRecentFileMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineRecentFileModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineRecentFileModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineDebugMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineDebugModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineDebugModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineConfigMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineConfigModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineConfigModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineReferencesMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineReferencesModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineReferencesModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineDocumentSymbolMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineDocumentSymbolModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineDocumentSymbolModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineCallHierarchyMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineCallHierarchyModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineCallHierarchyModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineTerminalMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineTerminalModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineTerminalModeInactive = { fg = "#000000", bg = "#a8a854" }
-
-statusLineFileTreeMode = { fg = "#ffffff", bg = "#8a8a8a" }
-statusLineFileTreeModeLabel = { fg = "#ffffff", bg = "#09aefa" }
-statusLineFileTreeModeInactive = { fg = "#000000", bg = "#a8a854" }
+statusLineMode = { fg = "#ffffff", bg = "#8a8a8a" }
+statusLineModeLabel = { fg = "#ffffff", bg = "#09aefa" }
+statusLineModeInactive = { fg = "#000000", bg = "#a8a854" }
 
 statusLineGitChangedLines = { fg = "#ffffff", bg = "#8a8a8a" }
 statusLineGitBranch = { fg = "#ffffff", bg = "#8a8a8a" }

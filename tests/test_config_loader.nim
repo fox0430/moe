@@ -4202,6 +4202,171 @@ foreground = "dimmed1"
       check saveConfigToToml(config, configFile).isOk
       check fileExists(missingTheme)
       check "\n[Palette]\n" notin readFile(missingTheme)
+      check "\nstatusLineMode = " in readFile(missingTheme)
+      check "statusLineNormalMode" notin readFile(missingTheme)
+      check themeSource.statusLineModes.len > 0
+
+suite "Config - Status line colors shared by all modes":
+  setup:
+    let
+      savedThemeColors = themeColors
+      savedThemeFileColors = themeFileColors
+      savedThemeSource = themeSource
+      savedLoadedThemeConfig = loadedThemeConfig
+
+  teardown:
+    setThemeColors(savedThemeColors)
+    themeFileColors = savedThemeFileColors
+    themeSource = savedThemeSource
+    loadedThemeConfig = savedLoadedThemeConfig
+
+  proc writeTheme(content: string): string =
+    inc testFileCounter
+    result = getTempDir() / "moe_test_theme_status_" & $testFileCounter & ".toml"
+    writeFile(result, content)
+
+  proc pair(fg, bg: string): ColorPair =
+    ColorPair(
+      foreground: ThemeColor(rgb: rgb(fg)), background: ThemeColor(rgb: rgb(bg))
+    )
+
+  const sharedTheme = """
+[Palette]
+accent = "#123456"
+
+[Colors]
+statusLineInsertMode = { bg = "#0a0b0c" }
+statusLineMode = { fg = "accent", bg = "#010203" }
+statusLineModeLabel = { bg = "#040506" }
+statusLineModeInactive = { fg = "#070809" }
+"""
+
+  test "Each key covers every mode":
+    for kind in StatusLineModeColor:
+      check StatusLineModeEntries[kind].card == 21
+    check StatusLineModeEntries[slmLine] * StatusLineModeEntries[slmLabel] == {}
+    check EditorColorPairIndex.statusLineNormalModeInactive in
+      StatusLineModeEntries[slmInactive]
+
+  test "They set what the per-mode keys leave out":
+    let themeFile = writeTheme(sharedTheme)
+    defer:
+      removeFile(themeFile)
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(themeFile, vr)
+    require loaded.isOk
+    check vr.errors.len == 0
+    let c = loaded.get
+    check c[EditorColorPairIndex.statusLineNormalMode] == pair("#123456", "#010203")
+    # fg and bg are resolved separately
+    check c[EditorColorPairIndex.statusLineInsertMode] == pair("#123456", "#0a0b0c")
+    check c[EditorColorPairIndex.statusLineFileTreeModeLabel].background.rgb ==
+      rgb("#040506")
+    check c[EditorColorPairIndex.statusLineFileTreeModeLabel].foreground ==
+      DefaultColors[EditorColorPairIndex.statusLineFileTreeModeLabel].foreground
+    check c[EditorColorPairIndex.statusLineVisualModeInactive].foreground.rgb ==
+      rgb("#070809")
+    check c[EditorColorPairIndex.statusLineGitBranch] ==
+      DefaultColors[EditorColorPairIndex.statusLineGitBranch]
+
+  test "Inactive colors they set are not filled in from the active ones":
+    let themeFile = writeTheme(
+      """
+[Colors]
+statusLineInsertMode = { fg = "#111111", bg = "#222222" }
+statusLineModeInactive = { fg = "#333333", bg = "#444444" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+    let loaded = loadThemeFromToml(themeFile)
+    require loaded.isOk
+    for index in StatusLineModeEntries[slmInactive]:
+      check loaded.get[index] == pair("#333333", "#444444")
+
+  test "Inactive colors no key sets take the shared active ones":
+    let themeFile = writeTheme(
+      """
+[Colors]
+statusLineMode = { fg = "#111111", bg = "#222222" }
+statusLineVisualModeInactive = { fg = "#222222" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+      removeFile(themeFile & ".bac")
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(themeFile, vr)
+    require loaded.isOk
+    var (colors, source) = loaded.get
+    check colors[EditorColorPairIndex.statusLineNormalModeInactive] ==
+      pair("#111111", "#222222")
+    check colors[EditorColorPairIndex.statusLineVisualModeInactive] ==
+      pair("#222222", "#111111")
+
+    # A save keeps the filled in colors out
+    colors[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: rgb("#777777"))
+    require saveThemeToToml(colors, themeFile, source).isOk
+    check "statusLineNormalModeInactive" notin readFile(themeFile)
+    check loadThemeFromToml(themeFile).get == colors
+
+  test "Invalid values are reported":
+    let themeFile = writeTheme(
+      """
+[Colors]
+statusLineMode = { fg = "nope", other = "#000000" }
+statusLineModeLabel = {}
+statusLineModeInactive = "#000000"
+"""
+    )
+    defer:
+      removeFile(themeFile)
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(themeFile, vr)
+    require loaded.isOk
+    check vr.errors.len == 4
+    check loaded.get == DefaultColors
+
+  test "Saving keeps them and writes only the mode that was changed":
+    let themeFile = writeTheme(sharedTheme)
+    defer:
+      removeFile(themeFile)
+      removeFile(themeFile & ".bac")
+    var vr = newValidationResult()
+    let config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+    initTheme(config, vr)
+    var colors = themeColors
+    colors[EditorColorPairIndex.statusLineVisualMode].foreground =
+      ThemeColor(rgb: rgb("#0d0e0f"))
+    check saveThemeToToml(colors, themeFile, themeSource).isOk
+
+    let saved = readFile(themeFile)
+    check "statusLineMode = { fg = \"accent\", bg = \"#010203\" }" in saved
+    check "statusLineModeLabel = { bg = \"#040506\" }" in saved
+    check "statusLineModeInactive = { fg = \"#070809\" }" in saved
+    check "statusLineInsertMode = { bg = \"#0a0b0c\" }" in saved
+    check "statusLineVisualMode = { fg = \"#0d0e0f\" }" in saved
+    check "statusLineNormalMode" notin saved
+    let reloaded = loadThemeFromToml(themeFile)
+    require reloaded.isOk
+    check reloaded.get == colors
+
+  test "A seeded theme file uses them":
+    inc testFileCounter
+    let themeFile = getTempDir() / "moe_test_theme_status_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(themeFile)
+    check saveThemeToToml(
+      DefaultColors, themeFile, sharedStatusLineSource(DefaultColors)
+    ).isOk
+    let saved = readFile(themeFile)
+    check "statusLineMode = " in saved
+    check "statusLineNormalMode" notin saved
+    let reloaded = loadThemeFromToml(themeFile)
+    require reloaded.isOk
+    check reloaded.get == DefaultColors
 
 suite "Config - Theme path containment (regression)":
   test "isThemePathAllowed accepts only files inside moe config dir":
