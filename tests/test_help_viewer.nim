@@ -548,7 +548,7 @@ suite "HelpViewer - Mode sections (snapshot)":
       "Ctrl-e               - Insert the character which is below the cursor"
     )
     check state.texts.contains(
-      "Ctrl-h or Backspace  - Delete the character before the cursor"
+      "Ctrl-h or Backspace  - Delete the character before the cursor; with autoDeleteParen, both of adjacent matching brackets or quotes when between them"
     )
     check state.texts.contains("Esc                  - Go to Normal mode")
 

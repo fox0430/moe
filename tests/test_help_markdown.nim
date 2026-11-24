@@ -155,7 +155,7 @@ suite "help_markdown.renderKbdHelpGroup":
     let table = renderKbdHelpGroup(InsertModeCommands)
     check (
       "| <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd> | " &
-      "Delete the character before the cursor |"
+      "Delete the character before the cursor; with `autoDeleteParen`, both of adjacent matching brackets or quotes when between them |"
     ) in table
 
   test "Terminal-Input 'Ctrl-\\ Ctrl-n' splits modifiers and escapes backslash":

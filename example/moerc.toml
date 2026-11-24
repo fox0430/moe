@@ -52,7 +52,10 @@ liveReloadOfConf = false               # Live config reload - Set to true to aut
 
 incrementalSearch = true               # Incremental search
 
-autoDeleteParen = true                 # Auto-delete matching parens - Set to false to disable
+# Delete adjacent matching brackets or quotes like () or "" together:
+# Backspace in Insert mode or X between them, or x on the first one
+# (x and X only with a count of 1)
+autoDeleteParen = true                 # Set to false to disable
 
 bracketSplit = "disable"               # Enter behavior between () [] {} pairs: "disable", "noIndent", "indent"
 

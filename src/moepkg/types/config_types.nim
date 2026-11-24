@@ -177,7 +177,13 @@ type
     popupWindowInExmode* {.
       cfg, cfgDocDescription: "Show Pop-up window in Command mode"
     .}: bool
-    autoDeleteParen* {.cfg, cfgDocDescription: "Automatic delete brackets".}: bool
+    autoDeleteParen* {.
+      cfg,
+      cfgDocDescription:
+        "Delete adjacent matching brackets or quotes together: Backspace in " &
+        "Insert mode or X between them, or x on the first one (x and X " &
+        "only with a count of 1)"
+    .}: bool
     liveReloadOfFile* {.
       cfg,
       cfgDocDescription:

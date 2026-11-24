@@ -154,8 +154,9 @@ With several files and `StartUp.FileOpen.autoSplit` (the default), each file ope
 | <kbd>**=**</kbd> <kbd>**=**</kbd> | Auto indent |
 | <kbd>**J**</kbd> | Join lines |
 | <kbd>**d**</kbd> <kbd>**d**</kbd> | Delete a line |
-| <kbd>**x**</kbd> | Delete current character |
-| <kbd>**X**</kbd> OR <kbd>**d**</kbd> <kbd>**h**</kbd> | Delete the character before the cursor |
+| <kbd>**x**</kbd> | Delete current character; with `autoDeleteParen`, both of adjacent matching brackets or quotes when on the first |
+| <kbd>**X**</kbd> | Delete the character before the cursor; with `autoDeleteParen`, both of adjacent matching brackets or quotes when between them |
+| <kbd>**d**</kbd> <kbd>**h**</kbd> | Delete the character before the cursor |
 | <kbd>**~**</kbd> | Toggle case of character under cursor |
 | <kbd>**g**</kbd> <kbd>**u**</kbd> | Lowercase (operator) |
 | <kbd>**g**</kbd> <kbd>**U**</kbd> | Uppercase (operator) |
@@ -381,7 +382,7 @@ With several files and `StartUp.FileOpen.autoSplit` (the default), each file ope
 | <kbd>**Ctrl**</kbd> <kbd>**e**</kbd> | Insert the character which is below the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**y**</kbd> | Insert the character which is above the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd> | Insert a Tab |
-| <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd> | Delete the character before the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd> | Delete the character before the cursor; with `autoDeleteParen`, both of adjacent matching brackets or quotes when between them |
 | <kbd>**Ctrl**</kbd> <kbd>**t**</kbd> | Add an indent in current line |
 | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Remove an indent in current line |
 | <kbd>**Delete**</kbd> | Delete the character at the cursor, or join the next line at the end |
@@ -863,7 +864,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `set indentationlines` or `set noindentationlines` | Enable/disable indentation guide lines (alias: `indl`, `noindl`) |
 | `set autoindent` or `set noautoindent` | Enable/disable auto indent (alias: `ai`, `noai`) |
 | `set autocloseparen` or `set noautocloseparen` | Enable/disable auto close paren (alias: `acp`, `noacp`) |
-| `set autodeleteparen` or `set noautodeleteparen` | Enable/disable auto delete paren (alias: `adp`, `noadp`) |
+| `set autodeleteparen` or `set noautodeleteparen` | Enable/disable deleting bracket/quote pairs (alias: `adp`, `noadp`) |
 | `set clipboard` or `set noclipboard` | Enable/disable system clipboard (alias: `cb`, `nocb`) |
 | `set smoothscroll` or `set nosmoothscroll` | Enable/disable smooth scroll (alias: `sms`, `nosms`) |
 | `set livereload` or `set nolivereload` | Enable/disable live reload of config (alias: `lr`, `nolr`) |

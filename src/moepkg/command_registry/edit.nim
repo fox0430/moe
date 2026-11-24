@@ -144,7 +144,8 @@ proc handleDeleteChar*(
 ): Result[(), string] =
   ## Delete character(s) at cursor position (x command)
   ## count: number of characters to delete (default: 1)
-  ## With autoDeleteParen enabled, deleting an opening paren also deletes matching closing paren
+  ## With autoDeleteParen enabled, deleting the first of two adjacent matching
+  ## brackets or quotes with a count of 1 deletes both.
 
   logDebug("delete", "handleDeleteChar called with count=" & $count)
   let actualCount = max(1, count)
@@ -166,7 +167,7 @@ proc handleDeleteChar*(
     ctx.recordChange(change)
     return ok(())
 
-  # Auto-delete adjacent paren pairs only (e.g., [] () {} "" '')
+  # Auto-delete adjacent matching brackets or quotes only (e.g., [] () {} "" '')
   if ctx.state.autoDeleteParen and actualCount == 1:
     let cursorCol = ctx.cursor.column
 
@@ -247,7 +248,8 @@ proc handleDeleteChar*(
 proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Delete character(s) before cursor position (X command)
   ## count: number of characters to delete (default: 1)
-  ## With autoDeleteParen enabled, deleting a closing paren also deletes matching opening paren
+  ## With autoDeleteParen enabled, deleting between two adjacent matching
+  ## brackets or quotes with a count of 1 deletes both.
 
   logDebug("delete", "handleDeleteCharBefore called with count=" & $count)
   let actualCount = max(1, count)
@@ -263,7 +265,7 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
 
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
-  # Auto-delete adjacent paren pairs only (e.g., [] () {} "" '')
+  # Auto-delete adjacent matching brackets or quotes only (e.g., [] () {} "" '')
   if ctx.state.autoDeleteParen and actualCount == 1:
     let cursorCol = ctx.cursor.column
 

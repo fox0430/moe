@@ -197,8 +197,9 @@ proc joinLineAbove(buffer: TextBuffer, state: EditorState): Result[void, string]
   ok()
 
 proc deleteCharsBefore(buffer: TextBuffer, state: EditorState): Result[void, string] =
-  ## Delete an auto-paired pair, back to a soft tab stop or one character
-  ## before the cursor, which is past the start of the line.
+  ## Delete the adjacent matching brackets or quotes around the cursor, back to
+  ## a soft tab stop or one character before the cursor, which is past the
+  ## start of the line.
   let pos = state.cursor
   if state.autoDeleteParen:
     let currentLine = buffer.getLine(pos.line)
@@ -248,8 +249,8 @@ proc deleteCharsBefore(buffer: TextBuffer, state: EditorState): Result[void, str
   ok()
 
 proc deleteBeforeCursor*(buffer: TextBuffer, state: EditorState): Result[void, string] =
-  ## Backspace in Insert mode: an auto-paired pair, a soft tab stop, a
-  ## character, or the line break before the line.
+  ## Backspace in Insert mode: adjacent matching brackets or quotes around
+  ## the cursor, a soft tab stop, a character, or the line break before the line.
   let pos = state.cursor
   if pos.line == 0 and pos.column == 0:
     return ok()
