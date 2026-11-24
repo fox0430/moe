@@ -3308,11 +3308,13 @@ suite "Config - theme file is written only when colors changed":
     let
       savedThemeColors = themeColors
       savedThemeFileColors = themeFileColors
+      savedThemeSource = themeSource
       savedLoadedThemeConfig = loadedThemeConfig
 
   teardown:
     setThemeColors(savedThemeColors)
     themeFileColors = savedThemeFileColors
+    themeSource = savedThemeSource
     loadedThemeConfig = savedLoadedThemeConfig
 
   let userThemeToml = """
@@ -3512,6 +3514,575 @@ background = "#f0f0f0"
     check saveConfigToToml(config, configFile).isOk
     check symlinkExists(link)
     check "#0a0b0c" in readFile(themeFile)
+
+  test "Saving through a link leaves a neighboring ~ file alone":
+    for hard in [false, true]:
+      let (config, configFile, themeFile) = initLoadedTheme()
+      let link = themeFile & ".link"
+      if hard:
+        createHardlink(themeFile, link)
+      else:
+        createSymlink(themeFile, link)
+      writeFile(link & "~", "editor backup")
+      defer:
+        for f in [configFile, themeFile, link, link & ".bac", link & "~"]:
+          removeFile(f)
+
+      config.theme.path = link
+      initTheme(config)
+      editKeyword(0x0a)
+      check saveConfigToToml(config, configFile).isOk
+      check "#0a0b0c" in readFile(themeFile)
+      check readFile(link & ".bac") == userThemeToml
+      check fileExists(link & "~")
+      if fileExists(link & "~"):
+        check readFile(link & "~") == "editor backup"
+
+suite "Config - Theme palette":
+  setup:
+    let
+      savedThemeColors = themeColors
+      savedThemeFileColors = themeFileColors
+      savedThemeSource = themeSource
+      savedLoadedThemeConfig = loadedThemeConfig
+    setThemeColors(DefaultColors)
+    themeFileColors = none(ThemeColors)
+    themeSource = ThemeSource()
+
+  teardown:
+    setThemeColors(savedThemeColors)
+    themeFileColors = savedThemeFileColors
+    themeSource = savedThemeSource
+    loadedThemeConfig = savedLoadedThemeConfig
+
+  proc writePaletteTheme(content: string): string =
+    inc testFileCounter
+    result = getTempDir() / "moe_test_theme_palette_" & $testFileCounter & ".toml"
+    writeFile(result, content)
+
+  test "Names resolve in fg, bg, foreground and background":
+    let themeFile = writePaletteTheme(
+      """
+[Palette]
+dimmed1 = "#3b3c35"
+dimmed2 = "112233"
+term = "termDefault"
+
+[Colors]
+foreground = "dimmed1"
+background = "dimmed2"
+keyword = { fg = "dimmed1", bg = "term" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(themeFile, vr)
+    require loaded.isOk
+    check vr.errors.len == 0
+    check loaded.get[EditorColorPairIndex.default].foreground.rgb == rgb("#3b3c35")
+    check loaded.get[EditorColorPairIndex.default].background.rgb == rgb("#112233")
+    check loaded.get[EditorColorPairIndex.keyword].foreground.rgb == rgb("#3b3c35")
+    check loaded.get[EditorColorPairIndex.keyword].background.rgb == TerminalDefaultRgb
+
+  test "[Palette] may come after [Colors]":
+    let themeFile = writePaletteTheme(
+      """
+[Colors]
+keyword = { fg = "accent" }
+
+[Palette]
+accent = "#123456"
+"""
+    )
+    defer:
+      removeFile(themeFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(themeFile, vr)
+    require loaded.isOk
+    check vr.errors.len == 0
+    check loaded.get[EditorColorPairIndex.keyword].foreground.rgb == rgb("#123456")
+
+  test "Literal colors still load without [Palette]":
+    let themeFile = writePaletteTheme(
+      """
+[Colors]
+keyword = { fg = "#123456" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+
+    let loaded = loadThemeFromToml(themeFile)
+    require loaded.isOk
+    check loaded.get[EditorColorPairIndex.keyword].foreground.rgb == rgb("#123456")
+
+  test "An undefined name is reported and other entries still load":
+    let themeFile = writePaletteTheme(
+      """
+[Palette]
+accent = "#123456"
+
+[Colors]
+keyword = { fg = "missing" }
+lineNum = { fg = "accent" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(themeFile, vr)
+    require loaded.isOk
+    require vr.errors.len == 1
+    check vr.errors[0].name == "Theme.Colors.keyword.fg"
+    check vr.errors[0].val == "missing"
+    check loaded.get[EditorColorPairIndex.lineNum].foreground.rgb == rgb("#123456")
+
+  test "Invalid palette entries are reported and skipped":
+    let themeFile = writePaletteTheme(
+      """
+[Palette]
+notAColor = "nope"
+abcdef = "#123456"
+termDefault = "#123456"
+"not a name" = "#123456"
+
+[Colors]
+keyword = { fg = "#abcdef" }
+lineNum = { fg = "notAColor" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(themeFile, vr)
+    require loaded.isOk
+    # notAColor, abcdef, termDefault, "not a name", and lineNum's unresolved
+    # reference are all reported; the literal color and the other entry load.
+    require vr.errors.len == 5
+    check vr.errors.countIt(it.name == "Theme.Palette.notAColor") == 1
+    check vr.errors.countIt(it.name == "Theme.Palette.abcdef") == 1
+    check vr.errors.countIt(it.name == "Theme.Palette.termDefault") == 1
+    check vr.errors.countIt(it.name == "Theme.Palette.not a name") == 1
+    check vr.errors.countIt(it.name == "Theme.Colors.lineNum.fg") == 1
+    check loaded.get[EditorColorPairIndex.keyword].foreground.rgb == rgb("#abcdef")
+
+  test "A palette value cannot reference another palette name":
+    let themeFile = writePaletteTheme(
+      """
+[Palette]
+a = "b"
+b = "#123456"
+
+[Colors]
+keyword = { fg = "b" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(themeFile, vr)
+    require loaded.isOk
+    require vr.errors.len == 1
+    check vr.errors[0].name == "Theme.Palette.a"
+    check vr.errors[0].expected == themePaletteValueExpected
+    check loaded.get[EditorColorPairIndex.keyword].foreground.rgb == rgb("#123456")
+
+  test "A non-table [Palette] is reported and [Colors] still loads":
+    let themeFile = writePaletteTheme(
+      """
+Palette = "#123456"
+
+[Colors]
+keyword = { fg = "#abcdef" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(themeFile, vr)
+    require loaded.isOk
+    require vr.errors.len == 1
+    check vr.errors[0].name == "Theme.Palette"
+    check loaded.get[EditorColorPairIndex.keyword].foreground.rgb == rgb("#abcdef")
+
+  test "Loading records the palette and the channels written by name":
+    let themeFile = writePaletteTheme(
+      """
+[Palette]
+dimmed1 = "#3b3c35"
+dimmed2 = "#112233"
+
+[Colors]
+foreground = "dimmed1"
+keyword = { fg = "dimmed2", bg = "#445566" }
+lineNum = { fg = "#777777", bg = "dimmed2" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(themeFile, vr)
+    require loaded.isOk
+    check vr.errors.len == 0
+    let source = loaded.get[1]
+    check source.palette.len == 2
+    check source.palette["dimmed1"] == rgb("#3b3c35")
+    check source.refs[(index: EditorColorPairIndex.default, isFg: true)] == "dimmed1"
+    check source.refs[(index: EditorColorPairIndex.keyword, isFg: true)] == "dimmed2"
+    check (index: EditorColorPairIndex.keyword, isFg: false) notin source.refs
+    check source.refs[(index: EditorColorPairIndex.lineNum, isFg: false)] == "dimmed2"
+    check (index: EditorColorPairIndex.lineNum, isFg: true) notin source.refs
+
+  test "Saving keeps references and the palette, except for the changed channel":
+    let themeFile = writePaletteTheme(
+      """
+# Hand-written layout saveThemeToToml would not reproduce.
+[Palette]
+unused = "#999999"
+dimmed1 = "#3b3c35"
+dimmed2 = "#112233"
+
+[Colors]
+foreground = "dimmed1"
+background = "#000000"
+keyword = { fg = "dimmed2", bg = "#445566" }
+lineNum = { fg = "#777777", bg = "dimmed2" }
+"""
+    )
+    inc testFileCounter
+    let configFile =
+      getTempDir() / "moe_test_theme_palette_cfg_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(themeFile)
+      removeFile(configFile)
+      if fileExists(themeFile & ".bac"):
+        removeFile(themeFile & ".bac")
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+    initTheme(config)
+    require not themeColorsEdited()
+
+    # Nothing changed: the hand-written layout survives byte for byte.
+    let originalTheme = readFile(themeFile)
+    check saveConfigToToml(config, configFile).isOk
+    check readFile(themeFile) == originalTheme
+
+    # Change one referenced channel only.
+    var colors = themeColors
+    colors[EditorColorPairIndex.lineNum].foreground = ThemeColor(rgb: rgb("#0a0b0c"))
+    setThemeColors(colors)
+    check saveConfigToToml(config, configFile).isOk
+
+    let saved = readFile(themeFile)
+    check saved.contains "\n[Palette]\n"
+    check saved.contains "unused = \"#999999\""
+    check saved.contains "dimmed1 = \"#3b3c35\""
+    check saved.contains "dimmed2 = \"#112233\""
+    check saved.contains "foreground = \"dimmed1\""
+    check saved.contains "keyword = { fg = \"dimmed2\", bg = \"#445566\" }"
+    check saved.contains "lineNum = { fg = \"#0a0b0c\", bg = \"dimmed2\" }"
+    # An unused name keeps its place in the original order.
+    check saved.find("unused") < saved.find("dimmed1")
+    check saved.find("dimmed1") < saved.find("dimmed2")
+
+    # The saved file reloads to the same colors.
+    let reloaded = loadThemeFromToml(themeFile)
+    require reloaded.isOk
+    check reloaded.get == colors
+
+  test "Saving keeps a termDefault palette value and a bg-only name":
+    let themeFile = writePaletteTheme(
+      """
+[Palette]
+term = "termDefault"
+accent = "#123456"
+
+[Colors]
+currentLine = { bg = "accent" }
+currentColumn = { bg = "accent" }
+keyword = { fg = "term" }
+"""
+    )
+    inc testFileCounter
+    let configFile =
+      getTempDir() / "moe_test_theme_palette_term_cfg_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(themeFile)
+      removeFile(configFile)
+      if fileExists(themeFile & ".bac"):
+        removeFile(themeFile & ".bac")
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+    initTheme(config)
+    require not themeColorsEdited()
+
+    # Change a channel written as a literal to force a rewrite.
+    var colors = themeColors
+    colors[EditorColorPairIndex.lineNum].foreground = ThemeColor(rgb: rgb("#0a0b0c"))
+    setThemeColors(colors)
+    check saveConfigToToml(config, configFile).isOk
+
+    let saved = readFile(themeFile)
+    check saved.contains "term = \"termDefault\""
+    check saved.contains "currentLine = { bg = \"accent\" }"
+    check saved.contains "currentColumn = { bg = \"accent\" }"
+    check saved.contains "keyword = { fg = \"term\" }"
+
+    # The saved file reloads to the same colors.
+    let reloaded = loadThemeFromToml(themeFile)
+    require reloaded.isOk
+    check reloaded.get == colors
+
+  test "Hex-like names with an underscore are names":
+    let themeFile = writePaletteTheme(
+      """
+[Palette]
+face_1 = "#112233"
+abc_de = "#445566"
+
+[Colors]
+keyword = { fg = "face_1", bg = "abc_de" }
+lineNum = { fg = "dead_b" }
+"""
+    )
+    defer:
+      removeFile(themeFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(themeFile, vr)
+    require loaded.isOk
+    require vr.errors.len == 1
+    check vr.errors[0].name == "Theme.Colors.lineNum.fg"
+    check loaded.get[EditorColorPairIndex.keyword].foreground.rgb == rgb("#112233")
+    check loaded.get[EditorColorPairIndex.keyword].background.rgb == rgb("#445566")
+
+  proc loadForSave(content: string): tuple[config: EditorConfig, themeFile: string] =
+    result.themeFile = writePaletteTheme(content)
+    result.config = newEditorConfig()
+    result.config.theme.kind = tkConfig
+    result.config.theme.path = result.themeFile
+    initTheme(result.config)
+
+  proc editColor(index: EditorColorPairIndex, isFg: bool, hex: string) =
+    var colors = themeColors
+    if isFg:
+      colors[index].foreground = ThemeColor(rgb: rgb(hex))
+    else:
+      colors[index].background = ThemeColor(rgb: rgb(hex))
+    setThemeColors(colors)
+
+  template checkSaveRoundTrip(config: EditorConfig, themeFile: string) =
+    check saveConfigToToml(config, themeFile & ".cfg").isOk
+    let want = themeColors
+    var vr = newValidationResult()
+    let reloaded = loadTheme(config, vr)
+    require reloaded.isOk
+    check not vr.hasErrors
+    check reloaded.get == want
+
+  template removeSaved(themeFile: string) =
+    for f in [themeFile, themeFile & ".bac", themeFile & ".cfg"]:
+      removeFile(f)
+
+  test "Entries that inherit the background follow the palette after a save":
+    let (config, themeFile) = loadForSave(
+      """
+[Palette]
+base = "#112233"
+
+[Colors]
+background = "base"
+lineNum = { fg = "#777777" }
+"""
+    )
+    defer:
+      removeSaved(themeFile)
+
+    editColor(EditorColorPairIndex.keyword, true, "#0a0b0c")
+    checkSaveRoundTrip(config, themeFile)
+    let saved = readFile(themeFile)
+    check "keyword = { fg = \"#0a0b0c\" }" in saved
+    check "lineNum = { fg = \"#777777\" }" in saved
+
+    writeFile(themeFile, saved.replace("base = \"#112233\"", "base = \"#223344\""))
+    let recolored = loadThemeFromToml(themeFile)
+    require recolored.isOk
+    check recolored.get[EditorColorPairIndex.lineNum].background.rgb == rgb("#223344")
+    check recolored.get[EditorColorPairIndex.keyword].background.rgb == rgb("#223344")
+
+  test "Changing what entries inherit from keeps their current colors":
+    let (config, themeFile) = loadForSave(
+      """
+[Colors]
+background = "#112233"
+builtin = { fg = "#445566" }
+"""
+    )
+    defer:
+      removeSaved(themeFile)
+
+    editColor(EditorColorPairIndex.default, false, "#221133")
+    editColor(EditorColorPairIndex.builtin, true, "#0a0b0c")
+    check themeColors[EditorColorPairIndex.markdownHeading].foreground.rgb ==
+      rgb("#445566")
+    checkSaveRoundTrip(config, themeFile)
+
+  test "Changing part of an adapted diff tint keeps the rest":
+    let (config, themeFile) = loadForSave(
+      """
+[Colors]
+foreground = "#111111"
+background = "#f0f0f0"
+"""
+    )
+    defer:
+      removeSaved(themeFile)
+
+    editColor(EditorColorPairIndex.diffViewerAddedWord, true, "#0a0b0c")
+    checkSaveRoundTrip(config, themeFile)
+
+  test "A background turned light keeps the diff tints that were saved":
+    for tints in ["", "diffViewerAddedLineBg = { bg = \"#17301c\" }\n"]:
+      let (config, themeFile) =
+        loadForSave("[Colors]\nforeground = \"#dadada\"\n" & tints)
+      defer:
+        removeSaved(themeFile)
+
+      editColor(EditorColorPairIndex.default, false, "#f0f0f0")
+      checkSaveRoundTrip(config, themeFile)
+
+  test "Only the diff tints a light theme leaves out are adapted":
+    let (_, themeFile) = loadForSave(
+      """
+[Colors]
+background = "#f0f0f0"
+diffViewerAddedLineBg = { bg = "#17301c" }
+"""
+    )
+    defer:
+      removeSaved(themeFile)
+
+    check themeColors[EditorColorPairIndex.diffViewerAddedLineBg] ==
+      DefaultColors[EditorColorPairIndex.diffViewerAddedLineBg]
+    check themeColors[EditorColorPairIndex.diffViewerDeletedLineBg] ==
+      LightColors[EditorColorPairIndex.diffViewerDeletedLineBg]
+
+  test "A name replaced by a saved color does not come back":
+    let (config, themeFile) = loadForSave(
+      """
+[Palette]
+dimmed1 = "#3b3c35"
+
+[Colors]
+lineNum = { fg = "dimmed1" }
+"""
+    )
+    defer:
+      removeSaved(themeFile)
+
+    editColor(EditorColorPairIndex.lineNum, true, "#0a0b0c")
+    checkSaveRoundTrip(config, themeFile)
+    editColor(EditorColorPairIndex.lineNum, true, "#3b3c35")
+    checkSaveRoundTrip(config, themeFile)
+    check "lineNum = { fg = \"#3b3c35\" }" in readFile(themeFile)
+
+  test "Switching to a theme without a palette drops the old one":
+    let paletteTheme = writePaletteTheme(
+      """
+[Palette]
+dimmed1 = "#3b3c35"
+
+[Colors]
+foreground = "dimmed1"
+"""
+    )
+    let plainTheme = writePaletteTheme(
+      """
+[Colors]
+keyword = { fg = "#123456" }
+"""
+    )
+    inc testFileCounter
+    let configFile =
+      getTempDir() / "moe_test_theme_palette_switch_cfg_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(paletteTheme)
+      removeFile(plainTheme)
+      removeFile(configFile)
+      if fileExists(plainTheme & ".bac"):
+        removeFile(plainTheme & ".bac")
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = paletteTheme
+    initTheme(config)
+    check not themeSource.isEmpty
+
+    config.theme.path = plainTheme
+    initTheme(config)
+    check themeSource.isEmpty
+
+    var colors = themeColors
+    colors[EditorColorPairIndex.lineNum].foreground = ThemeColor(rgb: rgb("#0a0b0c"))
+    setThemeColors(colors)
+    check saveConfigToToml(config, configFile).isOk
+    check "\n[Palette]\n" notin readFile(plainTheme)
+
+  test "A fallback to defaults drops the palette":
+    withTempHome(tmpHome):
+      let paletteTheme = writePaletteTheme(
+        """
+[Palette]
+dimmed1 = "#3b3c35"
+
+[Colors]
+foreground = "dimmed1"
+"""
+      )
+      let brokenTheme = writePaletteTheme("[Colors\n")
+      inc testFileCounter
+      let configFile =
+        getTempDir() / "moe_test_theme_palette_fallback_cfg_" & $testFileCounter &
+        ".toml"
+      # Bootstrapping is only allowed inside the moe config dir.
+      let missingTheme = tmpHome / ".config" / "moe" / "themes" / "fallback.toml"
+      defer:
+        removeFile(paletteTheme)
+        removeFile(brokenTheme)
+        removeFile(configFile)
+        if fileExists(missingTheme):
+          removeFile(missingTheme)
+        if fileExists(missingTheme & ".bac"):
+          removeFile(missingTheme & ".bac")
+
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = paletteTheme
+      initTheme(config)
+      check not themeSource.isEmpty
+
+      config.theme.path = brokenTheme
+      initTheme(config)
+      check themeSource.isEmpty
+      check themeFileColors.isNone
+
+      # The missing file is bootstrapped without the previous palette.
+      config.theme.path = missingTheme
+      check saveConfigToToml(config, configFile).isOk
+      check fileExists(missingTheme)
+      check "\n[Palette]\n" notin readFile(missingTheme)
 
 suite "Config - Theme path containment (regression)":
   test "isThemePathAllowed accepts only files inside moe config dir":

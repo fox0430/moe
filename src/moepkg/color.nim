@@ -853,6 +853,10 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
     else:
       s
 
+  # `fromHex` alone also skips `_` and accepts a `0x`/`#` prefix.
+  if not hexStr.allCharsInSet(HexDigits):
+    return Result[Rgb, string].err "Invalid hex color"
+
   var rgb: Rgb
   try:
     rgb = Rgb(

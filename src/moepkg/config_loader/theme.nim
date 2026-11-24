@@ -29,6 +29,9 @@ import ../[config, color, theme as themeMod, vscode_theme]
 
 import ../buffer/atomic_write
 
+when defined(posix):
+  from std/posix import geteuid, `==`
+
 import base, save_base
 
 # Top-level TOML section name handled by this module.
@@ -96,6 +99,70 @@ const MarkdownFallbackColors = [
   (EditorColorPairIndex.markdownFrontmatter, EditorColorPairIndex.preprocessor),
 ]
 
+# Named colors from the optional [Palette] table, in file order.
+type ThemePalette* = OrderedTable[string, Rgb]
+
+# One side of one color pair. The top-level foreground/background use
+# `EditorColorPairIndex.default`.
+type ThemeChannel* = tuple[index: EditorColorPairIndex, isFg: bool]
+
+# What the loaded theme file said, so a save can keep its palette and the
+# channels it wrote by name or left out without putting that on ThemeColor.
+type ThemeSource* = object
+  palette*: ThemePalette
+  refs*: Table[ThemeChannel, string]
+  omittedFg*, omittedBg*: set[EditorColorPairIndex]
+
+proc isEmpty*(source: ThemeSource): bool =
+  ## True without a palette and references to it.
+  source.palette.len == 0 and source.refs.len == 0
+
+proc explicitEntries(source: ThemeSource): set[EditorColorPairIndex] =
+  ## Entries the theme file sets at least one channel of.
+  {EditorColorPairIndex.low .. EditorColorPairIndex.high} -
+    source.omittedFg * source.omittedBg
+
+proc isValidPaletteName(name: string): bool =
+  ## Palette names are emitted as bare keys and must not read as color
+  ## literals (`abcdef` would be a hex color, `termDefault` a literal).
+  if name.len == 0 or name[0] notin {'A' .. 'Z', 'a' .. 'z', '_'}:
+    return false
+  for c in name:
+    if c notin {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '-'}:
+      return false
+  name != "termDefault" and hexToRgb(name).isErr
+
+proc loadThemePalette(toml: TomlValueRef, vr: var ValidationResult): ThemePalette =
+  ## Read [Palette] before [Colors], which refers to it. Bad entries are
+  ## reported and skipped; a non-table section is reported too.
+  result = initOrderedTable[string, Rgb]()
+  if not toml.hasKey("Palette"):
+    return
+  let value = toml["Palette"]
+  if value.kind != TomlValueKind.Table:
+    vr.addError("Theme.Palette", $value, themePaletteExpected)
+    return
+  for name, color in value.getTable():
+    let path = fullKey("Theme.Palette", name)
+    if not isValidPaletteName(name):
+      vr.addError(path, name, themePaletteNameExpected)
+      continue
+    if color.kind != TomlValueKind.String:
+      vr.addError(path, $color, themePaletteValueExpected)
+      continue
+    # Palette values cannot name other palette entries.
+    let parsed = parseThemeColor(color.getStr())
+    if parsed.isErr:
+      vr.addError(path, color.getStr(), themePaletteValueExpected)
+      continue
+    result[name] = parsed.get
+
+proc resolveThemeColor(s: string, palette: ThemePalette): Result[Rgb, string] =
+  ## Palette names win over literals so a name shadows a literal color.
+  if s in palette:
+    return Result[Rgb, string].ok palette[s]
+  parseThemeColor(s)
+
 proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
   ## Convert a TOML theme key to its `EditorColorPairIndex` by reverse
   ## lookup against `toTomlColorKey`. Most TOML keys match the enum name
@@ -110,38 +177,66 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
       return some(index)
   return none(EditorColorPairIndex)
 
-proc loadThemeFromToml*(
+proc baseThemeColors(default: ColorPair): ThemeColors =
+  ## What every entry starts from under the top-level foreground/background.
+  ## Entries whose bundled background is #000000 inherit the theme's background
+  ## (e.g. "termDefault") instead of keeping the hardcoded color.
+  result = DefaultColors
+  result[EditorColorPairIndex.default] = default
+
+  let hardcodedDefaultBg = rgb("#000000")
+  for index in EditorColorPairIndex:
+    if index != EditorColorPairIndex.default and
+        result[index].background.rgb == hardcodedDefaultBg:
+      result[index].background = default.background
+
+proc applyMarkdownFallback(
+    colors: var ThemeColors, omittedFg, omittedBg: set[EditorColorPairIndex]
+) =
+  ## Themes written before the Markdown keys colored these with the generic
+  ## keys; keep that look for whichever of fg/bg the theme does not set.
+  for (markdown, generic) in MarkdownFallbackColors:
+    if markdown in omittedFg:
+      colors[markdown].foreground = colors[generic].foreground
+    if markdown in omittedBg:
+      colors[markdown].background = colors[generic].background
+
+proc loadThemeWithSource*(
     path: string, vr: var ValidationResult
-): Result[ThemeColors, string] =
-  ## Load theme colors from a TOML file.
+): Result[(ThemeColors, ThemeSource), string] =
+  ## Load theme colors and the palette references they came from.
   ## Returns ThemeColors based on DefaultColors with overrides from the file.
-  ## Invalid keys/values inside the [Colors] section are recorded in `vr`
+  ## Invalid keys/values inside [Colors] and [Palette] are recorded in `vr`
   ## (and skipped) instead of aborting the load.
   ## File-level errors (file not found, parse failure, missing [Colors]
   ## section) are returned as `Result.err` and are NOT recorded in `vr`.
   ## Callers that want those errors surfaced should record them themselves
   ## (e.g. `initTheme` records them under `Theme.path`).
 
+  type Loaded = Result[(ThemeColors, ThemeSource), string]
+
   let expandedPath = path.expandTilde
   if not fileExists(expandedPath):
-    return Result[ThemeColors, string].err("Theme file not found: " & expandedPath)
+    return Loaded.err("Theme file not found: " & expandedPath)
 
   var toml: TomlValueRef
   try:
     toml = parseFile(expandedPath)
   except CatchableError as e:
-    return Result[ThemeColors, string].err("Failed to parse theme file: " & e.msg)
+    return Loaded.err("Failed to parse theme file: " & e.msg)
 
-  # Start with default colors
+  # Replaced below once the top-level foreground/background are known
   var colors = DefaultColors
 
   # Check for Colors section
   if not toml.hasKey("Colors"):
-    return Result[ThemeColors, string].err("Theme file missing [Colors] section")
+    return Loaded.err("Theme file missing [Colors] section")
 
   if toml["Colors"].kind != TomlValueKind.Table:
-    return
-      Result[ThemeColors, string].err("Theme file [Colors] section must be a table")
+    return Loaded.err("Theme file [Colors] section must be a table")
+
+  # The palette has to be known before [Colors] resolves its names.
+  var source = ThemeSource(palette: loadThemePalette(toml, vr))
 
   let colorsTable = toml["Colors"].getTable()
   const section = "Theme.Colors"
@@ -156,9 +251,11 @@ proc loadThemeFromToml*(
       vr.addError(fullKey(section, "foreground"), $v, themeColorExpected)
     else:
       let raw = v.getStr()
-      let fgResult = parseThemeColor(raw)
+      let fgResult = resolveThemeColor(raw, source.palette)
       if fgResult.isOk:
         defaultFg = fgResult.get
+        if raw in source.palette:
+          source.refs[(EditorColorPairIndex.default, true)] = raw
       else:
         vr.addError(fullKey(section, "foreground"), raw, themeColorExpected)
 
@@ -168,25 +265,19 @@ proc loadThemeFromToml*(
       vr.addError(fullKey(section, "background"), $v, themeColorExpected)
     else:
       let raw = v.getStr()
-      let bgResult = parseThemeColor(raw)
+      let bgResult = resolveThemeColor(raw, source.palette)
       if bgResult.isOk:
         defaultBg = bgResult.get
+        if raw in source.palette:
+          source.refs[(EditorColorPairIndex.default, false)] = raw
       else:
         vr.addError(fullKey(section, "background"), raw, themeColorExpected)
 
-  # Update default color pair
-  colors[EditorColorPairIndex.default] = ColorPair(
-    foreground: ThemeColor(rgb: defaultFg), background: ThemeColor(rgb: defaultBg)
+  colors = baseThemeColors(
+    ColorPair(
+      foreground: ThemeColor(rgb: defaultFg), background: ThemeColor(rgb: defaultBg)
+    )
   )
-
-  # Apply default background to all entries that still use the old default (#000000).
-  # This ensures entries not listed in the theme file inherit the user's chosen
-  # background (e.g. "termDefault") instead of keeping hardcoded #000000.
-  let hardcodedDefaultBg = rgb("#000000")
-  for index in EditorColorPairIndex:
-    if index != EditorColorPairIndex.default and
-        colors[index].background.rgb == hardcodedDefaultBg:
-      colors[index].background = ThemeColor(rgb: defaultBg)
 
   # Process all color entries. Each entry is an inline table of the form
   # `entry = { fg = "...", bg = "..." }`; both `fg` and `bg` are optional.
@@ -226,10 +317,12 @@ proc loadThemeFromToml*(
           vr.addError(subkeyPath, $subval, themeColorExpected)
           continue
         let raw = subval.getStr()
-        let parsed = parseThemeColor(raw)
+        let parsed = resolveThemeColor(raw, source.palette)
         if parsed.isErr:
           vr.addError(subkeyPath, raw, themeColorExpected)
           continue
+        if raw in source.palette:
+          source.refs[(index, subkey == "fg")] = raw
         if subkey == "fg":
           colors[index].foreground = ThemeColor(rgb: parsed.get)
           fgSet.incl index
@@ -239,40 +332,67 @@ proc loadThemeFromToml*(
       else:
         vr.addUnknownKey(fullKey(section, key & "." & subkey))
 
-  # Themes written before the Markdown keys colored these with the generic
-  # keys; keep that look for whichever of fg/bg the theme does not set.
-  for (markdown, generic) in MarkdownFallbackColors:
-    if markdown notin fgSet:
-      colors[markdown].foreground = colors[generic].foreground
-    if markdown notin bgSet:
-      colors[markdown].background = colors[generic].background
+  const allIndexes = {EditorColorPairIndex.low .. EditorColorPairIndex.high}
+  source.omittedFg = allIndexes - fgSet - {EditorColorPairIndex.default}
+  source.omittedBg = allIndexes - bgSet - {EditorColorPairIndex.default}
+  colors.applyMarkdownFallback(source.omittedFg, source.omittedBg)
 
-  return Result[ThemeColors, string].ok(colors)
+  return Loaded.ok((colors, source))
+
+proc loadThemeFromToml*(
+    path: string, vr: var ValidationResult
+): Result[ThemeColors, string] =
+  ## Load only the colors; the palette and its references are dropped.
+  let loaded = loadThemeWithSource(path, vr)
+  if loaded.isErr:
+    return Result[ThemeColors, string].err(loaded.error)
+  Result[ThemeColors, string].ok(loaded.get[0])
 
 proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
   ## Backwards-compatible wrapper that discards validation errors.
   var vr = newValidationResult()
   loadThemeFromToml(path, vr)
 
-proc loadTheme*(
+proc loadThemeWithSource*(
     config: EditorConfig, vr: var ValidationResult
-): Result[ThemeColors, string] =
-  ## Load theme based on config settings.
+): Result[(ThemeColors, ThemeSource), string] =
+  ## Load theme colors and their palette references based on config settings.
   ## Invalid keys/values from user theme files are recorded in `vr`.
+  ## Only `tkConfig` can have a palette; the other kinds return an empty source.
+
+  type Loaded = Result[(ThemeColors, ThemeSource), string]
 
   let loaded =
     case config.theme.kind
     of tkDefault:
-      Result[ThemeColors, string].ok(DefaultColors)
+      Loaded.ok((DefaultColors, ThemeSource()))
     of tkConfig:
-      loadThemeFromToml(config.theme.path, vr)
+      loadThemeWithSource(config.theme.path, vr)
     of tkVscode:
-      loadVSCodeTheme()
+      let vscode = loadVSCodeTheme()
+      if vscode.isErr:
+        Loaded.err(vscode.error)
+      else:
+        Loaded.ok((vscode.get, ThemeSource()))
   if loaded.isErr:
     return loaded
-  var colors = loaded.get
-  colors.adaptDiffTintsToBackground()
-  return Result[ThemeColors, string].ok(colors)
+  var colors = loaded.get[0]
+  let explicit =
+    if config.theme.kind == tkConfig:
+      loaded.get[1].explicitEntries
+    else:
+      {}
+  colors.adaptDiffTintsToBackground(explicit)
+  return Loaded.ok((colors, loaded.get[1]))
+
+proc loadTheme*(
+    config: EditorConfig, vr: var ValidationResult
+): Result[ThemeColors, string] =
+  ## Load theme based on config settings, dropping the palette references.
+  let loaded = loadThemeWithSource(config, vr)
+  if loaded.isErr:
+    return Result[ThemeColors, string].err(loaded.error)
+  Result[ThemeColors, string].ok(loaded.get[0])
 
 proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
   ## Backwards-compatible wrapper that discards validation errors.
@@ -290,13 +410,20 @@ proc themeColorsEdited*(): bool =
   ## what was last loaded or saved.
   themeFileColors.isSome and themeColors != themeFileColors.get
 
+# What the theme file holds as of the last load or save: the [Palette] table and
+# the channels written by name or left out. Empty when the theme did not come from a theme file, so a
+# save can never carry over another theme's palette.
+var themeSource*: ThemeSource
+
 # The [Theme] setting `themeColors` was last loaded for; none before the first
 # `initTheme`. Applying a config rereads the theme only when its setting differs.
 var loadedThemeConfig*: Option[ThemeConfig]
 
 # Forward declaration: `initTheme` bootstraps a missing tkConfig file via
 # `saveThemeToToml`, which is defined further down in the Serializers section.
-proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string]
+proc saveThemeToToml*(
+  colors: ThemeColors, path: string, source = ThemeSource()
+): Result[void, string]
 
 proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
   ## Initialize the theme based on configuration.
@@ -322,22 +449,25 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
         vr.addError("Theme.path", config.theme.path, "theme file inside moe config dir")
         initDefaultTheme()
         themeFileColors = none(ThemeColors)
+        themeSource = ThemeSource()
         return
       let saveResult = saveThemeToToml(DefaultColors, config.theme.path)
       if saveResult.isErr:
         vr.addLoadFailure("Theme.path", config.theme.path, saveResult.error)
         initDefaultTheme()
         themeFileColors = none(ThemeColors)
+        themeSource = ThemeSource()
         return
 
-  let themeResult = loadTheme(config, vr)
+  let themeResult = loadThemeWithSource(config, vr)
   if themeResult.isOk:
-    setThemeColors(themeResult.get)
+    setThemeColors(themeResult.get[0])
     themeFileColors =
       if config.theme.kind == tkConfig:
-        some(themeResult.get)
+        some(themeResult.get[0])
       else:
         none(ThemeColors)
+    themeSource = themeResult.get[1]
   else:
     case config.theme.kind
     of tkConfig:
@@ -348,6 +478,7 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
       discard
     initDefaultTheme()
     themeFileColors = none(ThemeColors)
+    themeSource = ThemeSource()
 
 proc initTheme*(config: EditorConfig) =
   ## Backwards-compatible wrapper that discards validation errors.
@@ -363,25 +494,119 @@ proc appendThemeToml*(lines: var seq[string], cfg: ThemeConfig) =
     lines.add "path = " & toTomlString(cfg.path)
   lines.add ""
 
-proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string] =
-  ## Save theme colors to a TOML file
+proc reloadedColors(colors: ThemeColors, source: ThemeSource): ThemeColors =
+  ## What loading a file that leaves out `source`'s omitted channels would give.
+  result = baseThemeColors(colors[EditorColorPairIndex.default])
+  for index in EditorColorPairIndex:
+    if index notin source.omittedFg:
+      result[index].foreground = colors[index].foreground
+    if index notin source.omittedBg:
+      result[index].background = colors[index].background
+  result.applyMarkdownFallback(source.omittedFg, source.omittedBg)
+  result.adaptDiffTintsToBackground(source.explicitEntries)
+
+proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource =
+  ## The part of `source` that still describes `colors`: names whose palette
+  ## entry holds the color, and omitted channels that would load back as they are.
+  result = source
+  result.refs.clear()
+  for channel, name in source.refs:
+    let color =
+      if channel.isFg:
+        colors[channel.index].foreground
+      else:
+        colors[channel.index].background
+    if name in source.palette and source.palette[name] == color.rgb:
+      result.refs[channel] = name
+
+  # Writing one channel can change what another would load as (the Markdown
+  # fallback and the diff tints), so repeat until nothing more is needed.
+  while true:
+    let reloaded = reloadedColors(colors, result)
+    var changedFg, changedBg: set[EditorColorPairIndex]
+    for index in EditorColorPairIndex:
+      if index in result.omittedFg and
+          reloaded[index].foreground != colors[index].foreground:
+        changedFg.incl index
+      if index in result.omittedBg and
+          reloaded[index].background != colors[index].background:
+        changedBg.incl index
+    if changedFg == {} and changedBg == {}:
+      break
+    result.omittedFg = result.omittedFg - changedFg
+    result.omittedBg = result.omittedBg - changedBg
+
+proc themeChannelToTomlValue(
+    color: ThemeColor, channel: ThemeChannel, source: ThemeSource
+): string =
+  ## The name in `source` for the channel, or else the color itself.
+  if channel in source.refs:
+    return toTomlString(source.refs[channel])
+  themeColorToTomlValue(color)
+
+proc mustWriteInPlace(path: string): bool =
+  ## True when renaming a new file over `path` would break a link or take the
+  ## file from its owner.
+  let target = classifyTarget(path)
+  result = target.isSymlink or target.linkCount > 1
+  when defined(posix):
+    result = result or target.uid != geteuid()
+
+proc writeThemeInPlace(path, content: string): Result[void, string] =
+  ## Overwrite `path`, whose content `<path>.bac` holds, and put that content
+  ## back when the write fails.
+  try:
+    writeFile(path, content)
+    Result[void, string].ok()
+  except CatchableError as e:
+    var msg = "Failed to write theme file: " & e.msg
+    try:
+      copyFile(path & ".bac", path)
+    except CatchableError:
+      msg.add "; the previous content is in " & path & ".bac"
+    Result[void, string].err(msg)
+
+proc saveThemeToToml*(
+    colors: ThemeColors, path: string, source = ThemeSource()
+): Result[void, string] =
+  ## Save theme colors to a TOML file. With a `source`, its [Palette] is
+  ## written first (in file order, unused names included), the channels the
+  ## file wrote by name stay names while the palette still holds the color, and
+  ## the ones it left out stay out while they would load as the same color.
+  let source = source.sourceFor(colors)
   var lines: seq[string] = @[]
 
   lines.add "# Theme color configuration"
   lines.add "# Color format: \"#RRGGBB\" (hex) or \"termDefault\" (terminal default color)"
   lines.add "# \"termDefault\" can be used for both foreground and background."
+  lines.add "# Define named colors under [Palette] and reuse them as fg/bg values."
   lines.add "# Examples:"
   lines.add "#   foreground = \"termDefault\"  # Use terminal's default foreground color"
   lines.add "#   background = \"termDefault\"  # Use terminal's default background color"
   lines.add ""
+
+  if source.palette.len > 0:
+    lines.add "[Palette]"
+    for name, color in source.palette:
+      lines.add name & " = " & themeColorToTomlValue(ThemeColor(rgb: color))
+    lines.add ""
+
   lines.add "[Colors]"
   lines.add ""
 
   # Write default foreground/background
   lines.add "foreground = " &
-    themeColorToTomlValue(colors[EditorColorPairIndex.default].foreground)
+    themeChannelToTomlValue(
+      colors[EditorColorPairIndex.default].foreground,
+      (index: EditorColorPairIndex.default, isFg: true),
+      source,
+    )
   lines.add "background = " &
-    themeColorToTomlValue(colors[EditorColorPairIndex.default].background)
+    themeChannelToTomlValue(
+      colors[EditorColorPairIndex.default].background,
+      (index: EditorColorPairIndex.default, isFg: false),
+      source,
+    )
   lines.add ""
 
   # Write all other color pairs as inline tables: `key = { fg = "...", bg = "..." }`.
@@ -390,13 +615,19 @@ proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string] =
     if index == EditorColorPairIndex.default:
       continue
 
-    let key = toTomlColorKey(index)
-    let bg = themeColorToTomlValue(colors[index].background)
-    if index in ColorBgOnlyEntries:
-      lines.add key & " = { bg = " & bg & " }"
-    else:
-      let fg = themeColorToTomlValue(colors[index].foreground)
-      lines.add key & " = { fg = " & fg & ", bg = " & bg & " }"
+    var channels: seq[string]
+    if index notin ColorBgOnlyEntries and index notin source.omittedFg:
+      channels.add "fg = " &
+        themeChannelToTomlValue(
+          colors[index].foreground, (index: index, isFg: true), source
+        )
+    if index notin source.omittedBg:
+      channels.add "bg = " &
+        themeChannelToTomlValue(
+          colors[index].background, (index: index, isFg: false), source
+        )
+    if channels.len > 0:
+      lines.add toTomlColorKey(index) & " = { " & channels.join(", ") & " }"
 
   lines.add ""
 
@@ -420,20 +651,25 @@ proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string] =
       return Result[void, string].err("Failed to write theme file: " & e.msg)
 
   if fileExists(expandedPath):
-    # The rename in `writeAtomic` would bypass the read-only bit.
-    try:
-      if fpUserWrite notin getFilePermissions(expandedPath):
-        return Result[void, string].err(
-          "Failed to write theme file: read-only: " & expandedPath
-        )
-    except CatchableError as e:
-      return Result[void, string].err("Failed to write theme file: " & e.msg)
+    # The rename in `writeAtomic` needs no write access to the file itself, so
+    # check that first. Opening for append changes nothing.
+    var f: File
+    if not open(f, expandedPath, fmAppend):
+      return Result[void, string].err(
+        "Failed to write theme file: cannot open for writing: " & expandedPath
+      )
+    close(f)
 
     # Backup existing file
     try:
       copyFile(expandedPath, expandedPath & ".bac")
     except CatchableError as e:
       return Result[void, string].err("Failed to backup theme file: " & e.msg)
+
+    # The `.bac` file already is the backup of an in-place write; `writeAtomic`
+    # would put another at `<path>~`, over whatever is there.
+    if mustWriteInPlace(expandedPath):
+      return writeThemeInPlace(expandedPath, content)
 
   # A failed write must not leave a partial theme: a later save skips
   # unchanged colors and would not repair it.

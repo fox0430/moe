@@ -834,14 +834,17 @@ proc drawsOnLightSurface(colors: ThemeColors): bool =
     return not isLightColor(fg)
   false
 
-proc adaptDiffTintsToBackground*(colors: var ThemeColors) =
+proc adaptDiffTintsToBackground*(
+    colors: var ThemeColors, explicit: set[EditorColorPairIndex] = {}
+) =
   ## The diff viewer marks lines with a background alone, so the bundled dark
   ## tints are unreadable on a light theme. Take the bundled light theme's when
   ## the theme draws on a light surface and left the tints at their defaults.
+  ## Entries in `explicit` were set by the theme and stay as they are.
   if not colors.drawsOnLightSurface():
     return
   for index in DiffViewerTints:
-    if colors[index] == DefaultColors[index]:
+    if index notin explicit and colors[index] == DefaultColors[index]:
       colors[index] = LightColors[index]
 
 proc initDefaultTheme*() =

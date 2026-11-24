@@ -82,6 +82,11 @@ suite "color - hexToRgb":
     let result = hexToRgb("#gggggg")
     check result.isErr
 
+  test "underscores and 0x prefixes are not hex digits":
+    check hexToRgb("face_1").isErr
+    check hexToRgb("#fa_e01").isErr
+    check hexToRgb("0x0x0x").isErr
+
   test "empty string":
     let result = hexToRgb("")
     check result.isErr

@@ -1897,6 +1897,38 @@ for example `lineNum = { fg = "#636d83", bg = "#000000" }`. The top-level
 background colors, which all other entries inherit when their `bg` is
 omitted.
 
+#### Named colors (`[Palette]`)
+
+The optional `[Palette]` table names a color once so it can be reused and
+changed in one place. `[Colors]` may refer to a name wherever it takes a
+color:
+
+```toml
+[Palette]
+dimmed1 = "#3b3c35"
+subtle = "termDefault"
+
+[Colors]
+lineNum = { fg = "dimmed1", bg = "termDefault" }
+comment = { fg = "subtle" }
+```
+
+A name starts with an ASCII letter or `_` and continues with letters, digits,
+`_` or `-`; names are case-sensitive. `termDefault` and names that are a
+six-digit hex color (`abcdef`, for example) are rejected, since a color value
+using them would be ambiguous. A palette value is always a literal color: it
+cannot name another palette entry. `[Palette]` may come before or after
+`[Colors]`.
+
+The Config mode edits the colors themselves, not the names. Saving keeps a
+name on the entries it was written for while the palette still holds that
+color; changing one entry writes that entry as a hex value and leaves the
+palette values alone. Entries the file leaves out stay left out as long as they
+would load as the same color. A save that changes no color does not rewrite the theme
+file at all, so its comments and layout stay. A save that does change a color
+rewrites the whole file: comments are lost, and `[Palette]` entries that
+failed validation when the file was read are not written back.
+
 #### Migrating from the legacy format
 
 Earlier versions used separate flat keys for foreground and background
@@ -1917,7 +1949,12 @@ Notes:
   the parsed TOML AST. Move any hand-written notes out of your theme file
   before running `--in-place`.
 - Only the `[Colors]` section is emitted; any other top-level sections in
-  the input are dropped.
+  the input are dropped when the tool rewrites a file. This includes
+  `[Palette]`, which the tool does not know about: on a file still in the
+  legacy format, `--in-place` drops it and any color name it held no longer
+  resolves. A theme already in the inline-table format (the only format that
+  can use `[Palette]`) passes `--check` and is returned unchanged, palette
+  included.
 - `--in-place` overwrites an existing `<file>.bak` without warning.
 
 The `statusLineQuickRunMode*` keys (the QuickRun mode no longer exists) are

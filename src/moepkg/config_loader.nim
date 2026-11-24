@@ -295,10 +295,11 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   if config.theme.kind == tkConfig and config.theme.path.len > 0:
     let expandedThemePath = expandTilde(config.theme.path)
     if not fileExists(expandedThemePath) or themeColorsEdited():
-      let themeResult = saveThemeToToml(themeColors, config.theme.path)
+      let themeResult = saveThemeToToml(themeColors, config.theme.path, themeSource)
       if themeResult.isErr:
         return Result[void, string].err(themeResult.error)
       themeFileColors = some(themeColors)
+      themeSource = themeSource.sourceFor(themeColors)
 
   return Result[void, string].ok()
 

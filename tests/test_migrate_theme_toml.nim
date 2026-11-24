@@ -119,6 +119,36 @@ currentLine = { bg = "#3e4452" }
     let actual = migrateThemeToml(src)
     check actual == src
 
+  test "an already-migrated theme with [Palette] is returned unchanged":
+    # Pins the documented limitation: the tool only rewrites the old format,
+    # so a theme that can use [Palette] is never touched.
+    let src = """
+[Palette]
+dimmed1 = "#3b3c35"
+
+[Colors]
+foreground = "dimmed1"
+lineNum = { fg = "dimmed1" }
+"""
+    check migrateThemeToml(src) == src
+
+  test "a legacy theme with [Palette] is rewritten without the palette":
+    # The other half of the limitation: the values stay as written, so a name
+    # that only the dropped [Palette] defined no longer resolves.
+    let src = """
+[Palette]
+dimmed1 = "#3b3c35"
+
+[Colors]
+foreground = "dimmed1"
+lineNum = "dimmed1"
+"""
+    let actual = migrateThemeToml(src)
+    check "[Palette]" notin actual
+    check "#3b3c35" notin actual
+    check "foreground = \"dimmed1\"" in actual
+    check "lineNum = { fg = \"dimmed1\" }" in actual
+
   test "missing [Colors] section raises MigrationError":
     expect MigrationError:
       discard migrateThemeToml("foreground = \"#dadada\"\n")
