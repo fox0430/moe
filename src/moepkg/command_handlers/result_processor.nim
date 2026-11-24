@@ -30,7 +30,7 @@ import
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
     syntax_checker, command_completion, key_bindings, key_router, lsp_integration,
     command_registry, command_line, editor_window_state, pending_input, macro_recording,
-    insert_record, wanted_column, search_ops, editor_open,
+    insert_record, wanted_column, search_ops, editor_open, prompt_line,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -632,6 +632,7 @@ const MaxMapRecursionDepth = 50
   ## mapping" before the macro depth guard fires.
 
 proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome
+proc letHeldKeysGo*(manager: HandlerManager, editor: Editor): ReplayOutcome
 proc playbackKeyCombosImpl(
   e: Editor, combos: seq[KeyCombo], remapFrom: int, standsFor: seq[KeyCombo]
 ): ReplayOutcome
@@ -755,6 +756,19 @@ proc playbackKeyCombosImpl(
     # Vim records typed keys as it reads them, whatever comes of them.
     e.state.pendingInput.macroState.recordTypedKeys(standsFor)
 
+proc playbackBreak(e: Editor): ReplayOutcome =
+  ## End what the keys before a `BreakMark` began, as the input recorded there
+  ## did: it was a command of its own, so Insert may resume after it.
+  e.asCommand:
+    result = e.handlerManager.letHeldKeysGo(e)
+    e.state.armInsertResume()
+    if e.state.hasOverlay:
+      discard e.state.input.line.endWait()
+    else:
+      e.state.pendingInput.cancelAll(e.keyRouter.registry)
+  if result != roQuit:
+    e.settleInsertResume()
+
 proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
   ## Iterate user-recorded macro `keys` (register storage is seq[string]).
   ## Aborts on the first `stringToKeyCombo` failure but keeps executing the
@@ -764,6 +778,11 @@ proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
   try:
     result = withPlaybackGuard(e):
       for keyStr in keys:
+        if keyStr == BreakMark:
+          outcome = e.playbackBreak()
+          if outcome != roContinue:
+            break
+          continue
         let keyComboOpt = stringToKeyCombo(keyStr)
         if keyComboOpt.isNone:
           e.state.statusMessage = "Invalid key in macro: " & keyStr

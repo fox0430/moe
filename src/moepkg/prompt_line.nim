@@ -118,6 +118,11 @@ proc insert(line: var PromptLine, s: string) =
   # From the end byte, so bytes that join across the seam keep the cursor.
   line.cursor = byteToCharPos(line.text, at + s.len)
 
+proc endWait*(line: var PromptLine): bool =
+  ## End a Ctrl-R's or a Ctrl-V's wait for its key. True if there was one.
+  result = line.wait != pwNone
+  line.wait = pwNone
+
 proc insertPasted*(line: var PromptLine, text: string): bool =
   ## A paste's first line at the cursor, as the line is one line. Returns
   ## whether anything went in.

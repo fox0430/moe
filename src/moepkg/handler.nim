@@ -62,7 +62,8 @@ import
   job_lanes,
   highlight,
   visual_selection,
-  insert_record
+  insert_record,
+  pending_input
 
 when not defined(moe.embedded):
   import terminal_mode
@@ -303,9 +304,48 @@ proc insertPastedTextInPrompt(e: Editor, text: string) =
   else:
     discard e.state.input.line.insertPasted(text)
 
+proc letHeldKeysGoFirst(e: Editor) =
+  ## Let go of the keys held for a mapping before an input that is not a key
+  ## acts, so it does not run ahead of them: Vim reads it after them from its
+  ## typeahead. A quit they run is noted, and the frontend's tick ends the
+  ## session.
+  if e.keyRouter.isHoldingKeys and e.handlerManager.letHeldKeysGo(e) == roQuit:
+    e.beginQuit()
+
+proc beginPasteInput(e: Editor): bool =
+  ## Start a paste, bracketed or by a middle click, as a command of its own: the
+  ## keys held for a mapping run first, and it ends the command being built (an
+  ## operator, a count, a register), or under an overlay, the wait of the
+  ## prompt's Ctrl-R or Ctrl-V. True if nothing is to be pasted: the held keys
+  ## quit, or the command waited for a motion or an operand, which the paste
+  ## then takes the place of, as Vim's clearopbeep. Insert and Replace have only
+  ## the first keys of a mapping to a command, which are typed already.
+  let held = e.keyRouter.isHoldingKeys
+  e.letHeldKeysGoFirst()
+  if e.state.quitDecided:
+    return true
+  let waited = e.state.insertResume == irWaiting
+  e.state.armInsertResume()
+  var cancelled = false
+  if e.state.hasOverlay:
+    cancelled = e.state.input.line.endWait()
+  else:
+    let registry = e.keyRouter.registry
+    result =
+      e.state.mode notin {EditorMode.Insert, EditorMode.Replace} and (
+        e.state.pendingInput.pendingOperator.isSome or
+        e.state.pendingInput.waitsForOperand(registry)
+      )
+    cancelled = e.state.pendingInput.cancelAll(registry)
+  if held or waited or cancelled:
+    e.state.pendingInput.macroState.recordBreak()
+  if result:
+    e.state.beep()
+
 proc handlePasteText(e: Editor, text: string): bool =
   ## Insert pasted text without triggering auto-indentation.
-  e.state.armInsertResume()
+  if e.beginPasteInput():
+    return true
   case e.resolvePasteSink()
   of psOverlay:
     # Single-line character fields, so normalize unconditionally.
@@ -479,14 +519,6 @@ proc scrollTextViewport(e: Editor, window: EditorWindow, deltaPhysicalRows: int)
     window.viewport.restoreViewportTop(topLine, topWrapOffset)
     window.viewport.detachedFromCursor = true
 
-proc letHeldKeysGoFirst(e: Editor) =
-  ## Let go of the keys held for a mapping before an input that is not a key
-  ## acts, so it does not run ahead of them: Vim reads it after them from its
-  ## typeahead. A quit they run is noted, and the frontend's tick ends the
-  ## session.
-  if e.keyRouter.isHoldingKeys and e.handlerManager.letHeldKeysGo(e) == roQuit:
-    e.beginQuit()
-
 proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
   ## Apply a frontend-neutral physical-line scroll and describe the affected
   ## rendered region for GUI repainting.
@@ -628,10 +660,9 @@ proc windowIndexAtCell(e: Editor, row, col: int): int =
 
 proc middleClickPaste(e: Editor, row, col: int) =
   ## Paste the PRIMARY selection for a middle-click at this screen cell.
-  if not e.config.clipboard.enable:
+  # Wherever the click landed and whatever it would paste, as in Vim.
+  if e.beginPasteInput() or not e.config.clipboard.enable:
     return
-  e.letHeldKeysGoFirst()
-  e.state.armInsertResume()
 
   # An overlay owns the keys wherever the click landed, so it keeps the focus.
   # Otherwise the click picks the target window, not the focused one.
@@ -669,8 +700,8 @@ proc middleClickPaste(e: Editor, row, col: int) =
     else:
       e.notify("Paste failed: " & readResult.error, nlError)
     return
-  # A click that pastes nothing (no tool, empty PRIMARY) stays a no-op rather
-  # than moving the focus.
+  # A click that pastes nothing (no tool, empty PRIMARY) does not move the
+  # focus.
   if readResult.get().len == 0:
     return
 
@@ -1035,7 +1066,6 @@ proc handlePaste*(e: Editor, text: string): bool =
   if e.windowManager.windows.len > 0:
     e.activeWindow.viewport.detachedFromCursor = false
   e.asInput:
-    e.letHeldKeysGoFirst()
     result = e.handlePasteText(text)
 
 proc handlePasteEvent*(e: Editor, event: Event): bool =

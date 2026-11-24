@@ -4128,6 +4128,7 @@ proc createTestEditorForMiddleClick(content: string): Editor =
   result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftCell: 0)
   result.motionController.viewportManager.viewport = result.viewport
+  result.syncActiveWindow()
   result.state.mode = EditorMode.Normal
 
 proc middleClickInWindow(e: Editor, row = 2, col = 5) =
@@ -4211,6 +4212,264 @@ suite "handlePasteText":
     check $line == "hello" & "\xEF\xBF\xBD" & "Aok"
     # Cursor advances by rune count: 4 runes inserted
     check e.windowManager.windows[0].cursor.column == 9
+
+suite "A paste ends the command being built":
+  test "a bracketed paste":
+    for keys in [@["2", "d"], @["f"], @["d", "i"], @["\"", "a"], @["2"], @["g"]]:
+      checkpoint $keys
+      let e = createTestEditorForMiddleClick("hello world")
+      e.state.mode = EditorMode.Normal
+      for k in keys:
+        discard e.handleKeyCombo(stringToKeyCombo(k).get)
+      discard e.handlePaste("abc")
+      check not e.state.pendingInput.isActive(e.keyRouter.registry)
+      discard e.handleKeyCombo(stringToKeyCombo("w").get)
+      check e.activeBuffer.getLine(0) == "hello world"
+      check e.cursor.column == 6
+      check e.state.mode == EditorMode.Normal
+
+  test "an overlay over a waiting operator keeps it":
+    let e = createTestEditorForMiddleClick("hello world")
+    e.state.mode = EditorMode.Normal
+    for k in ["d", "/"]:
+      discard e.handleKeyCombo(stringToKeyCombo(k).get)
+    discard e.handlePaste("wor")
+    discard e.handleKeyCombo(stringToKeyCombo("<Enter>").get)
+    check e.activeBuffer.getLine(0) == "world"
+
+  test "a middle click takes the place of the motion":
+    withFakePrimary("PP"):
+      let e = createTestEditorForMiddleClick("hello world")
+      e.state.mode = EditorMode.Normal
+      discard e.handleKeyCombo(stringToKeyCombo("d").get)
+      e.middleClickInWindow()
+      check not e.state.pendingInput.isActive(e.keyRouter.registry)
+      check e.activeBuffer.getLine(0) == "hello world"
+      check e.state.mode == EditorMode.Normal
+
+  test "a middle click that pastes nothing ends it too":
+    withFakePrimary(""):
+      # The clipboard, the row of the click: off the text, or on an empty PRIMARY.
+      for (enable, row) in [(true, 0), (true, 23), (true, 2), (false, 2)]:
+        for keys in [@["d"], @["2"], @["\"", "a"]]:
+          checkpoint $enable & " " & $row & " " & $keys
+          let e = createTestEditorForMiddleClick("hello world")
+          e.config.clipboard.enable = enable
+          for k in keys:
+            discard e.handleKeyCombo(stringToKeyCombo(k).get)
+          check e.state.pendingInput.isActive(e.keyRouter.registry)
+          e.middleClickPaste(row, 5)
+          check not e.state.pendingInput.isActive(e.keyRouter.registry)
+          check e.activeBuffer.getLine(0) == "hello world"
+          check e.state.mode == EditorMode.Normal
+
+  test "a middle click after a count pastes":
+    withFakePrimary("PP"):
+      let e = createTestEditorForMiddleClick("hello world")
+      discard e.handleKeyCombo(stringToKeyCombo("2").get)
+      e.middleClickInWindow()
+      check not e.state.pendingInput.isActive(e.keyRouter.registry)
+      check e.activeBuffer.getLine(0) == "PPhello world"
+
+  test "nothing is pasted once the keys held before it quit":
+    withFakePrimary("PP"):
+      for click in [false, true]:
+        checkpoint $click
+        let e = createTestEditorForMiddleClick("hello world")
+        for (lhs, rhs) in [("s", "Z Q"), ("s s s", "d d")]:
+          check e.keyRouter.registry.addRuntimeMapping(
+            EditorMode.Normal, lhs, rhs, noremap = true
+          ) == ""
+        discard e.handleKeyCombo(stringToKeyCombo("s").get)
+        check e.keyRouter.isHoldingKeys
+        if click:
+          e.middleClickInWindow()
+        else:
+          discard e.handlePaste("abc")
+        check e.state.quitDecided
+        check e.activeBuffer.getLine(0) == "hello world"
+
+  test "a macro recorded over it plays the same":
+    for keys in [@["d"], @["2"], @["f"], @["\"", "a"], @["v", "2"]]:
+      checkpoint $keys
+      let e = createTestEditorForMiddleClick("one two three four five")
+      for k in @["q", "q"] & keys:
+        discard e.handleKeyCombo(stringToKeyCombo(k).get)
+      discard e.handlePaste("abc")
+      for k in ["w", "q"]:
+        discard e.handleKeyCombo(stringToKeyCombo(k).get)
+      let mode = e.state.mode
+      check e.cursor.column == 4
+      if mode == EditorMode.Visual:
+        discard e.handleKeyCombo(stringToKeyCombo("<Escape>").get)
+      e.cursor = BufferPosition(line: 0, column: 0)
+      for k in ["@", "q"]:
+        discard e.handleKeyCombo(stringToKeyCombo(k).get)
+      check e.state.mode == mode
+      check e.cursor.column == 4
+      check e.activeBuffer.getLine(0) == "one two three four five"
+
+  test "a macro recorded over it under Insert's Ctrl-o plays the same":
+    for pending in [newSeq[string](), @["d"], @["2"], @["f"]]:
+      checkpoint $pending
+      let e = createTestEditorForMiddleClick("hello world")
+      for k in @["q", "q", "i", "<C-o>"] & pending:
+        discard e.handleKeyCombo(stringToKeyCombo(k).get)
+      discard e.handlePaste("abc")
+      check e.state.mode == EditorMode.Insert
+      for k in ["x", "<Escape>", "q"]:
+        discard e.handleKeyCombo(stringToKeyCombo(k).get)
+      check e.activeBuffer.getLine(0) == "xhello world"
+      e.cursor = BufferPosition(line: 0, column: 3)
+      for k in ["@", "q"]:
+        discard e.handleKeyCombo(stringToKeyCombo(k).get)
+      check e.activeBuffer.getLine(0) == "xhexllo world"
+      check e.state.mode == EditorMode.Normal
+
+  test "a macro recorded over it with keys held for a mapping plays the same":
+    let e = createTestEditorForMiddleClick("zz")
+    check e.keyRouter.registry.addRuntimeMapping(
+      EditorMode.Insert, "j j", "Esc", noremap = true
+    ) == ""
+    for k in ["q", "q", "i", "j"]:
+      discard e.handleKeyCombo(stringToKeyCombo(k).get)
+    check e.keyRouter.isHoldingKeys
+    discard e.handlePaste("P")
+    for k in ["j", "<Escape>", "q"]:
+      discard e.handleKeyCombo(stringToKeyCombo(k).get)
+    check e.activeBuffer.getLine(0) == "jPjzz"
+    e.cursor = BufferPosition(line: 0, column: 0)
+    for k in ["@", "q"]:
+      discard e.handleKeyCombo(stringToKeyCombo(k).get)
+    check e.activeBuffer.getLine(0) == "jjjPjzz"
+
+  test "a macro recorded over a prompt's paste keeps the waiting operator":
+    let e = createTestEditorForMiddleClick("hello world")
+    check e.keyRouter.registry.addRuntimeMapping(
+      EditorMode.Command, "w q", "X X", noremap = true
+    ) == ""
+    for k in ["q", "q", "d", "/", "w"]:
+      discard e.handleKeyCombo(stringToKeyCombo(k).get)
+    check e.keyRouter.isHoldingKeys
+    discard e.handlePaste("o")
+    for k in ["<Enter>", "q"]:
+      discard e.handleKeyCombo(stringToKeyCombo(k).get)
+    check e.activeBuffer.getLine(0) == "world"
+    discard e.activeBuffer.replaceAllLines(@["hello world"])
+    e.cursor = BufferPosition(line: 0, column: 0)
+    for k in ["@", "q"]:
+      discard e.handleKeyCombo(stringToKeyCombo(k).get)
+    check e.activeBuffer.getLine(0) == "world"
+
+  test "a macro recorded over it after a prompt's Ctrl-R or Ctrl-V plays the same":
+    for (key, wait) in [("<C-r>", pwRegister), ("<C-v>", pwLiteral)]:
+      for pasted in ["wor", ""]:
+        checkpoint key & " " & pasted
+        let e = createTestEditorForMiddleClick("hello 1orld world")
+        for k in ["q", "q", "/", key]:
+          discard e.handleKeyCombo(stringToKeyCombo(k).get)
+        check e.state.input.line.wait == wait
+        discard e.handlePaste(pasted)
+        check e.state.input.line.wait == pwNone
+        for k in ["1", "<Escape>", "q"]:
+          discard e.handleKeyCombo(stringToKeyCombo(k).get)
+        check e.state.pendingInput.macroState.registers['q'] ==
+          @["/", key, BreakMark, "1", "<Escape>"]
+        # Up to the key the wait would have read.
+        e.state.pendingInput.macroState.registers['q'].setLen(4)
+        for k in ["@", "q"]:
+          discard e.handleKeyCombo(stringToKeyCombo(k).get)
+        check e.state.input.line.wait == pwNone
+        check e.state.input.line.text == "1"
+
+  test "a recording the held keys start has no break before its first key":
+    let e = createTestEditorForMiddleClick("hello world")
+    for (lhs, rhs) in [("s", "q q"), ("s s s", "d d")]:
+      check e.keyRouter.registry.addRuntimeMapping(
+        EditorMode.Normal, lhs, rhs, noremap = true
+      ) == ""
+    discard e.handleKeyCombo(stringToKeyCombo("s").get)
+    discard e.handlePaste("abc")
+    for k in ["x", "q"]:
+      discard e.handleKeyCombo(stringToKeyCombo(k).get)
+    check e.state.pendingInput.macroState.registers['q'] == @["x"]
+
+  test "a middle click with the clipboard off is a command under Ctrl-o too":
+    let e = createTestEditorForMiddleClick("hello world")
+    e.config.clipboard.enable = false
+    for k in ["i", "<C-o>"]:
+      discard e.handleKeyCombo(stringToKeyCombo(k).get)
+    e.middleClickPaste(2, 5)
+    e.settleInsertResume()
+    check e.state.mode == EditorMode.Insert
+
+  test "the first key of an Insert or Replace mapping to a command":
+    for mode in [EditorMode.Insert, EditorMode.Replace]:
+      checkpoint $mode
+      let e = createTestEditorForMiddleClick("zzzzzz")
+      check e.keyRouter.registry.setRuntimeCommandMapping(
+        mode,
+        "jj",
+        "mode_switch normal",
+        key_bindings.Command(kind: ctModeSwitch, targetMode: EditorMode.Normal),
+      ) == ""
+      e.state.mode = mode
+      let beeps = e.state.beepCount
+      discard e.handleKeyCombo(stringToKeyCombo("j").get)
+      discard e.handlePaste("X")
+      discard e.handleKeyCombo(stringToKeyCombo("j").get)
+      check e.state.mode == mode
+      check e.state.beepCount == beeps
+      if mode == EditorMode.Insert:
+        check e.activeBuffer.getLine(0) == "jXjzzzzzz"
+
+  test "in Terminal-Normal":
+    let e = createTestEditorForMiddleClick("hello world")
+    let
+      win = e.activeWindow
+      term = TerminalState(
+        pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: false),
+        grid: newTerminalGrid(80, 24),
+        exitCode: none(int),
+        inTerminalNormal: true,
+      )
+    discard term.snapshotScrollback()
+    e.terminalStates[win.buffer.id] = term
+    win.modeState = ModeState(kind: mskTerminal, terminal: term)
+    win.setView(term.lastSnapshot)
+    e.syncActiveWindow()
+    for click in [false, true]:
+      discard e.handleKeyCombo(stringToKeyCombo("y").get)
+      check e.state.pendingInput.pendingOperator.isSome
+      if click:
+        e.middleClickInWindow()
+      else:
+        discard e.handlePaste("abc")
+      check not e.state.pendingInput.isActive(e.keyRouter.registry)
+
+  test "Ctrl-W in Terminal":
+    for click in [false, true]:
+      checkpoint $click
+      let e = createTestEditorForMiddleClick("hello world")
+      let
+        win = e.activeWindow
+        term = TerminalState(
+          pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: false),
+          grid: newTerminalGrid(80, 24),
+          exitCode: none(int),
+        )
+      e.terminalStates[win.buffer.id] = term
+      win.modeState = ModeState(kind: mskTerminal, terminal: term)
+      e.state.mode = EditorMode.Terminal
+      discard e.handleKeyCombo(stringToKeyCombo("<C-w>").get)
+      check e.state.pendingInput.isActive(e.keyRouter.registry)
+      let beeps = e.state.beepCount
+      if click:
+        e.middleClickInWindow()
+      else:
+        discard e.handlePaste("abc")
+      check not e.state.pendingInput.isActive(e.keyRouter.registry)
+      check e.state.beepCount == beeps + 1
 
 suite "middleClickPaste":
   test "Clipboard disabled":
