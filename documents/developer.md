@@ -30,6 +30,37 @@ nimble debug           # Debug build (--debugger:native, -d:debug)
 
 The resulting binary is `./moe`.
 
+### Updating dependencies with `nimble.paths`
+
+`nimble setup` generates `nimble.paths` (not tracked by git), which points the compiler at the library versions pinned in `nimble.lock`, and a `config.nims` that includes it.
+`nimble build` and direct `nim c` then use those paths, and neither `nimble build` nor `nimble install -d` updates them.
+Because `config.nims` also turns off the default package path, deleting only `nimble.paths` makes direct `nim c` fail to find the libraries.
+`nimble.paths` does not select the compiler: `nimble build` uses the `nim` pinned in `nimble.lock` unless `--useSystemNim` is given, while direct `nim c` uses the one on `PATH`.
+
+Run `nimble setup` again whenever `nimble.lock` changes, for example after pulling:
+
+```sh
+git pull
+nimble setup           # Install the pinned dependencies and update nimble.paths
+```
+
+A plain `nimble setup` and `nimble lock` leave the optional Matter dependency out of
+`nimble.paths`. The `setup` command in [Optional Matter syntax backend](#optional-matter-syntax-backend)
+adds it, but it fails on Nimble 0.26.0 and 0.26.2. It works on 0.24.1, where it may
+select versions newer than `nimble.lock`.
+
+To move the dependencies themselves to newer versions, update the lock file first
+(`--refresh` requires Nimble 0.26.0 or newer):
+
+```sh
+nimble lock --refresh          # All libraries (keeps the pinned nim)
+nimble lock --refresh celina   # Or only the named ones
+nimble setup                   # Update nimble.paths to match
+```
+
+Commit the `nimble.lock` change after checking that the tests pass. If moe needs
+the newer version, raise the matching `requires` in `moe.nimble` as well.
+
 ## Running tests
 
 Use the parallel test runner; `nimble test` is **not** the recommended path because it runs serially.
