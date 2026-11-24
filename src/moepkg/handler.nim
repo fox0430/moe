@@ -73,6 +73,7 @@ import
   ]
 import prompt_line
 from config_mode import clearKeySequence
+from pending_input import cancelAll
 export command_mode_handler, search_mode_handler, cursor_util, frontend_input
 
 proc addRunningProcess*(e: Editor, p: BackgroundProcess, label = "", path = "") =
@@ -817,6 +818,8 @@ proc enterPointerVisualMode(e: Editor, granularity: PointerSelectionGranularity)
       e.state.previousMode = EditorMode.Normal
     else:
       e.state.previousMode = previousMode
+  # A waiting operator would take the next motion as its own.
+  e.state.pendingInput.cancelAll(e.keyRouter.registry)
   e.setMode(granularity.visualMode)
 
 proc updatePointerSelection(e: Editor, position: BufferPosition) =

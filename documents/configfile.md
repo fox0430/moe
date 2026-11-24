@@ -610,7 +610,7 @@ The legacy mode name `quickrun` (the QuickRun mode no longer exists) is still ac
 
 `[KeyMapping.VisualAll]` applies mappings to all visual modes: Visual, VisualLine, and VisualBlock.
 
-`[KeyMapping.Visual]`, `[KeyMapping.VisualLine]`, and `[KeyMapping.VisualBlock]` apply to the specific visual mode only and override `VisualAll`.
+`[KeyMapping.Visual]`, `[KeyMapping.VisualLine]`, and `[KeyMapping.VisualBlock]` apply to the specific visual mode and override `VisualAll`. A command mapping in `[KeyMapping.Visual]` also runs in VisualLine and VisualBlock for keys they have no binding of their own for, such as `v`, `V` and `C-v`; a key sequence mapping does not.
 
 Special mode sections (`Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `RecoveryManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`) apply mappings to the corresponding special mode and override `All`.
 
@@ -771,6 +771,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | switch-to-command | Switch to command mode |
 | switch-to-search | Switch to search mode (forward) |
 | switch-to-search-backward | Switch to search mode (backward) |
+
+In a visual mode, `switch-to-visual`, `switch-to-visual-line` and `switch-to-visual-block` end it when it is already the one they name. `mode_switch <mode>` (for example `mode_switch visual`) stays in it.
 
 ##### Entering insert mode
 

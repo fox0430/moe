@@ -562,6 +562,17 @@ const VisualModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "I", description: "Insert character, multiple lines"),
     HelpEntry(syntax: "zf", description: "Fold selected lines"),
     HelpEntry(
+      syntax: "v", description: "Switch to Visual mode, or end it when already in it"
+    ),
+    HelpEntry(
+      syntax: "V",
+      description: "Switch to Visual line mode, or end it when already in it",
+    ),
+    HelpEntry(
+      syntax: "Ctrl-v",
+      description: "Switch to Visual block mode, or end it when already in it",
+    ),
+    HelpEntry(
       syntax: "gv", description: "Exchange the selection with the previous Visual area"
     ),
     HelpEntry(syntax: "q any", description: "Start recording operations for Macros"),

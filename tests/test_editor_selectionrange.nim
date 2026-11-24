@@ -25,7 +25,7 @@ import visual_test_helper
 import
   ../src/moepkg/[
     editor, config, config_loader, buffer, modes, lsp_service, editor_selectionrange,
-    types,
+    types, handler, key_bindings,
   ]
 
 privateAccess(LspService)
@@ -325,6 +325,29 @@ suite "editor_selectionrange - chain expansion":
     check e.state.lspCache.selectionRangeIndex == 1
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
+
+  test "A response cancels an operator waiting since the request":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "foo(bar)")
+    e.seedResponse(
+      1,
+      %*[
+        {
+          "range":
+            {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 7}}
+        }
+      ],
+    )
+    check e.handleKeyCombo(parseKeyCombo("d").get)
+    check e.state.pendingInput.pendingOperator.isSome
+
+    e.pollLspSelectionRange()
+    check e.state.mode == EditorMode.Visual
+    check e.state.pendingInput.pendingOperator.isNone
+
+    check e.handleKeyCombo(parseKeyCombo("h").get)
+    check e.activeBuffer.getLine(0) == "foo(bar)"
 
   test "A level that ends in a closed fold expands to its parent":
     let e = createTestEditor()

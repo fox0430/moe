@@ -22,7 +22,7 @@
 ## This module handles visual selection and provides the core selection
 ## functionality for Visual mode
 
-import std/options
+import std/[options, strutils]
 
 import pkg/results
 
@@ -307,6 +307,21 @@ proc handleVisualModeKey*(
       if passthrough.get notin KeepsVisual:
         state.leaveVisual()
       return VisualModeResult(kind: vmrPassthrough, passthroughKind: passthrough.get)
+
+  # An operator waiting since before Visual would take the next motion.
+  if cmd.kind == ctModeSwitch and cmd.targetMode.isVisualAllMode:
+    state.pendingInput.cancelOperatorPending()
+
+  # As Vim's nv_visual, the key of the current kind ends Visual. Unlike Escape,
+  # it keeps the column vertical moves want. A `mode_switch` mapping names the
+  # mode to be in, so it does not toggle.
+  if cmd.kind == ctModeSwitch and cmd.targetMode == originalMode and
+      cmd.name.startsWith("switch-to-visual"):
+    let wanted = state.wanted
+    state.pendingInput.cancelAll(handler.keyBindingRegistry)
+    state.leaveVisual()
+    state.wanted = wanted
+    return VisualModeResult(kind: vmrHandled, modeTransition: some(state.mode))
 
   let ctx = newCommandContext(
     buffer, state, viewport, handler.motionController, handler.keyBindingRegistry,

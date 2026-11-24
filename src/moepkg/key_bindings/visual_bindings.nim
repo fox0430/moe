@@ -20,12 +20,14 @@
 ## Default Visual / VisualBlock / VisualLine mode key bindings.
 ##
 ## The three modes share most bindings, so they live in `SharedVisualBindings`
-## and are replayed against each mode in turn. The three differences observed
-## in the original code are kept separate:
+## and are replayed against each mode in turn. The differences are kept
+## separate:
 ##
 ## * `i` / `a` (textobject-inner / textobject-around) — Visual only
+## * `v` / `V` / `C-v` (switch-to-visual*) — bound in Visual, reached from the
+##   other two through the fallback
 ## * `A` (visual-block-append) — VisualBlock only
-## * (nothing) — VisualLine has no mode-specific bindings
+## * (nothing) — VisualLine has no bindings of its own
 ##
 ## C-s (lsp-selection-range) is shared across all three; the original code
 ## bound it via a `KeyCombo(... modifiers: {kmCtrl})` literal in each mode,
@@ -151,6 +153,15 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
 const VisualOnlyBindings: seq[tuple[key, cmd: string]] =
   @[("i", "textobject-inner"), ("a", "textobject-around")]
 
+# Bound in character-wise Visual only: VisualBlock and VisualLine reach these
+# through the fallback, so a command the user maps them to in Visual runs there too. A key
+# sequence mapping is looked up by the exact mode and does not.
+const VisualSwitchBindings: seq[tuple[key, cmd: string]] = @[
+  ("v", "switch-to-visual"),
+  ("V", "switch-to-visual-line"),
+  ("C-v", "switch-to-visual-block"),
+]
+
 # Bindings that only apply to VisualBlock mode.
 const VisualBlockOnlyBindings: seq[tuple[key, cmd: string]] =
   @[("A", "visual-block-append")]
@@ -162,7 +173,7 @@ proc bindVisualModes*(registry: KeyBindingRegistry) =
   for mode in [EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]:
     for (key, cmd) in SharedVisualBindings:
       registry.bindKey(mode, key, cmd)
-  for (key, cmd) in VisualOnlyBindings:
+  for (key, cmd) in VisualOnlyBindings & VisualSwitchBindings:
     registry.bindKey(EditorMode.Visual, key, cmd)
   for (key, cmd) in VisualBlockOnlyBindings:
     registry.bindKey(EditorMode.VisualBlock, key, cmd)
