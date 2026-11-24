@@ -175,29 +175,23 @@ suite "Switching between the Visual modes":
     check e.state.mode == EditorMode.VisualLine
     check e.cursor.line == 1
 
-  test "a mouse selection cancels a waiting operator":
+  test "a multi-click selection cancels a waiting operator":
     # Each key would finish the operator if it were still waiting.
     for keys in [@["v", "l"], @["V", "l"], @["C-v", "l"], @["l"]]:
-      for drag in [false, true]:
-        let e = createTestEditor()
-        e.config.standard.mouse = true
-        e.activeWindow.viewport = ViewPort(x: 0, y: 0, width: 80, height: 24)
-        e.state.showTabLine = false
-        e.state.showLineNumbers = false
-        e.state.showSidebar = false
-        e.press("d")
-        check e.state.pendingInput.pendingOperator.isSome
-        if drag:
-          check e.handlePointerInput(initPointerInput(0, 2))
-          check e.handlePointerInput(initPointerInput(0, 4, action = paDrag))
-          check e.handlePointerInput(initPointerInput(0, 4, action = paRelease))
-        else:
-          check e.handlePointerInput(initPointerInput(0, 2, clickCount = 2))
-        check e.state.mode == EditorMode.Visual
-        check e.state.pendingInput.pendingOperator.isNone
-        e.press(keys)
+      let e = createTestEditor()
+      e.config.standard.mouse = true
+      e.activeWindow.viewport = ViewPort(x: 0, y: 0, width: 80, height: 24)
+      e.state.showTabLine = false
+      e.state.showLineNumbers = false
+      e.state.showSidebar = false
+      e.press("d")
+      check e.state.pendingInput.pendingOperator.isSome
+      check e.handlePointerInput(initPointerInput(0, 2, clickCount = 2))
+      check e.state.mode == EditorMode.Visual
+      check e.state.pendingInput.pendingOperator.isNone
+      e.press(keys)
 
-        check e.activeBuffer.getLine(0) == "abcdefgh"
+      check e.activeBuffer.getLine(0) == "abcdefgh"
 
   test "ending each kind with its key cancels the operator and drops a count":
     for (key, mode) in Kinds:

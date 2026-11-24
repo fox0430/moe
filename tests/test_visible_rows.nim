@@ -270,6 +270,54 @@ suite "cursorCell / cellToColumn":
     # Scrolled past the tab, the row starts with 'a', so cell 1 is 'b'.
     check buf.noWrap.cellToColumn(0, 0, 1, leftCell = 4) == 2
 
+suite "hitAt":
+  proc hit(rl: RowLayout, row, cell: int, vp = ViewPort()): (BufferPosition, bool) =
+    let h = rl.hitAt(vp, row, cell)
+    check (h.row, h.cell) == (row, cell)
+    (h.position, h.exact)
+
+  proc at(line, column: int): BufferPosition =
+    BufferPosition(line: line, column: column)
+
+  test "a cell right of the text is on the last character, not exactly":
+    let rl = newTextBuffer("abc\n\ndef").noWrap
+    check rl.hit(0, 2) == (at(0, 2), true)
+    check rl.hit(0, 3) == (at(0, 2), false)
+    check rl.hit(1, 0) == (at(1, 0), true)
+    check rl.hit(1, 1) == (at(1, 0), false)
+    check rl.hit(9, 1) == (at(2, 1), true)
+    check rl.hit(9, 8) == (at(2, 2), false)
+
+  test "it goes by what the window shows":
+    let rl = newTextBuffer("abc\ndefgh").noWrap
+    check rl.hit(0, 1, ViewPort(topLine: 1, leftCell: 2)) == (at(1, 3), true)
+    let wrapped = newTextBuffer("x".repeat(25)).wrapAt10
+    check wrapped.hit(0, 4, ViewPort(topWrapOffset: 1)) == (at(0, 14), true)
+    check wrapped.hit(1, 7, ViewPort(topWrapOffset: 1)) == (at(0, 24), false)
+    # Below the text, Vim does not add the rows scrolled off.
+    check wrapped.hit(9, 4, ViewPort(topWrapOffset: 1)) == (at(0, 4), true)
+
+  test "only a character's first cell is exact":
+    let rl = newTextBuffer("a\tあb").noWrap
+    check rl.hit(0, 1) == (at(0, 1), true)
+    check rl.hit(0, 2) == (at(0, 1), false)
+    check rl.hit(0, 4) == (at(0, 2), true)
+    check rl.hit(0, 5) == (at(0, 2), false)
+    check rl.hit(0, 6) == (at(0, 3), true)
+
+  test "the blank end of a wrapped row is not exact":
+    let rl = newTextBuffer("abcdefghiあx").wrapAt10
+    check rl.hit(0, 8) == (at(0, 8), true)
+    check rl.hit(0, 9) == (at(0, 8), false)
+    check rl.hit(1, 0) == (at(0, 9), true)
+
+  test "right of a closed fold's first line is the fold's start":
+    let buf = newTextBuffer("ab\ncd\nef")
+    check buf.foldState.addFold(0, 1)
+    buf.foldState.folds[0].collapsed = true
+    check buf.noWrap.hit(0, 1) == (at(0, 1), true)
+    check buf.noWrap.hit(0, 9) == (at(0, 0), true)
+
 suite "screen cells - counted along a line's rows, as gj and gk aim":
   # Rows of 10: "abcdefghi" takes 9 cells, so あ goes on to the next row.
   let pushed = newTextBuffer("abcdefghiあx").wrapAt10

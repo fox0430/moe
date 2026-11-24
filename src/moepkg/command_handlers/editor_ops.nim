@@ -31,8 +31,9 @@ import
   ../[
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     config_loader, window_manager, log_viewer, syntax_checker, motion, viewer_mode,
-    editor_build_jobs, path_key, cursor_util,
+    editor_build_jobs, path_key, cursor_util, fold_open, pending_input,
   ]
+import ../command_registry/core
 
 when not defined(moe.embedded):
   import ../[editor_window_layout, editor_window_tab, terminal_mode]
@@ -65,6 +66,34 @@ proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
   e.handlerManager.motionController.viewportManager.updateViewport(
     e.state, e.activeBuffer(), pos
   )
+
+proc finishOperatorWith*(e: Editor, operand: Operand): bool =
+  ## Finish the waiting operator over an operand that is not keys of Normal
+  ## mode, with what `handleKeyCombo` does after those. Whether it ran.
+  let ctx = newCommandContext(
+    e.activeBuffer, e.state, e.viewport, e.motionController, e.keyBindingRegistry
+  )
+  let operated = e.commandRegistry.finishOperator(ctx, operand)
+  if operated.isErr:
+    e.state.statusMessage = operated.error
+  elif e.state.mode == EditorMode.Insert:
+    e.state.openCursorLineFolds()
+  operated.isOk
+
+proc operatorTakesClick*(e: Editor): bool =
+  ## An operator waits for its motion, which a click in the text can be.
+  e.state.mode == EditorMode.Normal and not e.state.hasOverlay and
+    e.state.pendingInput.pendingOperator.isSome and
+    not e.state.pendingInput.waitsForOperand(e.keyRouter.registry)
+
+proc operateUpToCell*(e: Editor, row, cell: int): bool =
+  ## Finish the waiting operator up to a clicked cell of the window's text.
+  ## Whether it ran without a beep.
+  let beeps = e.state.beepCount
+  result =
+    e.finishOperatorWith(
+      Operand(kind: odClick, count: 1, clickRow: row, clickCell: cell)
+    ) and e.state.beepCount == beeps
 
 proc showFromView*(e: Editor, view: ViewState, pos: BufferPosition) =
   ## Scroll to `pos` from what the window showed in `view`, as Vim's

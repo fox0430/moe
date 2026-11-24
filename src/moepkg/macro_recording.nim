@@ -22,7 +22,7 @@
 ## out of it, as in Vim, and replayed keys, which stand for none, never reach
 ## it.
 
-import std/[options, tables]
+import std/[options, strscans, strutils, tables]
 
 import types, key_bindings
 
@@ -54,6 +54,25 @@ proc recordBreak*(m: var MacroState) =
   ## Nothing to end for the playback before the first recorded key.
   if m.recording.isSome and m.recording.get.keys.len > 0:
     m.recording.get.keys.add(BreakMark)
+
+const ClickMarkStart = "<InputClick:"
+
+proc clickMark*(row, cell: int): string =
+  ## Recorded where a click ended an operator: the cell it was on, counted from
+  ## the text area's top left, as `.` keeps it. No key, as `BreakMark`.
+  ClickMarkStart & $row & "," & $cell & ">"
+
+proc parseClickMark*(key: string): Option[tuple[row, cell: int]] =
+  if not key.startsWith(ClickMarkStart):
+    return
+  var row, cell: int
+  if key.scanf("<InputClick:$i,$i>$.", row, cell):
+    result = some((row, cell))
+
+proc recordClick*(m: var MacroState, row, cell: int) =
+  ## As for a break, no operator of the playback's waits before its first key.
+  if m.recording.isSome and m.recording.get.keys.len > 0:
+    m.recording.get.keys.add(clickMark(row, cell))
 
 proc stopRecording*(m: var MacroState, afterCtrlO: bool) =
   ## Save the session into its register. The key that stops it is still

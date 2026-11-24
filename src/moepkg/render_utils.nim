@@ -282,11 +282,12 @@ proc displayWidthSubstrFromByte*(
 
   return (charCount, currentWidth, bytePos)
 
-proc screenXToCharIndex*(
+proc charAtScreenX*(
     text: string, startChar: int, targetDisplayX: int, tabStop: int
-): int =
+): tuple[offset: int, onStart: bool] =
   ## Return the character offset (from startChar) corresponding to targetDisplayX
-  ## display columns within a wrap segment starting at startChar.
+  ## display columns within a wrap segment starting at startChar, and whether
+  ## the character starts there.
   ## For multi-column characters (tabs, wide chars), clicking anywhere within the
   ## character's display width selects that character.
   var
@@ -307,13 +308,19 @@ proc screenXToCharIndex*(
 
     # If targetDisplayX falls within this character's range, stop here
     if currentWidth + w > targetDisplayX:
-      break
+      return (charOffset, currentWidth == targetDisplayX)
 
     currentWidth += w
     charOffset += 1
     currentChar += 1
 
-  return charOffset
+  return (charOffset, false)
+
+proc screenXToCharIndex*(
+    text: string, startChar: int, targetDisplayX: int, tabStop: int
+): int =
+  ## The character offset of `charAtScreenX`.
+  charAtScreenX(text, startChar, targetDisplayX, tabStop).offset
 
 proc calculateWrapCount*(text: string, maxWidth: int, tabStop: int): int =
   ## Calculate how many screen lines a logical line will take when wrapped.
