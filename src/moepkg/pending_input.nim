@@ -25,6 +25,8 @@ import std/options
 
 import types, key_bindings
 
+const CtrlW = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
+
 proc isActive*(pi: PendingInputState, registry: KeyBindingRegistry): bool =
   ## True iff any pending-input FSM is active.
   pi.pendingOperator.isSome or pi.pendingTextObject.isSome or
@@ -37,6 +39,16 @@ proc waitsForOperand*(pi: PendingInputState, registry: KeyBindingRegistry): bool
   ## of its own, which mappings may take.
   pi.pendingTextObject.isSome or pi.pendingCommand != PendingNone or
     registry.isWaitingForChar or registry.isMidSequence
+
+proc typedKeys*(pi: PendingInputState, registry: KeyBindingRegistry): string =
+  ## The keys typed for the command being built, as Vim's showcmd shows them.
+  if pi.pendingOperator.isSome:
+    result.add(pi.pendingOperator.get.typedKeys)
+  if pi.pendingTextObject.isSome:
+    result.add(pi.pendingTextObject.get.typedKeys)
+  if pi.pendingCommand == PendingWindowCmd:
+    result.add(CtrlW.keyComboLabel)
+  result.add(registry.typedKeys)
 
 proc cancelOperatorPending*(pi: var PendingInputState): bool {.discardable.} =
   ## Drop the operator-pending gesture whole, as Vim's clearop does: the

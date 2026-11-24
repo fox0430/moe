@@ -549,17 +549,21 @@ proc handleTextObjectInner*(
     # We have a pending operator - set text object modifier
     ctx.state.pendingInput.pendingTextObject = some(
       PendingTextObject(
-        modifier: tomInner, count: max(1, count), countGiven: countGiven
+        modifier: tomInner,
+        count: max(1, count),
+        countGiven: countGiven,
+        typedKeys: ctx.typedKeys,
       )
     )
-    ctx.state.statusMessage =
-      $ctx.state.pendingInput.pendingOperator.get.operatorType & "i"
     return ok(())
   elif isVisualAllMode(ctx.state.mode):
     # In Visual mode - set text object modifier for visual selection
     ctx.state.pendingInput.pendingTextObject = some(
       PendingTextObject(
-        modifier: tomInner, count: max(1, count), countGiven: countGiven
+        modifier: tomInner,
+        count: max(1, count),
+        countGiven: countGiven,
+        typedKeys: ctx.typedKeys,
       )
     )
     return ok(())
@@ -578,17 +582,21 @@ proc handleTextObjectAround*(
     # We have a pending operator - set text object modifier
     ctx.state.pendingInput.pendingTextObject = some(
       PendingTextObject(
-        modifier: tomAround, count: max(1, count), countGiven: countGiven
+        modifier: tomAround,
+        count: max(1, count),
+        countGiven: countGiven,
+        typedKeys: ctx.typedKeys,
       )
     )
-    ctx.state.statusMessage =
-      $ctx.state.pendingInput.pendingOperator.get.operatorType & "a"
     return ok(())
   elif isVisualAllMode(ctx.state.mode):
     # In Visual mode - set text object modifier for visual selection
     ctx.state.pendingInput.pendingTextObject = some(
       PendingTextObject(
-        modifier: tomAround, count: max(1, count), countGiven: countGiven
+        modifier: tomAround,
+        count: max(1, count),
+        countGiven: countGiven,
+        typedKeys: ctx.typedKeys,
       )
     )
     return ok(())
@@ -1105,9 +1113,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Delete Operator",
     "Delete operator - waits for motion (d2w, d$, etc.) or dd for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(
-        ctx, OpDelete, ctx.givenCount(args), ctx.countGiven(args), "d"
-      ),
+      registry.operatorKey(ctx, OpDelete, ctx.givenCount(args), ctx.countGiven(args)),
     0,
     1, # A mapping's own count
   )
@@ -1117,9 +1123,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Change Operator",
     "Change operator - waits for motion (c2w, c$, etc.) or cc for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(
-        ctx, OpChange, ctx.givenCount(args), ctx.countGiven(args), "c"
-      ),
+      registry.operatorKey(ctx, OpChange, ctx.givenCount(args), ctx.countGiven(args)),
     0,
     1, # A mapping's own count
   )
@@ -1129,7 +1133,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Yank Operator",
     "Yank operator - waits for motion (y2w, y$, etc.) or yy for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(ctx, OpYank, ctx.givenCount(args), ctx.countGiven(args), "y"),
+      registry.operatorKey(ctx, OpYank, ctx.givenCount(args), ctx.countGiven(args)),
     0,
     1, # A mapping's own count
   )
@@ -1139,9 +1143,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Indent Operator",
     "Indent operator - waits for motion (>w, >$, etc.) or >> for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(
-        ctx, OpIndent, ctx.givenCount(args), ctx.countGiven(args), ">"
-      ),
+      registry.operatorKey(ctx, OpIndent, ctx.givenCount(args), ctx.countGiven(args)),
     0,
     1, # A mapping's own count
   )
@@ -1151,9 +1153,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Outdent Operator",
     "Outdent operator - waits for motion (<w, <$, etc.) or << for line",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(
-        ctx, OpOutdent, ctx.givenCount(args), ctx.countGiven(args), "<"
-      ),
+      registry.operatorKey(ctx, OpOutdent, ctx.givenCount(args), ctx.countGiven(args)),
     0,
     1, # A mapping's own count
   )
@@ -1163,9 +1163,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Lowercase Operator",
     "Lowercase operator - waits for motion (guw, gu$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(
-        ctx, OpLowerCase, ctx.givenCount(args), ctx.countGiven(args), "gu"
-      ),
+      registry.operatorKey(ctx, OpLowerCase, ctx.givenCount(args), ctx.countGiven(args)),
     0,
     1, # A mapping's own count
   )
@@ -1175,9 +1173,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Uppercase Operator",
     "Uppercase operator - waits for motion (gUw, gU$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(
-        ctx, OpUpperCase, ctx.givenCount(args), ctx.countGiven(args), "gU"
-      ),
+      registry.operatorKey(ctx, OpUpperCase, ctx.givenCount(args), ctx.countGiven(args)),
     0,
     1, # A mapping's own count
   )
@@ -1187,9 +1183,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Toggle Case Operator",
     "Toggle case operator - waits for motion (g~w, g~$, etc.)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      registry.operatorKey(
-        ctx, OpSwapCase, ctx.givenCount(args), ctx.countGiven(args), "g~"
-      ),
+      registry.operatorKey(ctx, OpSwapCase, ctx.givenCount(args), ctx.countGiven(args)),
     0,
     1, # A mapping's own count
   )

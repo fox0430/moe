@@ -24,6 +24,7 @@ import std/[options, strutils, unicode]
 import celina_backend as celina
 
 import
+  editor_display,
   editor_window_tab,
   types/editor_types,
   editor_window,
@@ -502,6 +503,37 @@ proc renderWrappedInput(
     bytePos = endByte
     row.inc
 
+const
+  PendingKeysWidth = 10 ## Columns the pending keys take, as Vim's SHOWCMD_COLS
+  PendingKeysArea = PendingKeysWidth + 1 ## With the last column, left blank
+
+proc lastColumns(text: string, width: int): string =
+  ## The end of `text`, `width` columns at most.
+  var
+    start = text.len
+    used = 0
+  while start > 0:
+    let
+      (r, size) = lastRune(text, start - 1)
+      w = r.charWidth
+    if used + w > width:
+      break
+    used += w
+    start -= size
+  text[start ..^ 1]
+
+proc renderPendingKeys(buffer: var Buffer, y: int, keys: string) =
+  ## The end of `keys` at the right of the command line, as Vim's showcmd, over
+  ## what the row shows and a blank column before them.
+  let
+    room = min(PendingKeysWidth, buffer.area.width - 1)
+    x = buffer.area.x + max(0, buffer.area.width - PendingKeysArea)
+  buffer.fill(
+    Rect(x: x - 1, y: y, width: PendingKeysArea + 1, height: 1),
+    cell(" ", commandStyle()),
+  )
+  buffer.setString(x, y, sanitizeForDisplay(keys).lastColumns(room), commandStyle())
+
 proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   ## Render status line and the command-line area at the bottom of the screen.
   ## The area sits below the windows, a single row in the steady state. Wrapped
@@ -513,6 +545,7 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     areaTopY = buffer.area.commandAreaTopY(e)
     areaH = screenBottomY - areaTopY + 1
     recording = e.state.pendingInput.macroState.recordingLabel
+    pendingKeys = e.pendingKeys
 
   # Per-window status lines are rendered in renderSplitView instead.
   if e.windowStatus == wsBottomWindows:
@@ -590,6 +623,8 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
         charDisplayWidth(recording) <= width:
       # With no status line to carry it, it takes the command line as in Vim
       buffer.setString(buffer.area.x, screenBottomY, recording, commandStyle())
+    if pendingKeys.len > 0:
+      buffer.renderPendingKeys(screenBottomY, pendingKeys)
 
 proc renderTempMessages*(e: Editor, buffer: var Buffer) =
   ## Render temporary messages at the bottom of screen (like Vim's :jumps output)

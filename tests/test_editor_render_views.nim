@@ -27,7 +27,9 @@ import
   ../src/moepkg/[
     editor, config, config_loader, config_mode, modes, types, buffer, render_utils,
     editor_window, editor_window_layout, macro_recording, viewer_mode, color,
+    editor_display, handler,
   ]
+import ../src/moepkg/key_bindings except Command
 import ../src/moepkg/types/config_mode_types
 import ../src/moepkg/editor_render_views {.all.}
 
@@ -710,6 +712,195 @@ suite "renderBottomLines - Recording label":
 
     check rowText(buffer, 23, 7) == "written"
     check "recording" notin rowText(buffer, 23, 80)
+
+suite "renderBottomLines - Pending keys":
+  proc typeKeys(e: Editor, keys: string) =
+    var i = 0
+    while i < keys.len:
+      let last =
+        if keys[i] == '<':
+          keys.find('>', i)
+        else:
+          i
+      discard e.handleKeyCombo(stringToKeyCombo(keys[i .. last]).get)
+      i = last + 1
+
+  proc bottomRowAfter(keys: string, width = 80): string =
+    let e = createTestEditor()
+    var buffer = newBuffer(width, 24)
+    buffer.area = Rect(x: 0, y: 0, width: width, height: 24)
+    e.viewport.width = width
+    e.viewport.height = 23
+    e.typeKeys(keys)
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    rowText(buffer, 23, width)
+
+  test "Shows the keys typed so far, as typed":
+    for (keys, shown) in {
+      "2": "2",
+      "2y": "2y",
+      "y3": "y3",
+      "\"": "\"",
+      "\"a": "\"a",
+      "3\"a2y": "3\"a2y",
+      "\"a2y3": "\"a2y3",
+      "2d3i": "2d3i",
+      "ya": "ya",
+      "2gu": "2gu",
+      "g": "g",
+      "3f": "3f",
+      "d2F": "d2F",
+      "r": "r",
+      "m": "m",
+      "q": "q",
+      "v2i": "2i",
+      "v2a": "2a",
+      "v\"a": "\"a",
+      "<C-w>": "^W",
+      "2<C-w>": "2^W",
+      "2\"a3\"b": "2\"a3\"b",
+      "\"a\"b": "\"a\"b",
+      "9999999\"a": "9999999\"a",
+      "2\"a3\"bd": "2\"a3\"bd",
+    }:
+      checkpoint keys
+      check bottomRowAfter(keys) == " ".repeat(69) & alignLeft(shown, 11)
+
+  test "Shows nothing once the command ends or is cancelled":
+    for keys in [
+      "yy", "2yy", "dw", "2j", "yiw", "fx", "d<Escape>", "2<Escape>", "\"a<Escape>",
+      "dy", "ix", "qa", "<C-w>w", "\"a\"byy", "2\"a3\"b<Escape>",
+    ]:
+      checkpoint keys
+      check bottomRowAfter(keys)[69 ..^ 1].strip() == ""
+
+  test "Keeps the last ten columns":
+    check bottomRowAfter("123456789012") == " ".repeat(69) & "3456789012 "
+
+  test "Fits a narrow screen":
+    check bottomRowAfter("1234567", 5) == "4567 "
+
+  test "Shares the row with a message, cut short of the keys":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    discard e.handleKeyCombo(toKeyCombo('y'))
+    e.state.statusMessage = "m".repeat(100)
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    check rowText(buffer, 23, 80) == "m".repeat(68) & " " & alignLeft("y", 11)
+
+  test "A wide character the keys cut goes whole":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    discard e.handleKeyCombo(toKeyCombo('y'))
+    e.state.statusMessage = "m".repeat(67) & "あ".repeat(10)
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    check buffer[66, 23].symbol == "m"
+    check buffer[67, 23].symbol == " "
+    check buffer[69, 23].symbol == "y"
+
+  test "Takes the last row of a message of several lines":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.typeKeys("y")
+    e.state.statusMessage = "one\ntwo"
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    check rowText(buffer, 22, 80) == alignLeft("one", 80)
+    check rowText(buffer, 23, 80) == alignLeft("two", 69) & alignLeft("y", 11)
+
+  test "Counts the columns of wide keys":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    discard e.keyRouter.registry.addRuntimeMapping(
+      EditorMode.Normal, "あいうえおかz", "j", noremap = true
+    )
+    for key in ["あ", "い", "う", "え", "お", "か"]:
+      discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: key))
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    for i, key in ["い", "う", "え", "お", "か"]:
+      check buffer[69 + i * 2, 23].symbol == key
+    check buffer[79, 23].symbol == " "
+
+  test "A message with a joined emoji is drawn whole":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.statusMessage = "👨‍👩‍👧‍👦" & "m".repeat(78)
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    check buffer[79, 23].symbol == "m"
+
+  test "Shows a window command begun in a terminal":
+    let e = createTestEditor()
+    e.activeWindow.mode = EditorMode.Terminal
+    e.typeKeys("<C-w>")
+    check e.pendingKeys == "^W"
+
+  test "Labels special keys short":
+    for (key, label) in {
+      "<Backspace>": "<BS>",
+      "<Enter>": "^M",
+      "<Tab>": "^I",
+      "<Escape>": "^[",
+      "<C-PageDown>": "<C-PgDn>",
+      "<F12>": "<F12>",
+    }:
+      checkpoint key
+      check stringToKeyCombo(key).get.keyComboLabel == label
+    check KeyCombo(isSpecial: false, char: " ").keyComboLabel == "<20>"
+    check KeyCombo(isSpecial: false, char: "あ", modifiers: {kmCtrl}).keyComboLabel ==
+      "<C-あ>"
+    check KeyCombo(isSpecial: false, char: " ", modifiers: {kmCtrl}).keyComboLabel ==
+      "^@"
+    check KeyCombo(isSpecial: false, char: " ", modifiers: {kmAlt}).keyComboLabel ==
+      "<M-Space>"
+    check KeyCombo(isSpecial: false, char: " ", modifiers: {kmCtrl, kmAlt}).keyComboLabel ==
+      "<C-M-Space>"
+
+  test "Covers the end of the recording label, not the whole":
+    let e = createTestEditor()
+    var buffer = newBuffer(20, 24)
+    e.viewport.width = 20
+    e.viewport.height = 23
+    e.state.showStatusLine = false
+    e.state.pendingInput.macroState.startRecording('a')
+    e.typeKeys("d")
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    check rowText(buffer, 23, 20) == "recordin " & alignLeft("d", 11)
+
+  test "Does not go through the status message":
+    let e = createTestEditor()
+    for k in ["2", "d", "i"]:
+      e.typeKeys(k)
+      check e.state.statusMessage == ""
+    check e.pendingKeys == "2di"
+
+  test "Shows every key of a sequence that awaits a character":
+    let e = createTestEditor()
+    e.keyRouter.registry.bindKey(EditorMode.Normal, "g z", "find-char")
+    e.typeKeys("2gz")
+    check e.keyRouter.registry.isWaitingForChar
+    check e.pendingKeys == "2gz"
+
+  test "Shows the keys held for a mapping":
+    let e = createTestEditor()
+    discard e.keyRouter.registry.addRuntimeMapping(
+      EditorMode.Normal, "gzz", "j", noremap = true
+    )
+    discard e.handleKeyCombo(toKeyCombo('g'))
+    check e.pendingKeys == "g"
+
+  test "Shows the keys held for a mapping after the operator":
+    let e = createTestEditor()
+    discard e.keyRouter.registry.addRuntimeMapping(
+      EditorMode.Normal, "gzz", "j", noremap = true
+    )
+    e.typeKeys("2dg")
+    check e.pendingKeys == "2dg"
 
 suite "renderTempMessages - Basic behavior":
   test "Render with no temp messages":

@@ -59,15 +59,30 @@ proc unbindKey*(registry: KeyBindingRegistry, mode: EditorMode, combo: KeyCombo)
   if mode in registry.bindings:
     registry.bindings[mode].keepItIf(it.combo != combo)
 
+proc typedPrefix(registry: KeyBindingRegistry): string =
+  ## The count and register held for the next command (`3"a2`).
+  registry.sequenceState.registerKeys & registry.sequenceState.numericPrefix
+
+proc typedSequence(registry: KeyBindingRegistry): string =
+  ## The keys of the sequence so far.
+  for key in registry.sequenceState.keys:
+    result.add(key.keyComboLabel)
+
+proc typedKeys*(registry: KeyBindingRegistry): string =
+  ## The keys typed for the command being built, as Vim's showcmd shows them.
+  registry.typedPrefix & registry.sequenceState.pendingKeys & registry.typedSequence
+
 proc clearSequence*(registry: KeyBindingRegistry) =
   ## Clear the current key sequence
   registry.sequenceState.keys = @[]
   registry.sequenceState.possibleSequences = @[]
   registry.sequenceState.pendingCommand = none(Command)
+  registry.sequenceState.pendingKeys = ""
   registry.sequenceState.waitingForChar = false
   registry.sequenceState.numericPrefix = ""
   registry.sequenceState.register = none(char)
   registry.sequenceState.registerCount = 0
+  registry.sequenceState.registerKeys = ""
 
 proc hasPendingKeys*(registry: KeyBindingRegistry): bool =
   ## A sequence prefix or an operand wait is pending, so the next key ends it.
@@ -110,12 +125,14 @@ proc isMidSequence*(registry: KeyBindingRegistry): bool =
   ## (the `g` of `gg`). Named API for the same reason as `clearNumericPrefix`.
   registry.sequenceState.keys.len > 0
 
-proc awaitOperand*(registry: KeyBindingRegistry, command: Command) =
+proc awaitOperand*(registry: KeyBindingRegistry, command: Command, typedKeys: string) =
   ## Make the next key the operand of `command`, for a command that takes one
   ## only sometimes (`q` takes a register unless it stops a recording).
+  ## `typedKeys` gave it.
   registry.sequenceState.keys = @[]
   registry.sequenceState.possibleSequences = @[]
   registry.sequenceState.pendingCommand = some(command)
+  registry.sequenceState.pendingKeys = typedKeys
   registry.sequenceState.waitingForChar = true
 
 proc clearAllPending*(registry: KeyBindingRegistry): bool {.discardable.} =
@@ -490,9 +507,11 @@ proc applyCountToCommand*(registry: KeyBindingRegistry, cmd: Command): Command =
     else:
       registry.getNumericPrefix()
   result.register = registry.sequenceState.register
+  result.typedKeys = registry.typedKeys
   registry.clearNumericPrefix()
   registry.sequenceState.register = none(char)
   registry.sequenceState.registerCount = 0
+  registry.sequenceState.registerKeys = ""
   logDebug("keybind", "Applied count=" & $result.count & " to command: " & cmd.name)
 
 proc holdRegister(registry: KeyBindingRegistry, name: char) =
@@ -506,11 +525,13 @@ proc holdRegister(registry: KeyBindingRegistry, name: char) =
         countTimes(before, count)
       else:
         count
+  registry.sequenceState.registerKeys = registry.typedKeys & name
   registry.sequenceState.register = some(name)
   registry.sequenceState.numericPrefix = ""
   registry.sequenceState.keys = @[]
   registry.sequenceState.possibleSequences = @[]
   registry.sequenceState.pendingCommand = none(Command)
+  registry.sequenceState.pendingKeys = ""
   registry.sequenceState.waitingForChar = false
 
 proc updatePossibleSequences*(registry: KeyBindingRegistry, mode: EditorMode) =
@@ -642,6 +663,7 @@ proc processKey*(
       # Check if this command requires additional input
       if command.kind == ctOperatorPending:
         registry.sequenceState.pendingCommand = some(command)
+        registry.sequenceState.pendingKeys = registry.typedSequence
         registry.sequenceState.waitingForChar = true
         registry.sequenceState.keys = @[] # Clear keys but keep pending state
         return none(Command) # Wait for next key
@@ -682,6 +704,7 @@ proc processKey*(
     # Check if this command requires additional input
     if singleKeyResult.isSome and singleKeyResult.get.kind == ctOperatorPending:
       registry.sequenceState.pendingCommand = singleKeyResult
+      registry.sequenceState.pendingKeys = registry.typedSequence
       registry.sequenceState.waitingForChar = true
       registry.sequenceState.keys = @[] # Clear keys but keep pending state
       return none(Command) # Wait for next key

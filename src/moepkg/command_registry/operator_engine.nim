@@ -328,23 +328,18 @@ proc startOperator*(
       startPos: ctx.cursor,
       register: ctx.register,
       topLine: ctx.motionController.viewportManager.viewport.topLine,
+      typedKeys: ctx.typedKeys,
     )
   )
 
 proc setPendingOperator*(
-    ctx: CommandContext,
-    operatorType: OperatorType,
-    count: int,
-    countGiven: bool,
-    statusMsg: string,
+    ctx: CommandContext, operatorType: OperatorType, count: int, countGiven: bool
 ) =
   ## Start the typed operator `operatorType`, cancelling one of another kind
   ## already waiting (`dyw` neither deletes nor yanks).
   if ctx.state.pendingInput.cancelOperatorPending():
-    ctx.state.statusMessage = ""
     return
   ctx.startOperator(operatorType, count, countGiven)
-  ctx.state.statusMessage = statusMsg
 
 proc namedMarkPosition*(
     ctx: CommandContext, name: char

@@ -43,7 +43,7 @@ proc handleMacroRecord(ctx: CommandContext, args: seq[string]): Result[(), strin
       afterCtrlO = ctx.state.resumesInsert
     )
     return ok(())
-  ctx.keyBindingRegistry.awaitOperand(RecordRegister)
+  ctx.keyBindingRegistry.awaitOperand(RecordRegister, ctx.typedKeys)
   ok(())
 
 proc startMacroRecording*(ctx: CommandContext, register: string): Result[(), string] =

@@ -21,7 +21,7 @@
 
 import std/[options, tables, unittest]
 
-import ../src/moepkg/[buffer, config, editor, git_cache]
+import ../src/moepkg/[buffer, config, editor, git_cache, handler, key_bindings]
 
 proc createTestEditor(): Editor =
   newEditor(newEditorConfig())
@@ -129,6 +129,22 @@ suite "Editor display status queries":
           branch: "feature/frontend-status", added: 4, modified: 2, deleted: 1
         ),
       )
+
+  test "frontendStatus carries the pending keys apart from the message":
+    let e = createTestEditor()
+    for key in ["2", "d"]:
+      discard e.handleKeyCombo(stringToKeyCombo(key).get)
+
+    check e.frontendStatus == FrontendStatus(modeLabel: "NORMAL", pendingKeys: "2d")
+
+  test "frontendStatus carries no pending keys while a prompt is open":
+    let e = createTestEditor()
+    for key in ["2", "d", "/"]:
+      discard e.handleKeyCombo(stringToKeyCombo(key).get)
+
+    check e.state.hasOverlay
+    check e.state.pendingInput.pendingOperator.isSome
+    check e.frontendStatus.pendingKeys == ""
 
   test "frontend Git status subscription can be enabled and disabled":
     let e = createTestEditor()

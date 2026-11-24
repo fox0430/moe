@@ -60,6 +60,9 @@ type
     count*: int ## Numeric prefix (e.g., 2 in "2w"), defaults to 1
     hasCount*: bool ## True iff the user typed a numeric prefix; lets `1G` mean line 1.
     register*: Option[char] ## Register named by a `"x` prefix
+    typedKeys*: string
+      ## The keys that gave the command, its count and register included, as
+      ## Vim's showcmd shows them. Empty when no key did.
     case kind*: CommandType
     of ctMotion:
       motion*: Motion
@@ -86,6 +89,9 @@ type
     keys*: seq[KeyCombo] ## Keys pressed so far
     possibleSequences*: seq[seq[KeyCombo]] ## Sequences that match current prefix
     pendingCommand*: Option[Command] ## Command waiting for additional input
+    pendingKeys*: string
+      ## The keys that gave `pendingCommand`, as shown. The count and register
+      ## the next command takes are not in it.
     waitingForChar*: bool ## Whether we're waiting for an arbitrary character
     numericPrefix*: string
       ## For building numeric prefixes like "2", "23", etc.
@@ -93,6 +99,7 @@ type
       ## separate bool; "0" alone is never accumulated (vim treats it as a
       ## command), so `len > 0` is the single source of truth.
     register*: Option[char] ## Register named by `"x` for the next command
+    registerKeys*: string ## The keys typed up to the last `"x`, as shown (`2"a3"b`)
     registerCount*: int
       ## Count typed before `"x`, 0 when none. Multiplies the count typed
       ## after it, as Vim's opcount does (`3"a2x` deletes 6).
@@ -410,6 +417,41 @@ proc keyComboToString*(keyCombo: KeyCombo): string =
       return "<" & prefix & keyCombo.char & ">"
     else:
       return keyCombo.char
+
+proc keyComboLabel*(keyCombo: KeyCombo): string =
+  ## A key as Vim's showcmd shows it: `^W` for Ctrl-w, `<20>` for a space. Keys
+  ## Vim has no readable form for take a short name.
+  if keyCombo.isSpecial:
+    if keyCombo.modifiers == {}:
+      case keyCombo.special
+      of skEnter:
+        return "^M"
+      of skTab:
+        return "^I"
+      of skEscape:
+        return "^["
+      else:
+        discard
+    keyComboToString(keyCombo).multiReplace(
+      ("Backspace", "BS"),
+      ("Delete", "Del"),
+      ("Escape", "Esc"),
+      ("PageUp", "PgUp"),
+      ("PageDown", "PgDn"),
+    )
+  elif keyCombo.modifiers == {kmCtrl} and keyCombo.char == " ":
+    "^@"
+  elif keyCombo.modifiers == {kmCtrl} and keyCombo.char.len == 1:
+    "^" & keyCombo.char.toUpperAscii
+  elif keyCombo.modifiers != {}:
+    var named = keyCombo
+    if named.char == " ":
+      named.char = "Space"
+    keyComboToString(named)
+  elif keyCombo.char == " ":
+    "<20>"
+  else:
+    keyCombo.char
 
 proc parseAngleBracketBody(key: string): Option[KeyCombo] =
   ## Parse the body inside `<...>` (modifier prefix already stripped) into a

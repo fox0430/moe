@@ -83,6 +83,11 @@ proc isHoldingKeys*(router: KeyRouter): bool =
   ## True while runtime-mapping keys wait for the rest of a mapping.
   router.dispatchState.keys.len > 0
 
+proc heldKeysLabel*(router: KeyRouter): string =
+  ## The held keys, as Vim's showcmd shows them.
+  for key in router.dispatchState.keys:
+    result.add(key.combo.keyComboLabel)
+
 proc dropHeldKeys*(router: KeyRouter) =
   ## Forget the keys held for a mapping, as Vim flushes the typeahead on an
   ## interrupt.
