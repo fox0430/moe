@@ -346,6 +346,9 @@ With several files and `StartUp.FileOpen.autoSplit` (the default), each file ope
 | <kbd>**g**</kbd> <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> | Decrease the numbers on the selected lines by count, 2*count, ... |
 | <kbd>**I**</kbd> | Insert character, multiple lines |
 | <kbd>**z**</kbd> <kbd>**f**</kbd> | Fold selected lines |
+| <kbd>**v**</kbd> | Switch to Visual mode, or end it when already in it |
+| <kbd>**V**</kbd> | Switch to Visual line mode, or end it when already in it |
+| <kbd>**Ctrl**</kbd> <kbd>**v**</kbd> | Switch to Visual block mode, or end it when already in it |
 | <kbd>**g**</kbd> <kbd>**v**</kbd> | Exchange the selection with the previous Visual area |
 | <kbd>**q**</kbd> <kbd>**Any key**</kbd> | Start recording operations for Macros |
 | <kbd>**q**</kbd> | Stop recording operations |

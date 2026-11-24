@@ -33,6 +33,7 @@ import std/[options, tables]
 import pkg/results
 
 import types/editor_types, editor_lsp, lsp_integration, unicode_utils, visual_selection
+from pending_input import cancelAll
 
 const SelectionRangeValidModes* =
   {EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
@@ -107,6 +108,10 @@ proc flattenSelectionChain(
 
 proc applySelectionRange(e: Editor, level: tuple[first, last: BufferPosition]) =
   ## Enter Visual mode (if not already) and select the given range.
+  if not e.state.mode.isVisualAllMode:
+    # The response may come while an operator waits, which would take the next
+    # motion as its own.
+    e.state.pendingInput.cancelAll(e.keyRouter.registry)
   e.state.enterVisual(vskChar, level.first, level.last)
 
 proc selectionChainPosition(e: Editor): int =

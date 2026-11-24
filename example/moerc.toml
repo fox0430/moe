@@ -377,7 +377,9 @@ enable = false                         # Open fileTree sidebar on startup
 # [KeyMapping.Insert]
 # "jj" = "Escape"
 #
-# [KeyMapping.Visual] applies to characterwise Visual mode only.
+# [KeyMapping.Visual] applies to characterwise Visual mode. A command mapping
+# there also runs in VisualLine and VisualBlock for keys they have no binding of
+# their own for, such as v, V and C-v. A key sequence mapping does not.
 # [KeyMapping.VisualAll] applies to all visual modes (Visual, VisualBlock, VisualLine).
 # [KeyMapping.VisualLine] and [KeyMapping.VisualBlock] for specific visual modes.
 # [KeyMapping.Visual]
