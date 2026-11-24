@@ -27,6 +27,8 @@ import pkg/[parsetoml, results]
 
 import ../[config, color, theme as themeMod, vscode_theme]
 
+import ../buffer/atomic_write
+
 import base, save_base
 
 # Top-level TOML section name handled by this module.
@@ -277,10 +279,16 @@ proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
   var vr = newValidationResult()
   loadTheme(config, vr)
 
-# True iff `themeColors` mirrors a successful `tkConfig` load from
-# `config.theme.path`. Consulted by `saveConfigToToml` so a fallback-to-defaults
-# load doesn't stamp bundled defaults over the user's theme file.
-var themeColorsFromFile* = false
+# Colors `themeColors` held when it was last loaded from or saved to the
+# `tkConfig` theme file (after `adaptDiffTintsToBackground`). None when
+# `themeColors` did not come from a file, so that a fallback to the defaults is
+# never stamped over the user's theme file.
+var themeFileColors*: Option[ThemeColors]
+
+proc themeColorsEdited*(): bool =
+  ## True when the in-memory colors came from the theme file and differ from
+  ## what was last loaded or saved.
+  themeFileColors.isSome and themeColors != themeFileColors.get
 
 # The [Theme] setting `themeColors` was last loaded for; none before the first
 # `initTheme`. Applying a config rereads the theme only when its setting differs.
@@ -313,19 +321,23 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
       if not isThemePathAllowed(config.theme.path):
         vr.addError("Theme.path", config.theme.path, "theme file inside moe config dir")
         initDefaultTheme()
-        themeColorsFromFile = false
+        themeFileColors = none(ThemeColors)
         return
       let saveResult = saveThemeToToml(DefaultColors, config.theme.path)
       if saveResult.isErr:
         vr.addLoadFailure("Theme.path", config.theme.path, saveResult.error)
         initDefaultTheme()
-        themeColorsFromFile = false
+        themeFileColors = none(ThemeColors)
         return
 
   let themeResult = loadTheme(config, vr)
   if themeResult.isOk:
     setThemeColors(themeResult.get)
-    themeColorsFromFile = config.theme.kind == tkConfig
+    themeFileColors =
+      if config.theme.kind == tkConfig:
+        some(themeResult.get)
+      else:
+        none(ThemeColors)
   else:
     case config.theme.kind
     of tkConfig:
@@ -335,7 +347,7 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
     of tkDefault:
       discard
     initDefaultTheme()
-    themeColorsFromFile = false
+    themeFileColors = none(ThemeColors)
 
 proc initTheme*(config: EditorConfig) =
   ## Backwards-compatible wrapper that discards validation errors.
@@ -397,17 +409,35 @@ proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string] =
     except CatchableError as e:
       return Result[void, string].err("Failed to create directory: " & e.msg)
 
-  # Backup existing file
-  if fileExists(expandedPath):
-    let backupPath = expandedPath & ".bac"
+  let content = lines.join("\n")
+
+  # A dangling symlink: create its target, which `writeAtomic` refuses to do.
+  if symlinkExists(expandedPath) and not fileExists(expandedPath):
     try:
-      copyFile(expandedPath, backupPath)
+      writeFile(expandedPath, content)
+      return Result[void, string].ok()
+    except CatchableError as e:
+      return Result[void, string].err("Failed to write theme file: " & e.msg)
+
+  if fileExists(expandedPath):
+    # The rename in `writeAtomic` would bypass the read-only bit.
+    try:
+      if fpUserWrite notin getFilePermissions(expandedPath):
+        return Result[void, string].err(
+          "Failed to write theme file: read-only: " & expandedPath
+        )
+    except CatchableError as e:
+      return Result[void, string].err("Failed to write theme file: " & e.msg)
+
+    # Backup existing file
+    try:
+      copyFile(expandedPath, expandedPath & ".bac")
     except CatchableError as e:
       return Result[void, string].err("Failed to backup theme file: " & e.msg)
 
-  # Write to file
-  try:
-    writeFile(expandedPath, lines.join("\n"))
-    return Result[void, string].ok()
-  except CatchableError as e:
-    return Result[void, string].err("Failed to write theme file: " & e.msg)
+  # A failed write must not leave a partial theme: a later save skips
+  # unchanged colors and would not repair it.
+  let written = writeAtomic(expandedPath, content, wpOverwrite)
+  if written.isErr:
+    return Result[void, string].err("Failed to write theme file: " & written.error)
+  Result[void, string].ok()
