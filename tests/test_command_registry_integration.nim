@@ -2274,6 +2274,18 @@ suite "Handler - Delete char before auto-delete paren (X)":
     check buffer[0] == "ab"
     check ctx.cursor.column == 1
 
+  test "X between adjacent pair at the end of line rests on the last char":
+    # a(|) -> X -> a, cursor on a
+    let buffer = newTextBuffer("a()")
+    let ctx = createTestContext(buffer)
+    ctx.state.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check buffer[0] == "a"
+    check ctx.cursor.column == 0
+
   test "X on adjacent pair stores both chars in the register":
     let buffer = newTextBuffer("a()b")
     let ctx = createTestContext(buffer)
