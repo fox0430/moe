@@ -1029,20 +1029,22 @@ suite "StatusLine - inactive window colors":
     for mode in EditorMode:
       check state.styleAt(1, false, mode).bg != state.styleAt(79, false, mode).bg
 
-  test "The bundled inactive line stands out from the editor in 16 colors":
+  test "The bundled inactive line stands out in 8 and 16 colors":
     let savedMode = globalColorMode
     defer:
       globalColorMode = savedMode
-    globalColorMode = cmk16color
-    themeColors = DefaultColors
-    let
-      state = createTestState()
-      editorBg = getThemeStyle(EditorColorPairIndex.default).bg
-    for mode in EditorMode:
-      let style = state.styleAt(79, false, mode)
-      check style.bg != editorBg
-      check style.bg != style.fg
-      check style.bg != state.styleAt(79, true, mode).bg
+    let state = createTestState()
+    for colors in [DefaultColors, LightColors]:
+      themeColors = colors
+      for colorMode in [cmk8color, cmk16color]:
+        globalColorMode = colorMode
+        checkpoint $colorMode
+        let editorBg = getThemeStyle(EditorColorPairIndex.default).bg
+        for mode in EditorMode:
+          let style = state.styleAt(79, false, mode)
+          check style.bg != editorBg
+          check style.bg != style.fg
+          check style.bg != state.styleAt(79, true, mode).bg
 
   test "An overlay colors only the active window":
     var state = createTestState()
