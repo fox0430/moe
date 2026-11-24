@@ -143,6 +143,7 @@ type
     register*: Option[char]
       ## Register named by `"x` for this command, or for the operator it ends
     count*: int ## The count typed before the command, 0 when none (Vim's count0)
+    typedKeys*: string ## The keys that gave the command, as shown
 
   ## Function signature for command handlers
   CommandHandler* =

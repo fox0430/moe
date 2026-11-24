@@ -671,6 +671,7 @@ type
     startPos*: BufferPosition # Position where operator was invoked
     register*: Option[char] # Register named by `"x` before the operator
     topLine*: int # The viewport's top line then, which the change puts back
+    typedKeys*: string # The keys that gave the operator, as shown (`"a2y`)
 
   TextObjectKind* = enum
     ## Types of text objects
@@ -708,6 +709,7 @@ type
     modifier*: TextObjectModifier # i or a
     count*: int # Count typed on the modifier (`d2iw`), 1 if none
     countGiven*: bool
+    typedKeys*: string # The keys that gave the modifier, as shown (`2i`)
 
   OperandKind* = enum
     odMotion ## A cursor motion, f/F/t/T with their character

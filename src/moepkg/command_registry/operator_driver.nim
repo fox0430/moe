@@ -452,7 +452,6 @@ proc operatorKey*(
     operatorType: OperatorType,
     count: int,
     countGiven: bool,
-    statusMsg: string,
 ): Result[(), string] =
   ## An operator's key: over lines when the same operator waits (`dd`, `2d3d`
   ## for six lines), else wait for what it acts over, cancelling an operator of
@@ -467,7 +466,7 @@ proc operatorKey*(
         countGiven: op.get.countGiven or countGiven,
       ),
     )
-  ctx.setPendingOperator(operatorType, count, countGiven, statusMsg)
+  ctx.setPendingOperator(operatorType, count, countGiven)
   ok(())
 
 proc operateOnLines*(

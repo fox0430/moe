@@ -22,7 +22,7 @@
 
 import std/options
 
-import types/editor_types, git_cache, macro_recording
+import types/editor_types, git_cache, macro_recording, pending_input, key_router
 
 export GitRefreshMode
 
@@ -36,6 +36,9 @@ type
     modeLabel*: string
     recordingLabel*: string
     message*: string
+    pendingKeys*: string
+      ## The keys of a command not complete yet (`"a2y`). `message` does not
+      ## carry them, so a host shows this to tell an operator is pending.
     git*: ActiveGitStatus
 
 proc statusModeLabel*(e: Editor): string =
@@ -50,6 +53,14 @@ proc statusModeLabel*(e: Editor): string =
 proc currentStatusMessage*(e: Editor): string =
   ## Return the current transient status message.
   e.state.statusMessage
+
+proc pendingKeys*(e: Editor): string =
+  ## The keys typed for a command or a mapping not complete yet, as Vim's
+  ## showcmd shows them. Keys typed at a prompt or to a terminal job are not,
+  ## nor the first key of a sequence a viewer reads itself (`gg` in the filer).
+  if e.state.hasOverlay:
+    return ""
+  e.state.pendingInput.typedKeys(e.keyRouter.registry) & e.keyRouter.heldKeysLabel
 
 proc activeGitStatus*(e: Editor): ActiveGitStatus =
   ## Return cached Git information for the active buffer without refreshing it.
@@ -69,6 +80,7 @@ proc frontendStatus*(e: Editor): FrontendStatus =
     modeLabel: e.statusModeLabel,
     recordingLabel: e.state.pendingInput.macroState.recordingLabel,
     message: e.currentStatusMessage,
+    pendingKeys: e.pendingKeys,
     git: e.activeGitStatus,
   )
 

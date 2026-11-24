@@ -113,6 +113,7 @@ proc executeCommand*(
     registry: CommandRegistry, ctx: CommandContext, cmd: key_bindings.Command
 ): Result[(), string] =
   ## Execute a keybinding command
+  ctx.typedKeys = cmd.typedKeys
   ctx.count = if cmd.count > 1 or (cmd.hasCount and cmd.count > 0): cmd.count else: 0
 
   # Clear f/F/t/T match highlight when executing a non-find/till command
