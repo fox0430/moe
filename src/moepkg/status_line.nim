@@ -39,7 +39,8 @@ proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
 static:
   # Verify the `statusLine<Mode>Mode` → `statusLine<Mode>ModeLabel` →
   # `statusLine<Mode>ModeInactive` triplet layout in `EditorColorPairIndex`
-  # that `toStatusLineModeLabelColorIndex` depends on.
+  # that `toStatusLineModeLabelColorIndex` and
+  # `toStatusLineModeInactiveColorIndex` depend on.
   for i in EditorColorPairIndex:
     let name = $i
     if name.startsWith("statusLine") and name.endsWith("Mode"):
@@ -51,7 +52,8 @@ static:
 proc toStatusLineModeColorIndex(mode: EditorMode): EditorColorPairIndex =
   ## Map an editor mode to its status line background color pair.
   ## The label/inactive variants directly follow this index in
-  ## `EditorColorPairIndex` (see `toStatusLineModeLabelColorIndex`).
+  ## `EditorColorPairIndex` (see `toStatusLineModeLabelColorIndex`
+  ## and `toStatusLineModeInactiveColorIndex`).
   case mode
   of EditorMode.Normal:
     EditorColorPairIndex.statusLineNormalMode
@@ -102,9 +104,18 @@ proc toStatusLineModeLabelColorIndex(mode: EditorMode): EditorColorPairIndex =
   ## `statusLine<Mode>ModeLabel` → `statusLine<Mode>ModeInactive`.
   succ(toStatusLineModeColorIndex(mode))
 
-proc getStatusLineModeStyle(mode: EditorMode): Style =
-  ## Get the status line background style based on current mode
-  getThemeStyle(toStatusLineModeColorIndex(mode), {StyleModifier.Bold})
+proc toStatusLineModeInactiveColorIndex(mode: EditorMode): EditorColorPairIndex =
+  ## Map an editor mode to its status line color pair in an inactive window.
+  succ(toStatusLineModeColorIndex(mode), 2)
+
+proc getStatusLineModeStyle(mode: EditorMode, isActiveWindow: bool): Style =
+  ## Get the status line background style of a window in `mode`
+  let index =
+    if isActiveWindow:
+      toStatusLineModeColorIndex(mode)
+    else:
+      toStatusLineModeInactiveColorIndex(mode)
+  getThemeStyle(index, {StyleModifier.Bold})
 
 proc getStatusLineModeLabelStyle(mode: EditorMode): Style =
   ## Get the status line mode label style based on current mode
@@ -546,7 +557,7 @@ proc drawStatusLine(
     if isActiveWindow and state.overlay.isSome:
       (getOverlayLabelStyle(state.overlay.get), getOverlayStyle(state.overlay.get))
     else:
-      (getStatusLineModeLabelStyle(mode), getStatusLineModeStyle(mode))
+      (getStatusLineModeLabelStyle(mode), getStatusLineModeStyle(mode, isActiveWindow))
 
   var left: seq[StatusItem]
   if showMode:

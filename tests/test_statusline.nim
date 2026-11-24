@@ -23,7 +23,9 @@ import std/[unittest, options, tables, strutils, os, importutils, sequtils, time
 
 import pkg/celina
 
-import ../src/moepkg/[types, modes, registers, config, git_cache, unicode_utils]
+import
+  ../src/moepkg/
+    [types, modes, registers, config, color, theme, git_cache, unicode_utils]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/search_ops
 import ../src/moepkg/syntax/tokenizer
@@ -965,6 +967,90 @@ suite "StatusLine - recording label":
 
     check getBufferLine(activeBuf, 10).startsWith(" NORMAL  recording @a ")
     check "recording" notin getBufferLine(inactiveBuf, 10)
+
+suite "StatusLine - inactive window colors":
+  setup:
+    let savedColors = themeColors
+    for i in EditorColorPairIndex:
+      # A distinct background per entry
+      themeColors[i].background =
+        ThemeColor(rgb: Rgb(red: int16(ord(i)), green: 1, blue: 2))
+
+  teardown:
+    themeColors = savedColors
+
+  proc styleAt(
+      state: EditorState, x: int, isActiveWindow: bool, mode: EditorMode
+  ): Style =
+    var displayBuffer = createTestBuffer()
+    var config = createTestStatusLineConfig()
+    config.mode = true
+    config.showModeInactive = true
+    renderWindowStatusLine(
+      state,
+      createTestTextBuffer("/path/file.nim", false, "test content"),
+      displayBuffer,
+      10,
+      0,
+      80,
+      isActiveWindow,
+      mode,
+      state.cursor,
+      config,
+    )
+    displayBuffer[x, 10].style
+
+  template checkColor(style: Style, index: EditorColorPairIndex) =
+    check style == getThemeStyle(index, {StyleModifier.Bold})
+
+  test "An inactive window uses the Inactive color of its mode":
+    let state = createTestState()
+    checkColor state.styleAt(79, false, EditorMode.Normal),
+      EditorColorPairIndex.statusLineNormalModeInactive
+    checkColor state.styleAt(79, false, EditorMode.Filer),
+      EditorColorPairIndex.statusLineFilerModeInactive
+    checkColor state.styleAt(79, true, EditorMode.Normal),
+      EditorColorPairIndex.statusLineNormalMode
+
+  test "The mode label keeps the label color":
+    checkColor createTestState().styleAt(1, false, EditorMode.Normal),
+      EditorColorPairIndex.statusLineNormalModeLabel
+
+  test "The mode label keeps the label color over a line of the same background":
+    let label = EditorColorPairIndex.statusLineNormalModeLabel
+    themeColors[label].foreground = ThemeColor(rgb: color.rgb("#ffcc00"))
+    themeColors[EditorColorPairIndex.statusLineNormalModeInactive].background =
+      themeColors[label].background
+    checkColor createTestState().styleAt(1, false, EditorMode.Normal), label
+
+  test "The bundled label stands out from the inactive line":
+    themeColors = DefaultColors
+    let state = createTestState()
+    for mode in EditorMode:
+      check state.styleAt(1, false, mode).bg != state.styleAt(79, false, mode).bg
+
+  test "The bundled inactive line stands out from the editor in 16 colors":
+    let savedMode = globalColorMode
+    defer:
+      globalColorMode = savedMode
+    globalColorMode = cmk16color
+    themeColors = DefaultColors
+    let
+      state = createTestState()
+      editorBg = getThemeStyle(EditorColorPairIndex.default).bg
+    for mode in EditorMode:
+      let style = state.styleAt(79, false, mode)
+      check style.bg != editorBg
+      check style.bg != style.fg
+      check style.bg != state.styleAt(79, true, mode).bg
+
+  test "An overlay colors only the active window":
+    var state = createTestState()
+    state.overlay = some(okCommand)
+    checkColor state.styleAt(79, true, EditorMode.Normal),
+      EditorColorPairIndex.statusLineExMode
+    checkColor state.styleAt(79, false, EditorMode.Normal),
+      EditorColorPairIndex.statusLineNormalModeInactive
 
 suite "StatusLine - renderWindowStatusLine":
   test "A narrow window keeps the preserved-work mark over the path":
