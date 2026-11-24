@@ -295,11 +295,17 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   if config.theme.kind == tkConfig and config.theme.path.len > 0:
     let expandedThemePath = expandTilde(config.theme.path)
     if not fileExists(expandedThemePath) or themeColorsEdited():
-      let themeResult = saveThemeToToml(themeColors, config.theme.path, themeSource)
+      # Colors that came from no theme file are written as a seeded file is
+      let source =
+        if themeFileColors.isNone:
+          sharedStatusLineSource(themeColors)
+        else:
+          themeSource
+      let themeResult = saveThemeToToml(themeColors, config.theme.path, source)
       if themeResult.isErr:
         return Result[void, string].err(themeResult.error)
       themeFileColors = some(themeColors)
-      themeSource = themeSource.sourceFor(themeColors)
+      themeSource = source.sourceFor(themeColors)
 
   return Result[void, string].ok()
 

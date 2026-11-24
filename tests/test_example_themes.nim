@@ -45,9 +45,14 @@ proc missingColors(colors: TomlTableRef): seq[string] =
       needsBg = default.background.rgb != rgb("#000000")
 
     for (side, needed) in [("fg", needsFg), ("bg", needsBg)]:
-      let isSet =
-        colors.hasKey(key) and colors[key].kind == TomlValueKind.Table and
-        colors[key].getTable.hasKey(side)
+      var keys = @[key]
+      for kind in StatusLineModeColor:
+        if index in StatusLineModeEntries[kind]:
+          keys.add $kind
+      let isSet = keys.anyIt(
+        colors.hasKey(it) and colors[it].kind == TomlValueKind.Table and
+          colors[it].getTable.hasKey(side)
+      )
       if needed and not isSet:
         result.add key & "." & side
 

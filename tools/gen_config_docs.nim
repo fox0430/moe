@@ -276,13 +276,18 @@ proc generateColorsMarkdown(): string =
   ## Render the markdown table for the Theme `[Colors]` section. Unlike the
   ## struct-driven sections, this one iterates `EditorColorPairIndex` and
   ## reads descriptions from `EditorColorPairDocDescription` in color.nim;
-  ## the TOML key for each enum value comes from `toTomlColorKey`. The two
-  ## top-level keys `foreground` / `background` are emitted manually since
-  ## they overlay the `default` pair rather than appearing as enum members.
+  ## the TOML key for each enum value comes from `toTomlColorKey`. The top-level
+  ## keys `foreground` / `background` and the `statusLineMode*` keys are emitted
+  ## separately since they overlay entries rather than being enum members.
   result = "| Name | Description |\n"
   result &= "|:---|:---|\n"
   result &= "| foreground | Default foreground color (overrides `Colors.default.fg`) |\n"
   result &= "| background | Default background color (overrides `Colors.default.bg`) |\n"
+  for kind in StatusLineModeColor:
+    result &=
+      "| " & escapeMdCell($kind) & " | " & escapeMdCell(
+        StatusLineModeDescriptions[kind]
+      ) & " |\n"
   for index in EditorColorPairIndex:
     if index == EditorColorPairIndex.default:
       continue

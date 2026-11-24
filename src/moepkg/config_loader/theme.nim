@@ -115,11 +115,22 @@ type ThemePalette* = OrderedTable[string, Rgb]
 # `EditorColorPairIndex.default`.
 type ThemeChannel* = tuple[index: EditorColorPairIndex, isFg: bool]
 
+# A color and the palette name it was written as, if any.
+type SharedColor* = object
+  color*: ThemeColor
+  name*: string
+
+# The `statusLineMode*` keys, which set one side of a color pair for every mode.
+# A theme file may set either side of each.
+type StatusLineModeChannel* = tuple[kind: StatusLineModeColor, isFg: bool]
+type StatusLineModeColors* = OrderedTable[StatusLineModeChannel, SharedColor]
+
 # What the loaded theme file said, so a save can keep its palette and the
 # channels it wrote by name or left out without putting that on ThemeColor.
 type ThemeSource* = object
   palette*: ThemePalette
   refs*: Table[ThemeChannel, string]
+  statusLineModes*: StatusLineModeColors
   omittedFg*, omittedBg*: set[EditorColorPairIndex]
 
 proc isEmpty*(source: ThemeSource): bool =
@@ -186,6 +197,12 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
       return some(index)
   return none(EditorColorPairIndex)
 
+proc toStatusLineModeColor(key: string): Option[StatusLineModeColor] =
+  for kind in StatusLineModeColor:
+    if $kind == key:
+      return some(kind)
+  none(StatusLineModeColor)
+
 proc baseThemeColors(default: ColorPair): ThemeColors =
   ## What every entry starts from under the top-level foreground/background.
   ## Entries whose bundled background is #000000 inherit the theme's background
@@ -248,6 +265,29 @@ proc applyStatusLineInactiveFallback(
       else:
         colors[inactive].background =
           otherChannel(colors[active].foreground, colors[inactive].foreground)
+
+proc applyStatusLineColors(
+    colors: var ThemeColors,
+    shared: StatusLineModeColors,
+    omittedFg, omittedBg: set[EditorColorPairIndex],
+) =
+  ## Color every mode the theme does not set with the keys shared by all modes,
+  ## then fill in the Inactive colors that neither sets.
+  var
+    unsetFg = omittedFg
+    unsetBg = omittedBg
+  for channel, value in shared:
+    let entries = StatusLineModeEntries[channel.kind]
+    for index in entries:
+      if channel.isFg and index in omittedFg:
+        colors[index].foreground = value.color
+      elif not channel.isFg and index in omittedBg:
+        colors[index].background = value.color
+    if channel.isFg:
+      unsetFg = unsetFg - entries
+    else:
+      unsetBg = unsetBg - entries
+  colors.applyStatusLineInactiveFallback(unsetFg, unsetBg)
 
 proc loadThemeWithSource*(
     path: string, vr: var ValidationResult
@@ -341,11 +381,12 @@ proc loadThemeWithSource*(
     if key == "foreground" or key == "background":
       continue
 
-    let indexOpt = toEditorColorPairIndex(key)
-    if indexOpt.isNone:
+    let
+      sharedOpt = toStatusLineModeColor(key)
+      indexOpt = toEditorColorPairIndex(key)
+    if sharedOpt.isNone and indexOpt.isNone:
       vr.addUnknownKey(fullKey(section, key))
       continue
-    let index = indexOpt.get
 
     if value.kind != TomlValueKind.Table:
       vr.addError(fullKey(section, key), $value, themeInlineTableExpected)
@@ -370,8 +411,14 @@ proc loadThemeWithSource*(
         if parsed.isErr:
           vr.addError(subkeyPath, raw, themeColorExpected)
           continue
-        if raw in source.palette:
-          source.refs[(index, subkey == "fg")] = raw
+        let name = if raw in source.palette: raw else: ""
+        if sharedOpt.isSome:
+          source.statusLineModes[(sharedOpt.get, subkey == "fg")] =
+            SharedColor(color: ThemeColor(rgb: parsed.get), name: name)
+          continue
+        let index = indexOpt.get
+        if name.len > 0:
+          source.refs[(index, subkey == "fg")] = name
         if subkey == "fg":
           colors[index].foreground = ThemeColor(rgb: parsed.get)
           fgSet.incl index
@@ -384,8 +431,10 @@ proc loadThemeWithSource*(
   const allIndexes = {EditorColorPairIndex.low .. EditorColorPairIndex.high}
   source.omittedFg = allIndexes - fgSet - {EditorColorPairIndex.default}
   source.omittedBg = allIndexes - bgSet - {EditorColorPairIndex.default}
+  colors.applyStatusLineColors(
+    source.statusLineModes, source.omittedFg, source.omittedBg
+  )
   colors.applyMarkdownFallback(source.omittedFg, source.omittedBg)
-  colors.applyStatusLineInactiveFallback(source.omittedFg, source.omittedBg)
 
   return Loaded.ok((colors, source))
 
@@ -469,6 +518,8 @@ var themeSource*: ThemeSource
 # `initTheme`. Applying a config rereads the theme only when its setting differs.
 var loadedThemeConfig*: Option[ThemeConfig]
 
+proc sharedStatusLineSource*(colors: ThemeColors): ThemeSource
+
 # Forward declaration: `initTheme` bootstraps a missing tkConfig file via
 # `saveThemeToToml`, which is defined further down in the Serializers section.
 proc saveThemeToToml*(
@@ -501,7 +552,9 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
         themeFileColors = none(ThemeColors)
         themeSource = ThemeSource()
         return
-      let saveResult = saveThemeToToml(DefaultColors, config.theme.path)
+      let saveResult = saveThemeToToml(
+        DefaultColors, config.theme.path, sharedStatusLineSource(DefaultColors)
+      )
       if saveResult.isErr:
         vr.addLoadFailure("Theme.path", config.theme.path, saveResult.error)
         initDefaultTheme()
@@ -552,8 +605,10 @@ proc reloadedColors(colors: ThemeColors, source: ThemeSource): ThemeColors =
       result[index].foreground = colors[index].foreground
     if index notin source.omittedBg:
       result[index].background = colors[index].background
+  result.applyStatusLineColors(
+    source.statusLineModes, source.omittedFg, source.omittedBg
+  )
   result.applyMarkdownFallback(source.omittedFg, source.omittedBg)
-  result.applyStatusLineInactiveFallback(source.omittedFg, source.omittedBg)
   result.adaptDiffTintsToBackground(source.explicitEntries)
 
 proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource =
@@ -586,6 +641,29 @@ proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource =
       break
     result.omittedFg = result.omittedFg - changedFg
     result.omittedBg = result.omittedBg - changedBg
+
+proc sharedStatusLineSource*(colors: ThemeColors): ThemeSource =
+  ## A source that writes what all modes of a status line color have in common
+  ## as one key.
+  for kind in StatusLineModeColor:
+    let entries = StatusLineModeEntries[kind]
+    for isFg in [true, false]:
+      var values: seq[ThemeColor]
+      for index in entries:
+        let color =
+          if isFg:
+            colors[index].foreground
+          else:
+            colors[index].background
+        if color notin values:
+          values.add color
+      if values.len != 1:
+        continue
+      result.statusLineModes[(kind, isFg)] = SharedColor(color: values[0])
+      if isFg:
+        result.omittedFg = result.omittedFg + entries
+      else:
+        result.omittedBg = result.omittedBg + entries
 
 proc themeChannelToTomlValue(
     color: ThemeColor, channel: ThemeChannel, source: ThemeSource
@@ -621,7 +699,8 @@ proc saveThemeToToml*(
     colors: ThemeColors, path: string, source = ThemeSource()
 ): Result[void, string] =
   ## Save theme colors to a TOML file. With a `source`, its [Palette] is
-  ## written first (in file order, unused names included), the channels the
+  ## written first (in file order, unused names included), its `statusLineMode*`
+  ## keys are written as they were, the channels the
   ## file wrote by name stay names while the palette still holds the color, and
   ## the ones it left out stay out while they would load as the same color.
   let source = source.sourceFor(colors)
@@ -659,6 +738,24 @@ proc saveThemeToToml*(
       source,
     )
   lines.add ""
+
+  # The keys shared by all modes, as far as the theme has them
+  for kind in StatusLineModeColor:
+    var channels: seq[string]
+    for (isFg, side) in [(true, "fg"), (false, "bg")]:
+      let channel: StatusLineModeChannel = (kind, isFg)
+      if channel in source.statusLineModes:
+        let shared = source.statusLineModes[channel]
+        let value =
+          if shared.name.len > 0:
+            toTomlString(shared.name)
+          else:
+            themeColorToTomlValue(shared.color)
+        channels.add side & " = " & value
+    if channels.len > 0:
+      lines.add $kind & " = { " & channels.join(", ") & " }"
+  if source.statusLineModes.len > 0:
+    lines.add ""
 
   # Write all other color pairs as inline tables: `key = { fg = "...", bg = "..." }`.
   # Bg-only entries emit only `bg`.
