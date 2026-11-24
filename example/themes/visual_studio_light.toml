@@ -5,6 +5,7 @@
 # pre-blended against the white background, since moe only takes #RRGGBB.
 #
 # Color format: "#RRGGBB" (hex) or "termDefault" (terminal default color)
+# Define named colors under [Palette] and reuse them as fg/bg values.
 
 [Colors]
 

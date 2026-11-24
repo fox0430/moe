@@ -36,8 +36,14 @@ import ../[config, setting_issue]
 export setting_issue
 
 const
-  themeColorExpected* = "string color (\"#RRGGBB\" hex or \"termDefault\")"
+  themeColorExpected* =
+    "string color (\"#RRGGBB\" hex, \"termDefault\", or a [Palette] name)"
   themeInlineTableExpected* = "inline table { fg = \"...\", bg = \"...\" }"
+  themePaletteExpected* = "table of named colors, e.g. dimmed1 = \"#3b3c35\""
+  themePaletteNameExpected* =
+    "palette name ([A-Za-z_][A-Za-z0-9_-]*, not a hex color or \"termDefault\")"
+  themePaletteValueExpected* =
+    "string literal color (\"#RRGGBB\" hex or \"termDefault\"), not a [Palette] name"
 
 proc parseColorMode*(s: string): ColorMode =
   case s
