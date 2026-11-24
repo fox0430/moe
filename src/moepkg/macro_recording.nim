@@ -45,6 +45,16 @@ proc recordTypedKeys*(m: var MacroState, keys: openArray[KeyCombo]) =
   for key in keys:
     m.recording.get.keys.add(keyComboToString(key))
 
+const BreakMark* = "<InputBreak>"
+  ## Recorded where an input that is not a key came between the keys and ended
+  ## what they had begun, so the playback ends it there too. It is no key, as
+  ## Vim's K_PS is none.
+
+proc recordBreak*(m: var MacroState) =
+  ## Nothing to end for the playback before the first recorded key.
+  if m.recording.isSome and m.recording.get.keys.len > 0:
+    m.recording.get.keys.add(BreakMark)
+
 proc stopRecording*(m: var MacroState, afterCtrlO: bool) =
   ## Save the session into its register. The key that stops it is still
   ## running, so its typed keys are not in it.
