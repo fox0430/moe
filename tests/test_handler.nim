@@ -122,7 +122,7 @@ proc echoCommand(arg: string): BackgroundProcessCommand =
   ## A queued QuickRun's command.
   BackgroundProcessCommand(cmd: "echo", args: @[arg])
 
-suite "screenToBufferPosition - Basic":
+suite "screenToTextHit - Basic":
   test "Click at top-left corner of viewport":
     let
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
@@ -130,13 +130,12 @@ suite "screenToBufferPosition - Basic":
       lineNumOffset = 0
       reservedLines = StatusLineReserve
 
-    let result = screenToBufferPosition(
-      vp, buffer, 0, 0, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 0, 0, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 0
+    check result.get.position.line == 0
+    check result.get.position.column == 0
 
   test "Click with line number offset":
     let
@@ -146,13 +145,12 @@ suite "screenToBufferPosition - Basic":
       reservedLines = StatusLineReserve
 
     # Click at x=5, which is x=1 in text area (5 - 4 = 1)
-    let result = screenToBufferPosition(
-      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 1
+    check result.get.position.line == 0
+    check result.get.position.column == 1
 
   test "Click on second line":
     let
@@ -161,13 +159,12 @@ suite "screenToBufferPosition - Basic":
       lineNumOffset = 0
       reservedLines = StatusLineReserve
 
-    let result = screenToBufferPosition(
-      vp, buffer, 3, 1, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 3, 1, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 1
-    check result.get.column == 3
+    check result.get.position.line == 1
+    check result.get.position.column == 3
 
   test "Click outside text area (below reserved lines)":
     let
@@ -177,9 +174,8 @@ suite "screenToBufferPosition - Basic":
       reservedLines = StatusLineReserve
 
     # Click at y=23 is within reserved lines (height=24, reserved=2)
-    let result = screenToBufferPosition(
-      vp, buffer, 0, 23, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 0, 23, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isNone
 
@@ -191,13 +187,12 @@ suite "screenToBufferPosition - Basic":
       reservedLines = StatusLineReserve
 
     # Click at x=2 is within line number area
-    let result = screenToBufferPosition(
-      vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isNone
 
-suite "screenToBufferPosition - Scrolled Viewport":
+suite "screenToTextHit - Scrolled Viewport":
   test "Click with topLine offset":
     let
       vp = createTestViewport(0, 0, 80, 24, 10, 0) # topLine = 10
@@ -208,13 +203,12 @@ suite "screenToBufferPosition - Scrolled Viewport":
       lineNumOffset = 0
       reservedLines = StatusLineReserve
 
-    let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 10 # topLine + screenY
-    check result.get.column == 3
+    check result.get.position.line == 10 # topLine + screenY
+    check result.get.position.column == 3
 
   test "Click with leftCell offset (horizontal scroll)":
     let
@@ -223,13 +217,12 @@ suite "screenToBufferPosition - Scrolled Viewport":
       lineNumOffset = 0
       reservedLines = StatusLineReserve
 
-    let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 8 # leftCell + screenX = 5 + 3
+    check result.get.position.line == 0
+    check result.get.position.column == 8 # leftCell + screenX = 5 + 3
 
   test "Click with both offsets":
     let
@@ -241,15 +234,14 @@ suite "screenToBufferPosition - Scrolled Viewport":
       lineNumOffset = 0
       reservedLines = StatusLineReserve
 
-    let result = screenToBufferPosition(
-      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 5
-    check result.get.column == 15 # leftCell + screenX = 10 + 5
+    check result.get.position.line == 5
+    check result.get.position.column == 15 # leftCell + screenX = 10 + 5
 
-suite "screenToBufferPosition - No Wrap Display Width":
+suite "screenToTextHit - No Wrap Display Width":
   # screenX is a display-column offset while the column is a character index, so
   # tabs and wide characters must be converted, not added.
   test "Click past a leading tab":
@@ -260,13 +252,13 @@ suite "screenToBufferPosition - No Wrap Display Width":
       reservedLines = StatusLineReserve
 
     # tabStop=4: the tab covers columns 0..3, so 'a' is drawn at column 4
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp, buffer, 4, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 1
+    check result.get.position.line == 0
+    check result.get.position.column == 1
 
   test "Click inside a tab selects the tab":
     let
@@ -275,12 +267,12 @@ suite "screenToBufferPosition - No Wrap Display Width":
       lineNumOffset = 0
       reservedLines = StatusLineReserve
 
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
     )
 
     check result.isSome
-    check result.get.column == 0
+    check result.get.position.column == 0
 
   test "Click past full width characters":
     let
@@ -290,12 +282,12 @@ suite "screenToBufferPosition - No Wrap Display Width":
       reservedLines = StatusLineReserve
 
     # Each wide rune takes 2 cells, so 'a' is drawn at column 6
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp, buffer, 6, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
     )
 
     check result.isSome
-    check result.get.column == 3
+    check result.get.position.column == 3
 
   test "Click on the second cell of a full width character":
     let
@@ -304,12 +296,12 @@ suite "screenToBufferPosition - No Wrap Display Width":
       lineNumOffset = 0
       reservedLines = StatusLineReserve
 
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
     )
 
     check result.isSome
-    check result.get.column == 1
+    check result.get.position.column == 1
 
   test "Click with horizontal scroll and full width characters":
     let
@@ -319,12 +311,12 @@ suite "screenToBufferPosition - No Wrap Display Width":
       reservedLines = StatusLineReserve
 
     # Scrolled by 2 cells, い takes cells 0..1 and う cell 2
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
     )
 
     check result.isSome
-    check result.get.column == 2
+    check result.get.position.column == 2
 
   test "Click with horizontal scroll onto a tab boundary":
     let
@@ -334,14 +326,14 @@ suite "screenToBufferPosition - No Wrap Display Width":
       reservedLines = StatusLineReserve
 
     # The tab keeps cells 2..3 of the line, so 'c' at cell 4 is drawn at 2
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
     )
 
     check result.isSome
-    check result.get.column == 3
+    check result.get.position.column == 3
 
-suite "screenToBufferPosition - Column Clamping":
+suite "screenToTextHit - Column Clamping":
   test "Column clamped to line length":
     let
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
@@ -350,13 +342,12 @@ suite "screenToBufferPosition - Column Clamping":
       reservedLines = StatusLineReserve
 
     # Click at x=50, but line only has 2 chars
-    let result = screenToBufferPosition(
-      vp, buffer, 50, 0, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 50, 0, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 1 # Clamped to max(0, lineLen - 1) = 1
+    check result.get.position.line == 0
+    check result.get.position.column == 1 # Clamped to max(0, lineLen - 1) = 1
 
   test "Column clamped on empty line":
     let
@@ -366,13 +357,12 @@ suite "screenToBufferPosition - Column Clamping":
       reservedLines = StatusLineReserve
 
     # Click on empty line at x=10
-    let result = screenToBufferPosition(
-      vp, buffer, 10, 1, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 10, 1, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 1
-    check result.get.column == 0 # Empty line, column stays at 0
+    check result.get.position.line == 1
+    check result.get.position.column == 0 # Empty line, column stays at 0
 
   test "Column clamped to character count for multibyte":
     let
@@ -382,15 +372,14 @@ suite "screenToBufferPosition - Column Clamping":
       reservedLines = StatusLineReserve
 
     # Click at x=50, but line only has 3 characters
-    let result = screenToBufferPosition(
-      vp, buffer, 50, 0, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 50, 0, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 2 # Clamped to max(0, charLen - 1) = 2, not 8
+    check result.get.position.line == 0
+    check result.get.position.column == 2 # Clamped to max(0, charLen - 1) = 2, not 8
 
-suite "screenToBufferPosition - Line Clamping":
+suite "screenToTextHit - Line Clamping":
   test "Line clamped when clicking beyond buffer":
     let
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
@@ -399,12 +388,11 @@ suite "screenToBufferPosition - Line Clamping":
       reservedLines = StatusLineReserve
 
     # Click at y=10, but buffer only has 1 line
-    let result = screenToBufferPosition(
-      vp, buffer, 5, 10, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 5, 10, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 0 # Clamped to buffer.len - 1
+    check result.get.position.line == 0 # Clamped to buffer.len - 1
 
   test "Line clamped with scrolled viewport":
     let
@@ -414,14 +402,13 @@ suite "screenToBufferPosition - Line Clamping":
       reservedLines = StatusLineReserve
 
     # Click at y=10, topLine=5, so bufferLine = 15, but only 7 lines
-    let result = screenToBufferPosition(
-      vp, buffer, 0, 10, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 0, 10, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 6 # Clamped to buffer.len - 1
+    check result.get.position.line == 6 # Clamped to buffer.len - 1
 
-suite "screenToBufferPosition - Viewport Position":
+suite "screenToTextHit - Viewport Position":
   test "Click with viewport at non-zero position":
     let
       vp = createTestViewport(10, 5, 60, 20, 0, 0) # Viewport at (10, 5)
@@ -430,13 +417,12 @@ suite "screenToBufferPosition - Viewport Position":
       reservedLines = StatusLineReserve
 
     # Click at absolute (12, 6) which is relative (2, 1) to viewport
-    let result = screenToBufferPosition(
-      vp, buffer, 12, 6, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 12, 6, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 1
-    check result.get.column == 2
+    check result.get.position.line == 1
+    check result.get.position.column == 2
 
   test "Click outside viewport area (above)":
     let
@@ -446,13 +432,12 @@ suite "screenToBufferPosition - Viewport Position":
       reservedLines = StatusLineReserve
 
     # Click at y=3, viewport starts at y=5
-    let result = screenToBufferPosition(
-      vp, buffer, 15, 3, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 15, 3, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isNone
 
-suite "screenToBufferPosition - Line Wrap Mode":
+suite "screenToTextHit - Line Wrap Mode":
   test "Click with lineWrap enabled uses screen position directly":
     let
       vp = createTestViewport(0, 0, 80, 24, 0, 5) # leftCell is set but ignored
@@ -461,7 +446,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       reservedLines = StatusLineReserve
 
     # With lineWrap=true, leftCell should be ignored
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       3,
@@ -473,8 +458,8 @@ suite "screenToBufferPosition - Line Wrap Mode":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 3 # screenX directly (not leftCell + screenX)
+    check result.get.position.line == 0
+    check result.get.position.column == 3 # screenX directly (not leftCell + screenX)
 
   test "Click on second wrap segment":
     # Line "abcdefghij" (10 chars), viewport width=5, so wraps at col 5
@@ -486,7 +471,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       reservedLines = StatusLineReserve
 
     # Click on screen row 1 (second wrap segment), col 2 => char 7 ('h')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       2,
@@ -498,8 +483,8 @@ suite "screenToBufferPosition - Line Wrap Mode":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 7
+    check result.get.position.line == 0
+    check result.get.position.column == 7
 
   test "Click after wrapped line goes to next buffer line":
     # Line 0: "abcde" (5 chars, 1 screen row at width=10)
@@ -511,7 +496,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       reservedLines = StatusLineReserve
 
     # Click on screen row 1 => line 1
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       2,
@@ -523,8 +508,8 @@ suite "screenToBufferPosition - Line Wrap Mode":
     )
 
     check result.isSome
-    check result.get.line == 1
-    check result.get.column == 2
+    check result.get.position.line == 1
+    check result.get.position.column == 2
 
   test "Click with wrap and line number offset":
     # viewport width=15, lineNumOffset=5, so maxWidth=10 for text
@@ -538,7 +523,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       reservedLines = StatusLineReserve
 
     # Click at x=7 on row 1 => screenX = 7-5=2, segment 1, char 12 ('m')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       7,
@@ -550,8 +535,8 @@ suite "screenToBufferPosition - Line Wrap Mode":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 12
+    check result.get.position.line == 0
+    check result.get.position.column == 12
 
   test "Click with wrap and sidebar":
     # viewport width=17, sidebarWidth=2, lineNumOffset=5, so maxWidth=10 for text
@@ -566,7 +551,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       reservedLines = StatusLineReserve
 
     # Click at x=9 on row 1 => screenX = 9-2-5=2, segment 1, char 12 ('m')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       9,
@@ -578,8 +563,8 @@ suite "screenToBufferPosition - Line Wrap Mode":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 12
+    check result.get.position.line == 0
+    check result.get.position.column == 12
 
   test "Click on wrap with wide characters":
     # "あいうえお" = 5 CJK chars = 10 display cols
@@ -591,7 +576,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       reservedLines = StatusLineReserve
 
     # Click on row 1, col 0 => first char of segment 1 = char 3 ('え')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       0,
@@ -603,8 +588,8 @@ suite "screenToBufferPosition - Line Wrap Mode":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 3
+    check result.get.position.line == 0
+    check result.get.position.column == 3
 
   test "Click on wrap with tabs":
     # "\tabcdefgh" with tabStop=4: tab=4 cols, then "abcdef"=6 cols = 10 cols for first 7 chars
@@ -617,7 +602,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       reservedLines = StatusLineReserve
 
     # Click on row 1, col 1 => char 8 ('h')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       1,
@@ -630,8 +615,8 @@ suite "screenToBufferPosition - Line Wrap Mode":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 8
+    check result.get.position.line == 0
+    check result.get.position.column == 8
 
   test "Multiple buffer lines with wrapping":
     # Line 0: "abcdefghij" (10 chars) => 2 rows at maxWidth=5
@@ -644,7 +629,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       reservedLines = StatusLineReserve
 
     # Click on row 2, col 1 => line 1, char 1 ('l')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       1,
@@ -656,8 +641,8 @@ suite "screenToBufferPosition - Line Wrap Mode":
     )
 
     check result.isSome
-    check result.get.line == 1
-    check result.get.column == 1
+    check result.get.position.line == 1
+    check result.get.position.column == 1
 
   test "Click honors topWrapOffset (sub-line scrolled top line)":
     # Line 0 (30 chars) wraps into 3 segments at maxWidth=10: seg0 0-9, seg1
@@ -671,7 +656,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
     vp.topWrapOffset = 1
 
     # Row 0, col 2 lands on seg1 => char 12, not seg0 char 2.
-    let onTop = screenToBufferPosition(
+    let onTop = screenToTextHit(
       vp,
       buffer,
       2,
@@ -682,12 +667,12 @@ suite "screenToBufferPosition - Line Wrap Mode":
       wrapWidth = vp.width - lineNumOffset,
     )
     check onTop.isSome
-    check onTop.get.line == 0
-    check onTop.get.column == 12
+    check onTop.get.position.line == 0
+    check onTop.get.position.column == 12
 
     # Line 0 shows only 2 visible rows (seg1, seg2), so screen row 2 is line 1 —
     # the over-counted top line must not swallow the click.
-    let below = screenToBufferPosition(
+    let below = screenToTextHit(
       vp,
       buffer,
       1,
@@ -698,10 +683,10 @@ suite "screenToBufferPosition - Line Wrap Mode":
       wrapWidth = vp.width - lineNumOffset,
     )
     check below.isSome
-    check below.get.line == 1
-    check below.get.column == 1
+    check below.get.position.line == 1
+    check below.get.position.column == 1
 
-suite "screenToBufferPosition - Scrollbar":
+suite "screenToTextHit - Scrollbar":
   test "Click with scrollbar reduces text area width":
     # viewport width=12, sidebarWidth=0, scrollbarWidth=1, lineNumOffset=0
     # maxWidth = 12 - 0 - 1 - 0 = 11
@@ -715,7 +700,7 @@ suite "screenToBufferPosition - Scrollbar":
       reservedLines = StatusLineReserve
 
     # Click on row 1, col 0 => char 11 ('l')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       0,
@@ -727,8 +712,8 @@ suite "screenToBufferPosition - Scrollbar":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 11
+    check result.get.position.line == 0
+    check result.get.position.column == 11
 
   test "Click with scrollbar and sidebar":
     # viewport width=20, sidebarWidth=2, scrollbarWidth=1, lineNumOffset=5
@@ -744,7 +729,7 @@ suite "screenToBufferPosition - Scrollbar":
       reservedLines = StatusLineReserve
 
     # Click at x=8 on row 1 => screenX = 8-2-5=1, segment 1, char 13 ('n')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       8,
@@ -756,8 +741,8 @@ suite "screenToBufferPosition - Scrollbar":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 13
+    check result.get.position.line == 0
+    check result.get.position.column == 13
 
   test "Click without scrollbar has wider text area":
     # Same setup as above but without scrollbar
@@ -772,7 +757,7 @@ suite "screenToBufferPosition - Scrollbar":
       reservedLines = StatusLineReserve
 
     # Click at x=8 on row 1 => screenX = 8-2-5=1, segment 1, char 14 ('o')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       8,
@@ -784,8 +769,8 @@ suite "screenToBufferPosition - Scrollbar":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 14
+    check result.get.position.line == 0
+    check result.get.position.column == 14
 
   test "No-wrap mode ignores scrollbar for column calculation":
     let
@@ -794,13 +779,12 @@ suite "screenToBufferPosition - Scrollbar":
       lineNumOffset = 0
       reservedLines = StatusLineReserve
 
-    let result = screenToBufferPosition(
-      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
-    )
+    let result =
+      screenToTextHit(vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false)
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 5
+    check result.get.position.line == 0
+    check result.get.position.column == 5
 
   test "Click with scrollbar width 2":
     # viewport width=14, scrollbarWidth=2, lineNumOffset=0
@@ -815,7 +799,7 @@ suite "screenToBufferPosition - Scrollbar":
       reservedLines = StatusLineReserve
 
     # Click on row 1, col 1 => char 13 ('n')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       1,
@@ -827,8 +811,8 @@ suite "screenToBufferPosition - Scrollbar":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 13
+    check result.get.position.line == 0
+    check result.get.position.column == 13
 
   test "Click with scrollbar width 0 defaults to no scrollbar":
     # scrollbarWidth=0 should behave same as no scrollbar
@@ -841,7 +825,7 @@ suite "screenToBufferPosition - Scrollbar":
 
     # 15 chars at maxWidth=10: segment 0 = 0-9, segment 1 = 10-14
     # Click on row 1, col 0 => char 10 ('k')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       0,
@@ -853,8 +837,8 @@ suite "screenToBufferPosition - Scrollbar":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 10
+    check result.get.position.line == 0
+    check result.get.position.column == 10
 
   test "Click with scrollbar on multiline buffer":
     # viewport width=12, scrollbarWidth=1, lineNumOffset=0
@@ -868,7 +852,7 @@ suite "screenToBufferPosition - Scrollbar":
       reservedLines = StatusLineReserve
 
     # Click on row 1, col 2 => line 1, char 2 ('n')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       2,
@@ -880,8 +864,8 @@ suite "screenToBufferPosition - Scrollbar":
     )
 
     check result.isSome
-    check result.get.line == 1
-    check result.get.column == 2
+    check result.get.position.line == 1
+    check result.get.position.column == 2
 
   test "Click with scrollbar, sidebar, and line numbers":
     # viewport width=25, sidebarWidth=2, scrollbarWidth=2, lineNumOffset=4
@@ -895,7 +879,7 @@ suite "screenToBufferPosition - Scrollbar":
       reservedLines = StatusLineReserve
 
     # Click at x=7 on row 1 => screenX = 7-2-4 = 1, segment 1, char 18 ('s')
-    let result = screenToBufferPosition(
+    let result = screenToTextHit(
       vp,
       buffer,
       7,
@@ -907,8 +891,8 @@ suite "screenToBufferPosition - Scrollbar":
     )
 
     check result.isSome
-    check result.get.line == 0
-    check result.get.column == 18
+    check result.get.position.line == 0
+    check result.get.position.column == 18
 
 suite "Background Process Management":
   test "addRunningProcess adds process to list":
@@ -4472,6 +4456,19 @@ suite "A paste ends the command being built":
       check e.state.beepCount == beeps + 1
 
 suite "middleClickPaste":
+  test "a waiting operator is cancelled and nothing is pasted":
+    let e = newEditor(newEditorConfig())
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abcdefgh")
+    e.activeWindow.viewport.width = 80
+    e.activeWindow.viewport.height = 24
+    for clipboard in [true, false]:
+      e.config.clipboard.enable = clipboard
+      check e.handleKeyCombo(parseKeyCombo("d").get)
+      e.middleClickInWindow(0, 4)
+      check e.state.pendingInput.pendingOperator.isNone
+      check e.state.mode == EditorMode.Normal
+      check e.activeBuffer.getLine(0) == "abcdefgh"
+
   test "Clipboard disabled":
     let e = createTestEditorForMiddleClick("hello")
     e.config.clipboard.enable = false
@@ -9409,7 +9406,7 @@ suite "middleClickPaste - the click picks the target":
       check e.activeBuffer().getLine(0).len == 0
       check e.state.mode == EditorMode.Terminal
 
-suite "pointerPositionInWindow":
+suite "pointerHitInWindow":
   proc singleWindowEditor(showTabLine: bool): Editor =
     let e = createTestEditorForMiddleClick("aaa\nbbb\nccc")
     e.state.showTabLine = showTabLine
@@ -9444,23 +9441,23 @@ suite "pointerPositionInWindow":
     # clamped onto the last buffer line.
     let e = singleWindowEditor(showTabLine = true)
 
-    check e.pointerPositionInWindow(initPointerInput(22, 10), 0).isSome
-    check e.pointerPositionInWindow(initPointerInput(23, 10), 0).isNone
+    check e.pointerHitInWindow(initPointerInput(22, 10), 0).isSome
+    check e.pointerHitInWindow(initPointerInput(23, 10), 0).isNone
 
   test "with the tab line off the window keeps its last text row":
     let e = singleWindowEditor(showTabLine = false)
 
-    check e.pointerPositionInWindow(initPointerInput(0, 10), 0).isSome
-    check e.pointerPositionInWindow(initPointerInput(22, 10), 0).isSome
-    check e.pointerPositionInWindow(initPointerInput(23, 10), 0).isNone
+    check e.pointerHitInWindow(initPointerInput(0, 10), 0).isSome
+    check e.pointerHitInWindow(initPointerInput(22, 10), 0).isSome
+    check e.pointerHitInWindow(initPointerInput(23, 10), 0).isNone
 
   test "a non-bottom window stops above its own status row":
     let e = splitWindowEditor()
 
-    check e.pointerPositionInWindow(initPointerInput(10, 10), 0).isSome
-    check e.pointerPositionInWindow(initPointerInput(11, 10), 0).isNone
-    check e.pointerPositionInWindow(initPointerInput(22, 10), 1).isSome
-    check e.pointerPositionInWindow(initPointerInput(23, 10), 1).isNone
+    check e.pointerHitInWindow(initPointerInput(10, 10), 0).isSome
+    check e.pointerHitInWindow(initPointerInput(11, 10), 0).isNone
+    check e.pointerHitInWindow(initPointerInput(22, 10), 1).isSome
+    check e.pointerHitInWindow(initPointerInput(23, 10), 1).isNone
 
   test "agrees with windowIndexAtCell on every row":
     # The two hit tests answer the same question (left click vs middle click);
@@ -9469,8 +9466,7 @@ suite "pointerPositionInWindow":
       for row in 0 .. 23:
         let hit = e.windowIndexAtCell(row, 10)
         for i in 0 ..< e.windowManager.windows.len:
-          check e.pointerPositionInWindow(initPointerInput(row, 10), i).isSome ==
-            (hit == i)
+          check e.pointerHitInWindow(initPointerInput(row, 10), i).isSome == (hit == i)
 
 suite "windowIndexAtCell":
   proc singleWindowEditor(showTabLine: bool): Editor =

@@ -24,8 +24,6 @@
 
 import std/options
 
-import pkg/results
-
 import ../celina_backend as celina
 
 import
@@ -99,23 +97,16 @@ proc operateOverSearch(e: Editor, typed: string): bool =
   ## began up to the match, as Vim's normal_search, and `.` searches for
   ## `typed` again.
   e.cursor = e.state.input.search.startPos
-  let ctx = newCommandContext(
-    e.activeBuffer, e.state, e.viewport, e.motionController, e.keyBindingRegistry
-  )
-  let operated = e.commandRegistry.finishOperator(
-    ctx,
+  result = e.finishOperatorWith(
     Operand(
       kind: odSearch,
       count: e.state.input.search.count,
       countGiven: e.state.input.search.countGiven,
       searchText: typed,
       searchDirection: e.state.input.search.direction,
-    ),
+    )
   )
-  if operated.isErr:
-    e.state.statusMessage = operated.error
   e.showFromSearchStart(e.cursor)
-  operated.isOk
 
 proc goToSearch(e: Editor, spec: SearchSpec, isRepeat: bool): bool =
   ## Move to the match of `spec`, the search Enter made the last one, from

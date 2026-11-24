@@ -74,7 +74,6 @@ import
   ]
 import prompt_line
 from config_mode import clearKeySequence
-from pending_input import cancelAll
 export command_mode_handler, search_mode_handler, cursor_util, frontend_input
 
 proc addRunningProcess*(e: Editor, p: BackgroundProcess, label = "", path = "") =
@@ -313,6 +312,24 @@ proc letHeldKeysGoFirst(e: Editor) =
   if e.keyRouter.isHoldingKeys and e.handlerManager.letHeldKeysGo(e) == roQuit:
     e.beginQuit()
 
+proc beginNonKeyInput(e: Editor): tuple[quit, ended: bool] =
+  ## Start an input that is not a key as a command of its own: the keys held
+  ## for a mapping run first, and Insert may resume after it. `ended` if that
+  ## ended a wait for keys, which a recording must show.
+  result.ended = e.keyRouter.isHoldingKeys
+  e.letHeldKeysGoFirst()
+  if e.state.quitDecided:
+    result.quit = true
+    return
+  if e.state.insertResume == irWaiting:
+    result.ended = true
+  e.state.armInsertResume()
+
+proc waitsForTarget(e: Editor): bool =
+  ## The command being built waits for a motion or an operand.
+  e.state.pendingInput.pendingOperator.isSome or
+    e.state.pendingInput.waitsForOperand(e.keyRouter.registry)
+
 proc beginPasteInput(e: Editor): bool =
   ## Start a paste, bracketed or by a middle click, as a command of its own: the
   ## keys held for a mapping run first, and it ends the command being built (an
@@ -321,24 +338,17 @@ proc beginPasteInput(e: Editor): bool =
   ## quit, or the command waited for a motion or an operand, which the paste
   ## then takes the place of, as Vim's clearopbeep. Insert and Replace have only
   ## the first keys of a mapping to a command, which are typed already.
-  let held = e.keyRouter.isHoldingKeys
-  e.letHeldKeysGoFirst()
-  if e.state.quitDecided:
+  let begun = e.beginNonKeyInput()
+  if begun.quit:
     return true
-  let waited = e.state.insertResume == irWaiting
-  e.state.armInsertResume()
   var cancelled = false
   if e.state.hasOverlay:
     cancelled = e.state.input.line.endWait()
   else:
-    let registry = e.keyRouter.registry
     result =
-      e.state.mode notin {EditorMode.Insert, EditorMode.Replace} and (
-        e.state.pendingInput.pendingOperator.isSome or
-        e.state.pendingInput.waitsForOperand(registry)
-      )
-    cancelled = e.state.pendingInput.cancelAll(registry)
-  if held or waited or cancelled:
+      e.state.mode notin {EditorMode.Insert, EditorMode.Replace} and e.waitsForTarget
+    cancelled = e.state.pendingInput.cancelAll(e.keyRouter.registry)
+  if begun.ended or cancelled:
     e.state.pendingInput.macroState.recordBreak()
   if result:
     e.state.beep()
@@ -417,7 +427,7 @@ proc handlePasteText(e: Editor, text: string): bool =
 
   return true
 
-proc screenToBufferPosition(
+proc screenToTextHit(
     vp: ViewPort,
     buffer: TextBuffer,
     mouseX, mouseY: int,
@@ -426,8 +436,8 @@ proc screenToBufferPosition(
     tabStop: int = 4,
     wrapWidth: int = 1,
     wrapCache: WrapCountCache = nil,
-): Option[BufferPosition] =
-  ## Convert screen coordinates to buffer position.
+): Option[TextHit] =
+  ## What the cell at screen coordinates is on.
   ## Returns none if click is outside the text area.
   ## Handles line wrap mode with display-width-based segment calculation.
   ##
@@ -441,26 +451,12 @@ proc screenToBufferPosition(
 
   # Check if click is within the text area
   if screenY < 0 or screenY >= vp.height - reservedLines:
-    return none(BufferPosition)
+    return none(TextHit)
   if screenX < 0:
-    return none(BufferPosition)
+    return none(TextHit)
 
-  let
-    rl = initRowLayout(buffer, wrapCache, lineWrap, wrapWidth, tabStop)
-    row = rl.rowAt(vp.topLine, vp.topWrapOffset, screenY)
-    # Below the last rendered row (the blank tail): clamp onto the last line.
-    line =
-      if row.isSome:
-        row.get.line
-      else:
-        max(0, buffer.len - 1)
-    wrapSeg = if row.isSome: row.get.wrapSeg else: 0
-
-  some(
-    BufferPosition(
-      line: line, column: rl.cellToColumn(line, wrapSeg, screenX, vp.leftCell)
-    )
-  )
+  let rl = initRowLayout(buffer, wrapCache, lineWrap, wrapWidth, tabStop)
+  some(rl.hitAt(vp, screenY, screenX))
 
 proc scrollTargetIndex(e: Editor, input: ScrollInput): int =
   ## Resolve the window under a cell-coordinate scroll, falling back to active.
@@ -520,6 +516,17 @@ proc scrollTextViewport(e: Editor, window: EditorWindow, deltaPhysicalRows: int)
     window.viewport.restoreViewportTop(topLine, topWrapOffset)
     window.viewport.detachedFromCursor = true
 
+proc cancelKeysAtMouse(e: Editor, ended: bool) =
+  ## Cancel the keys of an unfinished command at a mouse input, as Vim does.
+  ## A prompt keeps its operator for Enter (`d/foo`). `ended` if the input
+  ## already ended a wait for keys.
+  var cancelled = false
+  if not e.state.hasOverlay and
+      (e.state.mode == EditorMode.Normal or e.state.mode.isVisualAllMode):
+    cancelled = e.state.pendingInput.cancelAll(e.keyRouter.registry)
+  if ended or cancelled:
+    e.state.pendingInput.macroState.recordBreak()
+
 proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
   ## Apply a frontend-neutral physical-line scroll and describe the affected
   ## rendered region for GUI repainting.
@@ -531,8 +538,10 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
     return
   if e.windowManager.windows.len == 0:
     return
-  e.letHeldKeysGoFirst()
-  e.state.armInsertResume()
+  let begun = e.beginNonKeyInput()
+  if begun.quit:
+    return
+  e.cancelKeysAtMouse(begun.ended)
 
   # Handle Filer mode scroll.
   if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
@@ -565,7 +574,7 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
 
 type PointerTextHit = object
   windowIndex: int
-  position: BufferPosition
+  text: TextHit
 
 proc pointerTabPress(e: Editor, input: PointerInput): bool =
   ## Switch a tab hit by a primary press. Drags and releases never switch tabs.
@@ -595,19 +604,19 @@ proc pointerTabPress(e: Editor, input: PointerInput): bool =
         return true
   return false
 
-proc pointerPositionInWindow(
+proc pointerHitInWindow(
     e: Editor, input: PointerInput, windowIndex: int
-): Option[BufferPosition] =
+): Option[TextHit] =
   if windowIndex < 0 or windowIndex >= e.windowManager.windows.len:
-    return none(BufferPosition)
+    return none(TextHit)
 
   let
     window = e.windowManager.windows[windowIndex]
     vp = window.viewport
   if input.column < vp.x or input.column >= vp.x + vp.width:
-    return none(BufferPosition)
+    return none(TextHit)
 
-  # The tab line is part of the window's rows, and `screenToBufferPosition`
+  # The tab line is part of the window's rows, and `screenToTextHit`
   # bounds the row against `vp.height - reservedLines`, so the offset comes off
   # the reserve as well as off the row — otherwise the status row is
   # accepted and clamped onto the last buffer line.
@@ -617,14 +626,19 @@ proc pointerPositionInWindow(
 
   if e.windowManager.windows.len > 1 and
       (input.row < vp.y or input.row >= vp.y + vp.height):
-    return none(BufferPosition)
+    return none(TextHit)
 
-  screenToBufferPosition(
+  # The scrollbar, right of the text, is on its row's last cell.
+  let
+    gutterWidth = e.gutterWidth(window)
+    lastColumn = vp.x + gutterWidth + e.wrapWidth(window) - 1
+
+  screenToTextHit(
     vp,
     window.buffer,
-    input.column,
+    min(input.column, lastColumn),
     adjustedRow,
-    e.gutterWidth(window),
+    gutterWidth,
     e.steadyReservedLines(window) + tabLineOffset,
     e.lineWrap,
     e.tabStop,
@@ -634,16 +648,16 @@ proc pointerPositionInWindow(
 
 proc pointerTextHit(e: Editor, input: PointerInput): Option[PointerTextHit] =
   for i in 0 ..< e.windowManager.windows.len:
-    let position = e.pointerPositionInWindow(input, i)
-    if position.isSome:
-      return some(PointerTextHit(windowIndex: i, position: position.get))
+    let text = e.pointerHitInWindow(input, i)
+    if text.isSome:
+      return some(PointerTextHit(windowIndex: i, text: text.get))
   none(PointerTextHit)
 
 proc windowIndexAtCell(e: Editor, row, col: int): int =
   ## Index of the window whose text area contains this screen cell, or -1 for
   ## the tab line, the command line, or a gap between windows. Geometry only:
   ## a Terminal window draws its grid, not its buffer, so
-  ## `screenToBufferPosition` would miss it.
+  ## `screenToTextHit` would miss it.
   let
     tabLineOffset = if e.showTabLine: TabLineHeight else: 0
     maxBottomY = findMaxBottomY(e.windowManager.windows)
@@ -651,7 +665,7 @@ proc windowIndexAtCell(e: Editor, row, col: int): int =
     let vp = window.viewport
     if col < vp.x or col >= vp.x + vp.width:
       continue
-    # Same text area as pointerPositionInWindow: the status line is not the
+    # Same text area as pointerHitInWindow: the status line is not the
     # window's text.
     let reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
     if row < vp.y + tabLineOffset or row >= vp.y + vp.height - reservedLines:
@@ -849,7 +863,7 @@ proc enterPointerVisualMode(e: Editor, granularity: PointerSelectionGranularity)
       e.state.previousMode = EditorMode.Normal
     else:
       e.state.previousMode = previousMode
-  # A waiting operator would take the next motion as its own.
+  # The press left what Insert waited for, which would take the next key.
   e.state.pendingInput.cancelAll(e.keyRouter.registry)
   e.setMode(granularity.visualMode)
 
@@ -886,6 +900,33 @@ proc updatePointerSelection(e: Editor, position: BufferPosition) =
   e.state.selectVisualRange(anchor, focus)
   e.activeWindow.viewport.detachedFromCursor = false
 
+proc operateUpToClick(e: Editor, hit: TextHit) =
+  ## A click with an operator waiting is its motion, as in Vim. It acts on the
+  ## press, so a drag that follows selects nothing.
+  e.updateViewportReservedLines()
+  let operated = e.operateUpToCell(hit.row, hit.cell)
+  e.activeWindow.viewport.detachedFromCursor = false
+  e.state.pendingInput.cancelAll(e.keyRouter.registry)
+  if operated:
+    e.state.pendingInput.macroState.recordClick(hit.row, hit.cell)
+  else:
+    e.state.pendingInput.macroState.recordBreak()
+
+proc operatorClickHit(e: Editor, input: PointerInput): Option[TextHit] =
+  ## Where a waiting operator goes up to at this press. A press on the gutter
+  ## is on its row's first cell; one on the scrollbar is on no text.
+  if kmShift in input.modifiers or input.clickCount > 1 or not e.operatorTakesClick:
+    return none(TextHit)
+  let vp = e.activeWindow.viewport
+  if input.column < vp.x:
+    return none(TextHit)
+  let textX = vp.x + e.gutterWidth(e.activeWindow)
+  if input.column >= textX + e.textAreaWidth(e.activeWindow):
+    return none(TextHit)
+  var onText = input
+  onText.column = max(input.column, textX)
+  e.pointerHitInWindow(onText, e.windowManager.activeWindowIndex)
+
 proc beginPointerSelection(e: Editor, input: PointerInput, hit: PointerTextHit) =
   e.focusWindow(hit.windowIndex)
 
@@ -894,7 +935,7 @@ proc beginPointerSelection(e: Editor, input: PointerInput, hit: PointerTextHit) 
     oldSelection = e.activeWindow.visualSelection
     extendSelection = kmShift in input.modifiers
     granularity = input.pointerGranularity(oldSelection)
-    pressedRange = e.activeBuffer.pointerRange(hit.position, granularity)
+    pressedRange = e.activeBuffer.pointerRange(hit.text.position, granularity)
 
   if not extendSelection:
     e.state.leaveVisual()
@@ -916,9 +957,9 @@ proc beginPointerSelection(e: Editor, input: PointerInput, hit: PointerTextHit) 
   )
 
   if extendSelection or granularity in {psgWord, psgLine}:
-    e.updatePointerSelection(hit.position)
+    e.updatePointerSelection(hit.text.position)
   else:
-    e.cursor = hit.position
+    e.cursor = hit.text.position
     e.activeWindow.viewport.detachedFromCursor = false
 
 proc updatePointerGesture(e: Editor, input: PointerInput): bool =
@@ -926,18 +967,21 @@ proc updatePointerGesture(e: Editor, input: PointerInput): bool =
     return false
 
   let gesture = e.state.pointerSelection
-  if gesture.windowIndex != e.windowManager.activeWindowIndex or gesture.windowIndex < 0 or
-      gesture.windowIndex >= e.windowManager.windows.len or
+  # An overlay may have opened since the press without a key.
+  if e.state.hasOverlay or gesture.windowIndex != e.windowManager.activeWindowIndex or
+      gesture.windowIndex < 0 or gesture.windowIndex >= e.windowManager.windows.len or
       e.activeBuffer.id != gesture.bufferId:
     e.state.pointerSelection.active = false
     return false
 
-  let position = e.pointerPositionInWindow(input, gesture.windowIndex)
-  if position.isSome:
-    let moved =
-      position.get != gesture.anchorFirst or gesture.anchorFirst != gesture.anchorLast
+  let hit = e.pointerHitInWindow(input, gesture.windowIndex)
+  if hit.isSome:
+    let
+      position = hit.get.position
+      moved =
+        position != gesture.anchorFirst or gesture.anchorFirst != gesture.anchorLast
     if gesture.selectionStarted or input.action == paDrag or moved:
-      e.updatePointerSelection(position.get)
+      e.updatePointerSelection(position)
   true
 
 proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
@@ -954,19 +998,28 @@ proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
   if input.action != paPress:
     return false
 
-  e.letHeldKeysGoFirst()
-  e.state.armInsertResume()
+  let begun = e.beginNonKeyInput()
   e.state.pointerSelection.active = false
+  if begun.quit:
+    return true
+
+  let operatorHit = e.operatorClickHit(input)
+  if operatorHit.isSome:
+    e.operateUpToClick(operatorHit.get)
+    return true
+  e.cancelKeysAtMouse(begun.ended)
+  # A prompt takes the mouse from the windows, as in Vim.
+  if e.state.hasOverlay:
+    return false
 
   # Handle pointer selection in text editing modes.
   if e.state.mode in {
     EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualLine,
     EditorMode.VisualBlock, EditorMode.Replace,
   }:
+    let hit = e.pointerTextHit(input)
     if e.pointerTabPress(input):
       return true
-
-    let hit = e.pointerTextHit(input)
     if hit.isNone:
       return false
     e.beginPointerSelection(input, hit.get)
@@ -1011,12 +1064,13 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
 
   return none(bool)
 
-proc beginInput(e: Editor) =
+proc beginInput(e: Editor, keepMessage = false) =
   ## Clear stale status, keep the mode policy and refresh the input time.
 
   # Clear status message from previous event cycle:
   # messages persist for one render frame, then clear on next input)
-  e.state.statusMessage = ""
+  if not keepMessage:
+    e.state.statusMessage = ""
   e.enforceModePolicy()
 
   # Update last input time for auto backup idle detection
@@ -1033,10 +1087,11 @@ proc settleWindowForInput(e: Editor, isKeyInput: bool) =
   else:
     e.state.windowDisplay.scrollAnimation.stopPageScroll()
 
-proc prepareForInput(e: Editor, isKeyInput: bool) =
+proc prepareForInput(e: Editor, isKeyInput: bool, keepMessage = false) =
   ## Per-input setup: clear stale status, refresh input timestamp, end any
-  ## smooth page scroll on its way.
-  e.beginInput()
+  ## smooth page scroll on its way. `keepMessage` for the drag and release that
+  ## follow a press, whose message stays.
+  e.beginInput(keepMessage)
   e.settleWindowForInput(isKeyInput)
 
 proc prepareForKeyCombo(e: Editor) =
@@ -1081,7 +1136,7 @@ proc handlePointerInput*(e: Editor, input: PointerInput): bool =
   ## Handle a pointer event whose coordinates are cells in the rendered grid.
   ## Middle-click paste is intentionally a host policy: GUI frontends should
   ## obtain the selection text and pass it to `handlePaste`.
-  e.prepareForInput(false)
+  e.prepareForInput(false, keepMessage = input.action != paPress)
   e.asInput:
     result = e.handlePointerInputCore(input)
   e.enforceModePolicy()
@@ -1104,7 +1159,11 @@ proc celinaMouseModifiers(
     result.incl(kmShift)
 
 proc handleMouseEventCore(e: Editor, event: Event): bool =
-  e.prepareForInput(false)
+  e.prepareForInput(
+    false,
+    keepMessage =
+      event.kind == EventKind.Mouse and event.mouse.kind != celina.MouseEventKind.Press,
+  )
   if event.kind != EventKind.Mouse:
     return false
 

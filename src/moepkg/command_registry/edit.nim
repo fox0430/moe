@@ -1049,8 +1049,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
       of lecOperatorMotion:
         # The operator acts again over what its operand finds from here (`dw`,
         # `diw`, `dn` then `.`).
-        ctx.startOperator(lastCmd.operator)
-        return registry.finishOperator(ctx, lastCmd.operand)
+        return registry.repeatOperator(ctx, lastCmd.operator, lastCmd.operand)
       of lecDeleteChar:
         # Repeat character deletion (x or X)
         if lastCmd.deleteForward:
@@ -1081,8 +1080,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
           if typedCount > 0:
             operand.count = count
             operand.countGiven = true
-          ctx.startOperator(OpChange)
-          return registry.finishOperator(ctx, operand)
+          return registry.repeatOperator(ctx, OpChange, operand)
         of ieVisualChange, ieVisualInsert, ieVisualAppend:
           return ctx.repeatVisualInsert(record.entry)
       of lecVisualOperator:

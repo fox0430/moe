@@ -24,7 +24,11 @@ import std/[options, tables, unicode]
 
 import pkg/results
 
-import ../[types, motion, key_bindings, unicode_utils, modes, search_ops, cursor_util]
+import
+  ../[
+    types, motion, key_bindings, unicode_utils, modes, search_ops, cursor_util,
+    render_utils, visible_rows,
+  ]
 import ../buffer/[core, fold]
 
 import core, operator_engine, insert_entry
@@ -319,6 +323,32 @@ proc linesTarget(
     )
   )
 
+proc clickTarget(
+    ctx: CommandContext, op: PendingOperator, operand: Operand
+): Option[MotionTarget] =
+  ## What the window now shows on the clicked cell. None when the window
+  ## has shrunk to leave the cell out, or is scrolled away from the operator's
+  ## start. A cell below the text may still be on a row scrolled off the top, as
+  ## in Vim (see `hitAt`).
+  # As in linesTarget, a stale start names no line.
+  if op.startPos.line notin 0 ..< ctx.buffer.len:
+    return none(MotionTarget)
+  let
+    viewport = ctx.motionController.viewportManager.viewport
+    height = viewport.height - ctx.state.motionReservedLines()
+    layout = ctx.motionController.rowLayout
+  if operand.clickRow >= height or operand.clickCell >= layout.maxWidth or
+      not layout.showsPosition(viewport, height, op.startPos):
+    return none(MotionTarget)
+  let hit = layout.hitAt(viewport, operand.clickRow, operand.clickCell)
+  some(
+    MotionTarget(
+      start: op.startPos,
+      finish: hit.position,
+      motionType: if hit.exact: mtExclusive else: mtInclusive,
+    )
+  )
+
 proc isMotion*(registry: CommandRegistry, cmd: Command): bool =
   ## A waiting operator acts over `cmd` (`dw`, `dfx`, `dn`).
   case cmd.kind
@@ -410,6 +440,8 @@ proc finishOperator*(
       ?ctx.searchTarget(op, operand)
     of odLines:
       ctx.linesTarget(op, operand)
+    of odClick:
+      ctx.clickTarget(op, operand)
   if target.isNone:
     # Nothing to act over (`dj` on the last line): Vim's clearopbeep.
     ctx.state.beep()
@@ -445,6 +477,21 @@ proc finishOperator*(
       )
     )
   ok(())
+
+proc repeatOperator*(
+    registry: CommandRegistry,
+    ctx: CommandContext,
+    operatorType: OperatorType,
+    operand: Operand,
+): Result[(), string] =
+  ## `operatorType` over what `operand` finds from the cursor, for `.`.
+  if operand.kind == odClick:
+    # The cell is one of the window that shows the cursor, as Vim's always does.
+    ctx.motionController.viewportManager.updateViewport(
+      ctx.state, ctx.buffer, ctx.cursor
+    )
+  ctx.startOperator(operatorType)
+  registry.finishOperator(ctx, operand)
 
 proc operatorKey*(
     registry: CommandRegistry,

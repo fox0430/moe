@@ -31,6 +31,7 @@ import
     syntax_checker, command_completion, key_bindings, key_router, lsp_integration,
     command_registry, command_line, editor_window_state, pending_input, macro_recording,
     insert_record, wanted_column, search_ops, editor_open, prompt_line,
+    editor_window_layout,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -769,6 +770,25 @@ proc playbackBreak(e: Editor): ReplayOutcome =
   if result != roQuit:
     e.settleInsertResume()
 
+proc playbackClick(e: Editor, row, cell: int): ReplayOutcome =
+  ## End the waiting operator as the click recorded there did. The playback
+  ## stops if it cannot, as the keys after a change are its text.
+  e.asCommand:
+    result = e.handlerManager.letHeldKeysGo(e)
+    if result == roContinue:
+      e.state.armInsertResume()
+      if not e.operatorTakesClick:
+        result = roAbort
+      else:
+        e.updateViewportReservedLines()
+        # As for `.`, the cell is one of the window that shows the cursor.
+        e.updateViewportForCursor(e.cursor)
+        if not e.operateUpToCell(row, cell):
+          result = roAbort
+      e.state.pendingInput.cancelAll(e.keyRouter.registry)
+  if result != roQuit:
+    e.settleInsertResume()
+
 proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
   ## Iterate user-recorded macro `keys` (register storage is seq[string]).
   ## Aborts on the first `stringToKeyCombo` failure but keeps executing the
@@ -780,6 +800,12 @@ proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
       for keyStr in keys:
         if keyStr == BreakMark:
           outcome = e.playbackBreak()
+          if outcome != roContinue:
+            break
+          continue
+        let click = parseClickMark(keyStr)
+        if click.isSome:
+          outcome = e.playbackClick(click.get.row, click.get.cell)
           if outcome != roContinue:
             break
           continue

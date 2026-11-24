@@ -46,6 +46,13 @@ type
     wrapSeg*: int
     fold*: Option[Fold]
 
+  TextHit* = object ## What a cell of a window's text is on
+    row*, cell*: int ## Counted from the text area's top left
+    position*: BufferPosition ## On a character, or column 0 of an empty line
+    exact*: bool
+      ## The cell is the first of that character or empty line, where a cursor
+      ## can be put. Vim's coladvance fails on others.
+
 proc initRowLayout*(
     buffer: TextBuffer,
     wrapCache: WrapCountCache,
@@ -251,6 +258,23 @@ proc cursorCell*(
     onTabEnd,
   )
 
+proc showsPosition*(
+    rl: RowLayout, viewport: ViewPort, height: int, position: BufferPosition
+): bool =
+  ## The row of `position` is one of the `height` rows `viewport` shows.
+  let folded = rl.buffer.foldState.getCollapsedFoldAt(position.line).isSome
+  if not folded and position.line < viewport.topLine:
+    return false
+  for vl in rl.visibleLines(viewport.topLine, viewport.topWrapOffset, height):
+    if vl.fold.isSome:
+      if position.line in vl.line .. vl.fold.get.endLine:
+        return true
+    elif vl.line == position.line:
+      let row =
+        vl.startRow - vl.skipSegments +
+        rl.cursorCell(position.line, position.column, viewport.leftCell).wrapSeg
+      return row in 0 ..< height
+
 proc screenCellOf*(rl: RowLayout, line, column: int, onTabEnd: bool): int =
   ## The cell the cursor on `column` of `line` shows on, counted along the
   ## line's rows `maxWidth` cells each, as Vim's getvvcol with 'wrap': on its
@@ -318,10 +342,13 @@ proc segmentStartColumn*(rl: RowLayout, line, wrapSeg: int): int =
       displayWidthSubstrWithTabs(text, result, rl.maxWidth, rl.tabStop)
     result += max(1, charCount)
 
-proc cellToColumn*(rl: RowLayout, line, wrapSeg, cellX: int, leftCell: int = 0): int =
-  ## Char index at (`wrapSeg`, `cellX`). Inverse of `cursorCell`.
+proc columnAtCell(
+    rl: RowLayout, line, wrapSeg, cellX, leftCell: int
+): tuple[column: int, exact, pastEol: bool] =
+  ## Char index at (`wrapSeg`, `cellX`). A cell past the text, or past that of
+  ## its wrapped row, is on its last character.
   if rl.buffer.isNil or line < 0 or line >= rl.lineCount:
-    return 0
+    return
   let
     text = rl.buffer.getLine(line)
     (start, cell) =
@@ -329,10 +356,44 @@ proc cellToColumn*(rl: RowLayout, line, wrapSeg, cellX: int, leftCell: int = 0):
         (rl.segmentStartColumn(line, wrapSeg), cellX)
       else:
         (0, leftCell + cellX)
-  clamp(
-    start + screenXToCharIndex(text, start, cell, rl.tabStop),
-    0,
-    max(0, text.charLen - 1),
+  if text.len == 0:
+    return (0, cell == 0, cell > 0)
+  let found = charAtScreenX(text, start, cell, rl.tabStop)
+  var
+    index = start + found.offset
+    exact = found.onStart
+  if rl.lineWrap:
+    let next = rl.segmentStartColumn(line, wrapSeg + 1)
+    if next < text.charLen and index >= next:
+      index = next - 1
+      exact = false
+  (clamp(index, 0, max(0, text.charLen - 1)), exact, index >= text.charLen)
+
+proc cellToColumn*(rl: RowLayout, line, wrapSeg, cellX: int, leftCell: int = 0): int =
+  ## Char index at (`wrapSeg`, `cellX`). Inverse of `cursorCell`.
+  rl.columnAtCell(line, wrapSeg, cellX, leftCell).column
+
+proc hitAt*(rl: RowLayout, viewport: ViewPort, row, cell: int): TextHit =
+  ## What the cell of the text area at `row` and `cell` is on. Below the last
+  ## line's rows it is on that line's first row, even one scrolled off, as in
+  ## Vim. Right of the text of a closed fold's first
+  ## line it is on the fold's start, as in Vim.
+  let
+    visible = rl.rowAt(viewport.topLine, viewport.topWrapOffset, row)
+    (line, wrapSeg) =
+      if visible.isSome:
+        (visible.get.line, visible.get.wrapSeg)
+      else:
+        (max(0, rl.lineCount - 1), 0)
+  var (column, exact, pastEol) = rl.columnAtCell(line, wrapSeg, cell, viewport.leftCell)
+  if pastEol and visible.isSome and visible.get.fold.isSome:
+    column = 0
+    exact = true
+  TextHit(
+    row: row,
+    cell: cell,
+    position: BufferPosition(line: line, column: column),
+    exact: exact,
   )
 
 func wrapPosAbove*(aLine, aSeg, bLine, bSeg: int): bool {.inline.} =

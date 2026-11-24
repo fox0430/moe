@@ -718,6 +718,7 @@ type
     odSearch ## / or ? with the pattern typed after it (`d/foo`)
     odTextObject
     odLines ## The operator's own key again, over lines (`dd`, `3>>`)
+    odClick ## A cell of the window's text, clicked with the mouse
 
   Operand* = object ## What a waiting operator acts over, kept so `.` finds it again
     count*: int ## The operator's and the motion's counts multiplied (`2d3w`: 6)
@@ -740,6 +741,8 @@ type
       textObjectKind*: TextObjectKind
     of odLines:
       discard
+    of odClick:
+      clickRow*, clickCell*: int ## Counted from the text area's top left
 
   AutoIndentedLine* = object ## A line Insert mode indented by itself
     line*: int
