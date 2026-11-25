@@ -21,7 +21,7 @@ import std/[unittest, os, strutils, tables, options, sequtils, json]
 
 import pkg/results
 
-import ../src/moepkg/[config_loader, config, color, theme, modes]
+import ../src/moepkg/[config_loader, config, config_dir, color, theme, modes]
 
 import config_test_helper
 
@@ -4519,6 +4519,82 @@ suite "Config - Theme path containment (regression)":
       check not isThemePathAllowed("Q:/moe_theme_escape/theme.toml")
       check not isThemePathAllowed("\\moe_theme_escape\\theme.toml")
       check not isThemePathAllowed("\\\\moe-test\\share\\theme.toml")
+
+  test "An empty or relative XDG_CONFIG_HOME is ignored":
+    withTempHome(tmpHome):
+      let
+        homeDir = tmpHome / ".config" / "moe"
+        project = tmpHome / "project"
+        origDir = getCurrentDir()
+      for dir in [project / "moe", project / "rel" / "moe"]:
+        createDir(dir)
+        writeFile(dir / "moerc.toml", "")
+        writeFile(dir / "keybindings.toml", "")
+      createDir(homeDir)
+      setCurrentDir(project)
+      defer:
+        setCurrentDir(origDir)
+
+      for xdg in ["", "rel"]:
+        putEnv("XDG_CONFIG_HOME", xdg)
+        check getConfigPath() == homeDir / "moerc.toml"
+        check getKeyMappingFilePath() == ""
+        check isThemePathAllowed(homeDir / "themes" / "dark.toml")
+        check not isThemePathAllowed(xdg / "moe" / "themes" / "dark.toml")
+
+      writeFile(homeDir / "keybindings.toml", "")
+      for xdg in ["", "rel"]:
+        putEnv("XDG_CONFIG_HOME", xdg)
+        check getKeyMappingFilePath() == homeDir / "keybindings.toml"
+
+  when defined(posix):
+    test "A relative HOME never makes the working directory a config dir":
+      withTempHome(tmpHome):
+        let
+          gone = tmpHome / "gone"
+          origDir = getCurrentDir()
+        createDir(gone / "rel" / ".config" / "moe")
+        writeFile(gone / "rel" / ".config" / "moe" / "keybindings.toml", "")
+        setCurrentDir(gone)
+        defer:
+          setCurrentDir(origDir)
+        putEnv("HOME", "rel")
+
+        let dirs = moeConfigDirs()
+        check dirs.len == 1
+        check dirs[0].isAbsolute
+        check not dirs[0].startsWith(gone)
+        check not getKeyMappingFilePath().startsWith("rel")
+
+        when defined(linux):
+          removeDir(gone)
+          check moeConfigDirs() == dirs
+          check not isThemePathAllowed("rel/.config/moe/themes/dark.toml")
+          check isThemePathAllowed(dirs[0] / "themes" / "dark.toml")
+
+  when defined(linux):
+    test "A missing theme file is created after the working directory was deleted":
+      withTempHome(tmpHome):
+        let
+          themeFile = tmpHome / ".config" / "moe" / "themes" / "dark.toml"
+          gone = tmpHome / "gone"
+          origDir = getCurrentDir()
+        var config = newEditorConfig()
+        config.theme.kind = tkConfig
+        config.theme.path = themeFile
+        createDir(gone)
+        setCurrentDir(gone)
+        defer:
+          setCurrentDir(origDir)
+        removeDir(gone)
+
+        check isThemePathAllowed(themeFile)
+        check not isThemePathAllowed("themes" / "dark.toml")
+
+        var vr = newValidationResult()
+        initTheme(config, vr)
+        check not vr.hasErrors
+        check fileExists(themeFile)
 
   test "Theme files under XDG_CONFIG_HOME are allowed and bootstrapped":
     withTempHome(tmpHome):

@@ -23,15 +23,23 @@
 
 import std/os
 
-import color
+import color, config_dir
 
 const
   DefaultThemeName* = "default" ## The `:theme` name of the built-in colors
   ThemeFileExt* = ".toml"
 
-proc userThemesDir*(): string =
-  ## Where `:theme` looks for theme files.
-  getHomeDir() / ".config" / "moe" / "themes"
+proc userThemesDirs*(): seq[string] =
+  ## Where `:theme` looks for theme files, the first match winning.
+  for base in moeConfigDirs():
+    result.add base / "themes"
+
+proc findUserTheme*(name: string): string =
+  ## The theme file `:theme` loads for `name`, or "" if there is none.
+  for dir in userThemesDirs():
+    let path = dir / (name & ThemeFileExt)
+    if fileExists(path):
+      return path
 
 proc makeColorPair(fg, bg: string): ColorPair =
   ## Helper to create a ColorPair from two hex color strings

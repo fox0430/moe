@@ -28,6 +28,7 @@ import
     command_config, command_registry, logger, modes, types, viewer_mode, buffer_manager,
   ]
 import ../src/moepkg/filer
+import config_test_helper
 import visual_test_helper
 import
   ../src/moepkg/command_handlers/
@@ -3867,58 +3868,108 @@ suite "Editor - :theme routes through config so save/reload stay in sync":
     check e.config.theme.path == ""
     check e.state.statusMessage == "Theme changed to: default"
 
-  test ":theme <name> updates config.theme.path to the loaded file":
-    let e = createTestEditor()
-
-    let fakeHome = getTempDir() / "moe_test_theme_home"
-    let themesDir = fakeHome / ".config" / "moe" / "themes"
-    createDir(themesDir)
-    let themeFile = themesDir / "mytheme.toml"
-    writeFile(
-      themeFile,
-      """
+  const ThemeText = """
 [Colors]
 foreground = "#eeeeee"
 background = "#111111"
-""",
-    )
+"""
 
-    let originalHome = getEnv("HOME")
-    putEnv("HOME", fakeHome)
-    defer:
-      putEnv("HOME", originalHome)
-      removeDir(fakeHome)
+  test ":theme <name> updates config.theme.path to the loaded file":
+    withTempHome(tmpHome):
+      let e = createTestEditor()
+      let themesDir = tmpHome / ".config" / "moe" / "themes"
+      createDir(themesDir)
+      let themeFile = themesDir / "mytheme.toml"
+      writeFile(themeFile, ThemeText)
 
-    e.config.theme.kind = tkConfig
-    e.config.theme.path = getTempDir() / "moe_test_theme_prev.toml"
+      e.config.theme.kind = tkConfig
+      e.config.theme.path = getTempDir() / "moe_test_theme_prev.toml"
 
-    e.applyThemeCommand("mytheme")
+      e.applyThemeCommand("mytheme")
 
-    check e.config.theme.kind == tkConfig
-    check e.config.theme.path == themeFile
-    check e.state.statusMessage == "Theme changed to: mytheme"
+      check e.config.theme.kind == tkConfig
+      check e.config.theme.path == themeFile
+      check e.state.statusMessage == "Theme changed to: mytheme"
+
+  test ":theme <name> looks under XDG_CONFIG_HOME before the home fallback":
+    withTempHome(tmpHome):
+      let
+        e = createTestEditor()
+        xdg = tmpHome / "xdg"
+        xdgThemes = xdg / "moe" / "themes"
+        homeThemes = tmpHome / ".config" / "moe" / "themes"
+      for dir in [xdgThemes, homeThemes]:
+        createDir(dir)
+        writeFile(dir / "both.toml", ThemeText)
+      writeFile(xdgThemes / "xdgonly.toml", ThemeText)
+      writeFile(homeThemes / "homeonly.toml", ThemeText)
+      putEnv("XDG_CONFIG_HOME", xdg)
+
+      for (name, dir) in {
+        "xdgonly": xdgThemes, "homeonly": homeThemes, "both": xdgThemes
+      }:
+        e.applyThemeCommand(name)
+        check e.state.statusMessage == "Theme changed to: " & name
+        check e.config.theme.path == dir / (name & ".toml")
+
+  test ":theme ignores an empty or relative XDG_CONFIG_HOME":
+    withTempHome(tmpHome):
+      let
+        e = createTestEditor()
+        homeThemes = tmpHome / ".config" / "moe" / "themes"
+        project = tmpHome / "project"
+        origDir = getCurrentDir()
+      createDir(homeThemes)
+      writeFile(homeThemes / "mytheme.toml", ThemeText)
+      for dir in [project / "moe" / "themes", project / "rel" / "moe" / "themes"]:
+        createDir(dir)
+        writeFile(dir / "mytheme.toml", ThemeText)
+      setCurrentDir(project)
+      defer:
+        setCurrentDir(origDir)
+
+      for xdg in ["", "rel"]:
+        putEnv("XDG_CONFIG_HOME", xdg)
+        e.config.theme.path = ""
+        e.state.statusMessage = ""
+        e.applyThemeCommand("mytheme")
+        check e.state.statusMessage == "Theme changed to: mytheme"
+        check e.config.theme.path == homeThemes / "mytheme.toml"
+
+  when defined(linux):
+    test ":theme <name> works after the working directory was deleted":
+      withTempHome(tmpHome):
+        let
+          e = createTestEditor()
+          homeThemes = tmpHome / ".config" / "moe" / "themes"
+          gone = tmpHome / "gone"
+          origDir = getCurrentDir()
+        createDir(homeThemes)
+        writeFile(homeThemes / "mytheme.toml", ThemeText)
+        createDir(gone)
+        setCurrentDir(gone)
+        defer:
+          setCurrentDir(origDir)
+        removeDir(gone)
+
+        e.applyThemeCommand("mytheme")
+        check e.state.statusMessage == "Theme changed to: mytheme"
+        check e.config.theme.path == homeThemes / "mytheme.toml"
 
   test ":theme <missing> leaves config.theme untouched":
-    let e = createTestEditor()
+    withTempHome(tmpHome):
+      let e = createTestEditor()
+      createDir(tmpHome / ".config" / "moe" / "themes")
 
-    let fakeHome = getTempDir() / "moe_test_theme_missing_home"
-    createDir(fakeHome / ".config" / "moe" / "themes")
+      let previousPath = getTempDir() / "moe_test_theme_previous.toml"
+      e.config.theme.kind = tkConfig
+      e.config.theme.path = previousPath
 
-    let originalHome = getEnv("HOME")
-    putEnv("HOME", fakeHome)
-    defer:
-      putEnv("HOME", originalHome)
-      removeDir(fakeHome)
+      e.applyThemeCommand("nope")
 
-    let previousPath = getTempDir() / "moe_test_theme_previous.toml"
-    e.config.theme.kind = tkConfig
-    e.config.theme.path = previousPath
-
-    e.applyThemeCommand("nope")
-
-    check e.config.theme.kind == tkConfig
-    check e.config.theme.path == previousPath
-    check e.state.statusMessage == "Theme not found: nope"
+      check e.config.theme.kind == tkConfig
+      check e.config.theme.path == previousPath
+      check e.state.statusMessage == "Theme not found: nope"
 
 suite "Editor - processResult(hrSave) actually saves (regression)":
   test "processResult(hrSave) writes modified buffer to disk":

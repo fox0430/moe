@@ -32,7 +32,7 @@ import
 
 import types/command_completion_types
 import picker/catalog
-from theme import DefaultThemeName, ThemeFileExt, userThemesDir
+from theme import DefaultThemeName, ThemeFileExt, userThemesDirs
 from syntax/tokenizer import
   SourceLanguage, sourceLanguageToFiletype, sourceLanguageToStr
 export command_completion_types
@@ -351,8 +351,9 @@ proc collectThemeNames*(prefix: string): seq[CommandCompletionEntry] =
   var matches: seq[(string, string)]
   if fuzzyMatch(prefix, DefaultThemeName):
     matches.add (DefaultThemeName, "Built-in theme")
-  let themesDir = userThemesDir()
-  if dirExists(themesDir):
+  for themesDir in userThemesDirs():
+    if not dirExists(themesDir):
+      continue
     try:
       # Without `checkDir` an unreadable directory looks empty.
       for _, path in walkDir(themesDir, checkDir = true):
@@ -362,8 +363,9 @@ proc collectThemeNames*(prefix: string): seq[CommandCompletionEntry] =
             name.contains(Whitespace):
           continue
         # Runs on every key, so only the matches are stat'ed.
-        if fuzzyMatch(prefix, name) and fileExists(path):
-          matches.add (name, "Theme file")
+        let match = (name, "Theme file")
+        if fuzzyMatch(prefix, name) and match notin matches and fileExists(path):
+          matches.add match
     except OSError as e:
       logDebug "command_completion", "Failed to scan themes for completion: " & e.msg
   for (name, description) in matches:

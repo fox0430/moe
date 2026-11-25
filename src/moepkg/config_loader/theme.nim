@@ -25,7 +25,7 @@ import std/[os, options, tables, strutils]
 
 import pkg/[parsetoml, results]
 
-import ../[config, color, theme as themeMod, vscode_theme]
+import ../[config, config_dir, color, theme as themeMod, vscode_theme]
 
 import ../buffer/atomic_write
 
@@ -42,18 +42,6 @@ const ThemeConfigKeys* = ["kind", "path"]
 
 # [Theme] section loader (kind/path)
 
-proc moeThemeBaseDirs*(): seq[string] =
-  ## Dirs a theme file may be auto-created in (XDG dir + home fallback).
-  var bases: seq[string] = @[]
-  for raw in [getConfigDir() / "moe", getHomeDir() / ".config" / "moe"]:
-    try:
-      let norm = normalizedPath(absolutePath(raw))
-      if norm notin bases:
-        bases.add(norm)
-    except CatchableError:
-      discard
-  bases
-
 proc isThemePathAllowed*(path: string): bool =
   ## True iff `path` resolves inside a moe config dir. Guards implicit
   ## theme-file creation from crafted moerc paths; reads/overwrites stay
@@ -62,10 +50,18 @@ proc isThemePathAllowed*(path: string): bool =
     return false
   let expanded =
     try:
-      normalizedPath(absolutePath(expandTilde(path)))
+      # `absolutePath` reads the cwd even for an absolute path, and the cwd may
+      # have been deleted.
+      let tildeExpanded = expandTilde(path)
+      normalizedPath(
+        if tildeExpanded.isAbsolute:
+          tildeExpanded
+        else:
+          absolutePath(tildeExpanded)
+      )
     except CatchableError:
       return false
-  for base in moeThemeBaseDirs():
+  for base in moeConfigDirs():
     if expanded == base:
       continue
     # `relativePath` returns the input unchanged across drives/UNC roots,

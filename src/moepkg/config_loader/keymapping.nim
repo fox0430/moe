@@ -29,7 +29,7 @@ import std/[os, tables, strutils]
 
 import pkg/parsetoml
 
-import ../[config, key_bindings, modes]
+import ../[config, config_dir, key_bindings, modes]
 
 import base, save_base
 
@@ -191,13 +191,10 @@ proc getKeyMappingFilePath*(): string =
   ## 2. ~/.config/moe/keybindings.toml
   ## The current directory is never searched: an untrusted checkout could
   ## otherwise bind keys to arbitrary commands.
-  let paths = [
-    getConfigDir() / "moe" / "keybindings.toml",
-    getHomeDir() / ".config" / "moe" / "keybindings.toml",
-  ]
-  for p in paths:
-    if fileExists(p):
-      return p
+  for dir in moeConfigDirs():
+    let path = dir / "keybindings.toml"
+    if fileExists(path):
+      return path
 
 proc loadKeyMappingFile*(config: var KeyMappingConfig, vr: var ValidationResult) =
   ## Merge the optional dedicated keymap file into `config`. The file uses the
