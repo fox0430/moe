@@ -37,7 +37,7 @@ import
     completion, signature_help, lsp_integration, lsp_request_context, key_router,
     macro_recording, auto_pair,
   ]
-import handler_types, insert_commands
+import handler_types, insert_commands, smart_indent
 import ../fold_open
 import ../insert_record
 import ../types/editor_types
@@ -145,16 +145,23 @@ proc stepOver(state: EditorState, buffer: TextBuffer) =
 
 const TypedClosers = [")", "]", "}"]
 
-proc typedPair(action: AutoPairAction, text: string): seq[TypedInput] =
+proc mayReindent(buffer: TextBuffer, text: string): bool =
+  ## Whether typing `text` can change the line's indent: a closer, or, with
+  ## block words, anything that ends one or goes on past it.
+  text in TypedClosers or buffer.language in BlockWordLanguages
+
+proc typedPair(
+    buffer: TextBuffer, action: AutoPairAction, text: string
+): seq[TypedInput] =
   ## What `.` types again for a bracket or quote: what it did, not the key,
-  ## which would be judged again where it is typed. The indent a closer takes
-  ## is judged again, as Vim types the closer again.
+  ## which would be judged again where it is typed. The indent of the
+  ## line is judged again, as Vim types the key again.
   case action
   of apNone:
     discard
   of apInsert, apPair:
     result = @[TypedInput(kind: tiText, text: action.insertedText(text), cursorAt: 1)]
-    if text in TypedClosers:
+    if buffer.mayReindent(text):
       result.add TypedInput(kind: tiReindent)
   of apStepOver:
     result = @[TypedInput(kind: tiRight)]
@@ -171,20 +178,22 @@ proc handleCharacterInsertion*(
     state.stepOver(buffer)
   else:
     # The cursor goes after the text typed, between a pair.
+    let moved = buffer.takeReindentedWord(state)
     let insertResult =
       buffer.insertTextEnd(pos, action.insertedText(text), cursorByte = text.len)
     if insertResult.isErr:
       return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
     state.cursor.column = insertResult.get.cursor.column
-    if text in TypedClosers:
-      let reindented = buffer.reindentTypedCloser(state)
+    buffer.keepReindentedWord(state, moved)
+    if buffer.mayReindent(text):
+      let reindented = buffer.reindentTyped(state)
       if reindented.isErr:
         state.statusMessage = reindented.error
 
   InsertModeResult(
     kind: imrHandled,
     modeTransition: none(EditorMode),
-    typedBefore: typedPair(action, text),
+    typedBefore: buffer.typedPair(action, text),
     keyConsumed: action != apNone,
   )
 
@@ -192,18 +201,20 @@ proc handleBackspace*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ): InsertModeResult =
   ## Handle backspace key
-  let r = deleteBeforeCursor(buffer, state)
-  if r.isErr:
-    return InsertModeResult(kind: imrError, errorMessage: r.error)
+  buffer.keepingReindentedWord(state):
+    let r = deleteBeforeCursor(buffer, state)
+    if r.isErr:
+      return InsertModeResult(kind: imrError, errorMessage: r.error)
   InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleDelete*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ): InsertModeResult =
   ## Handle delete key
-  let r = deleteAtCursor(buffer, state)
-  if r.isErr:
-    return InsertModeResult(kind: imrError, errorMessage: r.error)
+  buffer.keepingReindentedWord(state):
+    let r = deleteAtCursor(buffer, state)
+    if r.isErr:
+      return InsertModeResult(kind: imrError, errorMessage: r.error)
   InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc linesAddedAtOrAbove(edits: openArray[TextEdit], line: int): int =
@@ -359,6 +370,15 @@ proc remapIndentChange*(session: var SnippetSession, line, before, after: int) =
         else:
           max(0, min(stopEnd, after) - stop.pos.column)
 
+proc reindentInSession(buffer: TextBuffer, state: EditorState) =
+  ## reindentTyped, with the tabstops of a snippet session kept on their text.
+  let reindented = buffer.reindentTyped(state)
+  if reindented.isErr:
+    state.statusMessage = reindented.error
+  elif reindented.get.isSome and state.snippetSession.active:
+    let (before, after) = reindented.get.get
+    remapIndentChange(state.snippetSession, state.cursor.line, before, after)
+
 proc deletePendingDefault(
     buffer: TextBuffer, state: EditorState
 ): Result[seq[TypedInput], string] =
@@ -369,15 +389,16 @@ proc deletePendingDefault(
   var removal: seq[TypedInput]
   if state.snippetSession.defaultPending and cur.len > 0:
     let before = state.cursor
-    state.cursor = cur.pos
     var deleteError = ""
     var deleted = 0
-    for _ in 0 ..< cur.len:
-      let deleteResult = buffer.deleteChar(state.cursor)
-      if deleteResult.isErr:
-        deleteError = deleteResult.error
-        break
-      inc deleted
+    buffer.keepingReindentedWord(state):
+      state.cursor = cur.pos
+      for _ in 0 ..< cur.len:
+        let deleteResult = buffer.deleteChar(state.cursor)
+        if deleteResult.isErr:
+          deleteError = deleteResult.error
+          break
+        inc deleted
     if deleted > 0:
       # Remap with the range that actually went through so the stop
       # coordinates stay in sync with the buffer on a partial failure too:
@@ -432,7 +453,7 @@ proc insertCharInSession(
     return InsertModeResult(
       kind: imrHandled,
       modeTransition: none(EditorMode),
-      typedBefore: pendingResult.get & typedPair(action, text),
+      typedBefore: pendingResult.get & buffer.typedPair(action, text),
       keyConsumed: true,
     )
   let toInsert = action.insertedText(text)
@@ -445,6 +466,7 @@ proc insertCharInSession(
   let stopStartsHere = state.snippetSession.stops[idx].pos == before
   # The cursor sits between an auto-closed pair, after the text otherwise; the
   # remap's new end is always the insertion end, not the cursor.
+  let moved = buffer.takeReindentedWord(state)
   let insertResult = buffer.insertTextEnd(before, toInsert, cursorByte = text.len)
   if insertResult.isErr:
     return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
@@ -459,19 +481,13 @@ proc insertCharInSession(
     state.snippetSession.stops[idx].pos = before
   state.snippetSession.stops[idx].len =
     max(0, state.snippetSession.stops[idx].len + gained)
-  if text in TypedClosers:
-    let reindented = buffer.reindentTypedCloser(state)
-    if reindented.isErr:
-      state.statusMessage = reindented.error
-    elif reindented.get.isSome:
-      let (indentBefore, indentAfter) = reindented.get.get
-      remapIndentChange(
-        state.snippetSession, state.cursor.line, indentBefore, indentAfter
-      )
+  buffer.keepReindentedWord(state, moved)
+  if buffer.mayReindent(text):
+    buffer.reindentInSession(state)
   return InsertModeResult(
     kind: imrHandled,
     modeTransition: none(EditorMode),
-    typedBefore: pendingResult.get & typedPair(action, text),
+    typedBefore: pendingResult.get & buffer.typedPair(action, text),
     keyConsumed: action != apNone,
   )
 
@@ -637,6 +653,7 @@ proc commitCompletion*(
 
   # The change starts the typed text at the cursor, before any edit moves it.
   state.stopArrow(state.cursor)
+  let moved = buffer.takeReindentedWord(state)
   if entry.additionalTextEdits.isSome and not keepPopupOpen:
     # Apply additionalTextEdits (auto-imports etc.) FIRST, while the buffer still
     # matches the coordinates the server computed them against. Edits inserted at
@@ -785,6 +802,24 @@ proc commitCompletion*(
       active: true, stops: resolved, index: 0, defaultPending: resolved[0].len > 0
     )
 
+  # What `.` types. The text goes in as it is, without the completion's extra
+  # edits (imports).
+  var typedBefore = @[
+    TypedInput(
+      kind: tiText,
+      removeBefore: removeBefore,
+      removeAfter: removeAfter,
+      text: insertText,
+      cursorAt: cursorCharOffset,
+    )
+  ]
+  if '\n' notin insertText:
+    buffer.keepReindentedWord(state, moved)
+    # As Vim's KEY_COMPLETE in 'indentkeys', once the completion is done.
+    if not keepPopupOpen and buffer.language in BlockWordLanguages:
+      buffer.reindentInSession(state)
+      typedBefore.add TypedInput(kind: tiReindent)
+
   if keepPopupOpen:
     # Cycling preview: keep the popup open and track the inserted text as the
     # prefix for the fallback delete path and popup rendering. Multi-line inserts
@@ -792,24 +827,38 @@ proc commitCompletion*(
     # main range-delete path is what actually runs during cycling).
     if '\n' notin insertText:
       handler.completionManager.menu.prefix = insertText
+    handler.previewEnd = (buffer.id, state.cursor, buffer.contentVersion)
   else:
     handler.completionManager.cancelCompletion()
-  # `.` puts the text in as it is, without the completion's extra edits
-  # (imports).
   return InsertModeResult(
     kind: imrHandled,
     modeTransition: none(EditorMode),
-    typedBefore: @[
-      TypedInput(
-        kind: tiText,
-        removeBefore: removeBefore,
-        removeAfter: removeAfter,
-        text: insertText,
-        cursorAt: cursorCharOffset,
-      )
-    ],
+    typedBefore: typedBefore,
     keyConsumed: true,
   )
+
+proc endCompletion(handler: InsertModeHandler, buffer: TextBuffer, state: EditorState) =
+  ## End the completion as it stands. A candidate picked is judged as typed, as
+  ## Vim's KEY_COMPLETE whichever key ends it, unless the cursor left it (a click)
+  ## or something else changed the text.
+  let picked =
+    if handler.completionManager.menu.hasSelection:
+      handler.completionManager.getSelectedEntry()
+    else:
+      none(CompletionEntry)
+  handler.completionManager.cancelCompletion()
+  if picked.isNone or buffer.language notin BlockWordLanguages or
+      handler.previewEnd != (buffer.id, state.cursor, buffer.contentVersion):
+    return
+  let text =
+    if picked.get.textEdit.isSome: picked.get.textEdit.get.newText else: picked.get.word
+  if text.len == 0 or '\n' in text:
+    return
+  buffer.reindentInSession(state)
+  state.noteReindent()
+  # The key that ended it may change nothing (Ctrl-A), and is then not settled.
+  state.settleTyping()
+  handler.keyStart = (state.cursor, buffer.contentVersion)
 
 proc lspCompletionAllowed(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
@@ -1137,6 +1186,7 @@ proc handleInsertModeKey*(
 
   # Only the last key of a batch counts for the frame's auto-trigger.
   handler.autoTrigger = none(AutoTriggerMark)
+  handler.keyStart = (state.cursor, buffer.contentVersion)
   # A completion under way sees every key first. It takes the keys that pick
   # from what it shows or edit the word; while a request is still in flight it
   # shows nothing, so there is nothing to pick.
@@ -1259,7 +1309,7 @@ proc handleInsertModeKey*(
 
     # Any other key ends the completion and is handled as if no popup were
     # open, as in Vim.
-    handler.completionManager.cancelCompletion()
+    handler.endCompletion(buffer, state)
 
   if state.snippetSession.active:
     # Snippet tabstop session. The completion popup's keys above take
@@ -1323,7 +1373,9 @@ proc handleInsertModeKey*(
           keyConsumed: true,
         )
       let curBefore = session.stops[session.index]
-      let deleted = deleteAtCursor(buffer, state)
+      var deleted: Result[Option[BufferPosition], string]
+      buffer.keepingReindentedWord(state):
+        deleted = deleteAtCursor(buffer, state)
       if deleted.isErr:
         return InsertModeResult(kind: imrError, errorMessage: deleted.error)
       let res = InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))

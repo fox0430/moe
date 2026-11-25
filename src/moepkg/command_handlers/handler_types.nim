@@ -74,6 +74,10 @@ type
     motionController*: MotionController
     commandRegistry*: CommandRegistry
     completionManager*: CompletionManager
+    keyStart*: tuple[cursor: BufferPosition, version: int]
+      ## Where the key being handled begins: past what ending a completion did.
+    previewEnd*: tuple[bufferId: BufferId, cursor: BufferPosition, version: int]
+      ## Where the candidate last previewed ends, nothing changed since.
     signatureHelpManager*: SignatureHelpManager
     lsp*: LspIntegration
     autoTrigger*: Option[AutoTriggerMark]

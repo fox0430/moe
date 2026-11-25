@@ -150,7 +150,8 @@ type
       cfg,
       cfgDocDescription:
         "Language-aware indent on Enter, o, O and a typed closer: by brackets in " &
-        "code languages, plus var/let/const/type, trailing or/and/object/" &
+        "code languages, plus block words (if/then/fi, do/done, case/esac) in " &
+        "Shell and Zsh, and var/let/const/type, trailing or/and/object/" &
         "tuple/enum and trailing `:` or `=` in Nim"
     .}: bool
     ignorecase* {.cfg, cfgDocDescription: "Enable ignorecase when searching".}: bool
