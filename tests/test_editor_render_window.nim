@@ -29,8 +29,10 @@ import
   ]
 import ../src/moepkg/editor_render_window {.all.}
 import
-  ../src/moepkg/
-    [editor_render_helpers, style_patch, colorcode, editor_codelens, visible_rows]
+  ../src/moepkg/[
+    editor_render_helpers, editor_window_layout, style_patch, colorcode,
+    editor_codelens, visible_rows,
+  ]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -417,6 +419,66 @@ suite "renderWindowLineWrapped - Basic behavior":
     for y in 0 ..< 3:
       check buffer[0, y].style.bg == sh.bg
       check buffer[1, y].style.bg == sh.bg
+
+suite "Cursor line color of the buffer":
+  proc renderRows(
+      showCursorLine, showSyntax: bool, color: Option[EditorColorPairIndex]
+  ): tuple[buf: Buffer, textX: int] =
+    ## Two entries, "ab" and "cd", with the cursor on the first, and the column
+    ## the text starts at.
+    let e = createTestEditor()
+    result.buf = createTestBuffer()
+    e.showCursorLine = showCursorLine
+    e.showSyntax = showSyntax
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "ab\ncd")
+    e.activeBuffer.isUtilityBuffer = true
+    e.activeBuffer.highlight = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 1,
+          lastColumn: 1,
+          color: EditorColorPairIndex.filerDirectory,
+          style:
+            getThemeStyle(EditorColorPairIndex.filerDirectory, {StyleModifier.Bold}),
+        )
+      ],
+      cursorLineColor: color,
+    )
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 10
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    result.textX = e.calculateSidebarWidth(window)
+    let ctx = RenderContext(cursorLine: 0, cursorCol: 0, windowRightEdge: 10)
+    e.renderWindowLineNoWrap(result.buf, window, 0, ctx, 0, 0)
+    e.renderWindowLineNoWrap(result.buf, window, 0, ctx, 1, 1)
+
+  test "draws the text and the fill, with the highlight on or off":
+    let want = colorIndexToStyle(EditorColorPairIndex.currentFile)
+    for (showCursorLine, showSyntax) in [
+      (true, true), (false, true), (true, false), (false, false)
+    ]:
+      checkpoint $(showCursorLine, showSyntax)
+      let (buf, textX) =
+        renderRows(showCursorLine, showSyntax, some(EditorColorPairIndex.currentFile))
+      for x in [textX, textX + 1, textX + 2, 9]:
+        check buf[x, 0].style.fg == want.fg
+        check buf[x, 0].style.bg == want.bg
+      check buf[textX, 1].style.bg != want.bg
+      check buf[9, 1].style.bg != want.bg
+      # Only the selected entry takes the color, and it stays bold.
+      if showSyntax:
+        check StyleModifier.Bold in buf[textX, 0].style.modifiers
+
+  test "without one the line keeps its text color":
+    let
+      (buf, textX) = renderRows(true, true, none(EditorColorPairIndex))
+      text = colorIndexToStyle(EditorColorPairIndex.filerDirectory)
+    check buf[textX, 0].style.fg == text.fg
+    check buf[textX, 0].style.bg == cursorLineHighlightStyle().bg
 
 suite "renderWindowLineNoWrap - Basic behavior":
   test "Render empty line":

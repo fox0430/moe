@@ -1984,6 +1984,20 @@ The `statusLineQuickRunMode*` keys (the QuickRun mode no longer exists) are
 no longer recognized; if a theme file still contains them, they are skipped
 with an unknown-key warning and can be removed.
 
+The old Filer keys `dir` and `pcLink` are still read, as `filerDirectory` and
+as `filerSymlink` and `filerSymlinkDir`. A theme that sets one of the new keys
+ignores the old key for it. Saving a theme writes the new keys.
+
+#### Filer colors
+
+The Filer and the file tree draw the selected entry with `currentFile` in place
+of the entry's own color and `currentLine`, whether or not the current line
+highlight is on. Regular files use `file`; a theme that leaves out its `fg` or
+`bg` takes the top-level `foreground` or `background`. Directories, symbolic
+links, hidden files and executables take `filerDirectory`,
+`filerSymlink`/`filerSymlinkDir`, `filerHiddenFile` and `filerExecutable` in
+both.
+
 #### Markdown colors
 
 The `markdownHeading`, `markdownCode`, `markdownLinkUrl`,
@@ -2188,10 +2202,8 @@ colors, as the active one does.
 | unresolvedReference | LSP semantic token: unresolved reference |
 | inlayHint | LSP inlay hint |
 | codeLens | LSP code lens |
-| currentFile | Filer: current file name |
-| file | Filer: file name |
-| dir | Filer: directory name |
-| pcLink | Filer: symbolic link |
+| currentFile | Filer and file tree: selected entry |
+| file | Filer and file tree: regular file entry |
 | popupWindow | Pop-up window |
 | popupWinCurrentLine | Pop-up window current line |
 | popupWindowBorder | Pop-up window border |
@@ -2242,11 +2254,11 @@ colors, as the active one does.
 | viewerHeader | Viewer common: header |
 | viewerSelectedLine | Viewer common: selected line |
 | viewerEmptyMessage | Viewer common: empty-state message |
-| filerDirectory | Filer: directory entry |
-| filerSymlink | Filer: symbolic link entry |
-| filerSymlinkDir | Filer: symbolic link to directory |
-| filerHiddenFile | Filer: hidden file entry |
-| filerExecutable | Filer: executable file entry |
+| filerDirectory | Filer and file tree: directory entry |
+| filerSymlink | Filer and file tree: symbolic link entry |
+| filerSymlinkDir | Filer and file tree: symbolic link to directory |
+| filerHiddenFile | Filer and file tree: hidden file entry |
+| filerExecutable | Filer and file tree: executable file entry |
 | bufferManagerActive | Buffer manager: active buffer |
 | bufferManagerModified | Buffer manager: modified buffer |
 | configModeSection | Configuration mode: section header |

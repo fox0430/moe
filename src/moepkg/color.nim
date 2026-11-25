@@ -277,8 +277,6 @@ type
     # Filer mode
     currentFile
     file
-    dir
-    pcLink
 
     # Popup window
     popupWindow
@@ -643,10 +641,8 @@ const
     EditorColorPairIndex.unresolvedReference: "LSP semantic token: unresolved reference",
     EditorColorPairIndex.inlayHint: "LSP inlay hint",
     EditorColorPairIndex.codeLens: "LSP code lens",
-    EditorColorPairIndex.currentFile: "Filer: current file name",
-    EditorColorPairIndex.file: "Filer: file name",
-    EditorColorPairIndex.dir: "Filer: directory name",
-    EditorColorPairIndex.pcLink: "Filer: symbolic link",
+    EditorColorPairIndex.currentFile: "Filer and file tree: selected entry",
+    EditorColorPairIndex.file: "Filer and file tree: regular file entry",
     EditorColorPairIndex.popupWindow: "Pop-up window",
     EditorColorPairIndex.popupWinCurrentLine: "Pop-up window current line",
     EditorColorPairIndex.popupWindowBorder: "Pop-up window border",
@@ -705,11 +701,12 @@ const
     EditorColorPairIndex.viewerHeader: "Viewer common: header",
     EditorColorPairIndex.viewerSelectedLine: "Viewer common: selected line",
     EditorColorPairIndex.viewerEmptyMessage: "Viewer common: empty-state message",
-    EditorColorPairIndex.filerDirectory: "Filer: directory entry",
-    EditorColorPairIndex.filerSymlink: "Filer: symbolic link entry",
-    EditorColorPairIndex.filerSymlinkDir: "Filer: symbolic link to directory",
-    EditorColorPairIndex.filerHiddenFile: "Filer: hidden file entry",
-    EditorColorPairIndex.filerExecutable: "Filer: executable file entry",
+    EditorColorPairIndex.filerDirectory: "Filer and file tree: directory entry",
+    EditorColorPairIndex.filerSymlink: "Filer and file tree: symbolic link entry",
+    EditorColorPairIndex.filerSymlinkDir:
+      "Filer and file tree: symbolic link to directory",
+    EditorColorPairIndex.filerHiddenFile: "Filer and file tree: hidden file entry",
+    EditorColorPairIndex.filerExecutable: "Filer and file tree: executable file entry",
     EditorColorPairIndex.bufferManagerActive: "Buffer manager: active buffer",
     EditorColorPairIndex.bufferManagerModified: "Buffer manager: modified buffer",
     EditorColorPairIndex.configModeSection: "Configuration mode: section header",

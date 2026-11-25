@@ -2197,6 +2197,136 @@ statusLineNormalMode = { fg = "#111111", bg = "#222222" }
     check "statusLineNormalModeInactive = { bg = \"#222222\" }" in readFile(testFile)
     check loadThemeFromToml(testFile).get == colors
 
+  test "Old Filer keys set the entries the theme has no key for":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_old_filer_" & $testFileCounter & ".toml"
+    # A new key wins as a whole entry, wherever it is in the file.
+    writeFile(
+      testFile,
+      "[Palette]\nlink = \"#222222\"\n[Colors]\nforeground = \"#777777\"\n" &
+        "background = \"#888888\"\ndir = { fg = \"#111111\", bg = \"#121212\" }\n" &
+        "pcLink = { fg = \"link\", bg = \"#232323\" }\n" &
+        "filerSymlink = { fg = \"#333333\" }\n",
+    )
+    let savedFile = testFile & ".saved"
+    defer:
+      removeFile(testFile)
+      removeFile(savedFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    check not vr.hasErrors
+    let (colors, source) = loaded.get
+    check colors[EditorColorPairIndex.filerDirectory].foreground.rgb == rgb("#111111")
+    check colors[EditorColorPairIndex.filerDirectory].background.rgb == rgb("#121212")
+    check colors[EditorColorPairIndex.filerSymlink].foreground.rgb == rgb("#333333")
+    check colors[EditorColorPairIndex.filerSymlink].background.rgb == rgb("#888888")
+    check colors[EditorColorPairIndex.filerSymlinkDir].foreground.rgb == rgb("#222222")
+    check colors[EditorColorPairIndex.filerSymlinkDir].background.rgb == rgb("#232323")
+    # `file` left out takes the theme's own foreground and background.
+    check colors[EditorColorPairIndex.file] == colors[EditorColorPairIndex.default]
+
+    require saveThemeToToml(colors, savedFile, source).isOk
+    let saved = readFile(savedFile)
+    check "\ndir = " notin saved
+    check "\npcLink = " notin saved
+    check "filerSymlinkDir = { fg = \"link\"" in saved
+    let reloaded = loadThemeFromToml(savedFile)
+    require reloaded.isOk
+    check reloaded.get == colors
+
+  test "Old Filer keys leave the entries a new key sets":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_old_filer_edges_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    # A new key before the old one still wins.
+    writeFile(
+      testFile,
+      "[Colors]\nforeground = \"#777777\"\nbackground = \"#888888\"\n" &
+        "filerDirectory = { fg = \"#010101\", bg = \"#020202\" }\n" &
+        "dir = { fg = \"#030303\", bg = \"#040404\" }\n",
+    )
+    var colors = loadThemeFromToml(testFile)
+    require colors.isOk
+    check colors.get[EditorColorPairIndex.filerDirectory].foreground.rgb ==
+      rgb("#010101")
+    check colors.get[EditorColorPairIndex.filerDirectory].background.rgb ==
+      rgb("#020202")
+
+    # pcLink fills only the entry the theme leaves out.
+    writeFile(
+      testFile,
+      "[Colors]\nforeground = \"#777777\"\nbackground = \"#888888\"\n" &
+        "pcLink = { fg = \"#111111\", bg = \"#121212\" }\n" &
+        "filerSymlinkDir = { fg = \"#131313\", bg = \"#141414\" }\n",
+    )
+    colors = loadThemeFromToml(testFile)
+    require colors.isOk
+    check colors.get[EditorColorPairIndex.filerSymlink].foreground.rgb == rgb("#111111")
+    check colors.get[EditorColorPairIndex.filerSymlink].background.rgb == rgb("#121212")
+    check colors.get[EditorColorPairIndex.filerSymlinkDir].foreground.rgb ==
+      rgb("#131313")
+    check colors.get[EditorColorPairIndex.filerSymlinkDir].background.rgb ==
+      rgb("#141414")
+
+    # One side of `file` falls back on its own.
+    writeFile(
+      testFile,
+      "[Colors]\nforeground = \"#777777\"\nbackground = \"#888888\"\n" &
+        "file = { fg = \"#123456\" }\n",
+    )
+    colors = loadThemeFromToml(testFile)
+    require colors.isOk
+    check colors.get[EditorColorPairIndex.file].foreground.rgb == rgb("#123456")
+    check colors.get[EditorColorPairIndex.file].background.rgb == rgb("#888888")
+
+    writeFile(
+      testFile,
+      "[Colors]\nforeground = \"#777777\"\nbackground = \"#888888\"\n" &
+        "file = { bg = \"#123456\" }\n",
+    )
+    colors = loadThemeFromToml(testFile)
+    require colors.isOk
+    check colors.get[EditorColorPairIndex.file].foreground.rgb == rgb("#777777")
+    check colors.get[EditorColorPairIndex.file].background.rgb == rgb("#123456")
+
+  test "A live top-level edit keeps the omitted entries omitted when saved":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_live_fallback_" & $testFileCounter & ".toml"
+    let savedFile = testFile & ".saved"
+    defer:
+      removeFile(testFile)
+      removeFile(savedFile)
+
+    writeFile(
+      testFile, "[Colors]\nforeground = \"#777777\"\nbackground = \"#888888\"\n"
+    )
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    var
+      colors = loaded.get[0]
+      source = loaded.get[1]
+
+    # As the config view does for a top-level foreground edit.
+    colors[EditorColorPairIndex.default].foreground = ThemeColor(rgb: rgb("#999999"))
+    colors.noteThemeColorEdited(source, EditorColorPairIndex.default, isFg = true)
+    check colors[EditorColorPairIndex.file].foreground.rgb == rgb("#999999")
+
+    require saveThemeToToml(colors, savedFile, source).isOk
+    let saved = readFile(savedFile)
+    check "file = " notin saved
+    let reloaded = loadThemeFromToml(savedFile)
+    require reloaded.isOk
+    check reloaded.get[EditorColorPairIndex.default].foreground.rgb == rgb("#999999")
+    check reloaded.get[EditorColorPairIndex.file].foreground.rgb == rgb("#999999")
+
   test "Markdown keys a theme leaves out take the keys they replace":
     inc testFileCounter
     let testFile =

@@ -91,13 +91,20 @@ proc loadThemeConfig*(
 
 # Standalone theme file loader (the [Colors] table)
 
-const MarkdownFallbackColors = [
+const FallbackColors = [
   (EditorColorPairIndex.markdownHeading, EditorColorPairIndex.builtin),
   (EditorColorPairIndex.markdownCode, EditorColorPairIndex.specialVar),
   (EditorColorPairIndex.markdownLinkUrl, EditorColorPairIndex.specialVar),
   (EditorColorPairIndex.markdownListMarker, EditorColorPairIndex.operator),
   (EditorColorPairIndex.markdownFrontmatter, EditorColorPairIndex.preprocessor),
+  (EditorColorPairIndex.file, EditorColorPairIndex.default),
 ]
+
+const LegacyColorKeys = {
+  # Old theme keys and the entries they set when the theme has no key for those.
+  "dir": @[EditorColorPairIndex.filerDirectory],
+  "pcLink": @[EditorColorPairIndex.filerSymlink, EditorColorPairIndex.filerSymlinkDir],
+}
 
 const StatusLineInactiveFallbacks = block:
   ## The Inactive color of each mode and the active color it falls back to.
@@ -197,6 +204,13 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
       return some(index)
   return none(EditorColorPairIndex)
 
+proc legacyColorIndexes(key: string): Option[seq[EditorColorPairIndex]] =
+  ## The entries the old theme key `key` stands for; none if it is not one.
+  for (legacy, indexes) in LegacyColorKeys:
+    if legacy == key:
+      return some(indexes)
+  none(seq[EditorColorPairIndex])
+
 proc toStatusLineModeColor(key: string): Option[StatusLineModeColor] =
   for kind in StatusLineModeColor:
     if $kind == key:
@@ -216,16 +230,30 @@ proc baseThemeColors(default: ColorPair): ThemeColors =
         result[index].background.rgb == hardcodedDefaultBg:
       result[index].background = default.background
 
-proc applyMarkdownFallback(
+proc applyColorFallback(
     colors: var ThemeColors, omittedFg, omittedBg: set[EditorColorPairIndex]
 ) =
-  ## Themes written before the Markdown keys colored these with the generic
-  ## keys; keep that look for whichever of fg/bg the theme does not set.
-  for (markdown, generic) in MarkdownFallbackColors:
-    if markdown in omittedFg:
-      colors[markdown].foreground = colors[generic].foreground
-    if markdown in omittedBg:
-      colors[markdown].background = colors[generic].background
+  ## Entries colored by a more generic one for whichever of fg/bg the theme does
+  ## not set, the look of themes written before their keys took effect.
+  for (specific, generic) in FallbackColors:
+    if specific in omittedFg:
+      colors[specific].foreground = colors[generic].foreground
+    if specific in omittedBg:
+      colors[specific].background = colors[generic].background
+
+proc noteThemeColorEdited*(
+    colors: var ThemeColors,
+    source: var ThemeSource,
+    index: EditorColorPairIndex,
+    isFg: bool,
+) =
+  ## A live color edit makes `index`'s channel explicit from now on, and the
+  ## channels the theme still leaves out take their fallbacks again.
+  if isFg:
+    source.omittedFg.excl index
+  else:
+    source.omittedBg.excl index
+  colors.applyColorFallback(source.omittedFg, source.omittedBg)
 
 proc applyStatusLineInactiveFallback(
     colors: var ThemeColors, omittedFg, omittedBg: set[EditorColorPairIndex]
@@ -384,7 +412,8 @@ proc loadThemeWithSource*(
     let
       sharedOpt = toStatusLineModeColor(key)
       indexOpt = toEditorColorPairIndex(key)
-    if sharedOpt.isNone and indexOpt.isNone:
+      legacyOpt = legacyColorIndexes(key)
+    if sharedOpt.isNone and indexOpt.isNone and legacyOpt.isNone:
       vr.addUnknownKey(fullKey(section, key))
       continue
 
@@ -398,6 +427,14 @@ proc loadThemeWithSource*(
       # before this loop, so an empty table is a no-op). Surface it.
       vr.addError(fullKey(section, key), "{}", themeInlineTableExpected)
       continue
+
+    var indexes: seq[EditorColorPairIndex]
+    if indexOpt.isSome:
+      indexes.add indexOpt.get
+    elif legacyOpt.isSome:
+      for index in legacyOpt.get:
+        if not colorsTable.hasKey(toTomlColorKey(index)):
+          indexes.add index
 
     for subkey, subval in sub:
       case subkey
@@ -416,15 +453,15 @@ proc loadThemeWithSource*(
           source.statusLineModes[(sharedOpt.get, subkey == "fg")] =
             SharedColor(color: ThemeColor(rgb: parsed.get), name: name)
           continue
-        let index = indexOpt.get
-        if name.len > 0:
-          source.refs[(index, subkey == "fg")] = name
-        if subkey == "fg":
-          colors[index].foreground = ThemeColor(rgb: parsed.get)
-          fgSet.incl index
-        else:
-          colors[index].background = ThemeColor(rgb: parsed.get)
-          bgSet.incl index
+        for index in indexes:
+          if name.len > 0:
+            source.refs[(index, subkey == "fg")] = name
+          if subkey == "fg":
+            colors[index].foreground = ThemeColor(rgb: parsed.get)
+            fgSet.incl index
+          else:
+            colors[index].background = ThemeColor(rgb: parsed.get)
+            bgSet.incl index
       else:
         vr.addUnknownKey(fullKey(section, key & "." & subkey))
 
@@ -434,7 +471,7 @@ proc loadThemeWithSource*(
   colors.applyStatusLineColors(
     source.statusLineModes, source.omittedFg, source.omittedBg
   )
-  colors.applyMarkdownFallback(source.omittedFg, source.omittedBg)
+  colors.applyColorFallback(source.omittedFg, source.omittedBg)
 
   return Loaded.ok((colors, source))
 
@@ -608,7 +645,7 @@ proc reloadedColors(colors: ThemeColors, source: ThemeSource): ThemeColors =
   result.applyStatusLineColors(
     source.statusLineModes, source.omittedFg, source.omittedBg
   )
-  result.applyMarkdownFallback(source.omittedFg, source.omittedBg)
+  result.applyColorFallback(source.omittedFg, source.omittedBg)
   result.adaptDiffTintsToBackground(source.explicitEntries)
 
 proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource =
@@ -625,8 +662,9 @@ proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource =
     if name in source.palette and source.palette[name] == color.rgb:
       result.refs[channel] = name
 
-  # Writing one channel can change what another would load as (the Markdown and
-  # Inactive fallbacks and the diff tints), so repeat until nothing more is needed.
+  # Writing one channel can change what another would load as (the color and
+  # Inactive fallbacks and the diff tints), so repeat until nothing more is
+  # needed.
   while true:
     let reloaded = reloadedColors(colors, result)
     var changedFg, changedBg: set[EditorColorPairIndex]

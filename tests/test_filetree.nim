@@ -17,10 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, sets, options, tables, tempfiles, strutils, unicode]
+import std/[unittest, os, sets, options, tables, tempfiles, sequtils, strutils, unicode]
 
 import ../src/moepkg/filetree {.all.}
-import ../src/moepkg/[buffer, highlight, unicode_utils]
+import ../src/moepkg/[buffer, color, highlight, unicode_utils]
+import ../src/moepkg/types/filer_types
 
 proc createTestTree(): string =
   ## Create a temporary directory structure for testing
@@ -739,6 +740,24 @@ suite "FileTreeState":
     state.searchText = ""
     state.updateSearchMatches()
     check state.searchMatches.len == 0
+
+  test "createFileTreeTextBuffer colors the entries as the Filer does":
+    let state = FileTreeState(rootPath: getTempDir())
+    for (kind, target) in [
+      (fekDirectory, fekDirectory),
+      (fekSymlink, fekDirectory),
+      (fekSymlink, fekFile),
+      (fekFile, fekFile),
+    ]:
+      state.flatList.add FileTreeNode(name: "x", kind: kind, targetKind: target)
+
+    let buf = state.createFileTreeTextBuffer(showIcons = false)
+    check buf.highlight.colorSegments.mapIt(it.color) ==
+      @[
+        EditorColorPairIndex.filerDirectory, EditorColorPairIndex.filerSymlinkDir,
+        EditorColorPairIndex.filerSymlink, EditorColorPairIndex.file,
+      ]
+    check buf.highlight.cursorLineColor == some(EditorColorPairIndex.currentFile)
 
   test "createFileTreeTextBuffer adds searchResult highlight at correct column":
     let tmpDir = createTestTree()

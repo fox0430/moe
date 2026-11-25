@@ -714,8 +714,9 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
-    check result[EditorColorPairIndex.dir].foreground.rgb.red == 0x37
-    check result[EditorColorPairIndex.pcLink].foreground.rgb.red == 0x37
+    check result[EditorColorPairIndex.filerDirectory].foreground.rgb.red == 0x37
+    check result[EditorColorPairIndex.filerSymlink].foreground.rgb.red == 0x37
+    check result[EditorColorPairIndex.filerSymlinkDir].foreground.rgb.red == 0x37
 
   test "Markdown keys take the Markdown grammar's scopes":
     let themeJson = %*{
@@ -1183,8 +1184,9 @@ suite "vscode_theme - findTokenSettings":
         ]
       }
     )
-    check c[EditorColorPairIndex.dir].foreground.rgb == rgb("#e6db74")
-    check c[EditorColorPairIndex.pcLink].foreground.rgb == rgb("#e6db74")
+    check c[EditorColorPairIndex.filerDirectory].foreground.rgb == rgb("#e6db74")
+    check c[EditorColorPairIndex.filerSymlink].foreground.rgb == rgb("#e6db74")
+    check c[EditorColorPairIndex.filerSymlinkDir].foreground.rgb == rgb("#e6db74")
 
   test "punctuation takes a punctuation rule, not a narrower one":
     let tagOnly = makeColorThemeFromVSCodeThemeFile(

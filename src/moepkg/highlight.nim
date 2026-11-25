@@ -80,6 +80,9 @@ type
       ## The segments' styles are what to draw, default colors included, for
       ## colors no theme index names. Elsewhere `style.fg` is a copy of `color`
       ## from when the segment was built, stale after a theme change.
+    cursorLineColor*: Option[EditorColorPairIndex]
+      ## What the cursor's line is drawn with, text included, instead of the
+      ## current line highlight and whether or not that is on.
     semantic*: Table[int, SemanticOverlayLine]
       ## Residual LSP semantic overlay, composed with `colorSegments` at render.
     semanticContentVersion*: int = -1

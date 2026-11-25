@@ -293,10 +293,8 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.codeLens: makeColorPairDefaultBg("#636d83"),
 
   # Filer mode
-  EditorColorPairIndex.currentFile: makeColorPair("#ffffff", "#61afef"),
-  EditorColorPairIndex.file: makeColorPair("#ffffff", "#000000"),
-  EditorColorPairIndex.dir: makeColorPair("#61afef", "#000000"),
-  EditorColorPairIndex.pcLink: makeColorPair("#008080", "#000000"),
+  EditorColorPairIndex.currentFile: makeColorPair("#000000", "#61afef"),
+  EditorColorPairIndex.file: makeColorPairDefaultBg("#dadada"),
 
   # Popup window
   EditorColorPairIndex.popupWindow: makeColorPair("#ffffff", "#000000"),
@@ -682,8 +680,6 @@ const LightColors*: ThemeColors = [
   # Filer mode
   EditorColorPairIndex.currentFile: makeColorPair("#000000", "#09aefa"),
   EditorColorPairIndex.file: makeColorPair("#000000", "#ffffff"),
-  EditorColorPairIndex.dir: makeColorPair("#09aefa", "#ffffff"),
-  EditorColorPairIndex.pcLink: makeColorPair("#008080", "#ffffff"),
 
   # Popup window
   EditorColorPairIndex.popupWindow: makeColorPair("#000000", "#808080"),

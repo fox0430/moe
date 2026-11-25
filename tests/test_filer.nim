@@ -1008,7 +1008,8 @@ suite "Filer - createFilerTextBuffer":
       currentPath: "/tmp", entries: entries, selectedIndex: 0, showHidden: false
     )
     let buf = state.createFilerTextBuffer(false)
-    check buf.highlight.colorSegments[0].color == EditorColorPairIndex.default
+    check buf.highlight.colorSegments[0].color == EditorColorPairIndex.file
+    check buf.highlight.cursorLineColor == some(EditorColorPairIndex.currentFile)
 
   test "Symlink to directory shows folder icon with icons enabled":
     let entries = @[
