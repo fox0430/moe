@@ -31,6 +31,8 @@ import celina_backend as celina
 import color
 import unicode_utils
 
+const WordChars = {'0' .. '9', 'A' .. 'Z', 'a' .. 'z', '_'}
+
 type
   ColorCodeMatch* = object
     startCol*: int ## Column of '#'
@@ -116,9 +118,9 @@ proc scanLineForColorCodes*(line: string): seq[ColorCodeMatch] =
           break
 
       if allHex:
-        # Check word boundary after last hex digit
+        # A longer word is not a color code (e.g. `#facade` in `#facade_x`)
         let afterEnd = i + 7
-        if afterEnd >= line.len or not line[afterEnd].isHexChar:
+        if afterEnd >= line.len or line[afterEnd] notin WordChars:
           let hexStr = line[i + 1 .. i + 6]
           let rgbResult = hexToRgb(hexStr)
           if rgbResult.isOk:
@@ -138,9 +140,9 @@ proc scanLineForColorCodes*(line: string): seq[ColorCodeMatch] =
           break
 
       if allHex:
-        # Check word boundary after last hex digit
+        # A longer word is not a color code (e.g. `#def` in `#define`)
         let afterEnd = i + 4
-        if afterEnd >= line.len or not line[afterEnd].isHexChar:
+        if afterEnd >= line.len or line[afterEnd] notin WordChars:
           # Expand 3-digit to 6-digit: F0A -> FF00AA
           let
             r = line[i + 1]
