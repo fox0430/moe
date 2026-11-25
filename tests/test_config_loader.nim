@@ -2267,10 +2267,8 @@ statusLineNormalMode = { fg = "#111111", bg = "#222222" }
     )
     colors = loadThemeFromToml(testFile)
     require colors.isOk
-    check colors.get[EditorColorPairIndex.filerSymlink].foreground.rgb ==
-      rgb("#111111")
-    check colors.get[EditorColorPairIndex.filerSymlink].background.rgb ==
-      rgb("#121212")
+    check colors.get[EditorColorPairIndex.filerSymlink].foreground.rgb == rgb("#111111")
+    check colors.get[EditorColorPairIndex.filerSymlink].background.rgb == rgb("#121212")
     check colors.get[EditorColorPairIndex.filerSymlinkDir].foreground.rgb ==
       rgb("#131313")
     check colors.get[EditorColorPairIndex.filerSymlinkDir].background.rgb ==
@@ -2317,8 +2315,7 @@ statusLineNormalMode = { fg = "#111111", bg = "#222222" }
       source = loaded.get[1]
 
     # As the config view does for a top-level foreground edit.
-    colors[EditorColorPairIndex.default].foreground =
-      ThemeColor(rgb: rgb("#999999"))
+    colors[EditorColorPairIndex.default].foreground = ThemeColor(rgb: rgb("#999999"))
     colors.noteThemeColorEdited(source, EditorColorPairIndex.default, isFg = true)
     check colors[EditorColorPairIndex.file].foreground.rgb == rgb("#999999")
 
@@ -2327,8 +2324,7 @@ statusLineNormalMode = { fg = "#111111", bg = "#222222" }
     check "file = " notin saved
     let reloaded = loadThemeFromToml(savedFile)
     require reloaded.isOk
-    check reloaded.get[EditorColorPairIndex.default].foreground.rgb ==
-      rgb("#999999")
+    check reloaded.get[EditorColorPairIndex.default].foreground.rgb == rgb("#999999")
     check reloaded.get[EditorColorPairIndex.file].foreground.rgb == rgb("#999999")
 
   test "Markdown keys a theme leaves out take the keys they replace":

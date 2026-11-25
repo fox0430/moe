@@ -164,8 +164,7 @@ suite "Config view - values changed elsewhere":
     colors[EditorColorPairIndex.file].foreground = ThemeColor(rgb: rgb("#777777"))
     setThemeColors(colors)
     themeSource = ThemeSource(
-      omittedFg: {EditorColorPairIndex.file},
-      omittedBg: {EditorColorPairIndex.file},
+      omittedFg: {EditorColorPairIndex.file}, omittedBg: {EditorColorPairIndex.file}
     )
 
     setColorValue(win.state, idx, "#999999")

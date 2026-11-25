@@ -702,14 +702,11 @@ const
     EditorColorPairIndex.viewerSelectedLine: "Viewer common: selected line",
     EditorColorPairIndex.viewerEmptyMessage: "Viewer common: empty-state message",
     EditorColorPairIndex.filerDirectory: "Filer and file tree: directory entry",
-    EditorColorPairIndex.filerSymlink:
-      "Filer and file tree: symbolic link entry",
+    EditorColorPairIndex.filerSymlink: "Filer and file tree: symbolic link entry",
     EditorColorPairIndex.filerSymlinkDir:
       "Filer and file tree: symbolic link to directory",
-    EditorColorPairIndex.filerHiddenFile:
-      "Filer and file tree: hidden file entry",
-    EditorColorPairIndex.filerExecutable:
-      "Filer and file tree: executable file entry",
+    EditorColorPairIndex.filerHiddenFile: "Filer and file tree: hidden file entry",
+    EditorColorPairIndex.filerExecutable: "Filer and file tree: executable file entry",
     EditorColorPairIndex.bufferManagerActive: "Buffer manager: active buffer",
     EditorColorPairIndex.bufferManagerModified: "Buffer manager: modified buffer",
     EditorColorPairIndex.configModeSection: "Configuration mode: section header",
