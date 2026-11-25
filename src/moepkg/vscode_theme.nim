@@ -986,7 +986,10 @@ proc makeColorThemeFromVSCodeThemeFile(
   )
 
   # A link as the Markdown grammar scopes it, which themes color.
-  result.setFg(token("markup.underline.link.markdown"), [I.dir, I.pcLink])
+  result.setFg(
+    token("markup.underline.link.markdown"),
+    [I.filerDirectory, I.filerSymlink, I.filerSymlinkDir],
+  )
 
   # VS Code has no color for marking blanks, so moe's own highlight stays.
   # Border colors such as tab.activeBorder often match the editor background.

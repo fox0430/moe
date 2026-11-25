@@ -124,10 +124,8 @@ unresolvedReference = { fg = "#dadada" }
 inlayHint = { fg = "#636d83" }
 codeLens = { fg = "#636d83" }
 
-currentFile = { fg = "#ffffff", bg = "#61afef" }
-file = { fg = "#ffffff", bg = "#000000" }
-dir = { fg = "#61afef", bg = "#000000" }
-pcLink = { fg = "#008080", bg = "#000000" }
+currentFile = { fg = "#000000", bg = "#61afef" }
+file = { fg = "#dadada" }
 
 popupWindow = { fg = "#ffffff", bg = "#000000" }
 popupWinCurrentLine = { fg = "#ffffff", bg = "#3e4452" }

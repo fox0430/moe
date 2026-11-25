@@ -380,17 +380,22 @@ proc createFileTreeTextBuffer*(state: FileTreeState, showIcons: bool): TextBuffe
     let row = i
     let lineLen = max(0, lines[row].toRunes().high)
     let (colorIdx, style) =
-      if node.kind == fekDirectory or
-          (node.kind == fekSymlink and node.targetKind == fekDirectory):
+      if node.kind == fekDirectory:
         (
           EditorColorPairIndex.filerDirectory,
           getThemeStyle(EditorColorPairIndex.filerDirectory, {StyleModifier.Bold}),
         )
       elif node.kind == fekSymlink:
-        (
-          EditorColorPairIndex.filerSymlink,
-          getThemeStyle(EditorColorPairIndex.filerSymlink),
-        )
+        if node.targetKind == fekDirectory:
+          (
+            EditorColorPairIndex.filerSymlinkDir,
+            getThemeStyle(EditorColorPairIndex.filerSymlinkDir, {StyleModifier.Bold}),
+          )
+        else:
+          (
+            EditorColorPairIndex.filerSymlink,
+            getThemeStyle(EditorColorPairIndex.filerSymlink),
+          )
       elif node.isHidden:
         (
           EditorColorPairIndex.filerHiddenFile,
@@ -402,7 +407,7 @@ proc createFileTreeTextBuffer*(state: FileTreeState, showIcons: bool): TextBuffe
           getThemeStyle(EditorColorPairIndex.filerExecutable, {StyleModifier.Bold}),
         )
       else:
-        (EditorColorPairIndex.default, getThemeStyle(EditorColorPairIndex.default))
+        (EditorColorPairIndex.file, getThemeStyle(EditorColorPairIndex.file))
 
     segments.add(
       ColorSegment(
@@ -415,7 +420,9 @@ proc createFileTreeTextBuffer*(state: FileTreeState, showIcons: bool): TextBuffe
       )
     )
 
-  result.highlight = Highlight(colorSegments: segments)
+  result.highlight = Highlight(
+    colorSegments: segments, cursorLineColor: some(EditorColorPairIndex.currentFile)
+  )
 
   # Overwrite search result highlight on top of entry-type coloring
   if state.searchText.len > 0 and state.searchMatches.len > 0:

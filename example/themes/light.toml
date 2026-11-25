@@ -126,8 +126,6 @@ codeLens = { fg = "#808080" }
 
 currentFile = { fg = "#000000", bg = "#09aefa" }
 file = { fg = "#000000", bg = "#ffffff" }
-dir = { fg = "#09aefa", bg = "#ffffff" }
-pcLink = { fg = "#008080", bg = "#ffffff" }
 
 popupWindow = { fg = "#000000", bg = "#808080" }
 popupWinCurrentLine = { fg = "#ffffff", bg = "#444444" }

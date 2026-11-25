@@ -76,6 +76,8 @@ type
       ## reads as a uniform stripe rather than only tinted characters. Ranks
       ## below cursor line / cursor column / git conflict / visual selection.
     defaultFill*: bool ## Past its text the line takes the default colors
+    cursorLineColor*: Option[EditorColorPairIndex]
+      ## The buffer's own color for the cursor's line
     undecorated*: bool ## The file-edit decorations stay off this line
 
   LinePrecomputed* = object
@@ -181,6 +183,11 @@ proc newLineStyleContext*(
     defaultFill:
       textBuffer != nil and not textBuffer.highlight.isNil and
       textBuffer.highlight.literalColors,
+    cursorLineColor:
+      if textBuffer != nil and not textBuffer.highlight.isNil:
+        textBuffer.highlight.cursorLineColor
+      else:
+        none(EditorColorPairIndex),
     # A utility buffer's look is its own, also while Visual runs on it.
     undecorated: textBuffer != nil and textBuffer.isUtilityBuffer,
   )
@@ -290,7 +297,13 @@ template gitConflictApplies(lineCtx: LineStyleContext): bool =
   lineCtx.lineConflict != cmkNone
 
 template cursorLineApplies(e: Editor, lineCtx: LineStyleContext): bool =
-  e.showCursorLine and lineCtx.isCursorLine
+  lineCtx.isCursorLine and (e.showCursorLine or lineCtx.cursorLineColor.isSome)
+
+proc cursorLineStyle(lineCtx: LineStyleContext): Style =
+  if lineCtx.cursorLineColor.isSome:
+    colorIndexToStyle(lineCtx.cursorLineColor.get)
+  else:
+    cursorLineHighlightStyle()
 
 template cursorColumnApplies(e: Editor, displayCol: int, cursorDisplayCol: int): bool =
   e.showCursorColumn and displayCol >= 0 and displayCol == cursorDisplayCol
@@ -304,7 +317,8 @@ proc overlayPatchSyntax(
     colorPair: EditorColorPairIndex,
 ): StylePatch =
   ## Background overlay for the syntax-highlighted code path. Syntax fg and
-  ## modifiers are preserved; only the bg may be overridden.
+  ## modifiers are preserved; only the bg may be overridden, except that the
+  ## buffer's own `cursorLineColor` also sets the fg.
   ## Priority: documentHighlight > gitConflict > cursorLine > cursorColumn.
   let highlightKind = e.state.isPositionInDocumentHighlight(lineCtx.bufferId, pos)
   if highlightKind.isSome:
@@ -315,7 +329,12 @@ proc overlayPatchSyntax(
   # so the search hit stays visible.
   if colorPair != EditorColorPairIndex.searchResult:
     if e.cursorLineApplies(lineCtx):
-      return bgOnly(cursorLineHighlightStyle().bg)
+      let style = lineCtx.cursorLineStyle
+      return
+        if lineCtx.cursorLineColor.isSome:
+          full(style)
+        else:
+          bgOnly(style.bg)
     if e.cursorColumnApplies(displayCol, cursorDisplayCol):
       return bgOnly(cursorColumnHighlightStyle().bg)
   noPatch
@@ -370,7 +389,7 @@ proc baseStyleWithOverlay(
     elif lineCtx.gitConflictApplies:
       conflictStyleFor(lineCtx.lineConflict, lineCtx.useTwoColor)
     elif e.cursorLineApplies(lineCtx):
-      cursorLineHighlightStyle()
+      lineCtx.cursorLineStyle
     elif e.cursorColumnApplies(displayCol, cursorDisplayCol):
       cursorColumnHighlightStyle()
     else:
@@ -515,7 +534,7 @@ proc lineFillPatch(
   if lineCtx.gitConflictApplies:
     return full(conflictStyleFor(lineCtx.lineConflict, lineCtx.useTwoColor))
   if e.cursorLineApplies(lineCtx):
-    return full(cursorLineHighlightStyle())
+    return full(lineCtx.cursorLineStyle)
   if e.cursorColumnApplies(displayX, cursorDisplayCol):
     return full(cursorColumnHighlightStyle())
   if lineCtx.lineBg.isSome:

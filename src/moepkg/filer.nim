@@ -379,7 +379,7 @@ proc createFilerTextBuffer*(state: FilerState, showIcons: bool): TextBuffer =
           getThemeStyle(EditorColorPairIndex.filerExecutable, {StyleModifier.Bold}),
         )
       else:
-        (EditorColorPairIndex.default, getThemeStyle(EditorColorPairIndex.default))
+        (EditorColorPairIndex.file, getThemeStyle(EditorColorPairIndex.file))
 
     segments.add(
       ColorSegment(
@@ -392,4 +392,6 @@ proc createFilerTextBuffer*(state: FilerState, showIcons: bool): TextBuffer =
       )
     )
 
-  result.highlight = Highlight(colorSegments: segments)
+  result.highlight = Highlight(
+    colorSegments: segments, cursorLineColor: some(EditorColorPairIndex.currentFile)
+  )

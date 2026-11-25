@@ -152,6 +152,29 @@ suite "Config view - values changed elsewhere":
     win.state.startEdit()
     check win.state.editBuffer == "#123456"
 
+  test "a live top-level color edit refreshes the entries the theme leaves out":
+    let e = createTestEditor()
+    e.config.theme.kind = tkConfig
+    e.config.theme.path = getTempDir() / "moe_config_live_theme_fallback.toml"
+    let win = e.openConfig()
+    let idx = win.state.select("Theme Colors", "default.fg")
+
+    var colors = themeColors
+    colors[EditorColorPairIndex.default].foreground = ThemeColor(rgb: rgb("#777777"))
+    colors[EditorColorPairIndex.file].foreground = ThemeColor(rgb: rgb("#777777"))
+    setThemeColors(colors)
+    themeSource = ThemeSource(
+      omittedFg: {EditorColorPairIndex.file},
+      omittedBg: {EditorColorPairIndex.file},
+    )
+
+    setColorValue(win.state, idx, "#999999")
+
+    check themeColors[EditorColorPairIndex.default].foreground.rgb == rgb("#999999")
+    check themeColors[EditorColorPairIndex.file].foreground.rgb == rgb("#999999")
+    check EditorColorPairIndex.file in themeSource.omittedFg
+    check EditorColorPairIndex.file in themeSource.omittedBg
+
 suite "Config view - rows shown or hidden by a change elsewhere":
   test "a key refreshes the rows and keeps the selection on its row":
     let e = createTestEditor()

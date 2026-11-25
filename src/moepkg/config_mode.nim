@@ -461,6 +461,9 @@ proc setColorValue*(state: ConfigModeState, itemIndex: int, value: string) =
     colors[item.colorIndex].foreground = ThemeColor(rgb: parsed.get)
   else:
     colors[item.colorIndex].background = ThemeColor(rgb: parsed.get)
+  var source = themeSource
+  colors.noteThemeColorEdited(source, item.colorIndex, item.colorIsFg)
+  themeSource = source
   setThemeColors(colors)
 
 # State management

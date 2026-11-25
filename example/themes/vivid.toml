@@ -125,9 +125,7 @@ inlayHint = { fg = "#808080" }
 codeLens = { fg = "#808080" }
 
 currentFile = { fg = "#ffffff", bg = "#ff0087" }
-file = { fg = "#ffffff", bg = "#000000" }
-dir = { fg = "#ff0087", bg = "#000000" }
-pcLink = { fg = "#00ffff", bg = "#000000" }
+file = { fg = "#f8f5d5" }
 
 popupWindow = { fg = "#ffffff", bg = "#000000" }
 popupWinCurrentLine = { fg = "#ffffff", bg = "#444444" }
