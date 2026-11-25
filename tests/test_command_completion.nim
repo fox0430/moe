@@ -24,6 +24,7 @@ import pkg/celina
 import ../src/moepkg/[command_line, command_config, fuzzy_match]
 import ../src/moepkg/command_completion {.all.}
 import ../src/moepkg/syntax/tokenizer
+import config_test_helper
 
 suite "CommandCompletion - extractCommandPrefix":
   test "Extract prefix from simple command :wq":
@@ -135,6 +136,70 @@ suite "CommandCompletion - collectSyntaxLanguages":
 
   test "Nothing matches an unknown name":
     check collectSyntaxLanguages("xyz123").len == 0
+
+suite "CommandCompletion - theme names":
+  template withThemes(files: openArray[string], body: untyped) =
+    ## Run `body` with a home directory whose theme files are `files`.
+    withTempHome(home):
+      let themesDir {.inject.} = home / ".config" / "moe" / "themes"
+      createDir(themesDir)
+      for file in files:
+        writeFile(themesDir / file, "")
+      body
+
+  test "The built-in theme and the theme files, alphabetically":
+    withThemes(
+      [
+        "light.toml", "dark.toml", "default.toml", ".hidden.toml", "two words.toml",
+        "notes.txt",
+      ]
+    ):
+      createDir(themesDir / "dir.toml")
+      check collectThemeNames("").mapIt(it.command) == @["dark", "default", "light"]
+      check collectThemeNames("li").mapIt(it.command) == @["light"]
+      check collectThemeNames("xyz123").len == 0
+
+  test "Only the built-in theme without a themes directory":
+    withThemes(["dark.toml"]):
+      removeDir(themesDir)
+      check collectThemeNames("").mapIt(it.command) == @["default"]
+
+  test ":theme completes its first word only":
+    withThemes(["dark.toml"]):
+      let mgr = newCommandCompletionManager()
+      mgr.triggerArgumentCompletion(":theme ")
+      check mgr.isActive
+      check mgr.mode == cmThemeName
+      check mgr.argStartX == ":theme ".len
+      check mgr.menu.entries.mapIt(it.command) == @["dark", "default"]
+
+      mgr.triggerArgumentCompletion(":theme dar")
+      check mgr.menu.entries.mapIt(it.command) == @["dark"]
+
+      mgr.triggerArgumentCompletion(":theme dark ")
+      check not mgr.isActive
+
+  test "More than one space may precede the name":
+    withThemes(["dark.toml"]):
+      let mgr = newCommandCompletionManager()
+      mgr.triggerArgumentCompletion(":theme  ")
+      check mgr.menu.entries.mapIt(it.command) == @["dark", "default"]
+
+      mgr.triggerArgumentCompletion(":theme  dar")
+      check mgr.isActive
+      check mgr.menu.entries.mapIt(it.command) == @["dark"]
+
+      mgr.triggerArgumentCompletion(":theme  dark ")
+      check not mgr.isActive
+
+  test ":picker also takes more than one space before its source":
+    let mgr = newCommandCompletionManager()
+    mgr.triggerArgumentCompletion(":picker  ")
+    check mgr.isActive
+    check mgr.mode == cmPickerSource
+
+    mgr.triggerArgumentCompletion(":picker  resume ")
+    check not mgr.isActive
 
 suite "CommandCompletion - newCommandCompletionManager":
   test "Create idle manager":

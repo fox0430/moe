@@ -32,6 +32,7 @@ import
 
 import types/command_completion_types
 import picker/catalog
+from theme import DefaultThemeName, ThemeFileExt, userThemesDir
 from syntax/tokenizer import
   SourceLanguage, sourceLanguageToFiletype, sourceLanguageToStr
 export command_completion_types
@@ -168,6 +169,10 @@ proc extractCommandPrefix*(commandText: string): string =
   ## Extract the command prefix from commandText (after ":")
   ## Example: ":wq" -> "wq", ":set num" -> "set"
   parseCommandLine(commandText).cmd
+
+proc isPastFirstArgument(commandText, cmd: string): bool =
+  ## Whether the first argument of `cmd` is over, by whitespace after it.
+  commandText.substr(2 + cmd.len).strip(trailing = false).contains(Whitespace)
 
 proc fullCommandName(cmd: string): string =
   if cmd in CommandAbbreviations:
@@ -340,6 +345,33 @@ proc collectPickerSources*(prefix: string): seq[CommandCompletionEntry] =
       command: PickerResume, description: PickerResumeDescription
     )
 
+proc collectThemeNames*(prefix: string): seq[CommandCompletionEntry] =
+  ## The names `:theme` takes that `prefix` matches: the built-in theme and the
+  ## user's theme files.
+  var matches: seq[(string, string)]
+  if fuzzyMatch(prefix, DefaultThemeName):
+    matches.add (DefaultThemeName, "Built-in theme")
+  let themesDir = userThemesDir()
+  if dirExists(themesDir):
+    try:
+      # Without `checkDir` an unreadable directory looks empty.
+      for _, path in walkDir(themesDir, checkDir = true):
+        let (_, name, ext) = splitFile(path)
+        # `:theme` takes one word, and "default" is always the built-in theme.
+        if ext != ThemeFileExt or name.startsWith(".") or name == DefaultThemeName or
+            name.contains(Whitespace):
+          continue
+        # Runs on every key, so only the matches are stat'ed.
+        if fuzzyMatch(prefix, name) and fileExists(path):
+          matches.add (name, "Theme file")
+    except OSError as e:
+      logDebug "command_completion", "Failed to scan themes for completion: " & e.msg
+  for (name, description) in matches:
+    result.add CommandCompletionEntry(
+      command: name, description: description, matchScore: matchScore(prefix, name)
+    )
+  result.sortByScore()
+
 # Completion menu operations
 
 proc newCommandCompletionManager*(): CommandCompletionManager =
@@ -444,11 +476,20 @@ proc triggerArgumentCompletion*(
     mgr.originalDirPrefix = ""
   elif name == "picker":
     # Only the source: what follows it is the source's own.
-    if commandText.substr(2 + cmd.len).contains({' ', '\t'}):
+    if commandText.isPastFirstArgument(cmd):
       mgr.state = ccsIdle
       return
     mgr.mode = cmPickerSource
     mgr.menu.entries = collectPickerSources(arg)
+    mgr.argStartX = baseArgX
+    mgr.originalDirPrefix = ""
+  elif name == "theme":
+    # `:theme` takes a single name.
+    if commandText.isPastFirstArgument(cmd):
+      mgr.state = ccsIdle
+      return
+    mgr.mode = cmThemeName
+    mgr.menu.entries = collectThemeNames(arg)
     mgr.argStartX = baseArgX
     mgr.originalDirPrefix = ""
   elif name in FilePathCommands:

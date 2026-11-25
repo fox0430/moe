@@ -34,6 +34,7 @@ import
     editor_build_jobs, path_key, cursor_util, fold_open, pending_input,
   ]
 import ../command_registry/core
+from ../theme import DefaultThemeName, ThemeFileExt, userThemesDir
 
 when not defined(moe.embedded):
   import ../[editor_window_layout, editor_window_tab, terminal_mode]
@@ -842,14 +843,14 @@ proc enterTerminalInActiveWindow*(e: Editor, command: string) =
 proc applyThemeCommand*(e: Editor, themeName: string) =
   ## Apply a `:theme` selection via `initTheme` so `config.theme` and
   ## `themeColors` stay in sync before saveConfigToToml.
-  if themeName == "default":
+  if themeName == DefaultThemeName:
     e.config.theme.kind = tkDefault
     e.config.theme.path = ""
     initTheme(e.config)
     e.state.statusMessage = "Theme changed to: default"
     return
 
-  let themePath = getHomeDir() / ".config" / "moe" / "themes" / (themeName & ".toml")
+  let themePath = userThemesDir() / (themeName & ThemeFileExt)
   if not fileExists(themePath):
     e.state.statusMessage = "Theme not found: " & themeName
     return

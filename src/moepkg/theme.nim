@@ -21,7 +21,17 @@
 ##
 ## This module provides the default dark theme and the bundled light theme.
 
+import std/os
+
 import color
+
+const
+  DefaultThemeName* = "default" ## The `:theme` name of the built-in colors
+  ThemeFileExt* = ".toml"
+
+proc userThemesDir*(): string =
+  ## Where `:theme` looks for theme files.
+  getHomeDir() / ".config" / "moe" / "themes"
 
 proc makeColorPair(fg, bg: string): ColorPair =
   ## Helper to create a ColorPair from two hex color strings

@@ -6946,6 +6946,19 @@ suite "The prompts edit their line as Vim's getcmdline":
     check not e.state.isCommandOverlay
     check e.activeBuffer.syntaxLanguage == langJavaScript
 
+  test "Tab completes the name after :theme and Enter runs it":
+    withTempHome(tmpDir):
+      let e = createEditorForLine()
+      e.press([":", "t", "h", "e", "m", "e", "Space"])
+      check e.state.commandCompletionManager.isActive()
+
+      e.press(["d", "e", "f", "a", "u", "Tab"])
+      check e.state.input.line.text == "theme default"
+
+      e.press(["Return"])
+      check not e.state.isCommandOverlay
+      check e.state.statusMessage == "Theme changed to: default"
+
   test ":set syntax off then :set syntax python highlights the buffer again":
     let e = createEditorForLine()
     e.activeBuffer.language = langPython

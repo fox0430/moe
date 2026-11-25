@@ -35,6 +35,7 @@ type
     cmSetOption ## Completing :set options
     cmSetValue ## Completing the value after `:set {option}=`
     cmPickerSource ## Completing the source of :picker
+    cmThemeName ## Completing the name after :theme
 
   CommandCompletionEntry* = object ## A single completion entry
     command*: string ## The command text (without :)
