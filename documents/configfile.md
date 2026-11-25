@@ -103,6 +103,7 @@ ignoring case and `_`. `${filetype}` expands to `Name`.
 | Name | Display name | Aliases |
 |:---|:---|:---|
 | astro | Astro |  |
+| bash | Bash | sh |
 | c | C |  |
 | commiteditmsg | COMMIT_EDITMSG |  |
 | cpp | C++ | cxx |
@@ -129,7 +130,6 @@ ignoring case and `_`. `${filetype}` expands to `Name`.
 | nim | Nim |  |
 | python | Python | py |
 | rust | Rust | rs |
-| shell | Shell | sh, bash |
 | tcl | Tcl |  |
 | toml | Toml |  |
 | tsx | TypeScriptReact |  |
@@ -161,7 +161,7 @@ ignoring case and `_`. `${filetype}` expands to `Name`.
 | showModifiedLines | bool | true | Show modified/inserted line indicators in sidebars |
 | autoCloseParen | bool | true | Automatic closing brackets and quotes. Typing a closing character before the same one steps over it. After a backslash that is not itself escaped a bracket or quote goes in as typed, as does a single quote after a word character, except in Python after a whole string prefix such as f or rb |
 | autoIndent | bool | true | Automatic indentation |
-| smartIndent | bool | false | Language-aware indent on Enter, o, O and a typed closer: by brackets in code languages, plus block words (if/then/fi, do/done, case/esac) in Shell and Zsh, and var/let/const/type, trailing or/and/object/tuple/enum and trailing `:` or `=` in Nim |
+| smartIndent | bool | false | Language-aware indent on Enter, o, O and a typed closer: by brackets in code languages, plus block words (if/then/fi, do/done, case/esac) in Bash and Zsh, and var/let/const/type, trailing or/and/object/tuple/enum and trailing `:` or `=` in Nim |
 | ignorecase | bool | true | Enable ignorecase when searching |
 | smartcase | bool | true | Enable smartcase when searching |
 | forceInsertMode | bool | false | Keep editable buffers in Insert mode; Ctrl-O opens the command line |

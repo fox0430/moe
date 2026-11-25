@@ -644,7 +644,7 @@ suite "Editor - editFile":
       (getTempDir() / "moe_test_new.c", SourceLanguage.langC),
       (getTempDir() / "moe_test_new.cpp", SourceLanguage.langCpp),
       (getTempDir() / "moe_test_new.md", SourceLanguage.langMarkdown),
-      (getTempDir() / "moe_test_new.sh", SourceLanguage.langShell),
+      (getTempDir() / "moe_test_new.sh", SourceLanguage.langBash),
     ]
 
     for (path, expectedLang) in cases:

@@ -340,6 +340,7 @@ type
   SourceLanguage* = enum
     langNone
     langAstro
+    langBash
     langC
     langCommitEditMsg
     langCpp
@@ -364,7 +365,6 @@ type
     langNim
     langPython
     langRust
-    langShell
     langTcl
     langToml
     langYaml
@@ -401,6 +401,7 @@ const
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     langNone: "none",
     langAstro: "Astro",
+    langBash: "Bash",
     langC: "C",
     langCommitEditMsg: "COMMIT_EDITMSG",
     langCpp: "C++",
@@ -425,7 +426,6 @@ const
     langNim: "Nim",
     langPython: "Python",
     langRust: "Rust",
-    langShell: "Shell",
     langTcl: "Tcl",
     langToml: "Toml",
     langYaml: "Yaml",
@@ -464,8 +464,7 @@ const sourceLanguageAliases* = [
   ("ts", langTypeScript),
   ("py", langPython),
   ("rs", langRust),
-  ("sh", langShell),
-  ("bash", langShell),
+  ("sh", langBash),
   ("yml", langYaml),
   ("docker", langDockerfile),
   ("md", langMarkdown),

@@ -1341,8 +1341,8 @@ suite "Incremental Highlight Fuzz":
   test "YAML: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langYaml, yamlCorpus(), iters, baseSeed)
 
-  test "Shell: incremental output matches full reparse under random edits":
-    check runFuzz(SourceLanguage.langShell, shellCorpus(), iters, baseSeed)
+  test "Bash: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langBash, shellCorpus(), iters, baseSeed)
 
   test "Zsh: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langZsh, zshCorpus(), iters, baseSeed)
@@ -1534,8 +1534,8 @@ suite "Incremental Highlight Line-Bounded Strings":
   # so the lines below resume as code.
   const EscapeBeforeEol = @["x=\"a \\6", "more\"", "ls -la", "pwd", "echo done"]
 
-  test "Shell: editing below a two-line string resumes line-bounded":
-    check checkResumeEquivalence(MultiLineString, 3, "cd /tmp", langShell, "shell")
+  test "Bash: editing below a two-line string resumes line-bounded":
+    check checkResumeEquivalence(MultiLineString, 3, "cd /tmp", langBash, "bash")
 
   test "Zsh: editing below a two-line string resumes line-bounded":
     check checkResumeEquivalence(MultiLineString, 3, "cd /tmp", langZsh, "zsh")
@@ -1546,8 +1546,8 @@ suite "Incremental Highlight Line-Bounded Strings":
   test "Tcl: editing below a two-line string resumes line-bounded":
     check checkResumeEquivalence(MultiLineString, 3, "cd /tmp", langTcl, "tcl")
 
-  test "Shell: escape ending at EOL does not emit an empty token":
-    check checkResumeEquivalence(EscapeBeforeEol, 3, "cd /tmp", langShell, "shell esc")
+  test "Bash: escape ending at EOL does not emit an empty token":
+    check checkResumeEquivalence(EscapeBeforeEol, 3, "cd /tmp", langBash, "bash esc")
 
   test "Zsh: escape ending at EOL does not emit an empty token":
     check checkResumeEquivalence(EscapeBeforeEol, 3, "cd /tmp", langZsh, "zsh esc")
@@ -1670,7 +1670,7 @@ suite "Monotonic-advance guard":
       (SourceLanguage.langHtml, htmlCorpus()),
       (SourceLanguage.langXml, xmlCorpus()),
       (SourceLanguage.langAstro, astroCorpus()),
-      (SourceLanguage.langShell, shellCorpus()),
+      (SourceLanguage.langBash, shellCorpus()),
       (SourceLanguage.langZsh, zshCorpus()),
       (SourceLanguage.langFish, fishCorpus()),
       (SourceLanguage.langTcl, tclCorpus()),

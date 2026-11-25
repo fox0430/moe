@@ -883,6 +883,11 @@ suite "syntax_markdown - fence lines":
     check tokens.count((gtCodeFence, "```")) == 2
     check (gtHeading, "#") in tokens
 
+  test "a ```shell block is highlighted as ```bash":
+    for name in ["shell", "Shell"]:
+      let tokens = collectTokens("```" & name & "\nif a; then b; fi\n```")
+      check (gtKeyword, "then") in tokens
+
   test "a heredoc in an indented ```sh block ends at its indented marker":
     let tokens =
       collectTokens("- item\n\n  ```sh\n  cat <<EOF\n  x\n  EOF\n  echo a\n  ```")

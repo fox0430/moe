@@ -61,7 +61,7 @@ proc languageExtension(lang: SourceLanguage): Result[string, string] =
     Result[string, string].ok "c"
   of SourceLanguage.langCpp:
     Result[string, string].ok "cpp"
-  of SourceLanguage.langShell:
+  of SourceLanguage.langBash:
     # sh is handled by the caller (isSh), so a temp file for a sh script
     # never gets a bash extension. TODO: Add support for other shells.
     Result[string, string].ok "bash"
@@ -253,7 +253,7 @@ proc builtinQuickRunCommand(
     command = clangQuickRunCommand(path, programPath(workDir, path), settings)
   of SourceLanguage.langCpp:
     command = cppQuickRunCommand(path, programPath(workDir, path), settings)
-  of SourceLanguage.langShell:
+  of SourceLanguage.langBash:
     if buffer.isSh:
       command = ?shQuickRunCommand(path, settings)
     else:
@@ -346,7 +346,7 @@ proc quickRunEntryFor*(
   none(QuickRunEntry)
 
 proc builtinTempExtension(buffer: TextBuffer): Result[string, string] =
-  if buffer.language == SourceLanguage.langShell and buffer.isSh:
+  if buffer.language == SourceLanguage.langBash and buffer.isSh:
     Result[string, string].ok "sh"
   else:
     buffer.language.languageExtension

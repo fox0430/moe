@@ -3247,8 +3247,8 @@ suite "Highlight - detectLanguage":
       ".bashrc", ".bash_profile", "bash_profile", ".bash_login", ".bash_logout",
       ".bash_aliases", ".profile",
     ]:
-      check detectLanguage(name) == SourceLanguage.langShell
-      check detectLanguage("/home/user/" & name) == SourceLanguage.langShell
+      check detectLanguage(name) == SourceLanguage.langBash
+      check detectLanguage("/home/user/" & name) == SourceLanguage.langBash
 
   test "detectLanguage for zsh startup files":
     for name in [".zshrc", ".zprofile", "zprofile", ".zshenv", ".zlogin", ".zlogout"]:
@@ -3343,9 +3343,9 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for Rust":
     check detectLanguage("test.rs") == SourceLanguage.langRust
 
-  test "detectLanguage for Shell":
+  test "detectLanguage for Bash":
     for ext in [".bash", ".sh"]:
-      check detectLanguage("script" & ext) == SourceLanguage.langShell
+      check detectLanguage("script" & ext) == SourceLanguage.langBash
 
   test "detectLanguage for Fish":
     check detectLanguage("config.fish") == SourceLanguage.langFish
@@ -6889,8 +6889,8 @@ suite "Highlight - shell heredoc at a chunk boundary":
 
   test "a re-parse chunk ending on the heredoc's first line":
     for row in ChunkSize - 4 .. ChunkSize:
-      check reparsedFromTop(placedAt(row, Heredoc), langShell)
-      check reparsedFromTop(placedAt(row, ContinuedHeredoc), langShell)
+      check reparsedFromTop(placedAt(row, Heredoc), langBash)
+      check reparsedFromTop(placedAt(row, ContinuedHeredoc), langBash)
       check reparsedFromTop(placedAt(row, Heredoc), langZsh)
 
   test "a heredoc in a Markdown code block at a re-parse chunk's end":
@@ -6925,7 +6925,7 @@ suite "Highlight - shell heredoc at a chunk boundary":
 
   test "the initial load's chunk ending on the heredoc's first line":
     for row in initialFrontier - 1 .. initialFrontier + 1:
-      for (lang, ext) in [(langShell, ".sh"), (langZsh, ".zsh")]:
+      for (lang, ext) in [(langBash, ".sh"), (langZsh, ".zsh")]:
         let buf = loaded(placedAt(row, Heredoc), ext)
         check buf.frontier == initialFrontier
         check buf.finishedAsFullParse(0, lang)
@@ -6951,7 +6951,7 @@ suite "Highlight - shell heredoc at a chunk boundary":
     for row in initialFrontier - 1 .. firstTickEnd + 1:
       buf = loaded(placedAt(row, Heredoc), ".sh")
       check buf.frontier == initialFrontier
-      check buf.finishedAsFullParse(Budget, langShell)
+      check buf.finishedAsFullParse(Budget, langBash)
 
     # Every header row that puts a line of the chain on the initial chunk's
     # last row, `| sort` (whose line break starts the body) included, plus one
@@ -6959,7 +6959,7 @@ suite "Highlight - shell heredoc at a chunk boundary":
     for row in initialFrontier - chain.len + 4 .. initialFrontier + 1:
       buf = loaded(placedAt(row, chain), ".sh")
       check buf.frontier == initialFrontier
-      check buf.finishedAsFullParse(Budget, langShell)
+      check buf.finishedAsFullParse(Budget, langBash)
 
 suite "initHighlight: Java word colors":
   test "literals, primitive types and keywords take their own colors":

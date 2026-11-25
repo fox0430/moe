@@ -82,7 +82,7 @@ proc languageNextToken(g: var GeneralTokenizer, lang: SourceLanguage) =
     g.pythonNextToken
   of langRust:
     g.rustNextToken
-  of langShell:
+  of langBash:
     g.shellNextToken
   of langTcl:
     g.tclNextToken
