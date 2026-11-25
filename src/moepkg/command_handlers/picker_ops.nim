@@ -76,7 +76,8 @@ proc processPickerOpen*(e: Editor, r: HandlerResult, subject: JumpSubject): bool
     e.focusWindow(origin)
   if e.activeWindow.viewerEntry.isSome:
     discard e.leaveViewerModeForJump(e.activeWindow.mode)
-  let opened = e.jumpTo(subject, none(TargetPosition), r.pickerPlacement)
+  let opened =
+    e.jumpTo(subject, none(TargetPosition), r.pickerPlacement, asSplitFile = true)
   if opened.isErr:
     e.state.statusMessage = opened.error
     e.state.beep()

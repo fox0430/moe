@@ -583,10 +583,11 @@ deleting a buffer never renumbers the others.
 current one. Each window has its own. A split of the same buffer takes over the
 alternate of the window it was split from. After `:sp filename` or `:vs filename`
 opens another buffer, that buffer is the alternate of the window split, and the
-buffer split from is the alternate of the new window. Unlike in Vim, `:b #` does
-not reopen a deleted buffer: once the alternate is deleted, it reports
-`E23: No alternate file`. Deleting the current buffer can also leave the window
-without an alternate.
+buffer split from is the alternate of the new window. A file opened in a split
+from the picker does the same; an item of `buffers` leaves the alternate of the
+window split as it was. Unlike in Vim, `:b #` does not reopen a deleted buffer:
+once the alternate is deleted, it reports `E23: No alternate file`. Deleting the
+current buffer can also leave the window without an alternate.
 
 When `:b name` or `:bd name` matches several buffers equally, it reports
 `E93: More than one match`; use the number from `:ls` or a longer path instead.

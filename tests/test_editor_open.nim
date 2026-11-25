@@ -23,8 +23,12 @@ import std/[unittest, os, options, strutils]
 
 import pkg/results
 
-import ../src/moepkg/[editor, config, config_loader, types, editor_open]
+import
+  ../src/moepkg/
+    [editor, config, config_loader, types, editor_open, window_manager, editor_window]
 import ../src/moepkg/command_handlers/[handler_result, result_processor]
+import ../src/moepkg/command_handlers/editor_ops
+import ../src/moepkg/editor_window_state
 
 proc createTestEditor(): Editor =
   newEditor(newEditorConfig(), newValidationResult())
@@ -169,6 +173,93 @@ suite "editor_open - jumpToFile":
       check e.activeWindow == original
       check e.buffers.len == buffers
       check e.state.jumpList.list.len == jumps
+
+suite "editor_open - the alternate of the window split":
+  proc twoFiles(): tuple[e: Editor, a, b: BufferId, other: string] =
+    ## `a` shown with no alternate, `b` open as another buffer and a third file.
+    let e = createTestEditor()
+    let a = e.activeWindow.tabBufferId
+    check e.enew().isOk
+    let b = e.activeWindow.tabBufferId
+    check e.switchToBuffer($a.int)
+    e.activeWindow.alternateBufferId = BufferId(0)
+    (e, a, b, tempFile("moe_test_open_alternate.txt", "x\n"))
+
+  proc pick(e: Editor, target: PickerTarget, placement: ViewerPlacement) =
+    discard e.processResult(
+      HandlerResult(
+        kind: hrPickerOpen,
+        pickerTarget: target,
+        pickerPlacement: placement,
+        pickerOrigin: e.activeWindow,
+      ),
+      e.activeBuffer(),
+    )
+
+  proc file(path: string): PickerTarget =
+    PickerTarget(kind: ptkFile, path: path)
+
+  test "a file picked into a split becomes it":
+    for placement in [vpVSplit, vpHSplit]:
+      let (e, a, _, other) = twoFiles()
+      defer:
+        removeFile(other)
+      let origin = e.activeWindow
+      e.pick(file(other), placement)
+      check e.windowManager.windows.len == 2
+      check e.activeBuffer().filePath == some(other)
+      check origin.alternateBufferId == e.activeWindow.tabBufferId
+      check e.activeWindow.alternateBufferId == a
+
+  test "a buffer picked into a split does not":
+    let (e, a, b, other) = twoFiles()
+    defer:
+      removeFile(other)
+    let origin = e.activeWindow
+    e.pick(PickerTarget(kind: ptkBuffer, buffer: b), vpVSplit)
+    check e.windowManager.windows.len == 2
+    check e.activeWindow.tabBufferId == b
+    check origin.alternateBufferId == BufferId(0)
+    check e.activeWindow.alternateBufferId == a
+
+  test "a jump into a split does not":
+    let (e, _, _, other) = twoFiles()
+    defer:
+      removeFile(other)
+    let origin = e.activeWindow
+    check e.jumpToFile(other, at(0, 0), vpVSplit) == outcome(ooOpened)
+    check origin.alternateBufferId == BufferId(0)
+
+  test "a file picked from the sidebar becomes that of the window it serves":
+    let (e, _, _, other) = twoFiles()
+    defer:
+      removeFile(other)
+    let served = e.activeWindow
+    e.toggleFileTree(none(string), e.activeBuffer())
+    e.windowManager.activateWindow(0)
+    e.syncActiveWindow()
+    let side = e.activeWindow
+    check side.isSidebar
+    e.pick(file(other), vpVSplit)
+    check e.windowManager.windows.len == 3
+    check served.alternateBufferId == e.activeWindow.tabBufferId
+    check side.alternateBufferId == BufferId(0)
+
+  test "a file picked from a lone sidebar leaves the sidebar none":
+    let (e, _, _, other) = twoFiles()
+    defer:
+      removeFile(other)
+    e.toggleFileTree(none(string), e.activeBuffer())
+    e.windowManager.activateWindow(1)
+    e.syncActiveWindow()
+    discard e.closeWindow()
+    let side = e.activeWindow
+    check side.isSidebar
+    check e.windowManager.windows.len == 1
+    e.pick(file(other), vpVSplit)
+    check e.windowManager.windows.len == 2
+    check e.activeBuffer().filePath == some(other)
+    check side.alternateBufferId == BufferId(0)
 
 suite "editor_open - opening the path under the cursor":
   test "opens a file URI where :e would":
