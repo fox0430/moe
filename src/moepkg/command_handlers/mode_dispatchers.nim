@@ -224,7 +224,7 @@ proc typeReindent*(manager: HandlerManager, editor: Editor): HandlerResult =
   let state = editor.state
   state.noteOutsideChange()
   state.anchorEdits(editor.activeBuffer)
-  let r = reindentTypedCloser(editor.activeBuffer, state)
+  let r = reindentTyped(editor.activeBuffer, state)
   if r.isErr:
     editor.activeBuffer.dropEditAnchor()
     return HandlerResult(kind: hrError, errorMessage: r.error)
@@ -253,9 +253,6 @@ proc handleInsertMode*(
   let buffer = editor.activeBuffer
   let state = editor.state
   state.noteOutsideChange()
-  let
-    cursorBefore = state.cursor
-    versionBefore = buffer.contentVersion
   let r = manager.insertHandler.handleInsertModeKey(buffer, state, keyCombo)
   case r.kind
   of imrHandled:
@@ -300,8 +297,8 @@ proc handleInsertMode*(
 
       return manager.leaveInsert(editor, r.modeTransition.get)
     state.noteKey(
-      buffer, keyCombo, r.typedBefore, r.keyConsumed, r.moves, cursorBefore,
-      versionBefore,
+      buffer, keyCombo, r.typedBefore, r.keyConsumed, r.moves,
+      manager.insertHandler.keyStart.cursor, manager.insertHandler.keyStart.version,
     )
     state.settleTyping()
     return HandlerResult(

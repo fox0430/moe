@@ -397,6 +397,7 @@ proc handlePasteText(e: Editor, text: string): bool =
 
     e.state.noteOutsideChange()
     let pos = e.cursor
+    let moved = activeBuffer.takeReindentedWord(e.state)
     e.state.anchorEdits(activeBuffer)
     let insertResult = activeBuffer.insertTextEnd(pos, pastedText, foldJoin = fjPasted)
     if insertResult.isErr:
@@ -415,6 +416,14 @@ proc handlePasteText(e: Editor, text: string): bool =
     e.state.openFoldsOfEdits(activeBuffer)
     # Record it as typed, so `.` types the pasted text.
     e.state.noteTypedText(pastedText, pos, fjPasted)
+    if moved.isSome and '\n' notin pastedText:
+      # Pasted onto a block word, it may be one no more.
+      activeBuffer.keepReindentedWord(e.state, moved)
+      let reindented = activeBuffer.reindentTyped(e.state)
+      if reindented.isErr:
+        e.state.statusMessage = reindented.error
+      e.state.noteReindent()
+      e.state.settleTyping()
 
     if ownTransaction:
       let commitResult = activeBuffer.commitTransaction()

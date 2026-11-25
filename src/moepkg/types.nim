@@ -404,6 +404,7 @@ type
     visualBlockInsertContext*: Option[VisualBlockInsertContext]
       # Context for visual block insert/append/change replication
     autoIndentedLine*: Option[AutoIndentedLine]
+    reindentedWord*: Option[ReindentedWord]
 
   PendingSemanticTokensRequest* = object
     ## Semantic-tokens-specific extras (legend, viewport, range) captured at
@@ -750,6 +751,12 @@ type
       # contentVersion once the indent went in: while it holds, nothing was
       # typed there. Enter takes the indent off, and so do Escape and a move
       # unless text Enter carried down follows it
+
+  ReindentedWord* = object ## A block word that moved its line's indent
+    buffer*: BufferId
+    version*: int # contentVersion once the indent moved: nothing typed since
+    cursor*: BufferPosition # Right after the word
+    indent*: string # Before it moved, for a word typed on past it
 
   InsertEntryKind* = enum
     ## The command a change entered Insert mode with, which `.` runs again

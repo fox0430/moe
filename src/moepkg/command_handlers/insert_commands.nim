@@ -429,8 +429,12 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string
   let autoIndent = state.autoIndent and buffer.allowsTextTransforms
   if autoIndent:
     indent = getLineIndent(lineContent)
-    if state.smartIndent and buffer.opensAboveDeeper(currentLine):
-      indent = state.rebuiltIndent(indent, steps = 1)
+    if state.smartIndent:
+      let above = buffer.aboveIndent(currentLine)
+      if above.alignTo >= 0:
+        indent = getLineIndent(buffer.getLine(above.alignTo))
+      if above.alignTo >= 0 or above.steps > 0:
+        indent = state.rebuiltIndent(indent, steps = above.steps)
     if indent.len > 0:
       textToInsert = indent & "\n"
 
@@ -590,35 +594,96 @@ proc changeIndent*(
 
   buffer.applyIndent(state, newIndent, column)
 
-proc reindentTypedCloser*(
+proc takeReindentedWord*(
+    buffer: TextBuffer, state: EditorState
+): Option[ReindentedWord] =
+  ## The block word before the cursor that moved its line's indent, none when
+  ## anything else changed or moved since.
+  result = state.editState.reindentedWord
+  state.editState.reindentedWord = none(ReindentedWord)
+  if result.isSome and (
+    result.get.buffer != buffer.id or result.get.version != buffer.contentVersion or
+    result.get.cursor != state.cursor
+  ):
+    result = none(ReindentedWord)
+
+proc keepReindentedWord*(
+    buffer: TextBuffer, state: EditorState, moved: Option[ReindentedWord]
+) =
+  ## Remember `moved`, taken before text was typed or deleted after the indent
+  ## of the cursor's line.
+  state.editState.reindentedWord = moved
+  if moved.isSome:
+    state.editState.reindentedWord.get.version = buffer.contentVersion
+    state.editState.reindentedWord.get.cursor = state.cursor
+
+template keepingReindentedWord*(buffer: TextBuffer, state: EditorState, body: untyped) =
+  ## Run `body`, which deletes text, and keep the block word remembered while
+  ## the cursor's line and its indent stay as they were.
+  block:
+    let
+      moved = buffer.takeReindentedWord(state)
+      line = state.cursor.line
+      indent = getLineIndent(buffer.getLine(line))
+    body
+    if state.cursor.line == line and getLineIndent(buffer.getLine(line)) == indent:
+      buffer.keepReindentedWord(state, moved)
+
+proc reindentTyped*(
     buffer: TextBuffer, state: EditorState
 ): Result[Option[tuple[before, after: int]], string] =
-  ## After a closer typed as the first non-blank of its line, the line takes
-  ## the indent of the line with the opener it closes, as Vim's 'smartindent'
-  ## does for `}` and Neovim's indent scripts for every closer. The lengths of
-  ## the indent before and after, when it changed.
+  ## After a closer typed as the first non-blank of its line, or a word that
+  ## closes a block, the line takes the indent of the line with the opener it
+  ## closes, as Vim's 'smartindent' does for `}` and Neovim's indent scripts
+  ## for the rest. Typed on, one that is none after all (`find`, `done)` as
+  ## a pattern) gives the indent back, for which the typing keeps the word (see
+  ## keepReindentedWord). The lengths of the indent before and after, when it
+  ## changed.
+  const Unchanged = none(tuple[before, after: int])
   if not (state.smartIndent and state.autoIndent and buffer.allowsTextTransforms):
-    return ok(none(tuple[before, after: int]))
+    return ok(Unchanged)
   # A block insert copies what was typed to the other lines; Vim's can_si is
   # off there too.
   if state.editState.visualBlockInsertContext.isSome:
-    return ok(none(tuple[before, after: int]))
+    return ok(Unchanged)
   let
     pos = state.cursor
-    indent = getLineIndent(buffer.getLine(pos.line))
-  if pos.column != indent.len + 1:
-    return ok(none(tuple[before, after: int]))
-  let alignTo = buffer.closerAlignLine(pos.line, indent.len)
-  if alignTo < 0:
-    return ok(none(tuple[before, after: int]))
-  let newIndent = state.rebuiltIndent(getLineIndent(buffer.getLine(alignTo)))
+    text = buffer.getLine(pos.line)
+    indent = getLineIndent(text)
+    moved = buffer.takeReindentedWord(state)
+  if pos.column <= indent.len:
+    return ok(Unchanged)
+  # Only words, all ASCII, are matched past the indent.
+  let alignTo = buffer.typedAlignLine(pos.line, pos.column)
+  var
+    newIndent = indent
+    aligned = alignTo >= 0
+  if aligned:
+    newIndent = state.rebuiltIndent(getLineIndent(buffer.getLine(alignTo)))
+  elif moved.isSome:
+    # With more typed after it, the word is still one.
+    aligned = buffer.leadingWordAlignLine(pos.line) >= 0
+    if not aligned:
+      newIndent = moved.get.indent
   if newIndent == indent:
-    return ok(none(tuple[before, after: int]))
-  # The typed text starts at the closer, so the indent change moves it along.
-  state.stopArrow(BufferPosition(line: pos.line, column: indent.len))
-  let applied = buffer.applyIndent(state, newIndent, newIndent.len + 1)
+    if aligned:
+      buffer.keepReindentedWord(state, moved)
+    return ok(Unchanged)
+  # The typed text starts at the character, so the indent change moves it along.
+  state.stopArrow(BufferPosition(line: pos.line, column: pos.column - 1))
+  let applied =
+    buffer.applyIndent(state, newIndent, newIndent.len + pos.column - indent.len)
   if applied.isErr:
     return err(applied.error)
+  if alignTo >= 0 and buffer.isBlockWord(text[indent.len ..< pos.column]):
+    state.editState.reindentedWord = some(
+      ReindentedWord(
+        buffer: buffer.id,
+        version: buffer.contentVersion,
+        cursor: state.cursor,
+        indent: indent,
+      )
+    )
   ok(some((indent.len, newIndent.len)))
 
 proc stepToAppend*(buffer: TextBuffer, state: EditorState) =
@@ -699,15 +764,17 @@ proc deleteTypedBefore(
 
 proc deleteWordBackward*(buffer: TextBuffer, state: EditorState) =
   ## Ctrl-W in Insert mode
-  let r = buffer.deleteTypedBefore(state, buWord)
-  if r.isErr:
-    state.statusMessage = r.error
+  buffer.keepingReindentedWord(state):
+    let r = buffer.deleteTypedBefore(state, buWord)
+    if r.isErr:
+      state.statusMessage = r.error
 
 proc deleteToLineStart*(buffer: TextBuffer, state: EditorState) =
   ## Ctrl-U in Insert mode
-  let r = buffer.deleteTypedBefore(state, buLine)
-  if r.isErr:
-    state.statusMessage = r.error
+  buffer.keepingReindentedWord(state):
+    let r = buffer.deleteTypedBefore(state, buLine)
+    if r.isErr:
+      state.statusMessage = r.error
 
 proc charsBetween*(buffer: TextBuffer, a, b: BufferPosition): int =
   ## Characters from `a` up to `b`, a line break counting as one. 0 when `b`
@@ -756,6 +823,7 @@ proc typeTextAgain*(
   ## Put the text `.` recorded in at the cursor, in place of the characters it
   ## replaced, as it came in: no indent or pair is added.
   let
+    moved = buffer.takeReindentedWord(state)
     first = buffer.stepChars(state.cursor, -typed.removeBefore)
     removed =
       buffer.deleteBetween(first, buffer.stepChars(state.cursor, typed.removeAfter))
@@ -772,6 +840,8 @@ proc typeTextAgain*(
     if inserted.isErr:
       return err(inserted.error)
     state.cursor = inserted.get.cursor
+  if '\n' notin typed.text:
+    buffer.keepReindentedWord(state, moved)
   ok()
 
 proc insertCharFromAbove*(buffer: TextBuffer, state: EditorState): bool =
@@ -795,11 +865,14 @@ proc insertCharFromAbove*(buffer: TextBuffer, state: EditorState): bool =
   # Sliced, not re-encoded: an undecodable byte would widen into the
   # replacement character and copy something the line above lacks.
   let ch = lineContent.charSubStr(pos.column, 1)
-  let insertResult = buffer.insertTextEnd(pos, ch)
+  let
+    moved = buffer.takeReindentedWord(state)
+    insertResult = buffer.insertTextEnd(pos, ch)
   if insertResult.isErr:
     state.statusMessage = insertResult.error
     return false
   state.cursor = insertResult.get.cursor
+  buffer.keepReindentedWord(state, moved)
   return true
 
 proc insertCharFromBelow*(buffer: TextBuffer, state: EditorState): bool =
@@ -821,11 +894,14 @@ proc insertCharFromBelow*(buffer: TextBuffer, state: EditorState): bool =
     return false # No character at this column in the line below
 
   let ch = lineContent.charSubStr(pos.column, 1)
-  let insertResult = buffer.insertTextEnd(pos, ch)
+  let
+    moved = buffer.takeReindentedWord(state)
+    insertResult = buffer.insertTextEnd(pos, ch)
   if insertResult.isErr:
     state.statusMessage = insertResult.error
     return false
   state.cursor = insertResult.get.cursor
+  buffer.keepReindentedWord(state, moved)
   return true
 
 proc clearAutoIndentIfUnedited*(

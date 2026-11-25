@@ -19,7 +19,7 @@
 
 ## Tests for insert_handler.nim
 
-import std/[unittest, options, tables, json, monotimes]
+import std/[unittest, options, strutils, tables, json, monotimes]
 from std/strutils import contains
 
 import pkg/results
@@ -4607,6 +4607,420 @@ suite "Insert Mode Handler - closer typed at the start of a line":
 
   test "without smartIndent the closer stays":
     check closerTyped(langC, "int f() {\n  ", "}", smart = false) == ("  }", 3)
+
+suite "Insert Mode Handler - shell block words":
+  proc typed(language: SourceLanguage, text: string, smart = true): string =
+    ## The buffer after typing `text`, whose lines carry no indent.
+    let buf = newTextBuffer()
+    buf.language = language
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoIndent = true
+    state.smartIndent = smart
+    state.autoCloseParen = false
+    state.expandTab = true
+    state.tabStop = 2
+    for c in text:
+      if c == '\n':
+        insertNewline(buf, state)
+      else:
+        discard handler.handleCharacterInsertion(buf, state, $c)
+    for l in 0 ..< buf.len:
+      if l > 0:
+        result.add '\n'
+      result.add buf.getLine(l)
+
+  proc flat(text: string): string =
+    var lines: seq[string]
+    for l in text.splitLines:
+      lines.add l.strip(trailing = false)
+    lines.join("\n")
+
+  template checkTyped(text: string, language = langShell) =
+    # As Neovim's indent/sh.vim leaves it, unless the test says otherwise.
+    check typed(language, flat(text)) == text
+
+  test "if":
+    checkTyped "if a; then\n  b\nelif c; then\n  d\nelse\n  e\nfi\nf"
+    checkTyped "if a\nthen\n  b\nfi\nc"
+    checkTyped "if a; then # x\n  b\nfi # y\nc"
+
+  test "loops":
+    checkTyped "for i in a b; do\n  x\ndone\ny"
+    checkTyped "while a\ndo\n  b\ndone\nc"
+    checkTyped "select x in a b\ndo\n  c\ndone\nd"
+    checkTyped "for ((i = 0;; i++)); do\n  x\ndone\ny"
+
+  test "case":
+    checkTyped "case $a in\n  x)\n    foo\n    ;;\n  y) bar ;;\n  *)\n    baz\nesac\nq"
+    checkTyped "case $a in\n  (x|y)\n    foo;;\n  z)\n    b\n    ;;\nesac\nq"
+    checkTyped "case x in\n  a)\n    b\n    ;&\n  c)\n    d\n    ;;&\nesac"
+    checkTyped "case x in a)\n  b\n  ;;\nesac\nc"
+    checkTyped "case x in\n  a) b\n    ;;\n  c) d\n    ;;\nesac"
+    checkTyped "case x in\nesac\nc"
+
+  test "nested":
+    checkTyped "f() {\n  if a; then\n    for i in 1; do\n      case $i in\n" &
+      "        a)\n          if b; then\n            c\n          fi\n" &
+      "          ;;\n      esac\n    done\n  fi\n}\nz"
+    checkTyped "case x in\n  a)\n    case y in\n      b)\n        c\n        ;;\n" &
+      "    esac\n    ;;\n  d)\n    e\n    ;;\nesac"
+
+  test "blocks closed on their line":
+    checkTyped "if a; then b; fi\nc\nfor i in 1; do x; done\nd"
+    checkTyped "case x in a) b;; esac\ne"
+
+  test "a block inside a pipe or a substitution, which sh.vim does not see":
+    checkTyped "a | while read x; do\n  b\ndone < f\nc"
+    checkTyped "x=$(\n  case y in\n    a) b;;\n  esac\n)\nc"
+    checkTyped "x=\"$(if a; then\n  b\nfi)\"\nc"
+
+  test "a word starting with a block word goes back in":
+    checkTyped "if a; then\n  do_it\n  final\n  elsewhere\n  done2\n  fi=1\nfi\nz"
+    checkTyped "for i in 1; do\n  done2\n  double\n  docker\ndone"
+
+  test "block words as arguments, patterns and text":
+    checkTyped "for i in 1; do\n  echo done\n  echo if\n  find . \\; done\ndone\ny"
+    checkTyped "dd if=x\ny"
+    checkTyped "echo 'if a; then'\ny"
+    checkTyped "# if a; then\ny"
+    checkTyped "cat <<EOF\nif a; then\nfi\nEOF\nz"
+    checkTyped "if a; then\n  echo a \\\n  fi\n  b\nfi"
+    checkTyped "case x in\n  if)\n    a\n    ;;\nesac\nb"
+
+  test "a header over lines":
+    checkTyped "if a &&\n  b; then\n  c\nelse\n  d\nfi"
+    checkTyped "if [ a ] \\\n  && [ b ]; then\n  c\nfi\nd"
+    checkTyped "for x in a \\\n  b; do\n  c\ndone\nd"
+    checkTyped "if a; then\n  b\nelif c &&\n  d; then\n  e\nfi"
+    checkTyped "if (a ||\n  b); then\n  c\nfi"
+    checkTyped "if a; then\n  b; fi\nc"
+
+  test "case patterns wherever they come":
+    checkTyped "x=$(case y in\n  a) b;;\nesac)\nz"
+    checkTyped "case x in\n  a) case y in\n    b)\n      c\n      ;;\n  esac"
+    checkTyped "case x in\n  a|\n  b)\n    c\n    ;;\nesac"
+    checkTyped "case x in\n  ( a | b )\n    c\n    ;;\n  \"\")\n    d\n    ;;\nesac\ne"
+    checkTyped "for a in b; do\n  case x in\n    for|while)\n      b\n      ;;\n" &
+      "    done|if)\n      c\n      ;;\n    @(for|while))\n      d\n      ;;\n" &
+      "  esac\ndone\nz"
+    checkTyped "for a in b; do\n  case x in\n    a)\n      c\n      ;;\ndone\nz"
+
+  test "a closing word as a pattern with blanks after it":
+    checkTyped "for a in b; do\n  case x in\n    done )\n      c\n      ;;\n" &
+      "    done | fi)\n      d\n      ;;\n  esac\ndone\nz"
+    checkTyped "for a in b; do\n  case x in\n    a)\n      c\n      ;;\n" &
+      "done | sort\nz"
+    checkTyped "x=$(case y in\n  a) b;;\nesac )\nz"
+
+  test "Enter after a bracket opened above":
+    checkTyped "if a; then\n  x=(a\n    b)\n  c\nfi"
+    checkTyped "if a; then\n  x=$((1 +\n    2))\n  c\nfi"
+    checkTyped "if a; then\n  x=$(b |\n    c)\n  d\nfi"
+    checkTyped "f() {\n  a; }\nb"
+    checkTyped "if [[ a &&\n  b ]]; then\n  c\nfi"
+    checkTyped "case x in\n  a)\n    y=(b\n      c)\n    d\n    ;;\nesac\nz"
+
+  test "words that are data":
+    checkTyped "if a; then\n  kw=(if for while)\n  b\nfi\nz"
+    checkTyped "if a; then\n  kw=(\n    if\n  )\n  b\nfi\nz"
+    checkTyped "if a; then\n  if [[ $x =~ ^(if|for)$ ]]; then\n    b\n  fi\nfi\nz"
+    checkTyped "for a in b; do\n  x=${y:-if; for}\n  c\ndone\nz"
+    checkTyped "if a; then\n  ((x = 1 << 2))\n  b=$((c + (d)))\nfi\nz"
+
+  test "a backslash that continues nothing":
+    checkTyped "if a; then\n  b # x \\\nfi\nz"
+    checkTyped "if a; then\n  echo a\\\\\nfi\nz"
+
+  proc typedOnto(text, keys: string, expand = true, tabStop = 2): string =
+    ## The last line after typing `keys` at the end of `text`.
+    let buf = newTextBuffer()
+    buf.language = langShell
+    discard buf.insertText(BufferPosition(line: 0, column: 0), text)
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoIndent = true
+    state.smartIndent = true
+    state.expandTab = expand
+    state.tabStop = tabStop
+    let last = buf.len - 1
+    state.cursor = BufferPosition(line: last, column: buf.getLine(last).len)
+    for c in keys:
+      discard handler.handleCharacterInsertion(buf, state, $c)
+    buf.getLine(last)
+
+  test "a word typed on past a block word gets its own indent back":
+    check typedOnto("if a; then\n  foo |\n    ", "find x") == "    find x"
+    check typedOnto("if a; then\n  x=1\n      ", "elsewhere") == "      elsewhere"
+    check typedOnto("        if a; then\n\t\t", "find", false, 8) == "\t\tfind"
+    check typedOnto("if a; then\nfi", "nd") == "find"
+
+    check typedOnto("if a; then\n  ", "fié") == "  fié"
+
+  test "Backspace keeps the indent the word had":
+    let buf = newTextBuffer()
+    buf.language = langShell
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n  ")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoIndent = true
+    state.smartIndent = true
+    state.expandTab = true
+    state.cursor = BufferPosition(line: 1, column: 2)
+    template press(text: string) =
+      for c in text:
+        discard handler.handleCharacterInsertion(buf, state, $c)
+
+    press "fi"
+    check buf.getLine(1) == "fi"
+    discard handler.handleBackspace(buf, state)
+    press "i"
+    check buf.getLine(1) == "fi"
+    press "nd"
+    check buf.getLine(1) == "  find"
+
+  test "Ctrl-Y and Ctrl-E keep the indent the word had":
+    for (text, line, key) in [
+      ("if a; then\n  n\n    ", 2, "y"), ("if a; then\n    \n  n", 1, "e")
+    ]:
+      let buf = newTextBuffer()
+      buf.language = langShell
+      discard buf.insertText(BufferPosition(line: 0, column: 0), text)
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.autoIndent = true
+      state.smartIndent = true
+      state.expandTab = true
+      state.cursor = BufferPosition(line: line, column: 4)
+      for c in "fi":
+        discard handler.handleCharacterInsertion(buf, state, $c)
+      check buf.getLine(line) == "fi"
+      discard handler.handleInsertModeKey(
+        buf, state, KeyCombo(isSpecial: false, char: key, modifiers: {kmCtrl})
+      )
+      discard handler.handleCharacterInsertion(buf, state, "d")
+      check buf.getLine(line) == "    find"
+
+  test "a completion is judged as typed":
+    proc completed(text, keys, word: string): (string, int) =
+      let buf = newTextBuffer()
+      buf.language = langShell
+      discard buf.insertText(BufferPosition(line: 0, column: 0), text)
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.autoIndent = true
+      state.smartIndent = true
+      state.expandTab = true
+      let last = buf.len - 1
+      state.cursor = BufferPosition(line: last, column: buf.getLine(last).len)
+      for c in keys:
+        discard handler.handleCharacterInsertion(buf, state, $c)
+      let manager = handler.completionManager
+      manager.menu.triggerLine = last
+      manager.menu.triggerCol = state.cursor.column - keys.len
+      manager.menu.prefix = keys
+      manager.menu.entries = @[CompletionEntry(word: word)]
+      manager.menu.hasSelection = true
+      discard handler.commitCompletion(buf, state, keepPopupOpen = true)
+      discard handler.commitCompletion(buf, state)
+      (buf.getLine(last), state.cursor.column)
+
+    check completed("if a; then\n  ", "fi", "find") == ("  find", 6)
+    check completed("for a in b; do\n  c\n  ", "don", "done") == ("done", 4)
+    check completed("for a in b; do\n  c\n  ", "d", "docker") == ("  docker", 8)
+
+  test "block words after loops that need none, and after brackets":
+    check typedOnto("for a in b; do\n  for ((;;)); {\n    c\n  }\n  ", "done") == "done"
+    check typedOnto("for ((i=0;i<3;i++)) do if a; then\n  b\n  ", "fi") == "fi"
+    check typedOnto("  coproc (\n  if a; then\n    b\n    ", "fi") == "  fi"
+    check typedOnto("if a; then\n  echo (\n  if b; then\n    ", "fi") == "  fi"
+
+  test "a long case is read once":
+    var text = "for a in b; do\n  case x in\n"
+    for i in 0 ..< 900:
+      text.add "    a" & $i & ") b ;;\n"
+    text.add "  esac\n  "
+    check typedOnto(text, "done") == "done"
+
+  test "Zsh's own loops":
+    checkTyped "foreach i (a b)\n  x\nend\ny", langZsh
+    checkTyped "repeat 3\ndo\n  x\ndone\ny", langZsh
+    checkTyped "for x in a b\n  docker run", langZsh
+    checkTyped "if y; then\n  for x in a\n    find .", langZsh
+    checkTyped "for x (a b)\n  done_it", langZsh
+
+  test "Zsh's tests with a body in braces or of one command":
+    checkTyped "if a; then\n  if [[ b ]] {\n    c\n  }\nfi\nz", langZsh
+    checkTyped "if a; then\n  if [[ b ]] {\n    c\n  } elif (( d )) {\n" &
+      "    e\n  } else {\n    f\n  }\nelse\n  g\nfi\nz", langZsh
+    checkTyped "if a; then\n  if [[ b ]] { c } else { d }\nelse\n  g\nfi", langZsh
+    checkTyped "for x in a; do\n  while (( b )) {\n    c\n  }\ndone\nz", langZsh
+    checkTyped "if a; then\n  if (( $+commands[x] )) c\n  if (d) e\nfi\nz", langZsh
+    checkTyped "if a; then\n  if b && [[ c ]] {\n    d\n  }\nfi\nz", langZsh
+    # These have a `fi` or `done` of their own.
+    checkTyped "if a; then\n  if [[ b ]]; then\n    c\n  fi\nfi\nz", langZsh
+    checkTyped "if a; then\n  if [[ b ]] && c; then\n    d\n  fi\nfi\nz", langZsh
+    checkTyped "if a; then\n  if [[ b ]] then\n    c\n  else\n    d\n  fi\nfi", langZsh
+    checkTyped "if a; then\n  if (b) 2>c; then\n    d\n  fi\nfi\nz", langZsh
+    checkTyped "if a; then\n  if b (c|d) e; then\n    f\n  fi\nfi\nz", langZsh
+    checkTyped "if a; then\n  while (( b )) do\n    c\n  done\nfi\nz", langZsh
+    checkTyped "if a; then\n  if (( b ))\n  then\n    c\n  fi\nfi\nz", langZsh
+
+  test "Zsh's `;|`":
+    checkTyped "case x in\n  a)\n    d\n    ;|\n  if)\n    f\n    ;;\nesac\nz", langZsh
+
+  test "a `{` as an argument begins no command, and one that begins a body does":
+    checkTyped "if a; then\n  echo { if\n    c\nfi"
+    checkTyped "f() { if a; then\n  b\nfi"
+    checkTyped "function f { if a; then\n  b\nfi"
+    checkTyped "coproc x { if a; then\n  b\nfi"
+    checkTyped "f() { if a; then\n  b\nfi", langZsh
+
+  test "a block word after `time -p`":
+    checkTyped "if a; then\n  time -p if a; then\n    b\n  fi\nfi"
+    checkTyped "for x in a; do\n  time -p -- while b; do\n    c\n  done\ndone"
+
+  test "Backspace past a separator keeps the indent the word had":
+    let buf = newTextBuffer()
+    buf.language = langShell
+    discard
+      buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n    b\n    ")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoIndent = true
+    state.smartIndent = true
+    state.expandTab = true
+    state.cursor = BufferPosition(line: 2, column: 4)
+    for c in "fi ":
+      discard handler.handleCharacterInsertion(buf, state, $c)
+    check buf.getLine(2) == "fi "
+    discard handler.handleBackspace(buf, state)
+    for c in "nd":
+      discard handler.handleCharacterInsertion(buf, state, $c)
+    check buf.getLine(2) == "    find"
+
+  test "a completion is judged whichever key ends it":
+    proc ended(keys, word: string, special: SpecialKey): string =
+      let buf = newTextBuffer()
+      buf.language = langShell
+      discard
+        buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n    b\n    ")
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.autoIndent = true
+      state.smartIndent = true
+      state.expandTab = true
+      state.cursor = BufferPosition(line: 2, column: 4)
+      for c in keys:
+        discard handler.handleCharacterInsertion(buf, state, $c)
+      let manager = handler.completionManager
+      manager.state = csActive
+      manager.menu.triggerLine = 2
+      manager.menu.triggerCol = state.cursor.column - keys.len
+      manager.menu.prefix = keys
+      manager.menu.entries = @[CompletionEntry(word: word)]
+      for key in [skTab, special]:
+        discard handler.handleInsertModeKey(
+          buf, state, KeyCombo(isSpecial: true, special: key)
+        )
+      buf.getLine(2)
+
+    for key in [skEscape, skLeft, skEnd]:
+      check ended("fi", "find", key) == "    find"
+      check ended("f", "fi", key) == "fi"
+
+  test "Ctrl-W, Ctrl-U and Delete keep the indent the word had":
+    proc retyped(key: KeyCombo, keys: string): string =
+      let buf = newTextBuffer()
+      buf.language = langShell
+      discard
+        buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n    b\n    ;")
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.autoIndent = true
+      state.smartIndent = true
+      state.expandTab = true
+      state.cursor = BufferPosition(line: 2, column: 4)
+      for c in "fi":
+        discard handler.handleCharacterInsertion(buf, state, $c)
+      doAssert buf.getLine(2) == "fi;"
+      discard handler.handleInsertModeKey(buf, state, key)
+      for c in keys:
+        discard handler.handleCharacterInsertion(buf, state, $c)
+      buf.getLine(2)
+
+    for ch in ["w", "u"]:
+      let key = KeyCombo(isSpecial: false, char: ch, modifiers: {kmCtrl})
+      check retyped(key, "find") == "    find;"
+      check retyped(key, "fi") == "fi;"
+    check retyped(KeyCombo(isSpecial: true, special: skDelete), "nd") == "    find"
+
+  test "Delete in a snippet session keeps the indent the word had":
+    let buf = newTextBuffer()
+    buf.language = langShell
+    discard
+      buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n    b\n    ;")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoIndent = true
+    state.smartIndent = true
+    state.expandTab = true
+    state.cursor = BufferPosition(line: 2, column: 4)
+    state.snippetSession = SnippetSession(
+      active: true, stops: @[SnippetStop(num: 1, pos: state.cursor, len: 0)]
+    )
+    template press(key: KeyCombo) =
+      discard handler.handleInsertModeKey(buf, state, key)
+
+    for c in "fi":
+      press KeyCombo(isSpecial: false, char: $c)
+    check buf.getLine(2) == "fi;"
+    press KeyCombo(isSpecial: true, special: skDelete)
+    for c in "nd":
+      press KeyCombo(isSpecial: false, char: $c)
+    check buf.getLine(2) == "    find"
+
+  test "a word put before text is not judged until it stands alone":
+    let buf = newTextBuffer()
+    buf.language = langShell
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n  x")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoIndent = true
+    state.smartIndent = true
+    state.expandTab = true
+    state.tabStop = 2
+    state.cursor = BufferPosition(line: 1, column: 2)
+    for c in "fi":
+      discard handler.handleCharacterInsertion(buf, state, $c)
+    check buf.getLine(1) == "  fix"
+    discard handler.handleCharacterInsertion(buf, state, " ")
+    check buf.getLine(1) == "  fi x"
+    check state.cursor.column == 5
+
+  test "the cursor and where typing starts follow the word":
+    let buf = newTextBuffer()
+    buf.language = langShell
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n  f")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoIndent = true
+    state.smartIndent = true
+    state.expandTab = true
+    let start = BufferPosition(line: 0, column: 0)
+    state.insertStart = InsertStart(at: start, stop: start, moved: true)
+    state.cursor = BufferPosition(line: 1, column: 3)
+    discard handler.handleCharacterInsertion(buf, state, "i")
+    check buf.getLine(1) == "fi"
+    check state.cursor.column == 2
+    check state.insertStart.at == BufferPosition(line: 1, column: 1)
+
+  test "without smartIndent the words stay":
+    check typed(langShell, "if a; then\n  b\nfi", smart = false) ==
+      "if a; then\n  b\n  fi"
+
+  test "other languages have no block words":
+    check typed(langC, "  x\nfi\nif a") == "  x\n  fi\n  if a"
 
 suite "Insert Mode Handler - snippet stops across a closer's reindent":
   test "a stop in the indent keeps the closer it covered":

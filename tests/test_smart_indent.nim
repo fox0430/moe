@@ -84,8 +84,12 @@ proc enterAt(language: SourceLanguage, text: string): NewLineIndent =
 proc indentStep(line: string, language: SourceLanguage, carried = ""): int =
   enterAt(language, line & Cursor & carried).steps
 
+proc wordLine(language: SourceLanguage, text: string): int =
+  ## `leadingWordAlignLine` of the last line of `text`.
+  highlighted(language, text).leadingWordAlignLine(text.count('\n'))
+
 proc aboveDeeper(language: SourceLanguage, text: string, line: int): bool =
-  highlighted(language, text).opensAboveDeeper(line)
+  highlighted(language, text).aboveIndent(line) == (1, -1)
 
 suite "smart_indent - stripNimCodeOnly":
   test "Plain code is unchanged":
@@ -676,7 +680,231 @@ suite "smart_indent - enterIndent (brackets)":
     tex.syntaxOverride = some(langC)
     check tex.enterIndent(0, 6).steps == 0
 
-suite "smart_indent - opensAboveDeeper":
+suite "smart_indent - shell block words":
+  test "Enter carrying a word that closes a block lines it up":
+    check enterAt(langShell, "  if a; then b;‸ fi") == (0, 0)
+    check enterAt(langShell, "if a\n  then b;‸ else c; fi") == (0, 0)
+    check enterAt(langShell, "if a; then‸ b; fi") == (1, -1)
+    check enterAt(langShell, "echo a‸ fi") == (0, -1)
+
+  test "Enter carrying a word that is no command there leaves it":
+    check enterAt(langShell, "for a in b; do\n  case x in‸ done) y;; esac") == (1, -1)
+    check enterAt(langShell, "if a; then\n  x=(a‸ fi)") == (1, -1)
+    check enterAt(langShell, "if a; then\n  echo \\‸ fi") == (0, -1)
+
+  test "a reserved word right after `))`, `]]` and a subshell":
+    check enterAt(langShell, "while a &&\n    ((b)) do‸") == (1, 0)
+    check enterAt(langShell, "while a &&\n    [[ b ]] do‸") == (1, 0)
+    check enterAt(langShell, "if a &&\n    (b) then‸") == (1, 0)
+
+  test "loops with no `do`":
+    check enterAt(langZsh, "for x (a b) echo $x‸") == (0, -1)
+    check enterAt(langZsh, "for x (a b) $x‸") == (0, -1)
+    check enterAt(langZsh, "for ((;;)) echo‸") == (0, -1)
+    check enterAt(langZsh, "for x (a) for y (b) echo‸") == (0, -1)
+    check enterAt(langZsh, "repeat 3 echo‸") == (0, -1)
+    check enterAt(langZsh, "repeat $((1 + 2)) echo a‸") == (0, -1)
+    check enterAt(langZsh, "for x (a b) do‸") == (1, -1)
+    check enterAt(langZsh, "for x (a b) {‸") == (1, -1)
+    check enterAt(langZsh, "repeat 3 do‸") == (1, -1)
+    check enterAt(langZsh, "repeat 3‸") == (1, -1)
+    check enterAt(langZsh, "for x in a b; do‸") == (1, -1)
+    check enterAt(langZsh, "for x in $(a) b; do‸") == (1, -1)
+    check enterAt(langZsh, "for x in (a|b)* c‸") == (1, -1)
+    check enterAt(langShell, "for ((;;)); {‸") == (1, -1)
+    check enterAt(langShell, "for x in $(b); {‸") == (1, -1)
+
+  test "after a `;;` the line goes to the patterns' depth":
+    check enterAt(langShell, "case x in\n  a)\n    b\n    ;; # c‸") == (0, 1)
+    check enterAt(langShell, "case x in\na) b ;;‸") == (0, 1)
+    check enterAt(langShell, "case x in\n    a) case y in\n  b) ;; esac\n  ;;‸") ==
+      (0, 1)
+    check enterAt(langShell, "case x in a) b;; c) d ;;‸") == (1, 0)
+    check enterAt(langShell, "case x in\n  a) b;; c) d ;;‸") == (0, 1)
+    check enterAt(langShell, "    ;;‸") == (0, -1)
+
+  test "a test ends at a `]]` of its own":
+    for test in [
+      "$x == [[:space:]]*", "$a[$b[1]] == c", "$x == *[[]*", "$x =~ ^[[:alpha:]]|if"
+    ]:
+      for language in [langShell, langZsh]:
+        check wordLine(
+          language, "if a; then\n  if [[ " & test & " ]]; then\n    b\n  fi"
+        ) == 1
+    check wordLine(langZsh, "if a; then\n  if [[ (b) ]] {\n    c\n  }\nfi") == 0
+
+  test "a parenthesis in `${ }` is text":
+    check enterAt(langShell, "x=$(\n  y=${z%%)*}‸") == (0, -1)
+    check enterAt(langShell, "x=$(\n  y=${z#(}‸") == (0, -1)
+    check enterAt(langZsh, "x=$(\n  y=${(f)z}‸") == (0, -1)
+    check enterAt(langShell, "x=(a\n  ${z:-$(b)})‸") == (0, 0)
+    check wordLine(langShell, "if a; then\n  b=(\n    ${c%)}\n    if\n  )\nfi") == 0
+
+  test "a test or arithmetic over lines":
+    check wordLine(langZsh, "if a; then\n  if [[ b &&\n    c ]] {\n    d\n  }\nfi") == 0
+    check wordLine(langZsh, "if a; then\n  if [[ b\n    || c ]] {\n    d\n  }\nfi") == 0
+    check wordLine(langZsh, "if a; then\n  if (( a ||\n    b )) {\n    d\n  }\nfi") == 0
+    check wordLine(langShell, "if [[ a ||\n    b == if ]]; then\n  c\nfi") == 0
+    check wordLine(langShell, "for ((\n  i = 0;;\n)); do\n  if a; then\n    b\n  fi") ==
+      3
+    check wordLine(langShell, "for ((\n  i = 0;;\n)); do\n  b\ndone") == 0
+    check enterAt(langShell, "for ((\n  i = 0;;\n)); do‸").steps == 1
+    check wordLine(langShell, "for ((\n  i = 0;;\n)); do\n  b; if c; then\n    d\n  fi") ==
+      3
+    check wordLine(langShell, "x=$((\n  (1 +\n  2)\n))\nif a; then\n  b\nfi") == 4
+
+  test "a test or arithmetic left unfinished ends at a block word":
+    check wordLine(langShell, "if [[ a\nthen\n  b\nfi") == 0
+    check wordLine(langShell, "if [[ a &&\nthen\n  b\nfi") == 0
+    check wordLine(langShell, "x=$((a\nif b; then\n  c\nfi") == 1
+    check wordLine(langShell, "for ((i\ndo\n  if a; then\n    b\n  fi\ndone") == 0
+
+  test "a `do` right after a loop's words":
+    for language in [langShell, langZsh]:
+      check wordLine(language, "while z; do\n  for x do\n    {\n      b\n    }\n  done") ==
+        1
+      check wordLine(language, "for x do if a; then\n  c\nfi") == 0
+      check wordLine(language, "for x in a do if; do\n  c\nfi") == -1
+      check enterAt(language, "for x do‸") == (1, -1)
+    check wordLine(langShell, "for x in a do\n  b\ndone") == 0
+    check wordLine(langZsh, "repeat 3 do\n  c\ndone") == 0
+    check wordLine(langZsh, "while z; do\n  repeat $((1 + 2)) do\n    c\n  done") == 1
+
+  test "a string over lines in a loop's words":
+    for words in [
+      "\"a\nb\"", "'a\nb'", "\"a $x\n\nb\"", "\"a\n$x b\"", "c \\\n\"a\nb\"", "$'a\nb'"
+    ]:
+      for language in [langShell, langZsh]:
+        check wordLine(language, "for x in " & words & "; do\n  c\ndone") == 0
+        check wordLine(language, "for x in " & words & "\ndo\n  c\ndone") == 0
+
+  test "a heredoc's end marker is no block word":
+    for body in ["x\n", ""]:
+      check wordLine(langZsh, "while a; do\n  cat <<end\n" & body & "end\n  b\ndone") ==
+        0
+      check wordLine(
+        langShell, "while a; do\n  cat <<done\n" & body & "done\n  b\ndone"
+      ) == 0
+      check wordLine(
+        langShell, "while a; do\n  cat <<-'done'\n" & body & "\tdone\n  b\ndone"
+      ) == 0
+      check wordLine(langShell, "x=$(cat <<if\n" & body & "if\n)\nif a; then\n  b\nfi") >
+        0
+
+  test "a variable named as a block word, in arithmetic over lines":
+    check wordLine(langShell, "while z; do\n  (( done = 1,\n  done == 2 ))\n  c\ndone") ==
+      0
+    check wordLine(langShell, "while z; do\n  (( a\n  + 1 +\n  done ))\n  c\ndone") == 0
+    check wordLine(langShell, "while z; do\n  (( a ||\n  done == 2 ))\n  c\ndone") == 0
+    check wordLine(langShell, "while z; do\n  (( a\ndone < f") == 0
+    check wordLine(langShell, "while z; do\n  (( a\ndone | f") == 0
+
+  test "Zsh's loops of one command after a separator":
+    check wordLine(langZsh, "for x in a; do\n  for y in c d; echo $y\ndone") == 0
+    check wordLine(langZsh, "for x in a; do\n  for y (c d); echo $y\ndone") == 0
+    check wordLine(langZsh, "for x in a; do\n  for y in c\n    echo $y\ndone") == 0
+    check wordLine(
+      langZsh, "for x in a; do\n  for y in c; if a; then\n    b\n  fi\ndone"
+    ) == 0
+    check wordLine(langZsh, "for x in a; do\n  for y in c\n  do\n    d\n  done") == 1
+    check wordLine(langZsh, "for x in a; do\n  for y in c; {\n    d\n  }\ndone") == 0
+    check enterAt(langZsh, "for y in c d; echo $y‸") == (0, -1)
+    check enterAt(langZsh, "for y in c d;‸") == (1, -1)
+
+  test "the body of a Zsh loop or test of one command is no block word":
+    for body in ["docker run", "done_it", "echo $x"]:
+      for header in ["for x in a b", "for x (a b)", "repeat 3"]:
+        check wordLine(langZsh, header & "\n  " & body) == -1
+        check not aboveDeeper(langZsh, header & "\n  " & body, 1)
+    check wordLine(langZsh, "if y; then\n  for x in a\n    find .") == -1
+    check not aboveDeeper(langZsh, "if [[ a ]] \\\n  echo", 1)
+    check wordLine(langZsh, "if a; then\n  for x in b\nfi") == 0
+    check wordLine(langZsh, "if a; then\n  for x in b\nelse") == 0
+    check wordLine(langZsh, "case a in\n  a)\n    for x in b\nesac") == 0
+    check highlighted(langZsh, "case a in\n  a)\n    for x in b\nesac").aboveIndent(3) ==
+      (0, 1)
+
+  test "Enter before the body of a Zsh loop or test":
+    for body in ["echo $x", "done_it", "if c; then"]:
+      check enterAt(langZsh, "for x in a b;‸ " & body) == (1, -1)
+      check enterAt(langZsh, "for x (a b)‸ " & body) == (1, -1)
+      check enterAt(langZsh, "repeat 3;‸ " & body) == (1, -1)
+    check enterAt(langZsh, "if [[ a ]]‸ echo") == (1, -1)
+    check enterAt(langZsh, "for x (a b)‸ {") == (0, 0)
+    check enterAt(langZsh, "for x in a b;‸ {") == (0, 0)
+    check enterAt(langZsh, "if a; then\n  for x in b;‸ fi") == (0, 0)
+
+  test "a pattern that begins with a group":
+    for language in [langShell, langZsh]:
+      for lead in ["!", "@", "?", "+", "*"]:
+        check wordLine(
+          language, "x=$(\n  case $1 in\n    " & lead & "(a|b))\n      foo\n  esac"
+        ) == 1
+        check highlighted(
+          language,
+          "x=$(\n  case $1 in\n    " & lead & "(a|b))\n      foo\n      ;;\n  esac\n)",
+        )
+          .closerAlignLine(6, 0) == 0
+        check enterAt(language, "x=$(\n  case $1 in\n    " & lead & "(a|b))‸") ==
+          (1, -1)
+
+  test "Zsh's `case` in braces":
+    const arms = "case $x {\n  a) if b; then\n    c\n  fi ;;\n  d) { e; } ;;\n"
+    check wordLine(langZsh, arms & "}\nif f; then\n  g\nfi") == 6
+    check wordLine(langZsh, "if z; then\n" & arms & "}\nfi") == 0
+    check wordLine(langZsh, "if z; then\n  case ${x} { a) b ;; }\nfi") == 0
+    check enterAt(langZsh, "case $x {‸") == (1, -1)
+    check enterAt(langZsh, "case $x {\n  a) b ;;\n}‸") == (0, -1)
+    check enterAt(langZsh, "case $x {\n  a) b ;; }‸") == (0, 0)
+    check wordLine(langZsh, "x=$(case $x {\n  a) b ;;\n})\nif a; then\n  b\nfi") == 3
+
+  test "a block word right after a Zsh `{`":
+    check wordLine(langZsh, "a | {while read b; do\n  c\ndone") == 0
+
+  test "a function header with a blank between its parentheses":
+    check wordLine(langShell, "f( ) { if a; then\n  b\nfi") == 0
+
+  test "Enter before a carried closer, in a block left open":
+    check enterAt(langShell, "x=$(if a; then‸)") == (1, -1)
+    check enterAt(langShell, "a | (while b; do‸)") == (1, -1)
+    check enterAt(langShell, "x=$(case a in‸)") == (1, -1)
+    check enterAt(langShell, "x=$(if a; then b; fi‸)") == (0, 0)
+    check enterAt(langShell, "if a; then b $(c d‸)") == (0, 0)
+    check enterAt(langShell, "case x in\n  a‸)") == (0, -1)
+    check enterAt(langShell, "x=$(\n  if a; then\n    b\n  fi‸)") == (0, 0)
+
+  test "Enter inside a string over lines stays":
+    check enterAt(langShell, "if a \"b‸\nc\"; then") == (0, -1)
+
+  test "Enter carrying a closer past a block":
+    check enterAt(langShell, "f() {\n  if a; then\n    b\n  fi\n  c‸}") == (0, 0)
+    check enterAt(langShell, "f() {\n  if a; then\n    b‸}") == (0, -1)
+    check enterAt(langShell, "f() {\n  g() { b; }\n  if a; then\n    b‸}") == (0, -1)
+    check enterAt(langShell, "if a; then\n  f() {\n    b‸}") == (0, 1)
+    check enterAt(langShell, "f() {\n  case x in\n    a)\n      b;;‸}") == (0, 2)
+    check enterAt(langShell, "f() {\n  case x in\n    a) b;;\n  esac\n  c‸}") == (
+      0, 0
+    )
+    check enterAt(langZsh, "case x {\n  a)\n    b‸}") == (0, -1)
+    check enterAt(langZsh, "f() {\n  if [[ a ]] {\n    b\n  }\n  c‸}") == (0, 0)
+    check enterAt(langZsh, "f() {\n  case x {\n    a) b;;\n  }\n  c‸}") == (0, 0)
+
+  test "a block word right before a `}`":
+    for language in [langShell, langZsh]:
+      let ends = language == langZsh
+      check (wordLine(language, "if a; then\n  { if b; then c; fi}\nfi") == 0) == ends
+      check (wordLine(language, "f() { if a; then\n  b\n  fi}") == 0) == ends
+
+  test "`O` above a word that closes a block":
+    check aboveDeeper(langShell, "if a; then\n  b\nfi", 2)
+    check highlighted(langShell, "case a in\nesac").aboveIndent(1) == (1, 0)
+    check highlighted(langShell, "case a in\na)\n  b\n  ;;\nesac").aboveIndent(4) ==
+      (0, 1)
+    check not aboveDeeper(langShell, "if a; then\n  b\nfi", 1)
+    check not aboveDeeper(langShell, "fi", 0)
+    check not aboveDeeper(langC, "if\nfi", 1)
+
+suite "smart_indent - aboveIndent":
   test "A line starting with a closer opens a deeper line above":
     check aboveDeeper(langC, "    }", 0)
     check aboveDeeper(langJavaScript, ")", 0)
