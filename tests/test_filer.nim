@@ -18,6 +18,8 @@
 #[############################################################################]#
 
 import std/[unittest, os, times, options, strutils, unicode]
+import pkg/celina
+
 import ../src/moepkg/filer {.all.}
 import ../src/moepkg/[buffer, highlight, color]
 
@@ -919,6 +921,32 @@ suite "Filer - createFilerTextBuffer":
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerDirectory
+
+  test "Entry highlight does not store the theme's italic":
+    let saved = themeColors
+    var colors = saved
+    for pair in colors.mitems:
+      pair.italic = true
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: @[
+        FileEntry(
+          name: "dir1",
+          kind: fekDirectory,
+          modified: getTime(),
+          targetKind: fekDirectory,
+        ),
+        FileEntry(
+          name: "file1", kind: fekFile, modified: getTime(), targetKind: fekFile
+        ),
+      ],
+    )
+    for seg in state.createFilerTextBuffer(false).highlight.colorSegments:
+      check Italic notin seg.style.modifiers
 
   test "Symlink-to-file highlight uses filerSymlink color":
     let entries = @[

@@ -825,11 +825,13 @@ const LightColors*: ThemeColors = [
   EditorColorPairIndex.tempMessageBorder: makeColorPairTermDefaultFg("#8a8a8a"),
 ]
 
-const DiffViewerTints = [
+const DiffViewerTints* = [
   EditorColorPairIndex.diffViewerAddedWord, EditorColorPairIndex.diffViewerDeletedWord,
   EditorColorPairIndex.diffViewerAddedLineBg,
   EditorColorPairIndex.diffViewerDeletedLineBg, EditorColorPairIndex.diffViewerFiller,
 ]
+  ## The diff viewer's tints. It paints them as backgrounds and blank filler, so
+  ## they have no text of their own and a theme cannot set `italic` on them.
 
 proc isLightColor*(c: Rgb): bool =
   ## W3C perceived-brightness test.

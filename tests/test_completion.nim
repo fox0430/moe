@@ -21,7 +21,7 @@ import std/[unittest, options, sequtils, strutils, monotimes, times, json, os]
 
 import pkg/celina
 
-import ../src/moepkg/[buffer, completion, unicode_utils]
+import ../src/moepkg/[buffer, completion, unicode_utils, color]
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
 suite "Completion - extractWords":
@@ -773,6 +773,30 @@ suite "Completion - calculatePopupPosition with showBorder=false":
 
     # Borderless: bottom content sits at cursorY-1
     check borderless.y + borderless.height == 20
+
+suite "Completion - popupSelectedDetailStyle":
+  test "keeps the detail's italic over the current-line background":
+    let saved = themeColors
+    var colors = saved
+    colors[EditorColorPairIndex.popupWindowDetail].italic = true
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+
+    let style = popupSelectedDetailStyle()
+    check Italic in style.modifiers
+    check style.fg == getThemeStyle(EditorColorPairIndex.popupWindowDetail).fg
+    check style.bg == getThemeStyle(EditorColorPairIndex.popupWinCurrentLine).bg
+
+  test "takes the current line's italic":
+    let saved = themeColors
+    var colors = saved
+    colors[EditorColorPairIndex.popupWinCurrentLine].italic = true
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+
+    check Italic in popupSelectedDetailStyle().modifiers
 
 suite "Completion - renderCompletionPopup":
   test "Renders border and content with showBorder=true":

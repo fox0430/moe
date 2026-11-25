@@ -219,7 +219,8 @@ proc renderConfig*(
         popupX = 0
 
       let
-        borderStyle = getThemeStyle(EditorColorPairIndex.configModePopupBg)
+        borderStyle =
+          getThemeStyle(EditorColorPairIndex.configModePopupBg).withoutItalic
         popupNormalStyle = getThemeStyle(EditorColorPairIndex.configModePopupBg)
         selectedStyle = getThemeStyle(
           EditorColorPairIndex.configModePopupSelected, {StyleModifier.Bold}

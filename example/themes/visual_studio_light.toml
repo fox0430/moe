@@ -6,6 +6,7 @@
 #
 # Color format: "#RRGGBB" (hex) or "termDefault" (terminal default color)
 # Define named colors under [Palette] and reuse them as fg/bg values.
+# Add "italic = true" to an entry to draw its text in italics.
 
 [Colors]
 

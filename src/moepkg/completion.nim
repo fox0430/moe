@@ -168,13 +168,12 @@ proc popupDetailStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.popupWindowDetail)
 
 proc popupSelectedDetailStyle*(): Style =
-  ## Detail text on the selected row: detail foreground over the
-  ## current-line background.
-  Style(
-    fg: getThemeStyle(EditorColorPairIndex.popupWindowDetail).fg,
-    bg: getThemeStyle(EditorColorPairIndex.popupWinCurrentLine).bg,
-    modifiers: {},
-  )
+  ## Detail text on the selected row: the detail style over the current line's
+  ## background, plus its modifiers.
+  let row = getThemeStyle(EditorColorPairIndex.popupWinCurrentLine)
+  result = getThemeStyle(EditorColorPairIndex.popupWindowDetail)
+  result.bg = row.bg
+  result.modifiers = result.modifiers + row.modifiers
 
 proc popupBorderStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.popupWindowBorder)

@@ -111,6 +111,36 @@ const StatusLineInactiveFallbacks = block:
         pairs.add (inactive, active)
   pairs
 
+const ItalicFallbacks = block:
+  ## The entry each entry takes `italic` from when a theme leaves it out.
+  var sources: array[EditorColorPairIndex, Option[EditorColorPairIndex]]
+  for (specific, generic) in FallbackColors:
+    # `file` falls back to `default` for colors, but `default` cannot be italic.
+    if specific != EditorColorPairIndex.file:
+      sources[specific] = some(generic)
+  for (inactive, active) in StatusLineInactiveFallbacks:
+    sources[inactive] = some(active)
+  sources
+
+const NoItalicEntries = block:
+  ## Entries that draw no text of their own, only backgrounds and blank cells,
+  ## and ones for frames and guides: slanted box-drawing characters do not join.
+  var entries =
+    ColorBgOnlyEntries + {
+      EditorColorPairIndex.selectArea, EditorColorPairIndex.snippetTabStop,
+      EditorColorPairIndex.highlightTrailingSpaces,
+      EditorColorPairIndex.highlightFullWidthSpace, EditorColorPairIndex.scrollBarThumb,
+      EditorColorPairIndex.scrollBarTrack, EditorColorPairIndex.indentationLine,
+      EditorColorPairIndex.popupWindowBorder,
+      EditorColorPairIndex.notificationPopupInfoBorder,
+      EditorColorPairIndex.notificationPopupWarningBorder,
+      EditorColorPairIndex.notificationPopupErrorBorder,
+      EditorColorPairIndex.tempMessageBorder, EditorColorPairIndex.whitespace,
+    }
+  for index in DiffViewerTints:
+    entries.incl index
+  entries
+
 # Named colors from the optional [Palette] table, in file order.
 type ThemePalette* = OrderedTable[string, Rgb]
 
@@ -135,6 +165,7 @@ type ThemeSource* = object
   refs*: Table[ThemeChannel, string]
   statusLineModes*: StatusLineModeColors
   omittedFg*, omittedBg*: set[EditorColorPairIndex]
+  explicitItalic*: set[EditorColorPairIndex] ## Entries the file sets `italic` of
 
 proc isEmpty*(source: ThemeSource): bool =
   ## True without a palette and references to it.
@@ -207,6 +238,15 @@ proc legacyColorIndexes(key: string): Option[seq[EditorColorPairIndex]] =
       return some(indexes)
   none(seq[EditorColorPairIndex])
 
+proc setsColor(colorsTable: TomlTableRef, key: string): bool =
+  ## Whether `key` replaces an old key's colors. An entry with neither `fg` nor
+  ## `bg`, such as `{ italic = true }`, does not.
+  if not colorsTable.hasKey(key):
+    return false
+  let value = colorsTable[key]
+  value.kind != TomlValueKind.Table or value.tableVal.hasKey("fg") or
+    value.tableVal.hasKey("bg")
+
 proc toStatusLineModeColor(key: string): Option[StatusLineModeColor] =
   for kind in StatusLineModeColor:
     if $kind == key:
@@ -250,6 +290,18 @@ proc noteThemeColorEdited*(
   else:
     source.omittedBg.excl index
   colors.applyColorFallback(source.omittedFg, source.omittedBg)
+
+proc fallbackItalic(colors: ThemeColors, index: EditorColorPairIndex): bool =
+  ## The italic `index` loads with when the theme leaves it out.
+  let source = ItalicFallbacks[index]
+  source.isSome and colors[source.get].italic
+
+proc applyItalicFallback(
+    colors: var ThemeColors, explicitItalic: set[EditorColorPairIndex]
+) =
+  for index in EditorColorPairIndex:
+    if index notin explicitItalic:
+      colors[index].italic = colors.fallbackItalic(index)
 
 proc applyStatusLineInactiveFallback(
     colors: var ThemeColors, omittedFg, omittedBg: set[EditorColorPairIndex]
@@ -429,7 +481,7 @@ proc loadThemeWithSource*(
       indexes.add indexOpt.get
     elif legacyOpt.isSome:
       for index in legacyOpt.get:
-        if not colorsTable.hasKey(toTomlColorKey(index)):
+        if not colorsTable.setsColor(toTomlColorKey(index)):
           indexes.add index
 
     for subkey, subval in sub:
@@ -458,6 +510,24 @@ proc loadThemeWithSource*(
           else:
             colors[index].background = ThemeColor(rgb: parsed.get)
             bgSet.incl index
+      of "italic":
+        let subkeyPath = fullKey(section, key & ".italic")
+        if sharedOpt.isSome:
+          # Italic is drawn per entry, not for a color shared by every mode.
+          vr.addUnknownKey(subkeyPath)
+        elif indexOpt.isNone:
+          vr.addUnknownKey(subkeyPath)
+        else:
+          let index = indexOpt.get
+          if subval.kind != TomlValueKind.Bool:
+            vr.addError(subkeyPath, $subval, themeItalicExpected)
+          elif index == EditorColorPairIndex.default:
+            vr.addError(subkeyPath, $subval, themeItalicOnDefaultExpected)
+          elif index in NoItalicEntries:
+            vr.addError(subkeyPath, $subval, themeItalicNoTextExpected)
+          else:
+            colors[index].italic = subval.getBool()
+            source.explicitItalic.incl index
       else:
         vr.addUnknownKey(fullKey(section, key & "." & subkey))
 
@@ -468,6 +538,7 @@ proc loadThemeWithSource*(
     source.statusLineModes, source.omittedFg, source.omittedBg
   )
   colors.applyColorFallback(source.omittedFg, source.omittedBg)
+  colors.applyItalicFallback(source.explicitItalic)
 
   return Loaded.ok((colors, source))
 
@@ -647,6 +718,7 @@ proc reloadedColors(colors: ThemeColors, source: ThemeSource): ThemeColors =
 proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource =
   ## The part of `source` that still describes `colors`: names whose palette
   ## entry holds the color, and omitted channels that would load back as they are.
+  ## Entries whose italic would not load back become explicit.
   result = source
   result.refs.clear()
   for channel, name in source.refs:
@@ -657,6 +729,10 @@ proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource =
         colors[channel.index].background
     if name in source.palette and source.palette[name] == color.rgb:
       result.refs[channel] = name
+
+  for index in EditorColorPairIndex:
+    if colors[index].italic != colors.fallbackItalic(index):
+      result.explicitItalic.incl index
 
   # Writing one channel can change what another would load as (the color and
   # Inactive fallbacks and the diff tints), so repeat until nothing more is
@@ -744,6 +820,7 @@ proc saveThemeToToml*(
   lines.add "# Color format: \"#RRGGBB\" (hex) or \"termDefault\" (terminal default color)"
   lines.add "# \"termDefault\" can be used for both foreground and background."
   lines.add "# Define named colors under [Palette] and reuse them as fg/bg values."
+  lines.add "# Add \"italic = true\" to an entry to draw its text in italics."
   lines.add "# Examples:"
   lines.add "#   foreground = \"termDefault\"  # Use terminal's default foreground color"
   lines.add "#   background = \"termDefault\"  # Use terminal's default background color"
@@ -808,6 +885,8 @@ proc saveThemeToToml*(
         themeChannelToTomlValue(
           colors[index].background, (index: index, isFg: false), source
         )
+    if index in source.explicitItalic:
+      channels.add "italic = " & $colors[index].italic
     if channels.len > 0:
       lines.add toTomlColorKey(index) & " = { " & channels.join(", ") & " }"
 

@@ -344,42 +344,27 @@ proc createFilerTextBuffer*(state: FilerState, showIcons: bool): TextBuffer =
   result.language = langNone
   result.filePath = some(state.currentPath)
 
-  # Build custom highlight ColorSegments for entry-type coloring
+  # Build custom highlight ColorSegments for entry-type coloring. Only fixed
+  # modifiers are stored; the rest follows the theme through the color index.
   var segments: seq[ColorSegment] = @[]
 
-  # Entry styles
   for i, entry in state.entries:
     let row = i
     let lineLen = max(0, lines[row].toRunes().high)
     let (colorIdx, style) =
       if entry.kind == fekDirectory:
-        (
-          EditorColorPairIndex.filerDirectory,
-          getThemeStyle(EditorColorPairIndex.filerDirectory, {StyleModifier.Bold}),
-        )
+        (EditorColorPairIndex.filerDirectory, Style(modifiers: {StyleModifier.Bold}))
       elif entry.kind == fekSymlink:
         if entry.targetKind == fekDirectory:
-          (
-            EditorColorPairIndex.filerSymlinkDir,
-            getThemeStyle(EditorColorPairIndex.filerSymlinkDir, {StyleModifier.Bold}),
-          )
+          (EditorColorPairIndex.filerSymlinkDir, Style(modifiers: {StyleModifier.Bold}))
         else:
-          (
-            EditorColorPairIndex.filerSymlink,
-            getThemeStyle(EditorColorPairIndex.filerSymlink),
-          )
+          (EditorColorPairIndex.filerSymlink, Style())
       elif entry.isHidden:
-        (
-          EditorColorPairIndex.filerHiddenFile,
-          getThemeStyle(EditorColorPairIndex.filerHiddenFile),
-        )
+        (EditorColorPairIndex.filerHiddenFile, Style())
       elif entry.isExecutable:
-        (
-          EditorColorPairIndex.filerExecutable,
-          getThemeStyle(EditorColorPairIndex.filerExecutable, {StyleModifier.Bold}),
-        )
+        (EditorColorPairIndex.filerExecutable, Style(modifiers: {StyleModifier.Bold}))
       else:
-        (EditorColorPairIndex.file, getThemeStyle(EditorColorPairIndex.file))
+        (EditorColorPairIndex.file, Style())
 
     segments.add(
       ColorSegment(

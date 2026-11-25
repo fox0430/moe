@@ -39,6 +39,11 @@ const
   themeColorExpected* =
     "string color (\"#RRGGBB\" hex, \"termDefault\", or a [Palette] name)"
   themeInlineTableExpected* = "inline table { fg = \"...\", bg = \"...\" }"
+  themeItalicExpected* = "boolean (true or false)"
+  themeItalicNoTextExpected* =
+    "no italic: the entry draws only a background, blanks, a frame or a guide"
+  themeItalicOnDefaultExpected* =
+    "no italic: the top-level foreground and background cannot set it"
   themePaletteExpected* = "table of named colors, e.g. dimmed1 = \"#3b3c35\""
   themePaletteNameExpected* =
     "palette name ([A-Za-z_][A-Za-z0-9_-]*, not a hex color or \"termDefault\")"

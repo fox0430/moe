@@ -1909,6 +1909,37 @@ background colors. An entry whose `bg` is omitted inherits the top-level
 `background` if its bundled `bg` is `#000000`; otherwise it keeps the bundled
 `bg`, except for the fallbacks described below.
 
+An entry can also set `italic = true` (the default is `false`) to draw its text
+in italics:
+
+```toml
+comment = { fg = "#636d83", bg = "#000000", italic = true }
+```
+
+The italic shape comes from the terminal and the font it uses; where either
+lacks italics, the text is drawn upright. moe always asks for italics and does
+not check whether the terminal supports them, so the same theme can look
+different between terminals. The bundled themes and the ones in
+`example/themes` set no italics.
+
+`italic` belongs to one entry. It cannot be put on `foreground` or `background`,
+which are plain colors, nor on a `default` entry; setting it on an entry that
+draws only a background, blanks, a frame or a guide (`currentLine`,
+`currentColumn`, `selectArea`, `snippetTabStop`, `highlightTrailingSpaces`,
+`highlightFullWidthSpace`, `scrollBarThumb`, `scrollBarTrack`, `whitespace`,
+`indentationLine`, `popupWindowBorder`, `notificationPopup*Border`,
+`tempMessageBorder`, and the diff viewer's line, word and filler tints) is an
+error. `popupWindowBorder` also colors the picker's titles, which stay upright
+with its frame. `gitConflict*` and `documentHighlight*` draw text only where
+syntax highlighting is off; elsewhere the text keeps its own shape. Text under a
+search match, the current word, a matching paren, an `f`/`t` candidate, a
+diagnostic or an LSP semantic token takes that entry's shape, as does a reserved
+word such as `TODO` in a comment, so an italic comment is upright there. The
+keys shared by all modes (`statusLineMode` and so on) set colors only; put
+`italic` on the per-mode keys instead. The window split lines use the colors of
+`lineNum`, and the frame of the Config mode's popup those of `configModePopup`;
+both stay upright.
+
 #### Named colors (`[Palette]`)
 
 The optional `[Palette]` table names a color once so it can be reused and
@@ -1939,7 +1970,9 @@ palette values alone. Entries the file leaves out stay left out as long as they
 would load as the same color. A save that changes no color does not rewrite the theme
 file at all, so its comments and layout stay. A save that does change a color
 rewrites the whole file: comments are lost, and `[Palette]` entries that
-failed validation when the file was read are not written back.
+failed validation when the file was read are not written back. A save
+writes `italic` on the entries the file sets it on, `false` included, and leaves
+it out on the ones that inherit it.
 
 #### Status line colors shared by all modes
 
@@ -1996,15 +2029,17 @@ no longer recognized; if a theme file still contains them, they are skipped
 with an unknown-key warning and can be removed.
 
 The old Filer keys `dir` and `pcLink` are still read, as `filerDirectory` and
-as `filerSymlink` and `filerSymlinkDir`. A theme that sets one of the new keys
-ignores the old key for it. Saving a theme writes the new keys.
+as `filerSymlink` and `filerSymlinkDir`. A theme that sets `fg` or `bg` of one of
+the new keys ignores the old key for it. The old keys take no `italic`; put it on
+the new ones. Saving a theme writes the new keys.
 
 #### Filer colors
 
 The Filer and the file tree draw the selected entry with `currentFile` in place
 of the entry's own color and `currentLine`, whether or not the current line
-highlight is on. Regular files use `file`; a theme that leaves out its `fg` or
-`bg` takes the top-level `foreground` or `background`. Directories, symbolic
+highlight is on. An italic entry stays italic while selected; `italic` on
+`currentFile` only adds to it. Regular files use `file`; a theme that leaves out
+its `fg` or `bg` takes the top-level `foreground` or `background`. Directories, symbolic
 links, hidden files and executables take `filerDirectory`,
 `filerSymlink`/`filerSymlinkDir`, `filerHiddenFile` and `filerExecutable` in
 both.
@@ -2013,8 +2048,8 @@ both.
 
 The `markdownHeading`, `markdownCode`, `markdownLinkUrl`,
 `markdownListMarker` and `markdownFrontmatter` keys were added after the
-generic syntax keys. If a theme does not set `fg` or `bg` for one of them,
-that color comes from the generic key Markdown used before:
+generic syntax keys. If a theme does not set `fg`, `bg` or `italic` for one of
+them, that comes from the generic key Markdown used before:
 
 | Markdown key | Falls back to |
 |:---|:---|
@@ -2039,6 +2074,9 @@ channel is `termDefault`.
 
 A color set by a key shared by all modes counts as set by the theme, for both
 the active and the inactive entry.
+
+An `italic` left out of `statusLine<Mode>ModeInactive` also comes from
+`statusLine<Mode>Mode`.
 
 If a theme sets neither entry, the inactive status line keeps the bundled dark
 colors, as the active one does.

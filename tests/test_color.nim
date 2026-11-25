@@ -362,6 +362,23 @@ suite "color - toStyle":
     check Bold in style.modifiers
     check Underline in style.modifiers
 
+  test "italic is added to the style":
+    let colorPair = ColorPair(
+      foreground: ThemeColor(rgb: Rgb(red: 255, green: 255, blue: 255)),
+      background: ThemeColor(rgb: Rgb(red: 0, green: 0, blue: 0)),
+      italic: true,
+    )
+    check colorPair.toStyle.modifiers == {Italic}
+
+  test "italic joins the modifiers passed in":
+    let colorPair = ColorPair(
+      foreground: ThemeColor(rgb: Rgb(red: 255, green: 0, blue: 0)),
+      background: ThemeColor(rgb: TerminalDefaultRgb),
+      italic: true,
+    )
+    let style = colorPair.toStyle({Bold, Underline})
+    check style.modifiers == {Bold, Underline, Italic}
+
 suite "color - theme colors":
   test "setThemeColors and getThemeColor":
     var colors: ThemeColors
@@ -374,6 +391,22 @@ suite "color - theme colors":
     let retrieved = getThemeColor(EditorColorPairIndex.default)
     check retrieved.foreground.rgb.red == 200
     check retrieved.background.rgb.red == 30
+
+  test "getThemeStyle adds the pair's italic to the modifiers":
+    let saved = themeColors
+    var colors: ThemeColors
+    colors[EditorColorPairIndex.comment] = ColorPair(
+      foreground: ThemeColor(rgb: Rgb(red: 100, green: 100, blue: 100)),
+      background: ThemeColor(rgb: Rgb(red: 0, green: 0, blue: 0)),
+      italic: true,
+    )
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+
+    let style = getThemeStyle(EditorColorPairIndex.comment, {Bold})
+    check style.modifiers == {Bold, Italic}
+    check getThemeStyle(EditorColorPairIndex.comment).modifiers == {Italic}
 
 suite "color - colorModeRank":
   test "ranking order":

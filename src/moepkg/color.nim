@@ -413,6 +413,7 @@ type
   ColorPair* = object
     foreground*: ThemeColor
     background*: ThemeColor
+    italic*: bool ## Whether the text is drawn in italics, if the terminal has them
 
   ## All theme colors indexed by EditorColorPairIndex
   ThemeColors* = array[EditorColorPairIndex, ColorPair]
@@ -1012,19 +1013,29 @@ proc toColorValue*(rgb: Rgb): ColorValue =
 proc toStyle*(colorPair: ColorPair): Style =
   ## Convert ColorPair to celina Style.
 
-  result = Style(
-    fg: colorPair.foreground.rgb.toColorValue,
-    bg: colorPair.background.rgb.toColorValue,
-    modifiers: {},
-  )
-
-proc toStyle*(colorPair: ColorPair, modifiers: set[StyleModifier]): Style =
-  ## Convert ColorPair to celina Style with modifiers.
-
+  let modifiers =
+    if colorPair.italic:
+      {StyleModifier.Italic}
+    else:
+      {}
   result = Style(
     fg: colorPair.foreground.rgb.toColorValue,
     bg: colorPair.background.rgb.toColorValue,
     modifiers: modifiers,
+  )
+
+proc toStyle*(colorPair: ColorPair, modifiers: set[StyleModifier]): Style =
+  ## Convert ColorPair to celina Style with modifiers, plus the pair's italic.
+
+  let styleModifiers =
+    if colorPair.italic:
+      modifiers + {StyleModifier.Italic}
+    else:
+      modifiers
+  result = Style(
+    fg: colorPair.foreground.rgb.toColorValue,
+    bg: colorPair.background.rgb.toColorValue,
+    modifiers: styleModifiers,
   )
 
 # Global theme colors (will be initialized from theme.nim)

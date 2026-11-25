@@ -20,10 +20,24 @@
 import std/[unittest, strutils]
 
 import pkg/results
+from pkg/celina import StyleModifier, `==`
 
 import ../src/moepkg/render_utils {.all.}
-import ../src/moepkg/[types, config, primitives, unicode_utils]
+import ../src/moepkg/[types, color, config, primitives, unicode_utils]
 import ../src/moepkg/buffer/[core, edit]
+
+suite "separatorStyle":
+  test "Stays upright when line numbers are italic":
+    let saved = themeColors
+    var colors = saved
+    colors[EditorColorPairIndex.lineNum].italic = true
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+
+    check Italic in lineNumStyle().modifiers
+    check Italic notin separatorStyle().modifiers
+    check separatorStyle().fg == lineNumStyle().fg
 
 suite "formatLineNumber":
   # formatLineNumber uses: align($(lineIndex + 1), width - 1) & " "

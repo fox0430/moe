@@ -44,7 +44,7 @@
 ##     sections in the input are dropped.
 ##   - `--in-place` overwrites an existing `<file>.bak` without warning.
 
-import std/[os, strutils, tables]
+import std/[options, os, strutils, tables]
 
 import pkg/parsetoml
 
@@ -55,6 +55,8 @@ type
     newKey: string
     fg: string # empty means "no fg"
     bg: string # empty means "no bg"
+    italic: Option[bool]
+    emptyColor: bool # a color key is present but empty
 
 const
   ColorsSection = "Colors"
@@ -94,7 +96,7 @@ proc collectEntries(colors: TomlTableRef): seq[Entry] =
     entries: seq[Entry] = @[]
     indexOf = initTable[string, int]() # newKey -> position in entries
 
-  template upsert(nk, fgVal, bgVal: string) =
+  template upsert(nk, fgVal, bgVal: string, italicVal = none(bool), empty = false) =
     let newKeyExpr = nk
     if newKeyExpr in indexOf:
       let i = indexOf[newKeyExpr]
@@ -102,9 +104,15 @@ proc collectEntries(colors: TomlTableRef): seq[Entry] =
         entries[i].fg = fgVal
       if bgVal.len > 0 and entries[i].bg.len == 0:
         entries[i].bg = bgVal
+      if italicVal.isSome:
+        entries[i].italic = italicVal
+      if empty:
+        entries[i].emptyColor = true
     else:
       indexOf[newKeyExpr] = entries.len
-      entries.add Entry(newKey: newKeyExpr, fg: fgVal, bg: bgVal)
+      entries.add Entry(
+        newKey: newKeyExpr, fg: fgVal, bg: bgVal, italic: italicVal, emptyColor: empty
+      )
 
   for key, val in colors[].pairs:
     if key == "foreground" or key == "background":
@@ -113,12 +121,24 @@ proc collectEntries(colors: TomlTableRef): seq[Entry] =
     if val.kind == TomlValueKind.Table:
       # Already-migrated entry passing through. Preserve it as-is.
       let sub = val.tableVal
-      var fg, bg: string
+      var
+        fg, bg: string
+        empty = false
       if sub[].hasKey("fg"):
         fg = sub[]["fg"].tomlString
+        empty = empty or fg.len == 0
       if sub[].hasKey("bg"):
         bg = sub[]["bg"].tomlString
-      upsert(key, fg, bg)
+        empty = empty or bg.len == 0
+      var italic = none(bool)
+      if sub[].hasKey("italic"):
+        let v = sub[]["italic"]
+        if v.kind != TomlValueKind.Bool:
+          raise newException(
+            MigrationError, "expected boolean value for 'italic', got " & $v.kind
+          )
+        italic = some(v.getBool())
+      upsert(key, fg, bg, italic, empty)
       continue
 
     if val.kind != TomlValueKind.String:
@@ -126,47 +146,52 @@ proc collectEntries(colors: TomlTableRef): seq[Entry] =
         MigrationError, "unexpected value kind for '" & key & "': " & $val.kind
       )
 
-    let value = val.stringVal
+    let
+      value = val.stringVal
+      empty = value.len == 0
 
     # Bg-only enum: enum name ends in "Bg" and the new key drops the suffix.
     if key in BgOnlyRenames:
-      upsert(BgOnlyRenames[key], "", value)
+      upsert(BgOnlyRenames[key], "", value, empty = empty)
       continue
 
     # Renamed pair: configModePopupBg (fg) and configModePopupBgBg (bg)
     # collapse to `configModePopup`.
     if key in PairRenames:
-      upsert(PairRenames[key], value, "")
+      upsert(PairRenames[key], value, "", empty = empty)
       continue
     if key.endsWith("Bg") and key[0 ..< key.len - 2] in PairRenames:
-      upsert(PairRenames[key[0 ..< key.len - 2]], "", value)
+      upsert(PairRenames[key[0 ..< key.len - 2]], "", value, empty = empty)
       continue
 
     # Plain `keyBg` carries the bg of base key.
     if key.endsWith("Bg"):
       let base = key[0 ..< key.len - 2]
-      upsert(base, "", value)
+      upsert(base, "", value, empty = empty)
       continue
 
     # Plain base key carries the fg.
-    upsert(key, value, "")
+    upsert(key, value, "", empty = empty)
 
   entries
 
-proc renderInlineTable(key, fg, bg: string): string =
-  ## Format `{ fg = "...", bg = "..." }`, omitting whichever side is empty.
-  ## At least one of fg/bg must be non-empty; an entry with both sides empty
-  ## indicates the source file has an empty color value (e.g. `lineNum = ""`).
-  if fg.len == 0 and bg.len == 0:
+proc renderInlineTable(entry: Entry): string =
+  ## Format `{ fg = "...", bg = "...", italic = true }`, omitting whichever
+  ## part is absent. An entry needs a color, or an `italic` with no color key;
+  ## otherwise the source file has an empty color value (e.g. `lineNum = ""`).
+  var channels: seq[string]
+  if entry.fg.len > 0:
+    channels.add "fg = \"" & entry.fg & "\""
+  if entry.bg.len > 0:
+    channels.add "bg = \"" & entry.bg & "\""
+  if channels.len == 0 and (entry.emptyColor or entry.italic.isNone):
     raise newException(
-      MigrationError, "entry '" & key & "' has no fg or bg value (empty color?)"
+      MigrationError,
+      "entry '" & entry.newKey & "' has no fg or bg value (empty color?)",
     )
-  if fg.len > 0 and bg.len > 0:
-    "{ fg = \"" & fg & "\", bg = \"" & bg & "\" }"
-  elif fg.len > 0:
-    "{ fg = \"" & fg & "\" }"
-  else:
-    "{ bg = \"" & bg & "\" }"
+  if entry.italic.isSome:
+    channels.add "italic = " & $entry.italic.get
+  "{ " & channels.join(", ") & " }"
 
 proc migrateThemeToml*(input: string): string =
   ## Pure transformation: legacy TOML text in, new-format TOML text out.
@@ -200,7 +225,7 @@ proc migrateThemeToml*(input: string): string =
     lines.add ""
 
   for entry in collectEntries(colors):
-    lines.add entry.newKey & " = " & renderInlineTable(entry.newKey, entry.fg, entry.bg)
+    lines.add entry.newKey & " = " & renderInlineTable(entry)
 
   lines.add "" # trailing newline
   lines.join("\n")

@@ -168,3 +168,49 @@ alpha = "#222222"
     check zebraIdx >= 0
     check alphaIdx >= 0
     check zebraIdx < alphaIdx
+
+  test "an inline table's italic survives migration":
+    let src = """
+[Colors]
+foreground = "#ffffff"
+background = "#000000"
+
+comment = "#636d83"
+keyword = { fg = "#111111", italic = true }
+"""
+    let actual = migrateThemeToml(src)
+    check "comment = { fg = \"#636d83\" }" in actual
+    check "keyword = { fg = \"#111111\", italic = true }" in actual
+
+  test "an inline table's italic = false survives migration":
+    let src = """
+[Colors]
+comment = "#636d83"
+markdownHeading = { fg = "#222222", italic = false }
+markdownCode = { italic = false }
+"""
+    let actual = migrateThemeToml(src)
+    check "markdownHeading = { fg = \"#222222\", italic = false }" in actual
+    check "markdownCode = { italic = false }" in actual
+
+  test "italic does not hide an empty legacy color":
+    for (legacy, key) in [
+      ("lineNumBg", "lineNum"),
+      ("currentLineBg", "currentLine"),
+      ("configModePopupBg", "configModePopup"),
+      ("configModePopupBgBg", "configModePopup"),
+    ]:
+      expect MigrationError:
+        discard migrateThemeToml(
+          "[Colors]\n" & legacy & " = \"\"\n" & key & " = { italic = true }\n"
+        )
+
+  test "italic does not hide an empty color":
+    expect MigrationError:
+      discard migrateThemeToml(
+        """
+[Colors]
+comment = "#636d83"
+keyword = { fg = "", italic = true }
+"""
+      )

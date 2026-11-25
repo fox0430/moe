@@ -750,11 +750,9 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
     var textX = popupX + 2
     if itemIdx < 9:
       let numStr = $(itemIdx + 1) & "."
-      let numStyle = Style(
-        fg: getThemeStyle(EditorColorPairIndex.popupWindowScrollBar).fg,
-        bg: style.bg,
-        modifiers: {},
-      )
+      var numStyle = getThemeStyle(EditorColorPairIndex.popupWindowScrollBar)
+      numStyle.bg = style.bg
+      numStyle.modifiers = numStyle.modifiers + style.modifiers
       buffer.setString(textX, y, numStr, numStyle)
       textX += 2
       buffer.setString(textX, y, " ", style)

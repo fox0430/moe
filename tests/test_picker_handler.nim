@@ -518,6 +518,37 @@ suite "picker: the screen":
     check onSelected
     check not matchBg
 
+  test "A match takes the match entry's modifiers on the row's background":
+    # After the editor, which sets the theme up.
+    let e = newPickerEditor()
+    let saved = themeColors
+    var colors = saved
+    colors[EditorColorPairIndex.popupWindowMatch].italic = true
+    colors[EditorColorPairIndex.popupWindowMatchSel].italic = true
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+    # `a` matches every buffer, the selected one too.
+    e.typeKeys(":picker buffers<Enter>a")
+    var frame = newBuffer(80, 24)
+    e.render(frame)
+    let
+      match = getThemeStyle(EditorColorPairIndex.popupWindowMatch)
+      matchSel = getThemeStyle(EditorColorPairIndex.popupWindowMatchSel)
+      normal = getThemeStyle(EditorColorPairIndex.popupWindow)
+      current = getThemeStyle(EditorColorPairIndex.popupWinCurrentLine)
+    var onRow, onSelected = false
+    for y in 0 ..< 24:
+      for x in 0 ..< 80:
+        let style = frame[x, y].style
+        if StyleModifier.Italic in style.modifiers:
+          if style.fg == match.fg and style.bg == normal.bg:
+            onRow = true
+          if style.fg == matchSel.fg and style.bg == current.bg:
+            onSelected = true
+    check onRow
+    check onSelected
+
   test "With no room for the box, none of it shows, nor the cursor":
     let e = newPickerEditor()
     e.typeKeys(":picker buffers<Enter>beta")
