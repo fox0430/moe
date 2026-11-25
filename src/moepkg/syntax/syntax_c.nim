@@ -84,6 +84,112 @@ proc rawStringOpen(g: GeneralTokenizer, position: int): int =
       inc(d)
   -1
 
+proc endsOperand(g: GeneralTokenizer, position: int): bool =
+  ## Whether the text before `position` on its line ends in an operand that no
+  ## type arguments follow: a call, an index or a literal.
+  const wordChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '$', '\x80' .. '\xFF'}
+  var p = position - 1
+  while p >= 0 and g.buf[p] in {' ', '\t'}:
+    dec(p)
+  if p < 0:
+    return false
+  if g.buf[p] in {')', ']', '"', '\''}:
+    return true
+  if g.buf[p] notin wordChars:
+    return false
+  while p > 0 and g.buf[p - 1] in wordChars:
+    dec(p)
+  g.buf[p] in {'0' .. '9'}
+
+proc startsOperand(g: GeneralTokenizer, position: int): bool =
+  ## Whether the text from `position` on its line starts an operand that does not
+  ## follow type arguments: a literal or a prefix operator.
+  var p = position
+  while g.buf[p] in {' ', '\t'}:
+    inc(p)
+  g.buf[p] in {'0' .. '9', '"', '\'', '-', '+', '!', '~'} or
+    (g.buf[p] == '.' and g.buf[p + 1] in {'0' .. '9'})
+
+proc opensGenerics(g: GeneralTokenizer, position: int): bool =
+  ## Whether the `<` at `position` opens type arguments or parameters that close
+  ## on the same line. A blank after the `<` makes it a comparison.
+  const
+    MaxLen = 1000
+    MaxDepth = 63
+    identStart = {'A' .. 'Z', 'a' .. 'z', '_', '$', '\x80' .. '\xFF'}
+    identChars = identStart + {'0' .. '9'}
+    expressionWords = ["false", "instanceof", "new", "null", "switch", "this", "true"]
+  if g.buf[position + 1] notin identStart + {'?', '@', '>'} or g.endsOperand(position):
+    return false
+  var
+    depth = 1
+    p = position + 1
+    bounded: set[0 .. MaxDepth] # Depths whose current argument has a bound.
+    argumentStart = true # Only annotations since the last `<` or `,`.
+    afterWildcard = false
+    inAnnotation = false # Past an `@`, or a `.` of the annotation's name.
+    annotationName = false # Past a part of the annotation's name.
+  while p - position <= MaxLen:
+    let c = g.buf[p]
+    if c in {' ', '\t'}:
+      inc(p)
+      continue
+    if c in identStart:
+      var word = ""
+      while g.buf[p] in identChars:
+        word.add g.buf[p]
+        inc(p)
+      if word in expressionWords or (word == "super" and not afterWildcard):
+        return false
+      annotationName = inAnnotation
+      if not inAnnotation:
+        argumentStart = false
+      if word == "extends":
+        bounded.incl depth
+      inAnnotation = false
+      afterWildcard = false
+      continue
+    case c
+    of '<':
+      # `<<` is a shift.
+      if depth == MaxDepth or g.buf[p + 1] == '<':
+        return false
+      inc(depth)
+      bounded.excl depth
+      argumentStart = true
+    of '>':
+      dec(depth)
+      if depth == 0:
+        # An operator: `a<b>>1`, `a<b, c>=d`
+        return g.buf[p + 1] notin {'>', '='} and not g.startsOperand(p + 1)
+      argumentStart = false
+    of ',':
+      bounded.excl depth
+      argumentStart = true
+    of '&':
+      # One joins bounds, two are the logical operator.
+      if depth notin bounded or g.buf[p + 1] == '&':
+        return false
+    of '?':
+      if not argumentStart:
+        return false
+    of '[':
+      inc(p)
+      while g.buf[p] in {' ', '\t'}:
+        inc(p)
+      if g.buf[p] != ']':
+        return false
+    of '.', '@':
+      discard
+    else:
+      return false
+    if c == '?':
+      argumentStart = false
+    afterWildcard = c == '?'
+    inAnnotation = c == '@' or (c == '.' and annotationName)
+    annotationName = false
+    inc(p)
+
 proc clikeNextToken*(
     g: var GeneralTokenizer,
     keywords: openArray[string],
@@ -290,7 +396,19 @@ proc clikeNextToken*(
     of '\0':
       g.kind = gtEof
     else:
-      if g.buf[pos] in opChars:
+      if g.genericDepth > 0 and g.buf[pos] in {'<', '>'}:
+        inc(g.genericDepth, if g.buf[pos] == '<': 1 else: -1)
+        g.kind = gtPunctuation
+        inc(pos)
+      elif g.buf[pos] == '<' and hasGenerics in flags and g.opensGenerics(pos):
+        g.genericDepth = 1
+        g.kind = gtPunctuation
+        inc(pos)
+      elif g.genericDepth > 0 and g.buf[pos] in opChars:
+        # One at a time, so that `?>` does not take the `>`.
+        g.kind = gtOperator
+        inc(pos)
+      elif g.buf[pos] in opChars:
         g.kind = gtOperator
         while g.buf[pos] in opChars:
           inc(pos)

@@ -38,6 +38,7 @@ type
     hasDoubleDashComments
     hasDoubleHashBracketComments
     hasDoubleHashComments
+    hasGenerics
     hasHashBracketComments
     hasHashComments
     hasHashHeadings
