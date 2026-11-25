@@ -140,8 +140,10 @@ suite "CommandCompletion - collectSyntaxLanguages":
 suite "CommandCompletion - theme names":
   template withThemes(files: openArray[string], body: untyped) =
     ## Run `body` with a home directory whose theme files are `files`.
-    withTempHome(home):
-      let themesDir {.inject.} = home / ".config" / "moe" / "themes"
+    withTempHome(tmpHome):
+      let
+        home {.inject.} = tmpHome
+        themesDir {.inject.} = home / ".config" / "moe" / "themes"
       createDir(themesDir)
       for file in files:
         writeFile(themesDir / file, "")
@@ -163,6 +165,16 @@ suite "CommandCompletion - theme names":
     withThemes(["dark.toml"]):
       removeDir(themesDir)
       check collectThemeNames("").mapIt(it.command) == @["default"]
+
+  test "The themes under XDG_CONFIG_HOME and the home fallback, each once":
+    withThemes(["dark.toml", "both.toml"]):
+      let xdg = home / "xdg"
+      createDir(xdg / "moe" / "themes")
+      for file in ["light.toml", "both.toml"]:
+        writeFile(xdg / "moe" / "themes" / file, "")
+      putEnv("XDG_CONFIG_HOME", xdg)
+      check collectThemeNames("").mapIt(it.command) ==
+        @["both", "dark", "default", "light"]
 
   test ":theme completes its first word only":
     withThemes(["dark.toml"]):

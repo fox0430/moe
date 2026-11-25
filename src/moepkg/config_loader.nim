@@ -38,7 +38,7 @@ import std/[options, os, strutils, tables]
 
 import pkg/[parsetoml, results]
 
-import config, color, config_macros
+import config, config_dir, color, config_macros
 
 when defined(moe.matter) or defined(features.moe.matter):
   import syntax/matter_backend
@@ -220,17 +220,14 @@ proc getConfigPath*(): string =
   ## 1. $XDG_CONFIG_HOME/moe/moerc.toml
   ## 2. ~/.config/moe/moerc.toml
 
-  let configPaths = [
-    getConfigDir() / "moe" / "moerc.toml",
-    getHomeDir() / ".config" / "moe" / "moerc.toml",
-  ]
-
-  for path in configPaths:
+  let dirs = moeConfigDirs()
+  for dir in dirs:
+    let path = dir / "moerc.toml"
     if fileExists(path):
       return path
 
   # Return the default location even if it doesn't exist
-  return getConfigDir() / "moe" / "moerc.toml"
+  return dirs[0] / "moerc.toml"
 
 proc loadConfig*(): Result[(EditorConfig, ValidationResult), string] =
   ## Load configuration from the default location, then merge the optional

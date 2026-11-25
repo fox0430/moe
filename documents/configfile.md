@@ -1,11 +1,13 @@
 # Configuration file
 
 Write moe's configuration file in toml.  
-The location is
+The file is searched in the following locations (in order):
 
-```
-~/.config/moe/moerc.toml
-```
+1. `$XDG_CONFIG_HOME/moe/moerc.toml` (`%APPDATA%\moe\moerc.toml` on Windows)
+2. `~/.config/moe/moerc.toml`
+
+An empty or relative `$XDG_CONFIG_HOME` is ignored, here and for the other
+files moe looks up in these directories.
 
 You can use the [example](../example/moerc.toml).
 
@@ -1114,6 +1116,8 @@ The file is searched in the following locations (in order):
 1. `$XDG_CONFIG_HOME/moe/keybindings.toml`
 2. `~/.config/moe/keybindings.toml`
 
+These are the directories of [`moerc.toml`](#configuration-file).
+
 The current directory is not searched, so a `keybindings.toml` inside a project you open cannot change your key mappings.
 
 Entries here are merged on top of `moerc.toml`'s `[KeyMapping]` section. When both define the same key in the same mode, the dedicated file wins (it is loaded last).
@@ -1883,6 +1887,13 @@ Notes:
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | kind | ThemeKind | config | Theme kind |
 | path | string | ~/.config/moe/themes/dark.toml | A path of user theme. Also Please set `"config"` to `Theme.kind`. |
+
+`:theme <name>` searches for `<name>.toml` in the following locations (in order):
+
+1. `$XDG_CONFIG_HOME/moe/themes`
+2. `~/.config/moe/themes`
+
+These are the directories of [`moerc.toml`](#configuration-file).
 
 
 ### Color table (Theme)

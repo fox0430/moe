@@ -34,7 +34,7 @@ import
     editor_build_jobs, path_key, cursor_util, fold_open, pending_input,
   ]
 import ../command_registry/core
-from ../theme import DefaultThemeName, ThemeFileExt, userThemesDir
+from ../theme import DefaultThemeName, findUserTheme
 
 when not defined(moe.embedded):
   import ../[editor_window_layout, editor_window_tab, terminal_mode]
@@ -850,8 +850,8 @@ proc applyThemeCommand*(e: Editor, themeName: string) =
     e.state.statusMessage = "Theme changed to: default"
     return
 
-  let themePath = userThemesDir() / (themeName & ThemeFileExt)
-  if not fileExists(themePath):
+  let themePath = findUserTheme(themeName)
+  if themePath.len == 0:
     e.state.statusMessage = "Theme not found: " & themeName
     return
 
