@@ -26,13 +26,14 @@ import
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
     render_utils, lsp_service, lsp_integration, setting_options, editor_init,
     command_config, command_registry, logger, modes, types, viewer_mode, buffer_manager,
+    editor_window_state,
   ]
 import ../src/moepkg/filer
 import config_test_helper
 import visual_test_helper
 import
   ../src/moepkg/command_handlers/
-    [command_mode_handler, editor_ops, handler_result, result_processor]
+    [command_mode_handler, editor_ops, handler_result, result_processor, window_ops]
 import ../src/moepkg/command_line/substitute_parser
 
 proc createTestEditor(): Editor =
@@ -424,6 +425,102 @@ suite "Editor - switchToBuffer":
     # same file. A renumbering would silently open the other one.
     check e.switchToBuffer($survivor.number)
     check e.activeBuffer().filePath == survivor.filePath
+
+  proc openNew(e: Editor): BufferId =
+    check e.enew().isOk
+    e.activeWindow.tabBufferId
+
+  test ":b # goes back and forth between two buffers":
+    let e = createTestEditor()
+    let a = e.activeWindow.tabBufferId
+    let b = e.openNew()
+
+    check e.switchToBuffer("#")
+    check e.activeWindow.tabBufferId == a
+    check e.switchToBuffer($a.int)
+    check e.switchToBuffer("#")
+    check e.activeWindow.tabBufferId == b
+
+  test ":b # without an alternate buffer is refused":
+    let e = createTestEditor()
+    check not e.switchToBuffer("#")
+    check e.state.statusMessage == "E23: No alternate file"
+
+  test ":b # is refused once the alternate buffer is deleted":
+    let e = createTestEditor()
+    let b = e.openNew()
+    check e.deleteBufferByArg("#").isOk
+    check not e.switchToBuffer("#")
+    check e.activeWindow.tabBufferId == b
+
+  test ":bd # from the FileTree sidebar deletes the served window's alternate":
+    let e = createTestEditor()
+    let a = e.activeWindow.tabBufferId
+    let b = e.openNew()
+    e.toggleFileTree(none(string), e.activeBuffer())
+    e.windowManager.activateWindow(0)
+    e.syncActiveWindow()
+    check e.activeWindow.isSidebar
+    check e.deleteBufferByArg("#").isOk
+    check e.bufferById(a).isNone
+    check e.bufferById(b).isSome
+    check e.deleteBufferByArg("#").error == "E23: No alternate file"
+
+  test "Deleting the current buffer leaves no deleted alternate":
+    let e = createTestEditor()
+    let a = e.activeWindow.tabBufferId
+    discard e.openNew()
+    let c = e.openNew()
+    check e.deleteCurrentBuffer().isOk
+    check e.activeWindow.tabBufferId != c
+    check e.activeWindow.alternateBufferId != c
+    discard e.deleteCurrentBuffer()
+    check e.activeWindow.tabBufferId == a
+    check not e.switchToBuffer("#")
+
+  test "The alternate buffer is the window's own":
+    let e = createTestEditor()
+    let a = e.activeWindow.tabBufferId
+    let b = e.openNew()
+    # A split of the same buffer takes the alternate over.
+    check e.vsplit().isOk
+    check e.activeWindow.alternateBufferId == a
+    let c = e.openNew()
+    check e.activeWindow.alternateBufferId == b
+    for win in e.windowManager.windows:
+      if win != e.activeWindow:
+        check win.alternateBufferId == a
+    # A split onto another file has the tab it was split from.
+    check e.vsplit(some(getTempDir() / "moe_test_alternate.txt")).isOk
+    check e.activeWindow.alternateBufferId == c
+
+  test "A split onto a file makes it the alternate of the window split":
+    for vertical in [true, false]:
+      let e = createTestEditor()
+      let origin = e.activeWindow
+      let a = origin.tabBufferId
+      let file = some(getTempDir() / "moe_test_alternate.txt")
+      check (if vertical: e.vsplit(file) else: e.hsplit(file)).isOk
+      check origin.alternateBufferId == e.activeWindow.tabBufferId
+      check e.activeWindow.alternateBufferId == a
+
+  test "A split of the same buffer or onto an empty one keeps the alternate":
+    let e = createTestEditor()
+    let a = e.activeWindow.tabBufferId
+    discard e.openNew()
+    let origin = e.activeWindow
+    check e.vsplit().isOk
+    check origin.alternateBufferId == a
+    check e.new().isOk
+    check origin.alternateBufferId == a
+
+  test "A refused :b beeps, ending the mapping that ran it":
+    let e = createTestEditor()
+    let beeps = e.state.beepCount
+    check e.processWindowResult(
+      HandlerResult(kind: hrBuffer, bufferArg: "#"), e.activeBuffer
+    )
+    check e.state.beepCount == beeps + 1
 
   test "Switch to buffer by filename":
     let e = createTestEditor()

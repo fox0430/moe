@@ -579,6 +579,15 @@ the current one, and lets you switch, close, or delete them. The number in front
 number taken by `:b number`; it stays with the buffer for its whole life, so
 deleting a buffer never renumbers the others.
 
+`:b #` switches to the alternate buffer: the one the window showed before the
+current one. Each window has its own. A split of the same buffer takes over the
+alternate of the window it was split from. After `:sp filename` or `:vs filename`
+opens another buffer, that buffer is the alternate of the window split, and the
+buffer split from is the alternate of the new window. Unlike in Vim, `:b #` does
+not reopen a deleted buffer: once the alternate is deleted, it reports
+`E23: No alternate file`. Deleting the current buffer can also leave the window
+without an alternate.
+
 When `:b name` or `:bd name` matches several buffers equally, it reports
 `E93: More than one match`; use the number from `:ls` or a longer path instead.
 
@@ -839,12 +848,13 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `redo` | Redo the last undone change |
 | `delete` | Delete current line and copy to register |
 | `ls` | Display all buffers |
+| `b {number\|name\|#}` | Switch to buffer |
 | `bprev` | Move to the previous tab, then back to the previous window by default |
 | `bnext` | Move to the next tab, then on to the next window by default |
 | `bfirst` | Move to the first window by default, or to this window's first tab |
 | `blast` | Move to the last window by default, or to this window's last tab |
-| `bd [number|name]` | Delete buffer |
-| `bd! [number|name]` | Delete buffer, discarding unsaved changes or ending its job |
+| `bd [number\|name\|#]` | Delete buffer |
+| `bd! [number\|name\|#]` | Delete buffer, discarding unsaved changes or ending its job |
 | `vs` | Vertical split window |
 | `vs filename` | Open in a vertical split window |
 | `sp` | Horizontal split window |

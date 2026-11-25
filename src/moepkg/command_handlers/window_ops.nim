@@ -110,7 +110,9 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     e.switchToPrevTab()
     return true
   of hrBuffer:
-    discard e.switchToBuffer(r.bufferArg)
+    if not e.switchToBuffer(r.bufferArg):
+      # As a Vim error, the refusal ends the mapping that ran it.
+      e.state.beep()
     return true
   of hrNextWindow:
     e.switchToNextWindow()

@@ -376,15 +376,15 @@ suite "HelpViewer - Command mode rendering (snapshot)":
       "delete                - Delete current line and copy to register"
     )
 
-  test "head group 4 (buffers/windows) is aligned to width 17":
+  test "head group 4 (buffers/windows) is aligned to width 19":
     let state = newHelpViewerState()
-    check state.texts.contains("ls                - Display all buffers")
-    check state.texts.contains("bd [number|name]  - Delete buffer")
+    check state.texts.contains("ls                  - Display all buffers")
+    check state.texts.contains("bd [number|name|#]  - Delete buffer")
     check state.texts.contains(
-      "bd! [number|name] - Delete buffer, discarding unsaved changes or ending its job"
+      "bd! [number|name|#] - Delete buffer, discarding unsaved changes or ending its job"
     )
     check state.texts.contains(
-      "filetree path     - Toggle FileTree sidebar with specified root path"
+      "filetree path       - Toggle FileTree sidebar with specified root path"
     )
 
   test "head group 5 (theme/noh/stripwhitespace) is aligned to width 15":

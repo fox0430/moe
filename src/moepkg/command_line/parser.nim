@@ -58,7 +58,7 @@ proc abbreviatedAction(
     if parser.aliases.getOrDefault(target.name, claUnknown) == target.action:
       return some(target.action)
 
-const BufferNumberActions = {claBuffer, claBufferDelete}
+const BufferArgActions = {claBuffer, claBufferDelete}
 
 proc isKnownName(parser: CommandLineParser, name: string): bool =
   name in parser.aliases or name in parser.shellCommands or
@@ -142,22 +142,24 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     parts[0] = first[0 .. bangPos]
     parts.insert(rest, 1)
 
-  # Vim ends a name at its letters, so ":bd2" is ":bd 2".
-  block splitTrailingNumber:
+  # Vim ends a name at its letters, so ":bd2" is ":bd 2" and ":b#" is ":b #".
+  block splitTrailingBuffer:
     let first = parts[0]
     if parser.isKnownName(first.toLowerAscii()):
-      break splitTrailingNumber
+      break splitTrailingBuffer
     var nameEnd = 0
     while nameEnd < first.len and first[nameEnd].isAlphaAscii:
       inc nameEnd
-    if nameEnd == 0 or nameEnd == first.len or
-        not first[nameEnd .. ^1].allCharsInSet(Digits):
-      break splitTrailingNumber
+    if nameEnd == 0 or nameEnd == first.len:
+      break splitTrailingBuffer
+    let arg = first[nameEnd .. ^1]
+    if arg != "#" and not arg.allCharsInSet(Digits):
+      break splitTrailingBuffer
     let name = first[0 ..< nameEnd].toLowerAscii()
-    if parser.aliases.getOrDefault(name, claUnknown) notin BufferNumberActions:
-      break splitTrailingNumber
+    if parser.aliases.getOrDefault(name, claUnknown) notin BufferArgActions:
+      break splitTrailingBuffer
     parts[0] = first[0 ..< nameEnd]
-    parts.insert(first[nameEnd .. ^1], 1)
+    parts.insert(arg, 1)
 
   block:
     # After the name, or after the `!` a name runs into, as `parts` has it.

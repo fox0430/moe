@@ -92,6 +92,9 @@ suite "help_markdown.renderBacktickCell":
   test "' or ' alternations wrap each side separately":
     check renderBacktickCell("bd or bd number") == "`bd` or `bd number`"
 
+  test "a pipe is escaped for the table":
+    check renderBacktickCell("b {name|#}") == "`b {name\\|#}`"
+
 suite "help_markdown.escapeMdCell":
   test "pipe is escaped":
     check escapeMdCell("a|b") == "a\\|b"

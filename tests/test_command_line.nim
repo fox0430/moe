@@ -720,18 +720,21 @@ suite "CommandLine - execute":
     check result.kind == claBuffer
     check result.bufferArg == "3"
 
-  test "A number right after a name is its argument":
+  test "A number or # right after a name is its argument":
     for (typed, kind, arg) in [
       (":b2", claBuffer, "2"),
       (":bd2", claBufferDelete, "2"),
       (":BD2", claBufferDelete, "2"),
       (":bd12", claBufferDelete, "12"),
+      (":b#", claBuffer, "#"),
+      (":bd#", claBufferDelete, "#"),
     ]:
       let parsed = parser.parseCommandLine(typed)
       checkpoint(typed)
       check parsed.action == kind
       check parsed.args == @[arg]
     check parser.parseCommandLine(":bd2x").action == claUnknown
+    check parser.parseCommandLine(":b#x").action == claUnknown
 
   test "A number right after a name that takes no buffer is not split":
     parser.addAlias("undo", claUndo)

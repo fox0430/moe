@@ -260,12 +260,18 @@ proc splitOrigin(
     false,
   )
 
+proc splitOntoFile(origin: EditorWindow, buf: TextBuffer) =
+  ## Make the file a split of `origin` opened its alternate, as Vim's do_exedit.
+  if buf.id != origin.tabBufferId:
+    origin.alternateBufferId = buf.id
+
 proc startSplitWindow(e: Editor, newWindow, origin: EditorWindow, fresh: bool) =
   ## Bring up the window a split of `origin` made: in the mode its tab derives,
   ## and on the same buffer wanting the column `origin` wants, as Vim's
   ## win_init copies curswant. `fresh` centers it as any arrival on a tab.
   if newWindow.buffer == origin.buffer:
     newWindow.takeWantedColumn(origin)
+  newWindow.alternateBufferId = e.alternateFor(origin, newWindow.tabBufferId)
   let anotherTab = newWindow.tabBufferId != origin.tabBufferId
   if anotherTab:
     e.placeInTab(newWindow, e.tabBuffer(newWindow))
@@ -376,7 +382,10 @@ proc vsplit*(
     let loaded = e.loadSplitBuffer(filename.get)
     if loaded.isErr:
       return err(loaded.error)
-    return e.vsplitWithBuffer(loaded.get, checkRoom = false, right = right)
+    let origin = e.activeWindow
+    discard ?e.vsplitWithBuffer(loaded.get, checkRoom = false, right = right)
+    origin.splitOntoFile(loaded.get)
+    return ok(())
 
   # Split the tab, not a mode-swapped view.
   e.vsplitWithBuffer(e.tabBuffer(e.activeWindow), checkRoom = false, right = right)
@@ -427,7 +436,10 @@ proc hsplit*(
     let loaded = e.loadSplitBuffer(filename.get)
     if loaded.isErr:
       return err(loaded.error)
-    return e.hsplitWithBuffer(loaded.get, checkRoom = false, below = below)
+    let origin = e.activeWindow
+    discard ?e.hsplitWithBuffer(loaded.get, checkRoom = false, below = below)
+    origin.splitOntoFile(loaded.get)
+    return ok(())
 
   # Split the tab, not a mode-swapped view.
   e.hsplitWithBuffer(e.tabBuffer(e.activeWindow), checkRoom = false, below = below)

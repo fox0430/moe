@@ -58,7 +58,7 @@ const
   ## doc groups by user-discoverability (basic → forced → window-scoped).
   CommandModeHeadNames = @[
     "bg", "man", "e", "saveas", "ene", "new", "vnew", "undo", "redo", "delete", "ls",
-    "bprev", "bnext", "bfirst", "blast", "bd", "vs", "sp", "only", "theme", "noh",
+    "b", "bprev", "bnext", "bfirst", "blast", "bd", "vs", "sp", "only", "theme", "noh",
     "stripwhitespace",
   ]
 
@@ -188,10 +188,11 @@ proc renderKbdKeysCell*(syntax: string): string =
 proc renderBacktickCell*(syntax: string): string =
   ## Render the Command-column cell for command-mode tables. Wraps the
   ## syntax in backticks and handles ` or ` alternations by wrapping each
-  ## side separately: `"bd or bd number"` → `` `bd` or `bd number` ``.
+  ## side separately: `"bd or bd number"` → `` `bd` or `bd number` ``. GFM
+  ## splits cells on `|` even in code, so it is escaped.
   var segments: seq[string] = @[]
   for seg in syntax.split(" or "):
-    segments.add "`" & seg & "`"
+    segments.add "`" & seg.replace("|", "\\|") & "`"
   segments.join(" or ")
 
 proc renderKbdHelpGroupRow(e: HelpEntry): string =
