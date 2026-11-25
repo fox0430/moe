@@ -496,7 +496,8 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "b",
     completionDescription: "Switch to buffer",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "b {number|name|#}", description: "Switch to buffer")],
     action: some(claBuffer),
     isCanonicalLong: false,
   ),
@@ -656,9 +657,9 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     name: "bd",
     completionDescription: "Delete buffer",
     helpEntries: @[
-      HelpEntry(syntax: "bd [number|name]", description: "Delete buffer"),
+      HelpEntry(syntax: "bd [number|name|#]", description: "Delete buffer"),
       HelpEntry(
-        syntax: "bd! [number|name]",
+        syntax: "bd! [number|name|#]",
         description: "Delete buffer, discarding unsaved changes or ending its job",
       ),
     ],

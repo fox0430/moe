@@ -405,11 +405,29 @@ proc switchToPrevTab*(e: Editor) =
   ## Switch to the previous tab in the active window's tab list (gT).
   e.cycleStops(csActiveWindow, -1)
 
+proc commandAlternate(e: Editor): Option[TextBuffer] =
+  ## The alternate buffer of the active window, or from the FileTree sidebar
+  ## that of the window it serves.
+  var win = e.activeWindow
+  if win.isSidebar:
+    let target = e.sidebarTarget()
+    if target < 0:
+      return none(TextBuffer)
+    win = e.windowManager.windows[target]
+  e.bufferById(win.alternateBufferId)
+
 proc resolveBufferArg*(e: Editor, arg: string): Result[BufferId, string] =
   ## Resolve a `:b`-style argument — a stable buffer number (`BufferId`, as
-  ## shown by `:ls`) or the best name match — to a registered buffer id.
+  ## shown by `:ls`), `#` for the alternate buffer or the best name match — to a
+  ## registered buffer id.
   if arg.len == 0:
     return err("E94: No matching buffer for " & arg)
+
+  if arg == "#":
+    let alternate = e.commandAlternate()
+    if alternate.isNone:
+      return err("E23: No alternate file")
+    return ok(alternate.get.id)
 
   # A number is not a position in the list: deleting a buffer never renumbers
   # the others.
@@ -466,7 +484,7 @@ proc resolveBufferArg*(e: Editor, arg: string): Result[BufferId, string] =
   err("E94: No matching buffer for " & arg)
 
 proc switchToBuffer*(e: Editor, arg: string): bool =
-  ## Switch to a buffer by number or name (:b N or :b name)
+  ## Switch to a buffer by number or name (:b N, :b # or :b name)
   ## Returns true if successful, false otherwise
   ## Uses the buffer list (not windows) like Vim
 
@@ -598,9 +616,9 @@ proc deleteBufferByArg*(
     e: Editor, arg: string, force: bool = false
 ): Result[(), string] =
   ## Delete a buffer named by a `:b`-style argument: a stable number as shown
-  ## by `:ls`, or the best name match (`:bd N`, `:bd name`). `force` skips the
-  ## modified and running-job checks as `:bd!` does. Refusals come back as
-  ## `err`, not a status message, so an embedding caller can tell a refusal
+  ## by `:ls`, `#` for the alternate buffer, or the best name match (`:bd N`,
+  ## `:bd #`, `:bd name`). `force` skips the modified and running-job checks as
+  ## `:bd!` does. Refusals come back as `err`, not a status message, so an embedding caller can tell a refusal
   ## from a deletion.
   let resolved = e.resolveBufferArg(arg)
   if resolved.isErr:
@@ -752,8 +770,10 @@ proc openAdditionalStartupFiles*(
   ## edit_buffers.
   let
     first = e.activeWindow
+    firstAlternate = first.alternateBufferId
     splitType = e.config.startUpFileOpen.splitType
   var
+    opened: seq[EditorWindow]
     unsplit: seq[TextBuffer]
     splitting = e.config.startUpFileOpen.autoSplit
   for i in 1 ..< filePaths.len:
@@ -769,6 +789,7 @@ proc openAdditionalStartupFiles*(
         of stHorizontal:
           e.hsplit(some(filePath), below = true)
       if splitResult.isOk:
+        opened.add e.activeWindow
         if readonly:
           e.activeBuffer().readOnly = true
           e.enforceModePolicy()
@@ -787,6 +808,15 @@ proc openAdditionalStartupFiles*(
       unsplit.add bufResult.get
       if readonly:
         bufResult.get.readOnly = true
+  # As Vim's edit_buffers, every window comes from the first file, not from the
+  # window before it as `:split file` would.
+  first.alternateBufferId = firstAlternate
+  for win in opened:
+    win.alternateBufferId =
+      if win.tabBufferId == first.tabBufferId:
+        BufferId(0)
+      else:
+        first.tabBufferId
   # Each split shrank the windows before it, so centre them at their final size.
   if e.windowManager.windows.len > 1:
     for win in e.windowManager.windows:

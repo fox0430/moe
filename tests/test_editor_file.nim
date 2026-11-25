@@ -234,6 +234,30 @@ suite "Editor - loadFile":
     check e.state.cursor.line == 0
     check e.state.cursor.column <= "Short".len
 
+suite "Editor - multi-file startup alternate buffer":
+  test "Auto-split windows have the first file as their alternate, as Vim's -O":
+    for splitType in [stVertical, stHorizontal]:
+      let e = createTestEditor()
+      e.config.startUpFileOpen.autoSplit = true
+      e.config.startUpFileOpen.splitType = splitType
+      var files: seq[string]
+      for name in ["a", "b", "c"]:
+        files.add getTempDir() / ("moe_test_startup_alt_" & name & ".txt")
+        writeFile(files[^1], name)
+      defer:
+        for file in files:
+          removeFile(file)
+
+      check e.loadFile(files[0]).isOk
+      let first = e.activeWindow
+      e.openAdditionalStartupFiles(files, readonly = false)
+      check e.windowManager.windows.len == 3
+      for win in e.windowManager.windows:
+        if win == first:
+          check win.alternateBufferId == BufferId(0)
+        else:
+          check win.alternateBufferId == first.tabBufferId
+
 suite "Editor - multi-file startup (no auto-split)":
   test "Each extra file becomes its own buffer":
     # Regression: `moe a b c` without auto-split used to call loadFile for

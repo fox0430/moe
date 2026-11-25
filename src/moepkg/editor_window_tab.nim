@@ -385,6 +385,16 @@ proc centerCursorLine*(e: Editor, win: EditorWindow) =
       centered = true,
     )
 
+proc alternateFor*(e: Editor, win: EditorWindow, tab: BufferId): BufferId =
+  ## The alternate buffer once `win`, or a window split off it, shows `tab`. A
+  ## tab that was deleted underneath `win` is not one to go back to.
+  if tab != win.tabBufferId and e.bufferById(win.tabBufferId).isSome:
+    win.tabBufferId
+  elif win.alternateBufferId == tab:
+    BufferId(0)
+  else:
+    win.alternateBufferId
+
 proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
   ## Move `win` onto `buf`'s tab and rebuild state owned by the old tab
   ## (Insert session, buffer-swap modes, view position, derived mode).
@@ -417,6 +427,7 @@ proc moveWindowToTab*(e: Editor, win: EditorWindow, buf: TextBuffer): TabMove =
   if wasSpecialMode:
     win.dropModeState()
 
+  win.alternateBufferId = e.alternateFor(win, buf.id)
   win.setTab(buf)
   e.placeInTab(win, buf)
 
@@ -439,6 +450,7 @@ proc moveTabUnder*(e: Editor, win: EditorWindow, buf: TextBuffer) =
   ## and resumes onto `buf` when it ends; any other window takes the shared
   ## transition.
   if win.viewerEntry.isSome:
+    win.alternateBufferId = e.alternateFor(win, buf.id)
     win.retabTo(buf)
   else:
     discard e.moveWindowToTab(win, buf)

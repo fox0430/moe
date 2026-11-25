@@ -249,6 +249,11 @@ type
       # (Terminal-Normal snapshot, Filer listing). Read it as `win.buffer`.
     tabBufferId*: BufferId
       # The tab the window is parked on. Changes on a tab switch only.
+    alternateBufferId*: BufferId
+      # The tab the window was on before, or the file `:split file` opened from
+      # it, as Vim's w_alt_fnum: what `:b #` goes to. A split starts from the
+      # alternate or the tab of the window split. Unassigned when there is none;
+      # may name a deleted buffer.
     bufferIds*: seq[BufferId]
       # Window-local tab list, stored as stable BufferIds.
       # Resolve via Editor.bufferById; entries pointing at deleted buffers
@@ -1310,13 +1315,15 @@ proc moveAcross*(lines: var seq[TabLine], bufferId: BufferId, move: RowMove) =
       spot.line = spot.line.moved(move)
 
 proc setTab*(win: EditorWindow, buf: TextBuffer) {.inline.} =
-  ## Move the window to another tab: view and identity change together.
+  ## Move the window to another tab: view and identity change together. The
+  ## caller updates `alternateBufferId` first.
   win.viewBuffer = buf
   win.tabBufferId = buf.id
 
 proc retabTo*(win: EditorWindow, buf: TextBuffer) {.inline.} =
   ## Move the tab while a mode holds a view up, for a tab deleted underneath
-  ## one. The mode restores `buf` when it exits.
+  ## one. The mode restores `buf` when it exits. The caller updates
+  ## `alternateBufferId` first.
   win.tabBufferId = buf.id
 
 proc setView*(win: EditorWindow, buf: TextBuffer) {.inline.} =
