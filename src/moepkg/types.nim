@@ -250,10 +250,10 @@ type
     tabBufferId*: BufferId
       # The tab the window is parked on. Changes on a tab switch only.
     alternateBufferId*: BufferId
-      # The tab the window was on before, or the file `:split file` opened from
-      # it, as Vim's w_alt_fnum: what `:b #` goes to. A split starts from the
-      # alternate or the tab of the window split. Unassigned when there is none;
-      # may name a deleted buffer.
+      # The tab the window was on before, or the file `:split file` or a picker's
+      # split opened from it, as Vim's w_alt_fnum: what `:b #` goes to. A split
+      # starts from the alternate or the tab of the window split. Unassigned when
+      # there is none; may name a deleted buffer.
     bufferIds*: seq[BufferId]
       # Window-local tab list, stored as stable BufferIds.
       # Resolve via Editor.bufferById; entries pointing at deleted buffers

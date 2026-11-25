@@ -260,7 +260,7 @@ proc splitOrigin(
     false,
   )
 
-proc splitOntoFile(origin: EditorWindow, buf: TextBuffer) =
+proc splitOntoFile*(origin: EditorWindow, buf: TextBuffer) =
   ## Make the file a split of `origin` opened its alternate, as Vim's do_exedit.
   if buf.id != origin.tabBufferId:
     origin.alternateBufferId = buf.id

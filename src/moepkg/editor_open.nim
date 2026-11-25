@@ -97,22 +97,27 @@ proc placeCursor(e: Editor, at: TargetPosition) =
       max(0, text.charLen - 1)
   e.activeWindow.cursor = BufferPosition(line: line, column: clamp(column, 0, last))
 
-proc splitForJump(e: Editor, placement: ViewerPlacement): Result[bool, string] =
+type JumpWindow = object
+  opened: bool ## A window was opened for the jump.
+  splitFrom: EditorWindow ## The window it was split off, nil when it was not.
+
+proc splitForJump(e: Editor, placement: ViewerPlacement): Result[JumpWindow, string] =
   ## Make the window a jump lands in: from the FileTree sidebar the one it
   ## serves (opened beside it when it is alone), then a `placement` split of
-  ## it. True when a window was opened for the jump.
+  ## it.
   let opened = ?e.leaveSidebar()
   if opened:
     # That window is new already: jump into it rather than split it again.
-    return ok(true)
+    return ok(JumpWindow(opened: true))
+  let origin = e.activeWindow
   case placement
   of vpInPlace:
-    return ok(false)
+    return ok(JumpWindow())
   of vpVSplit:
     discard ?e.vsplit()
   of vpHSplit:
     discard ?e.hsplit()
-  ok(true)
+  ok(JumpWindow(opened: true, splitFrom: origin))
 
 type JumpSubject* = object ## What a jump shows: a file, or a buffer of the editor.
   case isBuffer*: bool
@@ -141,10 +146,12 @@ proc jumpTo*(
     subject: JumpSubject,
     at: Option[TargetPosition],
     placement: ViewerPlacement,
+    asSplitFile = false,
 ): Result[OpenOutcome, string] =
   ## `jumpToFile` for a file or a buffer of the editor, a buffer shown as `:b`
   ## shows it. Unlike moe's `:b`, and as Vim's, going to another buffer is a
-  ## jump.
+  ## jump. With `asSplitFile`, a split onto a file makes it the alternate of the
+  ## window split, as `:split file` does and Vim's `:sb` and `<C-w>]` do not.
   let
     side = e.activeWindow
     previous = e.windowManager.previousWindow
@@ -160,12 +167,14 @@ proc jumpTo*(
   if not e.shows(subject):
     let shown = e.show(subject)
     if shown.isErr:
-      if split.get:
+      if split.get.opened:
         # Don't leave the window opened for the jump behind
         discard e.closeWindow()
       e.restoreSidebarFocus(side, previous)
       return err(shown.error)
     outcome = ooOpened
+    if asSplitFile and not subject.isBuffer and split.get.splitFrom != nil:
+      split.get.splitFrom.splitOntoFile(e.tabBuffer(e.activeWindow))
   elif at.isNone:
     return ok(ooStayed)
 
