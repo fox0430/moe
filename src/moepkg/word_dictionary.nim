@@ -237,7 +237,7 @@ proc getLanguageKeywords*(lang: SourceLanguage): seq[string] =
     @NimKeywordList
   of langRust:
     @RustKeywordList
-  of langShell:
+  of langBash:
     @ShellKeywordList
   of langZsh:
     @ZshKeywordList

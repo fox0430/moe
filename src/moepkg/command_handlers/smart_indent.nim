@@ -22,7 +22,7 @@
 ## No buffer/state mutation. Used by Insert mode newline handlers when
 ## `smartIndent` is enabled. Every code language shares the bracket rules,
 ## read through the tokenizer from the highlighter's state; Nim adds its own,
-## and Shell and Zsh a table of block words.
+## and Bash and Zsh a table of block words.
 
 import std/[options, strutils]
 import ../syntax/[tokenizer, dispatch]
@@ -89,7 +89,7 @@ const
     ),
     ShellCase,
   ]
-  BlockWordLanguages* = {langShell, langZsh}
+  BlockWordLanguages* = {langBash, langZsh}
   Blanks = {' ', '\t'}
   WordAfter = Blanks + {';', '&', '|', '<', '>', '(', ')', '`'}
     ## What may follow a block word.

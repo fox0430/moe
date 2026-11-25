@@ -385,7 +385,12 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         while lexer.buf[position] notin wsChars and lexer.buf[position] notin eolChars:
           langName.add lexer.buf[position]
           inc position
-        let lang = getSourceLanguage(langName)
+        # GitHub's fence name for Bash; not a filetype name.
+        let lang =
+          if langName.toLowerAscii == "shell":
+            langBash
+          else:
+            getSourceLanguage(langName)
         lexer.lang.markdown.codeBlockLang = if lang == langMarkdown: langNone else: lang
         if langName.toLowerAscii == "vim9":
           lexer.lang.vim.vim9 = true

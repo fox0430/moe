@@ -84,8 +84,8 @@ suite "QuickRunUtils - languageExtension":
     check result.isOk
     check result.get == "cpp"
 
-  test "Shell extension":
-    let result = languageExtension(SourceLanguage.langShell)
+  test "Bash extension":
+    let result = languageExtension(SourceLanguage.langBash)
     check result.isOk
     check result.get == "bash"
 
@@ -429,22 +429,22 @@ suite "QuickRunUtils - builtinQuickRunCommand":
     check result.isOk
     check result.get.cmd == "python3"
 
-  test "Shell language with sh shebang":
+  test "Bash language with sh shebang":
     var buffer = newTextBuffer("#!/bin/sh\necho hello")
-    buffer.language = SourceLanguage.langShell
+    buffer.language = SourceLanguage.langBash
     let settings = QuickRunConfig(shOptions: none(string), bashOptions: none(string))
     let result = builtinQuickRunCommand(
-      "/path/to/script.sh", SourceLanguage.langShell, buffer, settings, "/work"
+      "/path/to/script.sh", SourceLanguage.langBash, buffer, settings, "/work"
     )
     check result.isOk
     check result.get.cmd == "/bin/sh"
 
-  test "Shell language with bash shebang":
+  test "Bash language with bash shebang":
     var buffer = newTextBuffer("#!/bin/bash\necho hello")
-    buffer.language = SourceLanguage.langShell
+    buffer.language = SourceLanguage.langBash
     let settings = QuickRunConfig(shOptions: none(string), bashOptions: none(string))
     let result = builtinQuickRunCommand(
-      "/path/to/script.sh", SourceLanguage.langShell, buffer, settings, "/work"
+      "/path/to/script.sh", SourceLanguage.langBash, buffer, settings, "/work"
     )
     check result.isOk
     check result.get.cmd == "/bin/bash"
@@ -804,9 +804,9 @@ suite "QuickRunUtils - prepareQuickRun":
       ("echo 1", SourceLanguage.langNim, "quickruntemp.nim"),
       ("int main() { return 0; }", SourceLanguage.langC, "quickruntemp.c"),
       ("int main() { return 0; }", SourceLanguage.langCpp, "quickruntemp.cpp"),
-      ("echo hello", SourceLanguage.langShell, "quickruntemp.bash"),
-      ("#!/bin/sh\necho hello", SourceLanguage.langShell, "quickruntemp.sh"),
-      ("#!/bin/sh -e\necho hello", SourceLanguage.langShell, "quickruntemp.sh"),
+      ("echo hello", SourceLanguage.langBash, "quickruntemp.bash"),
+      ("#!/bin/sh\necho hello", SourceLanguage.langBash, "quickruntemp.sh"),
+      ("#!/bin/sh -e\necho hello", SourceLanguage.langBash, "quickruntemp.sh"),
       ("fn main() {}", SourceLanguage.langRust, "quickruntemp.rs"),
     ]:
       var buffer = newTextBuffer(text)
@@ -1037,11 +1037,11 @@ suite "QuickRunUtils - prepareQuickRun with entries":
 
   test "A new file with no extension keeps its name, not the built-in one":
     var buffer = newTextBuffer("echo hello", some(dir / "newscript"))
-    buffer.language = SourceLanguage.langShell
+    buffer.language = SourceLanguage.langBash
     var config = newEditorConfig()
     config.quickRun.saveBufferWhenQuickRun = false
     config.quickRun.entries =
-      @[QuickRunEntry(filetype: @["shell"], command: "bash ${file}")]
+      @[QuickRunEntry(filetype: @["bash"], command: "bash ${file}")]
 
     let result = prepareQuickRun(buffer, config)
     require result.isOk
@@ -1282,7 +1282,7 @@ suite "QuickRunUtils - runs leave the current directory alone":
     inDir(getTempDir() / "moe_test_quickrun_cwd_bash"):
       createSymlink(victim, "quickruntemp.bash")
       var buffer = newTextBuffer("echo hi\npwd")
-      buffer.language = SourceLanguage.langShell
+      buffer.language = SourceLanguage.langBash
 
       let prepared = prepareQuickRun(buffer, newEditorConfig())
       require prepared.isOk

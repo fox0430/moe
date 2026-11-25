@@ -1467,7 +1467,7 @@ proc chunkHandoffUnsafe*(language: SourceLanguage, state: TokenizerState): bool 
     # `blockScalarActive`). A boundary a finished scalar crossed cannot.
     state.state == gtCommand or
       (state.state == gtLongStringLit and not state.lang.yaml.blockScalarActive)
-  of SourceLanguage.langShell, SourceLanguage.langZsh, SourceLanguage.langMarkdown:
+  of SourceLanguage.langBash, SourceLanguage.langZsh, SourceLanguage.langMarkdown:
     # A heredoc's body starts at the line break after its `<<EOF`, which a
     # window cut on that line never reads, so the marker is still pending. A
     # `\` continuation leaves the same state where resuming would be right;
@@ -2210,7 +2210,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langHyprland
   of ".bashrc", ".bash_profile", "bash_profile", ".bash_login", ".bash_logout",
       ".bash_aliases", ".profile":
-    return SourceLanguage.langShell
+    return SourceLanguage.langBash
   of ".zshrc", ".zprofile", "zprofile", ".zshenv", ".zlogin", ".zlogout":
     return SourceLanguage.langZsh
   of ".exrc", "_exrc":
@@ -2263,7 +2263,7 @@ proc detectLanguage*(filename: string): SourceLanguage =
   of ".rs":
     return SourceLanguage.langRust
   of ".bash", ".sh":
-    return SourceLanguage.langShell
+    return SourceLanguage.langBash
   of ".fish":
     return SourceLanguage.langFish
   of ".zsh", ".zshrc", ".zshenv", ".zlogin", ".zlogout", ".zprofile":

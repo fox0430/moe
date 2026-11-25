@@ -258,8 +258,8 @@ suite "word_dictionary: getLanguageKeywords":
     check "await" in keywords
     check "interface" in keywords
 
-  test "Shell":
-    let keywords = getLanguageKeywords(langShell)
+  test "Bash":
+    let keywords = getLanguageKeywords(langBash)
     check keywords.len > 0
     check "if" in keywords
     check "then" in keywords

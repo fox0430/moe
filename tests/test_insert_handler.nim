@@ -4571,7 +4571,7 @@ suite "Insert Mode Handler - closer typed at the start of a line":
     check not state.insertStart.moved
 
   test "a closer in a heredoc or a raw string stays":
-    check closerTyped(langShell, "if x; then {\n  cat <<EOF\n    ", "}") == ("    }", 5)
+    check closerTyped(langBash, "if x; then {\n  cat <<EOF\n    ", "}") == ("    }", 5)
     check closerTyped(langCpp, "int f() {\n  auto s = R\"(\n    ", "}") == ("    }", 5)
 
   test "a closer inside a long string stays":
@@ -4636,7 +4636,7 @@ suite "Insert Mode Handler - shell block words":
       lines.add l.strip(trailing = false)
     lines.join("\n")
 
-  template checkTyped(text: string, language = langShell) =
+  template checkTyped(text: string, language = langBash) =
     # As Neovim's indent/sh.vim leaves it, unless the test says otherwise.
     check typed(language, flat(text)) == text
 
@@ -4735,7 +4735,7 @@ suite "Insert Mode Handler - shell block words":
   proc typedOnto(text, keys: string, expand = true, tabStop = 2): string =
     ## The last line after typing `keys` at the end of `text`.
     let buf = newTextBuffer()
-    buf.language = langShell
+    buf.language = langBash
     discard buf.insertText(BufferPosition(line: 0, column: 0), text)
     let handler = createTestHandler(buf)
     let state = createTestState()
@@ -4759,7 +4759,7 @@ suite "Insert Mode Handler - shell block words":
 
   test "Backspace keeps the indent the word had":
     let buf = newTextBuffer()
-    buf.language = langShell
+    buf.language = langBash
     discard buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n  ")
     let handler = createTestHandler(buf)
     let state = createTestState()
@@ -4784,7 +4784,7 @@ suite "Insert Mode Handler - shell block words":
       ("if a; then\n  n\n    ", 2, "y"), ("if a; then\n    \n  n", 1, "e")
     ]:
       let buf = newTextBuffer()
-      buf.language = langShell
+      buf.language = langBash
       discard buf.insertText(BufferPosition(line: 0, column: 0), text)
       let handler = createTestHandler(buf)
       let state = createTestState()
@@ -4804,7 +4804,7 @@ suite "Insert Mode Handler - shell block words":
   test "a completion is judged as typed":
     proc completed(text, keys, word: string): (string, int) =
       let buf = newTextBuffer()
-      buf.language = langShell
+      buf.language = langBash
       discard buf.insertText(BufferPosition(line: 0, column: 0), text)
       let handler = createTestHandler(buf)
       let state = createTestState()
@@ -4882,7 +4882,7 @@ suite "Insert Mode Handler - shell block words":
 
   test "Backspace past a separator keeps the indent the word had":
     let buf = newTextBuffer()
-    buf.language = langShell
+    buf.language = langBash
     discard
       buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n    b\n    ")
     let handler = createTestHandler(buf)
@@ -4902,7 +4902,7 @@ suite "Insert Mode Handler - shell block words":
   test "a completion is judged whichever key ends it":
     proc ended(keys, word: string, special: SpecialKey): string =
       let buf = newTextBuffer()
-      buf.language = langShell
+      buf.language = langBash
       discard
         buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n    b\n    ")
       let handler = createTestHandler(buf)
@@ -4932,7 +4932,7 @@ suite "Insert Mode Handler - shell block words":
   test "Ctrl-W, Ctrl-U and Delete keep the indent the word had":
     proc retyped(key: KeyCombo, keys: string): string =
       let buf = newTextBuffer()
-      buf.language = langShell
+      buf.language = langBash
       discard
         buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n    b\n    ;")
       let handler = createTestHandler(buf)
@@ -4957,7 +4957,7 @@ suite "Insert Mode Handler - shell block words":
 
   test "Delete in a snippet session keeps the indent the word had":
     let buf = newTextBuffer()
-    buf.language = langShell
+    buf.language = langBash
     discard
       buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n    b\n    ;")
     let handler = createTestHandler(buf)
@@ -4982,7 +4982,7 @@ suite "Insert Mode Handler - shell block words":
 
   test "a word put before text is not judged until it stands alone":
     let buf = newTextBuffer()
-    buf.language = langShell
+    buf.language = langBash
     discard buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n  x")
     let handler = createTestHandler(buf)
     let state = createTestState()
@@ -5000,7 +5000,7 @@ suite "Insert Mode Handler - shell block words":
 
   test "the cursor and where typing starts follow the word":
     let buf = newTextBuffer()
-    buf.language = langShell
+    buf.language = langBash
     discard buf.insertText(BufferPosition(line: 0, column: 0), "if a; then\n  f")
     let handler = createTestHandler(buf)
     let state = createTestState()
@@ -5016,7 +5016,7 @@ suite "Insert Mode Handler - shell block words":
     check state.insertStart.at == BufferPosition(line: 1, column: 1)
 
   test "without smartIndent the words stay":
-    check typed(langShell, "if a; then\n  b\nfi", smart = false) ==
+    check typed(langBash, "if a; then\n  b\nfi", smart = false) ==
       "if a; then\n  b\n  fi"
 
   test "other languages have no block words":

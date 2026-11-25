@@ -481,14 +481,14 @@ suite "a closer smartIndent reindents":
 
   test "`.` judges a block word where it types it":
     let e = smartPairing(@["if a", "    b", "  if c", "      d"], 1, 0)
-    e.activeBuffer.language = langShell
+    e.activeBuffer.language = langBash
     e.press("^Cfi<Escape>jj^.")
     check e.lines == @["if a", "fi", "  if c", "  fi"]
 
   test "`.` judges a completion the Escape or an arrow ended":
     for ending in ["<Escape>", "<Left><Escape>"]:
       let e = smartPairing(@["done", "while a", "    b", "  while c", "      d"], 2, 0)
-      e.activeBuffer.language = langShell
+      e.activeBuffer.language = langBash
       e.press("^Cdon<C-n><C-n>" & ending)
       check e.lines[2] == "done"
       e.press("jj^.")
@@ -497,7 +497,7 @@ suite "a closer smartIndent reindents":
   test "a key that types nothing itself after a completion keeps the typing":
     for key in ["<C-a>", "<F9>"]:
       let e = smartPairing(@["done", "while a", "    b", "q"], 3, 0)
-      e.activeBuffer.language = langShell
+      e.activeBuffer.language = langBash
       e.press("ofoo<Escape>kk")
       e.press("odon<C-n><C-n>" & key & "x<Escape>")
       let typed = if key == "<C-a>": "donefoox" else: "donex"
@@ -510,7 +510,7 @@ suite "a closer smartIndent reindents":
   test "`.` gives the indent back to a word typed on past with a pair":
     for rest in ["\"x", "'x"]:
       let e = smartPairing(@["if a", "    b", "    c"], 1, 0)
-      e.activeBuffer.language = langShell
+      e.activeBuffer.language = langBash
       e.press("ofi" & rest & "<Escape>j.")
       check e.lines[2] == e.lines[4]
       check strutils.startsWith(e.lines[2], "    fi")
@@ -518,19 +518,19 @@ suite "a closer smartIndent reindents":
   test "`.` gives the indent back to a pattern that is a block word":
     let e =
       smartPairing(@["for a in b; do", "  case x in", "    y) ;;", "    z) ;;"], 2, 0)
-    e.activeBuffer.language = langShell
+    e.activeBuffer.language = langBash
     e.press("odone)<Escape>j.")
     check e.lines[3] == "    done)"
     check e.lines[5] == "    done)"
 
   test "a block left open inside a carried closer keeps its indent":
-    proc typed(lines: string, language = langShell): seq[string] =
+    proc typed(lines: string, language = langBash): seq[string] =
       let e = smartPairing(@[""], 0, 0)
       e.activeBuffer.language = language
       e.press("i" & lines)
       e.lines
 
-    for language in [langShell, langZsh]:
+    for language in [langBash, langZsh]:
       check typed("f() {<Enter>if a; then<Enter>b<Enter>c<Enter>fi<Enter>d", language) ==
         @["f() {", "    if a; then", "        b", "        c", "    fi", "d}"]
     check typed("x=$(<Enter>if a; then<Enter>b<Enter>c") ==
@@ -545,7 +545,7 @@ suite "a closer smartIndent reindents":
       @["if z; then", "    f() {", "        if a; then b; fi", "    }"]
 
   test "a word before the closer of a pair is judged as a whole one":
-    for language in [langShell, langZsh]:
+    for language in [langBash, langZsh]:
       let e = smartPairing(@["f() {", "    if a; then", "        b", "        }"], 3, 8)
       e.activeBuffer.language = language
       e.press("ifi")
@@ -555,7 +555,7 @@ suite "a closer smartIndent reindents":
 
   test "a completion is judged only where its text was put":
     let e = smartPairing(@["if a; then", "    b", "        fi", "done x"], 1, 0)
-    e.activeBuffer.language = langShell
+    e.activeBuffer.language = langBash
     e.press("odon<C-n><C-n>")
     e.state.cursor = BufferPosition(line: 3, column: 10)
     e.press("<Escape>")
@@ -563,7 +563,7 @@ suite "a closer smartIndent reindents":
 
   test "a paste keeps the indent a block word had":
     let e = smartPairing(@["if a; then", "    b", "    c"], 1, 0)
-    e.activeBuffer.language = langShell
+    e.activeBuffer.language = langBash
     e.press("ofi")
     check e.handlePasteText("nd x")
     check e.lines[2] == "    find x"

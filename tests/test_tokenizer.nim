@@ -64,7 +64,7 @@ suite "tokenizer - sourceLanguageToStr":
     check sourceLanguageToStr[langJson] == "Json"
     check sourceLanguageToStr[langYaml] == "Yaml"
     check sourceLanguageToStr[langToml] == "Toml"
-    check sourceLanguageToStr[langShell] == "Shell"
+    check sourceLanguageToStr[langBash] == "Bash"
     check sourceLanguageToStr[langMarkdown] == "Markdown"
     check sourceLanguageToStr[langAstro] == "Astro"
 
@@ -115,8 +115,8 @@ suite "tokenizer - getSourceLanguage":
     check getSourceLanguage("tsx") == langTsx
     check getSourceLanguage("py") == langPython
     check getSourceLanguage("rs") == langRust
-    check getSourceLanguage("sh") == langShell
-    check getSourceLanguage("bash") == langShell
+    check getSourceLanguage("sh") == langBash
+    check getSourceLanguage("bash") == langBash
     check getSourceLanguage("yml") == langYaml
     check getSourceLanguage("docker") == langDockerfile
     check getSourceLanguage("md") == langMarkdown
@@ -128,6 +128,7 @@ suite "tokenizer - getSourceLanguage":
     check getSourceLanguage("unknown") == langNone
     check getSourceLanguage("") == langNone
     check getSourceLanguage("foo") == langNone
+    check getSourceLanguage("shell") == langNone
 
   test "getSourceLanguage with all languages":
     check getSourceLanguage("Astro") == langAstro
@@ -136,7 +137,7 @@ suite "tokenizer - getSourceLanguage":
     check getSourceLanguage("Java") == langJava
     check getSourceLanguage("JavaScriptReact") == langJsx
     check getSourceLanguage("Markdown") == langMarkdown
-    check getSourceLanguage("Shell") == langShell
+    check getSourceLanguage("Bash") == langBash
     check getSourceLanguage("Toml") == langToml
     check getSourceLanguage("Yaml") == langYaml
     check getSourceLanguage("Json") == langJson
@@ -616,23 +617,23 @@ suite "tokenizer - getNextToken with langToml":
     g.getNextToken(langToml)
     check g.kind == gtComment
 
-suite "tokenizer - getNextToken with langShell":
-  test "getNextToken tokenizes Shell keywords":
+suite "tokenizer - getNextToken with langBash":
+  test "getNextToken tokenizes Bash keywords":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("if then")
-    g.getNextToken(langShell)
+    g.getNextToken(langBash)
     check g.kind == gtKeyword
 
-  test "getNextToken tokenizes Shell comments":
+  test "getNextToken tokenizes Bash comments":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("# comment")
-    g.getNextToken(langShell)
+    g.getNextToken(langBash)
     check g.kind == gtComment
 
-  test "getNextToken tokenizes Shell variables":
+  test "getNextToken tokenizes Bash variables":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("$VAR")
-    g.getNextToken(langShell)
+    g.getNextToken(langBash)
     # $ is first tokenized as operator, then VAR as identifier
     check g.kind == gtOperator
 
@@ -1246,6 +1247,7 @@ suite "tokenizer - filetype tokens":
   test "The enum name without its lang prefix, lowercased":
     check sourceLanguageToFiletype[langNim] == "nim"
     check sourceLanguageToFiletype[langJavaScript] == "javascript"
+    check sourceLanguageToFiletype[langBash] == "bash"
     check sourceLanguageToFiletype[langCpp] == "cpp"
     check sourceLanguageToFiletype[langNone] == "none"
 
