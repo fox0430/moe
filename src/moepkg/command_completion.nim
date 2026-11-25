@@ -619,13 +619,12 @@ proc cmdPopupDescNormalStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.popupWindowDetail)
 
 proc cmdPopupDescSelectedStyle*(): Style =
-  ## Description text on the selected row: detail foreground over the
-  ## current-line background.
-  Style(
-    fg: getThemeStyle(EditorColorPairIndex.popupWindowDetail).fg,
-    bg: getThemeStyle(EditorColorPairIndex.popupWinCurrentLine).bg,
-    modifiers: {},
-  )
+  ## Description text on the selected row: the detail style over the
+  ## current line's background, plus its modifiers.
+  let row = getThemeStyle(EditorColorPairIndex.popupWinCurrentLine)
+  result = getThemeStyle(EditorColorPairIndex.popupWindowDetail)
+  result.bg = row.bg
+  result.modifiers = result.modifiers + row.modifiers
 
 proc calculateMaxCommandWidth*(entries: seq[CommandCompletionEntry]): int =
   ## Calculate the maximum command width (in terminal columns) in the entries

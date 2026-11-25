@@ -2385,6 +2385,410 @@ statusLineNormalMode = { fg = "#111111", bg = "#222222" }
     check colors[EditorColorPairIndex.markdownListMarker].background ==
       colors[EditorColorPairIndex.operator].background
 
+proc writeItalicTheme(name, content: string): string =
+  ## Write a temp theme file for the italic tests and return its path.
+  inc testFileCounter
+  result =
+    getTempDir() / ("moe_test_theme_italic_" & name & "_" & $testFileCounter & ".toml")
+  writeFile(result, content)
+
+suite "Config - theme italic":
+  test "Italic is loaded on the entries that set it":
+    let testFile = writeItalicTheme(
+      "load",
+      """
+[Colors]
+comment = { fg = "#636d83", italic = true }
+keyword = { italic = true }
+""",
+    )
+    defer:
+      removeFile(testFile)
+
+    let loaded = loadThemeFromToml(testFile)
+    require loaded.isOk
+    let colors = loaded.get
+    check colors[EditorColorPairIndex.comment].italic
+    check colors[EditorColorPairIndex.keyword].italic
+    check colors[EditorColorPairIndex.keyword].foreground ==
+      DefaultColors[EditorColorPairIndex.keyword].foreground
+    check colors[EditorColorPairIndex.keyword].background ==
+      DefaultColors[EditorColorPairIndex.keyword].background
+    check not colors[EditorColorPairIndex.stringLit].italic
+
+  test "Italic false and omitted are both upright":
+    let testFile = writeItalicTheme(
+      "upright",
+      """
+[Colors]
+comment = { italic = false }
+keyword = { fg = "#111111" }
+""",
+    )
+    defer:
+      removeFile(testFile)
+
+    let loaded = loadThemeFromToml(testFile)
+    require loaded.isOk
+    check not loaded.get[EditorColorPairIndex.comment].italic
+    check not loaded.get[EditorColorPairIndex.keyword].italic
+
+  test "A non-boolean italic is an error":
+    let testFile = writeItalicTheme(
+      "bad_type",
+      """
+[Colors]
+comment = { italic = "yes" }
+""",
+    )
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(testFile, vr)
+    require loaded.isOk
+    check vr.errors.anyIt(
+      it.kind == sikInvalidValue and it.name == "Theme.Colors.comment.italic"
+    )
+    check not loaded.get[EditorColorPairIndex.comment].italic
+
+  test "Italic on an entry that draws no text is an error":
+    let testFile = writeItalicTheme(
+      "bg_only",
+      """
+[Colors]
+currentLine = { bg = "#112233", italic = true }
+currentColumn = { italic = true }
+diffViewerAddedLineBg = { italic = true }
+diffViewerDeletedLineBg = { italic = true }
+diffViewerAddedWord = { italic = true }
+diffViewerDeletedWord = { italic = true }
+diffViewerFiller = { italic = true }
+selectArea = { italic = true }
+snippetTabStop = { italic = true }
+highlightTrailingSpaces = { italic = true }
+highlightFullWidthSpace = { italic = true }
+scrollBarThumb = { italic = true }
+scrollBarTrack = { italic = true }
+indentationLine = { italic = true }
+popupWindowBorder = { italic = true }
+notificationPopupInfoBorder = { italic = true }
+notificationPopupWarningBorder = { italic = true }
+notificationPopupErrorBorder = { italic = true }
+tempMessageBorder = { italic = true }
+whitespace = { italic = true }
+""",
+    )
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(testFile, vr)
+    require loaded.isOk
+    for key in [
+      "currentLine", "currentColumn", "diffViewerAddedLineBg",
+      "diffViewerDeletedLineBg", "diffViewerAddedWord", "diffViewerDeletedWord",
+      "diffViewerFiller", "selectArea", "snippetTabStop", "highlightTrailingSpaces",
+      "highlightFullWidthSpace", "scrollBarThumb", "scrollBarTrack", "indentationLine",
+      "popupWindowBorder", "notificationPopupInfoBorder",
+      "notificationPopupWarningBorder", "notificationPopupErrorBorder",
+      "tempMessageBorder", "whitespace",
+    ]:
+      check vr.errors.anyIt(
+        it.kind == sikInvalidValue and it.name == "Theme.Colors." & key & ".italic"
+      )
+    for index in EditorColorPairIndex:
+      check not loaded.get[index].italic
+    # The background the entry does use is still applied.
+    check loaded.get[EditorColorPairIndex.currentLineBg].background.rgb == rgb(
+      "#112233"
+    )
+    check not loaded.get[EditorColorPairIndex.currentLineBg].italic
+    check not loaded.get[EditorColorPairIndex.diffViewerAddedLineBg].italic
+
+  test "Italic on the default color pair is an error":
+    let testFile = writeItalicTheme(
+      "default",
+      """
+[Colors]
+default = { italic = true }
+""",
+    )
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(testFile, vr)
+    require loaded.isOk
+    check vr.errors.anyIt(
+      it.kind == sikInvalidValue and it.name == "Theme.Colors.default.italic"
+    )
+    check not loaded.get[EditorColorPairIndex.default].italic
+
+  test "Italic on a key shared by every mode is an unknown key":
+    let testFile = writeItalicTheme(
+      "shared",
+      """
+[Colors]
+statusLineMode = { italic = true }
+""",
+    )
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(testFile, vr)
+    require loaded.isOk
+    check vr.errors.anyIt(
+      it.kind == sikUnknownKey and it.name == "Theme.Colors.statusLineMode.italic"
+    )
+    check not loaded.get[EditorColorPairIndex.statusLineNormalMode].italic
+
+  test "Italic on a legacy Filer key is an unknown key":
+    let testFile = writeItalicTheme(
+      "legacy_filer",
+      """
+[Colors]
+dir = { italic = true }
+pcLink = { italic = true }
+""",
+    )
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let loaded = loadThemeFromToml(testFile, vr)
+    require loaded.isOk
+    for key in ["dir", "pcLink"]:
+      check vr.errors.anyIt(
+        it.kind == sikUnknownKey and it.name == "Theme.Colors." & key & ".italic"
+      )
+    check not loaded.get[EditorColorPairIndex.filerDirectory].italic
+    check not loaded.get[EditorColorPairIndex.filerSymlink].italic
+    check not loaded.get[EditorColorPairIndex.filerSymlinkDir].italic
+
+  test "Italic alone on a new Filer key keeps the legacy key's colors":
+    let testFile = writeItalicTheme(
+      "legacy_filer_colors",
+      """
+[Colors]
+filerDirectory = { italic = true }
+dir = { fg = "#030303", bg = "#040404" }
+pcLink = { fg = "#050505", bg = "#060606" }
+filerSymlink = { italic = false }
+""",
+    )
+    defer:
+      removeFile(testFile)
+      removeFile(testFile & ".bac")
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    check not vr.hasErrors
+    let (colors, source) = loaded.get
+    let directory = colors[EditorColorPairIndex.filerDirectory]
+    check directory.foreground.rgb == rgb("#030303")
+    check directory.background.rgb == rgb("#040404")
+    check directory.italic
+    for index in [
+      EditorColorPairIndex.filerSymlink, EditorColorPairIndex.filerSymlinkDir
+    ]:
+      check colors[index].foreground.rgb == rgb("#050505")
+      check colors[index].background.rgb == rgb("#060606")
+      check not colors[index].italic
+
+    require saveThemeToToml(colors, testFile, source).isOk
+    check "filerDirectory = { fg = \"#030303\", bg = \"#040404\", italic = true }" in
+      readFile(testFile)
+    check loadThemeFromToml(testFile).get == colors
+
+  test "A Markdown key without italic takes the replaced key's italic":
+    let testFile = writeItalicTheme(
+      "markdown",
+      """
+[Colors]
+builtin = { fg = "#111111", italic = true }
+specialVar = { fg = "#222222", italic = true }
+operator = { fg = "#333333" }
+preprocessor = { fg = "#444444", italic = true }
+markdownHeading = { bg = "#f0f0f0" }
+markdownCode = { italic = false }
+""",
+    )
+    defer:
+      removeFile(testFile)
+
+    let loaded = loadThemeFromToml(testFile)
+    require loaded.isOk
+    let colors = loaded.get
+    check colors[EditorColorPairIndex.markdownHeading].italic
+    check colors[EditorColorPairIndex.markdownFrontmatter].italic
+    # The replaced key is upright.
+    check not colors[EditorColorPairIndex.markdownListMarker].italic
+    # An explicit false is not overridden by the replaced key.
+    check not colors[EditorColorPairIndex.markdownCode].italic
+
+  test "A save writes italic = true and reloads the same":
+    let testFile = writeItalicTheme(
+      "save_true",
+      """
+[Colors]
+comment = { fg = "#636d83", italic = true }
+keyword = { italic = true }
+""",
+    )
+    defer:
+      removeFile(testFile)
+      removeFile(testFile & ".bac")
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    var (colors, source) = loaded.get
+    colors[EditorColorPairIndex.stringLit].foreground = ThemeColor(rgb: rgb("#abcdef"))
+    require saveThemeToToml(colors, testFile, source).isOk
+
+    let saved = readFile(testFile)
+    check "comment = { fg = \"#636d83\", italic = true }" in saved
+    check "keyword = { italic = true }" in saved
+    check loadThemeFromToml(testFile).get == colors
+
+  test "A save writes no italic for an upright entry":
+    let testFile = writeItalicTheme(
+      "save_omit",
+      """
+[Colors]
+keyword = { fg = "#111111" }
+""",
+    )
+    defer:
+      removeFile(testFile)
+      removeFile(testFile & ".bac")
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    var (colors, source) = loaded.get
+    colors[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: rgb("#abcdef"))
+    require saveThemeToToml(colors, testFile, source).isOk
+
+    # The header comment mentions italic; no entry may.
+    for line in readFile(testFile).splitLines:
+      if not line.startsWith("#"):
+        check "italic" notin line
+    check loadThemeFromToml(testFile).get == colors
+
+  test "A save keeps a Markdown key upright against an italic replaced key":
+    let testFile = writeItalicTheme(
+      "save_markdown_false",
+      """
+[Colors]
+builtin = { fg = "#111111", italic = true }
+markdownHeading = { fg = "#222222", italic = false }
+""",
+    )
+    defer:
+      removeFile(testFile)
+      removeFile(testFile & ".bac")
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    var (colors, source) = loaded.get
+    colors[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: rgb("#abcdef"))
+    require saveThemeToToml(colors, testFile, source).isOk
+
+    check "markdownHeading = { fg = \"#222222\", italic = false }" in readFile(testFile)
+    check loadThemeFromToml(testFile).get == colors
+
+  test "An inherited italic stays left out of a save":
+    let testFile = writeItalicTheme(
+      "save_inherited",
+      """
+[Colors]
+builtin = { fg = "#111111", italic = true }
+""",
+    )
+    defer:
+      removeFile(testFile)
+      removeFile(testFile & ".bac")
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    var (colors, source) = loaded.get
+    require colors[EditorColorPairIndex.markdownHeading].italic
+    colors[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: rgb("#abcdef"))
+    require saveThemeToToml(colors, testFile, source).isOk
+
+    for line in readFile(testFile).splitLines:
+      check not line.startsWith("markdownHeading")
+    check loadThemeFromToml(testFile).get == colors
+
+    # Once loaded back, it still follows the key it is inherited from.
+    writeFile(
+      testFile, readFile(testFile).replace("italic = true }", "italic = false }")
+    )
+    check not loadThemeFromToml(testFile).get[EditorColorPairIndex.markdownHeading].italic
+
+  test "An explicit italic equal to the inherited one is kept by a save":
+    let testFile = writeItalicTheme(
+      "save_explicit",
+      """
+[Colors]
+builtin = { italic = true }
+markdownHeading = { italic = true }
+comment = { italic = false }
+markdownCode = { italic = false }
+""",
+    )
+    defer:
+      removeFile(testFile)
+      removeFile(testFile & ".bac")
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    var (colors, source) = loaded.get
+    colors[EditorColorPairIndex.stringLit].foreground = ThemeColor(rgb: rgb("#abcdef"))
+    require saveThemeToToml(colors, testFile, source).isOk
+
+    let saved = readFile(testFile)
+    for key in [
+      "markdownHeading = { italic = true }", "comment = { italic = false }",
+      "markdownCode = { italic = false }",
+    ]:
+      check key in saved
+    check loadThemeFromToml(testFile).get == colors
+
+  test "An inactive status line takes the active one's italic":
+    let testFile = writeItalicTheme(
+      "inactive",
+      """
+[Colors]
+statusLineNormalMode = { fg = "#ffffff", bg = "#61afef", italic = true }
+statusLineInsertMode = { italic = true }
+statusLineInsertModeInactive = { italic = false }
+""",
+    )
+    defer:
+      removeFile(testFile)
+      removeFile(testFile & ".bac")
+
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    var (colors, source) = loaded.get
+    check colors[EditorColorPairIndex.statusLineNormalModeInactive].italic
+    check not colors[EditorColorPairIndex.statusLineInsertModeInactive].italic
+    colors[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: rgb("#abcdef"))
+    require saveThemeToToml(colors, testFile, source).isOk
+    for line in readFile(testFile).splitLines:
+      if line.startsWith("statusLineNormalModeInactive"):
+        check "italic" notin line
+    check loadThemeFromToml(testFile).get == colors
+
 suite "Config - loadTheme":
   test "tkDefault returns DefaultColors":
     var config = newEditorConfig()

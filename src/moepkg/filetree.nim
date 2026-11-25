@@ -373,7 +373,8 @@ proc createFileTreeTextBuffer*(state: FileTreeState, showIcons: bool): TextBuffe
   result.language = langNone
   result.filePath = some(state.rootPath)
 
-  # Build custom highlight ColorSegments for entry-type coloring
+  # Build custom highlight ColorSegments for entry-type coloring. Only fixed
+  # modifiers are stored; the rest follows the theme through the color index.
   var segments: seq[ColorSegment] = @[]
 
   for i, node in state.flatList:
@@ -381,33 +382,18 @@ proc createFileTreeTextBuffer*(state: FileTreeState, showIcons: bool): TextBuffe
     let lineLen = max(0, lines[row].toRunes().high)
     let (colorIdx, style) =
       if node.kind == fekDirectory:
-        (
-          EditorColorPairIndex.filerDirectory,
-          getThemeStyle(EditorColorPairIndex.filerDirectory, {StyleModifier.Bold}),
-        )
+        (EditorColorPairIndex.filerDirectory, Style(modifiers: {StyleModifier.Bold}))
       elif node.kind == fekSymlink:
         if node.targetKind == fekDirectory:
-          (
-            EditorColorPairIndex.filerSymlinkDir,
-            getThemeStyle(EditorColorPairIndex.filerSymlinkDir, {StyleModifier.Bold}),
-          )
+          (EditorColorPairIndex.filerSymlinkDir, Style(modifiers: {StyleModifier.Bold}))
         else:
-          (
-            EditorColorPairIndex.filerSymlink,
-            getThemeStyle(EditorColorPairIndex.filerSymlink),
-          )
+          (EditorColorPairIndex.filerSymlink, Style())
       elif node.isHidden:
-        (
-          EditorColorPairIndex.filerHiddenFile,
-          getThemeStyle(EditorColorPairIndex.filerHiddenFile),
-        )
+        (EditorColorPairIndex.filerHiddenFile, Style())
       elif node.isExecutable:
-        (
-          EditorColorPairIndex.filerExecutable,
-          getThemeStyle(EditorColorPairIndex.filerExecutable, {StyleModifier.Bold}),
-        )
+        (EditorColorPairIndex.filerExecutable, Style(modifiers: {StyleModifier.Bold}))
       else:
-        (EditorColorPairIndex.file, getThemeStyle(EditorColorPairIndex.file))
+        (EditorColorPairIndex.file, Style())
 
     segments.add(
       ColorSegment(
@@ -456,7 +442,7 @@ proc createFileTreeTextBuffer*(state: FileTreeState, showIcons: bool): TextBuffe
             lastRow: row,
             lastColumn: lastCol,
             color: EditorColorPairIndex.searchResult,
-            style: getThemeStyle(EditorColorPairIndex.searchResult),
+            style: Style(),
           )
         )
         let nextStart = pos + query.len

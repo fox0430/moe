@@ -290,6 +290,30 @@ suite "renderConfig - enum popup border":
       # vacuous.
       check borderCells > 0
 
+  test "The frame stays upright when the popup text is italic":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let saved = themeColors
+    var colors = saved
+    colors[EditorColorPairIndex.configModePopupBg].italic = true
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+    let configState = e.openEnumPopupOnFirstEnum()
+    require not configState.isNil
+    e.renderConfig(buffer, e.activeWindow, true, true, 0)
+
+    var frameCells, italicCells = 0
+    for y in 0 ..< buffer.area.height:
+      for x in 0 ..< buffer.area.width:
+        if buffer[x, y].symbol in ["┌", "┐", "└", "┘", "│", "─"]:
+          inc frameCells
+          check Italic notin buffer[x, y].style.modifiers
+        elif Italic in buffer[x, y].style.modifiers:
+          inc italicCells
+    check frameCells > 0
+    check italicCells > 0
+
   test "Selected row highlight is applied to the inner content, not the frame":
     let e = createTestEditor()
     var buffer = createTestBuffer()

@@ -2590,6 +2590,86 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     check style.bg == visualStyle().bg
     check style.fg == normalStyle().fg
 
+suite "getSelectionStyle - theme italic":
+  proc italicCommentEditor(): Editor =
+    ## An editor with a comment cell next to an upright one, for a theme that
+    ## draws comments in italics.
+    result = createTestEditor()
+    result.state.showSyntax = true
+    result.state.showCursorLine = false
+    discard result.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "ab")
+    result.activeBuffer.highlight = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 0,
+          color: EditorColorPairIndex.comment,
+        ),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 1,
+          lastRow: 0,
+          lastColumn: 1,
+          color: EditorColorPairIndex.default,
+        ),
+      ]
+    )
+
+  proc withItalicComment(): ThemeColors =
+    result = themeColors
+    result[EditorColorPairIndex.comment].italic = true
+
+  test "A comment cell is italic and its neighbor is not":
+    # The editor resets the global theme while it is created.
+    let e = italicCommentEditor()
+    let saved = themeColors
+    setThemeColors(withItalicComment())
+    defer:
+      setThemeColors(saved)
+
+    let commentStyle = e.getSelectionStyleAt(
+      e.activeBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 5,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check Italic in commentStyle.modifiers
+
+    let plainStyle = e.getSelectionStyleAt(
+      e.activeBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 1),
+      cursorLine = 5,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check Italic notin plainStyle.modifiers
+
+  test "Visual keeps the comment italic":
+    let e = italicCommentEditor()
+    let saved = themeColors
+    setThemeColors(withItalicComment())
+    defer:
+      setThemeColors(saved)
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 1)
+    )
+
+    let style = e.getSelectionStyleAt(
+      e.activeBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 5,
+      cursorCol = 0,
+      windowMode = EditorMode.Visual,
+    )
+    check Italic in style.modifiers
+    check style.bg == visualStyle().bg
+
 suite "getSelectionStyle - Matching paren":
   test "Returns paren pair style for matching paren":
     let e = createTestEditor()

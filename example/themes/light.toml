@@ -2,6 +2,7 @@
 # Color format: "#RRGGBB" (hex) or "termDefault" (terminal default color)
 # "termDefault" can be used for both foreground and background.
 # Define named colors under [Palette] and reuse them as fg/bg values.
+# Add "italic = true" to an entry to draw its text in italics.
 # Examples:
 #   foreground = "termDefault"  # Use terminal's default foreground color
 #   background = "termDefault"  # Use terminal's default background color

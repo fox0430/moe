@@ -19,6 +19,8 @@
 
 import std/[unittest, os, sets, options, tables, tempfiles, sequtils, strutils, unicode]
 
+import pkg/celina
+
 import ../src/moepkg/filetree {.all.}
 import ../src/moepkg/[buffer, color, highlight, unicode_utils]
 import ../src/moepkg/types/filer_types
@@ -758,6 +760,26 @@ suite "FileTreeState":
         EditorColorPairIndex.filerSymlink, EditorColorPairIndex.file,
       ]
     check buf.highlight.cursorLineColor == some(EditorColorPairIndex.currentFile)
+
+  test "createFileTreeTextBuffer does not store the theme's italic":
+    let saved = themeColors
+    var colors = saved
+    for pair in colors.mitems:
+      pair.italic = true
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+
+    let tmpDir = createTestTree()
+    defer:
+      removeDir(tmpDir)
+
+    let state = newFileTreeState(tmpDir)
+    state.searchText = "README"
+    state.updateSearchMatches()
+    let buf = state.createFileTreeTextBuffer(showIcons = false)
+    for seg in buf.highlight.colorSegments:
+      check Italic notin seg.style.modifiers
 
   test "createFileTreeTextBuffer adds searchResult highlight at correct column":
     let tmpDir = createTestTree()

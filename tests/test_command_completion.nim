@@ -21,7 +21,7 @@ import std/[unittest, os, tables, algorithm, strutils, sequtils]
 
 import pkg/celina
 
-import ../src/moepkg/[command_line, command_config, fuzzy_match]
+import ../src/moepkg/[command_line, command_config, fuzzy_match, color]
 import ../src/moepkg/command_completion {.all.}
 import ../src/moepkg/syntax/tokenizer
 import config_test_helper
@@ -1122,6 +1122,30 @@ suite "CommandCompletion - FilePathCommands constant":
     ## for it leads to `Unknown command` on Enter.
     check "save" notin FilePathCommands
     check "editconfigfile" notin FilePathCommands
+
+suite "CommandCompletion - cmdPopupDescSelectedStyle":
+  test "keeps the description's italic over the current-line background":
+    let saved = themeColors
+    var colors = saved
+    colors[EditorColorPairIndex.popupWindowDetail].italic = true
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+
+    let style = cmdPopupDescSelectedStyle()
+    check Italic in style.modifiers
+    check style.fg == getThemeStyle(EditorColorPairIndex.popupWindowDetail).fg
+    check style.bg == getThemeStyle(EditorColorPairIndex.popupWinCurrentLine).bg
+
+  test "takes the current line's italic":
+    let saved = themeColors
+    var colors = saved
+    colors[EditorColorPairIndex.popupWinCurrentLine].italic = true
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+
+    check Italic in cmdPopupDescSelectedStyle().modifiers
 
 suite "CommandCompletion - popup constants":
   test "Constants have expected values":

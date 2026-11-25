@@ -106,9 +106,15 @@ proc currentLineStyle*(): Style =
   ## Get current line number style from theme (with bold)
   getThemeStyle(EditorColorPairIndex.currentLineNum, {StyleModifier.Bold})
 
+proc withoutItalic*(style: Style): Style =
+  ## For frames and rules drawn with a text entry's colors: slanted
+  ## box-drawing characters do not join up.
+  result = style
+  result.modifiers.excl StyleModifier.Italic
+
 proc separatorStyle*(): Style =
   ## Get separator style (uses line number colors)
-  getThemeStyle(EditorColorPairIndex.lineNum)
+  getThemeStyle(EditorColorPairIndex.lineNum).withoutItalic
 
 proc commandStyle*(): Style =
   ## Get command line style from theme (with bold)

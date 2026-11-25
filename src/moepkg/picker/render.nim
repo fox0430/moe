@@ -194,10 +194,12 @@ proc renderPicker*(
     let
       y = list.y + i
       style = if row.selected: current else: normal
-    # Only the match's foreground, as Neovim lays PmenuMatch over Pmenu, so
-    # the row keeps its background whatever one a theme gives the match.
+      matchStyle = if row.selected: matchSel else: match
+    # Take the match's foreground and modifiers, as Neovim lays PmenuMatch over
+    # Pmenu; the row keeps its background whatever one a theme gives the match.
     var mark = style
-    mark.fg = (if row.selected: matchSel else: match).fg
+    mark.fg = matchStyle.fg
+    mark.modifiers = mark.modifiers + matchStyle.modifiers
     discard buffer.fillCells(list.x, y, list.x + list.width, style)
     buffer.drawText(
       list.x + 1,
