@@ -233,6 +233,11 @@ suite "word_dictionary: getLanguageKeywords":
     check "func" in keywords
     check "true" in keywords # Boolean
 
+  test "get Java keywords":
+    let keywords = getLanguageKeywords(langJava)
+    for word in ["class", "true", "null", "boolean", "int"]:
+      check word in keywords
+
   test "Python":
     let keywords = getLanguageKeywords(langPython)
     check keywords.len > 0

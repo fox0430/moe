@@ -70,8 +70,9 @@ const TokenScopes = [
   # the theme colors, itself or through a parent, is used. A lookup falls back
   # to parent scopes, as in TextMate, never to children: a child rule colors
   # only text with that scope. So a later scope counts only when no earlier
-  # one, nor any of its parents, is colored. rust-analyzer's types use its VS Code extension's scopes or the
-  # Rust grammar's.
+  # one, nor any of its parents, is colored. rust-analyzer's types use its VS
+  # Code extension's scopes or the Rust grammar's; builtinType ends with the Java
+  # grammar's.
   # Most keywords are keyword.control, which themes may color alone.
   (I.keyword, @["keyword", "keyword.control"]),
   (I.functionName, @["entity.name.function"]),
@@ -135,7 +136,10 @@ const TokenScopes = [
   (I.brace, @["punctuation.brackets.curly"]),
   (I.bracket, @["punctuation.brackets.square"]),
   (I.builtinAttribute, @["meta.attribute", "entity.name.function.decorator"]),
-  (I.builtinType, @["support.type.primitive", "entity.name.type"]),
+  (
+    I.builtinType,
+    @["support.type.primitive", "entity.name.type", "storage.type.primitive"],
+  ),
   (I.colon, @["keyword.operator.key-value"]),
   (I.comma, @["punctuation.comma"]),
   (I.comparison, @["keyword.operator.comparison"]),

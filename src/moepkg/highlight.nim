@@ -1116,6 +1116,8 @@ proc getEditorColorPair(
     EditorColorPairIndex.functionName
   of gtTypeName:
     EditorColorPairIndex.typeName
+  of gtBuiltinType:
+    EditorColorPairIndex.builtinType
   of gtWhitespace:
     EditorColorPairIndex.whitespace
   of gtPragma:

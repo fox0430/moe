@@ -132,6 +132,10 @@ proc getVimKeywords(): seq[string] {.compileTime.} =
 proc getJavaKeywords(): seq[string] {.compileTime.} =
   for s in javaKeywords:
     result.add s
+  for s in javaBooleans:
+    result.add s
+  for s in javaBuiltinTypes:
+    result.add s
 
 proc getJavaScriptKeywords(): seq[string] {.compileTime.} =
   for s in javaScriptkeywords:

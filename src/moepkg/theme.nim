@@ -665,7 +665,7 @@ const LightColors*: ThemeColors = [
   EditorColorPairIndex.brace: makeColorPair("#f8f5d5", "#ffffff"),
   EditorColorPairIndex.bracket: makeColorPair("#f8f5d5", "#ffffff"),
   EditorColorPairIndex.builtinAttribute: makeColorPair("#00b7ce", "#ffffff"),
-  EditorColorPairIndex.builtinType: makeColorPair("#00ffff", "#ffffff"),
+  EditorColorPairIndex.builtinType: makeColorPair("#008000", "#ffffff"),
   EditorColorPairIndex.colon: makeColorPair("#f8f5d5", "#ffffff"),
   EditorColorPairIndex.comma: makeColorPair("#f8f5d5", "#ffffff"),
   EditorColorPairIndex.comparison: makeColorPair("#f8f5d5", "#ffffff"),

@@ -95,7 +95,7 @@ bitwise = { fg = "#f8f5d5" }
 brace = { fg = "#f8f5d5" }
 bracket = { fg = "#f8f5d5" }
 builtinAttribute = { fg = "#00b7ce" }
-builtinType = { fg = "#00ffff" }
+builtinType = { fg = "#008000" }
 colon = { fg = "#f8f5d5" }
 comma = { fg = "#f8f5d5" }
 comparison = { fg = "#f8f5d5" }

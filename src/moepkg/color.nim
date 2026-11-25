@@ -613,7 +613,7 @@ const
     EditorColorPairIndex.brace: "LSP semantic token: brace",
     EditorColorPairIndex.bracket: "LSP semantic token: bracket",
     EditorColorPairIndex.builtinAttribute: "LSP semantic token: builtin attribute",
-    EditorColorPairIndex.builtinType: "LSP semantic token: builtin type",
+    EditorColorPairIndex.builtinType: "Syntax and LSP semantic token: builtin type",
     EditorColorPairIndex.colon: "LSP semantic token: colon",
     EditorColorPairIndex.comma: "LSP semantic token: comma",
     EditorColorPairIndex.comparison: "LSP semantic token: comparison operator",
