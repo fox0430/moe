@@ -154,6 +154,25 @@ suite "colorcode: scanLineForColorCodes":
     # And #ABCF is only 4 digits, not 6, so no 6-digit match either
     check matches.len == 0
 
+  test "Word that starts with hex digits - no match":
+    for line in [
+      "#define FOO 1", "  #define FOO", "#defined", "#fade_in", "#face1z", "#facade_x",
+      "#facadeXyz",
+    ]:
+      checkpoint line
+      check scanLineForColorCodes(line).len == 0
+
+  test "Non-ASCII char after the digits - match":
+    for line in ["#fff色", "#ffffff色"]:
+      checkpoint line
+      check scanLineForColorCodes(line).len == 1
+
+  test "Color code in a #define value":
+    let matches = scanLineForColorCodes("#define RED \"#ff0000\"")
+    check matches.len == 1
+    check matches[0].startCol == 13
+    check matches[0].endCol == 19
+
   test "3-digit with non-hex char after - match":
     let matches = scanLineForColorCodes("#ABC;")
     check matches.len == 1

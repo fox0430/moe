@@ -4942,6 +4942,32 @@ suite "newLineStyleContext - search highlight":
 
     check e.searchRangesFor("foobar foo") == @[ColumnRange(startCol: 7, endCol: 10)]
 
+suite "newLineStyleContext - color code at the highlight cap":
+  proc colorCodeMatchesAtCap(cap: int, line: string): seq[ColorCodeMatch] =
+    let e = createTestEditor()
+    e.activeBuffer.maxHighlightLineLength = cap
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), line)
+    let ctx = RenderContext(windowMode: EditorMode.Normal)
+    e.newLineStyleContext(e.activeBuffer, 0, line, ctx).colorCodeMatches
+
+  test "A word continuing at the cap is not decorated":
+    # The capped scan used to drop the character after the cap, so the word
+    # boundary looked like end-of-line and `#facade` in a longer word at the
+    # cap boundary was decorated.
+    let line = repeat('z', 193) & "#facade" & "X" & "tail"
+    check colorCodeMatchesAtCap(200, line).len == 0
+
+  test "A code ending at the cap still matches when the word ends":
+    let line = repeat('z', 193) & "#facade" & " tail"
+    let matches = colorCodeMatchesAtCap(200, line)
+    check matches.len == 1
+    check matches[0].startCol == 193
+    check matches[0].endCol == 199
+
+  test "A code reaching the cap stays plain":
+    let line = repeat('z', 194) & "#ff0000" & ";"
+    check colorCodeMatchesAtCap(200, line).len == 0
+
 suite "renderWindow - Visual block over screen cells":
   test "A block shows over the cells it covers":
     let e = createTestEditor()

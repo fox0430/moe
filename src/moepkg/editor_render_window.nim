@@ -203,15 +203,19 @@ proc newLineStyleContext*(
 
   # Bound the color-code scan to the cap: scanLineForColorCodes allocates an
   # O(line) byte->rune map, and past the cap the line is plain text anyway.
+  # The capped scan reads one character past the cap so the word boundary can
+  # still see what follows a code that ends at the cap; matches that reach the
+  # cap are dropped.
   # (Search/current-word ranges stay uncapped: they're functional, not
   # decorative — a match past the cap must still be shown.)
   if e.config.highlight.colorCodeHighlight and ctx.decorates(result):
     let cap = if textBuffer != nil: textBuffer.maxHighlightLineLength else: 0
-    result.colorCodeMatches =
-      if cap > 0 and fullLine.len > cap:
-        scanLineForColorCodes(fullLine.charSubStr(0, cap))
-      else:
-        scanLineForColorCodes(fullLine)
+    if cap > 0 and fullLine.len > cap:
+      for m in scanLineForColorCodes(fullLine.charSubStr(0, cap + 1)):
+        if m.endCol < cap:
+          result.colorCodeMatches.add m
+    else:
+      result.colorCodeMatches = scanLineForColorCodes(fullLine)
 
   if textBuffer != nil and e.state.input.search.hlsearch:
     let spec = e.shownSearch()
