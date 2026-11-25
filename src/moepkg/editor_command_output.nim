@@ -19,7 +19,7 @@
 
 ## The window a background command writes its output into.
 
-import std/strutils
+import std/[options, strutils]
 
 import pkg/results
 
@@ -48,6 +48,13 @@ proc focusOutputWindow(editor: Editor, target: EditorWindow) =
       editor.setActiveWindowScreenCursor(editor.activeWindow)
       break
 
+proc moveAlternates(editor: Editor, stale: BufferId, buf: TextBuffer) =
+  ## Let a window that left the replaced output still go to the new one with
+  ## `:b #`.
+  for window in editor.windowManager.windows:
+    if window.alternateBufferId == stale and window.tabBufferId != buf.id:
+      window.alternateBufferId = buf.id
+
 proc showCommandOutput*(
     editor: Editor, output: seq[string], keepFocus: bool
 ): bool {.discardable.} =
@@ -61,9 +68,11 @@ proc showCommandOutput*(
   let outputBuffer = newTextBuffer(output.join("\n"))
   outputBuffer.readOnly = true
 
+  var replaced = none(BufferId)
   let staleIdx = editor.bufferIndexById(editor.state.commandOutputBufferId)
   if staleIdx >= 0:
     let stale = editor.buffers[staleIdx]
+    replaced = some(stale.id)
     # A window a viewer covers is not reused: showing the output would put the
     # viewer's window in Normal. It still moves its tab below.
     var
@@ -83,6 +92,7 @@ proc showCommandOutput*(
       # Covered windows only move their tab, so leaving the viewer shows the new
       # output rather than the deleted one.
       editor.redirectWindowsFromBuffer(stale, outputBuffer)
+      editor.moveAlternates(stale.id, outputBuffer)
       editor.state.commandOutputBufferId = outputBuffer.id
     else:
       # The window is gone but its buffer is still listed; drop it, or every
@@ -100,6 +110,8 @@ proc showCommandOutput*(
   if splitResult.isErr:
     editor.notify("Failed to open output window: " & splitResult.error, nlError)
     return false
+  if replaced.isSome:
+    editor.moveAlternates(replaced.get, outputBuffer)
   editor.state.commandOutputBufferId = outputBuffer.id
   editor.enforceModePolicy()
   true

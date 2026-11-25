@@ -183,6 +183,55 @@ suite "Background command output":
     check e.activeWindow.buffer.id == e.state.commandOutputBufferId
     check e.activeWindow.buffer.getLine(0) == "second"
 
+  test "A later command keeps the output the alternate of a window that left it":
+    let e = testEditor()
+    let
+      user = e.activeWindow
+      file = user.tabBufferId
+    e.showCommandOutput(@["first"], keepFocus = true)
+    check e.switchToBuffer($e.state.commandOutputBufferId.int)
+    check e.switchToBuffer($file.int)
+
+    e.replaceOutput(@["second"], keepFocus = true)
+
+    check e.activeWindow == user
+    check e.switchToBuffer("#")
+    check user.tabBufferId == e.state.commandOutputBufferId
+
+  test "A command that reopens the output keeps it the alternate":
+    let e = testEditor()
+    let
+      user = e.activeWindow
+      file = user.tabBufferId
+    e.showCommandOutput(@["first"], keepFocus = false)
+    let output = e.activeWindow
+    e.focus(user)
+    check e.switchToBuffer($e.state.commandOutputBufferId.int)
+    check e.switchToBuffer($file.int)
+    e.focus(output)
+    discard e.closeWindow()
+    require e.windowManager.windows == @[user]
+
+    e.replaceOutput(@["second"], keepFocus = true)
+
+    check e.activeWindow == user
+    check e.switchToBuffer("#")
+    check user.tabBufferId == e.state.commandOutputBufferId
+
+  test "An output window that moved to a file keeps the output its alternate":
+    let e = testEditor()
+    let file = e.activeWindow.tabBufferId
+    e.showCommandOutput(@["first"], keepFocus = false)
+    let former = e.activeWindow
+    check e.switchToBuffer($file.int)
+
+    e.replaceOutput(@["second"], keepFocus = true)
+
+    check e.windowManager.windows.len == 3
+    check e.activeWindow == former
+    check e.switchToBuffer("#")
+    check former.tabBufferId == e.state.commandOutputBufferId
+
   test "A build and a QuickRun share the one output window":
     let e = testEditor()
     e.showCommandOutput(@["build output"], keepFocus = true)

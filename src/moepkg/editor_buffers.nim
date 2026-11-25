@@ -618,8 +618,8 @@ proc deleteBufferByArg*(
   ## Delete a buffer named by a `:b`-style argument: a stable number as shown
   ## by `:ls`, `#` for the alternate buffer, or the best name match (`:bd N`,
   ## `:bd #`, `:bd name`). `force` skips the modified and running-job checks as
-  ## `:bd!` does. Refusals come back as `err`, not a status message, so an embedding caller can tell a refusal
-  ## from a deletion.
+  ## `:bd!` does. Refusals come back as `err`, not a status message, so an
+  ## embedding caller can tell a refusal from a deletion.
   let resolved = e.resolveBufferArg(arg)
   if resolved.isErr:
     return err(resolved.error)
