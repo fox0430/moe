@@ -42,16 +42,25 @@ suite "syntax_java - javaKeywords constant":
     check "continue" in javaKeywords
     check "return" in javaKeywords
 
-  test "javaKeywords contains type keywords":
-    check "int" in javaKeywords
-    check "long" in javaKeywords
-    check "short" in javaKeywords
-    check "byte" in javaKeywords
-    check "float" in javaKeywords
-    check "double" in javaKeywords
-    check "char" in javaKeywords
-    check "boolean" in javaKeywords
-    check "void" in javaKeywords
+  test "javaBuiltinTypes contains primitive types":
+    check "int" in javaBuiltinTypes
+    check "int" notin javaKeywords
+    check "long" in javaBuiltinTypes
+    check "long" notin javaKeywords
+    check "short" in javaBuiltinTypes
+    check "short" notin javaKeywords
+    check "byte" in javaBuiltinTypes
+    check "byte" notin javaKeywords
+    check "float" in javaBuiltinTypes
+    check "float" notin javaKeywords
+    check "double" in javaBuiltinTypes
+    check "double" notin javaKeywords
+    check "char" in javaBuiltinTypes
+    check "char" notin javaKeywords
+    check "boolean" in javaBuiltinTypes
+    check "boolean" notin javaKeywords
+    check "void" in javaBuiltinTypes
+    check "void" notin javaKeywords
 
   test "javaKeywords contains access modifiers":
     check "public" in javaKeywords
@@ -67,10 +76,13 @@ suite "syntax_java - javaKeywords constant":
     check "throw" in javaKeywords
     check "throws" in javaKeywords
 
-  test "javaKeywords contains boolean literals":
-    check "true" in javaKeywords
-    check "false" in javaKeywords
-    check "null" in javaKeywords
+  test "javaBooleans contains literals":
+    check "true" in javaBooleans
+    check "true" notin javaKeywords
+    check "false" in javaBooleans
+    check "false" notin javaKeywords
+    check "null" in javaBooleans
+    check "null" notin javaKeywords
 
   test "javaKeywords contains other keywords":
     check "new" in javaKeywords
@@ -120,40 +132,64 @@ suite "syntax_java - javaNextToken keywords":
     check g.kind == gtKeyword
     check g.length == 6
 
-  test "int keyword":
+  test "int type":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("int")
     g.javaNextToken()
-    check g.kind == gtKeyword
+    check g.kind == gtBuiltinType
     check g.length == 3
 
-  test "boolean keyword":
+  test "boolean type":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("boolean")
     g.javaNextToken()
-    check g.kind == gtKeyword
+    check g.kind == gtBuiltinType
     check g.length == 7
 
-  test "true keyword":
+  test "true literal":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("true")
     g.javaNextToken()
-    check g.kind == gtKeyword
+    check g.kind == gtBoolean
     check g.length == 4
 
-  test "false keyword":
+  test "false literal":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("false")
     g.javaNextToken()
-    check g.kind == gtKeyword
+    check g.kind == gtBoolean
     check g.length == 5
 
-  test "null keyword":
+  test "null literal":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("null")
     g.javaNextToken()
-    check g.kind == gtKeyword
+    check g.kind == gtBoolean
     check g.length == 4
+
+suite "syntax_java - javaNextToken word classes":
+  test "every listed word gets its class":
+    proc kindOf(word: string): TokenClass =
+      var g: GeneralTokenizer
+      g.initGeneralTokenizer(word)
+      g.javaNextToken()
+      check g.length == word.len
+      g.kind
+
+    for word in javaKeywords:
+      check kindOf(word) == gtKeyword
+    for word in javaBooleans:
+      check kindOf(word) == gtBoolean
+    for word in javaBuiltinTypes:
+      check kindOf(word) == gtBuiltinType
+
+  test "words that only contain a listed word stay identifiers":
+    for word in ["trueValue", "nullable", "Boolean", "interval", "myInt"]:
+      var g: GeneralTokenizer
+      g.initGeneralTokenizer(word)
+      g.javaNextToken()
+      check g.kind == gtIdentifier
+      check g.length == word.len
 
 suite "syntax_java - javaNextToken identifiers":
   test "simple identifier":

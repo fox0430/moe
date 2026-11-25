@@ -85,8 +85,13 @@ proc rawStringOpen(g: GeneralTokenizer, position: int): int =
   -1
 
 proc clikeNextToken*(
-    g: var GeneralTokenizer, keywords: openArray[string], flags: TokenizerFlags
+    g: var GeneralTokenizer,
+    keywords: openArray[string],
+    flags: TokenizerFlags,
+    booleans: openArray[string] = [],
+    builtinTypes: openArray[string] = [],
 ) =
+  ## The word lists must be sorted: they are searched with `isKeyword`.
   const
     hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
@@ -240,6 +245,10 @@ proc clikeNextToken*(
         pos = g.rawStringBody(rawText)
       elif isKeyword(keywords, id) >= 0:
         g.kind = gtKeyword
+      elif isKeyword(booleans, id) >= 0:
+        g.kind = gtBoolean
+      elif isKeyword(builtinTypes, id) >= 0:
+        g.kind = gtBuiltinType
       else:
         g.kind = gtIdentifier
     of '0' .. '9':

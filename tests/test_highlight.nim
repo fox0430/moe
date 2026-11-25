@@ -6960,3 +6960,19 @@ suite "Highlight - shell heredoc at a chunk boundary":
       buf = loaded(placedAt(row, chain), ".sh")
       check buf.frontier == initialFrontier
       check buf.finishedAsFullParse(Budget, langShell)
+
+suite "initHighlight: Java word colors":
+  test "literals, primitive types and keywords take their own colors":
+    let h =
+      initHighlight(@["return true null int String"], @[], SourceLanguage.langJava)
+
+    proc colorAt(column: int): EditorColorPairIndex =
+      for s in h.colorSegments:
+        if s.firstRow == 0 and column in s.firstColumn .. s.lastColumn:
+          return s.color
+
+    check colorAt(0) == EditorColorPairIndex.keyword
+    check colorAt(7) == EditorColorPairIndex.boolean
+    check colorAt(12) == EditorColorPairIndex.boolean
+    check colorAt(17) == EditorColorPairIndex.builtinType
+    check colorAt(21) == EditorColorPairIndex.identifier

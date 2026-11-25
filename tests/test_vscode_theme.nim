@@ -281,6 +281,20 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.interfaceName].foreground.rgb == expectedRgb
     check result[EditorColorPairIndex.builtinType].foreground.rgb == expectedRgb
 
+  test "storage.type colors builtin types when entity.name.type has no color":
+    proc rule(scope, fg: string): JsonNode =
+      %*{"scope": scope, "settings": {"foreground": fg}}
+
+    let themeJson = %*{"colors": {}, "tokenColors": [rule("storage.type", "#569cd6")]}
+    let result = makeColorThemeFromVSCodeThemeFile(themeJson)
+    check result[EditorColorPairIndex.builtinType].foreground.rgb == rgb("#569cd6")
+
+    themeJson["tokenColors"].add rule("entity.name.type", "#4ec9b0")
+    let withTypeName = makeColorThemeFromVSCodeThemeFile(themeJson)
+    check withTypeName[EditorColorPairIndex.builtinType].foreground.rgb == rgb(
+      "#4ec9b0"
+    )
+
   test "variable token color":
     let themeJson = %*{
       "colors": {},

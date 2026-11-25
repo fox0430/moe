@@ -2224,7 +2224,7 @@ colors, as the active one does.
 | brace | LSP semantic token: brace |
 | bracket | LSP semantic token: bracket |
 | builtinAttribute | LSP semantic token: builtin attribute |
-| builtinType | LSP semantic token: builtin type |
+| builtinType | Syntax and LSP semantic token: builtin type |
 | colon | LSP semantic token: colon |
 | comma | LSP semantic token: comma |
 | comparison | LSP semantic token: comparison operator |

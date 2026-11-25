@@ -109,6 +109,7 @@ type
     gtBuiltin
     gtFunctionName
     gtTypeName
+    gtBuiltinType
     gtPragma
     gtTable
     gtDate
