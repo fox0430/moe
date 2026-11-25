@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[strutils, unittest]
 
 import ../src/moepkg/syntax/[tokenizer, syntax_java]
 
@@ -320,3 +320,110 @@ suite "syntax_java - javaNextToken complete code":
     check gtKeyword in tokens # public, class
     check gtIdentifier in tokens # Main
     check gtPunctuation in tokens # {, }
+
+suite "syntax_java - generics":
+  proc angles(code: string): seq[(string, TokenClass)] =
+    ## The tokens that contain `<` or `>`.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(code)
+    while true:
+      g.javaNextToken()
+      if g.kind == gtEof:
+        break
+      let text = code[g.start ..< g.start + g.length]
+      if '\n' in text:
+        check g.genericDepth == 0
+      if '<' in text or '>' in text:
+        result.add (text, g.kind)
+    check g.genericDepth == 0
+
+  const
+    Open = ("<", gtPunctuation)
+    Close = (">", gtPunctuation)
+    Less = ("<", gtOperator)
+    Greater = (">", gtOperator)
+
+  test "type arguments and the diamond are punctuation":
+    check angles("HashSet<Integer> set = new HashSet<>();") ==
+      @[Open, Close, Open, Close]
+    check angles("Map<String, List<int[]>> m;") == @[Open, Open, Close, Close]
+    check angles("Class<?> c; List<? extends a.B> l;") == @[Open, Close, Open, Close]
+    check angles("public <T extends A & B> void f()") == @[Open, Close]
+    check angles("List.<String>of()") == @[Open, Close]
+
+  test "comparisons, shifts and arrows are operators":
+    check angles("if (a < b && c > d)") == @[("<", gtOperator), (">", gtOperator)]
+    check angles("if (a<b && c>d)") == @[("<", gtOperator), (">", gtOperator)]
+    check angles("for (; i<n; i++)") == @[("<", gtOperator)]
+    check angles("f(a < b, c > d)") == @[("<", gtOperator), (">", gtOperator)]
+    check angles("x<y>>1") == @[("<", gtOperator), (">>", gtOperator)]
+    check angles("a <<= b >>> c; d <= e; f >= g; () -> h") ==
+      @[
+        ("<<=", gtOperator),
+        (">>>", gtOperator),
+        ("<=", gtOperator),
+        (">=", gtOperator),
+        ("->", gtOperator),
+      ]
+
+  test "bounds, wildcards, arrays and annotations are punctuation":
+    check angles("<T extends Comparable<T> & A, U extends B & C> void f()") ==
+      @[Open, Open, Close, Close]
+    check angles("Map<?, ? super T> m;") == @[Open, Close]
+    check angles("Map<? extends A<?>, ?> m;") == @[Open, Open, Close, Close]
+    check angles("List<@A ? extends B> l; List<@a.A ?> k;") ==
+      @[Open, Close, Open, Close]
+    check angles("List<int[ ][]> l;") == @[Open, Close]
+    check angles("List<T1>x=y; List<thisType> z;") == @[Open, Close, Open, Close]
+    check angles("A<B<C<D>>> x;") == @[Open, Open, Open, Close, Close, Close]
+
+  test "unspaced comparisons are operators":
+    check angles("a<b>=c") == @[Less, (">=", gtOperator)]
+    check angles("f(a<b, c>=d)") == @[Less, (">=", gtOperator)]
+    check angles("if (a<b & c>d)") == @[Less, Greater]
+    check angles("if (a<b & c>=d)") == @[Less, (">=", gtOperator)]
+    check angles("r = a<b?c>d?1:2:3;") == @[Less, Greater]
+    check angles("a<b[i]>c") == @[Less, Greater]
+    check angles("f(a<b[i], c>d)") == @[Less, Greater]
+    check angles("f(i<n, 3>k)") == @[Less, Greater]
+    check angles("a<b, 1.>c") == @[Less, (">", gtOperator)]
+    check angles("x<y<<z>>w, b>c") ==
+      @[Less, ("<<", gtOperator), (">>", gtOperator), Greater]
+    for word in [
+      "this.x", "super.x", "null", "true", "false", "new A", "e instanceof B"
+    ]:
+      check angles("f(a<" & word & ", c>d)") == @[Less, Greater]
+
+  test "a literal or a prefix operator after the close makes a comparison":
+    for operand in ["0", " 0", "-1", "!x", "~x", "+1", ".5", "'x'", "\"x\""]:
+      let tokens = angles("f(i<n, j>" & operand & ")")
+      check Open notin tokens
+      check Close notin tokens
+    check angles("f(i<n, j > 0)") == @[Less, Greater]
+    check angles("f(a<b, c<d>>1)") == @[Less, Less, (">>", gtOperator)]
+    check angles("new A<B>(); A<B>::new; A<B>[] x; A<B>.C y; A<B> z") ==
+      @[Open, Close, Open, Close, Open, Close, Open, Close, Open, Close]
+
+  test "a call, an index or a literal before the open makes a comparison":
+    for operand in ["a.size()", "x[0]", "1", "1.0", "0x1F", "10L", "'a'", "\"a\"", "1 "]:
+      check angles("f(" & operand & "<n, m>k)") == @[Less, Greater]
+    check angles("T1<A> x; a1.B2<C> y") == @[Open, Close, Open, Close]
+    check angles("<T> void f() {} <U> void g()") == @[Open, Close, Open, Close]
+    check angles("int[] a;\n<T> f()\n<U> g") == @[Open, Close, Open, Close]
+
+  test "limitation: comma-separated comparisons of names read as type arguments":
+    check angles("f(a<b, c>d)") == @[Open, Close]
+    check angles("f(a<b, c > d)") == @[Open, Close]
+    check angles("f(a<b, c<d>>e)") == @[Open, Open, Close, Close]
+
+  test "limitation: type parameters after annotation arguments are operators":
+    check angles("@A(\"x\") <T> T f()") == @[Less, Greater]
+
+  test "deep nesting is not followed":
+    let code = "A<".repeat(70) & "B" & ">".repeat(70)
+    check Open notin angles(code)
+
+  test "type arguments do not span lines":
+    check angles("Map<String,\n  Integer> m;") == @[
+      ("<", gtOperator), (">", gtOperator)
+    ]

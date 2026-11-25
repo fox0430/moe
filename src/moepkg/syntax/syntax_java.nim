@@ -1,6 +1,6 @@
 import std/algorithm
 
-import tokenizer, syntax_c
+import flags, tokenizer, syntax_c
 
 const
   javaKeywords* = [
@@ -22,4 +22,4 @@ static:
   doAssert javaBuiltinTypes.isSorted
 
 proc javaNextToken*(g: var GeneralTokenizer) =
-  clikeNextToken(g, javaKeywords, {}, javaBooleans, javaBuiltinTypes)
+  clikeNextToken(g, javaKeywords, {hasGenerics}, javaBooleans, javaBuiltinTypes)

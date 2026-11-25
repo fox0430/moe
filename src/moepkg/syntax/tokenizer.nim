@@ -333,6 +333,9 @@ type
       ## Transient: a copy of that span when a closing fence ends it, so the
       ## block's lexer sees the end of input there. Nil when the span already
       ## ends the buffer.
+    genericDepth*: int
+      ## Transient: open `<` of the type arguments being lexed. They never span
+      ## lines, so this is 0 at line boundaries.
 
   SourceLanguage* = enum
     langNone
@@ -522,6 +525,7 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.mdBlockBase = 0
   g.mdBlockEnd = 0
   g.mdBlockText = nil
+  g.genericDepth = 0
 
 proc scanToTerminator*(buf: cstring, pos: var int, t0, t1, t2: char): bool =
   ## Advance `pos` until the 3-byte terminator `t0 t1 t2` (consumed) or the
