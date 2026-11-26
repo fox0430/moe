@@ -360,6 +360,8 @@ const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("fold-toggle", "Toggle fold at cursor", "fold.toggle"),
   ("fold-open-all", "Open all folds", "fold.open.all"),
   ("fold-close-all", "Close all folds", "fold.close.all"),
+  ("fold-reduce", "Raise the fold level by count", "fold.reduce"),
+  ("fold-more", "Lower the fold level by count", "fold.more"),
   ("fold-create", "Create fold from selection", "fold.create"),
   ("fold-delete", "Delete fold at cursor", "fold.delete"),
   ("fold-delete-all", "Delete all folds", "fold.delete.all"),

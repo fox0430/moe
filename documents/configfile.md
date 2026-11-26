@@ -940,6 +940,8 @@ In a visual mode, `switch-to-visual`, `switch-to-visual-line` and `switch-to-vis
 | fold-toggle | Toggle fold at cursor |
 | fold-open-all | Open all folds |
 | fold-close-all | Close all folds |
+| fold-reduce | Raise the fold level by count |
+| fold-more | Lower the fold level by count |
 | fold-create | Create fold from selection |
 | fold-delete | Delete fold at cursor |
 | fold-delete-all | Delete all folds |

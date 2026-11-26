@@ -329,41 +329,87 @@ proc handleScrollHalfPageUp*(
 
 ## Fold commands
 
-proc handleFoldOpen*(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Open fold at cursor position (zo command)
-  if ctx.buffer.foldState.openFold(ctx.cursor.line):
-    discard
-  elif ctx.buffer.foldState.foldIndexAt(ctx.cursor.line).isNone:
-    # Distinguish "no fold here" from "fold already open" (the latter is a
-    # silent no-op, matching vim).
+proc repeatFold(ctx: CommandContext, step: proc(): bool): bool =
+  ## Run `step` up to count1 times, stopping when it does nothing (Vim's
+  ## setFoldRepeat). Returns true if it did anything.
+  for _ in 1 .. ctx.count1:
+    if not step():
+      break
+    result = true
+
+proc openFoldsAtCursor(ctx: CommandContext): bool =
+  ## Open count1 levels of closed folds at the cursor, outermost first.
+  let line = ctx.cursor.line
+  ctx.repeatFold(
+    proc(): bool =
+      ctx.buffer.foldState.openFold(line)
+  )
+
+proc closeFoldsAtCursor(ctx: CommandContext): bool =
+  ## Close count1 levels of open folds at the cursor, innermost first.
+  let line = ctx.cursor.line
+  ctx.repeatFold(
+    proc(): bool =
+      ctx.buffer.foldState.closeFold(line)
+  )
+
+proc reportNoFold(ctx: CommandContext) =
+  ## A fold already open or closed is a silent no-op, as in Vim; only a line
+  ## without any fold reports.
+  if ctx.buffer.foldState.foldIndexAt(ctx.cursor.line).isNone:
     ctx.state.statusMessage = "No fold found"
+
+proc handleFoldOpen*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Open the fold at the cursor, [count] levels deep (zo command)
+  if not ctx.openFoldsAtCursor():
+    ctx.reportNoFold()
   return ok(())
 
 proc handleFoldClose*(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Close fold at cursor position (zc command)
-  if not ctx.buffer.foldState.closeFold(ctx.cursor.line) and
-      ctx.buffer.foldState.foldIndexAt(ctx.cursor.line).isNone:
-    # Distinguish "no fold here" from "fold already closed" (the latter is a
-    # silent no-op, matching vim and handleFoldOpen).
-    ctx.state.statusMessage = "No fold found"
+  ## Close the fold at the cursor, [count] levels deep (zc command)
+  if not ctx.closeFoldsAtCursor():
+    ctx.reportNoFold()
   return ok(())
 
 proc handleFoldToggle*(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Toggle fold at cursor position (za command)
-  if ctx.buffer.foldState.toggleFold(ctx.cursor.line):
-    return ok(())
-  else:
-    ctx.state.statusMessage = "No fold found"
-    return ok(())
+  ## Open [count] levels on a closed fold, else close [count] (za command)
+  let toggled =
+    if ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line).isSome:
+      ctx.openFoldsAtCursor()
+    else:
+      ctx.closeFoldsAtCursor()
+  if not toggled:
+    ctx.reportNoFold()
+  return ok(())
+
+proc setFoldLevel(ctx: CommandContext, level: int) =
+  ## Set 'foldlevel' and re-apply it to every fold.
+  ctx.buffer.foldLevel = level
+  ctx.buffer.foldState.applyFoldLevel(level)
+
+proc handleFoldReduce*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Add [count] to 'foldlevel', at most the deepest nesting (zr command).
+  ## Unchanged, it leaves folds opened or closed by hand alone, as in Vim.
+  let level =
+    min(ctx.buffer.foldLevel + ctx.count1, ctx.buffer.foldState.deepestNesting)
+  if level != ctx.buffer.foldLevel:
+    ctx.setFoldLevel(level)
+  return ok(())
+
+proc handleFoldMore*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Subtract [count] from 'foldlevel', at least 0 (zm command). Always
+  ## re-applies the level, as Vim forces the update.
+  ctx.setFoldLevel(max(0, ctx.buffer.foldLevel - ctx.count1))
+  return ok(())
 
 proc handleFoldOpenAll*(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Open all folds (zR command)
-  ctx.buffer.foldState.openAllFolds()
+  ## Set 'foldlevel' to the deepest nesting, opening every fold (zR command)
+  ctx.setFoldLevel(ctx.buffer.foldState.deepestNesting)
   return ok(())
 
 proc handleFoldCloseAll*(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Close all folds (zM command)
-  ctx.buffer.foldState.closeAllFolds()
+  ## Set 'foldlevel' to 0, closing every fold (zM command)
+  ctx.setFoldLevel(0)
   return ok(())
 
 proc handleFoldCreate*(ctx: CommandContext, args: seq[string]): Result[(), string] =
@@ -619,6 +665,24 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     "Fold Close All",
     "Close all folds (zM)",
     handleFoldCloseAll,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldReduce),
+    "Fold Reduce",
+    "Add [count] to 'foldlevel' (zr)",
+    handleFoldReduce,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldMore),
+    "Fold More",
+    "Subtract [count] from 'foldlevel' (zm)",
+    handleFoldMore,
     0,
     0,
   )

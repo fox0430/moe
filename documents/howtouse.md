@@ -261,6 +261,8 @@ With several files and `StartUp.FileOpen.autoSplit` (the default), each file ope
 | <kbd>**z**</kbd> <kbd>**a**</kbd> | Toggle fold |
 | <kbd>**z**</kbd> <kbd>**R**</kbd> | Open all folds |
 | <kbd>**z**</kbd> <kbd>**M**</kbd> | Close all folds |
+| <kbd>**z**</kbd> <kbd>**r**</kbd> | Raise the fold level by count |
+| <kbd>**z**</kbd> <kbd>**m**</kbd> | Lower the fold level by count |
 | <kbd>**z**</kbd> <kbd>**d**</kbd> | Delete folding lines |
 | <kbd>**z**</kbd> <kbd>**D**</kbd> | Delete all folding lines |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd> | Selection Range (LSP) |

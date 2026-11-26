@@ -359,6 +359,8 @@ suite "CommandRegistry - BuiltinCommandId":
     check $bcFoldToggle == "fold.toggle"
     check $bcFoldOpenAll == "fold.open.all"
     check $bcFoldCloseAll == "fold.close.all"
+    check $bcFoldReduce == "fold.reduce"
+    check $bcFoldMore == "fold.more"
     check $bcFoldCreate == "fold.create"
     check $bcFoldDelete == "fold.delete"
     check $bcFoldDeleteAll == "fold.delete.all"
@@ -443,6 +445,8 @@ suite "CommandRegistry - registerBuiltinCommands":
     check registry.findCommand(builtin(bcFoldToggle)).isSome
     check registry.findCommand(builtin(bcFoldOpenAll)).isSome
     check registry.findCommand(builtin(bcFoldCloseAll)).isSome
+    check registry.findCommand(builtin(bcFoldReduce)).isSome
+    check registry.findCommand(builtin(bcFoldMore)).isSome
     check registry.findCommand(builtin(bcFoldCreate)).isSome
     check registry.findCommand(builtin(bcFoldDelete)).isSome
     check registry.findCommand(builtin(bcFoldDeleteAll)).isSome

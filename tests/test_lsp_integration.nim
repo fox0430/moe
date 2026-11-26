@@ -1350,9 +1350,12 @@ suite "LspIntegration - applyLspFoldingRanges":
         collapsedText: none(string),
       )
     ]
+    buffer.foldLevel = 3
     let count = buffer.applyLspFoldingRanges(ranges, startCollapsed = true)
     check count == 1
     check buffer.foldState.folds[0].collapsed
+    # Fold-all closes like zM, so the next zm/zr counts from level 0.
+    check buffer.foldLevel == 0
 
   test "applyLspFoldingRanges with multiple non-overlapping folds":
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")

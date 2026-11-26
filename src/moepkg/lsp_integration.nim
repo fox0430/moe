@@ -2270,7 +2270,9 @@ proc applyLspFoldingRanges*(
   ##
   ## When `clearExisting` is true, only previously LSP-provided folds are
   ## removed; manual (`zf`) folds are kept so the two can coexist.
-  ## When `startCollapsed` is true the folds are added collapsed (fold-all).
+  ## When `startCollapsed` is true the folds are added collapsed (fold-all)
+  ## and 'foldlevel' drops to 0, so zr/zm start from there. This is zM for the
+  ## LSP folds only: manual folds keep their state.
   if clearExisting:
     buffer.foldState.folds.keepItIf(it.source != fsLsp)
 
@@ -2296,6 +2298,8 @@ proc applyLspFoldingRanges*(
     ):
       inc added
 
+  if startCollapsed and added > 0:
+    buffer.foldLevel = 0
   return added
 
 # Cleanup
