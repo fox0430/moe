@@ -22,7 +22,7 @@
 
 import std/options
 
-import buffer/core, list_viewer, unicode_utils
+import buffer/core, list_viewer, unicode_utils, highlight, color
 import types/buffer_manager_types
 
 export buffer_manager_types
@@ -91,4 +91,32 @@ proc formatLine*(entry: BufferEntry): string =
 
 proc createBufferManagerTextBuffer*(state: BufferManagerState): TextBuffer =
   ## Create a TextBuffer from buffer manager entries for rendering via the normal view path
-  state.toListTextBuffer("-- Buffer Manager --", formatLine)
+  result = state.toListTextBuffer("-- Buffer Manager --", formatLine)
+  result.isUtilityBuffer = true
+  result.highlightNeedsUpdate = false
+
+  # Every row gets a segment: a lookup between segments takes the one above.
+  # Modified wins over active: unsaved changes matter more.
+  var segments: seq[ColorSegment] = @[]
+  for row in 0 ..< result.len:
+    let color =
+      if row == 0 or state.items.len == 0:
+        EditorColorPairIndex.default
+      else:
+        let entry = state.items[row - 1]
+        if entry.modified:
+          EditorColorPairIndex.bufferManagerModified
+        elif entry.active:
+          EditorColorPairIndex.bufferManagerActive
+        else:
+          EditorColorPairIndex.default
+    segments.add(
+      ColorSegment(
+        firstRow: row,
+        firstColumn: 0,
+        lastRow: row,
+        lastColumn: max(0, result[row].charLen - 1),
+        color: color,
+      )
+    )
+  result.highlight = Highlight(colorSegments: segments)
