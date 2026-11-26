@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, algorithm, sequtils]
 
 import ../src/moepkg/syntax/[tokenizer, syntax_typescript]
 import ../src/moepkg/highlight
@@ -371,6 +371,32 @@ suite "syntax_typescript - typescriptNextToken identifiers":
     g.typescriptNextToken()
     check g.kind == gtIdentifier
     check g.length == 11
+
+proc kindOf(src, word: string): TokenClass =
+  ## Token class of the first token in `src` whose text is `word`.
+  var g: GeneralTokenizer
+  g.initGeneralTokenizer(src)
+  while true:
+    g.typescriptNextToken()
+    if g.kind == gtEof:
+      return gtEof
+    if src[g.start ..< g.start + g.length] == word:
+      return g.kind
+
+suite "syntax_typescript - method names":
+  test "keyword table is sorted for binarySearch":
+    check typescriptKeywords.toSeq.isSorted
+
+  test "console.log and console.error get the same class":
+    check kindOf("console.log(x)", "log") == gtFunctionName
+    check kindOf("console.error(x)", "error") == gtFunctionName
+
+  test "method and property names are identifiers":
+    for word in ["map", "filter", "push", "join", "then", "value"]:
+      check kindOf("a." & word, word) == gtIdentifier
+
+  test "default is a keyword":
+    check kindOf("export default x", "default") == gtKeyword
 
 suite "syntax_typescript - typescriptNextToken object keys":
   test "identifier followed by colon is key":

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, algorithm, sequtils]
 
 import ../src/moepkg/syntax/[tokenizer, syntax_javascript]
 import ../src/moepkg/highlight
@@ -234,6 +234,32 @@ suite "syntaxjavascript - javaScriptNextToken identifiers":
     g.javaScriptNextToken()
     check g.kind == gtIdentifier
     check g.length == 14
+
+proc kindOf(src, word: string): TokenClass =
+  ## Token class of the first token in `src` whose text is `word`.
+  var g: GeneralTokenizer
+  g.initGeneralTokenizer(src)
+  while true:
+    g.javaScriptNextToken()
+    if g.kind == gtEof:
+      return gtEof
+    if src[g.start ..< g.start + g.length] == word:
+      return g.kind
+
+suite "syntaxjavascript - method names":
+  test "keyword table is sorted for binarySearch":
+    check javaScriptkeywords.toSeq.isSorted
+
+  test "console.log and console.error get the same class":
+    check kindOf("console.log(x)", "log") == gtFunctionName
+    check kindOf("console.error(x)", "error") == gtFunctionName
+
+  test "method and property names are identifiers":
+    for word in ["map", "filter", "push", "join", "then", "value"]:
+      check kindOf("a." & word, word) == gtIdentifier
+
+  test "default is a keyword":
+    check kindOf("export default x", "default") == gtKeyword
 
 suite "syntaxjavascript - javaScriptNextToken object keys":
   test "identifier followed by colon is key":
