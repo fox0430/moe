@@ -289,6 +289,9 @@ type
       ## and a bracket of `((`, `$((`, `$[` or `name[` arithmetic, where `<<`
       ## is a shift.
 
+  TomlState* = object
+    arrayDepth*: int ## Open `[` of array values, which can span lines.
+
   CLikeState* = object
     rawDelimiter*: string
       ## Delimiter of the C++ raw string open, `x` for `R"x(`. Only meaningful
@@ -304,6 +307,7 @@ type
     python*: PythonState
     lua*: LuaState
     nim*: NimState
+    toml*: TomlState
     vim*: VimState
     shell*: ShellState
     clike*: CLikeState

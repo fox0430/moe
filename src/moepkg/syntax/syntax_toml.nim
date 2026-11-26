@@ -102,7 +102,7 @@ proc isArrayElement(g: GeneralTokenizer, pos: int): bool =
   inc(p) # Skip opening quote
   # Skip string content with bounds checking
   while g.buf[p] notin {'\0', '\n', '\r'} and g.buf[p] != quote:
-    if g.buf[p] == '\\' and g.buf[p + 1] != '\0':
+    if g.buf[p] == '\\' and quote == '"' and g.buf[p + 1] notin {'\0', '\n', '\r'}:
       inc(p) # Skip escape character
     inc(p)
   if g.buf[p] == quote:
@@ -127,7 +127,79 @@ proc isArrayElement(g: GeneralTokenizer, pos: int): bool =
       return true # It's an array
   return false
 
+proc isAtLineStart(g: GeneralTokenizer, pos: int): bool =
+  var p = pos - 1
+  while p >= 0 and g.buf[p] in {' ', '\t'}:
+    dec(p)
+  result = p < 0 or g.buf[p] in {'\n', '\r'}
+
+const BareKeyChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '-'}
+
+proc isBareHeader(g: GeneralTokenizer, position: int): bool =
+  ## `[a.b]` or `[[a.b]]` alone on its line (a comment may follow). A bare
+  ## identifier is no array value, so this is a header even inside an
+  ## unclosed array.
+  var pos = position + 1
+  let closeCount = if g.buf[pos] == '[': 2 else: 1
+  pos.inc closeCount - 1
+  while true:
+    while g.buf[pos] in {' ', '\t'}:
+      inc(pos)
+    if g.buf[pos] notin {'A' .. 'Z', 'a' .. 'z', '_'}:
+      return false
+    var key = ""
+    while g.buf[pos] in BareKeyChars:
+      key.add g.buf[pos]
+      inc(pos)
+    if key in ArrayKeywords:
+      return false
+    while g.buf[pos] in {' ', '\t'}:
+      inc(pos)
+    if g.buf[pos] != '.':
+      break
+    inc(pos)
+  for _ in 1 .. closeCount:
+    if g.buf[pos] != ']':
+      return false
+    inc(pos)
+  while g.buf[pos] in {' ', '\t'}:
+    inc(pos)
+  g.buf[pos] in {'\n', '\r', '\0', '#'}
+
+proc isKeyValueLine(g: GeneralTokenizer, position: int): bool =
+  ## The line starts with `key =` (dotted and quoted keys too).
+  var pos = position
+  while true:
+    if g.buf[pos] in {'"', '\''}:
+      let quote = g.buf[pos]
+      inc(pos)
+      while g.buf[pos] notin {quote, '\n', '\r', '\0'}:
+        if g.buf[pos] == '\\' and quote == '"' and
+            g.buf[pos + 1] notin {'\n', '\r', '\0'}:
+          inc(pos)
+        inc(pos)
+      if g.buf[pos] != quote:
+        return false
+      inc(pos)
+    elif g.buf[pos] in BareKeyChars:
+      while g.buf[pos] in BareKeyChars:
+        inc(pos)
+    else:
+      return false
+    while g.buf[pos] in {' ', '\t'}:
+      inc(pos)
+    if g.buf[pos] != '.':
+      break
+    inc(pos)
+    while g.buf[pos] in {' ', '\t'}:
+      inc(pos)
+  g.buf[pos] == '=' and g.buf[pos + 1] != '='
+
 proc isTableHeader(g: GeneralTokenizer, position: int): bool =
+  # A table header is always the first thing on its line, outside any array.
+  if g.lang.toml.arrayDepth > 0 or not g.isAtLineStart(position):
+    return false
+
   var pos = position + 1
 
   # Skip whitespace
@@ -135,7 +207,7 @@ proc isTableHeader(g: GeneralTokenizer, position: int): bool =
     inc(pos)
 
   # [[...]] could be array of tables or nested array
-  if g.buf[pos] == '[':
+  if g.buf[pos] == '[' and pos == position + 1:
     var pos2 = pos + 1
     while g.buf[pos2] in {' ', '\t'}:
       inc(pos2)
@@ -171,23 +243,30 @@ proc isTableHeader(g: GeneralTokenizer, position: int): bool =
   return false
 
 proc tomlTable(g: var GeneralTokenizer, position: int): int =
+  ## Ends after the closing `]` (or `]]`) so a trailing comment stays a comment.
   var pos = position
 
   g.kind = gtTable
 
-  while not (g.buf[pos] in {'\n', '\r', '\0', '['}):
+  let closeCount = if g.buf[pos + 1] == '[': 2 else: 1
+  pos.inc closeCount
+
+  var quote = '\0'
+  while g.buf[pos] notin {'\n', '\r', '\0'}:
+    let c = g.buf[pos]
+    if quote != '\0':
+      if c == '\\' and quote == '"' and g.buf[pos + 1] notin {'\n', '\r', '\0'}:
+        inc(pos)
+      elif c == quote:
+        quote = '\0'
+    elif c in {'"', '\''}:
+      quote = c
+    elif c == ']':
+      if closeCount == 1:
+        return pos + 1
+      if g.buf[pos + 1] == ']':
+        return pos + 2
     inc(pos)
-
-  if g.buf[pos] == '[':
-    # Array of table
-    var countClose = 0
-    while not (g.buf[pos] in {'\n', '\r', '\0'} or countClose == 2):
-      inc(pos)
-      if g.buf[pos] == ']':
-        countClose.inc
-
-    if countClose == 2:
-      pos.inc
 
   return pos
 
@@ -273,6 +352,10 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
       else:
         inc(pos)
   else:
+    # An array holds no `key = value`, so such a line closes an unclosed one.
+    if g.lang.toml.arrayDepth > 0 and g.buf[pos] notin {' ', '\t' .. '\r', '\0'} and
+        g.isAtLineStart(pos) and g.isKeyValueLine(pos):
+      g.lang.toml.arrayDepth = 0
     case g.buf[pos]
     of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
@@ -322,10 +405,18 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
       if g.buf[pos] in Letters:
         inc(pos)
     of '[':
-      if g.isTableHeader(pos):
+      if g.lang.toml.arrayDepth > 0 and g.isAtLineStart(pos) and g.isBareHeader(pos):
+        # Recover from an unclosed array, e.g. while one is being typed.
+        g.lang.toml = TomlState()
+        pos = tomlTable(g, pos)
+      elif g.isTableHeader(pos):
         pos = tomlTable(g, pos)
       else:
         g.kind = gtPunctuation
+        # A value never starts a line at the top level, so a `[` there (a
+        # header being typed) opens no array.
+        if g.lang.toml.arrayDepth > 0 or not g.isAtLineStart(pos):
+          inc(g.lang.toml.arrayDepth)
         inc(pos)
     of '\"':
       inc(pos)
@@ -397,6 +488,8 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
           else:
             inc(pos)
     of ']', ',', '{', '}':
+      if g.buf[pos] == ']' and g.lang.toml.arrayDepth > 0:
+        dec(g.lang.toml.arrayDepth)
       g.kind = gtPunctuation
       inc(pos)
     of '\0':

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, sequtils]
 
 import ../src/moepkg/syntax/[tokenizer, syntax_toml]
 
@@ -1739,3 +1739,82 @@ suite "syntax_toml - date/time edge cases":
     g.tomlNextToken()
     check g.kind == gtDate
     check g.length == 8
+
+suite "syntax_toml - array value followed by a comment":
+  proc tokens(code: string): seq[(TokenClass, int)] =
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(code)
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      result.add (g.kind, g.length)
+
+  test "string array":
+    check tokens("a = [\"/etc\"] # x") ==
+      @[
+        (gtIdentifier, 1),
+        (gtWhitespace, 1),
+        (gtOperator, 1),
+        (gtWhitespace, 1),
+        (gtPunctuation, 1),
+        (gtStringLit, 6),
+        (gtPunctuation, 1),
+        (gtWhitespace, 1),
+        (gtComment, 3),
+      ]
+
+  test "quoted array of tables after a key":
+    check gtTable notin tokens("a = [[\"x\"]] # x").mapIt(it[0])
+
+  test "identifier-like array of tables after a key":
+    check gtTable notin tokens("a = [[b]] # x").mapIt(it[0])
+
+  test "inner string array on its own line in a multi-line array":
+    check gtTable notin tokens("a = [\n  [\"x\"] # c\n]").mapIt(it[0])
+    check gtTable notin tokens("a = [\n  [\"x\"]\n]").mapIt(it[0])
+
+  test "table header after a multi-line array closes":
+    check (gtTable, 8) in tokens("a = [\n  [\"x\"],\n]\n[server]")
+
+  test "literal strings ending in a backslash are an array":
+    check gtTable notin tokens("['C:\\', 'D:\\']").mapIt(it[0])
+
+  test "indented table header is still a table":
+    check tokens("  [server] # x")[1] == (gtTable, 8)
+
+  test "table header followed by a comment":
+    check tokens("[server] # x") == @[(gtTable, 8), (gtWhitespace, 1), (gtComment, 3)]
+
+  test "array of tables followed by a comment":
+    check tokens("[[a.b]] # x") == @[(gtTable, 7), (gtWhitespace, 1), (gtComment, 3)]
+
+  test "quoted table name containing a bracket":
+    check tokens("[\"a]b\"] # x")[0] == (gtTable, 7)
+
+  test "a table header closes an unclosed array":
+    let t = tokens("a = [1, 2\n\n[server]\nport = 1\n[[db.x]] # c")
+    check (gtTable, 8) in t
+    check t.filterIt(it[0] == gtTable).len == 2
+
+  test "a key/value line closes an unclosed array":
+    check (gtTable, 3) in tokens("a = [1, 2\nb = 3\n[s]")
+    check (gtTable, 3) in tokens("a = [1, 2\n\"b\".c = 3\n[s]")
+
+  test "a keyword or quoted element in a multi-line array is no header":
+    check gtTable notin tokens("a = [\n  [true]\n]").mapIt(it[0])
+    check gtTable notin tokens("a = [\n  [\"b\"]\n]").mapIt(it[0])
+
+  test "an unclosed inline table does not keep an unclosed array open":
+    check (gtTable, 5) in tokens("a = { b = 1\nc = [1,\nd = 3\n[\"q\"]")
+
+  test "a lone bracket at line start opens no array":
+    let t = tokens("[\n[\"x y\"]\n[[\"a\"]]")
+    check (gtTable, 7) in t
+    check t.filterIt(it[0] == gtTable).len == 2
+
+  test "array of tables needs adjacent brackets":
+    check gtTable notin tokens("[ [a]]").mapIt(it[0])
+
+  test "an escape before the line end does not read the next line":
+    check tokens("[\"C:\\\nx\", 1]")[0] == (gtTable, 5)
