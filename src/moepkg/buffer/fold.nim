@@ -253,11 +253,6 @@ proc closeFold*(state: var FoldState, line: int): bool =
     state.folds[best].collapsed = true
     return true
 
-proc toggleFold*(state: var FoldState, line: int): bool =
-  ## Open the collapsed fold drawn at `line`, else close the innermost fold.
-  ## Returns true if a fold was toggled.
-  state.openFold(line) or state.closeFold(line)
-
 proc deleteFold*(state: var FoldState, line: int): bool =
   ## Delete the fold under the cursor: the collapsed one drawn at `line`, else
   ## the innermost. Returns true if a fold was deleted.
@@ -280,15 +275,28 @@ proc openFoldsInRange*(state: var FoldState, startLine, endLine: int): bool =
       state.folds[i].collapsed = false
       result = true
 
-proc openAllFolds*(state: var FoldState) =
-  ## Open all folds
-  for i in 0 ..< state.folds.len:
-    state.folds[i].collapsed = false
+proc foldDepths(state: FoldState): seq[int] =
+  ## Nesting depth of each fold, 1 for a top-level one. The folds are sorted
+  ## outer-first and never cross, so the open ancestors form a stack.
+  result = newSeq[int](state.folds.len)
+  var ends: seq[int]
+  for i, fold in state.folds:
+    while ends.len > 0 and ends[^1] < fold.startLine:
+      discard ends.pop
+    result[i] = ends.len + 1
+    ends.add fold.endLine
 
-proc closeAllFolds*(state: var FoldState) =
-  ## Close all folds
+proc deepestNesting*(state: FoldState): int =
+  ## The deepest fold nesting, 0 without folds (Vim's getDeepestNesting).
+  for depth in state.foldDepths:
+    result = max(result, depth)
+
+proc applyFoldLevel*(state: var FoldState, level: int) =
+  ## Close the folds nested deeper than `level` and open the rest, as Vim's
+  ## newFoldLevel does when 'foldlevel' changes.
+  let depths = state.foldDepths
   for i in 0 ..< state.folds.len:
-    state.folds[i].collapsed = true
+    state.folds[i].collapsed = depths[i] > level
 
 proc deleteAllFolds*(state: var FoldState) =
   ## Delete all folds (zD command)

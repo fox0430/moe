@@ -115,6 +115,8 @@ type
     bcFoldToggle = "fold.toggle" # za - toggle fold at cursor
     bcFoldOpenAll = "fold.open.all" # zR - open all folds
     bcFoldCloseAll = "fold.close.all" # zM - close all folds
+    bcFoldReduce = "fold.reduce" # zr - add [count] to foldlevel
+    bcFoldMore = "fold.more" # zm - subtract [count] from foldlevel
     bcFoldCreate = "fold.create" # zf - create fold from selection
     bcFoldDelete = "fold.delete" # zd - delete fold at cursor
     bcFoldDeleteAll = "fold.delete.all" # zD - delete all folds

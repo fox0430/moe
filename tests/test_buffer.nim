@@ -849,16 +849,6 @@ suite "Buffer - Folding":
     check buf.foldState.folds[0].collapsed == true
     check buf.foldState.closeFold(1) == false
 
-  test "toggleFold":
-    let buf = newTextBuffer("Line1\nLine2\nLine3")
-    discard buf.foldState.addFold(0, 2)
-
-    check buf.foldState.folds[0].collapsed == true
-    check buf.foldState.toggleFold(1) == true
-    check buf.foldState.folds[0].collapsed == false
-    check buf.foldState.toggleFold(1) == true
-    check buf.foldState.folds[0].collapsed == true
-
   test "deleteFold":
     let buf = newTextBuffer("Line1\nLine2\nLine3")
     discard buf.foldState.addFold(0, 2)
@@ -1009,7 +999,7 @@ suite "Buffer - Folding":
     check buf.foldState.folds[0].startLine == 0 # outer remains
     check buf.foldState.folds[0].endLine == 5
 
-  test "zo and za reach a fold made over another with the same range":
+  test "zo reaches a fold made over another with the same range":
     # `Vzf` on a closed fold nests a second one with its range, as in Vim,
     # where two `zo` open both.
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
@@ -1019,15 +1009,6 @@ suite "Buffer - Folding":
     check buf.foldState.isLineInCollapsedFold(3)
     check buf.foldState.openFold(2) == true
     check not buf.foldState.isLineInCollapsedFold(3)
-    # za likewise opens one level at a time, then closes the innermost.
-    buf.foldState.closeAllFolds()
-    check buf.foldState.toggleFold(2) == true
-    check buf.foldState.isLineInCollapsedFold(3)
-    check buf.foldState.toggleFold(2) == true
-    check not buf.foldState.isLineInCollapsedFold(3)
-    check buf.foldState.toggleFold(2) == true
-    check buf.foldState.folds[1].collapsed == true
-    check buf.foldState.folds[0].collapsed == false
 
   test "foldIndexAt returns the outermost fold, unlike foldIndexAtInnermost":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
@@ -1078,16 +1059,18 @@ suite "Buffer - Folding":
     # endLine + 1 is past the buffer; the result must stay in range.
     check buf.foldState.getNextVisibleLine(4, maxLine) == maxLine
 
-  test "openAllFolds / closeAllFolds hit every fold regardless of nesting":
+  test "applyFoldLevel closes the folds nested deeper than the level":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
     discard buf.foldState.addFold(0, 5, collapsed = true)
     discard buf.foldState.addFold(1, 3, collapsed = false)
-    buf.foldState.openAllFolds()
-    for fold in buf.foldState.folds:
-      check not fold.collapsed
-    buf.foldState.closeAllFolds()
-    for fold in buf.foldState.folds:
-      check fold.collapsed
+    discard buf.foldState.addFold(4, 5, collapsed = false)
+    check buf.foldState.deepestNesting == 2
+    buf.foldState.applyFoldLevel(1)
+    check buf.foldState.folds.mapIt(it.collapsed) == @[false, true, true]
+    buf.foldState.applyFoldLevel(2)
+    check buf.foldState.folds.mapIt(it.collapsed) == @[false, false, false]
+    buf.foldState.applyFoldLevel(0)
+    check buf.foldState.folds.mapIt(it.collapsed) == @[true, true, true]
 
   test "fold lookups stay correct after an insert shifts the folds":
     # Every line-keyed lookup breaks out as soon as a fold starts past the

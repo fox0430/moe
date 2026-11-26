@@ -371,6 +371,8 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "za", description: "Toggle fold"),
     HelpEntry(syntax: "zR", description: "Open all folds"),
     HelpEntry(syntax: "zM", description: "Close all folds"),
+    HelpEntry(syntax: "zr", description: "Raise the fold level by count"),
+    HelpEntry(syntax: "zm", description: "Lower the fold level by count"),
     HelpEntry(syntax: "zd", description: "Delete folding lines"),
     HelpEntry(syntax: "zD", description: "Delete all folding lines"),
     HelpEntry(syntax: "Ctrl-s", description: "Selection Range (LSP)"),

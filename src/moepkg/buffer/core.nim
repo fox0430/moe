@@ -661,6 +661,9 @@ type
 
     # Line folding state (vim-like manual folding)
     foldState*: FoldState
+    foldLevel*: int
+      ## Vim's 'foldlevel', set by zr/zm/zR/zM. Kept out of `foldState` so an
+      ## undo, which restores the folds, leaves it alone as Vim does.
     editAnchor*: Option[EditAnchor]
 
     # Bookmarks (sorted list of bookmarked line numbers)
