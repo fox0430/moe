@@ -22,7 +22,7 @@
 ## No buffer/state mutation. Used by Insert mode newline handlers when
 ## `smartIndent` is enabled. Every code language shares the bracket rules,
 ## read through the tokenizer from the highlighter's state; Nim adds its own,
-## and Bash and Zsh a table of block words.
+## Python and YAML a trailing `:`, and Bash and Zsh a table of block words.
 
 import std/[options, strutils]
 import ../syntax/[tokenizer, dispatch]
@@ -49,6 +49,15 @@ const
   Closers = {')', ']', '}'}
   NimContinuationKeywords = ["or", "and", "object", "tuple", "enum"]
   NimBlockDeclKeywords = ["var", "let", "const", "type"]
+  PythonBlockKeywords = [
+    "async", "class", "def", "elif", "else", "except", "finally", "for", "if", "try",
+    "while", "with",
+  ] ## What a block's header starts with.
+  PythonSoftKeywords = ["match", "case"] ## Headers too, unless they name something.
+  PythonStatementKeywords = [
+    "assert", "break", "class", "continue", "def", "del", "elif", "except", "finally",
+    "global", "import", "nonlocal", "pass", "raise", "return", "try", "while", "with",
+  ] ## What starts no line inside brackets: one open above was left unclosed.
 
 type
   MiddleWord = tuple[word: string, targets, stops: seq[string]]
@@ -272,9 +281,10 @@ type
   TokenLine = tuple[text: string, tokens: seq[LineToken], inString: bool]
     ## `inString` when it starts inside a string, but for a heredoc's body.
 
-  NewLineIndent* = tuple[steps, alignTo: int]
+  NewLineIndent* = tuple[steps, alignTo, column: int]
     ## The new line takes the indent of line `alignTo` (-1: of the text before
-    ## the cursor), `steps` 'shiftwidth's deeper.
+    ## the cursor), `steps` 'shiftwidth's deeper; past 0, `column` is the byte
+    ## of line `alignTo` it counts from in place of the first non-blank.
 
 proc tokenLines(buffer: TextBuffer, first, last: int): seq[TokenLine] =
   ## Lines `first` to `last` and their tokens, read as a full parse does so a
@@ -1163,18 +1173,18 @@ proc leadingWordAlignLine*(buffer: TextBuffer, line: int): int =
 proc patternAlignment(read: ShellLines, column: int): NewLineIndent =
   ## The indent of the pattern after the `;;` at byte `column`: of the line the
   ## nearest pattern above starts, or a step in from a `case` with none.
-  result = (0, -1)
+  result = (0, -1, 0)
   var
     depth = 0
     label = -1
   for (l, m) in read.marksBefore(column):
     if label >= 0 and l != label:
-      return (0, label)
+      return (0, label, 0)
     if m.kind in {mkWord, mkImplied} and m.text == "esac":
       inc depth
     elif m.kind == mkWord and m.text == "case":
       if depth == 0:
-        return (1, l)
+        return (1, l, 0)
       dec depth
     elif depth == 0 and m.kind == mkLabel:
       label = l
@@ -1194,7 +1204,7 @@ proc shellEnterIndent(
   ## line its `then`, `fi` or closer is. A code closer carried down, at byte
   ## `carried` when `closing`, goes to its opener's line unless a block is open
   ## inside it: the line is then as without the closer.
-  result = (0, -1)
+  result = (0, -1, 0)
   for t in at.tokens:
     if t.kind in LongTokens + {gtStringLit} and t.first < split and
         (t.last >= split or t.continues):
@@ -1210,7 +1220,7 @@ proc shellEnterIndent(
     if word.len > 0:
       let alignTo = buffer.wordAlignLine(read, split, word)
       if alignTo >= 0:
-        return (0, alignTo)
+        return (0, alignTo, 0)
     let head = firstNonBlankAt(at.text, 0)
     var
       open: seq[string] # What closes each block left open
@@ -1268,12 +1278,12 @@ proc shellEnterIndent(
     if closing:
       if read.carried.len > 0 and read.carried[0].kind == mkLabel and
           not at.text[0 ..< split].strip(leading = false).endsWith(" in"):
-        return (0, -1)
+        return (0, -1, 0)
       if open.len > 0 and open[^1] notin [")", "]", "}"]:
-        return (1, -1)
+        return (1, -1, 0)
       let closer = at.text[carried]
       if open.len > 0 or not read.leavesBlockOpen(blocks, split, closer):
-        return (0, read.openerLine(split, closer))
+        return (0, read.openerLine(split, closer), 0)
     if lastBreak >= 0:
       var last = -1
       for t in at.tokens:
@@ -1299,17 +1309,222 @@ proc closerAlignLine*(buffer: TextBuffer, line, column: int): int =
     return -1
   buffer.matchingOpenerLine(line, column, at)
 
+proc isHashComment(at: TokenLine, t: LineToken): bool =
+  ## Whether `t` is a `#` comment; one starting with `#!` is a gtPreprocessor.
+  ## A triple-quoted string, gtDocLongComment in Python, is none.
+  t.kind in {gtComment, gtDocComment} or
+    (t.kind == gtPreprocessor and at.text[t.first] == '#')
+
+proc trailingColon(at: TokenLine, split: int): int =
+  ## Byte of the `:` that is the last code before byte `split`; -1 for none.
+  for j in countdown(at.tokens.high, 0):
+    let t = at.tokens[j]
+    if j == at.tokens.high and not at.isHashComment(t) and
+        at.text.lastNonBlankBefore(split) > t.last:
+      return -1 # Past 'synmaxcol'.
+    if t.first >= split or t.kind == gtWhitespace or at.isHashComment(t):
+      continue
+    if t.kind == gtPunctuation and t.first == t.last and at.text[t.first] == ':':
+      return t.first
+    return -1
+  -1
+
+type PythonReader = object
+  ## Reads Python statements from the top down, so that what a line's end means
+  ## is known from the statement it is part of.
+  brackets: string ## The openers left open.
+  joined: bool ## The last line ended with a backslash.
+  inString: bool ## The last line ended inside a string.
+  inTripled: bool ## And that is a triple-quoted one.
+  tokens: int ## Code tokens of the statement so far.
+  start: int ## The line it starts on.
+  indent: int ## That line's.
+  header: bool ## It is a block's header, not ended yet.
+  soft: bool ## Its first word is `match` or `case`.
+  lambdas: int ## `lambda`s outside brackets still without their `:`.
+  colon: tuple[line, column: int] ## The `:` that ended the last header.
+
+proc namesSubject(text: string, kind: TokenClass): bool =
+  ## Whether `text`, right after `match` or `case`, may start what it matches.
+  case kind
+  of gtPunctuation:
+    text[0] in Openers
+  of gtOperator:
+    text[0] in {'+', '-', '*', '~'} and text[^1] != '='
+  else:
+    true
+
+proc readCode(
+    reader: var PythonReader,
+    line, indent: int,
+    text: string,
+    kind: TokenClass,
+    column: int,
+) =
+  ## Read one token of code.
+  if reader.tokens == 0:
+    reader.start = line
+    reader.indent = indent
+    reader.soft = kind == gtIdentifier and text in PythonSoftKeywords
+    reader.header = reader.soft or (kind == gtKeyword and text in PythonBlockKeywords)
+  elif reader.tokens == 1 and reader.soft and not text.namesSubject(kind):
+    reader.header = false
+  inc reader.tokens
+  if kind in BracketTokens and text.len == 1 and text[0] in Openers:
+    reader.brackets.add text[0]
+  elif kind in BracketTokens and text.len == 1 and text[0] in Closers:
+    let opener =
+      case text[0]
+      of ')': '('
+      of ']': '['
+      else: '{'
+    let at = reader.brackets.rfind(opener)
+    if at >= 0:
+      reader.brackets.setLen(at)
+  elif reader.brackets.len > 0:
+    discard
+  elif kind == gtKeyword and text == "lambda":
+    inc reader.lambdas
+  elif kind == gtPunctuation and text == ":":
+    if reader.lambdas > 0:
+      dec reader.lambdas
+    elif reader.header:
+      reader.header = false
+      reader.colon = (line, column)
+
+proc readLine(reader: var PythonReader, line: int, at: TokenLine, split = int.high) =
+  ## Read `line` up to byte `split`.
+  if not reader.inString:
+    let first = firstNonBlankAt(at.text, 0)
+    var recovers = false
+    for j, t in at.tokens:
+      if t.first == first:
+        # Inside brackets a line goes deeper than the statement it is part of.
+        let
+          word = at.text[t.first .. t.last]
+          shallow = reader.brackets.len > 0 and first <= reader.indent
+        if t.kind == gtKeyword:
+          recovers =
+            word in PythonStatementKeywords or (shallow and word in PythonBlockKeywords)
+        elif shallow and t.kind == gtIdentifier and word in PythonSoftKeywords:
+          for next in at.tokens[j + 1 .. ^1]:
+            if next.kind != gtWhitespace and not at.isHashComment(next):
+              recovers = at.text[next.first .. next.last].namesSubject(next.kind)
+              break
+        break
+    if recovers:
+      reader.brackets.setLen(0)
+    if recovers or (reader.brackets.len == 0 and not reader.joined):
+      reader.tokens = 0
+      reader.lambdas = 0
+      reader.header = false
+  let
+    brackets = reader.brackets
+    indent = max(0, firstNonBlankAt(at.text, 0))
+  for t in at.tokens:
+    if t.first >= split:
+      break
+    if t.kind == gtWhitespace or at.isHashComment(t):
+      continue
+    let word = at.text[t.first .. t.last]
+    # A lone backslash only joins the next line.
+    if word != "\\" or t.kind in StringTokens + LongTokens:
+      reader.readCode(line, indent, word, t.kind, t.first)
+  reader.joined = false
+  if at.tokens.len == 0:
+    # Only a triple-quoted string goes on past an empty line.
+    reader.inString = reader.inTripled
+  else:
+    let last = at.tokens[^1]
+    reader.inString = last.continues and last.kind in StringTokens + LongTokens
+    reader.inTripled = reader.inString and last.kind in LongTokens
+    if not at.isHashComment(last) and at.text.lastNonBlankBefore(at.text.len) > last.last:
+      # Past 'synmaxcol' what closes the line's brackets is not read.
+      reader.brackets = brackets
+    reader.joined =
+      at.text[^1] == '\\' and last.last == at.text.high and
+      last.kind notin StringTokens + LongTokens and not at.isHashComment(last)
+
+proc pythonStatementStart(buffer: TextBuffer, line, split: int): int =
+  ## Where the statement that goes on to byte `split` of `line` starts, going
+  ## only up from closers to their openers and over joined lines.
+  result = line
+  let lowest = max(0, line - MaxOpenerSearchLines)
+  while result > lowest:
+    let at = buffer.tokenLine(result)
+    var
+      depth = 0
+      closer = -1 # The outermost one opened above.
+    for b in codeBrackets(at.tokens, at.text, if result == line: split else: int.high):
+      if b.ch in Openers:
+        inc depth
+      elif depth > 0:
+        dec depth
+      else:
+        closer = b.column
+    var above = -1
+    if closer >= 0:
+      above = buffer.matchingOpenerLine(result, closer, at)
+    elif buffer.getLine(result - 1).endsWith('\\'):
+      above = result - 1
+    if above < lowest or above >= result:
+      break
+    result = above
+
+proc pythonHeaderLine(buffer: TextBuffer, line, split, colon: int): int =
+  ## The line the block's header that the `:` at byte `colon` of `line` ends
+  ## starts on; -1 when it ends none, as in a dict, a slice or a `lambda`.
+  var first = max(0, line - MaxOpenerSearchLines)
+  if buffer.resumePoint(first, MaxResumeLines).isNone:
+    # Read as code from inside a string, all below would come out wrong.
+    let resume = buffer.resumePoint(line, MaxOpenerSearchLines)
+    first = min(
+      buffer.pythonStatementStart(line, split),
+      if resume.isSome: resume.get.line else: line,
+    )
+  var reader = PythonReader(colon: (-1, -1))
+  let lines = buffer.tokenLines(first, line)
+  for l in first .. line:
+    reader.readLine(l, lines[l - first], if l == line: split else: int.high)
+  if reader.colon == (line, colon): reader.start else: -1
+
+proc pythonBodyLine(buffer: TextBuffer, header, last: int): int =
+  ## The first line of the body that the header on lines `header` to `last`
+  ## already has below; -1 for none. All of a body takes one indent.
+  let
+    text = buffer.getLine(header)
+    indent = text[0 ..< max(0, firstNonBlankAt(text, 0))]
+  for l in last + 1 .. min(buffer.len - 1, last + MaxOpenerSearchLines):
+    let
+      below = buffer.getLine(l)
+      first = firstNonBlankAt(below, 0)
+    # A comment's indent means nothing.
+    if first >= 0 and below[first] != '#':
+      return if first > indent.len and below.startsWith(indent): l else: -1
+  -1
+
+proc yamlKeyColumn(text: string): int =
+  ## Byte of the first key of the line, past the `- `, `? ` and `: ` before it.
+  result = max(0, firstNonBlankAt(text, 0))
+  while result + 1 < text.len and text[result] in {'-', '?', ':'} and
+      text[result + 1] in Blanks:
+    let next = firstNonBlankAt(text, result + 1)
+    if next < 0:
+      break
+    result = next
+
 proc enterIndent*(buffer: TextBuffer, line, split: int): NewLineIndent =
   ## The indent of the line Enter opens at byte `split` of `line` (its end for
   ## `o`). An opener left unclosed indents it. A carried closer steps in right
   ## after an opener, as Vim's 'smartindent', so typing goes on at the inner
   ## depth; and otherwise goes to the line of the opener it closes, as Neovim's
-  ## indent scripts.
+  ## indent scripts. A trailing `:` indents it in Python and YAML;
+  ## in Python as the header's body is, when it has one.
   ##
   ## Which rules apply goes by the file's language, as Vim's indent goes by
   ## 'filetype'; the tokens come from the language highlighting reads, so
   ## `:set syntax=` changes what is code but not the rules.
-  result = (0, -1)
+  result = (0, -1, 0)
   let language = buffer.language
   if language in NoIndentLanguages:
     return
@@ -1320,22 +1535,35 @@ proc enterIndent*(buffer: TextBuffer, line, split: int): NewLineIndent =
   let closing =
     carried >= 0 and text[carried] in Closers and tokens.isCodeBracket(text, carried)
   if closing and tokens.opensLast(text, split):
-    return (1, -1)
+    return (1, -1, 0)
   if language in BlockWordLanguages:
     return buffer.shellEnterIndent(line, split, carried, at, closing)
   if closing:
-    return (0, buffer.matchingOpenerLine(line, carried, at))
+    return (0, buffer.matchingOpenerLine(line, carried, at), 0)
   if language == langNim:
     if not tokens.inLongToken(split):
       result.steps = ord(nimNeedsExtraIndent(text[0 ..< split]))
-  else:
-    result.steps = ord(tokens.leavesOpen(text, split))
+  elif tokens.leavesOpen(text, split):
+    result.steps = 1
+  elif language in {langPython, langYaml}:
+    let colon = at.trailingColon(split)
+    if colon < 0:
+      return
+    if language == langYaml:
+      # What a key holds goes past the key, not past its line's `- `.
+      return (1, line, text[0 ..< split].yamlKeyColumn)
+    let header = buffer.pythonHeaderLine(line, split, colon)
+    if header >= 0:
+      let body = buffer.pythonBodyLine(header, line)
+      if body >= 0:
+        return (0, body, 0)
+      result = (1, if header == line: -1 else: header, 0)
 
 proc aboveIndent*(buffer: TextBuffer, line: int): NewLineIndent =
   ## The indent of the line `O` opens above `line`: a step deeper than one that
   ## starts with a closer, as Vim's 'smartindent', or a word that closes a
   ## block; above an `esac`, that of the patterns, as Enter after a `;;`.
-  result = (0, -1)
+  result = (0, -1, 0)
   if buffer.language in NoIndentLanguages:
     return
   let
@@ -1349,9 +1577,9 @@ proc aboveIndent*(buffer: TextBuffer, line: int): NewLineIndent =
       return
     if read.leadingWord == "esac":
       return read.patternAlignment(first)
-    return (1, -1)
+    return (1, -1, 0)
   if text[first] in Closers and buffer.tokenLine(line).tokens.isCodeBracket(text, first):
-    return (1, -1)
+    return (1, -1, 0)
 
 proc isBlockWord*(buffer: TextBuffer, word: string): bool =
   ## Whether `word` continues or closes a block in `buffer`'s language.
