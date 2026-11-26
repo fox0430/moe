@@ -27,7 +27,7 @@ import
   ../src/moepkg/[
     editor, config, config_loader, config_mode, modes, types, buffer, render_utils,
     editor_window, editor_window_layout, macro_recording, viewer_mode, color,
-    editor_display, handler,
+    editor_display, handler, buffer_manager, buffer_listings,
   ]
 import ../src/moepkg/key_bindings except Command
 import ../src/moepkg/types/config_mode_types
@@ -2559,6 +2559,44 @@ suite "advanceLayoutForFrame - viewer selection drives the window viewport":
     e.advanceLayoutForFrame(buffer, false)
 
     check e.windowManager.windows[0].viewport.topLine == 0
+
+suite "renderSplitView - Buffer manager colors":
+  test "Active and modified rows take their theme colors":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let active = e.tabBuffer(e.activeWindow)
+    active.filePath = some("/active.nim")
+    let modified = newTextBuffer("x")
+    modified.filePath = some("/modified.nim")
+    modified.changeSeq.inc
+    let plain = newTextBuffer("x")
+    plain.filePath = some("/plain.nim")
+    e.addBuffer(plain)
+    e.addBuffer(modified)
+
+    let state = newBufferManagerState()
+    state.updateEntries(e.getBufferInfos(active.id))
+    state.selectedIndex = 0
+    check e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: state),
+      state.createBufferManagerTextBuffer(),
+      vpInPlace,
+    ).isOk
+
+    e.renderSplitView(buffer, false)
+
+    proc fgOf(name: string): Option[ColorValue] =
+      for y in 0 ..< buffer.area.height:
+        let x = buffer.rowText(y, buffer.area.width).find("/" & name)
+        if x >= 0:
+          return some(buffer[x, y].style.fg)
+
+    check fgOf("active.nim") == some(getThemeStyle(bufferManagerActive).fg)
+    check fgOf("modified.nim") == some(getThemeStyle(bufferManagerModified).fg)
+    check fgOf("plain.nim").isSome
+    check fgOf("plain.nim") != some(getThemeStyle(bufferManagerActive).fg)
+    check fgOf("plain.nim") != some(getThemeStyle(bufferManagerModified).fg)
 
 suite "advanceLayoutForFrame - Config view follows the config":
   proc setupConfig(e: Editor, section, name: string): ConfigModeState =

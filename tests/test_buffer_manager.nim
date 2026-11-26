@@ -22,6 +22,7 @@
 import std/[unittest, options, strutils]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/buffer_manager
+import ../src/moepkg/[highlight, color, unicode_utils]
 
 suite "BufferManagerState - Constructor":
   test "newBufferManagerState creates empty state":
@@ -477,3 +478,39 @@ suite "BufferManagerState - Integration":
     # The selection stays on its buffer
     check state.items.len == 2
     check state.selectedIndex == 1
+
+suite "createBufferManagerTextBuffer - colors":
+  test "Every row gets the color of its entry":
+    let state = newBufferManagerState()
+    state.updateEntries(
+      @[
+        BufferInfo(number: 1, filePath: some("/a.nim"), isActive: true),
+        BufferInfo(number: 2, filePath: some("/日本.nim")),
+        BufferInfo(number: 3, filePath: some("/c.nim"), isModified: true),
+      ]
+    )
+    let buf = state.createBufferManagerTextBuffer()
+
+    check buf.isUtilityBuffer
+    let segments = buf.highlight.colorSegments
+    check segments.len == 4
+    for row, segment in segments:
+      check segment.firstRow == row
+      check segment.lastRow == row
+      check segment.lastColumn == buf[row].charLen - 1
+    check segments[0].color == EditorColorPairIndex.default
+    check segments[1].color == EditorColorPairIndex.bufferManagerActive
+    check segments[2].color == EditorColorPairIndex.default
+    check segments[3].color == EditorColorPairIndex.bufferManagerModified
+
+  test "Modified wins over active":
+    let state = newBufferManagerState()
+    state.updateEntries(
+      @[
+        BufferInfo(
+          number: 1, filePath: some("/a.nim"), isActive: true, isModified: true
+        )
+      ]
+    )
+    let segments = state.createBufferManagerTextBuffer().highlight.colorSegments
+    check segments[1].color == EditorColorPairIndex.bufferManagerModified
