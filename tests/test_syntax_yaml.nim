@@ -151,23 +151,23 @@ suite "syntax_yaml - yamlNextToken single quoted strings":
     g.initGeneralTokenizer("'hello'")
     g.state = gtOther
     g.yamlNextToken()
-    check g.kind == gtNone
-    check g.state == gtCharLit
-
-  test "single quoted string content":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("'hello'")
-    g.state = gtOther
-    g.yamlNextToken() # start '
-    g.yamlNextToken() # content
     check g.kind == gtStringLit
+    check g.length == 7
+    check g.state == gtOther
+
+  test "quotes right at the ends of a single-quoted string":
+    for src in ["''", "''''", "'x'''", "'''x'", "'x\n'", "'\n'''"]:
+      check finalStateAtEof(src) == gtOther
+    for src in ["'", "'''", "'x''", "'\n''"]:
+      check finalStateAtEof(src) == gtCharLit
+    check collectKinds("'x'''") == @[gtStringLit, gtEscapeSequence, gtStringLit]
+    check collectKinds("'': a")[0] == gtKey
 
   test "escaped single quote":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("'it''s'")
     g.state = gtOther
-    g.yamlNextToken() # start '
-    g.yamlNextToken() # it
+    g.yamlNextToken() # 'it
     check g.kind == gtStringLit
 
     g.yamlNextToken() # ''
@@ -688,10 +688,9 @@ suite "syntax_yaml - yamlNextToken key detection":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("'name': value")
     g.state = gtOther
-    g.yamlNextToken() # start '
-    check g.state == gtCharLit
-    g.yamlNextToken() # content 'name'
+    g.yamlNextToken()
     check g.kind == gtKey
+    check g.state == gtOther
 
   test "number key":
     var g: GeneralTokenizer
@@ -896,8 +895,7 @@ suite "syntax_yaml - yamlNextToken quoted values":
     g.yamlNextToken() # key
     g.yamlNextToken() # :
     g.yamlNextToken() # space
-    g.yamlNextToken() # ' (start)
-    g.yamlNextToken() # value content
+    g.yamlNextToken() # 'value'
     check g.kind == gtStringLit
 
 suite "syntax_yaml - false positive prevention":
@@ -1048,10 +1046,9 @@ suite "syntax_yaml - quoted key with escapes":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("'it''s': value")
     g.state = gtOther
-    g.yamlNextToken() # start '
+    g.yamlNextToken() # 'it
     check g.state == gtCharLit
     check g.lang.yaml.isKey == true
-    g.yamlNextToken() # it
     check g.kind == gtKey
     g.yamlNextToken() # '' escape
     check g.kind == gtEscapeSequence
@@ -1689,9 +1686,6 @@ suite "syntax_yaml - multi-line scalars fold across lines":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("'first\nsecond'")
     g.state = gtOther
-    g.yamlNextToken() # opening '
-    check g.kind == gtNone
-    check g.state == gtCharLit
     g.yamlNextToken() # 'first<newline>
     check g.kind == gtStringLit
     check g.state == gtCharLit # still inside the single-quoted scalar

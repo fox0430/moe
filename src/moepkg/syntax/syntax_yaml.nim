@@ -179,6 +179,39 @@ proc yamlPossibleNumber(g: var GeneralTokenizer, pos: var int) =
   # content, but that is far too troublesome. I think it is fine that the
   # highlighter is sloppy here.
 
+proc yamlSingleQuoted(g: var GeneralTokenizer, pos: var int) =
+  ## One token of a single-quoted string, at `pos` past its opening quote: an
+  ## escaped quote, or text up to one, the line's end or the closing quote.
+  g.kind = if g.lang.yaml.isKey: gtKey else: gtStringLit
+  while true:
+    case g.buf[pos]
+    of '\0':
+      # Keep gtCharLit: end of buffer is not end of string, and a chunked parse
+      # resumes the next chunk from this state (see the gtStringLit
+      # continuation below). With nothing consumed it is the end of the stream.
+      if pos == g.pos:
+        g.kind = gtEof
+      break
+    of '\n', '\r':
+      # Fold across the line keeping `gtCharLit`: one token per line so the
+      # closing-quote token (which resets to `gtOther`) stays on its own line
+      # and the lines between are marked as inside the string.
+      inc(pos)
+      break
+    of '\'':
+      if g.buf[pos + 1] == '\'':
+        # Escape sequence, return content first if any
+        if pos > g.pos:
+          break
+        inc(pos, 2)
+        g.kind = gtEscapeSequence
+      else:
+        inc(pos)
+        g.state = gtOther
+      break
+    else:
+      inc(pos)
+
 proc yamlNextToken*(g: var GeneralTokenizer) =
   const hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
   var pos = g.pos
@@ -248,66 +281,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         inc(pos)
   elif g.state == gtCharLit:
     # abusing gtCharLit as single-quoted string lit
-    g.kind = if g.lang.yaml.isKey: gtKey else: gtStringLit
-    # Check if we're at an escape sequence ''
-    if g.buf[pos] == '\'' and g.buf[pos + 1] == '\'':
-      inc(pos, 2)
-      g.kind = gtEscapeSequence
-    elif g.buf[pos] == '\'':
-      inc(pos) # skip the starting '
-      while true:
-        case g.buf[pos]
-        of '\0':
-          # Unterminated at end of buffer; stop so we don't read past it.
-          # Keep gtCharLit: end of buffer is not end of string, and a chunked
-          # parse resumes the next chunk from this state (see the gtStringLit
-          # continuation above).
-          break
-        of '\n', '\r':
-          # Fold across the line keeping `gtCharLit`: one token per line so the
-          # closing-quote token (which resets to `gtOther`) stays on its own
-          # line and the lines between are marked as inside the string.
-          inc(pos)
-          break
-        of '\'':
-          if g.buf[pos + 1] == '\'':
-            # Escape sequence, return content first if any
-            if pos > g.pos + 1:
-              break
-            inc(pos, 2)
-            g.kind = gtEscapeSequence
-          else:
-            inc(pos)
-            g.state = gtOther
-          break
-        else:
-          inc(pos)
-    else:
-      # Continue reading after previous token
-      while true:
-        case g.buf[pos]
-        of '\0':
-          # Keep gtCharLit at end of buffer (chunk resume; see the gtStringLit
-          # continuation above) and report gtEof when nothing was consumed.
-          if pos == g.pos:
-            g.kind = gtEof
-          break
-        of '\n', '\r':
-          inc(pos)
-          break
-        of '\'':
-          if g.buf[pos + 1] == '\'':
-            # Escape sequence, return content first if any
-            if pos > g.pos:
-              break
-            inc(pos, 2)
-            g.kind = gtEscapeSequence
-          else:
-            inc(pos)
-            g.state = gtOther
-          break
-        else:
-          inc(pos)
+    g.yamlSingleQuoted(pos)
   elif g.state == gtCommand:
     # gtCommand means 'block scalar header'
     case g.buf[pos]
@@ -633,7 +607,8 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         else:
           inc(tempPos)
       g.state = gtCharLit
-      g.kind = gtNone
+      inc(pos)
+      g.yamlSingleQuoted(pos)
     of '!':
       g.kind = gtTagStart
       inc(pos)
