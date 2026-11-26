@@ -56,11 +56,12 @@ proc changedMarkNames(change: BufferChange): set[char] =
 func undoFollowers(change: BufferChange): set[EditFollower] =
   ## Followers undo/redo moves across `change`: all but wholesale-restored
   ## line arrays; only diagnostics for ckSnapshot, without semantic overlay.
-  ## The Visual area and the jump list move by `rowsAcrossUndo` instead.
+  ## The folds, the Visual area and the jump list move by `rowsAcrossUndo`
+  ## instead.
   if change.kind == ckSnapshot:
     {efDiagnostics}
   else:
-    AllFollowers - {efLineArrays, efSemantic, efLastVisual, efRowsMoved}
+    AllFollowers - {efLineArrays, efSemantic, efFolds, efLastVisual, efRowsMoved}
 
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Apply the inverse of a single change (internal helper)
@@ -107,35 +108,32 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # ends up back at the pre-undo state instead of an intermediate one.
       let n = change.transactionChanges.len
       var i = n - 1
-      while i >= 0:
-        let r = b.undoChange(change.transactionChanges[i])
-        if r.isErr:
-          # Roll forward indices (i+1 .. n-1) which we already reverted.
-          for j in (i + 1) .. (n - 1):
-            let rr = b.redoChange(change.transactionChanges[j])
-            if rr.isErr:
-              logError(
-                "buffer",
-                "Failed to roll forward after partial transaction undo: " & rr.error,
-              )
-          return r
-        dec i
+      b.holdingRows(change):
+        while i >= 0:
+          let r = b.undoChange(change.transactionChanges[i])
+          if r.isErr:
+            # Roll forward indices (i+1 .. n-1) which we already reverted.
+            for j in (i + 1) .. (n - 1):
+              let rr = b.redoChange(change.transactionChanges[j])
+              if rr.isErr:
+                logError(
+                  "buffer",
+                  "Failed to roll forward after partial transaction undo: " & rr.error,
+                )
+            return r
+          dec i
     of ckSnapshot:
       b.storage.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
       # b.modifiedLines currently holds the post-mutation state; reverse it.
       applyUndo(b.modifiedLines, change.modifiedLinesDelta)
-      b.foldState = change.snapshotFoldState
       b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
 
     # Move followers back; ckTransaction recurses.
-    # Folds get their ranges back here and below, unlike Vim, whose undo only
-    # shifts folds across the change so the restored lines mostly stay out of
-    # them (`dd` then `u` shrinks the inner fold). Kept on purpose.
     if change.kind != ckTransaction:
       b.followChange(change, change.undoFollowers, undone = true)
-      b.rowsAcrossUndo(change, undone = true)
+    b.rowsAcrossUndo(change, undone = true)
     b.namedMarks.applyNamedMarkChanges(change.namedMarkChanges, useAfter = false)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
@@ -146,10 +144,9 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     if change.kind != ckSnapshot and change.savedLineMarkers.len > 0:
       b.lineMarkers = change.savedLineMarkers
 
-    # A rewritten span that gave rows up dropped their folds and bookmarks and
-    # the reversed events cannot bring them back, so restore them wholesale.
+    # A rewritten span that gave rows up dropped their bookmarks and the
+    # reversed events cannot bring them back, so restore them wholesale.
     if change.givesRowsUp:
-      b.foldState = change.replaceLinesSavedFolds
       b.bookmarks = change.replaceLinesSavedBookmarks
 
     # Ensure lineMarkers and modifiedLines stay in sync after undo operations
@@ -165,8 +162,8 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     return err("Failed to undo change: " & e.msg)
 
 proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange =
-  ## Build the inverse ckSnapshot entry for undo()/redo(). The piece tree,
-  ## markers and folds are captured from the CURRENT (pre-restore) buffer; the
+  ## Build the inverse ckSnapshot entry for undo()/redo(). The piece tree and
+  ## markers are captured from the CURRENT (pre-restore) buffer; the
   ## bidirectional modifiedLinesDelta is shared as-is so the same delta drives
   ## both directions.
   BufferChange(
@@ -178,7 +175,6 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     snapshotCursorPos: change.snapshotCursorPos,
     snapshotLineMarkers: b.lineMarkers,
     modifiedLinesDelta: change.modifiedLinesDelta,
-    snapshotFoldState: b.foldState,
     snapshotBookmarks: b.bookmarks,
     snapshotEdits: change.snapshotEdits,
     snapshotRows: change.snapshotRows,
@@ -229,6 +225,7 @@ proc beginTransaction*(
       cursorPos: cursorPos,
       namedMarksBefore: b.namedMarks,
       lastVisualBefore: b.lastVisual,
+      foldsBefore: b.foldState,
     )
   )
   return ok(())
@@ -275,7 +272,6 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
           snapshotLineMarkers: b.pendingSnapshotMarkers,
           modifiedLinesDelta:
             computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
-          snapshotFoldState: b.pendingSnapshotFolds,
           snapshotBookmarks: b.pendingSnapshotBookmarks,
           snapshotEdits: b.takePendingSnapshotEdits(),
           snapshotRows: b.takePendingSnapshotRows(),
@@ -309,10 +305,59 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
   else:
     # Zero-change transaction: beginTransaction captured a pending snapshot that
     # no undo entry consumes here. Discard it so the next edit's ckSnapshot
-    # doesn't reuse this stale base and desync markers / folds on undo.
+    # doesn't reuse this stale base and desync markers on undo.
     b.discardPendingSnapshot()
 
   return ok(())
+
+type SavedRowsMark = object ## Where the edits `savingRows` groups begin.
+  changes, seq, snapshotRows: int
+
+proc markSavedRows(b: TextBuffer): SavedRowsMark =
+  doAssert b.inTransaction and b.currentTransaction.isSome
+  SavedRowsMark(
+    changes: b.currentTransaction.get.changes.len,
+    seq: b.changeSeq,
+    snapshotRows: b.pendingSnapshotRows.len,
+  )
+
+proc putSavedRows(b: TextBuffer, mark: SavedRowsMark, rows: RowSpan) =
+  ## Record the edits since `mark` as having saved `rows`.
+  if b.changeSeq == mark.seq or b.currentTransaction.isNone:
+    return
+  if b.pendingSnapshot.isSome:
+    b.pendingSnapshotRows.setLen(mark.snapshotRows)
+    b.pendingSnapshotRows.add rows
+  else:
+    template changes(): untyped =
+      b.currentTransaction.get.changes
+
+    if changes.len <= mark.changes:
+      return
+    var inner = newSeqOfCap[BufferChange](changes.len - mark.changes)
+    for i in mark.changes ..< changes.len:
+      inner.add move(changes[i])
+    changes.setLen(mark.changes)
+    changes.add BufferChange(
+      startSeq: inner[0].startSeq,
+      endSeq: inner[^1].endSeq,
+      id: inner[^1].id,
+      kind: ckTransaction,
+      transactionChanges: inner,
+      transactionRows: some(rows),
+    )
+
+template savingRows*(b: TextBuffer, rows: RowSpan, body: untyped) =
+  ## Run `body`, edits in the open transaction, as one command that saved
+  ## `rows` as Vim's u_save does: undo and redo move the folds, the last Visual
+  ## area and the jump list across `rows` once, not across each edit. Vim's
+  ## fold adjustment on undo is not linear, so the two differ.
+  bind markSavedRows, putSavedRows
+  let savedRowsMark = markSavedRows(b)
+  try:
+    body
+  finally:
+    putSavedRows(b, savedRowsMark, rows)
 
 template guardedTransaction(
     b: TextBuffer,
@@ -412,7 +457,6 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
       b.storage.pieceTable.restoreSnapshot(b.pendingSnapshot.get)
       b.lineMarkers = b.pendingSnapshotMarkers
       b.modifiedLines = b.pendingSnapshotModifiedLines
-      b.foldState = b.pendingSnapshotFolds
       b.namedMarks = b.pendingSnapshotNamedMarks
       b.bookmarks = b.pendingSnapshotBookmarks
       b.followBack(b.pendingSnapshotEdits, {efDiagnostics})
@@ -422,11 +466,14 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
         if r.isErr:
           # Clean up transaction state even if rollback partially fails
           b.lastVisual = transaction.lastVisualBefore
+          b.foldState = transaction.foldsBefore
           b.inTransaction = false
           b.currentTransaction = none(BufferTransaction)
           b.discardPendingSnapshot()
           return err("Failed to rollback transaction: " & r.error)
     b.lastVisual = transaction.lastVisualBefore
+    # As if it never happened: an undo would keep what fold commands did since.
+    b.foldState = transaction.foldsBefore
 
     # Drop every pending-snapshot artifact, matching the commit path, so a later
     # capture/edit never reuses a stale pre-transaction base. Required for the
@@ -502,7 +549,6 @@ proc joinedSnapshot(b: TextBuffer, first: int): BufferChange =
     snapshotCursorPos: head.snapshotCursorPos,
     snapshotLineMarkers: head.snapshotLineMarkers,
     modifiedLinesDelta: computeDelta(before, b.modifiedLines),
-    snapshotFoldState: head.snapshotFoldState,
     snapshotBookmarks: head.snapshotBookmarks,
     snapshotEdits: edits,
     snapshotRows: rows,
@@ -597,7 +643,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let change = b.undoStack.popLast()
 
-    # For snapshot undo: capture current (post) tree/markers/folds before
+    # For snapshot undo: capture current (post) tree/markers before
     # restoring. modifiedLinesDelta is bidirectional, so the same delta drives
     # the redo entry — no full-array recapture needed.
     var redoEntry =
@@ -719,31 +765,31 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # restored to the pre-redo state.
       let n = change.transactionChanges.len
       var i = 0
-      while i < n:
-        let r = b.redoChange(change.transactionChanges[i])
-        if r.isErr:
-          for j in countdown(i - 1, 0):
-            let rr = b.undoChange(change.transactionChanges[j])
-            if rr.isErr:
-              logError(
-                "buffer",
-                "Failed to roll back after partial transaction redo: " & rr.error,
-              )
-          return r
-        inc i
+      b.holdingRows(change):
+        while i < n:
+          let r = b.redoChange(change.transactionChanges[i])
+          if r.isErr:
+            for j in countdown(i - 1, 0):
+              let rr = b.undoChange(change.transactionChanges[j])
+              if rr.isErr:
+                logError(
+                  "buffer",
+                  "Failed to roll back after partial transaction redo: " & rr.error,
+                )
+            return r
+          inc i
     of ckSnapshot:
       b.storage.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
       # b.modifiedLines currently holds the pre-mutation state; re-apply it.
       applyRedo(b.modifiedLines, change.modifiedLinesDelta)
-      b.foldState = change.snapshotFoldState
       b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
 
     # Move followers forward; symmetric to undoChange.
     if change.kind != ckTransaction:
       b.followChange(change, change.undoFollowers)
-      b.rowsAcrossUndo(change, undone = false)
+    b.rowsAcrossUndo(change, undone = false)
     b.namedMarks.applyNamedMarkChanges(change.namedMarkChanges, useAfter = true)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
@@ -790,7 +836,7 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let change = b.redoStack.popLast()
 
-    # For snapshot redo: capture current (pre) tree/markers/folds before
+    # For snapshot redo: capture current (pre) tree/markers before
     # re-applying. modifiedLinesDelta is bidirectional, so the same delta drives
     # the undo entry — no full-array recapture needed.
     var undoEntry =

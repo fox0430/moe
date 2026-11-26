@@ -553,7 +553,8 @@ suite "Lines typed below a fold's last line go into the fold, as Vim's foldMarkA
     ).isOk
     check e.foldRanges == @[(1, 3)]
 
-  test "A redo of a typed line break below a fold's last line leaves the fold":
+  test "A redo of a typed line break at a fold's last line shortens it":
+    # Vim 9.2: fold 2,4, `4G02la<CR><Esc>` makes it 2,5, u 2,4, Ctrl-r 2,3.
     let e = newVimLikeEditor(Six, 0, 0)
     let b = e.activeBuffer
     check b.foldState.addFold(1, 3, collapsed = false)
@@ -562,9 +563,9 @@ suite "Lines typed below a fold's last line go into the fold, as Vim's foldMarkA
     check b.undo().isOk
     check e.foldRanges == @[(1, 3)]
     check b.redo().isOk
-    check e.foldRanges == @[(1, 3)]
+    check e.foldRanges == @[(1, 2)]
 
-  test "A redo of a transaction with a typed line break leaves the fold":
+  test "A redo of a transaction with a typed line break shortens the fold":
     let e = newVimLikeEditor(Six, 0, 0)
     let b = e.activeBuffer
     check b.foldState.addFold(1, 3, collapsed = false)
@@ -575,7 +576,7 @@ suite "Lines typed below a fold's last line go into the fold, as Vim's foldMarkA
     check b.undo().isOk
     check e.foldRanges == @[(1, 3)]
     check b.redo().isOk
-    check e.foldRanges == @[(1, 3)]
+    check e.foldRanges == @[(1, 2)]
 
 suite "Deleting lines past a fold's end, as in Vim":
   # Typed in Vim 9.2 (`vim -u NONE`, manual folds 1,7 and 3,6 in 12 lines).

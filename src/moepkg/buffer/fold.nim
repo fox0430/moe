@@ -18,9 +18,8 @@
 #[############################################################################]#
 
 ## User-facing fold operations (vim-style manual folding).
-## `FoldState` type and the line-shift adjusters (`adjustFoldsAfterInsert` /
-## `adjustFoldsAfterDelete`) live in `core.nim` because they are needed by
-## `newTextBuffer` and the mutation helpers.
+## `FoldState` type and moving the folds across an edit live in `core.nim`
+## because they are needed by `newTextBuffer` and the mutation helpers.
 
 import std/options
 

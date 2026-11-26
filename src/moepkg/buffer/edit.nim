@@ -384,8 +384,9 @@ proc replaceLines*(
   ## reported to the row-remap subscribers once, so the per-line side arrays
   ## shift once instead of once per rewritten line.
   ##
-  ## `keepRows = false` gives the old rows up: their markers, folds and
-  ## bookmarks go with them instead of staying on unrelated replacement text.
+  ## `keepRows = false` gives the old rows up: their markers and bookmarks go
+  ## with them instead of staying on unrelated replacement text. The folds
+  ## move as Vim's filter moves them.
   ## `column` is where the rewrite starts on the first line, which undo and the
   ## changelist report as the change's position.
   ##
@@ -405,7 +406,7 @@ proc replaceLineSpans*(
 # A NoUndo swap skips undo and changeSeq and moves only what is drawn over the
 # text, which revertNoUndo moves back. Marks, the last Visual area and jumps
 # stay put; the per-line arrays shift unmarked with the rows it adds or drops.
-const NoUndoFollowers = {efSemantic, efFolds, efBookmarks, efDiagnostics}
+const NoUndoFollowers = {efSemantic, efFolds, efEditAnchor, efBookmarks, efDiagnostics}
 
 type NoUndoSwap* = object
   ## A swap replaceLineSpansNoUndo made, for revertNoUndo to take back.
@@ -500,17 +501,42 @@ proc markAcross*(
 proc deleteAllLines*(b: TextBuffer): Result[(), string] =
   ## Delete every line, leaving one empty line. The empty line is added below
   ## first so the old rows are all dropped: their marks, folds and bookmarks
-  ## go (and come back on undo), and the last Visual area lands on line 0.
+  ## go (the folds do not come back on undo, as in Vim), and the last Visual
+  ## area lands on line 0.
   if not b.inTransaction:
     return withTransaction(b, "delete all lines"):
       let r = b.deleteAllLines()
       if r.isErr:
         return r
   let count = b.len
-  let inserted = b.insert(count, "")
-  if inserted.isErr:
-    return inserted
-  b.replaceLines(0, count, [], keepRows = false)
+  # Vim saves them all and the empty line left.
+  b.savingRows(RowSpan(start: 0, before: count, after: 1)):
+    let inserted = b.insert(count, "")
+    if inserted.isErr:
+      return inserted
+    result = b.replaceLines(0, count, [], keepRows = false)
+
+proc deleteLines*(b: TextBuffer, first, last: int): Result[(), string] =
+  ## Delete lines `first` to `last` as one command, as Vim's del_lines; all of
+  ## them leave one empty line.
+  if first < 0 or first >= b.len or last < first:
+    return err("Line range out of bounds: " & $first & ".." & $last)
+  if first == 0 and last >= b.len - 1:
+    return b.deleteAllLines()
+  let count = min(last, b.len - 1) - first + 1
+  if count == 1:
+    return b.deleteLine(first)
+  if not b.inTransaction:
+    return withTransaction(b, "delete " & $count & " lines"):
+      let r = b.deleteLines(first, last)
+      if r.isErr:
+        return r
+  b.savingRows(RowSpan(start: first, before: count)):
+    for _ in 0 ..< count:
+      let r = b.deleteLine(first)
+      if r.isErr:
+        return r
+  ok(())
 
 proc linewiseText*(b: TextBuffer, first, last: int): string =
   ## Lines `first` to `last` as linewise register text: each ends in a line
@@ -717,78 +743,81 @@ proc joinLines*(
     "join " & $linesToJoin & " lines",
     some(undoCursor.get(BufferPosition(line: startLine, column: 0))),
   ):
-    for i in 1 ..< linesToJoin:
-      let currentLine = b.getLine(startLine)
-      let nextLine = b.getLine(startLine + 1)
-      let
-        marksBeforeJoin = b.namedMarks
-        visualBeforeJoin = b.lastVisual
+    b.savingRows(RowSpan(start: startLine, before: linesToJoin, after: 1)):
+      for i in 1 ..< linesToJoin:
+        let currentLine = b.getLine(startLine)
+        let nextLine = b.getLine(startLine + 1)
+        let
+          marksBeforeJoin = b.namedMarks
+          visualBeforeJoin = b.lastVisual
 
-      # Blanks are space and tab alone, as Vim's.
-      let trimmedCurrent = strip(currentLine, leading = false, chars = {' ', '\t'})
-      let trimmedNext = strip(nextLine, trailing = false, chars = {' ', '\t'})
-      let leadingTrim = nextLine.charLen - trimmedNext.charLen
+        # Blanks are space and tab alone, as Vim's.
+        let trimmedCurrent = strip(currentLine, leading = false, chars = {' ', '\t'})
+        let trimmedNext = strip(nextLine, trailing = false, chars = {' ', '\t'})
+        let leadingTrim = nextLine.charLen - trimmedNext.charLen
 
-      # Vim J: separate joined lines with a space, but not when the next line
-      # begins with ')'.
-      let separated =
-        trimmedCurrent.len > 0 and trimmedNext.len > 0 and trimmedNext[0] != ')'
-      # Where Vim's J starts the next line's text: it keeps trailing blanks and
-      # then adds no space.
-      let vimNextStart =
-        currentLine.charLen + ord(separated and trimmedCurrent.len == currentLine.len)
-      let joinAt = BufferPosition(line: startLine, column: trimmedCurrent.charLen)
-      let joinedPrefixLen = joinAt.column + ord(separated)
-      lastJoin =
-        if trimmedCurrent.len < currentLine.len: joinedPrefixLen else: joinAt.column
+        # Vim J: separate joined lines with a space, but not when the next line
+        # begins with ')'.
+        let separated =
+          trimmedCurrent.len > 0 and trimmedNext.len > 0 and trimmedNext[0] != ')'
+        # Where Vim's J starts the next line's text: it keeps trailing blanks and
+        # then adds no space.
+        let vimNextStart =
+          currentLine.charLen + ord(separated and trimmedCurrent.len == currentLine.len)
+        let joinAt = BufferPosition(line: startLine, column: trimmedCurrent.charLen)
+        let joinedPrefixLen = joinAt.column + ord(separated)
+        lastJoin =
+          if trimmedCurrent.len < currentLine.len: joinedPrefixLen else: joinAt.column
 
-      # Edit as text so followers on either side move with it, on undo too;
-      # space goes in first.
-      if separated:
-        let insertResult = b.insertText(joinAt, " ")
-        if insertResult.isErr:
-          return err(insertResult.error)
-      let blanksEnd =
-        if leadingTrim > 0:
-          BufferPosition(line: startLine + 1, column: leadingTrim - 1)
-        else:
-          BufferPosition(line: startLine, column: currentLine.charLen + ord(separated))
-      let deleteResult = b.deleteRange(
-        BufferPosition(line: startLine, column: joinedPrefixLen), blanksEnd
-      )
-      if deleteResult.isErr:
-        return err(deleteResult.error)
-
-      # Not clamped to the joined line, as in Vim: readers clamp. A column in
-      # the trailing blanks trimmed here goes to the join; one past the line
-      # end stays on the text Vim's J puts there.
-      proc joined(pos: BufferPosition): Option[BufferPosition] =
-        if pos.line == startLine:
-          let column =
-            if pos.column < currentLine.charLen:
-              min(pos.column, joinedPrefixLen)
-            else:
-              pos.column + joinedPrefixLen - vimNextStart
-          some(BufferPosition(line: startLine, column: column))
-        elif pos.line == startLine + 1:
-          some(
+        # Edit as text so followers on either side move with it, on undo too;
+        # space goes in first.
+        if separated:
+          let insertResult = b.insertText(joinAt, " ")
+          if insertResult.isErr:
+            return err(insertResult.error)
+        let blanksEnd =
+          if leadingTrim > 0:
+            BufferPosition(line: startLine + 1, column: leadingTrim - 1)
+          else:
             BufferPosition(
-              line: startLine,
-              column: joinedPrefixLen + max(0, pos.column - leadingTrim),
+              line: startLine, column: currentLine.charLen + ord(separated)
             )
-          )
-        else:
-          none(BufferPosition)
-
-      for name in 'a' .. 'z':
-        if marksBeforeJoin[name].isSome:
-          let moved = joined(marksBeforeJoin[name].get)
-          if moved.isSome:
-            b.namedMarks[name] = moved
-      if visualBeforeJoin.isSome:
-        b.moveLastVisualEnds(
-          joined(visualBeforeJoin.get.start), joined(visualBeforeJoin.get.cursor)
+        let deleteResult = b.deleteRange(
+          BufferPosition(line: startLine, column: joinedPrefixLen), blanksEnd
         )
+        if deleteResult.isErr:
+          return err(deleteResult.error)
+
+        # Not clamped to the joined line, as in Vim: readers clamp. A column in
+        # the trailing blanks trimmed here goes to the join; one past the line
+        # end stays on the text Vim's J puts there.
+        proc joined(pos: BufferPosition): Option[BufferPosition] =
+          if pos.line == startLine:
+            let column =
+              if pos.column < currentLine.charLen:
+                min(pos.column, joinedPrefixLen)
+              else:
+                pos.column + joinedPrefixLen - vimNextStart
+            some(BufferPosition(line: startLine, column: column))
+          elif pos.line == startLine + 1:
+            some(
+              BufferPosition(
+                line: startLine,
+                column: joinedPrefixLen + max(0, pos.column - leadingTrim),
+              )
+            )
+          else:
+            none(BufferPosition)
+
+        for name in 'a' .. 'z':
+          if marksBeforeJoin[name].isSome:
+            let moved = joined(marksBeforeJoin[name].get)
+            if moved.isSome:
+              b.namedMarks[name] = moved
+        if visualBeforeJoin.isSome:
+          b.moveLastVisualEnds(
+            joined(visualBeforeJoin.get.start), joined(visualBeforeJoin.get.cursor)
+          )
 
   if txr.isErr:
     return err(txr.error)
@@ -875,7 +904,8 @@ proc replaceAllLines*(
   ## when nothing changed. No replacement lines at all means one empty line.
   ##
   ## When the two sides are too far apart for a minimal edit, or share no line
-  ## at all, a whole span is rewritten and what was attached to it is lost.
+  ## at all, a whole span is rewritten: its markers and bookmarks are lost, and
+  ## its folds stay on the rows by position, as over a Vim filter.
   ## `requireExact` refuses instead, for a caller that cannot afford that.
   ##
   ## `newLines` comes from outside the buffer, so it is sanitized like pasted
@@ -908,9 +938,9 @@ proc replaceAllLines*(
 
   # All hunks as one change, so the side arrays shift once for the lot.
   let txr = withTransaction(b, description):
-    # A coarse hunk puts unrelated text on the lines it covers, so what was
-    # attached to them goes with the old lines; a line-by-line script keeps the
-    # rows both sides share.
+    # A coarse hunk puts unrelated text on the lines it covers, so markers and
+    # bookmarks go with the old lines and the folds move as over a filter; a
+    # line-by-line script keeps the rows both sides share.
     let r = b.replaceLineSpans(diff.hunks, keepRows = not diff.coarse)
     if r.isErr:
       return err(r.error)

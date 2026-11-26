@@ -1074,25 +1074,16 @@ suite "PieceTable - Snapshot Undo/Redo Integration":
     check b[0] == "line0"
     check b.lineMarkers[1] == some(GitChanged)
 
-  test "foldState preserved across undo/redo":
+  test "a fold deleted after an edit stays deleted across its undo":
+    # Folds follow the edits back rather than come back from the snapshot, so
+    # an undo leaves what zd did since, as in Vim.
     let b = buf("line0\nline1\nline2\nline3", PieceTable)
-    b.foldState.folds.add(Fold(startLine: 0, endLine: 2, collapsed: true))
-    check b.foldState.folds.len == 1
-
-    # Edit captures snapshot with fold
+    check b.foldState.addFold(0, 2)
     discard b.replaceLine(0, "CHANGED")
-
-    # Remove fold after edit
     b.foldState.folds = @[]
-    check b.foldState.folds.len == 0
-
-    # Undo should restore the snapshot (which had the fold)
     discard b.undo()
     check b[0] == "line0"
-    check b.foldState.folds.len == 1
-    check b.foldState.folds[0].startLine == 0
-    check b.foldState.folds[0].endLine == 2
-    check b.foldState.folds[0].collapsed == true
+    check b.foldState.folds.len == 0
 
   test "transaction creates single ckSnapshot entry":
     let b = buf("aaa\nbbb\nccc", PieceTable)
