@@ -32,7 +32,7 @@ autoCloseParen = true                  # Auto-close brackets and quotes, and ste
 
 autoIndent = true                      # Auto-indent
 
-smartIndent = false                    # Language-aware indent on Enter, o, O and closers (brackets; Nim, Bash and Zsh keywords)
+smartIndent = false                    # Language-aware indent on Enter, o, O and closers (brackets; Nim, Bash and Zsh keywords; trailing : in Python and YAML)
 
 ignorecase = true                      # Search case insensitive
 

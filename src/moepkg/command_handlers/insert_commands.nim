@@ -33,6 +33,7 @@ import
   ]
 import ../buffer/[core, edit, undo]
 import ../fold_open
+import ../syntax/tokenizer
 import smart_indent
 
 proc beginInsertModeSession*(
@@ -142,18 +143,41 @@ proc rebuiltIndent*(state: EditorState, indent: string, steps = 0): string =
   let width = displayWidthWithTabs(indent, tabStop) + steps * shift
   state.indentOfWidth(max(0, width))
 
+proc smartRebuiltIndent(
+    state: EditorState, buffer: TextBuffer, base: string, steps = 0
+): string =
+  ## `base` rebuilt as `rebuiltIndent` for 'smartindent', but of spaces only in
+  ## YAML, which allows no tab there; and kept in Python, where one block's
+  ## indent has to start with that of the block around it.
+  let
+    (tabStop, shift) = state.indentSteps
+    width = max(0, displayWidthWithTabs(base, tabStop) + steps * shift)
+  if buffer.language == SourceLanguage.langYaml:
+    return " ".repeat(width)
+  if buffer.language == SourceLanguage.langPython and steps >= 0 and base.len > 0:
+    let added = steps * shift
+    # A tab would fall short of its width off a tab stop.
+    if '\t' notin base or displayWidthWithTabs(base, tabStop) mod tabStop != 0:
+      return base & " ".repeat(added)
+    return base & state.indentOfWidth(added)
+  state.indentOfWidth(width)
+
 proc smartIndentOf(
     state: EditorState, buffer: TextBuffer, line, split: int, indent: string
 ): string =
   ## The indent 'smartindent' gives the line Enter opens at byte `split` of
   ## `line`, where autoindent gives `indent`.
-  let (steps, alignTo) = buffer.enterIndent(line, split)
-  if alignTo >= 0:
-    state.rebuiltIndent(getLineIndent(buffer.getLine(alignTo)), steps)
-  elif steps != 0:
-    state.rebuiltIndent(indent, steps)
-  else:
-    indent
+  let (steps, alignTo, column) = buffer.enterIndent(line, split)
+  if alignTo < 0 and steps == 0:
+    return indent
+  let base =
+    if alignTo < 0:
+      indent
+    elif column > 0:
+      buffer.getLine(alignTo)[0 ..< column]
+    else:
+      getLineIndent(buffer.getLine(alignTo))
+  state.smartRebuiltIndent(buffer, base, steps)
 
 proc insertChar*(buffer: TextBuffer, state: EditorState, ch: char) =
   ## Insert a character at cursor position
@@ -434,7 +458,7 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string
       if above.alignTo >= 0:
         indent = getLineIndent(buffer.getLine(above.alignTo))
       if above.alignTo >= 0 or above.steps > 0:
-        indent = state.rebuiltIndent(indent, steps = above.steps)
+        indent = state.smartRebuiltIndent(buffer, indent, above.steps)
     if indent.len > 0:
       textToInsert = indent & "\n"
 
@@ -659,7 +683,7 @@ proc reindentTyped*(
     newIndent = indent
     aligned = alignTo >= 0
   if aligned:
-    newIndent = state.rebuiltIndent(getLineIndent(buffer.getLine(alignTo)))
+    newIndent = state.smartRebuiltIndent(buffer, getLineIndent(buffer.getLine(alignTo)))
   elif moved.isSome:
     # With more typed after it, the word is still one.
     aligned = buffer.leadingWordAlignLine(pos.line) >= 0

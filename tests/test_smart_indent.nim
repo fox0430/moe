@@ -73,13 +73,24 @@ proc highlighted(language: SourceLanguage, text: string): TextBuffer =
   result = newBufferIn(language, text)
   result.updateHighlight()
 
-proc enterAt(language: SourceLanguage, text: string): NewLineIndent =
+proc enterAt(language: SourceLanguage, text: string): tuple[steps, alignTo: int] =
   ## `enterIndent` for Enter at `Cursor` in `text`, with the highlight built.
   let
     at = text.find(Cursor)
     line = text[0 ..< at].count('\n')
     split = at - (text.rfind('\n', last = at - 1) + 1)
-  highlighted(language, text.replace(Cursor, "")).enterIndent(line, split)
+  let indent = highlighted(language, text.replace(Cursor, "")).enterIndent(line, split)
+  (indent.steps, indent.alignTo)
+
+proc entered(language: SourceLanguage, text: string): string =
+  ## The line Enter opens at the end of `text`, with a 2-column 'shiftwidth'.
+  let
+    buf = highlighted(language, text)
+    state = createSmartIndentState()
+    line = text.count('\n')
+  state.cursor = BufferPosition(line: line, column: buf.getLine(line).len)
+  buf.insertNewline(state)
+  buf.getLine(line + 1)
 
 proc indentStep(line: string, language: SourceLanguage, carried = ""): int =
   enterAt(language, line & Cursor & carried).steps
@@ -89,7 +100,7 @@ proc wordLine(language: SourceLanguage, text: string): int =
   highlighted(language, text).leadingWordAlignLine(text.count('\n'))
 
 proc aboveDeeper(language: SourceLanguage, text: string, line: int): bool =
-  highlighted(language, text).aboveIndent(line) == (1, -1)
+  highlighted(language, text).aboveIndent(line) == (1, -1, 0)
 
 suite "smart_indent - stripNimCodeOnly":
   test "Plain code is unchanged":
@@ -680,6 +691,252 @@ suite "smart_indent - enterIndent (brackets)":
     tex.syntaxOverride = some(langC)
     check tex.enterIndent(0, 6).steps == 0
 
+suite "smart_indent - a trailing colon (Python)":
+  test "A block's header indents the next line":
+    check enterAt(langPython, "if x:‸") == (1, -1)
+    check enterAt(langPython, "  async def f(a: int) -> str:‸") == (1, -1)
+    check enterAt(langPython, "else:‸") == (1, -1)
+    check enterAt(langPython, "match x:‸") == (1, -1)
+    check enterAt(langPython, "  case [a, *_]:‸") == (1, -1)
+    check enterAt(langPython, "if x == 1:‸") == (1, -1)
+    check enterAt(langPython, "if x:‸ pass") == (1, -1)
+
+  test "Blanks and a comment may follow the colon":
+    check enterAt(langPython, "if x:  ‸") == (1, -1)
+    check enterAt(langPython, "if x:  # why‸") == (1, -1)
+
+  test "A header over lines indents from its first":
+    check enterAt(langPython, "def f(\n        a,\n        b):‸") == (1, 0)
+    check enterAt(langPython, "  with (\n    a as b,\n  ) as c:‸") == (1, 0)
+    check enterAt(langPython, "x = 1\nif a and \\\n        b:‸") == (1, 1)
+    check enterAt(langPython, "# a \\\nif b:‸") == (1, -1)
+    check enterAt(langPython, "if f(\n  a) and \\\n    b:‸") == (1, 0)
+
+  test "A colon that ends no header does not indent":
+    check enterAt(langPython, "d = {\n    \"a\":‸") == (0, -1)
+    check enterAt(langPython, "f(\n    lambda x:‸") == (0, -1)
+    check enterAt(langPython, "x:‸ int") == (0, -1)
+    check enterAt(langPython, "if x: pass‸") == (0, -1)
+    check enterAt(langPython, "x = 1 # if a:‸") == (0, -1)
+    check enterAt(langPython, "if x: \"\"\"doc\"\"\"‸") == (0, -1)
+    check enterAt(langPython, "\"\"\"\nif x:‸") == (0, -1)
+    check enterAt(langPython, "print(\"a:\")‸") == (0, -1)
+
+  test "A line inside brackets is no header":
+    check enterAt(langPython, "d = {\n  \"x\"\n  if a\n  else \"y\":‸") == (0, -1)
+    check enterAt(langPython, "f(\n  a if b\n  else lambda x:‸") == (0, -1)
+    check enterAt(langPython, "d = {\n  match:‸") == (0, -1)
+
+  test "A colon after the header's own does not indent":
+    check enterAt(langPython, "if x: y = lambda:‸") == (0, -1)
+    check enterAt(langPython, "if a: b; c:‸") == (0, -1)
+    check enterAt(langPython, "if lambda: 1:‸") == (1, -1)
+    check enterAt(langPython, "if (lambda: 1)():‸") == (1, -1)
+    check enterAt(langPython, "while lambda:‸") == (0, -1)
+
+  test "match and case as names are no headers":
+    check enterAt(langPython, "class A:\n  match:‸") == (0, -1)
+    check enterAt(langPython, "match = lambda:‸") == (0, -1)
+    check enterAt(langPython, "case.x:‸") == (0, -1)
+    check enterAt(langPython, "match -x:‸") == (1, -1)
+    check enterAt(langPython, "match \\\n  x:‸") == (1, 0)
+    check enterAt(langPython, "match \\\n  = lambda:‸") == (0, -1)
+    check enterAt(langPython, "match (a, b):‸") == (1, -1)
+    check enterAt(langPython, "case \"a\":‸") == (1, -1)
+
+  test "A shebang-like comment may follow the colon":
+    check enterAt(langPython, "x = 1\nif x:  #!why‸") == (1, -1)
+
+  test "A header with a string over lines indents from its first":
+    check enterAt(langPython, "if x == \"\"\"a\n\nb\"\"\":‸") == (1, 0)
+    check enterAt(langPython, "if x == \"a\\\nb\":‸") == (1, 0)
+    check enterAt(langPython, "\"\"\"doc\n(\n\"\"\"\nif x:‸") == (1, -1)
+
+  test "A bracket left unclosed ends at a statement":
+    check enterAt(langPython, "x = f(\n\ndef g():\n  if x:‸") == (1, -1)
+    check enterAt(langPython, "x = f(a,\nwhile b:‸") == (1, -1)
+
+  test "A header no deeper than the statement with the bracket ends it":
+    check enterAt(langPython, "x = f(\n\nasync def g():‸") == (1, -1)
+    check enterAt(langPython, "x = {\n  'a': 1\n\nfor b in c:‸") == (1, -1)
+    check enterAt(langPython, "  x = f(a,\n  if b:‸") == (1, -1)
+    check enterAt(langPython, "x = foo(\n  a\nmatch b:‸") == (1, -1)
+    check enterAt(langPython, "x = foo(\n  a\ncase (b, c):‸") == (1, -1)
+    check enterAt(langPython, "d = {\nmatch:‸") == (0, -1)
+    check enterAt(langPython, "x = [\n  a\n  for b in lambda:‸") == (0, -1)
+
+  test "A string ended by a blank line is over":
+    check enterAt(langPython, "s = \"abc\\\n\nif x:‸") == (1, -1)
+    check enterAt(langPython, "s = \"\"\"abc\n\nif x:‸") == (0, -1)
+
+  test "A bracket on a line cut at synmaxcol is not left open":
+    let buf = newBufferIn(langPython, "X = [" & "1, ".repeat(20) & "]\n  if a:")
+    buf.maxHighlightLineLength = 20
+    buf.updateHighlight()
+    check buf.enterIndent(1, buf.getLine(1).len) == (1, -1, 0)
+
+  test "A comment cut at synmaxcol may follow the colon":
+    for language in [langPython, langYaml]:
+      let
+        text = if language == langPython: "if x:  # " else: "x:  # "
+        buf = newBufferIn(language, text & "c".repeat(30))
+      buf.maxHighlightLineLength = 20
+      buf.updateHighlight()
+      check buf.enterIndent(0, buf.getLine(0).len).steps == 1
+
+  test "With no known state above, only the line is read":
+    var text = "x = 1\n".repeat(1400) & "\"\"\"\n" & "doc\n".repeat(300) & "\"\"\"\n"
+    text.add "x = 1\n".repeat(800) & "if x:"
+    let
+      buf = newBufferIn(langPython, text)
+      last = buf.len - 1
+    check buf.resumePoint(last, 1000).isNone
+    check buf.enterIndent(last, 5) == (1, -1, 0)
+
+  test "With no known state above, a header over lines is still one":
+    proc enterFarDown(text: string): NewLineIndent =
+      let buf = newBufferIn(langPython, "x = 1\n".repeat(3000) & text)
+      check buf.resumePoint(buf.len - 1, 1000).isNone
+      result = buf.enterIndent(buf.len - 1, buf.getLine(buf.len - 1).len)
+
+    check enterFarDown("def f(\n    a):") == (1, 3000, 0)
+    check enterFarDown("def f(\n    a=(1,\n  2),\n) -> X[\n  int\n]:") == (1, 3000, 0)
+    check enterFarDown("if a and \\\n    f(b,\n  c):") == (1, 3000, 0)
+    check enterFarDown("x = [a\n  for b in c]\nif x:") == (1, -1, 0)
+    check enterFarDown("x = f(a\n  if b else lambda:") == (0, -1, 0)
+    check enterFarDown("f(a\n  if b):") == (0, -1, 0)
+
+  test "A colon past synmaxcol is not read":
+    let buf = newBufferIn(langPython, "if a:" & " ".repeat(20) & "b = 1")
+    buf.maxHighlightLineLength = 10
+    buf.updateHighlight()
+    check buf.enterIndent(0, buf.getLine(0).len).steps == 0
+
+  test "Enter indents from the header":
+    check entered(langPython, "  if x:") == "    "
+    check entered(langPython, "  def f(\n      a):") == "    "
+
+  test "Enter goes on from the header's own tabs or spaces":
+    proc opened(text: string, expandTab: bool): string =
+      let
+        buf = highlighted(langPython, text)
+        state = createSmartIndentState()
+      state.config.standard.expandTab = expandTab
+      state.cursor = BufferPosition(line: 0, column: text.len)
+      buf.insertNewline(state)
+      buf.getLine(1)
+
+    check opened("    if x:", false) == "      "
+    check opened("    f(", false) == "      "
+    check opened("\tif x:", true) == "\t  "
+    check opened("\tif x:", false) == "\t\t"
+    check opened("\t if x:", false) == "\t   "
+    check opened("\t f(", false) == "\t   "
+    check opened("if x:", false) == "\t"
+    check opened("if x:", true) == "  "
+
+  test "Below a header with a body, the line takes the body's indent":
+    proc opened(text: string, line: int, expandTab: bool): string =
+      let
+        buf = highlighted(langPython, text)
+        state = createSmartIndentState()
+      state.config.standard.expandTab = expandTab
+      state.config.standard.tabStop = 8
+      state.config.standard.shiftWidth = 4
+      state.cursor = BufferPosition(line: line, column: 0)
+      check buf.insertLineBelow(state).isOk
+      buf.getLine(line + 1)
+
+    check opened("def f():\n\n  z = 1", 0, false) == "  "
+    check opened("def f():\n# c\n\tz = 1", 0, true) == "\t"
+    check opened("def f():\n\tif x:\n\t\ty", 1, true) == "\t\t"
+    check opened("def f(\n\t\ta):\n  z = 1", 1, false) == "  "
+    # With none, as set.
+    check opened("if x:\n   \ny = 1", 0, true) == "    "
+    check opened("  if x:\n  y\n   z", 0, true) == "      "
+    check opened("  if x:\n\ty", 0, true) == "      "
+    check opened("def f():\n\nS = [\n\t1]", 0, true) == "    "
+    # Brackets and text are not headers.
+    check opened("x = f(a,\n        b)", 0, true) == "    "
+
+suite "smart_indent - a trailing colon (YAML)":
+  test "A key indents the next line":
+    check entered(langYaml, "a:") == "  "
+    check entered(langYaml, "x: 1\n  a b:") == "    "
+    check entered(langYaml, "\"a\":") == "  "
+    check entered(langYaml, "'a':") == "  "
+    check entered(langYaml, "a:  ") == "  "
+    check entered(langYaml, "a: # c") == "  "
+
+  test "Under a list item it goes past the key":
+    check entered(langYaml, "- a:") == "    "
+    check entered(langYaml, "  - a:") == "      "
+    check entered(langYaml, "- - a:") == "      "
+    check entered(langYaml, "-   a:") == "      "
+    check entered(langYaml, "- \"a b\":") == "    "
+
+  test "A tab after the dash counts at its width":
+    # 'tabstop' is 2.
+    check entered(langYaml, "-\ta:") == "    "
+    check entered(langYaml, "--- 1\n-\t\ta:") == "      "
+
+  test "bracketSplit keeps to 'expandtab'":
+    let
+      buf = highlighted(langYaml, "a: []")
+      state = createSmartIndentState()
+    state.config.standard.smartIndent = false
+    state.config.standard.expandTab = false
+    state.config.standard.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 4)
+    buf.insertNewline(state)
+    check buf.getLine(1) == "\t"
+
+  test "The indent has no tabs":
+    for (text, indent) in [("a:", "  "), ("- a:", "    "), ("a: [", "  ")]:
+      let
+        buf = highlighted(langYaml, text)
+        state = createSmartIndentState()
+      state.config.standard.expandTab = false
+      state.cursor = BufferPosition(line: 0, column: text.len)
+      buf.insertNewline(state)
+      check buf.getLine(1) == indent
+
+  test "A typed closer and O above one have no tabs":
+    let
+      buf = highlighted(langYaml, "a:\n  b: [\n    1\n")
+      state = createSmartIndentState()
+    state.config.standard.expandTab = false
+    state.cursor = BufferPosition(line: 3, column: 0)
+    buf.insertChar(state, ']')
+    check buf.reindentTyped(state).isOk
+    check buf.getLine(3) == "  ]"
+    check buf.insertLineAbove(state).isOk
+    check buf.getLine(3) == "    "
+
+  test "What is carried down does not count as the key":
+    proc carried(text: string, split: int): string =
+      let
+        buf = highlighted(langYaml, text)
+        state = createSmartIndentState()
+      state.cursor = BufferPosition(line: 0, column: split)
+      buf.insertNewline(state)
+      getLineIndent(buf.getLine(1))
+
+    check carried("- : foo", 3) == "    "
+    check carried(": foo", 1) == "  "
+
+  test "A value, a string and a comment do not indent":
+    check entered(langYaml, "a: b") == ""
+    check entered(langYaml, "- a: b") == ""
+    check entered(langYaml, "# a:") == ""
+    check entered(langYaml, "a: \"b:") == ""
+    check entered(langYaml, "a: |\n  foo:") == "  "
+    check enterAt(langYaml, "a: http:‸//x") == (0, -1)
+
+  test "Other languages have no such rule":
+    check entered(langC, "label:") == ""
+    check entered(langToml, "a:") == ""
+
 suite "smart_indent - shell block words":
   test "Enter carrying a word that closes a block lines it up":
     check enterAt(langBash, "  if a; then b;‸ fi") == (0, 0)
@@ -820,7 +1077,7 @@ suite "smart_indent - shell block words":
     check wordLine(langZsh, "if a; then\n  for x in b\nelse") == 0
     check wordLine(langZsh, "case a in\n  a)\n    for x in b\nesac") == 0
     check highlighted(langZsh, "case a in\n  a)\n    for x in b\nesac").aboveIndent(3) ==
-      (0, 1)
+      (0, 1, 0)
 
   test "Enter before the body of a Zsh loop or test":
     for body in ["echo $x", "done_it", "if c; then"]:
@@ -893,9 +1150,9 @@ suite "smart_indent - shell block words":
 
   test "`O` above a word that closes a block":
     check aboveDeeper(langBash, "if a; then\n  b\nfi", 2)
-    check highlighted(langBash, "case a in\nesac").aboveIndent(1) == (1, 0)
+    check highlighted(langBash, "case a in\nesac").aboveIndent(1) == (1, 0, 0)
     check highlighted(langBash, "case a in\na)\n  b\n  ;;\nesac").aboveIndent(4) ==
-      (0, 1)
+      (0, 1, 0)
     check not aboveDeeper(langBash, "if a; then\n  b\nfi", 1)
     check not aboveDeeper(langBash, "fi", 0)
     check not aboveDeeper(langC, "if\nfi", 1)
@@ -1012,8 +1269,8 @@ suite "smart_indent - reading a line where the highlight cannot tell":
     let buf = highlighted(langC, "/*\n  ( */\nint f() {")
     check buf.insertText(BufferPosition(line: 0, column: 0), "\n").isOk
     check buf.getLine(2) == "  ( */"
-    check buf.enterIndent(2, buf.getLine(2).len) == (0, -1)
-    check buf.enterIndent(3, buf.getLine(3).len) == (1, -1)
+    check buf.enterIndent(2, buf.getLine(2).len) == (0, -1, 0)
+    check buf.enterIndent(3, buf.getLine(3).len) == (1, -1, 0)
 
   test "a line in a nested comment is read from where the comment opens":
     # Restarting at line 2 would take the depth the comment ended with, and
@@ -1026,7 +1283,7 @@ suite "smart_indent - reading a line where the highlight cannot tell":
     buf.incrementalHighlight.lineStates = initLineStateCache(
       [TokenizerState(backend: hbMatter), TokenizerState(backend: hbMatter)]
     )
-    check buf.enterIndent(1, buf.getLine(1).len) == (0, -1)
+    check buf.enterIndent(1, buf.getLine(1).len) == (0, -1, 0)
 
   test "far down under another backend's cache, a line is read on its own":
     var lines = newSeq[string](1500)
@@ -1036,19 +1293,19 @@ suite "smart_indent - reading a line where the highlight cannot tell":
     for s in states.mitems:
       s.backend = hbMatter
     buf.incrementalHighlight.lineStates = initLineStateCache(states)
-    check buf.enterIndent(1499, 4) == (1, -1)
+    check buf.enterIndent(1499, 4) == (1, -1, 0)
 
   test "far from a known state, a line is read on its own":
     var lines = newSeq[string](1500)
     lines[^1] = "foo("
     let buf = newBufferIn(langC, lines.join("\n"))
-    check buf.enterIndent(1499, 4) == (1, -1)
+    check buf.enterIndent(1499, 4) == (1, -1, 0)
     # Not knowing it is in a comment, it reads as code.
     lines[1000] = "/*"
     let commented = newBufferIn(langC, lines.join("\n"))
-    check commented.enterIndent(1499, 4) == (1, -1)
+    check commented.enterIndent(1499, 4) == (1, -1, 0)
     commented.updateHighlight()
-    check commented.enterIndent(1499, 4) == (0, -1)
+    check commented.enterIndent(1499, 4) == (0, -1, 0)
 
   test "an edit far above, not caught up with yet, is not read through":
     # As a macro edits and opens a line before the next frame.
@@ -1056,7 +1313,7 @@ suite "smart_indent - reading a line where the highlight cannot tell":
     lines[1990] = "int f() {"
     let buf = highlighted(langC, lines.join("\n"))
     check buf.insertText(BufferPosition(line: 10, column: 0), "/*").isOk
-    check buf.enterIndent(1990, 9) == (1, -1)
+    check buf.enterIndent(1990, 9) == (1, -1, 0)
 
   test "a closer finds its opener far below the last parsed row":
     var lines = newSeq[string](3000)
