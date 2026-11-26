@@ -259,6 +259,9 @@ With several files and `StartUp.FileOpen.autoSplit` (the default), each file ope
 | <kbd>**z**</kbd> <kbd>**o**</kbd> | Open fold |
 | <kbd>**z**</kbd> <kbd>**c**</kbd> | Close fold |
 | <kbd>**z**</kbd> <kbd>**a**</kbd> | Toggle fold |
+| <kbd>**z**</kbd> <kbd>**O**</kbd> | Open folds recursively |
+| <kbd>**z**</kbd> <kbd>**C**</kbd> | Close folds recursively |
+| <kbd>**z**</kbd> <kbd>**A**</kbd> | Toggle folds recursively |
 | <kbd>**z**</kbd> <kbd>**R**</kbd> | Open all folds |
 | <kbd>**z**</kbd> <kbd>**M**</kbd> | Close all folds |
 | <kbd>**z**</kbd> <kbd>**r**</kbd> | Raise the fold level by count |

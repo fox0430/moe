@@ -357,6 +357,9 @@ suite "CommandRegistry - BuiltinCommandId":
     check $bcFoldOpen == "fold.open"
     check $bcFoldClose == "fold.close"
     check $bcFoldToggle == "fold.toggle"
+    check $bcFoldOpenRecursive == "fold.open.recursive"
+    check $bcFoldCloseRecursive == "fold.close.recursive"
+    check $bcFoldToggleRecursive == "fold.toggle.recursive"
     check $bcFoldOpenAll == "fold.open.all"
     check $bcFoldCloseAll == "fold.close.all"
     check $bcFoldReduce == "fold.reduce"
@@ -443,6 +446,9 @@ suite "CommandRegistry - registerBuiltinCommands":
     check registry.findCommand(builtin(bcFoldOpen)).isSome
     check registry.findCommand(builtin(bcFoldClose)).isSome
     check registry.findCommand(builtin(bcFoldToggle)).isSome
+    check registry.findCommand(builtin(bcFoldOpenRecursive)).isSome
+    check registry.findCommand(builtin(bcFoldCloseRecursive)).isSome
+    check registry.findCommand(builtin(bcFoldToggleRecursive)).isSome
     check registry.findCommand(builtin(bcFoldOpenAll)).isSome
     check registry.findCommand(builtin(bcFoldCloseAll)).isSome
     check registry.findCommand(builtin(bcFoldReduce)).isSome

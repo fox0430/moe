@@ -938,6 +938,9 @@ In a visual mode, `switch-to-visual`, `switch-to-visual-line` and `switch-to-vis
 | fold-open | Open fold at cursor |
 | fold-close | Close fold at cursor |
 | fold-toggle | Toggle fold at cursor |
+| fold-open-recursive | Open folds recursively |
+| fold-close-recursive | Close folds recursively |
+| fold-toggle-recursive | Toggle folds recursively |
 | fold-open-all | Open all folds |
 | fold-close-all | Close all folds |
 | fold-reduce | Raise the fold level by count |

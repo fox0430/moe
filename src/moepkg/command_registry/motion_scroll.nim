@@ -382,6 +382,35 @@ proc handleFoldToggle*(ctx: CommandContext, args: seq[string]): Result[(), strin
     ctx.reportNoFold()
   return ok(())
 
+proc handleFoldOpenRecursive*(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## Open the closed fold at the cursor and every fold in it (zO command)
+  if not ctx.buffer.foldState.openFoldRecursive(ctx.cursor.line):
+    ctx.reportNoFold()
+  return ok(())
+
+proc handleFoldCloseRecursive*(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## Close every fold at the cursor (zC command)
+  if not ctx.buffer.foldState.closeFoldRecursive(ctx.cursor.line):
+    ctx.reportNoFold()
+  return ok(())
+
+proc handleFoldToggleRecursive*(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## zO on a closed fold, else zC (zA command)
+  let toggled =
+    if ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line).isSome:
+      ctx.buffer.foldState.openFoldRecursive(ctx.cursor.line)
+    else:
+      ctx.buffer.foldState.closeFoldRecursive(ctx.cursor.line)
+  if not toggled:
+    ctx.reportNoFold()
+  return ok(())
+
 proc setFoldLevel(ctx: CommandContext, level: int) =
   ## Set 'foldlevel' and re-apply it to every fold.
   ctx.buffer.foldLevel = level
@@ -647,6 +676,33 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     "Fold Toggle",
     "Toggle fold at cursor position (za)",
     handleFoldToggle,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldOpenRecursive),
+    "Fold Open Recursive",
+    "Open the fold at cursor and all folds in it (zO)",
+    handleFoldOpenRecursive,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldCloseRecursive),
+    "Fold Close Recursive",
+    "Close all folds at cursor (zC)",
+    handleFoldCloseRecursive,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldToggleRecursive),
+    "Fold Toggle Recursive",
+    "Toggle all folds at cursor (zA)",
+    handleFoldToggleRecursive,
     0,
     0,
   )
