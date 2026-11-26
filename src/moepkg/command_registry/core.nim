@@ -113,6 +113,9 @@ type
     bcFoldOpen = "fold.open" # zo - open fold at cursor
     bcFoldClose = "fold.close" # zc - close fold at cursor
     bcFoldToggle = "fold.toggle" # za - toggle fold at cursor
+    bcFoldOpenRecursive = "fold.open.recursive" # zO - open folds recursively
+    bcFoldCloseRecursive = "fold.close.recursive" # zC - close folds recursively
+    bcFoldToggleRecursive = "fold.toggle.recursive" # zA - toggle recursively
     bcFoldOpenAll = "fold.open.all" # zR - open all folds
     bcFoldCloseAll = "fold.close.all" # zM - close all folds
     bcFoldReduce = "fold.reduce" # zr - add [count] to foldlevel

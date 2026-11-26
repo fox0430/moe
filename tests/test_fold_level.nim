@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-## zo/zc/za take a count and zr/zm move 'foldlevel', as in Vim.
+## zo/zc/za take a count, zr/zm move 'foldlevel' and zO/zC/zA work
+## recursively, as in Vim.
 
 import std/[options, sequtils, strutils, unittest]
 
@@ -111,3 +112,59 @@ suite "Fold counts and 'foldlevel', as in Vim":
     e.press("zMzrGx")
     e.press("u")
     check e.activeBuffer.foldLevel == 1
+
+proc newSiblingFoldEditor(): Editor =
+  ## Lines 1-10 hold 2-8, which holds 3-5 and 6-7; 11-12 apart. All open.
+  result = newVimLikeEditor(toSeq(1 .. 12).mapIt($it), 0, 0)
+  for (first, last) in [(0, 9), (1, 7), (2, 4), (5, 6), (10, 11)]:
+    doAssert result.activeBuffer.foldState.addFold(first, last, collapsed = false)
+
+suite "zO/zC/zA, as in Vim":
+  # Typed in Vim 9.2 (`vim -u NONE`, manual folds 1,10 / 2,8 / 3,5 / 6,7 /
+  # 11,12); foldclosed() of lines 1, 2, 3, 6 and 11, 0-based. A count is
+  # ignored.
+  for (keys, closed) in [
+    ("zMGzO", [0, 0, 0, 0, -1]),
+    ("zM:4<Enter>zO", [-1, -1, -1, -1, 10]),
+    ("zMggzOzc", [0, 0, 0, 0, 10]),
+    ("zR:4<Enter>zC", [0, 0, 0, 0, -1]),
+    ("zR:4<Enter>zCzo", [-1, 1, 1, 1, -1]),
+    ("zR:4<Enter>zCzozo", [-1, -1, 2, -1, -1]),
+    ("zR:4<Enter>zCzozozo", [-1, -1, -1, -1, -1]),
+    ("zR:4<Enter>zC:6<Enter>zozo", [-1, -1, 2, -1, -1]),
+    ("zR:4<Enter>2zCzo", [-1, 1, 1, 1, -1]),
+    ("zR:3<Enter>zc:6<Enter>zcggzO", [-1, -1, 2, 5, -1]),
+    ("zR:3<Enter>zc:6<Enter>zc:2<Enter>zcggzO", [-1, 1, 1, 1, -1]),
+    ("zR:3<Enter>zc:6<Enter>zc:2<Enter>zcggzA", [0, 0, 0, 0, -1]),
+    ("zR:3<Enter>zc:6<Enter>zc:2<Enter>zc:4<Enter>zA", [-1, -1, -1, -1, -1]),
+    ("zR:3<Enter>zc:4<Enter>zA:4<Enter>zc", [-1, -1, 2, -1, -1]),
+    ("zR:4<Enter>zA", [0, 0, 0, 0, -1]),
+    ("zR:4<Enter>zAzozozo", [-1, -1, -1, -1, -1]),
+    ("zR:9<Enter>zAzozo", [-1, -1, -1, -1, -1]),
+    ("zR:3<Enter>3zO", [-1, -1, -1, -1, -1]),
+  ]:
+    test keys:
+      let e = newSiblingFoldEditor()
+      e.press(keys)
+      check [0, 1, 2, 5, 10].mapIt(e.foldClosed(it)) == closed
+      check e.activeBuffer.foldLevel == (if keys.startsWith("zM"): 0 else: 3)
+
+  for keys in ["zO", "zC", "zA"]:
+    test keys & " on a line without a fold reports it":
+      let e = newVimLikeEditor(@["a", "b", "c"], 0, 0)
+      check e.activeBuffer.foldState.addFold(0, 1, collapsed = false)
+      e.press("G" & keys)
+      check e.activeBuffer.foldState.folds.allIt(not it.collapsed)
+      check "No fold found" in e.state.statusMessage
+
+  test "zC on folds already closed is silent":
+    let e = newSiblingFoldEditor()
+    e.press("zMzC")
+    check e.state.statusMessage.len == 0
+
+  test "zO opens a fold made over another with the same range at once":
+    let e = newVimLikeEditor(toSeq(0 .. 6).mapIt($it), 2, 0)
+    check e.activeBuffer.foldState.addFold(2, 5, collapsed = true)
+    check e.activeBuffer.foldState.addFold(2, 5, collapsed = true)
+    e.press("zO")
+    check e.activeBuffer.foldState.folds.mapIt(it.collapsed) == @[false, false]

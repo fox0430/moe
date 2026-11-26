@@ -253,6 +253,33 @@ proc closeFold*(state: var FoldState, line: int): bool =
     state.folds[best].collapsed = true
     return true
 
+proc openFoldRecursive*(state: var FoldState, line: int): bool =
+  ## Open the collapsed fold drawn at `line` and every fold nested in it, as
+  ## Vim's zO does. Open folds around `line` are left as they are. Returns
+  ## true only when a fold was opened.
+  let idx = state.collapsedFoldIndexAt(line)
+  if idx.isNone:
+    return false
+  let outer = state.folds[idx.get]
+  # Sorted by startLine, outer-first on ties, so nested folds follow it.
+  for i in idx.get ..< state.folds.len:
+    if state.folds[i].startLine > outer.endLine:
+      break
+    if state.folds[i].endLine <= outer.endLine:
+      state.folds[i].collapsed = false
+  return true
+
+proc closeFoldRecursive*(state: var FoldState, line: int): bool =
+  ## Close every fold containing `line`, as Vim's zC does. Returns true only
+  ## when a fold was closed.
+  for i in 0 ..< state.folds.len:
+    let fold = state.folds[i]
+    if fold.startLine > line:
+      break
+    if line <= fold.endLine and not fold.collapsed:
+      state.folds[i].collapsed = true
+      result = true
+
 proc deleteFold*(state: var FoldState, line: int): bool =
   ## Delete the fold under the cursor: the collapsed one drawn at `line`, else
   ## the innermost. Returns true if a fold was deleted.
