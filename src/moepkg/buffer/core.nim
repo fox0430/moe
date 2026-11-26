@@ -870,9 +870,12 @@ proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: i
     else:
       # Fold partially overlaps - adjust
       if state.folds[i].startLine < deleteLine:
-        # Fold starts before deletion
-        state.folds[i].endLine =
-          max(state.folds[i].startLine, state.folds[i].endLine - lineCount)
+        # Fold starts before deletion: it ends just before the deleted lines
+        # when they run past its end, else it loses all of them.
+        if state.folds[i].endLine <= deleteEnd:
+          state.folds[i].endLine = deleteLine - 1
+        else:
+          state.folds[i].endLine -= lineCount
       else:
         # Fold starts within deletion range
         state.folds[i].startLine = deleteLine

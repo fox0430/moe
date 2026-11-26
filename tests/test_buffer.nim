@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, tables, times, options, unicode]
+import std/[unittest, os, sequtils, strutils, tables, times, options, unicode]
 
 import pkg/[results, celina]
 
@@ -1108,6 +1108,28 @@ suite "Buffer - Folding":
     check buf.foldState.getNextVisibleLine(6, buf.len - 1) == 7
     # The gap between the two folds is still fold-free.
     check buf.foldState.foldIndexAt(4).isNone
+
+  # Typed in Vim 9.2 (`vim -u NONE`, manual folds 1,7 and 3,6 in 12 lines,
+  # then `:{range}d`), 0-based. A fold the deleted lines run past the end of
+  # ends just before them, so the inner fold stays inside the outer one.
+  for (first, last, want) in [
+    (4, 8, @[(0, 3), (2, 3)]),
+    (2, 8, @[(0, 1)]),
+    (6, 8, @[(0, 5), (2, 5)]),
+    (3, 4, @[(0, 4), (2, 3)]),
+    (1, 2, @[(0, 4), (1, 3)]),
+    (0, 1, @[(0, 4), (0, 3)]),
+    (5, 5, @[(0, 5), (2, 4)]),
+    (6, 6, @[(0, 5), (2, 5)]),
+    (2, 5, @[(0, 2)]),
+    (1, 11, @[(0, 0)]),
+  ]:
+    test "deleting lines " & $first & ".." & $last & " moves the folds as Vim does":
+      let buf = newTextBuffer(toSeq(1 .. 12).mapIt($it).join("\n"))
+      check buf.foldState.addFold(0, 6)
+      check buf.foldState.addFold(2, 5)
+      buf.foldState.adjustFoldsAfterDelete(first, last - first + 1)
+      check buf.foldState.folds.mapIt((it.startLine, it.endLine)) == want
 
   test "fold lookups stay correct after a delete shifts the folds":
     let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
