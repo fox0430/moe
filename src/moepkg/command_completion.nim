@@ -22,7 +22,7 @@
 ## This module provides command completion functionality for command mode.
 ## It collects available commands and presents them in a popup menu for selection.
 
-import std/[algorithm, strutils, unicode, tables, os]
+import std/[algorithm, options, strutils, unicode, tables, os]
 
 import celina_backend as celina
 
@@ -374,6 +374,16 @@ proc collectThemeNames*(prefix: string): seq[CommandCompletionEntry] =
     )
   result.sortByScore()
 
+proc collectSyntaxSubcommands*(prefix: string): seq[CommandCompletionEntry] =
+  ## The arguments `:syntax` takes that `prefix` begins.
+  for (name, description) in [
+    ("on", "Highlighting on, with every buffer's file type"),
+    ("enable", "The same as on"),
+    ("off", "Highlighting off everywhere"),
+  ]:
+    if name.startsWith(prefix):
+      result.add CommandCompletionEntry(command: name, description: description)
+
 # Completion menu operations
 
 proc newCommandCompletionManager*(): CommandCompletionManager =
@@ -447,10 +457,26 @@ proc triggerCompletion*(
   else:
     mgr.state = ccsIdle
 
+proc resolvesAction(
+    parser: CommandLineParser, commandText: string, action: CommandLineAction
+): bool =
+  ## Whether `commandText` runs `action` once the parser resolves user
+  ## aliases, abbreviations and shell commands: the same resolution `execute`
+  ## goes through.
+  let parsed = parser.parseCommandLine(commandText)
+  parsed.abbreviatedAction.get(parsed.action) == action
+
 proc triggerArgumentCompletion*(
-    mgr: CommandCompletionManager, commandText: string, basePath: string = ""
+    mgr: CommandCompletionManager,
+    commandText: string,
+    parser: CommandLineParser,
+    basePath: string = "",
 ) =
-  ## Trigger completion for command arguments (files, options, etc.)
+  ## Trigger completion for command arguments (files, options, etc.).
+  ##
+  ## `parser` decides which command the typed name runs, so a user alias, a
+  ## shell command or a disabled command that reuses a built-in name or
+  ## abbreviation does not get that command's argument completions.
   let (cmd, arg) = parseCommandLine(commandText)
 
   mgr.baseCommand = cmd
@@ -492,6 +518,14 @@ proc triggerArgumentCompletion*(
       return
     mgr.mode = cmThemeName
     mgr.menu.entries = collectThemeNames(arg)
+    mgr.argStartX = baseArgX
+    mgr.originalDirPrefix = ""
+  elif parser.resolvesAction(commandText, claSyntax):
+    if commandText.isPastFirstArgument(cmd):
+      mgr.state = ccsIdle
+      return
+    mgr.mode = cmSyntaxSubcommand
+    mgr.menu.entries = collectSyntaxSubcommands(arg)
     mgr.argStartX = baseArgX
     mgr.originalDirPrefix = ""
   elif name in FilePathCommands:

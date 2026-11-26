@@ -211,6 +211,9 @@ proc processSetOptionResult*(
     if r.followFiletype:
       e.setBoolOption(bsoSyntax, true)
       activeBuffer.setSyntaxLanguage(activeBuffer.language)
+      if r.allBuffers:
+        for buffer in e.buffers:
+          buffer.setSyntaxLanguage(buffer.language)
     let
       language = if r.followFiletype: activeBuffer.language else: r.highlightLanguage
       name = sourceLanguageToFiletype[language]

@@ -58,8 +58,8 @@ const
   ## doc groups by user-discoverability (basic → forced → window-scoped).
   CommandModeHeadNames = @[
     "bg", "man", "e", "saveas", "ene", "new", "vnew", "undo", "redo", "delete", "ls",
-    "b", "bprev", "bnext", "bfirst", "blast", "bd", "vs", "sp", "only", "theme", "noh",
-    "stripwhitespace",
+    "b", "bprev", "bnext", "bfirst", "blast", "bd", "vs", "sp", "only", "theme",
+    "syntax", "noh", "stripwhitespace",
   ]
 
   CommandModeTailNames = @[

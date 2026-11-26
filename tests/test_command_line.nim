@@ -462,6 +462,7 @@ suite "CommandLine - execute":
     parser.addAlias("e", claEdit)
     parser.addAlias("enew", claEnew)
     parser.addAlias("set", claSet)
+    parser.addAlias("syntax", claSyntax)
     parser.addAlias("help", claHelp)
     parser.addAlias("vs", claVSplit)
     parser.addAlias("sp", claHSplit)
@@ -772,6 +773,55 @@ suite "CommandLine - execute":
   test "Execute :man without page returns error":
     let result = parser.parseAndExecute(":man")
     check result.kind == claUnknown
+
+  test "Execute :syntax on, enable and off":
+    for (input, on) in [
+      (":syntax on", true),
+      (":syntax enable", true),
+      (":syntax off", false),
+      (":sy off", false),
+      (":syn on", true),
+    ]:
+      checkpoint input
+      let result = parser.parseAndExecute(input)
+      check result.kind == claSyntax
+      check result.syntaxOn == on
+
+  test "Execute :syntax alone shows the option":
+    for input in [":syntax", ":sy"]:
+      checkpoint input
+      let result = parser.parseAndExecute(input)
+      check result.kind == claSet
+      check result.option == "syntax?"
+      check result.value.isNone
+
+  test "Execute :syntax ignores what follows the subcommand, as Vim":
+    for (input, on) in [
+      (":syntax on x", true),
+      (":syntax off junk", false),
+      (":syntax enable please", true),
+      (":syntax on!", true),
+      (":syntax off!", false),
+      (":syntax on!! x", true),
+    ]:
+      checkpoint input
+      let result = parser.parseAndExecute(input)
+      check result.kind == claSyntax
+      check result.syntaxOn == on
+
+  test "Execute :syntax with anything else returns error":
+    for (input, message) in [
+      (":syntax! off", "E477: No ! allowed"),
+      (":sy!off", "E477: No ! allowed"),
+      (":syntax!", "E477: No ! allowed"),
+      (":syntax foo", "E410: Invalid :syntax subcommand: foo"),
+      (":syntax foo!", "E410: Invalid :syntax subcommand: foo"),
+      (":syntax OFF", "E410: Invalid :syntax subcommand: OFF"),
+    ]:
+      checkpoint input
+      let result = parser.parseAndExecute(input)
+      check result.kind == claUnknown
+      check result.errorMessage == message
 
   test "Execute :theme with name":
     let result = parser.parseAndExecute(":theme dark")

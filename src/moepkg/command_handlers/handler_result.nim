@@ -252,6 +252,7 @@ type
       followFiletype*: bool
         ## `:set syntax=on`: turn highlighting on and go back to the file's
         ## language, ignoring `highlightLanguage`.
+      allBuffers*: bool ## `:syntax on`: every buffer goes back to its file's language.
     of hrClearSearchHighlight:
       discard
     of hrSave:

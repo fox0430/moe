@@ -1494,6 +1494,7 @@ Available command names:
 | bufferdelete | Delete buffer |
 | buffer | Switch to buffer |
 | stripwhitespace | Strip trailing whitespace |
+| syntax | Turn syntax highlighting on or off |
 | filer | Open file explorer |
 | log | Open log viewer |
 | quickrun | Quick run |

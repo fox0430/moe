@@ -862,6 +862,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `sp filename` | Open in a horizontal split window |
 | `only` | Close all other windows |
 | `theme themeName` | Change color theme; e.g. `theme dark` |
+| `sy[ntax] on\|off` | Turn syntax highlighting on (or `enable`) or off everywhere |
 | `noh` | Hide search highlights until the next search |
 | `stripwhitespace` | Delete trailing spaces |
 | `%s/keyword1/keyword2/` | Replace regex matches as `/` finds them (PCRE style: `(...)` is a group, which `\1` puts back, and Vim's `\(` is a literal `(`), case as in a search or by flag `i`/`I` (normal mode only); a :s that can run makes keyword1 the last search, and an empty keyword1 reuses that search as it matched (a regex after `/`, whole words after `*`), also from the previous session (E35 without one); `\r` in keyword2 breaks the line and `\n` puts a NUL, as in Vim; the cursor lands on the last line changed; flag `n` only counts the matches, `e` makes finding nothing no error, and `c` is refused |
