@@ -1655,8 +1655,8 @@ proc runFilterAsync(
 
       # Replace the span rather than diffing a rebuilt buffer: the cost follows
       # the range, and no line outside it can be rewritten. `keepRows = false`
-      # because the range is rewritten wholesale, leaving folds and bookmarks
-      # on it nothing to point at.
+      # because the range is rewritten wholesale, leaving marks and bookmarks
+      # on it nothing to point at; folds stay on its rows, as in Vim.
       let applied =
         buffer.replaceLines(info.first, replaced, produced, keepRows = false)
       if applied.isErr:

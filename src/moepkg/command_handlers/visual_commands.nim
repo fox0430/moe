@@ -238,16 +238,9 @@ proc deleteLineSelection(
   # Get text to yank first
   yanked = toRegister(getLineText(buffer, sel), true)
 
-  if startLine == 0 and endLine >= buffer.len - 1:
-    let delResult = buffer.deleteAllLines()
-    if delResult.isErr:
-      return err(delResult.error)
-  else:
-    # Delete lines from end to start to preserve line numbers.
-    for lineNum in countdown(endLine, startLine):
-      let delResult = buffer.deleteLine(lineNum)
-      if delResult.isErr:
-        return err(delResult.error)
+  let delResult = buffer.deleteLines(startLine, endLine)
+  if delResult.isErr:
+    return err(delResult.error)
 
   # Vim lands on the first non-blank of the line that takes the deleted
   # range's place, the new last line when it ran to the end of the buffer.

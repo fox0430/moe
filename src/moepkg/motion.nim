@@ -29,7 +29,7 @@ import pkg/results
 import
   cursor_util, types, unicode_utils, char_class, logger, render_utils, modes,
   wanted_column
-import buffer/[core, edit, fold, undo]
+import buffer/[core, edit, fold]
 import visible_rows
 
 type
@@ -1516,17 +1516,6 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
 
   return text
 
-proc deleteLinesInRange(buffer: TextBuffer, range: OperatorRange): Result[(), string] =
-  ## Delete every line the linewise range covers, keeping the buffer at one line.
-  if range.start.line == 0 and range.endPos.line >= buffer.len - 1:
-    return buffer.deleteAllLines()
-  for i in 0 .. (range.endPos.line - range.start.line):
-    if range.start.line < buffer.len:
-      let deleteResult = buffer.deleteLine(range.start.line)
-      if deleteResult.isErr:
-        return err(deleteResult.error)
-  ok(())
-
 proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] =
   ## Delete text in the given range
   ## Used for delete and change operations
@@ -1536,20 +1525,8 @@ proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] 
     return ok(())
 
   if range.isLinewise:
-    # Delete entire lines
-    let lineCount = range.endPos.line - range.start.line + 1
-
-    # Group the per-line deletes into one undo unit, unless the caller already
-    # owns a transaction (beginTransaction rejects a nested one).
-    if lineCount > 1 and not buffer.inTransaction:
-      let txr = withTransaction(buffer, "delete " & $lineCount & " lines"):
-        let r = buffer.deleteLinesInRange(range)
-        if r.isErr:
-          return err(r.error)
-      if txr.isErr:
-        return err(txr.error)
-    else:
-      let r = buffer.deleteLinesInRange(range)
+    if range.start.line < buffer.len:
+      let r = buffer.deleteLines(range.start.line, range.endPos.line)
       if r.isErr:
         return err(r.error)
   else:

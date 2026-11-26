@@ -31,10 +31,12 @@ proc newVimLikeEditor*(
     expandTab = false,
     tabStop = 8,
     shiftWidth = 0,
+    bufferBackend = bbcAuto,
 ): Editor =
   ## An editor typing as `vim -u NONE` with these options does: no pair is
   ## closed or deleted, and 'shiftwidth' 0 follows 'tabstop'.
   var config = newEditorConfig()
+  config.bufferBackend = BufferBackendConfig(kind: bufferBackend)
   config.standard.autoIndent = autoIndent
   config.standard.autoCloseParen = false
   config.standard.autoDeleteParen = false

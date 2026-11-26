@@ -672,20 +672,13 @@ proc executeDelete*(
   let text = buffer.linewiseText(rangeStart, rangeEnd)
 
   let lineCount = rangeEnd - rangeStart + 1
-  let deletingAll = rangeStart == 0 and rangeEnd == buffer.len - 1
 
   let txr =
     try:
       withTransaction(buffer, "delete lines"):
-        if deletingAll:
-          let deleteResult = buffer.deleteAllLines()
-          if deleteResult.isErr:
-            return HandlerResult(kind: hrError, errorMessage: deleteResult.error)
-        else:
-          for i in countdown(rangeEnd, rangeStart):
-            let deleteResult = buffer.deleteLine(i)
-            if deleteResult.isErr:
-              return HandlerResult(kind: hrError, errorMessage: deleteResult.error)
+        let deleteResult = buffer.deleteLines(rangeStart, rangeEnd)
+        if deleteResult.isErr:
+          return HandlerResult(kind: hrError, errorMessage: deleteResult.error)
     except TransactionRollbackError as exc:
       # Surface a failed rollback (untrustworthy buffer) as a status message.
       return HandlerResult(

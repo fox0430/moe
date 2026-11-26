@@ -165,15 +165,17 @@ suite "TextBuffer lastVisual":
       check b.lastVisual == area(pos(1, 0), pos(2, 0))
 
     test "undo moves an area saved after a rewrite, as Vim does (" & $backend & ")":
+      # Vim 9.2: `:2,3!printf 'p\nq\nr\n'`, then V over 3-6 is 4-5 after u
+      # and 5-6 after Ctrl-r.
       let b = newTextBuffer("a\nb\nc\nd\ne", backend = backend)
       check b.replaceLines(1, 2, ["p", "q", "r"], keepRows = false).isOk
       b.lastVisual = area(pos(2, 0), pos(5, 0))
 
       check b.undo().isOk
-      check b.lastVisual == area(pos(1, 0), pos(4, 0))
+      check b.lastVisual == area(pos(3, 0), pos(4, 0))
 
       check b.redo().isOk
-      check b.lastVisual == area(pos(1, 0), pos(5, 0))
+      check b.lastVisual == area(pos(4, 0), pos(5, 0))
 
     test "undo moves an area saved after the edit (" & $backend & ")":
       let b = newTextBuffer("a\nb\nc\nd\ne\nf\ng", backend = backend)
@@ -534,7 +536,9 @@ suite "gv":
       check e.state.mode == EditorMode.VisualLine
       check e.selection == (pos(0, 0), pos(0, 0))
 
-    test name & " drops marks, bookmarks and folds, and undo brings them back":
+    test name & " drops marks, bookmarks and folds; undo brings back all but folds":
+      # Vim's undo brings back the marks, not the folds: they only follow the
+      # rows. Bookmarks, which Vim lacks, come back like the marks.
       let e = newTestEditor("abc\ndef\nghi")
       e.press("l", "m", "a")
       e.activeBuffer.toggleBookmark(0)
@@ -551,7 +555,7 @@ suite "gv":
       check e.activeBuffer.len == 3
       check e.activeBuffer.namedMarks['a'] == some(pos(0, 1))
       check e.activeBuffer.bookmarks == @[0]
-      check e.activeBuffer.foldState.folds.len == 1
+      check e.activeBuffer.foldState.folds.len == 0
 
   test "after a blockwise put, selects the put text blockwise":
     let e = newTestEditor("ab\ncd\n0123456789\n0123456789")

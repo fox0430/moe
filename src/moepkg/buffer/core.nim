@@ -358,16 +358,20 @@ type
       replaceLinesColumn*: int ## Where the rewrite starts on its first line
       replaceLinesKeepRows*: bool
         ## True when the rows both sides share keep their identity, so what is
-        ## attached to them stays; false gives the old rows up with it.
-      replaceLinesSavedFolds*: FoldState
-        ## Folds before the spans were rewritten; a row that leaves takes its
-        ## folds, and undo only puts blank rows back, so restore wholesale.
+        ## attached to them stays; false gives the old rows up with it, and the
+        ## folds move as Vim's filter moves them.
       replaceLinesSavedBookmarks*: seq[int]
-        ## Bookmarks before the rewrite; same reason as the folds above.
+        ## Bookmarks before the spans were rewritten; a row that leaves takes
+        ## its bookmarks, and undo only puts blank rows back, so restore
+        ## wholesale.
     of ckTransaction:
       transactionChanges*: seq[BufferChange]
       transactionDescription*: string
       transactionCursorPos*: Option[BufferPosition]
+      transactionRows*: Option[RowSpan]
+        ## The rows the command saved as Vim's u_save does, once for all of
+        ## `transactionChanges`: undo and redo move the folds, the last Visual
+        ## area and the jump list across these instead of each change's.
     of ckSnapshot:
       snapshotData*: PieceTableSnapshot
       snapshotCursorPos*: BufferPosition
@@ -378,16 +382,15 @@ type
         ## Bidirectional per-line delta vs the pre-mutation state, so the entry
         ## keeps O(changed lines) instead of a full O(lines) copy. The piece
         ## tree restore is absolute; only this side array is delta-encoded.
-      snapshotFoldState*: FoldState
       snapshotBookmarks*: seq[int]
-        ## Restored wholesale like snapshotLineMarkers / snapshotFoldState;
+        ## Restored wholesale like snapshotLineMarkers;
         ## the non-snapshot line-op branches shift via adjustBookmarksFor*.
       snapshotEdits*: CowSeq[SpanEdit]
         ## Replaced text, in order, for diagnostics and `lastVisual` to follow
         ## across undo and redo. Shared with the inverse entry.
       snapshotRows*: CowSeq[RowSpan]
-        ## Rows each change rewrote, in order, for `lastVisual`. Shared like
-        ## `snapshotEdits`.
+        ## Rows each change rewrote, in order, for the folds, `lastVisual` and
+        ## the jump list. Shared like `snapshotEdits`.
 
   InsertOutcome* = object ## What an insertion did to the line it landed on.
     insertEnd*: BufferPosition ## Just past everything that was written.
@@ -399,6 +402,7 @@ type
     ## What sits on the text and follows it across edits.
     efSemantic ## The language server's semantic token overlay
     efFolds
+    efEditAnchor ## `editAnchor`
     efBookmarks
     efNamedMarks
     efLastVisual
@@ -476,6 +480,7 @@ type
     cursorPos*: Option[BufferPosition] # Cursor position before the transaction
     namedMarksBefore*: NamedMarks
     lastVisualBefore*: Option[VisualArea]
+    foldsBefore*: FoldState ## Restored wholesale by a rollback
 
   BufferStorage* = object
     ## The text backend, held by value on TextBuffer. Keeping the variant
@@ -596,7 +601,6 @@ type
     pendingSnapshot*: Option[PieceTableSnapshot]
     pendingSnapshotMarkers*: CowSeq[Option[LineMarkerKind]]
     pendingSnapshotModifiedLines*: seq[LineModificationKind]
-    pendingSnapshotFolds*: FoldState
     pendingSnapshotNamedMarks*: NamedMarks
     pendingSnapshotBookmarks*: seq[int]
     pendingSnapshotEdits*: seq[SpanEdit] ## Replaced text since the snapshot
@@ -624,6 +628,9 @@ type
     rowMovesStopped: int
       ## While positive, row moves do not reach `rowsMovedHook`: a
       ## `replacingSpan` or a rollback is under way.
+    rowsHeld: int
+      ## While positive, undo and redo of a change do not move what sits on
+      ## rows: a transaction with `transactionRows` moves it once.
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
@@ -662,8 +669,8 @@ type
     # Line folding state (vim-like manual folding)
     foldState*: FoldState
     foldLevel*: int
-      ## Vim's 'foldlevel', set by zr/zm/zR/zM. Kept out of `foldState` so an
-      ## undo, which restores the folds, leaves it alone as Vim does.
+      ## Vim's 'foldlevel', set by zr/zm/zR/zM. Kept out of `foldState` and the
+      ## undo entries, so an undo leaves it alone as Vim does.
     editAnchor*: Option[EditAnchor]
 
     # Bookmarks (sorted list of bookmarked line numbers)
@@ -839,54 +846,112 @@ proc initFoldState*(): FoldState =
   ## Initialize an empty fold state
   FoldState(folds: @[])
 
-proc adjustFoldsAfterInsert*(
-    state: var FoldState, insertLine: int, lineCount: int, joinAbove = false
-) =
-  ## Adjust fold line numbers after lines are inserted. With `joinAbove` the
-  ## lines also go into a fold ending just above them, as Vim's foldMarkAdjust
-  ## does in Insert.
-  for i in 0 ..< state.folds.len:
-    if state.folds[i].startLine >= insertLine:
-      state.folds[i].startLine += lineCount
-      state.folds[i].endLine += lineCount
-    elif state.folds[i].endLine >= insertLine - ord(joinAbove):
-      # Fold spans the insertion point - extend it
-      state.folds[i].endLine += lineCount
+const AllRows = high(int)
+  ## Vim's MAXLNUM: up to the last row, or, as the amount, the rows go.
 
-proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: int) =
-  ## Adjust fold line numbers after lines are deleted
-  var toRemove: seq[int] = @[]
-
-  for i in 0 ..< state.folds.len:
-    let deleteEnd = deleteLine + lineCount - 1
-
-    if state.folds[i].endLine < deleteLine:
-      # Fold entirely before deletion - no change
-      discard
-    elif state.folds[i].startLine > deleteEnd:
-      # Fold entirely after deletion - shift down
-      state.folds[i].startLine -= lineCount
-      state.folds[i].endLine -= lineCount
-    elif state.folds[i].startLine >= deleteLine and state.folds[i].endLine <= deleteEnd:
-      # Fold entirely within deletion - remove it
-      toRemove.add(i)
+func markAdjusted(
+    fold: var Fold, line1, line2, amount, amountAfter: int, join: bool
+): bool =
+  ## Move `fold` as Vim's foldMarkAdjust does: rows `line1 .. line2` move by
+  ## `amount`, or go when it is `AllRows`, and the rows below by
+  ## `amountAfter`. `join` is Insert mode adding rows, which go into a fold
+  ## ending just above them. False when the fold is gone or left empty.
+  var
+    line1 = line1
+    line2 = line2
+  if amount == AllRows and line2 >= line1 and line2 - line1 >= -amountAfter:
+    # Not all of the rows go: only the first ones lose their folds.
+    line2 = line1 - amountAfter - 1
+  if line2 < line1:
+    line2 = line1
+  let top = line1
+  if join and line2 == AllRows:
+    dec line1
+  let last = fold.endLine
+  if last < line1:
+    discard
+  elif fold.startLine > line2:
+    fold.startLine += amountAfter
+    fold.endLine += amountAfter
+  elif fold.startLine >= top and last <= line2:
+    if amount == AllRows:
+      return false
+    fold.startLine += amount
+    fold.endLine += amount
+  elif fold.startLine < top:
+    if last > line2:
+      fold.endLine += amountAfter
+    elif amount == AllRows:
+      fold.endLine = line1 - 1
     else:
-      # Fold partially overlaps - adjust
-      if state.folds[i].startLine < deleteLine:
-        # Fold starts before deletion: it ends just before the deleted lines
-        # when they run past its end, else it loses all of them.
-        if state.folds[i].endLine <= deleteEnd:
-          state.folds[i].endLine = deleteLine - 1
-        else:
-          state.folds[i].endLine -= lineCount
-      else:
-        # Fold starts within deletion range
-        state.folds[i].startLine = deleteLine
-        state.folds[i].endLine = max(deleteLine, state.folds[i].endLine - lineCount)
+      fold.endLine += amount
+  elif amount == AllRows:
+    fold.startLine = line1
+    fold.endLine = line1 + last - line2 - 1
+  else:
+    fold.startLine += amount
+    fold.endLine += amountAfter
+  fold.endLine >= fold.startLine
 
-  # Remove folds marked for deletion (in reverse order to preserve indices)
-  for i in countdown(toRemove.high, 0):
-    state.folds.delete(toRemove[i])
+func foldOrder(a, b: Fold): int =
+  if a.startLine != b.startLine:
+    cmp(a.startLine, b.startLine)
+  else:
+    cmp(b.endLine, a.endLine)
+
+proc markAdjust(
+    state: var FoldState, line1, line2, amount, amountAfter: int, join = false
+) =
+  ## Move the folds as Vim's mark_adjust does, see `markAdjusted`, and keep
+  ## them in order.
+  if line2 < line1 and amountAfter == 0:
+    return
+  var
+    kept = 0
+    sorted = true
+  for i in 0 ..< state.folds.len:
+    var fold = state.folds[i]
+    if fold.markAdjusted(line1, line2, amount, amountAfter, join):
+      if kept > 0 and foldOrder(state.folds[kept - 1], fold) > 0:
+        sorted = false
+      state.folds[kept] = fold
+      inc kept
+  state.folds.setLen(kept)
+  if not sorted:
+    state.folds.sort(foldOrder)
+
+proc insertRows(state: var FoldState, row, count: int, join = false) =
+  ## `count` rows added at `row`, as Vim's appended_lines_mark.
+  state.markAdjust(row, AllRows, count, 0, join)
+
+proc deleteRows(state: var FoldState, row, count: int) =
+  ## `count` rows deleted at `row`, as Vim's deleted_lines_mark.
+  state.markAdjust(row, row + count - 1, AllRows, -count)
+
+proc filterRows(state: var FoldState, rows: RowSpan) =
+  ## `rows.before` rows at `rows.start` replaced by `rows.after` rows as a
+  ## whole, as Vim's filter does: the new rows go below the old ones, which
+  ## hand their folds over and then go.
+  let
+    first = rows.start
+    old = rows.before
+    read = rows.after
+  state.insertRows(first + old, read)
+  if read >= old:
+    state.markAdjust(first, first + old - 1, old, 0)
+  else:
+    state.markAdjust(first, first + read - 1, old, 0)
+    state.markAdjust(first + read, first + old - 1, AllRows, 0)
+  state.deleteRows(first, old)
+
+proc restore(state: var FoldState, rows: RowSpan) =
+  ## Undo/redo putting `rows.after` rows back for `rows.before` rows, as Vim's
+  ## u_undoredo moves the folds: the rows it took out go, unless as many come
+  ## back.
+  if rows.before != rows.after:
+    state.markAdjust(
+      rows.start, rows.start + rows.before - 1, AllRows, rows.after - rows.before
+    )
 
 proc clampFoldsToLineCount*(state: var FoldState, lineCount: int) =
   ## Drop folds that start past the content and clamp folds that extend past it.
@@ -1323,7 +1388,7 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
     return change.snapshotCursorPos
 
 func givesRowsUp*(change: BufferChange): bool =
-  ## Whether `change` gives rows up, losing their folds and bookmarks for good.
+  ## Whether `change` gives rows up, losing their bookmarks for good.
   if change.kind != ckReplaceLines:
     return false
   if not change.replaceLinesKeepRows:
@@ -1776,24 +1841,24 @@ iterator savedRows(change: BufferChange): RowSpan =
       yield RowSpan(start: change.deleteStartPos.line, before: dropped + 1, after: 1)
   of ckReplaceLines:
     for hunk in change.replaceLinesHunks:
-      if hunk.oldText.len != hunk.newText.len:
-        yield
-          RowSpan(start: hunk.start, before: hunk.oldText.len, after: hunk.newText.len)
+      let
+        old = hunk.oldText.len
+        new = hunk.newText.len
+      if not change.replaceLinesKeepRows and old > 0 and new > 0:
+        # As Vim's filter saves them: the new rows added below the old ones,
+        # then the old ones deleted.
+        yield RowSpan(start: hunk.start + old, after: new)
+        yield RowSpan(start: hunk.start, before: old)
+      elif old != new:
+        yield RowSpan(start: hunk.start, before: old, after: new)
   of ckSnapshot:
     for i in 0 ..< change.snapshotRows.len:
       yield change.snapshotRows[i]
-  of ckReplaceLine, ckTransaction:
+  of ckTransaction:
+    if change.transactionRows.isSome:
+      yield change.transactionRows.get
+  of ckReplaceLine:
     discard
-
-proc wantsSnapshotRows(b: TextBuffer): bool =
-  ## Whether an entry needs its rows replayed: for the jump list, or for a
-  ## Visual area it was not made with.
-  if b.rowsMovedHook != nil:
-    true
-  elif b.inTransaction and b.currentTransaction.isSome:
-    b.currentTransaction.get.lastVisualBefore.isNone
-  else:
-    b.lastVisual.isNone
 
 proc notifyRowsMoved(b: TextBuffer, move: RowMove) =
   if b.rowMovesStopped > 0 or b.rowsMovedHook == nil:
@@ -1871,15 +1936,38 @@ proc restoreRows*(
       restore(r)
 
 proc rowsAcrossUndo*(b: TextBuffer, change: BufferChange, undone: bool) =
-  ## Move the last Visual area, unless `change` restores it, and the jump list
-  ## across undo/redo of `change`.
+  ## Move the folds, the last Visual area, unless `change` restores it, and the
+  ## jump list across undo/redo of `change`.
+  if b.rowsHeld > 0:
+    return
   let visual = change.visualAcross == nil and b.lastVisual.isSome
-  if not visual and b.rowsMovedHook == nil:
+  if not visual and b.rowsMovedHook == nil and b.foldState.folds.len == 0:
     return
   var rows: seq[RowSpan]
   for r in change.savedRows:
     rows.add r
+  if b.foldState.folds.len > 0:
+    if undone:
+      for i in countdown(rows.high, 0):
+        b.foldState.restore(
+          RowSpan(start: rows[i].start, before: rows[i].after, after: rows[i].before)
+        )
+    else:
+      for r in rows:
+        b.foldState.restore(r)
   b.restoreRows(rows, undone, visual)
+
+template holdingRows*(b: TextBuffer, change: BufferChange, body: untyped) =
+  ## Run `body`, undoing or redoing the changes of the transaction `change`,
+  ## without moving what sits on rows across each when it saved its rows.
+  let held = change.transactionRows.isSome
+  if held:
+    inc b.rowsHeld
+  try:
+    body
+  finally:
+    if held:
+      dec b.rowsHeld
 
 proc moveDiagnostics(b: TextBuffer, edit: SpanEdit) =
   ## Move diagnostics across `edit`; drop those it deleted.
@@ -1973,7 +2061,7 @@ proc follow(
   let rows = edit.rows
   let move =
     if rows.isSome and (
-      (efFolds in followers and b.editAnchor.isSome) or
+      (efEditAnchor in followers and b.editAnchor.isSome) or
       followers * {efLastVisual, efRowsMoved} != {}
     ):
       edit.rowMove
@@ -1989,18 +2077,21 @@ proc follow(
 
     if efFolds in followers:
       if rows.before == 0 and join.joins(rows.after):
-        b.foldState.adjustFoldsAfterInsert(
-          edit.markRows.get.start, rows.after, joinAbove = true
-        )
+        b.foldState.insertRows(edit.markRows.get.start, rows.after, join = true)
+      elif edit.rowsAt == raStart and rows.before > 0 and rows.after > 0:
+        # Whole rows replaced at once, as only a filter or a coarse rewrite
+        # does.
+        b.foldState.filterRows(rows)
       else:
-        shift(b.foldState.adjustFoldsAfterDelete, b.foldState.adjustFoldsAfterInsert)
-      if b.editAnchor.isSome and move.isSome and b.editAnchor.get.line >= 0:
-        let line = b.editAnchor.get.line
-        b.editAnchor.get.line =
-          if move.get.drops(line):
-            -1
-          else:
-            line.moved(move.get)
+        shift(b.foldState.deleteRows, b.foldState.insertRows)
+    if efEditAnchor in followers and b.editAnchor.isSome and move.isSome and
+        b.editAnchor.get.line >= 0:
+      let line = b.editAnchor.get.line
+      b.editAnchor.get.line =
+        if move.get.drops(line):
+          -1
+        else:
+          line.moved(move.get)
     if efBookmarks in followers:
       shift(b.adjustBookmarksForDelete, b.adjustBookmarksForInsert)
     if efLineArrays in followers:
@@ -2048,7 +2139,7 @@ proc followChange*(
       if recording and b.pendingSnapshot.isSome:
         b.pendingSnapshotEdits.record(edit)
     b.followAll(edits, followers)
-    if recording and b.pendingSnapshot.isSome and b.wantsSnapshotRows:
+    if recording and b.pendingSnapshot.isSome:
       for rows in change.savedRows:
         b.pendingSnapshotRows.add rows
   if efSemantic in followers and not b.highlight.isNil:
@@ -2414,7 +2505,6 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
     # after this and clones once; same-line edits never clone.
     b.pendingSnapshotMarkers = b.lineMarkers
     b.pendingSnapshotModifiedLines = b.modifiedLines
-    b.pendingSnapshotFolds = b.foldState
     b.pendingSnapshotNamedMarks = b.namedMarks
     b.pendingSnapshotBookmarks = b.bookmarks
   # Capture modifiedLines snapshot for non-PieceTable backends (once per undo entry).
@@ -2450,7 +2540,6 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   b.pendingSnapshot = none(PieceTableSnapshot)
   b.pendingSnapshotMarkers.clear()
   b.pendingSnapshotModifiedLines.setLen(0)
-  b.pendingSnapshotFolds = initFoldState()
   b.pendingSnapshotNamedMarks = default(NamedMarks)
   b.pendingSnapshotBookmarks.setLen(0)
   # Released, not truncated: one large edit would otherwise leave its capacity
@@ -2571,13 +2660,10 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange, foldJoin = fjNone) =
   # updateHighlight's mismatch guard and wipe the overlay every keystroke.
   let marksBefore = b.namedMarks
   let visualBefore = b.lastVisual
-  # Dropped rows take folds/bookmarks for good, so save them with the change.
-  let needsFoldBookmarkRestore = change.givesRowsUp
-  var
-    foldsBefore: FoldState
-    bookmarksBefore: seq[int]
-  if needsFoldBookmarkRestore:
-    foldsBefore = b.foldState
+  # Dropped rows take bookmarks for good, so save them with the change.
+  let needsBookmarkRestore = change.givesRowsUp
+  var bookmarksBefore: seq[int]
+  if needsBookmarkRestore:
     bookmarksBefore = b.bookmarks
   if b.editAnchor.isSome:
     b.editAnchor.get.edited = true
@@ -2615,8 +2701,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange, foldJoin = fjNone) =
 
   # Attach pre-mutation modifiedLines snapshot to the change
   var changeWithSnapshot = change
-  if needsFoldBookmarkRestore:
-    changeWithSnapshot.replaceLinesSavedFolds = foldsBefore
+  if needsBookmarkRestore:
     changeWithSnapshot.replaceLinesSavedBookmarks = bookmarksBefore
   changeWithSnapshot.namedMarkChanges = namedMarkChanges
   changeWithSnapshot.startSeq = preSeq
@@ -2647,7 +2732,6 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange, foldJoin = fjNone) =
         snapshotLineMarkers: b.pendingSnapshotMarkers,
         modifiedLinesDelta:
           computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
-        snapshotFoldState: b.pendingSnapshotFolds,
         snapshotBookmarks: b.pendingSnapshotBookmarks,
         snapshotEdits: b.takePendingSnapshotEdits(),
         snapshotRows: b.takePendingSnapshotRows(),

@@ -1111,7 +1111,7 @@ suite "Buffer - Folding":
       let buf = newTextBuffer(toSeq(1 .. 12).mapIt($it).join("\n"))
       check buf.foldState.addFold(0, 6)
       check buf.foldState.addFold(2, 5)
-      buf.foldState.adjustFoldsAfterDelete(first, last - first + 1)
+      check buf.replaceLines(first, last - first + 1, []).isOk
       check buf.foldState.folds.mapIt((it.startLine, it.endLine)) == want
 
   test "fold lookups stay correct after a delete shifts the folds":
@@ -1192,7 +1192,9 @@ suite "Buffer - Folding":
     check buf.foldState.folds[0].startLine == 1
     check buf.foldState.folds[0].endLine == 2
 
-  test "undoing an append below a fold leaves the fold unstretched":
+  test "undoing an append at a fold's last line shortens it, as in Vim":
+    # Vim 9.2: fold 1,2, then a charwise "\nnew" put at the end of line 2
+    # leaves the fold, and u leaves 1,1.
     let buf = newTextBuffer("0\n1\n2\n3")
     discard buf.foldState.addFold(0, 1, collapsed = true)
 
@@ -1202,7 +1204,7 @@ suite "Buffer - Folding":
     check buf.undo().isOk
     check buf.foldState.folds.len == 1
     check buf.foldState.folds[0].startLine == 0
-    check buf.foldState.folds[0].endLine == 1
+    check buf.foldState.folds[0].endLine == 0
 
 suite "Buffer - Sidebar Markers":
   test "setLineMarker and getLineMarker":

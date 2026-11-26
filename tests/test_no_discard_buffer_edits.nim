@@ -38,8 +38,8 @@ const
   ## Buffer-edit / transaction APIs whose Result must not be discarded.
   TargetApis = [
     "insertText", "insertTextEnd", "deleteChar", "insert", "deleteLine", "deleteRange",
-    "replaceLine", "replaceLines", "replaceLineSpans", "deleteAllLines", "splitLine",
-    "joinLines", "joinWithNextLine", "transformRange", "replaceWholeLines",
+    "replaceLine", "replaceLines", "replaceLineSpans", "deleteAllLines", "deleteLines",
+    "splitLine", "joinLines", "joinWithNextLine", "transformRange", "replaceWholeLines",
     "replaceSpan", "replaceAllLines", "beginTransaction", "commitTransaction",
     "rollbackTransaction", "withTransaction", "withTransactionForInsert",
     "deleteBlockSelection", "deleteLineSelection", "undo", "redo", "putText",

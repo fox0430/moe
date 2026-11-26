@@ -63,14 +63,22 @@ proc state(b: TextBuffer): auto =
     modified: b.modifiedLines,
   )
 
+proc unfolded(state: auto): auto =
+  ## All but the folds, which follow the rows both ways rather than come back.
+  (
+    contents: state.contents,
+    markers: state.markers,
+    bookmarks: state.bookmarks,
+    modified: state.modified,
+  )
+
 proc undoable(state: auto): auto =
   ## What undo puts back: all but the diagnostics, which wait for the next
-  ## report.
+  ## report, and the folds, which only follow the rows.
   (
     contents: state.contents,
     markers: state.markers.mapIt(it[0]),
     bookmarks: state.bookmarks,
-    folds: state.folds,
     modified: state.modified,
   )
 
@@ -90,6 +98,24 @@ proc decorate(b: TextBuffer, rng: var Rand) =
     else:
       discard
   b.setDiagnostics(dsrcSyntaxCheck, diagnostics)
+
+template checkFoldsOutside(before, after: seq[Fold], start, old, new: int) =
+  ## Across rows `start ..< start + old` turned into `new` rows, the folds wholly
+  ## above them stay and the ones starting below the row after them shift; the
+  ## others move as Vim's mark_adjust takes them, which the tests on Vim's
+  ## results pin (an undo putting rows back takes the row after them too).
+  for f in before:
+    if f.endLine < start:
+      check f in after
+    elif f.startLine > start + old:
+      var moved = f
+      moved.startLine += new - old
+      moved.endLine += new - old
+      check moved in after
+  for i, f in after:
+    check f.startLine <= f.endLine
+    if i > 0:
+      check after[i - 1].startLine <= f.startLine
 
 suite "Buffer - replaceLines":
   test "A span is swapped for a longer one":
@@ -174,15 +200,17 @@ suite "Buffer - replaceLines":
     check buf.getLineMarker(2) == some(LineMarkerKind.GitChanged)
     check buf.diagnosticMarker(2) == some(LineMarkerKind.SyntaxError)
 
-  test "Without keepRows a fold reaching into the span is cut back to it":
-    # The fold covered lines the span took with it; letting it stretch over the
-    # replacement would put it on text it never covered.
+  test "Without keepRows a fold moves as Vim's filter moves it":
+    # Vim 9.2: fold 2,4, then `:3,4!printf '1\n2\n3\n'` and u keep it 2,4.
     let buf = bufferOf("a", "b", "c", "d", "e")
     check buf.foldState.addFold(1, 3)
     check buf.replaceLines(2, 2, ["1", "2", "3"], keepRows = false).isOk
     check buf.contents == @["a", "b", "1", "2", "3", "e"]
     check buf.foldState.folds[0] ==
-      Fold(startLine: 1, endLine: 1, collapsed: true, source: fsManual)
+      Fold(startLine: 1, endLine: 3, collapsed: true, source: fsManual)
+    check buf.undo().isOk
+    check buf.foldState.folds[0] ==
+      Fold(startLine: 1, endLine: 3, collapsed: true, source: fsManual)
 
   test "A fold below the span moves with its lines":
     let buf = bufferOf("a", "b", "c", "d", "e")
@@ -215,22 +243,22 @@ suite "Buffer - replaceLines":
     check buf.replaceLines(0, 2, [""]).isOk
     check buf.contents == @[""]
 
-  test "Undo brings back the folds and bookmarks a rewritten span dropped":
-    # The rows the span gives up take their folds and bookmarks with them, and
-    # the reversed events can only put blank rows back, so undo restores them
-    # wholesale. GapBuffer has no snapshot to fall back on.
+  test "Undo brings back the bookmarks a rewritten span dropped, not its folds":
+    # The rows the span gives up take their bookmarks with them, and the
+    # reversed events can only put blank rows back, so undo restores them
+    # wholesale. Folds only move, as in Vim 9.2: folds 2,3 and 4,5, then
+    # `:1,5!printf '1\n2\n3\n'` leaves 2,3, and u none.
     let buf = bufferOf(GapBuffer, @["a", "b", "c", "d", "e"])
     buf.toggleBookmark(1)
-    check buf.foldState.addFold(2, 3)
+    check buf.foldState.addFold(1, 2)
+    check buf.foldState.addFold(3, 4)
     check buf.replaceLines(0, 5, @["1", "2", "3"], keepRows = false).isOk
     check buf.bookmarkLines.len == 0
-    check buf.foldState.folds.len == 0
+    check buf.foldState.folds.mapIt((it.startLine, it.endLine)) == @[(1, 2)]
     check buf.undo().isOk
     check buf.contents == @["a", "b", "c", "d", "e"]
     check buf.bookmarkLines == @[1]
-    check buf.foldState.folds.len == 1
-    check buf.foldState.folds[0].startLine == 2
-    check buf.foldState.folds[0].endLine == 3
+    check buf.foldState.folds.len == 0
 
   test "Undo brings back what a shrinking span dropped off its end":
     # Even with the shared rows kept, the surplus at the end of the span leaves
@@ -330,9 +358,14 @@ suite "Buffer - replaceLines against the per-line sequence":
       perLine.decorate(perLineRng)
       let before = bulk.state
 
+      # Folds move as Vim moves them for the one change, which the per-line
+      # sequence does not answer to, so they are checked around the span.
       check bulk.replaceLines(start, delete, replacement, keepRows = keepRows).isOk
       perLine.applyPerLine(start, delete, replacement, keepRows)
-      check bulk.state == perLine.state
+      check bulk.state.unfolded == perLine.state.unfolded
+      checkFoldsOutside(
+        before.folds, bulk.foldState.folds, start, delete, replacement.len
+      )
       let afterEdit = bulk.state
 
       # The whole span comes back as one undo step where the per-line sequence
@@ -341,20 +374,25 @@ suite "Buffer - replaceLines against the per-line sequence":
       while perLine.undoStack.len > 0:
         check perLine.undo().isOk
       # Undo answers to the buffer as it stood, not to the per-line sequence:
-      # a row that left the span took its folds and bookmarks with it, and the
-      # per-line deletes cannot bring those back.
+      # a row that left the span took its bookmarks with it, and the per-line
+      # deletes cannot bring those back.
       check bulk.state.undoable == before.undoable
       check (bulk.contents, bulk.markers, bulk.modifiedLines) ==
         (perLine.contents, perLine.markers, perLine.modifiedLines)
+      checkFoldsOutside(
+        afterEdit.folds, bulk.foldState.folds, start, replacement.len, delete
+      )
+      let undone = bulk.foldState.folds
 
       check bulk.redo().isOk
       while perLine.redoStack.len > 0:
         check perLine.redo().isOk
-      # The per-line reference never got its folds and bookmarks back, so redo
-      # is measured against the edit's own result.
-      check bulk.state == afterEdit
+      # The per-line reference never got its bookmarks back, so redo is
+      # measured against the edit's own result.
+      check bulk.state.unfolded == afterEdit.unfolded
       check (bulk.contents, bulk.markers, bulk.modifiedLines) ==
         (perLine.contents, perLine.markers, perLine.modifiedLines)
+      checkFoldsOutside(undone, bulk.foldState.folds, start, delete, replacement.len)
 
 suite "Buffer - replaceAllLines records one change for all its hunks":
   ## The guard against the quadratic rewrite: the hunks used to cost one
@@ -376,7 +414,7 @@ suite "Buffer - replaceAllLines records one change for all its hunks":
     check entry.transactionChanges[0].kind == ckReplaceLines
     check entry.transactionChanges[0].replaceLinesHunks.len == diff.get.hunks.len
 
-  test "Undo after a whole-file filter brings the folds and bookmarks back":
+  test "Undo after a whole-file filter brings the bookmarks back, not the folds":
     # What `:%!filter` does: a rewrite far enough from the buffer to be coarse,
     # so every row is given up, then `u`.
     var lines = newSeq[string](200)
@@ -398,8 +436,8 @@ suite "Buffer - replaceAllLines records one change for all its hunks":
     check buf.undo().isOk
     check buf.contents == lines
     check buf.bookmarkLines == @[10]
-    check buf.foldState.folds.len == 1
-    check buf.foldState.folds[0].startLine == 20
+    # Vim 9.2: fold 21,26, then `:%!sed s/l/o/` keeps it and u deletes it.
+    check buf.foldState.folds.len == 0
     check buf.getLineMarker(30) == some(LineMarkerKind.GitChanged)
     check buf.diagnosticMarker(30).isNone
 
@@ -507,12 +545,14 @@ suite "Buffer - replaceLineSpans":
         check each.undo().isOk
       check bulk.state.undoable == before.undoable
       check each.state.undoable == before.undoable
+      check bulk.foldState.folds == each.foldState.folds
 
       check bulk.redo().isOk
       while each.redoStack.len > 0:
         check each.redo().isOk
-      check bulk.state == afterEdit
-      check each.state == afterEdit
+      check bulk.state.unfolded == afterEdit.unfolded
+      check each.state.unfolded == afterEdit.unfolded
+      check bulk.foldState.folds == each.foldState.folds
 
   proc markerArray(b: TextBuffer): seq[Option[LineMarkerKind]] =
     for i in 0 ..< b.lineMarkers.len:
