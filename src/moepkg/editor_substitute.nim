@@ -109,6 +109,7 @@ proc takeBackSwap(e: Editor) =
       "The buffer changed under the substitute preview, which stays in it", nlError
     )
   preview.swap = none(NoUndoSwap)
+  preview.replaced = @[]
 
 proc restoreFromPreview*(e: Editor) =
   ## Take back what the preview wrote and put the cursor back, keeping the
@@ -155,11 +156,24 @@ proc updateSubstitutePreview*(
 
   let parsed = parseReplacement(replacement)
   let buffer = e.state.ui.substitutePreview.buffer
-  var spans: seq[LineEdit]
+  var
+    spans: seq[LineEdit]
+    replaced: seq[ReplacedText]
+    shift = 0
   for s in buffer.substitutions(
-    firstLine .. lastLine, pattern, parsed, flags.ignoreCase, flags.global, match
+    firstLine .. lastLine,
+    pattern,
+    parsed,
+    flags.ignoreCase,
+    flags.global,
+    match,
+    withReplaced = true,
   ):
+    for r in s.replaced:
+      replaced.add ReplacedText(line: s.line + shift + r.line, cols: r.cols)
+    shift += s.lines.len - 1
     spans.add LineEdit(start: s.line, delete: 1, insert: s.lines)
   e.state.ui.substitutePreview.swap = buffer.replaceLineSpansNoUndo(spans)
   if e.state.ui.substitutePreview.swap.isSome:
+    e.state.ui.substitutePreview.replaced = move replaced
     buffer.highlightNeedsUpdate = true

@@ -164,6 +164,10 @@ proc parenPairStyle*(): Style =
   ## Get matching parenthesis pair highlight style from theme
   getThemeStyle(EditorColorPairIndex.parenPair)
 
+proc replaceTextStyle*(): Style =
+  ## Style of the text a substitute preview wrote
+  getThemeStyle(EditorColorPairIndex.replaceText)
+
 proc currentWordStyle*(): Style =
   ## Get current word highlight style from theme
   getThemeStyle(EditorColorPairIndex.currentWord)

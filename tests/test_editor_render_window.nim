@@ -3782,6 +3782,22 @@ suite "charOverridePatch":
     let p = e.charOverridePatch(ctx, lineCtx, ' '.Rune, 7)
     check p == full(ccStyle)
 
+  test "Text the substitute preview wrote takes no override":
+    let e = createTestEditor()
+    e.config.highlight.trailingSpaces = true
+    let ctx = fileEditCtx()
+    let ccStyle = Style(
+      fg: ColorValue(kind: Default),
+      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 1, g: 2, b: 3)),
+      modifiers: {},
+    )
+    let lineCtx = LineStyleContext(
+      trailingSpaceStart: 5,
+      colorCodeMatches: @[ColorCodeMatch(startCol: 6, endCol: 8, style: ccStyle)],
+      replaceRanges: @[ColumnRange(startCol: 5, endCol: 9)],
+    )
+    check e.charOverridePatch(ctx, lineCtx, ' '.Rune, 7) == noPatch
+
   test "colorCode requires col within range":
     let e = createTestEditor()
     let ctx = fileEditCtx()
@@ -4972,6 +4988,48 @@ suite "renderScrollbar - fold/wrap-aware display rows":
     # at the far bottom — pin the observable: it starts in the upper half.
     check firstThumbRow >= 0
     check firstThumbRow < 5
+
+suite "newLineStyleContext - substitute preview":
+  test "Lines the preview wrote get the replaced columns":
+    let e = createTestEditor()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x\ny")
+    e.state.ui.substitutePreview = SubstitutePreview(
+      isActive: true,
+      buffer: e.activeBuffer,
+      replaced: @[
+        ReplacedText(line: 0, cols: ColumnRange(startCol: 0, endCol: 1)),
+        ReplacedText(line: 1, cols: ColumnRange(startCol: 0, endCol: 1)),
+      ],
+    )
+    let ctx = RenderContext(windowMode: EditorMode.Normal)
+    check e.newLineStyleContext(e.activeBuffer, 1, "y", ctx).replaceRanges ==
+      @[ColumnRange(startCol: 0, endCol: 1)]
+
+  test "Another buffer gets none":
+    let e = createTestEditor()
+    e.state.ui.substitutePreview = SubstitutePreview(
+      isActive: true,
+      buffer: newTextBuffer("x"),
+      replaced: @[ReplacedText(line: 0, cols: ColumnRange(startCol: 0, endCol: 1))],
+    )
+    let ctx = RenderContext(windowMode: EditorMode.Normal)
+    check e.newLineStyleContext(e.activeBuffer, 0, "x", ctx).replaceRanges.len == 0
+
+  test "Replaced text takes the replaceText color over a search match":
+    let e = createTestEditor()
+    let lineCtx = LineStyleContext(
+      replaceRanges: @[ColumnRange(startCol: 0, endCol: 3)],
+      searchRanges: @[ColumnRange(startCol: 0, endCol: 3)],
+    )
+    let style = e.getSelectionStyle(
+      e.activeBuffer,
+      VisualSelection(),
+      BufferPosition(line: 0, column: 1),
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+      lineCtx = lineCtx,
+    )
+    check style == replaceTextStyle()
 
 suite "newLineStyleContext - search highlight":
   proc searchRangesFor(e: Editor, line: string): seq[ColumnRange] =

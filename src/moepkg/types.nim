@@ -1063,6 +1063,7 @@ type
     isActive*: bool # Whether preview is currently active
     buffer*: TextBuffer # The buffer the preview writes
     swap*: Option[NoUndoSwap] # What the preview wrote; none when restored
+    replaced*: seq[ReplacedText] # Where the written replacements are, top down
     applied*: SubstitutePreviewKey # What the buffer shows, empty when restored
     originalCursor*: BufferPosition # Cursor position when preview started
     originalView*: ViewState # What the window showed when preview started
