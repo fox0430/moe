@@ -37,6 +37,11 @@ type
     startCol*: int # inclusive
     endCol*: int # exclusive
 
+  ReplacedText* = object
+    ## Text a `:s` replacement wrote: columns `cols` of line `line`.
+    line*: int
+    cols*: ColumnRange
+
   SearchDirection* = enum
     Forward # Search forward (/)
     Backward # Search backward (?)

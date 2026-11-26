@@ -807,6 +807,41 @@ proc expand(r: Replacement, line: string, m: LiteralRange, lines: var seq[string
       one = lcKeep
       lines.add("")
 
+proc substituteLine(
+    line, pattern: string,
+    replacement: Replacement,
+    ignorecase, everyMatch: bool,
+    match: SearchMatch,
+    replaced: var seq[ReplacedText],
+    record: bool,
+): tuple[lines: seq[string], count: int] =
+  var copied = 0
+  let withGroups = replacement.usesGroups
+  for r in line.matchRanges(pattern, ignorecase, match, mwSubstitute, withGroups):
+    if result.count == 0:
+      result.lines = @[""]
+    result.lines[^1].add(line[copied ..< r.startByte])
+    let
+      firstRow = result.lines.high
+      firstByte = result.lines[^1].len
+    replacement.expand(line, r, result.lines)
+    if record:
+      for row in firstRow .. result.lines.high:
+        let
+          text = result.lines[row]
+          first = if row == firstRow: firstByte else: 0
+        if text.len > first:
+          replaced.add ReplacedText(
+            line: row,
+            cols: ColumnRange(startCol: text[0 ..< first].charLen, endCol: text.charLen),
+          )
+    result.count.inc
+    copied = r.endByte
+    if not everyMatch:
+      break
+  if result.count > 0:
+    result.lines[^1].add(line[copied .. line.high])
+
 proc substituteMatches*(
     line, pattern: string,
     replacement: Replacement,
@@ -815,19 +850,10 @@ proc substituteMatches*(
 ): tuple[lines: seq[string], count: int] =
   ## The lines `line` becomes with the first match, or every match, replaced,
   ## and how many; no lines when none.
-  var copied = 0
-  let withGroups = replacement.usesGroups
-  for r in line.matchRanges(pattern, ignorecase, match, mwSubstitute, withGroups):
-    if result.count == 0:
-      result.lines = @[""]
-    result.lines[^1].add(line[copied ..< r.startByte])
-    replacement.expand(line, r, result.lines)
-    result.count.inc
-    copied = r.endByte
-    if not everyMatch:
-      break
-  if result.count > 0:
-    result.lines[^1].add(line[copied .. line.high])
+  var replaced: seq[ReplacedText]
+  line.substituteLine(
+    pattern, replacement, ignorecase, everyMatch, match, replaced, record = false
+  )
 
 iterator substitutions*(
     b: TextBuffer,
@@ -836,15 +862,18 @@ iterator substitutions*(
     replacement: Replacement,
     ignorecase, everyMatch: bool,
     match: SearchMatch,
-): tuple[line: int, lines: seq[string], count: int] =
-  ## What :s makes of each line of `rows` it changes, top down. The buffer
+    withReplaced = false,
+): tuple[line: int, lines: seq[string], count: int, replaced: seq[ReplacedText]] =
+  ## What :s makes of each line of `rows` it changes, top down, and with
+  ## `withReplaced` where in those lines the replacements went. The buffer
   ## must not change while it runs; the caller writes them all at once.
   for row in max(rows.a, 0) .. min(rows.b, b.len - 1):
-    var s = b.getLine(row).substituteMatches(
-        pattern, replacement, ignorecase, everyMatch, match
+    var replaced: seq[ReplacedText]
+    var s = b.getLine(row).substituteLine(
+        pattern, replacement, ignorecase, everyMatch, match, replaced, withReplaced
       )
     if s.count > 0:
-      yield (line: row, lines: move s.lines, count: s.count)
+      yield (line: row, lines: move s.lines, count: s.count, replaced: move replaced)
 
 proc matchAt*(
     b: TextBuffer,

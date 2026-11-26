@@ -83,6 +83,29 @@ suite "editor_substitute":
     check e.activeBuffer.getLine(0) == "qux bar qux"
     check e.activeBuffer.getLine(1) == "qux baz"
 
+  test "updateSubstitutePreview records where the replacements went":
+    let e = createTestEditor()
+    setBufferContent(e, "a,b\nfoo,bar")
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview(",", "[\\r]", "g".parseSubstituteFlags, smRegex)
+    check e.activeBuffer.textLines == @["a[", "]b", "foo[", "]bar"]
+    check e.state.ui.substitutePreview.replaced ==
+      @[
+        ReplacedText(line: 0, cols: ColumnRange(startCol: 1, endCol: 2)),
+        ReplacedText(line: 1, cols: ColumnRange(startCol: 0, endCol: 1)),
+        ReplacedText(line: 2, cols: ColumnRange(startCol: 3, endCol: 4)),
+        ReplacedText(line: 3, cols: ColumnRange(startCol: 0, endCol: 1)),
+      ]
+
+  test "restoreFromPreview forgets where the replacements went":
+    let e = createTestEditor()
+    setBufferContent(e, "foo")
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview("foo", "x", "".parseSubstituteFlags, smRegex)
+    check e.state.ui.substitutePreview.replaced.len == 1
+    e.restoreFromPreview()
+    check e.state.ui.substitutePreview.replaced.len == 0
+
   test "updateSubstitutePreview with isGlobalFlag=false replaces first only":
     let e = createTestEditor()
     setBufferContent(e, "foo bar foo\nfoo baz")

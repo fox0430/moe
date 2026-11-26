@@ -19,7 +19,7 @@
 
 ## Window and line rendering procedures
 
-import std/[enumerate, options, strutils, unicode, tables]
+import std/[algorithm, enumerate, options, strutils, unicode, tables]
 
 import celina_backend as celina
 
@@ -66,6 +66,7 @@ type
     useTwoColor*: bool
     blockShown*: BlockShown ## What a block selection shows over on this line
     searchRanges*: seq[ColumnRange]
+    replaceRanges*: seq[ColumnRange] ## Text the substitute preview wrote
     wordRanges*: seq[ColumnRange]
     colorCodeMatches*: seq[ColorCodeMatch]
     trailingSpaceStart*: int
@@ -224,6 +225,19 @@ proc newLineStyleContext*(
         spec.pattern, e.state.input.search.ignoresCase(spec), spec.match
       )
 
+  template preview(): untyped =
+    e.state.ui.substitutePreview
+
+  if textBuffer != nil and preview.isActive and preview.buffer == textBuffer:
+    var i = preview.replaced.lowerBound(
+      lineIndex,
+      proc(r: ReplacedText, line: int): int =
+        cmp(r.line, line),
+    )
+    while i < preview.replaced.len and preview.replaced[i].line == lineIndex:
+      result.replaceRanges.add preview.replaced[i].cols
+      i.inc
+
   if textBuffer != nil and not e.state.isSearchOverlay and e.state.currentWord.len > 0:
     let excludeCol = if lineIndex == ctx.cursorLine: ctx.cursorCol else: -1
     result.wordRanges = fullLine.findWordMatchRanges(e.state.currentWord, excludeCol)
@@ -293,6 +307,9 @@ template matchesCurrentWord(
     e: Editor, lineCtx: LineStyleContext, pos: BufferPosition
 ): bool =
   not e.state.isSearchOverlay and lineCtx.wordRanges.isColumnInRanges(pos.column)
+
+template matchesReplaceText(lineCtx: LineStyleContext, pos: BufferPosition): bool =
+  lineCtx.replaceRanges.isColumnInRanges(pos.column)
 
 template matchesSearchHighlight(lineCtx: LineStyleContext, pos: BufferPosition): bool =
   lineCtx.searchRanges.isColumnInRanges(pos.column)
@@ -444,7 +461,7 @@ proc getSelectionStyle*(
 ): Style =
   ## Get the appropriate style for a character based on selection state and syntax.
   ## Priority: visualSelection > snippetTabStop > matchingParen > findCharMatch >
-  ## currentWord > searchHighlight > baseStyleWithOverlay.
+  ## replaceText > currentWord > searchHighlight > baseStyleWithOverlay.
   # Keep the original foreground (syntax highlight) for bg-only overlays.
   template syntaxBaseStyle(): Style =
     if e.hasSyntaxHighlight(buffer, windowMode):
@@ -465,6 +482,8 @@ proc getSelectionStyle*(
     parenPairStyle()
   elif e.matchesFindCharMatch(lineCtx, pos):
     findCharMatchStyle()
+  elif lineCtx.matchesReplaceText(pos):
+    replaceTextStyle()
   elif e.matchesCurrentWord(lineCtx, pos):
     currentWordStyle()
   elif lineCtx.matchesSearchHighlight(pos):
@@ -505,7 +524,10 @@ proc charOverridePatch(
 ): StylePatch =
   ## Per-character style overrides applied on top of the resolved base style.
   ## Priority (later wins): fullWidthSpace < trailingSpaces < colorCode.
-  ## Returns `noPatch` when no override fires.
+  ## Returns `noPatch` when no override fires, and on text the substitute
+  ## preview wrote, which keeps the replaceText color.
+  if lineCtx.replaceRanges.isColumnInRanges(col):
+    return noPatch
   var patch = noPatch
   if rune == FULLWIDTH_SPACE and e.config.highlight.fullWidthSpace and
       ctx.decorates(lineCtx):

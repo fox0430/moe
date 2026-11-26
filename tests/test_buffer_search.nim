@@ -23,7 +23,7 @@ import pkg/results
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/buffer/search {.all.}
-import ../src/moepkg/unicode_utils
+import ../src/moepkg/[primitives, unicode_utils]
 import search_test_helper
 
 suite "Buffer Search - Basic findNext":
@@ -1425,6 +1425,39 @@ suite "substituteMatches":
   test "Case folds as Vim's utf_fold does":
     check replaced("\u03c2 \u03c3 \u03a3", "\u03c3", ignorecase = true) == "# # #"
     check replaced("\u0130 i I", "i", ignorecase = true) == "\u0130 # #"
+
+suite "substitutions - where the replacements went":
+  proc replacedIn(
+      line, pattern, replacement: string, everyMatch = true
+  ): seq[ReplacedText] =
+    for s in newTextBuffer(line).substitutions(
+      0 .. 0,
+      pattern,
+      parseReplacement(replacement),
+      false,
+      everyMatch,
+      smRegex,
+      withReplaced = true,
+    ):
+      result.add s.replaced
+
+  proc at(line, startCol, endCol: int): ReplacedText =
+    ReplacedText(line: line, cols: ColumnRange(startCol: startCol, endCol: endCol))
+
+  test "Each replacement, in the columns of the line made":
+    check "foo bar foo".replacedIn("foo", "xy") == @[at(0, 0, 2), at(0, 7, 9)]
+
+  test "Only the first one unless told":
+    check "foo foo".replacedIn("foo", "x", everyMatch = false) == @[at(0, 0, 1)]
+
+  test "Columns count characters, not bytes":
+    check "あいう".replacedIn("い", "えお") == @[at(0, 1, 3)]
+
+  test "A replacement breaking the line goes on each line it makes":
+    check "a,b".replacedIn(",", "[\\r]") == @[at(0, 1, 2), at(1, 0, 1)]
+
+  test "An empty replacement leaves nothing to show":
+    check "abc".replacedIn("b", "").len == 0
 
 suite "substituteMatches with Vim's replacement specials":
   # Expectations are Vim 9.2's :s, groups written as nim-regex writes them.
