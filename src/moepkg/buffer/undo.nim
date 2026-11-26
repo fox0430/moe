@@ -130,6 +130,9 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       b.lastChangedLines = 0
 
     # Move followers back; ckTransaction recurses.
+    # Folds get their ranges back here and below, unlike Vim, whose undo only
+    # shifts folds across the change so the restored lines mostly stay out of
+    # them (`dd` then `u` shrinks the inner fold). Kept on purpose.
     if change.kind != ckTransaction:
       b.followChange(change, change.undoFollowers, undone = true)
       b.rowsAcrossUndo(change, undone = true)

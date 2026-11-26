@@ -576,3 +576,27 @@ suite "Lines typed below a fold's last line go into the fold, as Vim's foldMarkA
     check e.foldRanges == @[(1, 3)]
     check b.redo().isOk
     check e.foldRanges == @[(1, 3)]
+
+suite "Deleting lines past a fold's end, as in Vim":
+  # Typed in Vim 9.2 (`vim -u NONE`, manual folds 1,7 and 3,6 in 12 lines).
+  # A charwise delete drops its rows in one edit, so the fold it runs past the
+  # end of must end just before them.
+  for (keys, want) in [
+    (":5<Enter>5dd", @[(0, 3), (2, 3)]),
+    (":3<Enter>dG", @[(0, 1)]),
+    (":5,9d<Enter>", @[(0, 3), (2, 3)]),
+    (":5<Enter>Vjjjjd", @[(0, 3), (2, 3)]),
+    (":5<Enter>d4j", @[(0, 3), (2, 3)]),
+    (":5<Enter>vjjjj$d", @[(0, 4), (2, 4)]),
+    (":5<Enter>vjjjjd", @[(0, 4), (2, 4)]),
+    (":5<Enter>4J", @[(0, 4), (2, 4)]),
+    (":4<Enter>$vjjjjd", @[(0, 3), (2, 3)]),
+  ]:
+    test keys:
+      let e = newVimLikeEditor(
+        @["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"], 0, 0
+      )
+      check e.activeBuffer.foldState.addFold(0, 6, collapsed = false)
+      check e.activeBuffer.foldState.addFold(2, 5, collapsed = false)
+      e.pressWithFrames(keys)
+      check e.foldRanges == want
