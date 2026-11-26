@@ -736,6 +736,19 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
+    name: "syntax",
+    completionDescription: "Turn syntax highlighting on (or enable) or off everywhere",
+    helpEntries: @[
+      HelpEntry(
+        syntax: "sy[ntax] on|off",
+        description: "Turn syntax highlighting on (or `enable`) or off everywhere",
+      )
+    ],
+    action: some(claSyntax),
+    isCanonicalLong: true,
+    minAbbrev: 2,
+  ),
+  CommandLineCommandSpec(
     name: "noh",
     completionDescription: "Hide search highlights until the next search",
     helpEntries: @[

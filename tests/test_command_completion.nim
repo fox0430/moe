@@ -26,6 +26,13 @@ import ../src/moepkg/command_completion {.all.}
 import ../src/moepkg/syntax/tokenizer
 import config_test_helper
 
+proc triggerBuiltinArgCompletion(
+    mgr: CommandCompletionManager, commandText: string, basePath: string = ""
+) =
+  ## `triggerArgumentCompletion` against the built-in command set, as an editor
+  ## without user aliases, shell commands or disabled commands resolves it.
+  mgr.triggerArgumentCompletion(commandText, newBuiltinCommandLineParser(), basePath)
+
 suite "CommandCompletion - extractCommandPrefix":
   test "Extract prefix from simple command :wq":
     let prefix = extractCommandPrefix(":wq")
@@ -179,38 +186,38 @@ suite "CommandCompletion - theme names":
   test ":theme completes its first word only":
     withThemes(["dark.toml"]):
       let mgr = newCommandCompletionManager()
-      mgr.triggerArgumentCompletion(":theme ")
+      mgr.triggerBuiltinArgCompletion(":theme ")
       check mgr.isActive
       check mgr.mode == cmThemeName
       check mgr.argStartX == ":theme ".len
       check mgr.menu.entries.mapIt(it.command) == @["dark", "default"]
 
-      mgr.triggerArgumentCompletion(":theme dar")
+      mgr.triggerBuiltinArgCompletion(":theme dar")
       check mgr.menu.entries.mapIt(it.command) == @["dark"]
 
-      mgr.triggerArgumentCompletion(":theme dark ")
+      mgr.triggerBuiltinArgCompletion(":theme dark ")
       check not mgr.isActive
 
   test "More than one space may precede the name":
     withThemes(["dark.toml"]):
       let mgr = newCommandCompletionManager()
-      mgr.triggerArgumentCompletion(":theme  ")
+      mgr.triggerBuiltinArgCompletion(":theme  ")
       check mgr.menu.entries.mapIt(it.command) == @["dark", "default"]
 
-      mgr.triggerArgumentCompletion(":theme  dar")
+      mgr.triggerBuiltinArgCompletion(":theme  dar")
       check mgr.isActive
       check mgr.menu.entries.mapIt(it.command) == @["dark"]
 
-      mgr.triggerArgumentCompletion(":theme  dark ")
+      mgr.triggerBuiltinArgCompletion(":theme  dark ")
       check not mgr.isActive
 
   test ":picker also takes more than one space before its source":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":picker  ")
+    mgr.triggerBuiltinArgCompletion(":picker  ")
     check mgr.isActive
     check mgr.mode == cmPickerSource
 
-    mgr.triggerArgumentCompletion(":picker  resume ")
+    mgr.triggerBuiltinArgCompletion(":picker  resume ")
     check not mgr.isActive
 
 suite "CommandCompletion - newCommandCompletionManager":
@@ -672,7 +679,7 @@ suite "CommandCompletion - triggerCompletion":
 suite "CommandCompletion - triggerArgumentCompletion":
   test "Trigger set option completion":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":set num")
+    mgr.triggerBuiltinArgCompletion(":set num")
 
     check mgr.state == ccsActive
     check mgr.mode == cmSetOption
@@ -681,7 +688,7 @@ suite "CommandCompletion - triggerArgumentCompletion":
 
   test "Trigger file path completion for edit":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":e ", getCurrentDir())
+    mgr.triggerBuiltinArgCompletion(":e ", getCurrentDir())
 
     check mgr.state == ccsActive
     check mgr.mode == cmFilePath
@@ -689,19 +696,19 @@ suite "CommandCompletion - triggerArgumentCompletion":
 
   test "Unknown command does not trigger":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":unknown arg")
+    mgr.triggerBuiltinArgCompletion(":unknown arg")
 
     check mgr.state == ccsIdle
 
   test "'se' is not a set alias and does not trigger":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":se num")
+    mgr.triggerBuiltinArgCompletion(":se num")
 
     check mgr.state == ccsIdle
 
   test "File path completion for write command":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":w ", getCurrentDir())
+    mgr.triggerBuiltinArgCompletion(":w ", getCurrentDir())
 
     check mgr.state == ccsActive
     check mgr.mode == cmFilePath
@@ -709,7 +716,7 @@ suite "CommandCompletion - triggerArgumentCompletion":
 
   test "File path completion for vsplit command":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":vs ", getCurrentDir())
+    mgr.triggerBuiltinArgCompletion(":vs ", getCurrentDir())
 
     check mgr.state == ccsActive
     check mgr.mode == cmFilePath
@@ -717,7 +724,7 @@ suite "CommandCompletion - triggerArgumentCompletion":
 
   test "File path completion for split command":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":sp ", getCurrentDir())
+    mgr.triggerBuiltinArgCompletion(":sp ", getCurrentDir())
 
     check mgr.state == ccsActive
     check mgr.mode == cmFilePath
@@ -725,33 +732,33 @@ suite "CommandCompletion - triggerArgumentCompletion":
 
   test "originalDirPrefix is set for path with directory":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":e /home/user/", "")
+    mgr.triggerBuiltinArgCompletion(":e /home/user/", "")
 
     check mgr.originalDirPrefix == "/home/user/"
 
   test "originalDirPrefix is empty for simple filename":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":e test", getCurrentDir())
+    mgr.triggerBuiltinArgCompletion(":e test", getCurrentDir())
 
     check mgr.originalDirPrefix == ""
 
   test "argStartX is calculated correctly for command mode":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":set num")
+    mgr.triggerBuiltinArgCompletion(":set num")
 
     # argStartX = 1 (":") + 3 ("set") + 1 (space) = 5
     check mgr.argStartX == 5
 
   test "Menu prefix is set to argument":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":set number")
+    mgr.triggerBuiltinArgCompletion(":set number")
 
     check mgr.menu.prefix == "number"
 
   test "selectedIndex is reset to -1":
     let mgr = newCommandCompletionManager()
     mgr.menu.selectedIndex = 5
-    mgr.triggerArgumentCompletion(":set num")
+    mgr.triggerBuiltinArgCompletion(":set num")
 
     check mgr.menu.selectedIndex == -1
 
@@ -764,7 +771,7 @@ suite "CommandCompletion - triggerArgumentCompletion":
     ]:
       checkpoint line
       let mgr = newCommandCompletionManager()
-      mgr.triggerArgumentCompletion(line)
+      mgr.triggerBuiltinArgCompletion(line)
 
       check mgr.state == ccsActive
       check mgr.mode == cmSetValue
@@ -774,11 +781,53 @@ suite "CommandCompletion - triggerArgumentCompletion":
       # argStartX = 1 (":") + 3 ("set") + 1 (space) + the option and its "="
       check mgr.argStartX == line.find('=') + 1
 
+  test "After :syntax its subcommands complete":
+    for line in [":syntax ", ":sy ", ":SYNTAX ", ":SY "]:
+      checkpoint line
+      let mgr = newCommandCompletionManager()
+      mgr.triggerBuiltinArgCompletion(line)
+
+      check mgr.state == ccsActive
+      check mgr.mode == cmSyntaxSubcommand
+      check mgr.menu.entries.mapIt(it.command) == @["on", "enable", "off"]
+      check mgr.argStartX == line.len
+    for line in [":syntax x", ":syntax on ", ":syntax on o"]:
+      checkpoint line
+      let mgr = newCommandCompletionManager()
+      mgr.triggerBuiltinArgCompletion(line)
+      check mgr.state == ccsIdle
+
+  test "A user alias reusing an abbreviation gets no :syntax subcommands":
+    let parser = newBuiltinCommandLineParser()
+    parser.addAlias("sy", claSave)
+    let mgr = newCommandCompletionManager()
+    mgr.triggerArgumentCompletion(":sy ", parser)
+
+    check mgr.state == ccsIdle
+
+  test "A shell command reusing an abbreviation gets no :syntax subcommands":
+    let parser = newBuiltinCommandLineParser()
+    parser.shellCommands["sy"] = ShellCommandEntry(command: "echo sy")
+    let mgr = newCommandCompletionManager()
+    mgr.triggerArgumentCompletion(":sy ", parser)
+
+    check mgr.state == ccsIdle
+
+  test "A disabled :syntax gets no subcommands":
+    let parser = newBuiltinCommandLineParser()
+    parser.removeAlias("syntax")
+    for line in [":syntax ", ":sy "]:
+      checkpoint line
+      let mgr = newCommandCompletionManager()
+      mgr.triggerArgumentCompletion(line, parser)
+
+      check mgr.state == ccsIdle
+
   test "Any other option with = completes the options as before":
     for line in [":set nosyntax=ja", ":set tabstop=4"]:
       checkpoint line
       let mgr = newCommandCompletionManager()
-      mgr.triggerArgumentCompletion(line)
+      mgr.triggerBuiltinArgCompletion(line)
 
       check mgr.mode == cmSetOption
       check mgr.menu.entries == collectSetOptions(line[5 .. ^1])
@@ -1088,7 +1137,7 @@ suite "CommandCompletion - directory completion for :cd":
   test ":cd and :chdir complete directories only":
     for command in [":cd ", ":chdir "]:
       let mgr = newCommandCompletionManager()
-      mgr.triggerArgumentCompletion(command, testDir)
+      mgr.triggerBuiltinArgCompletion(command, testDir)
       check mgr.state == ccsActive
       check mgr.mode == cmFilePath
       check mgr.menu.entries.mapIt(it.command) == @["subdir/"]
@@ -1096,19 +1145,19 @@ suite "CommandCompletion - directory completion for :cd":
   test ":chdir abbreviations complete directories":
     for command in [":chd ", ":chdi "]:
       let mgr = newCommandCompletionManager()
-      mgr.triggerArgumentCompletion(command, testDir)
+      mgr.triggerBuiltinArgCompletion(command, testDir)
       check mgr.state == ccsActive
       check mgr.mode == cmFilePath
       check mgr.menu.entries.mapIt(it.command) == @["subdir/"]
 
   test ":ch is not an abbreviation and does not trigger":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":ch ", testDir)
+    mgr.triggerBuiltinArgCompletion(":ch ", testDir)
     check mgr.state == ccsIdle
 
   test ":e still completes files":
     let mgr = newCommandCompletionManager()
-    mgr.triggerArgumentCompletion(":e ", testDir)
+    mgr.triggerBuiltinArgCompletion(":e ", testDir)
     check mgr.menu.entries.len == 2
 
   test "DirectoryCommands holds :cd and :chdir only":

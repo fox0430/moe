@@ -44,6 +44,7 @@ type
     claEdit # :e
     claEnew # :ene, :enew (new empty buffer)
     claSet # :set
+    claSyntax # :syntax on/off
     claHelp # :help, :h
     claUndo # :undo, :u
     claRedo # :redo
@@ -244,6 +245,8 @@ type
       allRecovery*: bool # true for :recover!
     of claRecentFile:
       discard
+    of claSyntax:
+      syntaxOn*: bool
     of claClearSearchHighlight:
       discard
     of claShellCommand:
@@ -331,6 +334,7 @@ const ArgumentRequiredActions* = {
   claSaveAs, # requires filename
   claGoto, # requires line number
   claSet, # requires option name
+  claSyntax, # optional on, enable or off
   claSubstitute, # requires pattern
   claBuffer, # requires buffer number/name
   claBufferDelete, # optional buffer number/name

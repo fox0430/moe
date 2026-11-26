@@ -158,6 +158,23 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       let parts = option.split("=", 1)
       return CommandLineResult(kind: claSet, option: parts[0], value: some(parts[1]))
     return CommandLineResult(kind: claSet, option: option, value: none(string))
+  of claSyntax:
+    if "force" in cmd.flags:
+      return CommandLineResult(kind: claUnknown, errorMessage: "E477: No ! allowed")
+    if cmd.args.len == 0:
+      # Vim lists the syntax items; ours has none, so it shows the state.
+      return CommandLineResult(kind: claSet, option: "syntax?", value: none(string))
+    # As Vim's ex_syntax, the subcommand ends where a `!` or anything after
+    # it begins: `:syntax on! x` is `on`, and extra words are ignored.
+    var subcommand = cmd.args[0]
+    while subcommand.len > 0 and subcommand[^1] == '!':
+      subcommand.setLen(subcommand.len - 1)
+    if subcommand notin ["on", "enable", "off"]:
+      return CommandLineResult(
+        kind: claUnknown,
+        errorMessage: "E410: Invalid :syntax subcommand: " & subcommand,
+      )
+    return CommandLineResult(kind: claSyntax, syntaxOn: subcommand != "off")
   of claDeleteLines:
     return CommandLineResult(kind: claDeleteLines, deleteRange: cmd.range)
   of claSubstitute:

@@ -621,3 +621,7 @@ suite "HelpViewer - Mode sections (snapshot)":
     check state.texts.contains("i  - Return to Terminal-Input sub-mode")
     check state.texts.contains("a  - Return to Terminal-Input sub-mode")
     check state.texts.contains(":  - Enter command mode")
+
+  test "Command mode section lists :syntax":
+    let state = newHelpViewerState()
+    check state.texts.anyIt(it.startsWith("sy[ntax] on|off"))

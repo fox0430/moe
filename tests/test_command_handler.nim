@@ -1781,6 +1781,20 @@ suite "CommandModeHandler - handleCommandModeInput":
     check result.boolOption == bsoRelativeNumber
     check result.boolValue == false
 
+  test "Handle :syntax on and off":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let on = handler.handleCommandModeInput(buffer, ":syntax on")
+    check on.kind == hrSetSyntaxLanguage
+    check on.followFiletype
+    check on.allBuffers
+    let off = handler.handleCommandModeInput(buffer, ":syntax off")
+    check off.kind == hrSetBoolOption
+    check off.boolOption == bsoSyntax
+    check not off.boolValue
+    check handler.handleCommandModeInput(buffer, ":syntax").kind == hrShowOption
+
   test "Handle :set syntax off, false and on":
     let handler = setupHandler()
     let buffer = setupBuffer()

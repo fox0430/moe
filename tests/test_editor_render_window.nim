@@ -3700,6 +3700,58 @@ suite "Terminal-Normal colors":
 
     check e.charOverridePatch(ctx, lineCtx, FULLWIDTH_SPACE, 0) == noPatch
 
+suite "Diff viewer colors":
+  proc addedLineBuffer(): TextBuffer =
+    ## The shape `createDiffTextBuffer` gives an added line: a diff language
+    ## and the added-line background, with no literalColors.
+    let bg = getThemeStyle(EditorColorPairIndex.diffViewerAddedLineBg).bg
+    result = newTextBuffer("+ added line")
+    result.language = SourceLanguage.langDiff
+    result.highlight = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 11,
+          color: EditorColorPairIndex.default,
+          style: Style(bg: bg),
+        )
+      ]
+    )
+
+  test "are not syntax highlighting":
+    ## `:syntax off` turns syntax off; the diff's own tints stay, as the
+    ## terminal's literal colors do.
+    let e = createTestEditor()
+    e.state.showSyntax = false
+    let style = e.getSelectionStyleAt(
+      addedLineBuffer(),
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 2),
+      cursorLine = 5,
+      cursorCol = 0,
+      windowMode = EditorMode.DiffViewer,
+    )
+
+    check style.bg == getThemeStyle(EditorColorPairIndex.diffViewerAddedLineBg).bg
+
+  test "a diff-language file in a text window is syntax":
+    ## A .diff opened for editing is syntax-highlighted, so `:syntax off`
+    ## reaches it.
+    let e = createTestEditor()
+    e.state.showSyntax = false
+    let style = e.getSelectionStyleAt(
+      addedLineBuffer(),
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 2),
+      cursorLine = 5,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+
+    check style.bg == normalStyle().bg
+
 suite "charOverridePatch":
   proc fileEditCtx(): RenderContext =
     RenderContext(windowMode: EditorMode.Normal, windowRightEdge: 80)

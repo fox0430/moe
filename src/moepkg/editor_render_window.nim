@@ -95,7 +95,12 @@ template decorates(ctx: RenderContext, lineCtx: LineStyleContext): bool =
 template hasSyntaxHighlight(
     e: Editor, buffer: TextBuffer, windowMode: EditorMode
 ): bool =
-  not buffer.highlight.isNil and (e.showSyntax or buffer.highlight.literalColors) and (
+  ## The diff viewer colors its rows itself, as the terminal does: `:syntax
+  ## off` turns syntax highlighting off, not the diff's added/removed tints.
+  not buffer.highlight.isNil and (
+    e.showSyntax or buffer.highlight.literalColors or
+    (windowMode == EditorMode.DiffViewer and buffer.syntaxLanguage == langDiff)
+  ) and (
     windowMode.isFileEditMode or buffer.syntaxLanguage != langNone or
     buffer.isUtilityBuffer
   )

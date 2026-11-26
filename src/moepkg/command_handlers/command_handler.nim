@@ -743,6 +743,11 @@ proc handleCommandModeInput*(
     handler.executeGotoLine(buffer, cmdResult.gotoAddress, currentLine)
   of claSet:
     handler.executeSet(cmdResult.option, cmdResult.value, cmdResult.valueAfterSpace)
+  of claSyntax:
+    if cmdResult.syntaxOn:
+      HandlerResult(kind: hrSetSyntaxLanguage, followFiletype: true, allBuffers: true)
+    else:
+      HandlerResult(kind: hrSetBoolOption, boolOption: bsoSyntax, boolValue: false)
   of claHelp:
     handler.executeHelp(cmdResult.topic)
   of claUndo:

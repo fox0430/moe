@@ -1813,6 +1813,24 @@ suite "Editor - :set toggle and show":
     check e.config.standard.syntax
     check e.state.statusMessage == "syntax = python"
 
+  test ":syntax on takes every buffer back to its file's language":
+    let e = createTestEditor()
+    e.config.standard.syntax = false
+    let current = e.activeBuffer()
+    current.language = langPython
+    current.setSyntaxLanguage(langNone)
+    let other = newTextBuffer("class B {}")
+    other.language = langJava
+    other.setSyntaxLanguage(langCpp)
+    e.addBuffer(other)
+
+    e.run(
+      HandlerResult(kind: hrSetSyntaxLanguage, followFiletype: true, allBuffers: true)
+    )
+    check e.config.standard.syntax
+    check current.syntaxLanguage == langPython
+    check other.syntaxLanguage == langJava
+
   test "syntax=on in a listing turns highlighting on; syntax=off says how":
     let e = createTestEditor()
     let current = e.activeBuffer()
