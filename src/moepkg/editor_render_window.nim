@@ -45,7 +45,8 @@ import
   visual_selection,
   visual_block,
   wanted_column,
-  search_ops
+  search_ops,
+  uri_utils
 import command_handlers/visual_handler
 
 type
@@ -69,6 +70,7 @@ type
     replaceRanges*: seq[ColumnRange] ## Text the substitute preview wrote
     wordRanges*: seq[ColumnRange]
     colorCodeMatches*: seq[ColorCodeMatch]
+    uriRanges*: seq[ColumnRange] ## URIs the syntax layer underlines
     trailingSpaceStart*: int
     lineBg*: Option[ColorValue]
       ## Line-scoped background overlay (Markdown fenced code block). When set,
@@ -222,6 +224,15 @@ proc newLineStyleContext*(
           result.colorCodeMatches.add m
     else:
       result.colorCodeMatches = scanLineForColorCodes(fullLine)
+
+  # Found here rather than kept in the highlight, so they need no upkeep
+  # through edits and re-parses. Raw buffers would show binary as URIs; a
+  # terminal's literal colors carry the program's own underlines.
+  if textBuffer != nil and e.hasSyntaxHighlight(textBuffer, ctx.windowMode) and
+      not textBuffer.highlight.literalColors and not textBuffer.isUtilityBuffer and
+      textBuffer.allowsTextTransforms:
+    for m in findAllUris(fullLine, textBuffer.maxHighlightLineLength):
+      result.uriRanges.add ColumnRange(startCol: m.start, endCol: m.finish + 1)
 
   if textBuffer != nil and e.state.input.search.hlsearch:
     let spec = e.shownSearch()
@@ -380,8 +391,13 @@ proc segmentStyle(
       result.modifiers.excl(StyleModifier.Reversed)
     return
   result = colorIndexToStyle(colorPair)
+  let uri =
+    if lineCtx.uriRanges.isColumnInRanges(pos.column):
+      {StyleModifier.Underline}
+    else:
+      {}
   result.modifiers =
-    result.modifiers + highlight.getSegmentModifiers(pos.line, pos.column)
+    result.modifiers + highlight.getSegmentModifiers(pos.line, pos.column, uri)
   let segBg = highlight.getSegmentBg(pos.line, pos.column)
   if segBg.isSome:
     result = result.merge(bgOnly(segBg.get))

@@ -94,11 +94,15 @@ proc findAllUris*(line: string, maxChars: int = 0): seq[UriMatch] =
   ## one straddling it is underlined only up to it. `charSubStr` scans at most
   ## `maxChars` characters, keeping the cost O(cap), and `toCharRunes` steps the
   ## same way `charLen` does, so its indices are the columns the buffer uses.
-  let runes =
+  let scanned =
     if maxChars > 0 and line.len > maxChars:
-      line.charSubStr(0, maxChars).toCharRunes
+      line.charSubStr(0, maxChars)
     else:
-      line.toCharRunes
+      line
+  # Every scheme has a ':'; most lines have none, so skip the rune decode.
+  if ':' notin scanned:
+    return
+  let runes = scanned.toCharRunes
   var pos = 0
   while pos < runes.len:
     let schemeLen = findSchemeAtRune(runes, pos)

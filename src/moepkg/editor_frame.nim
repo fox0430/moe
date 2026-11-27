@@ -472,11 +472,6 @@ proc updateForFrame*(e: Editor, area: Rect): bool =
       consumed = 0
       discard activeBuffer.continueInitialHighlight(min(1000, activeBudget), consumed)
       activeBudget -= consumed
-    # Continue progressive URI scanning for all file types
-    if activeBudget > 0:
-      consumed = 0
-      discard activeBuffer.continueUriScan(min(1000, activeBudget), consumed)
-      activeBudget -= consumed
     # If the content changed, re-apply semantic tokens
     if contentChanged:
       invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
@@ -488,11 +483,11 @@ proc updateForFrame*(e: Editor, area: Rect): bool =
     # Apply semantic tokens after local highlight is ready
     e.updateSemanticTokensCache()
 
-  # Also advance re-parses, initial loads and URI scans of the other open
-  # buffers: they have no frame of their own, and a stale load frontier
-  # would freeze tail rows' underlines until the buffer reactivates. The
-  # rotating start index serves every buffer at least once per
-  # `e.buffers.len` frames. Runs even while the debug viewer is active.
+  # Also advance re-parses and initial loads of the other open buffers: they
+  # have no frame of their own, and a stale load frontier would leave tail
+  # rows uncolored until the buffer reactivates. The rotating start index
+  # serves every buffer at least once per `e.buffers.len` frames. Runs even
+  # while the debug viewer is active.
   const InactiveFrameBudget = 2000
   var frameBudget = InactiveFrameBudget
   let bufCount = e.buffers.len

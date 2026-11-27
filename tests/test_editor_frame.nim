@@ -533,6 +533,19 @@ suite "notify - routing and logging":
 
     check getMessageLog().len == 0
 
+proc addLoadingRust(e: Editor, name: string, lines: int): TextBuffer =
+  ## A Rust buffer whose initial load stopped after its first 1000-line chunk,
+  ## so each frame's sweep advances `parsedUpTo` by what the budget allows.
+  result = newTextBuffer()
+  let path = getTempDir() / name
+  var content = ""
+  for i in 0 ..< lines:
+    content.add("let value" & $i & " = " & $i & ";\n")
+  writeFile(path, content)
+  discard result.loadFile(path)
+  removeFile(path)
+  e.addBuffer(result)
+
 suite "updateForFrame - split buffer re-parse budget":
   test "advances in-flight re-parses of inactive buffers across frames":
     let config = newEditorConfig()
@@ -575,15 +588,14 @@ suite "updateForFrame - split buffer re-parse budget":
     check frames < 100
     check buf.incrementalHighlight.pendingReparse == nil
     check buf.incrementalHighlight.lineStates.len == buf.len
-    # The per-frame URI scan keeps the inactive buffer's underlines current;
-    # it is clamped to the syntax progress, so the loop must also drive the
-    # initial-load resume, or the tail rows never get scanned.
-    var uriFrames = 1
-    while buf.uriScanParsedUpTo < buf.len - 1 and uriFrames < 100:
+    # The loop must also drive the initial-load resume, or the load frontier
+    # the insert left behind never reaches the tail.
+    var loadFrames = 1
+    while buf.incrementalHighlight.parsedUpTo < buf.len - 1 and loadFrames < 100:
       discard e.updateForFrame(frameBuffer)
-      inc uriFrames
-    check uriFrames < 100
-    check buf.uriScanParsedUpTo == buf.len - 1
+      inc loadFrames
+    check loadFrames < 100
+    check buf.incrementalHighlight.parsedUpTo == buf.len - 1
 
   test "a new edit mid-re-parse restarts the inactive buffer's flight":
     let config = newEditorConfig()
@@ -754,36 +766,22 @@ suite "updateForFrame - split buffer re-parse budget":
     discard flightBuf.commitTransaction()
     check flightBuf.updateHighlight(100)
     check flightBuf.incrementalHighlight.pendingReparse != nil
-    # The trigger rewound the URI scan to the re-parse start; mark it done so
-    # the frame's scan is a no-op and this test isolates the re-parse charge.
-    flightBuf.uriScanParsedUpTo = flightBuf.len - 1
     e.addBuffer(flightBuf)
 
-    # Two plain-text buffers after it in e.buffers order.
-    var plain: seq[TextBuffer]
+    # Two loading buffers after it in e.buffers order.
+    var loading: seq[TextBuffer]
     for i in 0 ..< 2:
-      var buf = newTextBuffer()
-      let p = getTempDir() / "moe_test_frame_charge" & $i & ".txt"
-      defer:
-        removeFile(p)
-      var c = ""
-      for j in 0 ..< 10_000:
-        c.add("plain line " & $j & "\n")
-      writeFile(p, c)
-      discard buf.loadFile(p)
-      buf.uriScanParsedUpTo = -1
-      e.addBuffer(buf)
-      plain.add(buf)
+      loading.add e.addLoadingRust("moe_test_frame_charge" & $i & ".rs", 10_000)
 
     let frameBuffer = newBuffer(80, 24)
     discard e.updateForFrame(frameBuffer)
 
     # The flight completed within the frame's continuation and its actual
-    # (~500-line) work was charged, so plain[1] did NOT get a full
+    # (~500-line) work was charged, so loading[1] did NOT get a full
     # 1000-line chunk this frame.
     check flightBuf.incrementalHighlight.pendingReparse == nil
-    check plain[0].uriScanParsedUpTo == 999
-    check plain[1].uriScanParsedUpTo < 999
+    check loading[0].incrementalHighlight.parsedUpTo == 1999
+    check loading[1].incrementalHighlight.parsedUpTo < 1999
 
   test "a trigger completing a flight within a frame charges the shared budget":
     # Regression: a trigger that restarts AND completes a flight within the
@@ -811,9 +809,6 @@ suite "updateForFrame - split buffer re-parse budget":
     discard flightBuf.commitTransaction()
     check flightBuf.updateHighlight(100)
     check flightBuf.incrementalHighlight.pendingReparse != nil
-    # Mark the URI scan done so the trigger's rewind re-arms it; the re-cover
-    # is charged like any scan.
-    flightBuf.uriScanParsedUpTo = flightBuf.len - 1
     # A second edit lands mid-flight: the next frame's trigger restarts it
     # from ~0 and completes it within the call.
     discard flightBuf.beginTransaction()
@@ -821,75 +816,53 @@ suite "updateForFrame - split buffer re-parse budget":
     discard flightBuf.commitTransaction()
     e.addBuffer(flightBuf)
 
-    var plain: seq[TextBuffer]
+    var loading: seq[TextBuffer]
     for i in 0 ..< 2:
-      var buf = newTextBuffer()
-      let p = getTempDir() / "moe_test_frame_trigger_charge" & $i & ".txt"
-      defer:
-        removeFile(p)
-      var c = ""
-      for j in 0 ..< 10_000:
-        c.add("plain line " & $j & "\n")
-      writeFile(p, c)
-      discard buf.loadFile(p)
-      buf.uriScanParsedUpTo = -1
-      e.addBuffer(buf)
-      plain.add(buf)
+      loading.add e.addLoadingRust("moe_test_frame_trigger_charge" & $i & ".rs", 10_000)
 
     let frameBuffer = newBuffer(80, 24)
     discard e.updateForFrame(frameBuffer)
 
-    # The trigger's ~600-line re-parse plus the URI re-cover exhaust the
-    # shared budget: plain[0] gets less than a full chunk and plain[1]
-    # nothing (without the charge both would scan full chunks).
+    # The trigger's ~600-line re-parse is charged to the shared budget:
+    # loading[0] gets a full chunk and loading[1] only the rest (without the
+    # charge both would load full chunks).
     check flightBuf.incrementalHighlight.pendingReparse == nil
-    check plain[0].uriScanParsedUpTo < 999
-    check plain[1].uriScanParsedUpTo == -1
+    check loading[0].incrementalHighlight.parsedUpTo == 1999
+    check loading[1].incrementalHighlight.parsedUpTo < 1999
 
   test "inactive buffers share one frame budget":
     let config = newEditorConfig()
     let e = newEditor(config)
 
-    # Three large plain-text buffers: their URI scans are the only per-frame
-    # work. The shared 2000-line budget must cap the aggregate scan: the
-    # first two buffers consume it and the third is deferred.
+    # Three large loading buffers: their initial loads are the only
+    # per-frame work. The shared 2000-line budget must cap the aggregate
+    # load: the first two buffers consume it and the third is deferred.
     var bufs: seq[TextBuffer]
     for i in 0 ..< 3:
-      var buf = newTextBuffer()
-      let path = getTempDir() / "moe_test_frame_budget" & $i & ".txt"
-      defer:
-        removeFile(path)
-      var content = ""
-      for j in 0 ..< 10_000:
-        content.add("plain line " & $j & "\n")
-      writeFile(path, content)
-      discard buf.loadFile(path)
-      buf.uriScanParsedUpTo = -1
-      e.addBuffer(buf)
-      bufs.add(buf)
+      bufs.add e.addLoadingRust("moe_test_frame_budget" & $i & ".rs", 10_000)
 
     let frameBuffer = newBuffer(80, 24)
     discard e.updateForFrame(frameBuffer)
 
-    check bufs[0].uriScanParsedUpTo == 999
-    check bufs[1].uriScanParsedUpTo == 999
+    check bufs[0].incrementalHighlight.parsedUpTo == 1999
+    check bufs[1].incrementalHighlight.parsedUpTo == 1999
     # The budget is exhausted by the first two buffers; the third must not
     # run this frame.
-    check bufs[2].uriScanParsedUpTo == -1
+    check bufs[2].incrementalHighlight.parsedUpTo == 999
 
     # ... and the loop catches up on later frames (the front buffers finish
     # first, then the deferred one).
     var frames = 1
-    while bufs[2].uriScanParsedUpTo < bufs[2].len - 1 and frames < 100:
+    while bufs[2].incrementalHighlight.parsedUpTo < bufs[2].len - 1 and frames < 100:
       discard e.updateForFrame(frameBuffer)
       inc frames
     check frames < 100
-    check bufs[2].uriScanParsedUpTo == bufs[2].len - 1
+    check bufs[2].incrementalHighlight.parsedUpTo == bufs[2].len - 1
 
   test "the frame loop drives an incomplete initial load of an inactive buffer":
     # Regression: the per-frame load-resume and its `loadLines` budget
-    # accounting had no test. Without the resume, an inactive buffer's URI
-    # scan (clamped to the load frontier) never reaches the tail rows.
+    # accounting had no test. Without the resume, an inactive buffer's tail
+    # rows stay uncolored.
     let config = newEditorConfig()
     let e = newEditor(config)
 
@@ -899,38 +872,28 @@ suite "updateForFrame - split buffer re-parse budget":
       removeFile(path)
     var content = ""
     for i in 0 ..< 5000:
-      if i == 4000:
-        content.add("let x = 1; // see https://example.com/api\n")
-      else:
-        content.add("let value" & $i & " = " & $i & ";\n")
+      content.add("let value" & $i & " = " & $i & ";\n")
     writeFile(path, content)
     discard buf.loadFile(path)
     # Advance the initial load by one chunk only: the frontier stalls at 999.
     check buf.continueInitialHighlight()
     check buf.incrementalHighlight.parsedUpTo < buf.len - 1
     e.addBuffer(buf)
-    # An edit below the load frontier (the inserted row shifts the URI from
-    # 4000 to 4001); the load re-parses the uncovered band below the edit.
+    # An edit below the load frontier; the load re-parses the uncovered band
+    # below the edit.
     discard buf.beginTransaction()
     discard buf.insert(2000, "let inserted = 1;")
     discard buf.commitTransaction()
 
     let frameBuffer = newBuffer(80, 24)
-    # The frame loop must advance the load and, with it, the URI scan
-    # (clamped to the load frontier) until the tail rows are covered.
+    # The frame loop must advance the load until the tail rows are covered.
     var frames = 1
-    while (
-      buf.incrementalHighlight.parsedUpTo < buf.len - 1 or
-      buf.uriScanParsedUpTo < buf.len - 1
-    ) and frames < 100
-    :
+    while buf.incrementalHighlight.parsedUpTo < buf.len - 1 and frames < 100:
       discard e.updateForFrame(frameBuffer)
       inc frames
     check frames < 100
     check buf.incrementalHighlight.parsedUpTo == buf.len - 1
-    check buf.uriScanParsedUpTo == buf.len - 1
-    let uriCol = "let x = 1; // see ".len
-    check Underline in buf.highlight.getSegmentModifiers(4001, uriCol)
+    check buf.incrementalHighlight.lineStates.len == buf.len
 
   test "an inactive YAML buffer stuck in a handoff hazard does not drain the shared budget":
     # Regression: a chunk fully inside a handoff hazard doubles `chunkLen`
@@ -961,20 +924,10 @@ suite "updateForFrame - split buffer re-parse budget":
       discard
     e.addBuffer(stuck)
 
-    # Buffer 2: a plain buffer served after `stuck`. Its URI scan is the
-    # canary — before the fix, the stuck buffer drained the budget and this
-    # scan never advanced.
-    var canary = newTextBuffer()
-    let canaryPath = getTempDir() / "moe_test_frame_canary.txt"
-    defer:
-      removeFile(canaryPath)
-    var canaryContent = ""
-    for i in 0 ..< 500:
-      canaryContent.add("plain line " & $i & "\n")
-    writeFile(canaryPath, canaryContent)
-    discard canary.loadFile(canaryPath)
-    canary.uriScanParsedUpTo = -1
-    e.addBuffer(canary)
+    # Buffer 2: a loading buffer served after `stuck`. Its initial load is
+    # the canary — before the fix, the stuck buffer drained the budget and
+    # this load never advanced.
+    let canary = e.addLoadingRust("moe_test_frame_canary.rs", 1500)
 
     # Edit at the top of the stuck buffer to trigger a flight inside the
     # handoff hazard.
@@ -985,9 +938,9 @@ suite "updateForFrame - split buffer re-parse budget":
     let frameBuffer = newBuffer(80, 24)
     discard e.updateForFrame(frameBuffer)
 
-    # The canary must have made progress in the same frame — its URI scan
-    # covers its full length in one chunk.
-    check canary.uriScanParsedUpTo == canary.len - 1
+    # The canary must have made progress in the same frame — its load covers
+    # the rest of it in one chunk.
+    check canary.incrementalHighlight.parsedUpTo == canary.len - 1
     # And the stuck buffer's flight defers (still pending, no chunk accepted).
     check stuck.incrementalHighlight.pendingReparse != nil
 

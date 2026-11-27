@@ -1275,168 +1275,6 @@ suite "Highlight - budgeted incremental update":
       lines[i] = buf.getLine(i)
     checkMatchesFullParse(lines, buf.highlight.colorSegments, SourceLanguage.langRust)
 
-  test "URI underlines re-cover a budgeted re-parse region":
-    var buf = newTextBuffer()
-    let path = getTempDir() / "moe_test_budgeted_uri.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 1500:
-      if i == 100:
-        content.add("let x = 1; // see https://example.com/api\n")
-      else:
-        content.add("let value" & $i & " = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-    while buf.continueInitialHighlight():
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    let uriCol = "let x = 1; // see ".len
-    check Underline in buf.highlight.getSegmentModifiers(100, uriCol)
-
-    # Insert at the top: the re-parse trims the segments (URI underlines
-    # included); the progressive scan must re-cover them.
-    discard buf.beginTransaction()
-    discard buf.insert(0, "let inserted = 1;")
-    discard buf.commitTransaction()
-
-    check buf.updateHighlight(100)
-    while buf.continueIncrementalHighlight(100):
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    check Underline in buf.highlight.getSegmentModifiers(101, uriCol)
-
-  test "URI rewind covers rows above the change when a block comment opener trims them":
-    # Regression: the previous `-3` heuristic missed the MultiLineKinds
-    # rewind — a `/*` opener above the edit trimmed segments from the
-    # opener onward, but the URI scan resumed at `lastChangedLines - 3`,
-    # skipping the URI inside the comment.
-    var buf = newTextBuffer()
-    let path = getTempDir() / "moe_test_uri_multiline_rewind.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 5:
-      content.add("let value" & $i & " = " & $i & ";\n")
-    content.add("/* opener\n")
-    for i in 6 ..< 50:
-      content.add(" * padding " & $i & "\n")
-    content.add(" * see https://example.com/api\n")
-    for i in 51 ..< 150:
-      content.add(" * padding " & $i & "\n")
-    content.add(" */\n")
-    for i in 151 ..< 200:
-      content.add("let value" & $i & " = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-    while buf.continueInitialHighlight():
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    let uriCol = " * see ".len
-    check Underline in buf.highlight.getSegmentModifiers(50, uriCol)
-
-    # Edit line 100 (inside the comment): reparseStart rewinds to the `/*`
-    # opener, trimming the URI's segment. Re-parse completes in one call
-    # (fits in the default budget); the completed-branch URI rewind must
-    # reach past the URI so `continueUriScan` re-underlines it.
-    discard buf.replaceLine(100, " * padding 100 edited")
-    check buf.updateHighlight(1000) == false
-    check buf.incrementalHighlight.pendingReparse == nil
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    check Underline in buf.highlight.getSegmentModifiers(50, uriCol)
-
-  test "URI scan clamps to the re-parse frontier while in flight":
-    # The scan must not run past the re-parse frontier: the trimmed rows
-    # beyond it have no segments yet, and scanning past them would
-    # permanently skip their underlines.
-    var buf = newTextBuffer()
-    let path = getTempDir() / "moe_test_budgeted_uri_clamp.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 1500:
-      if i == 100:
-        content.add("let x = 1; // see https://example.com/api\n")
-      else:
-        content.add("let value" & $i & " = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-    while buf.continueInitialHighlight():
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-
-    discard buf.beginTransaction()
-    discard buf.insert(0, "let inserted = 1;")
-    discard buf.commitTransaction()
-
-    check buf.updateHighlight(100)
-    check buf.incrementalHighlight.pendingReparse != nil
-    discard buf.continueUriScan()
-    # Clamped to the frontier: without it the scan would reach row 999 while
-    # the re-parse has produced only rows up to 99.
-    check buf.uriScanParsedUpTo <= buf.incrementalHighlight.pendingReparse.reparseEnd
-    while buf.continueIncrementalHighlight(100):
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    let uriCol = "let x = 1; // see ".len
-    check Underline in buf.highlight.getSegmentModifiers(101, uriCol)
-
-  test "URI scan covers flight rows beyond a stalled initial-load frontier":
-    # Regression: while a re-parse is in flight, the scan's early exit used
-    # the STALE initial-load frontier (`parsedUpTo`), so rows the flight
-    # re-parsed past it got no underlines until completion. The flight's
-    # frontier (`reparseEnd`) must govern: rows up to it have fresh segments
-    # and must be scanned immediately.
-    var buf = newTextBuffer()
-    let path = getTempDir() / "moe_test_uri_stalled_load.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 3000:
-      if i == 2000:
-        content.add("let x = 1; // see https://example.com/api\n")
-      else:
-        content.add("let value" & $i & " = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-    # Advance the initial load by one chunk only: the frontier stalls below
-    # the URI row (2000) while the URI sits beyond it.
-    discard buf.continueInitialHighlight()
-    let loadFrontier = buf.incrementalHighlight.parsedUpTo
-    check loadFrontier < 2000
-    check loadFrontier < buf.len - 1
-    discard buf.continueUriScan()
-    check buf.uriScanParsedUpTo == loadFrontier
-
-    # Line-count change above the URI: the flight re-parses past the stale
-    # load frontier and reparseStart <= parsedUpTo + 1, so the flight covers
-    # the whole unparsed tail.
-    discard buf.beginTransaction()
-    discard buf.insert(500, "let inserted = 1;")
-    discard buf.commitTransaction()
-    check buf.updateHighlight(100)
-    check buf.incrementalHighlight.pendingReparse != nil
-
-    # Drive the flight past the URI row, then let the scan catch up: it must
-    # pass the stale load frontier up to the flight's frontier and underline
-    # the URI while the flight is still in flight. `continueUriScan` returns
-    # whether URIs were applied, not whether work remains, so drive by the
-    # pointer.
-    while buf.incrementalHighlight.pendingReparse.reparseEnd < 2100:
-      discard buf.continueIncrementalHighlight(100)
-    check buf.incrementalHighlight.pendingReparse != nil
-    while buf.uriScanParsedUpTo < buf.incrementalHighlight.pendingReparse.reparseEnd:
-      discard buf.continueUriScan()
-    let uriCol = "let x = 1; // see ".len
-    check Underline in buf.highlight.getSegmentModifiers(2001, uriCol)
-    check buf.uriScanParsedUpTo > loadFrontier
-
   test "a line-count change mid-re-parse keeps the EOF re-parse after undo":
     # Regression: a restart discarded the flight's original tail, leaving
     # rows beyond its start without segments. The undo changes the line
@@ -1746,166 +1584,6 @@ suite "Highlight - budgeted incremental update":
       for col in 0 ..< buffer[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
 
-  test "a content-version bump without needsUpdate mid-re-parse rewinds the URI scan":
-    # Regression: a restart driven from continueIncrementalHighlight (the
-    # undo/redo roll-forward paths bump contentVersion without
-    # markLineChanged) re-creates segments without URI underlines, but the
-    # continuation path had no URI-scan rewind — the rows between the new
-    # reparseStart and the old scan position were never re-scanned.
-    var buf = newTextBuffer()
-    let path = getTempDir() / "moe_test_budgeted_uri_restart.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 1500:
-      if i == 100:
-        content.add("let x = 1; // see https://example.com/api\n")
-      else:
-        content.add("let value" & $i & " = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-    while buf.continueInitialHighlight():
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    let uriCol = "let x = 1; // see ".len
-    check Underline in buf.highlight.getSegmentModifiers(100, uriCol)
-
-    discard buf.beginTransaction()
-    discard buf.insert(0, "let inserted = 1;")
-    discard buf.commitTransaction()
-    check buf.updateHighlight(100)
-    check buf.incrementalHighlight.pendingReparse != nil
-    # Let the flight and the URI scan advance past the re-parse start.
-    for _ in 0 ..< 4:
-      discard buf.continueIncrementalHighlight(100)
-      discard buf.continueUriScan()
-    check buf.uriScanParsedUpTo > buf.incrementalHighlight.pendingReparse.reparseStart
-
-    # Simulate an undo/redo backend failure: contentVersion advances without
-    # highlightNeedsUpdate, so the next continuation call restarts the
-    # re-parse and must rewind the URI scan to the new reparseStart.
-    buf.advanceContentVersion()
-    discard buf.continueIncrementalHighlight(100)
-    check buf.incrementalHighlight.pendingReparse != nil
-    check buf.uriScanParsedUpTo ==
-      buf.incrementalHighlight.pendingReparse.reparseStart - 1
-
-    while buf.continueIncrementalHighlight(100):
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    # The underline is re-covered (insert moved the URI row from 100 to 101).
-    check Underline in buf.highlight.getSegmentModifiers(101, uriCol)
-
-  test "a restart completing in one continuation call rewinds the URI scan":
-    # Regression: the continuation path's completed-restart rewind (the
-    # `newPr == nil` branch of continueIncrementalHighlight) had no test.
-    # Without the rewind the rows between the new reparseStart and the old
-    # scan position keep underline-less segments that are never re-scanned.
-    var buf = newTextBuffer()
-    let path = getTempDir() / "moe_test_budgeted_uri_rewind_cont.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 900:
-      if i == 1:
-        content.add("let x = 1; // see https://example.com/api\n")
-      else:
-        content.add("let value" & $i & " = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-    while buf.continueInitialHighlight():
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-
-    # A flight at the top stays in flight with a small budget.
-    discard buf.beginTransaction()
-    discard buf.insert(0, "let inserted = 1;")
-    discard buf.commitTransaction()
-    check buf.updateHighlight(50)
-    check buf.incrementalHighlight.pendingReparse != nil
-    # Advance the flight and the URI scan past the re-parse start.
-    for _ in 0 ..< 4:
-      discard buf.continueIncrementalHighlight(50)
-      discard buf.continueUriScan()
-    check buf.uriScanParsedUpTo > buf.incrementalHighlight.pendingReparse.reparseStart
-
-    # A second edit below the flight's frontier restarts it from the
-    # discarded flight's start (rows between the old frontier and the new
-    # anchor have no segments); the remaining distance is small enough that
-    # a large budget completes the restart within this one continuation
-    # call, exercising the `newPr == nil` rewind branch.
-    discard buf.beginTransaction()
-    discard buf.insert(600, "let second = 1;")
-    discard buf.commitTransaction()
-    check not buf.continueIncrementalHighlight(1000)
-    check buf.incrementalHighlight.pendingReparse == nil
-    # Rewound past the new re-parse start (the restart re-parsed from row 0).
-    check buf.uriScanParsedUpTo == -1
-
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    # The underline is re-covered (the URI row moved from 1 to 2 with the
-    # first insert).
-    let uriCol = "let x = 1; // see ".len
-    check Underline in buf.highlight.getSegmentModifiers(2, uriCol)
-
-  test "a restart that completes in one call rewinds the URI scan past the inherited start":
-    # Regression: a restart whose reparseStart is overridden to the discarded
-    # flight's start re-parses rows above lastChangedLines - 3; the
-    # completed-re-parse rewind must cover them or those rows' new segments
-    # keep no URI underlines.
-    var buf = newTextBuffer()
-    let path = getTempDir() / "moe_test_budgeted_uri_rewind.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 250:
-      if i == 1:
-        content.add("let x = 1; // see https://example.com/api\n")
-      else:
-        content.add("let value" & $i & " = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-    while buf.continueInitialHighlight():
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    let uriCol = "let x = 1; // see ".len
-    check Underline in buf.highlight.getSegmentModifiers(1, uriCol)
-
-    # Edit at the top: the re-parse (from row 0) stays in flight and the
-    # clamped URI scan re-covers the re-parsed rows as the frontier grows.
-    discard buf.beginTransaction()
-    discard buf.insert(0, "let inserted = 1;")
-    discard buf.commitTransaction()
-    check buf.updateHighlight(100)
-    check buf.incrementalHighlight.pendingReparse != nil
-    discard buf.continueIncrementalHighlight(100)
-    discard buf.continueUriScan()
-    check buf.uriScanParsedUpTo > 2
-    # A second edit lands mid-flight with a reparseStart (3) below the new
-    # anchor but above the discarded flight's start (0): the restart rewinds
-    # the re-parse to row 0 and completes within this call. The completion
-    # rewind must go back to the inherited start, not just lastChangedLines -
-    # 3 (row 2), or the URI row's fresh segment keeps no underline.
-    discard buf.beginTransaction()
-    discard buf.insert(5, "let second = 1;")
-    discard buf.commitTransaction()
-    check not buf.updateHighlight(1000)
-    check buf.incrementalHighlight.pendingReparse == nil
-    # The edits grew the buffer past the initial load's stale frontier
-    # (parsedUpTo), and continueUriScan refuses to pass it, so resume the
-    # load before the scan can re-cover the re-parsed rows.
-    while buf.continueInitialHighlight():
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    # The URI row moved from 1 to 2 (inserts at rows 0 and 5).
-    check Underline in buf.highlight.getSegmentModifiers(2, uriCol)
-
   test "a reserved-word change mid-re-parse restarts with the new words":
     # setReservedWords touches neither the anchor, the line count nor the
     # content version, so only the reserved-words check can detect it;
@@ -1986,13 +1664,6 @@ suite "Highlight - budgeted incremental update":
     for i in 0 ..< buf.len:
       lines[i] = buf.getLine(i)
     checkMatchesFullParse(lines, buf.highlight.colorSegments, SourceLanguage.langRust)
-    # URI underlines survive the flight + resume interplay (the URI row moved
-    # from 2000 to 2001 with the insert). Drive the scan per frame: it returns
-    # whether a chunk applied URIs, not whether work remains.
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    let uriCol = "let x = 1; // see ".len
-    check Underline in buf.highlight.getSegmentModifiers(2001, uriCol)
 
   test "an unclosed Nim block comment spans chunk boundaries":
     # Regression (found by the budgeted fuzz): the Nim tokenizer never set a
@@ -3029,63 +2700,6 @@ suite "Highlight - diagnostics survive progressive load":
       discard
     check buf.highlight.getSegmentModifiers(500, 2) == {StyleModifier.Undercurl}
 
-  test "clearing diagnostics leaves no residual styling after URI scan rewind":
-    # End-to-end: rewinding continueUriScan, then clearing diagnostics and
-    # editing far from the affected line, must leave the old diagnostic line
-    # with no undercurl and no syntaxCheck* colour.
-    var buf = newTextBuffer()
-
-    let path = getTempDir() / "test_uri_scan_diag_no_bake.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 500:
-      if i == 250:
-        content.add("// see https://example.com/api\n")
-      else:
-        content.add("let x = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-
-    while buf.continueInitialHighlight():
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-
-    buf.setDiagnostics(
-      dsrcLsp,
-      @[
-        BufferDiagnostic(
-          startLine: 100,
-          startCol: 0,
-          endLine: 100,
-          endCol: 5,
-          severity: bdsError,
-          message: "test error",
-        )
-      ],
-    )
-    buf.diagnosticsDirty = true
-    buf.highlightNeedsUpdate = true
-    buf.updateHighlight()
-    check StyleModifier.Undercurl in buf.highlight.getSegmentModifiers(100, 2)
-
-    buf.uriScanParsedUpTo = -1
-    discard buf.continueUriScan()
-
-    buf.setDiagnostics(dsrcLsp, @[])
-    buf.diagnosticsDirty = true
-
-    buf.lastChangedLines = 490
-    buf.highlightNeedsUpdate = true
-    buf.updateHighlight()
-
-    check StyleModifier.Undercurl notin buf.highlight.getSegmentModifiers(100, 2)
-    check buf.highlight.getColorPair(100, 2) notin {
-      EditorColorPairIndex.syntaxCheckErr, EditorColorPairIndex.syntaxCheckWarn,
-      EditorColorPairIndex.syntaxCheckInfo, EditorColorPairIndex.syntaxCheckHint,
-    }
-
 suite "Highlight - JS/TS String Line Bounding":
   # JS/TS string tokens (and the isKey lookahead) must not cross a newline:
   # a line's tokens may depend only on the tokenizer state at the line's
@@ -3438,6 +3052,38 @@ suite "Highlight - getSegmentModifiers":
     let h = Highlight(colorSegments: @[])
     check h.getSegmentModifiers(0, 0) == {}
 
+  test "syntaxExtra joins the syntax layer, also with no segment there":
+    let h = Highlight(colorSegments: @[])
+    check h.getSegmentModifiers(0, 0, {Underline}) == {Underline}
+
+  test "a diagnostic replaces syntaxExtra with the syntax layer":
+    var h = Highlight(colorSegments: @[])
+    h.diagnosticOverlay[0] = DiagnosticOverlayLine(
+      cells: @[
+        DiagnosticOverlayCell(
+          firstColumn: 0,
+          lastColumn: 5,
+          color: EditorColorPairIndex.syntaxCheckErr,
+          style: Style(modifiers: {Undercurl}),
+        )
+      ]
+    )
+    check h.getSegmentModifiers(0, 2, {Underline}) == {Undercurl}
+
+  test "a semantic token keeps syntaxExtra":
+    var h = Highlight(colorSegments: @[])
+    h.semantic[0] = SemanticOverlayLine(
+      tokens: @[
+        SemanticOverlayToken(
+          firstColumn: 0,
+          length: 5,
+          color: EditorColorPairIndex.functionName,
+          style: Style(modifiers: {Bold}),
+        )
+      ]
+    )
+    check h.getSegmentModifiers(0, 2, {Underline}) == {Underline, Bold}
+
   test "Position outside range returns empty modifiers":
     let h = Highlight(
       colorSegments: @[
@@ -3482,268 +3128,6 @@ suite "Highlight - getSegmentModifiers":
       ]
     )
     check h.getSegmentModifiers(0, 3) == {}
-
-suite "Highlight - addModifier":
-  test "Fully contained segment":
-    # Segment covers 0..10, modifier range covers 0..10
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 10,
-          color: EditorColorPairIndex.default,
-          style: defaultStyle,
-        )
-      ]
-    )
-    h.addModifier(0, 0, 0, 10, StyleModifier.Underline)
-    check h.colorSegments.len == 1
-    check Underline in h.colorSegments[0].style.modifiers
-
-  test "No overlap":
-    # Segment on row 0, modifier on row 1
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 10,
-          color: EditorColorPairIndex.default,
-          style: defaultStyle,
-        )
-      ]
-    )
-    h.addModifier(1, 0, 1, 5, StyleModifier.Underline)
-    check h.colorSegments.len == 1
-    check Underline notin h.colorSegments[0].style.modifiers
-
-  test "Split segment - modifier in the middle":
-    # Segment covers cols 0..20, modifier covers cols 5..10
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 20,
-          color: EditorColorPairIndex.default,
-          style: defaultStyle,
-        )
-      ]
-    )
-    h.addModifier(0, 5, 0, 10, StyleModifier.Underline)
-    check h.colorSegments.len == 3
-    # Before: 0..4, no modifier
-    check h.colorSegments[0].firstColumn == 0
-    check h.colorSegments[0].lastColumn == 4
-    check Underline notin h.colorSegments[0].style.modifiers
-    # Middle: 5..10, with modifier
-    check h.colorSegments[1].firstColumn == 5
-    check h.colorSegments[1].lastColumn == 10
-    check Underline in h.colorSegments[1].style.modifiers
-    # After: 11..20, no modifier
-    check h.colorSegments[2].firstColumn == 11
-    check h.colorSegments[2].lastColumn == 20
-    check Underline notin h.colorSegments[2].style.modifiers
-
-  test "Split segment - modifier at the start":
-    # Segment covers cols 0..20, modifier covers cols 0..5
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 20,
-          color: EditorColorPairIndex.default,
-          style: defaultStyle,
-        )
-      ]
-    )
-    h.addModifier(0, 0, 0, 5, StyleModifier.Underline)
-    check h.colorSegments.len == 2
-    # Modified: 0..5
-    check h.colorSegments[0].firstColumn == 0
-    check h.colorSegments[0].lastColumn == 5
-    check Underline in h.colorSegments[0].style.modifiers
-    # After: 6..20
-    check h.colorSegments[1].firstColumn == 6
-    check h.colorSegments[1].lastColumn == 20
-    check Underline notin h.colorSegments[1].style.modifiers
-
-  test "Split segment - modifier at the end":
-    # Segment covers cols 0..20, modifier covers cols 15..20
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 20,
-          color: EditorColorPairIndex.default,
-          style: defaultStyle,
-        )
-      ]
-    )
-    h.addModifier(0, 15, 0, 20, StyleModifier.Underline)
-    check h.colorSegments.len == 2
-    # Before: 0..14
-    check h.colorSegments[0].firstColumn == 0
-    check h.colorSegments[0].lastColumn == 14
-    check Underline notin h.colorSegments[0].style.modifiers
-    # Modified: 15..20
-    check h.colorSegments[1].firstColumn == 15
-    check h.colorSegments[1].lastColumn == 20
-    check Underline in h.colorSegments[1].style.modifiers
-
-  test "Multiple segments - modifier spans partial overlap":
-    # Two segments: cols 0..9 and 10..19, modifier covers 5..14
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 9,
-          color: EditorColorPairIndex.default,
-          style: defaultStyle,
-        ),
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 10,
-          lastRow: 0,
-          lastColumn: 19,
-          color: EditorColorPairIndex.default,
-          style: defaultStyle,
-        ),
-      ]
-    )
-    h.addModifier(0, 5, 0, 14, StyleModifier.Underline)
-    check h.colorSegments.len == 4
-    # seg0 before: 0..4
-    check h.colorSegments[0].firstColumn == 0
-    check h.colorSegments[0].lastColumn == 4
-    check Underline notin h.colorSegments[0].style.modifiers
-    # seg0 overlap: 5..9
-    check h.colorSegments[1].firstColumn == 5
-    check h.colorSegments[1].lastColumn == 9
-    check Underline in h.colorSegments[1].style.modifiers
-    # seg1 overlap: 10..14
-    check h.colorSegments[2].firstColumn == 10
-    check h.colorSegments[2].lastColumn == 14
-    check Underline in h.colorSegments[2].style.modifiers
-    # seg1 after: 15..19
-    check h.colorSegments[3].firstColumn == 15
-    check h.colorSegments[3].lastColumn == 19
-    check Underline notin h.colorSegments[3].style.modifiers
-
-  test "Preserves existing modifiers":
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 10,
-          color: EditorColorPairIndex.default,
-          style: Style(modifiers: {StyleModifier.Bold}),
-        )
-      ]
-    )
-    h.addModifier(0, 0, 0, 10, StyleModifier.Underline)
-    check h.colorSegments.len == 1
-    check Bold in h.colorSegments[0].style.modifiers
-    check Underline in h.colorSegments[0].style.modifiers
-
-  test "Preserves color on split":
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 20,
-          color: EditorColorPairIndex.keyword,
-          style: defaultStyle,
-        )
-      ]
-    )
-    h.addModifier(0, 5, 0, 10, StyleModifier.Underline)
-    check h.colorSegments.len == 3
-    for seg in h.colorSegments:
-      check seg.color == EditorColorPairIndex.keyword
-
-  test "Multi-row segment - modifier starts at column 0 on a later row":
-    # Segment spans rows 0..1, modifier range starts at (1, 0).
-    # The before-segment should end at row 0 without using high(int).
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 5,
-          lastRow: 1,
-          lastColumn: 15,
-          color: EditorColorPairIndex.default,
-          style: defaultStyle,
-        )
-      ]
-    )
-    h.addModifier(1, 0, 1, 10, StyleModifier.Underline)
-    check h.colorSegments.len == 3
-    # Before: row 0 col 5 .. row 0 (no modifier)
-    check h.colorSegments[0].firstRow == 0
-    check h.colorSegments[0].firstColumn == 5
-    check h.colorSegments[0].lastRow == 0
-    check h.colorSegments[0].lastColumn <= 15 # Must not be high(int)
-    check Underline notin h.colorSegments[0].style.modifiers
-    # Overlap: (1,0)..(1,10) with modifier
-    check h.colorSegments[1].firstRow == 1
-    check h.colorSegments[1].firstColumn == 0
-    check h.colorSegments[1].lastRow == 1
-    check h.colorSegments[1].lastColumn == 10
-    check Underline in h.colorSegments[1].style.modifiers
-    # After: (1,11)..(1,15) no modifier
-    check h.colorSegments[2].firstRow == 1
-    check h.colorSegments[2].firstColumn == 11
-    check h.colorSegments[2].lastRow == 1
-    check h.colorSegments[2].lastColumn == 15
-    check Underline notin h.colorSegments[2].style.modifiers
-
-  test "Multi-row segment - modifier covers middle rows":
-    # Segment spans rows 0..2, modifier covers row 1 entirely.
-    var h = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 3,
-          lastRow: 2,
-          lastColumn: 8,
-          color: EditorColorPairIndex.default,
-          style: defaultStyle,
-        )
-      ]
-    )
-    h.addModifier(1, 0, 1, 20, StyleModifier.Underline)
-    check h.colorSegments.len == 3
-    # Before: row 0
-    check h.colorSegments[0].firstRow == 0
-    check h.colorSegments[0].lastRow == 0
-    check Underline notin h.colorSegments[0].style.modifiers
-    # Overlap: row 1
-    check h.colorSegments[1].firstRow == 1
-    check h.colorSegments[1].firstColumn == 0
-    check h.colorSegments[1].lastRow == 1
-    check h.colorSegments[1].lastColumn == 20
-    check Underline in h.colorSegments[1].style.modifiers
-    # After: row 1 col 21 .. row 2 col 8
-    check h.colorSegments[2].firstRow == 1
-    check h.colorSegments[2].firstColumn == 21
-    check h.colorSegments[2].lastRow == 2
-    check h.colorSegments[2].lastColumn == 8
-    check Underline notin h.colorSegments[2].style.modifiers
 
 suite "Highlight - overwrite":
   test "Empty highlight is unchanged":
@@ -4094,190 +3478,6 @@ suite "Highlight - Progressive Initial Highlighting":
             firstMismatch = (row: row, col: col)
             break compare
     check firstMismatch == (row: -1, col: -1)
-
-suite "Highlight - URI Underline on Load":
-  test "loadFile applies URI underlines in initial chunk":
-    var buf = newTextBuffer()
-
-    let path = getTempDir() / "test_uri_highlight_initial.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 10:
-      if i == 5:
-        content.add("// see https://example.com/docs\n")
-      else:
-        content.add("let v" & $i & " = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-
-    # Line 5 contains a URI; it should have Underline modifier
-    let uriCol = "// see ".len
-    let mods = buf.highlight.getSegmentModifiers(5, uriCol)
-    check Underline in mods
-
-  test "loadFile applies URI underlines for plain text":
-    var buf = newTextBuffer()
-
-    let path = getTempDir() / "test_uri_highlight_plain.txt"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 10:
-      if i == 3:
-        content.add("visit https://example.com/page\n")
-      else:
-        content.add("plain line " & $i & "\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-
-    let uriCol = "visit ".len
-    let mods = buf.highlight.getSegmentModifiers(3, uriCol)
-    check Underline in mods
-
-  test "continueUriScan applies URI underlines in later chunks":
-    var buf = newTextBuffer()
-
-    # Create file with URI beyond line 1000
-    let path = getTempDir() / "test_uri_highlight_progressive.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 1500:
-      if i == 1200:
-        content.add("// see https://example.com/api\n")
-      else:
-        content.add("let v" & $i & " = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-
-    # After loadFile, only first 1000 lines are scanned for URIs
-    check buf.uriScanParsedUpTo == 999
-
-    # Continue syntax highlighting first (creates color segments for lines 1000+)
-    check buf.continueInitialHighlight() == true
-
-    # Continue URI scanning - should cover line 1200 and apply URI underline
-    check buf.continueUriScan() == true
-    check buf.uriScanParsedUpTo == 1499
-
-    let uriCol = "// see ".len
-    let mods = buf.highlight.getSegmentModifiers(1200, uriCol)
-    check Underline in mods
-
-  test "continueUriScan applies URI underlines for plain text beyond 1000 lines":
-    var buf = newTextBuffer()
-
-    # Create plain text file with URI beyond line 1000
-    let path = getTempDir() / "test_uri_highlight_plain_progressive.txt"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 1500:
-      if i == 1200:
-        content.add("visit https://example.com/page\n")
-      else:
-        content.add("plain line " & $i & "\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-
-    # After loadFile, only first 1000 lines are scanned for URIs
-    check buf.uriScanParsedUpTo == 999
-    check buf.incrementalHighlight == nil # no syntax highlight for plain text
-
-    # Continue URI scanning - should cover line 1200
-    check buf.continueUriScan() == true
-    check buf.uriScanParsedUpTo == 1499
-
-    let uriCol = "visit ".len
-    let mods = buf.highlight.getSegmentModifiers(1200, uriCol)
-    check Underline in mods
-
-  test "URI underlines survive incremental updateHighlight outside re-parse region":
-    var buf = newTextBuffer()
-
-    # Create file with URIs at line 5 and line 1500
-    let path = getTempDir() / "test_uri_restore_before_edit.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 2000:
-      if i == 5:
-        content.add("// https://early.example.com\n")
-      elif i == 1500:
-        content.add("// https://late.example.com\n")
-      else:
-        content.add("let x = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-
-    # Complete initial highlighting and URI scan
-    while buf.continueInitialHighlight():
-      discard
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-
-    # Verify both URIs have underlines
-    let earlyCol = "// ".len
-    check Underline in buf.highlight.getSegmentModifiers(5, earlyCol)
-    check Underline in buf.highlight.getSegmentModifiers(1500, earlyCol)
-
-    # Edit at line 500 — triggers incremental update around that line
-    buf.lastChangedLines = 500
-    buf.highlightNeedsUpdate = true
-    buf.updateHighlight()
-
-    # URI modifiers outside the incremental re-parse region must survive —
-    # the re-parse keeps the segments outside it, not rebuilt from scratch on
-    # every edit.
-    check Underline in buf.highlight.getSegmentModifiers(5, earlyCol)
-    check Underline in buf.highlight.getSegmentModifiers(1500, earlyCol)
-
-    # Progressive scan should not need to rewind to the start of the file;
-    # only the region around the change point is re-scanned.
-    check buf.uriScanParsedUpTo >= 400
-
-  test "continueUriScan returns false when no URIs found in chunk":
-    var buf = newTextBuffer()
-
-    # Create file with no URIs, 1500 lines
-    let path = getTempDir() / "test_uri_scan_no_uri.rs"
-    defer:
-      removeFile(path)
-    var content = ""
-    for i in 0 ..< 1500:
-      content.add("let x = " & $i & ";\n")
-    writeFile(path, content)
-    discard buf.loadFile(path)
-
-    # Complete initial highlighting
-    while buf.continueInitialHighlight():
-      discard
-
-    # URI scan should return false (no URIs found despite scanning)
-    check buf.continueUriScan() == false
-
-  test "updateHighlight applies URI underlines after edit":
-    var buf = newTextBuffer()
-
-    let path = getTempDir() / "test_uri_highlight_update.rs"
-    defer:
-      removeFile(path)
-    var content = "let x = 1;\nlet y = 2;\nlet z = 3;\n"
-    writeFile(path, content)
-    discard buf.loadFile(path)
-
-    # Edit line 1 to contain a URI
-    discard buf.beginTransaction()
-    discard buf.deleteLine(1)
-    discard buf.insert(1, "// https://example.com")
-    discard buf.commitTransaction()
-
-    buf.updateHighlight()
-
-    let uriCol = "// ".len
-    let mods = buf.highlight.getSegmentModifiers(1, uriCol)
-    check Underline in mods
 
 suite "Highlight - Markdown Incremental":
   # Regression coverage for multi-line Markdown constructs whose highlighting
@@ -6586,14 +5786,11 @@ suite "Highlight - a NUL in a line":
     check capped == "a b"
 
 suite "Highlight - a missing highlight takes the parse cache with it":
-  proc loadRust(buf: TextBuffer, name: string, n: int, uriRow = -1): string =
+  proc loadRust(buf: TextBuffer, name: string, n: int): string =
     result = getTempDir() / name
     var content = ""
     for i in 0 ..< n:
-      if i == uriRow:
-        content.add("// see https://example.com/api\n")
-      else:
-        content.add("let v" & $i & " = " & $i & ";\n")
+      content.add("let v" & $i & " = " & $i & ";\n")
     writeFile(result, content)
     discard buf.loadFile(result)
 
@@ -6602,7 +5799,6 @@ suite "Highlight - a missing highlight takes the parse cache with it":
     check buf.incrementalHighlight == nil
     check buf.highlightNeedsUpdate
     buf.updateHighlight()
-    check buf.uriScanParsedUpTo == -1
     var lines = newSeq[string](buf.len)
     for i in 0 ..< buf.len:
       lines[i] = buf.getLine(i)
@@ -6635,22 +5831,6 @@ suite "Highlight - a missing highlight takes the parse cache with it":
     check not buf.continueInitialHighlight()
     buf.checkRebuilds()
 
-  test "continueUriScan drops the cache and the scan re-covers the rebuild":
-    var buf = newTextBuffer()
-    let path = buf.loadRust("moe_test_nil_highlight_uri.rs", 1500, uriRow = 1200)
-    defer:
-      removeFile(path)
-    while buf.continueInitialHighlight():
-      discard
-    check buf.uriScanParsedUpTo < 1200
-
-    buf.highlight = nil
-    discard buf.continueUriScan()
-    buf.checkRebuilds()
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-    check Underline in buf.highlight.getSegmentModifiers(1200, "// see ".len)
-
   test "a utility buffer is left alone":
     var buf = newTextBuffer()
     buf.isUtilityBuffer = true
@@ -6658,7 +5838,6 @@ suite "Highlight - a missing highlight takes the parse cache with it":
     buf.highlightNeedsUpdate = false
     check not buf.continueIncrementalHighlight()
     check not buf.continueInitialHighlight()
-    check not buf.continueUriScan()
     check buf.highlight == nil
     check not buf.highlightNeedsUpdate
 
@@ -6692,14 +5871,11 @@ suite "Highlight - segments change in place":
   proc segmentsAddress(buf: TextBuffer): int =
     cast[int](buf.highlight.colorSegments[0].addr)
 
-  proc loadRust(buf: TextBuffer, name: string, n: int, uriRow = -1): string =
+  proc loadRust(buf: TextBuffer, name: string, n: int): string =
     result = getTempDir() / name
     var content = ""
     for i in 0 ..< n:
-      if i == uriRow:
-        content.add("// see https://example.com/api\n")
-      else:
-        content.add("let v" & $i & " = " & $i & ";\n")
+      content.add("let v" & $i & " = " & $i & ";\n")
     writeFile(result, content)
     discard buf.loadFile(result)
 
@@ -6770,21 +5946,6 @@ suite "Highlight - segments change in place":
     check buf.segmentsAddress == before
     check matchesFullParse(buf.bufferLines, buf.highlight.colorSegments)
 
-  test "URI underlines move no segments to new storage":
-    var buf = newTextBuffer()
-    let path = buf.loadRust("moe_test_segments_uri.rs", 2500, uriRow = 2000)
-    defer:
-      removeFile(path)
-    while buf.continueInitialHighlight():
-      discard
-    let before = buf.segmentsAddress
-
-    while buf.uriScanParsedUpTo < buf.len - 1:
-      discard buf.continueUriScan()
-
-    check buf.segmentsAddress == before
-    check Underline in buf.highlight.getSegmentModifiers(2000, "// see ".len)
-
   proc rustLines(n: int): seq[string] =
     for i in 0 ..< n:
       result.add("let value" & $i & " = " & $i & ";")
@@ -6835,7 +5996,6 @@ suite "Highlight - segments change in place":
     )
     :
       discard
-    check ih.lastReparseStart <= 10
     check matchesFullParse(lines, segs)
 
 suite "Highlight - shell heredoc at a chunk boundary":

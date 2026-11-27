@@ -651,7 +651,6 @@ type
     when defined(moe.matter) or defined(features.moe.matter):
       matterGrammarSet*: MatterGrammarSet
         ## Explicit grammar collection shared with other buffers in the editor.
-    uriScanParsedUpTo*: int # Last line scanned for URIs during progressive init
 
     # Change list (tracks positions where changes were made, like Vim's changelist)
     changeList*: seq[BufferPosition]

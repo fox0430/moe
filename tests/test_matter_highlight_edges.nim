@@ -5,7 +5,7 @@ import ../src/moepkg/syntax/tokenizer
 import pkg/celina
 
 when defined(moe.matter) or defined(features.moe.matter):
-  import std/[sequtils, strutils, tables]
+  import std/[sequtils, tables]
   import ../src/moepkg/unicode_utils
   import matter_test_grammars
 
@@ -72,7 +72,7 @@ when defined(moe.matter) or defined(features.moe.matter):
       check segments.allIt(it.color == EditorColorPairIndex.default)
       check segments.len == 4
 
-    test "backend reload preserves semantic diagnostic and URI overlays":
+    test "backend reload preserves semantic and diagnostic overlays":
       let text = "let x = 1 # https://example.com\nlet y = 2"
       let buffer = newTextBuffer(text)
       buffer.language = langNim
@@ -97,7 +97,6 @@ when defined(moe.matter) or defined(features.moe.matter):
         tokens: @[SemanticOverlayToken(firstColumn: 4, length: 1, color: functionName)]
       )
       original.semanticContentVersion = buffer.contentVersion
-      let uriColumn = text.find("https")
       for backend in [hbBuiltin, hbMatter]:
         var config = newEditorConfig()
         config.highlight.backend = backend
@@ -108,7 +107,6 @@ when defined(moe.matter) or defined(features.moe.matter):
         check buffer.highlight.semanticContentVersion == buffer.contentVersion
         check buffer.highlight.getColorPair(0, 4) == functionName
         check buffer.highlight.getColorPair(1, 0) == syntaxCheckErr
-        check Underline in buffer.highlight.getSegmentModifiers(0, uriColumn)
         check Undercurl in buffer.highlight.getSegmentModifiers(1, 0)
 else:
   suite "Matter-disabled configuration":
