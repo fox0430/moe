@@ -675,8 +675,9 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
         themeFileColors = none(ThemeColors)
         themeSource = ThemeSource().withFallbackLinks(themeColors)
         return
-      let saveResult =
-        saveThemeToToml(DefaultColors, config.theme.path, builtinThemeSource(DefaultColors))
+      let saveResult = saveThemeToToml(
+        DefaultColors, config.theme.path, builtinThemeSource(DefaultColors)
+      )
       if saveResult.isErr:
         vr.addLoadFailure("Theme.path", config.theme.path, saveResult.error)
         initDefaultTheme()

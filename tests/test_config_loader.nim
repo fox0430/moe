@@ -2428,8 +2428,7 @@ statusLineNormalMode = { fg = "#111111", bg = "#222222" }
     colors.noteThemeColorEdited(
       source, EditorColorPairIndex.popupWinCurrentLine, isFg = false
     )
-    check colors[EditorColorPairIndex.pickerSelection].background.rgb ==
-      rgb("#ff0000")
+    check colors[EditorColorPairIndex.pickerSelection].background.rgb == rgb("#ff0000")
 
   test "Markdown keys a theme leaves out take the keys they replace":
     inc testFileCounter
