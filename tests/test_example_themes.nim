@@ -114,8 +114,7 @@ proc previewHides(colors: ThemeColors): seq[EditorColorPairIndex] =
   ## file would draw them invisible.
   let bg = colors[EditorColorPairIndex.pickerPreview].background.rgb
   for index in EditorColorPairIndex.keyword .. EditorColorPairIndex.property:
-    if index != EditorColorPairIndex.whitespace and
-        colors[index].foreground.rgb == bg:
+    if index != EditorColorPairIndex.whitespace and colors[index].foreground.rgb == bg:
       result.add index
 
 suite "picker preview background":
