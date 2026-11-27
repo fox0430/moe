@@ -671,8 +671,7 @@ const
     EditorColorPairIndex.pickerMatch: "Picker: characters the query matched",
     EditorColorPairIndex.pickerMatchSel:
       "Picker: characters the query matched in the selected item",
-    EditorColorPairIndex.pickerDetail:
-      "Picker: prompt mark, item count and notes",
+    EditorColorPairIndex.pickerDetail: "Picker: prompt mark, item count and notes",
     EditorColorPairIndex.pickerPreview: "Picker: preview background",
     EditorColorPairIndex.notificationPopupInfo: "Notification popup: info body",
     EditorColorPairIndex.notificationPopupInfoBorder: "Notification popup: info border",
@@ -835,8 +834,7 @@ proc rgbTo16Color*(r, g, b: int16): uint8 =
 const ColorBgOnlyEntries* = {
   EditorColorPairIndex.currentLineBg, EditorColorPairIndex.currentColumnBg,
   EditorColorPairIndex.pickerPreview,
-}
-  ## Color pairs that only use their background.
+} ## Color pairs that only use their background.
 
 type StatusLineModeColor* = enum
   ## Theme keys that color the status line of every mode. They are not entries

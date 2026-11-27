@@ -87,14 +87,15 @@ proc loadThemeConfig*(
 
 # Standalone theme file loader (the [Colors] table)
 
-const FallbackColors = @[
-  (EditorColorPairIndex.markdownHeading, EditorColorPairIndex.builtin),
-  (EditorColorPairIndex.markdownCode, EditorColorPairIndex.specialVar),
-  (EditorColorPairIndex.markdownLinkUrl, EditorColorPairIndex.specialVar),
-  (EditorColorPairIndex.markdownListMarker, EditorColorPairIndex.operator),
-  (EditorColorPairIndex.markdownFrontmatter, EditorColorPairIndex.preprocessor),
-  (EditorColorPairIndex.file, EditorColorPairIndex.default),
-] & @PickerColorFallbacks
+const FallbackColors =
+  @[
+    (EditorColorPairIndex.markdownHeading, EditorColorPairIndex.builtin),
+    (EditorColorPairIndex.markdownCode, EditorColorPairIndex.specialVar),
+    (EditorColorPairIndex.markdownLinkUrl, EditorColorPairIndex.specialVar),
+    (EditorColorPairIndex.markdownListMarker, EditorColorPairIndex.operator),
+    (EditorColorPairIndex.markdownFrontmatter, EditorColorPairIndex.preprocessor),
+    (EditorColorPairIndex.file, EditorColorPairIndex.default),
+  ] & @PickerColorFallbacks
 
 const LegacyColorKeys = {
   # Old theme keys and the entries they set when the theme has no key for those.
