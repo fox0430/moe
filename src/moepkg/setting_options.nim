@@ -56,6 +56,7 @@ type
     bsoHighlightColorCode
     bsoHighlightGitConflict
     bsoHighlightGitConflictTwoColor
+    bsoHighlightUri
     bsoMultipleStatusLine
     bsoIgnoreCase
     bsoSmartCase
@@ -274,6 +275,13 @@ const SetOptionTable*: seq[SetOptionSpec] = @[
       "Use two-color (ours/theirs) conflict scheme; disable for single-color fallback",
     kind: sokBool,
     boolOption: bsoHighlightGitConflictTwoColor,
+  ),
+  SetOptionSpec(
+    longName: "highlighturi",
+    shortName: "hu",
+    description: "Underline URIs",
+    kind: sokBool,
+    boolOption: bsoHighlightUri,
   ),
   SetOptionSpec(
     longName: "multistatusline",

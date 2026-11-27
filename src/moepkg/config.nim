@@ -153,6 +153,7 @@ proc newEditorConfig*(): EditorConfig =
       colorCodeHighlight: true,
       gitConflict: true,
       gitConflictTwoColor: true,
+      uri: true,
       # Keep in sync with highlight.DefaultMaxHighlightLineLength. Not referenced
       # directly: config.nim must not import the highlight engine (keeps its
       # dependency closure small).

@@ -50,6 +50,7 @@ proc boolOptionValue(e: Editor, option: BoolSettingOption): bool =
   of bsoHighlightColorCode: e.config.highlight.colorCodeHighlight
   of bsoHighlightGitConflict: e.config.highlight.gitConflict
   of bsoHighlightGitConflictTwoColor: e.config.highlight.gitConflictTwoColor
+  of bsoHighlightUri: e.config.highlight.uri
   of bsoMultipleStatusLine: e.config.statusLine.multipleStatusLine
   of bsoIgnoreCase: e.state.ignorecase
   of bsoSmartCase: e.state.smartcase
@@ -107,6 +108,8 @@ proc setBoolOption(e: Editor, option: BoolSettingOption, value: bool) =
     e.config.highlight.gitConflict = value
   of bsoHighlightGitConflictTwoColor:
     e.config.highlight.gitConflictTwoColor = value
+  of bsoHighlightUri:
+    e.config.highlight.uri = value
   of bsoMultipleStatusLine:
     e.config.statusLine.multipleStatusLine = value
   of bsoIgnoreCase:

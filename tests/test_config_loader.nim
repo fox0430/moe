@@ -500,6 +500,15 @@ backend = "matter"
     check not vr.hasErrors
     check config.highlight.backend == hbMatter
 
+  test "uri loads from TOML":
+    let content = """
+[Highlight]
+uri = false
+"""
+    let (config, vr) = loadFromTomlString(content)
+    check not vr.hasErrors
+    check config.highlight.uri == false
+
   test "invalid backend is rejected":
     let content = """
 [Highlight]

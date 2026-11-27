@@ -1472,6 +1472,8 @@ suite "CommandCompletion - SetOptions and executeSet sync":
       "nohighlightgitconflict",
       "highlightgitconflicttwocolor",
       "nohighlightgitconflicttwocolor",
+      "highlighturi",
+      "nohighlighturi",
       "multistatusline",
       "nomultistatusline",
       "ignorecase",
@@ -1521,12 +1523,12 @@ suite "CommandCompletion - SetOptions and executeSet sync":
       "nohighlightparen", "highlightfindchar", "nohighlightfindchar",
       "highlightcolorcode", "nohighlightcolorcode", "highlightgitconflict",
       "nohighlightgitconflict", "highlightgitconflicttwocolor",
-      "nohighlightgitconflicttwocolor", "multistatusline", "nomultistatusline",
-      "ignorecase", "noignorecase", "smartcase", "nosmartcase", "incsearch",
-      "noincsearch", "hlsearch", "nohlsearch", "buildonsave", "nobuildonsave",
-      "showgitinactive", "noshowgitinactive", "wrap", "nowrap", "expandtab",
-      "noexpandtab", "scrollbar", "noscrollbar", "tabstop", "shiftwidth", "softtabstop",
-      "scrollbarwidth", "scrollfriction", "scrollairdrag",
+      "nohighlightgitconflicttwocolor", "highlighturi", "nohighlighturi",
+      "multistatusline", "nomultistatusline", "ignorecase", "noignorecase", "smartcase",
+      "nosmartcase", "incsearch", "noincsearch", "hlsearch", "nohlsearch",
+      "buildonsave", "nobuildonsave", "showgitinactive", "noshowgitinactive", "wrap",
+      "nowrap", "expandtab", "noexpandtab", "scrollbar", "noscrollbar", "tabstop",
+      "shiftwidth", "softtabstop", "scrollbarwidth", "scrollfriction", "scrollairdrag",
     ]
     for key in SetOptions.keys:
       check key in executeSetPrimaryOptions

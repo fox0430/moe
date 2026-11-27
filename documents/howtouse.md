@@ -897,6 +897,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `set highlightcolorcode` or `set nohighlightcolorcode` | Highlight inline color codes (`#RRGGBB`, `#RGB`) with their actual color (alias: `hcc`, `nohcc`) |
 | `set highlightgitconflict` or `set nohighlightgitconflict` | Highlight git merge conflict blocks (`<<<<<<<` / `=======` / `>>>>>>>`) (alias: `hgc`, `nohgc`) |
 | `set highlightgitconflicttwocolor` or `set nohighlightgitconflicttwocolor` | Use two-color (ours/theirs) conflict scheme; disable for single-color fallback (alias: `hgctc`, `nohgctc`) |
+| `set highlighturi` or `set nohighlighturi` | Underline URIs (alias: `hu`, `nohu`) |
 | `set multistatusline` or `set nomultistatusline` | Enable/disable multiple status line (alias: `msl`, `nomsl`) |
 | `set ignorecase` or `set noignorecase` | Enable/disable ignorecase (alias: `ic`, `noic`) |
 | `set smartcase` or `set nosmartcase` | Enable/disable smartcase (alias: `scs`, `noscs`) |
