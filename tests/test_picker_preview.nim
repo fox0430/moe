@@ -26,7 +26,7 @@ import ../src/moepkg/celina_backend
 import
   ../src/moepkg/[
     editor, types, config, editor_frame, buffer, encoding, handler, key_bindings,
-    job_lanes,
+    job_lanes, color,
   ]
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/command_handlers/result_processor
@@ -408,6 +408,42 @@ suite "picker preview: in the picker":
     check screen.row(p.y, p.x, p.x + p.width).strip == "line 0"
     check screen.row(p.y + 2, p.x, p.x + p.width).strip == "line 2"
     check " Preview " in screen.row(layout.frame.y, p.x, p.x + p.width)
+
+  test "The preview is drawn on its own background, keeping a line's own":
+    let e = newPreviewEditor()
+    let saved = themeColors
+    var colors = saved
+    # Apart even in 256 colors, which the test terminal uses.
+    colors[EditorColorPairIndex.pickerPreview] = ColorPair(
+      foreground: ThemeColor(rgb: color.rgb("#ff0000")),
+      background: ThemeColor(rgb: color.rgb("#00005f")),
+    )
+    colors[EditorColorPairIndex.markdownCodeBlock].background =
+      ThemeColor(rgb: color.rgb("#5f0000"))
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+    let a = dir / "a.md"
+    writeFile(a, "text\n```\ncode\n```\n")
+    e.openFilePicker([a])
+    discard e.frame()
+    e.settlePreview()
+    let screen = e.frame()
+    let p = e.state.pickerScreenLayout(120, 40).preview
+    let
+      surface = getThemeStyle(EditorColorPairIndex.pickerPreview)
+      editorBg = getThemeStyle(EditorColorPairIndex.default).bg
+      codeBg = getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg
+    check surface.bg != editorBg
+    check screen.row(p.y, p.x, p.x + p.width).strip == "text"
+    for x in p.x ..< p.x + p.width:
+      check screen[x, p.y].style.bg == surface.bg
+      # Past the file's last line.
+      check screen[x, p.y + p.height - 1].style.bg == surface.bg
+    # The text keeps its own color, not the preview entry's.
+    check screen[p.x + 1, p.y].style.fg != surface.fg
+    check screen.row(p.y + 2, p.x, p.x + p.width).strip == "code"
+    check screen[p.x + 1, p.y + 2].style.bg == codeBg
 
   test "A closed picker keeps no file read for it, and a resume reads again":
     let e = newPreviewEditor()

@@ -137,6 +137,9 @@ popupWindowActiveParameter = { fg = "#ffff00", bg = "#808080" }
 popupWindowMatch = { fg = "#ffff00", bg = "#808080" }
 popupWindowMatchSel = { fg = "#ffff00", bg = "#444444" }
 
+# The popup's gray would hide gray comments in the picker preview.
+pickerPreview = { bg = "#ffffff" }
+
 notificationPopupInfo = { fg = "#000000", bg = "#d0d0d0" }
 notificationPopupInfoBorder = { fg = "#808080", bg = "#d0d0d0" }
 notificationPopupWarning = { fg = "#000000", bg = "#d0d0d0" }

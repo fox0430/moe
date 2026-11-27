@@ -443,6 +443,93 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     )
     check c[EditorColorPairIndex.popupWinCurrentLine].background.rgb == rgb("#99b3cc")
 
+  test "the picker takes Quick Open's colors, not the suggest widget's":
+    let c = makeColorThemeFromVSCodeThemeFile(
+      %*{
+        "colors": {
+          "editor.background": "#1e1e1e",
+          "editorSuggestWidget.background": "#336699",
+          "quickInput.background": "#202020",
+          "quickInput.foreground": "#e0e0e0",
+          "quickInputList.focusBackground": "#ffffff80",
+          "quickInputList.focusForeground": "#010101",
+          "quickInputList.focusHighlightForeground": "#020202",
+          "list.highlightForeground": "#030303",
+          "pickerGroup.border": "#040404",
+          "widget.border": "#050505",
+          "quickInputTitle.background": "#070707",
+          "descriptionForeground": "#060606",
+        }
+      }
+    )
+    check c[EditorColorPairIndex.picker].foreground.rgb == rgb("#e0e0e0")
+    check c[EditorColorPairIndex.picker].background.rgb == rgb("#202020")
+    check c[EditorColorPairIndex.pickerSelection].foreground.rgb == rgb("#010101")
+    # Translucent, blended onto the picker.
+    check c[EditorColorPairIndex.pickerSelection].background.rgb == rgb("#909090")
+    check c[EditorColorPairIndex.pickerMatchSel].foreground.rgb == rgb("#020202")
+    check c[EditorColorPairIndex.pickerMatchSel].background.rgb == rgb("#909090")
+    check c[EditorColorPairIndex.pickerMatch].foreground.rgb == rgb("#030303")
+    check c[EditorColorPairIndex.pickerMatch].background.rgb == rgb("#202020")
+    # widget.border is faint outside high contrast and would hide the frame.
+    check c[EditorColorPairIndex.pickerBorder].foreground ==
+      c[EditorColorPairIndex.popupWindowBorder].foreground
+    check c[EditorColorPairIndex.pickerBorder].background.rgb == rgb("#202020")
+    # A title bar color would cover only the title's letters on the border row.
+    check c[EditorColorPairIndex.pickerTitle].foreground.rgb == rgb("#e0e0e0")
+    check c[EditorColorPairIndex.pickerTitle].background.rgb == rgb("#202020")
+    check c[EditorColorPairIndex.pickerDetail].foreground.rgb == rgb("#060606")
+    check c[EditorColorPairIndex.pickerDetail].background.rgb == rgb("#202020")
+    # Quick Open has no preview.
+    check c[EditorColorPairIndex.pickerPreview] == c[EditorColorPairIndex.picker]
+    check c[EditorColorPairIndex.popupWindow].background.rgb == rgb("#336699")
+
+  test "a theme without Quick Open colors gives the picker VS Code's defaults":
+    let c = makeColorThemeFromVSCodeThemeFile(
+      %*{
+        "colors": {
+          "editor.background": "#1e1e1e",
+          "editorWidget.background": "#2a2a2a",
+          "list.activeSelectionBackground": "#0a0b0c",
+        }
+      }
+    )
+    # quickInput.background -> editorWidget.background
+    check c[EditorColorPairIndex.picker].background.rgb == rgb("#2a2a2a")
+    # foreground -> editorWidget.foreground -> quickInput.foreground
+    check c[EditorColorPairIndex.picker].foreground.rgb == rgb("#cccccc")
+    check c[EditorColorPairIndex.pickerSelection].background.rgb == rgb("#0a0b0c")
+    check c[EditorColorPairIndex.pickerBorder].background.rgb == rgb("#2a2a2a")
+    check c[EditorColorPairIndex.pickerTitle].foreground.rgb == rgb("#cccccc")
+
+  test "high contrast keeps the popup's selection for the picker":
+    # VS Code outlines the focused item in high contrast instead of filling it.
+    let c = makeColorThemeFromVSCodeThemeFile(
+      %*{"colors": {"editor.background": "#000000"}}, kind = vtkHcDark
+    )
+    check c[EditorColorPairIndex.pickerSelection] ==
+      c[EditorColorPairIndex.popupWinCurrentLine]
+    check c[EditorColorPairIndex.pickerMatchSel] ==
+      c[EditorColorPairIndex.popupWindowMatchSel]
+
+  test "high contrast frames the picker in widget.border":
+    # widget.border -> contrastBorder
+    let c = makeColorThemeFromVSCodeThemeFile(
+      %*{"colors": {"editor.background": "#000000"}}, kind = vtkHcDark
+    )
+    check c[EditorColorPairIndex.pickerBorder].foreground.rgb == rgb("#6fc3df")
+    let set = makeColorThemeFromVSCodeThemeFile(
+      %*{
+        "colors": {
+          "editor.background": "#000000",
+          "contrastBorder": "#6fc3df",
+          "widget.border": "#ffff00",
+        }
+      },
+      kind = vtkHcDark,
+    )
+    check set[EditorColorPairIndex.pickerBorder].foreground.rgb == rgb("#ffff00")
+
   test "error and warning colors":
     let themeJson = %*{
       "colors": {

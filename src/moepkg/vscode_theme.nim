@@ -322,6 +322,7 @@ const VsColorDefaults = [
   # and "?key:a:b" a when the theme sets key, else b (ifDefinedThenElse).
   ("foreground", byKind("#CCCCCC", "#616161", "#FFFFFF", "#292929")),
   ("contrastBorder", byKind("", "", "#6FC3DF", "#0F4A85")),
+  ("widget.border", byKind("", "", "@contrastBorder", "@contrastBorder")),
   ("contrastActiveBorder", byKind("", "", "@focusBorder", "@focusBorder")),
   ("focusBorder", byKind("#007FD4", "#0090F1", "#F38518", "#006BBD")),
   ("badge.background", byKind("#4D4D4D", "#C4C4C4", "#000000", "#0F4A85")),
@@ -402,6 +403,27 @@ const VsColorDefaults = [
       "?list.activeSelectionBackground:@list.highlightForeground:#BBE7FF",
       "@list.highlightForeground", "@list.highlightForeground",
     ),
+  ),
+  ("quickInput.background", allKinds("@editorWidget.background")),
+  ("quickInput.foreground", allKinds("@editorWidget.foreground")),
+  ("editorWidget.foreground", allKinds("@foreground")),
+  # The deprecated quickInput.list.focusBackground first, when a theme sets it.
+  (
+    "quickInputList.focusBackground",
+    byKind(
+      "?quickInput.list.focusBackground:@quickInput.list.focusBackground:@list.activeSelectionBackground",
+      "?quickInput.list.focusBackground:@quickInput.list.focusBackground:@list.activeSelectionBackground",
+      "", "",
+    ),
+  ),
+  ("quickInputList.focusForeground", allKinds("@list.activeSelectionForeground")),
+  (
+    "quickInputList.focusHighlightForeground",
+    allKinds("@list.focusHighlightForeground"),
+  ),
+  (
+    "descriptionForeground",
+    byKind("@foreground*0.7", "#717171", "@foreground*0.7", "@foreground*0.7"),
   ),
   ("list.activeSelectionBackground", byKind("#04395E", "#0060C0", "", "#0F4A851A")),
   ("list.activeSelectionForeground", byKind("#FFFFFF", "#FFFFFF", "", "")),
@@ -981,6 +1003,34 @@ proc makeColorThemeFromVSCodeThemeFile(
     vs.rgba("editorSuggestWidget.focusHighlightForeground"),
     selectedBg,
     [I.popupWindowMatchSel],
+  )
+
+  # The picker is VS Code's Quick Open, not the suggest widget. What neither
+  # the theme nor VS Code colors stays as the popup.
+  for (picker, popup) in PickerColorFallbacks:
+    result[picker] = result[popup]
+  let pickerBg = vs.color("quickInput.background")
+  result.setPair(vs.rgba("quickInput.foreground"), pickerBg, [I.picker])
+  # Quick Open has no preview: it takes the picker's, as a TOML theme's does.
+  result[I.pickerPreview] = result[I.picker]
+  let pickerSurface = pickerBg.get(vs.surface)
+  # VS Code frames Quick Open in widget.border, faint outside high contrast
+  # where a shadow lifts it; a terminal has none, so there moe's color stays,
+  # as for the popup's border.
+  if vs.kind in {vtkHcDark, vtkHcLight}:
+    result.setFg(vs.rgba("widget.border").over(pickerSurface), [I.pickerBorder])
+  result.setBg(pickerBg, [I.pickerBorder])
+  # On the border row a title bar color would cover only the letters.
+  result.setPair(vs.rgba("quickInput.foreground"), pickerBg, [I.pickerTitle])
+  result.setPair(vs.rgba("descriptionForeground"), pickerBg, [I.pickerDetail])
+  result.setPair(vs.rgba("list.highlightForeground"), pickerBg, [I.pickerMatch])
+  # High contrast themes have no focused item background: VS Code draws an outline.
+  let focusBg = vs.rgba("quickInputList.focusBackground").over(pickerSurface)
+  result.setPair(
+    vs.rgba("quickInputList.focusForeground"), focusBg, [I.pickerSelection]
+  )
+  result.setPair(
+    vs.rgba("quickInputList.focusHighlightForeground"), focusBg, [I.pickerMatchSel]
   )
   # A manager's current line is VS Code's selected list item.
   result.setPair(

@@ -25,7 +25,7 @@ import ../src/moepkg/celina_backend
 import
   ../src/moepkg/[
     editor, types, config, keybind_config, registers, editor_frame, color, handler,
-    frontend_input, key_bindings,
+    frontend_input, key_bindings, theme,
   ]
 import ../src/moepkg/command_handlers/[result_processor, handler_result]
 from vim_like_test_helper import keysOf
@@ -479,7 +479,7 @@ suite "picker: the screen":
     var marked = false
     for y in 0 ..< 24:
       for x in 0 ..< 80:
-        if frame[x, y].style == getThemeStyle(EditorColorPairIndex.popupWindowMatchSel):
+        if frame[x, y].style == getThemeStyle(EditorColorPairIndex.pickerMatchSel):
           marked = true
     check marked
 
@@ -488,9 +488,9 @@ suite "picker: the screen":
     let e = newPickerEditor()
     let saved = themeColors
     var colors = saved
-    colors[EditorColorPairIndex.popupWindowMatch].background =
+    colors[EditorColorPairIndex.pickerMatch].background =
       ThemeColor(rgb: Rgb(red: 255, green: 0, blue: 255))
-    colors[EditorColorPairIndex.popupWindowMatchSel].background =
+    colors[EditorColorPairIndex.pickerMatchSel].background =
       ThemeColor(rgb: Rgb(red: 0, green: 255, blue: 255))
     setThemeColors(colors)
     defer:
@@ -500,10 +500,10 @@ suite "picker: the screen":
     var frame = newBuffer(80, 24)
     e.render(frame)
     let
-      match = getThemeStyle(EditorColorPairIndex.popupWindowMatch)
-      matchSel = getThemeStyle(EditorColorPairIndex.popupWindowMatchSel)
-      normal = getThemeStyle(EditorColorPairIndex.popupWindow)
-      current = getThemeStyle(EditorColorPairIndex.popupWinCurrentLine)
+      match = getThemeStyle(EditorColorPairIndex.pickerMatch)
+      matchSel = getThemeStyle(EditorColorPairIndex.pickerMatchSel)
+      normal = getThemeStyle(EditorColorPairIndex.picker)
+      current = getThemeStyle(EditorColorPairIndex.pickerSelection)
     var onRow, onSelected, matchBg = false
     for y in 0 ..< 24:
       for x in 0 ..< 80:
@@ -518,13 +518,74 @@ suite "picker: the screen":
     check onSelected
     check not matchBg
 
+  test "The box is drawn in the picker's own entries, not the popup's":
+    # After the editor, which sets the theme up.
+    let e = newPickerEditor()
+    let saved = themeColors
+    var colors = saved
+    # Apart even in 256 colors, which the test terminal uses.
+    const
+      Fgs = [
+        "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff", "#ff8700",
+        "#87ff00",
+      ]
+      Bgs = [
+        "#5f0000", "#005f00", "#00005f", "#5f5f00", "#5f005f", "#005f5f", "#875f00",
+        "#5f8700",
+      ]
+    for i, (picker, _) in PickerColorFallbacks:
+      colors[picker] = ColorPair(
+        foreground: ThemeColor(rgb: color.rgb(Fgs[i])),
+        background: ThemeColor(rgb: color.rgb(Bgs[i])),
+      )
+    setThemeColors(colors)
+    defer:
+      setThemeColors(saved)
+    e.typeKeys(":picker buffers<Enter>a")
+    var frame = newBuffer(80, 24)
+    e.render(frame)
+    const OnSurface = {
+      EditorColorPairIndex.pickerBorder, EditorColorPairIndex.pickerTitle,
+      EditorColorPairIndex.pickerDetail,
+    }
+    let surface = getThemeStyle(EditorColorPairIndex.picker).bg
+    var
+      seen: set[EditorColorPairIndex]
+      corner = (x: -1, y: -1)
+    for y in 0 ..< 24:
+      for x in 0 ..< 80:
+        let cell = frame[x, y]
+        for (picker, popup) in PickerColorFallbacks:
+          # The preview's entry falls back to the picker's own.
+          if picker != EditorColorPairIndex.pickerPreview:
+            check cell.style != getThemeStyle(popup)
+          if cell.style.fg == getThemeStyle(picker).fg:
+            seen.incl picker
+            # Drawn on the picker's background, not the entry's own.
+            if picker in OnSurface:
+              check cell.style.bg == surface
+        if cell.symbol == "┌" and corner.x < 0:
+          corner = (x: x, y: y)
+    check corner.x >= 0
+    check frame[corner.x, corner.y].style.fg ==
+      getThemeStyle(EditorColorPairIndex.pickerBorder).fg
+    # The prompt mark, inside the box on its first row.
+    let mark = frame[corner.x + 1, corner.y + 1]
+    check mark.symbol == ">"
+    check mark.style.fg == getThemeStyle(EditorColorPairIndex.pickerDetail).fg
+    check seen >= {
+      EditorColorPairIndex.picker, EditorColorPairIndex.pickerBorder,
+      EditorColorPairIndex.pickerTitle, EditorColorPairIndex.pickerSelection,
+      EditorColorPairIndex.pickerDetail,
+    }
+
   test "A match takes the match entry's modifiers on the row's background":
     # After the editor, which sets the theme up.
     let e = newPickerEditor()
     let saved = themeColors
     var colors = saved
-    colors[EditorColorPairIndex.popupWindowMatch].italic = true
-    colors[EditorColorPairIndex.popupWindowMatchSel].italic = true
+    colors[EditorColorPairIndex.pickerMatch].italic = true
+    colors[EditorColorPairIndex.pickerMatchSel].italic = true
     setThemeColors(colors)
     defer:
       setThemeColors(saved)
@@ -533,10 +594,10 @@ suite "picker: the screen":
     var frame = newBuffer(80, 24)
     e.render(frame)
     let
-      match = getThemeStyle(EditorColorPairIndex.popupWindowMatch)
-      matchSel = getThemeStyle(EditorColorPairIndex.popupWindowMatchSel)
-      normal = getThemeStyle(EditorColorPairIndex.popupWindow)
-      current = getThemeStyle(EditorColorPairIndex.popupWinCurrentLine)
+      match = getThemeStyle(EditorColorPairIndex.pickerMatch)
+      matchSel = getThemeStyle(EditorColorPairIndex.pickerMatchSel)
+      normal = getThemeStyle(EditorColorPairIndex.picker)
+      current = getThemeStyle(EditorColorPairIndex.pickerSelection)
     var onRow, onSelected = false
     for y in 0 ..< 24:
       for x in 0 ..< 80:
