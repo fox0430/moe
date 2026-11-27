@@ -2414,6 +2414,23 @@ statusLineNormalMode = { fg = "#111111", bg = "#222222" }
     check preview.background.rgb == rgb("#222222")
     check preview.foreground.rgb == rgb("#111111")
 
+  test "A popup edit reaches the picker in the default theme":
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(config, vr)
+    require loaded.isOk
+    var
+      colors = loaded.get[0]
+      source = loaded.get[1]
+    colors[EditorColorPairIndex.popupWinCurrentLine].background =
+      ThemeColor(rgb: rgb("#ff0000"))
+    colors.noteThemeColorEdited(
+      source, EditorColorPairIndex.popupWinCurrentLine, isFg = false
+    )
+    check colors[EditorColorPairIndex.pickerSelection].background.rgb ==
+      rgb("#ff0000")
+
   test "Markdown keys a theme leaves out take the keys they replace":
     inc testFileCounter
     let testFile =
@@ -2969,6 +2986,40 @@ suite "Config - initTheme":
 
       let loaded = loadThemeFromToml(themeFile)
       check loaded.isOk
+
+  test "Bootstrap: the seeded file keeps fallback colors linked":
+    withTempHome(tmpHome):
+      inc testFileCounter
+      let themeFile =
+        tmpHome / ".config" / "moe" / "themes" & "/moe_test_inittheme_links_" &
+        $testFileCounter & ".toml"
+      var config = newEditorConfig()
+      config.theme.kind = tkConfig
+      config.theme.path = themeFile
+      var vr = newValidationResult()
+      initTheme(config, vr)
+      check not vr.hasErrors
+
+      let seeded = readFile(themeFile)
+      check "\npicker = " notin seeded
+      check "pickerSelection" notin seeded
+      check "popupWinCurrentLine = " in seeded
+      let reloaded = loadThemeFromToml(themeFile)
+      require reloaded.isOk
+      check reloaded.get == DefaultColors
+
+      # The picker follows an edit of the popup in the file.
+      var lines = seeded.splitLines
+      for line in lines.mitems:
+        if line.startsWith("popupWinCurrentLine = "):
+          line = "popupWinCurrentLine = { fg = \"#111111\", bg = \"#121212\" }"
+      writeFile(themeFile, lines.join("\n"))
+      let edited = loadThemeFromToml(themeFile)
+      require edited.isOk
+      check edited.get[EditorColorPairIndex.pickerSelection].foreground.rgb ==
+        rgb("#111111")
+      check edited.get[EditorColorPairIndex.pickerSelection].background.rgb ==
+        rgb("#121212")
 
   test "Bootstrap failure (unwritable path) falls back to default":
     withTempHome(tmpHome):

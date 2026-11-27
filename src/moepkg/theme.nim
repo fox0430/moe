@@ -74,7 +74,19 @@ const PickerColorFallbacks* = [
   (EditorColorPairIndex.pickerPreview, EditorColorPairIndex.picker),
 ]
 
-const DefaultColors*: ThemeColors = [
+proc withPickerLinks*(colors: ThemeColors): ThemeColors =
+  ## `colors` with each picker entry set from the entry it falls back to.
+  result = colors
+  for (picker, generic) in PickerColorFallbacks:
+    result[picker] = result[generic]
+
+proc withPreviewBg(colors: ThemeColors, bg: string): ThemeColors =
+  ## `colors` with the picker preview on `bg`, for a popup whose bg would hide
+  ## the syntax colors drawn on it.
+  result = colors
+  result[EditorColorPairIndex.pickerPreview].background = ThemeColor(rgb: rgb(bg))
+
+const DefaultColors*: ThemeColors = withPickerLinks([
   # Basic
   EditorColorPairIndex.default: makeColorPair("#dadada", "#000000"),
   EditorColorPairIndex.lineNum: makeColorPair("#636d83", "#000000"),
@@ -340,15 +352,15 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.popupWindowMatch: makeColorPair("#61afef", "#000000"),
   EditorColorPairIndex.popupWindowMatchSel: makeColorPair("#61afef", "#3e4452"),
 
-  # Picker: the same as the popup it falls back to
-  EditorColorPairIndex.picker: makeColorPair("#ffffff", "#000000"),
-  EditorColorPairIndex.pickerBorder: makeColorPair("#636d83", "#000000"),
-  EditorColorPairIndex.pickerTitle: makeColorPair("#636d83", "#000000"),
-  EditorColorPairIndex.pickerSelection: makeColorPair("#ffffff", "#3e4452"),
-  EditorColorPairIndex.pickerMatch: makeColorPair("#61afef", "#000000"),
-  EditorColorPairIndex.pickerMatchSel: makeColorPair("#61afef", "#3e4452"),
-  EditorColorPairIndex.pickerDetail: makeColorPair("#636d83", "#000000"),
-  EditorColorPairIndex.pickerPreview: makeColorPair("#ffffff", "#000000"),
+  # Picker: each set from the entry it falls back to, by withPickerLinks
+  EditorColorPairIndex.picker: ColorPair(),
+  EditorColorPairIndex.pickerBorder: ColorPair(),
+  EditorColorPairIndex.pickerTitle: ColorPair(),
+  EditorColorPairIndex.pickerSelection: ColorPair(),
+  EditorColorPairIndex.pickerMatch: ColorPair(),
+  EditorColorPairIndex.pickerMatchSel: ColorPair(),
+  EditorColorPairIndex.pickerDetail: ColorPair(),
+  EditorColorPairIndex.pickerPreview: ColorPair(),
 
   # Notification popup
   EditorColorPairIndex.notificationPopupInfo: makeColorPair("#ffffff", "#323232"),
@@ -464,12 +476,12 @@ const DefaultColors*: ThemeColors = [
 
   # Temporary message area
   EditorColorPairIndex.tempMessageBorder: makeColorPairTermDefaultFg("#ffffff"),
-]
+])
 
 # The bundled light theme, for theme sources that leave colors unset on a light
 # surface. It sets every entry: one it left out would stay dark. A test checks
 # it against example/themes/light.toml.
-const LightColors*: ThemeColors = [
+const LightColors*: ThemeColors = withPickerLinks([
   # Basic
   EditorColorPairIndex.default: makeColorPair("#000000", "#ffffff"),
   EditorColorPairIndex.lineNum: makeColorPair("#8a8a8a", "#000000"),
@@ -735,15 +747,15 @@ const LightColors*: ThemeColors = [
   EditorColorPairIndex.popupWindowMatch: makeColorPair("#ffff00", "#808080"),
   EditorColorPairIndex.popupWindowMatchSel: makeColorPair("#ffff00", "#444444"),
 
-  # Picker: the same as the popup it falls back to
-  EditorColorPairIndex.picker: makeColorPair("#000000", "#808080"),
-  EditorColorPairIndex.pickerBorder: makeColorPair("#4d4d4d", "#808080"),
-  EditorColorPairIndex.pickerTitle: makeColorPair("#4d4d4d", "#808080"),
-  EditorColorPairIndex.pickerSelection: makeColorPair("#ffffff", "#444444"),
-  EditorColorPairIndex.pickerMatch: makeColorPair("#ffff00", "#808080"),
-  EditorColorPairIndex.pickerMatchSel: makeColorPair("#ffff00", "#444444"),
-  EditorColorPairIndex.pickerDetail: makeColorPair("#4d4d4d", "#808080"),
-  EditorColorPairIndex.pickerPreview: makeColorPair("#000000", "#ffffff"),
+  # Picker: each set from the entry it falls back to, by withPickerLinks
+  EditorColorPairIndex.picker: ColorPair(),
+  EditorColorPairIndex.pickerBorder: ColorPair(),
+  EditorColorPairIndex.pickerTitle: ColorPair(),
+  EditorColorPairIndex.pickerSelection: ColorPair(),
+  EditorColorPairIndex.pickerMatch: ColorPair(),
+  EditorColorPairIndex.pickerMatchSel: ColorPair(),
+  EditorColorPairIndex.pickerDetail: ColorPair(),
+  EditorColorPairIndex.pickerPreview: ColorPair(),
 
   # Notification popup
   EditorColorPairIndex.notificationPopupInfo: makeColorPair("#000000", "#d0d0d0"),
@@ -859,7 +871,7 @@ const LightColors*: ThemeColors = [
 
   # Temporary message area
   EditorColorPairIndex.tempMessageBorder: makeColorPairTermDefaultFg("#8a8a8a"),
-]
+]).withPreviewBg("#ffffff")
 
 const DiffViewerTints* = [
   EditorColorPairIndex.diffViewerAddedWord, EditorColorPairIndex.diffViewerDeletedWord,
