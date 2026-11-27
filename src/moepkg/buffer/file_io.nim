@@ -569,13 +569,6 @@ proc loadFileWithDecoded*(
       b.highlight = Highlight(colorSegments: @[])
     b.incrementalHighlight = nil
 
-  # Raw buffer: skip URI scan. Reset frontier regardless.
-  b.uriScanParsedUpTo = -1
-  if b.allowsTextTransforms:
-    let uriChunkEnd = min(999, b.len - 1)
-    discard buffer_highlight.scanAndApplyUriUnderlines(b, 0, uriChunkEnd)
-    b.uriScanParsedUpTo = uriChunkEnd
-
   b.highlightNeedsUpdate = false
 
   # Last, so a subscriber can clamp against a fully consistent buffer.

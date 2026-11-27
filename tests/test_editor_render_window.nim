@@ -5358,3 +5358,86 @@ suite "renderWindow - Visual block over screen cells":
     check buffer[2, 1].style.bg == visBg
     check buffer[3, 1].style.bg == visBg
     check buffer[4, 1].style.bg != visBg
+
+suite "newLineStyleContext - URI underline":
+  proc uriEditor(text: string): Editor =
+    result = createTestEditor()
+    result.state.showSyntax = true
+    result.state.showCursorLine = false
+    discard result.activeBuffer.insertText(BufferPosition(line: 0, column: 0), text)
+    result.activeBuffer.highlightNeedsUpdate = true
+    result.activeBuffer.updateHighlight()
+
+  proc uriRangesOf(e: Editor, row: int): seq[ColumnRange] =
+    let ctx = RenderContext(windowMode: EditorMode.Normal)
+    e.newLineStyleContext(e.activeBuffer, row, e.activeBuffer.getLine(row), ctx).uriRanges
+
+  proc styleAt(e: Editor, row, col: int, selected = false): Style =
+    let
+      buffer = e.activeBuffer
+      mode = if selected: EditorMode.Visual else: EditorMode.Normal
+      ctx = RenderContext(windowMode: mode)
+      lineCtx = e.newLineStyleContext(buffer, row, buffer.getLine(row), ctx)
+      selection =
+        if selected:
+          e.state.visualSelection
+        else:
+          VisualSelection()
+    e.getSelectionStyle(
+      buffer,
+      selection,
+      BufferPosition(line: row, column: col),
+      cursorCol = -1,
+      windowMode = mode,
+      lineCtx = lineCtx,
+    )
+
+  test "a URI is underlined and the text around it is not":
+    let e = uriEditor("see https://example.com now")
+    check e.uriRangesOf(0) == @[ColumnRange(startCol: 4, endCol: 23)]
+    check Underline in e.styleAt(0, 4).modifiers
+    check Underline in e.styleAt(0, 22).modifiers
+    check Underline notin e.styleAt(0, 3).modifiers
+    check Underline notin e.styleAt(0, 23).modifiers
+
+  test "an edit shows before the highlight catches up":
+    let e = uriEditor("see https://example.com")
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 23), "\nhttps://b.example"
+    )
+    check e.activeBuffer.highlightNeedsUpdate
+    check Underline in e.styleAt(1, 0).modifiers
+
+  test "a selected URI keeps its underline":
+    let e = uriEditor("https://example.com")
+    e.state.selectVisual(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 5)
+    )
+    let style = e.styleAt(0, 2, selected = true)
+    check Underline in style.modifiers
+    check style.bg == visualStyle().bg
+
+  test "with :syntax off there is none":
+    let e = uriEditor("https://example.com")
+    e.state.showSyntax = false
+    check e.uriRangesOf(0).len == 0
+    check Underline notin e.styleAt(0, 0).modifiers
+
+  test "a raw buffer, a utility buffer and a terminal have none":
+    block raw:
+      let e = uriEditor("https://example.com")
+      e.activeBuffer.keepRaw = true
+      check e.uriRangesOf(0).len == 0
+    block utility:
+      let e = uriEditor("https://example.com")
+      e.activeBuffer.isUtilityBuffer = true
+      check e.uriRangesOf(0).len == 0
+    block terminal:
+      let e = uriEditor("https://example.com")
+      e.activeBuffer.highlight.literalColors = true
+      check e.uriRangesOf(0).len == 0
+
+  test "past the highlight cap it stops":
+    let e = uriEditor("https://example.com/" & "a".repeat(40))
+    e.activeBuffer.maxHighlightLineLength = 25
+    check e.uriRangesOf(0) == @[ColumnRange(startCol: 0, endCol: 25)]

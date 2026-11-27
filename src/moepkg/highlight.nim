@@ -141,8 +141,7 @@ type
       ## `lineCount` the same.
     reservedWords*: seq[ReservedWord]
       ## Reserved words at start; a config change restarts the re-parse.
-    reparseStart*: int
-      ## First re-parsed row (segment trim point and URI-scan rewind target).
+    reparseStart*: int ## First re-parsed row (segment trim point).
     currentStart*: int ## Next chunk's first row (the frontier + 1).
     currentState*: TokenizerState
       ## Tokenizer state entering `currentStart`, captured at the frontier.
@@ -172,12 +171,11 @@ type
     parsedUpTo*: int ## Last line parsed during initial load. -1 = not started.
     pendingReparse*: PendingReparse
       ## In-flight budgeted re-parse state (see `PendingReparse`); nil = none.
-    lastReparseStart*: int ## First row the last re-parse actually touched.
 
   Position = tuple[row, column: int]
-    ## Module-private alias used by segment-splitting helpers (overwrite,
-    ## addModifier, addUnderlineRanges). Disambiguates from celina's geometry
-    ## Position and lsp/protocol/types Position.
+    ## Module-private alias for the position helpers nested in `overwrite`.
+    ## Disambiguates from celina's geometry Position and lsp/protocol/types
+    ## Position.
 
   SemanticTypeColorTable* = ref object
     ## Precomputed `(tokenType, modifiers) -> (colour, style)` cache for one
@@ -588,10 +586,13 @@ proc segmentStyleAt(highlight: Highlight, line, col: int): Option[Style] =
     return some(highlight[highlight.indexOf(line, col)].style)
   none(Style)
 
-proc getSegmentModifiers*(highlight: Highlight, line, col: int): set[StyleModifier] =
+proc getSegmentModifiers*(
+    highlight: Highlight, line, col: int, syntaxExtra: set[StyleModifier] = {}
+): set[StyleModifier] =
   ## Syntax and semantic-overlay modifiers are unioned (so e.g. URI underline
   ## survives a semantic hit). A diagnostic overlay hit replaces the syntax
-  ## layer (matching the bake) but still unions with semantic.
+  ## layer (matching the bake) but still unions with semantic. `syntaxExtra`
+  ## joins the syntax layer (the URI underline found while drawing).
   var mods: set[StyleModifier] = {}
   var diagHit = false
 
@@ -607,6 +608,7 @@ proc getSegmentModifiers*(highlight: Highlight, line, col: int): set[StyleModifi
     let seg = highlight.segmentStyleAt(line, col)
     if seg.isSome:
       mods = seg.get.modifiers
+    mods = mods + syntaxExtra
 
   if highlight.semantic.len > 0:
     highlight.semantic.withValue(line, lineOv):
@@ -781,8 +783,7 @@ proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
   ##
   ## Segments are sorted by (firstRow, firstColumn), so the affected window
   ## is found via binary search on `firstRow`/`lastRow` and replaced in
-  ## place; the segments around it are not touched. Same pattern as
-  ## [[addModifier]] / [[addUnderlineRanges]].
+  ## place; the segments around it are not touched.
   let (startIdx, endIdx) =
     highlight.colorSegments.rowWindow(colorSegment.firstRow, colorSegment.lastRow)
   if startIdx >= endIdx:
@@ -794,229 +795,6 @@ proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
   for i in startIdx ..< endIdx:
     repl.add(highlight.colorSegments[i].overwrite(colorSegment))
   highlight.colorSegments.replaceSegments(startIdx, endIdx, repl)
-
-proc addModifier*(
-    highlight: var Highlight,
-    firstRow, firstCol, lastRow, lastCol: int,
-    modifier: StyleModifier,
-) =
-  ## Add a style modifier to segments overlapping the given range,
-  ## splitting segments at boundaries so only the overlapping portion
-  ## receives the modifier.
-  ##
-  ## Segments are sorted by (firstRow, firstColumn), so the affected window
-  ## is found via binary search and replaced in place: segments fully before
-  ## or after the range are not touched.
-
-  let rangeFirst: Position = (firstRow, firstCol)
-  let rangeLast: Position = (lastRow, lastCol)
-
-  let (startIdx, endIdx) = highlight.colorSegments.rowWindow(firstRow, lastRow)
-  if startIdx >= endIdx:
-    # No segment overlaps the row range — nothing to do.
-    return
-
-  var repl = newSeqOfCap[ColorSegment](endIdx - startIdx + 2)
-  for i in startIdx ..< endIdx:
-    let cs = highlight.colorSegments[i]
-    let csFirst: Position = (cs.firstRow, cs.firstColumn)
-    let csLast: Position = (cs.lastRow, cs.lastColumn)
-
-    if csLast < rangeFirst or csFirst > rangeLast:
-      # No overlap (possible for column-range checks within the same row).
-      repl.add(cs)
-    elif csFirst >= rangeFirst and csLast <= rangeLast:
-      # Fully contained — add modifier to whole segment
-      var modified = cs
-      modified.style.modifiers.incl(modifier)
-      repl.add(modified)
-    else:
-      # Partial overlap — split the segment
-      if csFirst < rangeFirst:
-        # Part before the range: no modifier
-        if rangeFirst.column > 0:
-          repl.add(
-            ColorSegment(
-              firstRow: cs.firstRow,
-              firstColumn: cs.firstColumn,
-              lastRow: rangeFirst.row,
-              lastColumn: rangeFirst.column - 1,
-              color: cs.color,
-              style: cs.style,
-            )
-          )
-        elif cs.firstRow < rangeFirst.row:
-          # Range starts at column 0 on a later row. End the before-segment
-          # at the previous row using the segment's own lastColumn as an
-          # estimate (exact line length is unavailable here).
-          repl.add(
-            ColorSegment(
-              firstRow: cs.firstRow,
-              firstColumn: cs.firstColumn,
-              lastRow: rangeFirst.row - 1,
-              lastColumn: cs.lastColumn,
-              color: cs.color,
-              style: cs.style,
-            )
-          )
-
-      # Overlapping part: add modifier
-      let overlapFirst = if csFirst > rangeFirst: csFirst else: rangeFirst
-      let overlapLast = if csLast < rangeLast: csLast else: rangeLast
-      var modifiedStyle = cs.style
-      modifiedStyle.modifiers.incl(modifier)
-      repl.add(
-        ColorSegment(
-          firstRow: overlapFirst.row,
-          firstColumn: overlapFirst.column,
-          lastRow: overlapLast.row,
-          lastColumn: overlapLast.column,
-          color: cs.color,
-          style: modifiedStyle,
-        )
-      )
-
-      if csLast > rangeLast:
-        # Part after the range: no modifier
-        repl.add(
-          ColorSegment(
-            firstRow: rangeLast.row,
-            firstColumn: rangeLast.column + 1,
-            lastRow: cs.lastRow,
-            lastColumn: cs.lastColumn,
-            color: cs.color,
-            style: cs.style,
-          )
-        )
-
-  highlight.colorSegments.replaceSegments(startIdx, endIdx, repl)
-
-proc addUnderlineRanges*(
-    segs: var seq[ColorSegment], ranges: openArray[tuple[row, firstCol, lastCol: int]]
-) =
-  ## Batch-apply the Underline modifier to the given single-row column
-  ## ranges in a single pass over `segs`. Ranges MUST be sorted by
-  ## (row, firstCol) and non-overlapping.
-  ##
-  ## Equivalent to repeatedly calling `addModifier(..., Underline)` for each
-  ## range, but replaces the segments between the first and the last range
-  ## **once** instead of per-range. URI scanning over a 1000-line chunk in a
-  ## 40k-line file typically hits ~140 URIs against ~300k segments.
-  if ranges.len == 0:
-    return
-
-  let (startIdx, endIdx) = segs.rowWindow(ranges[0].row, ranges[^1].row)
-  if startIdx >= endIdx:
-    return
-
-  # Allocate for the worst case: each range can split a segment into 3 parts.
-  var repl = newSeqOfCap[ColorSegment](endIdx - startIdx + ranges.len * 2)
-  var rIdx = 0
-
-  for cs in segs.toOpenArray(startIdx, endIdx - 1):
-    let csFirst: Position = (cs.firstRow, cs.firstColumn)
-    let csLast: Position = (cs.lastRow, cs.lastColumn)
-
-    # Skip ranges fully before this segment.
-    while rIdx < ranges.len:
-      let r = ranges[rIdx]
-      if r.row < cs.firstRow:
-        inc rIdx
-        continue
-      if r.row == cs.firstRow and r.lastCol < cs.firstColumn:
-        inc rIdx
-        continue
-      break
-
-    # Find the first range past this segment.
-    var endRange = rIdx
-    while endRange < ranges.len:
-      let r = ranges[endRange]
-      if r.row > cs.lastRow:
-        break
-      if r.row == cs.lastRow and r.firstCol > cs.lastColumn:
-        break
-      inc endRange
-
-    if endRange == rIdx:
-      # No overlapping range — keep segment as-is.
-      repl.add(cs)
-      continue
-
-    # Walk the segment left-to-right, emitting unmodifed parts interleaved
-    # with modifier-applied overlap parts.
-    var curStart = csFirst
-    var modStyle = cs.style
-    modStyle.modifiers.incl(StyleModifier.Underline)
-
-    for k in rIdx ..< endRange:
-      let r = ranges[k]
-      let rFirst: Position = (r.row, r.firstCol)
-      let rLast: Position = (r.row, r.lastCol)
-
-      # Plain part before this range (curStart .. rFirst-1), if any.
-      if curStart < rFirst:
-        if rFirst.column > 0:
-          repl.add(
-            ColorSegment(
-              firstRow: curStart.row,
-              firstColumn: curStart.column,
-              lastRow: rFirst.row,
-              lastColumn: rFirst.column - 1,
-              color: cs.color,
-              style: cs.style,
-            )
-          )
-        elif curStart.row < rFirst.row:
-          repl.add(
-            ColorSegment(
-              firstRow: curStart.row,
-              firstColumn: curStart.column,
-              lastRow: rFirst.row - 1,
-              lastColumn: cs.lastColumn,
-              color: cs.color,
-              style: cs.style,
-            )
-          )
-
-      # Overlap part with modifier.
-      let overlapFirst = if rFirst > csFirst: rFirst else: csFirst
-      let overlapLast = if rLast < csLast: rLast else: csLast
-      repl.add(
-        ColorSegment(
-          firstRow: overlapFirst.row,
-          firstColumn: overlapFirst.column,
-          lastRow: overlapLast.row,
-          lastColumn: overlapLast.column,
-          color: cs.color,
-          style: modStyle,
-        )
-      )
-
-      curStart = (overlapLast.row, overlapLast.column + 1)
-
-    # Tail part after the last overlapping range.
-    if curStart <= csLast:
-      repl.add(
-        ColorSegment(
-          firstRow: curStart.row,
-          firstColumn: curStart.column,
-          lastRow: csLast.row,
-          lastColumn: csLast.column,
-          color: cs.color,
-          style: cs.style,
-        )
-      )
-
-    rIdx = endRange
-
-  segs.replaceSegments(startIdx, endIdx, repl)
-
-proc addUnderlineRanges*(
-    highlight: var Highlight, ranges: openArray[tuple[row, firstCol, lastCol: int]]
-) =
-  ## Highlight overload: forwards to the seq-level `addUnderlineRanges`.
-  highlight.colorSegments.addUnderlineRanges(ranges)
 
 iterator parseReservedWord(
     buffer: string, reservedWords: seq[ReservedWord], color: EditorColorPairIndex
@@ -1406,8 +1184,8 @@ when defined(moe.matter) or defined(features.moe.matter):
           )
 
       if parsed.spans.len == 0:
-        # Explicit plain coverage also prevents URI overlays from inheriting a
-        # previous row's colour when tokenization is interrupted.
+        # Explicit plain coverage keeps the row from inheriting a previous
+        # row's colour when tokenization is interrupted.
         result.segments.add(
           ColorSegment(
             firstRow: row,
@@ -1988,8 +1766,6 @@ proc updateHighlightIncremental*(
     currentState = initialState
     reparseEnd = reparseStart - 1
     chunkLen = ChunkSize
-
-  incrHighlight.lastReparseStart = reparseStart
 
   # Convergence is only sound when the line count matches the cache; while a
   # re-parse is in flight the cache only grows, so equality means no rows

@@ -115,7 +115,6 @@ when defined(moe.matter) or defined(features.moe.matter):
       check buffer.incrementalHighlight.backend == hbMatter
       buffer.setHighlightBackend(hbBuiltin)
       check buffer.incrementalHighlight.isNil
-      check buffer.uriScanParsedUpTo == -1
 
     test "budgeted multiline edit converges to a fresh Matter parse":
       var lines = @["#["]
