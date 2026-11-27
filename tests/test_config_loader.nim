@@ -2327,6 +2327,93 @@ statusLineNormalMode = { fg = "#111111", bg = "#222222" }
     check reloaded.get[EditorColorPairIndex.default].foreground.rgb == rgb("#999999")
     check reloaded.get[EditorColorPairIndex.file].foreground.rgb == rgb("#999999")
 
+  test "Picker keys a theme leaves out take the popup's, per channel":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_picker_fallback_" & $testFileCounter & ".toml"
+    let savedFile = testFile & ".saved"
+    defer:
+      removeFile(testFile)
+      removeFile(savedFile)
+
+    writeFile(
+      testFile,
+      "[Colors]\nforeground = \"#777777\"\nbackground = \"#888888\"\n" &
+        "popupWindow = { fg = \"#111111\", bg = \"#121212\" }\n" &
+        "popupWinCurrentLine = { fg = \"#222222\", bg = \"#232323\" }\n" &
+        "picker = { fg = \"#333333\" }\n",
+    )
+    var vr = newValidationResult()
+    let loaded = loadThemeWithSource(testFile, vr)
+    require loaded.isOk
+    check not vr.hasErrors
+    var
+      colors = loaded.get[0]
+      source = loaded.get[1]
+    check colors[EditorColorPairIndex.picker].foreground.rgb == rgb("#333333")
+    check colors[EditorColorPairIndex.picker].background.rgb == rgb("#121212")
+    check colors[EditorColorPairIndex.pickerSelection] ==
+      colors[EditorColorPairIndex.popupWinCurrentLine]
+    for (picker, popup) in PickerColorFallbacks:
+      if picker != EditorColorPairIndex.picker:
+        check colors[picker] == colors[popup]
+
+    # Saved, the picker keys stay linked to the popup's.
+    require saveThemeToToml(colors, savedFile, source).isOk
+    let saved = readFile(savedFile)
+    check "picker = { fg = \"#333333\" }" in saved
+    check "pickerSelection" notin saved
+    writeFile(
+      savedFile,
+      saved.replace(
+        "popupWinCurrentLine = { fg = \"#222222\", bg = \"#232323\" }",
+        "popupWinCurrentLine = { fg = \"#444444\", bg = \"#454545\" }",
+      ),
+    )
+    let reloaded = loadThemeFromToml(savedFile)
+    require reloaded.isOk
+    check reloaded.get[EditorColorPairIndex.pickerSelection].foreground.rgb ==
+      rgb("#444444")
+    check reloaded.get[EditorColorPairIndex.pickerSelection].background.rgb ==
+      rgb("#454545")
+    check reloaded.get[EditorColorPairIndex.picker].background.rgb == rgb("#121212")
+
+  test "The picker's title takes the picker's border, not the popup's":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_picker_title_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    writeFile(
+      testFile,
+      "[Colors]\npopupWindowBorder = { fg = \"#111111\", bg = \"#121212\" }\n" &
+        "pickerBorder = { fg = \"#222222\" }\n",
+    )
+    let loaded = loadThemeFromToml(testFile)
+    require loaded.isOk
+    let title = loaded.get[EditorColorPairIndex.pickerTitle]
+    check title.foreground.rgb == rgb("#222222")
+    check title.background.rgb == rgb("#121212")
+
+  test "The picker's preview takes the picker's background":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_theme_picker_preview_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    writeFile(
+      testFile,
+      "[Colors]\npopupWindow = { fg = \"#111111\", bg = \"#121212\" }\n" &
+        "picker = { bg = \"#222222\" }\n",
+    )
+    let loaded = loadThemeFromToml(testFile)
+    require loaded.isOk
+    let preview = loaded.get[EditorColorPairIndex.pickerPreview]
+    check preview.background.rgb == rgb("#222222")
+    check preview.foreground.rgb == rgb("#111111")
+
   test "Markdown keys a theme leaves out take the keys they replace":
     inc testFileCounter
     let testFile =

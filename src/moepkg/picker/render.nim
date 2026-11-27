@@ -112,6 +112,25 @@ proc drawText(
       cellX += w
     inc column
 
+proc overlaid(surface: Style, index: EditorColorPairIndex): Style =
+  ## `index` drawn on the picker's `surface`: its foreground and modifiers,
+  ## the surface's background, so the box stays one color whatever a theme
+  ## gives the entry.
+  result = getThemeStyle(index)
+  result.bg = surface.bg
+
+proc onSurface(buffer: var Buffer, left, right, y: int, under, surface: ColorValue) =
+  ## Puts `surface` under the cells of row `y` drawn on `under`, the editor's
+  ## background, as Neovim draws a group with no background on the window's
+  ## Normal. A background of the line's own, such as a code block's, stays.
+  if under == surface:
+    return
+  for x in left ..< right:
+    var cell = buffer[x, y]
+    if cell.style.bg == under:
+      cell.style.bg = surface
+      buffer[x, y] = cell
+
 proc rule(left, right: string, width: int): string =
   result = left
   for _ in 0 ..< width - 2:
@@ -123,12 +142,13 @@ proc renderPicker*(
 ) =
   let
     frame = layout.frame
-    normal = getThemeStyle(EditorColorPairIndex.popupWindow)
-    border = getThemeStyle(EditorColorPairIndex.popupWindowBorder)
-    current = getThemeStyle(EditorColorPairIndex.popupWinCurrentLine)
-    match = getThemeStyle(EditorColorPairIndex.popupWindowMatch)
-    matchSel = getThemeStyle(EditorColorPairIndex.popupWindowMatchSel)
-    detail = getThemeStyle(EditorColorPairIndex.popupWindowDetail)
+    normal = getThemeStyle(EditorColorPairIndex.picker)
+    border = normal.overlaid(EditorColorPairIndex.pickerBorder)
+    title = normal.overlaid(EditorColorPairIndex.pickerTitle)
+    current = getThemeStyle(EditorColorPairIndex.pickerSelection)
+    match = getThemeStyle(EditorColorPairIndex.pickerMatch)
+    matchSel = getThemeStyle(EditorColorPairIndex.pickerMatchSel)
+    detail = normal.overlaid(EditorColorPairIndex.pickerDetail)
     right = frame.x + frame.width - 1
   if not layout.shown:
     return
@@ -144,7 +164,7 @@ proc renderPicker*(
       right
   buffer.drawBorder(frame.x, frame.y, frame.width, frame.height, border)
   if view.title.len > 0:
-    buffer.drawText(frame.x + 2, frame.y, listRight - 1, " " & view.title & " ", border)
+    buffer.drawText(frame.x + 2, frame.y, listRight - 1, " " & view.title & " ", title)
 
   let promptY = layout.prompt.y
   buffer.drawText(frame.x + 1, promptY, layout.prompt.x, PromptMark, detail)
@@ -177,13 +197,13 @@ proc renderPicker*(
           buffer.drawText(listRight, y, listRight + 1, "│", border)
       if previewTitle.len > 0:
         buffer.drawText(
-          listRight + 2, frame.y, right - 1, " " & previewTitle & " ", border
+          listRight + 2, frame.y, right - 1, " " & previewTitle & " ", title
         )
     else:
       let y = preview.y - 1
       buffer.drawText(frame.x, y, right + 1, rule("├", "┤", frame.width), border)
       if previewTitle.len > 0:
-        buffer.drawText(frame.x + 2, y, right - 1, " " & previewTitle & " ", border)
+        buffer.drawText(frame.x + 2, y, right - 1, " " & previewTitle & " ", title)
 
   let list = layout.list
   if view.rows.len == 0 and view.message.len > 0 and list.height > 0:
@@ -215,27 +235,28 @@ proc renderPickerPreview*(
     e: Editor, buffer: var Buffer, rect: PickerRect, view: PickerPreviewView
 ) =
   ## The preview's rows: the lines from `view.topLine` as a window not the
-  ## active one draws them, with no cursor line and no line numbers, or why
-  ## the item shows none.
+  ## active one draws them, with no cursor line and no line numbers, on the
+  ## `pickerPreview` background, or why the item shows none.
   if rect.width <= 0 or rect.height <= 0:
     return
-  let right = rect.x + rect.width
+  let
+    right = rect.x + rect.width
+    surface = getThemeStyle(EditorColorPairIndex.pickerPreview)
   if view.buffer.isNil:
-    let normal = getThemeStyle(EditorColorPairIndex.popupWindow)
     for y in rect.y ..< rect.y + rect.height:
-      discard buffer.fillCells(rect.x, y, right, normal)
+      discard buffer.fillCells(rect.x, y, right, surface)
     if view.message.len > 0:
       buffer.drawText(
         rect.x + 1,
         rect.y,
         right,
         view.message,
-        getThemeStyle(EditorColorPairIndex.popupWindowDetail),
+        surface.overlaid(EditorColorPairIndex.pickerDetail),
       )
     return
   let
     lines = view.buffer
-    blank = getThemeStyle(EditorColorPairIndex.default)
+    editorBg = getThemeStyle(EditorColorPairIndex.default).bg
     ctx = RenderContext(
       cursorLine: -1,
       cursorCol: -1,
@@ -251,7 +272,7 @@ proc renderPickerPreview*(
     if y < 0 or y >= buffer.area.height:
       continue
     # A column of margin after the border, as the list has.
-    discard buffer.fillCells(rect.x, y, min(right, rect.x + 1), blank)
+    discard buffer.fillCells(rect.x, y, min(right, rect.x + 1), surface)
     if line < lines.len and rect.width > 1:
       # Only the cells the row shows are styled one by one, as a window's are:
       # a minified file's line is long. The line's style context still scans
@@ -270,5 +291,6 @@ proc renderPickerPreview*(
         ctx,
         startCell = shown.cell,
       )
+      buffer.onSurface(rect.x + 1, right, y, editorBg, surface.bg)
     else:
-      discard buffer.fillCells(rect.x, y, right, blank)
+      discard buffer.fillCells(rect.x, y, right, surface)

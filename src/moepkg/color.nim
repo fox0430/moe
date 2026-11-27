@@ -288,6 +288,16 @@ type
     popupWindowMatch
     popupWindowMatchSel
 
+    # Picker
+    picker
+    pickerBorder
+    pickerTitle
+    pickerSelection
+    pickerMatch
+    pickerMatchSel
+    pickerDetail
+    pickerPreview
+
     # Notification popup
     notificationPopupInfo
     notificationPopupInfoBorder
@@ -654,6 +664,16 @@ const
     EditorColorPairIndex.popupWindowMatch: "Pop-up window: characters a query matched",
     EditorColorPairIndex.popupWindowMatchSel:
       "Pop-up window: characters a query matched on the current line",
+    EditorColorPairIndex.picker: "Picker: background, query and items",
+    EditorColorPairIndex.pickerBorder: "Picker: border and rules",
+    EditorColorPairIndex.pickerTitle: "Picker: titles on the border",
+    EditorColorPairIndex.pickerSelection: "Picker: selected item",
+    EditorColorPairIndex.pickerMatch: "Picker: characters the query matched",
+    EditorColorPairIndex.pickerMatchSel:
+      "Picker: characters the query matched in the selected item",
+    EditorColorPairIndex.pickerDetail:
+      "Picker: prompt mark, item count and notes",
+    EditorColorPairIndex.pickerPreview: "Picker: preview background",
     EditorColorPairIndex.notificationPopupInfo: "Notification popup: info body",
     EditorColorPairIndex.notificationPopupInfoBorder: "Notification popup: info border",
     EditorColorPairIndex.notificationPopupWarning: "Notification popup: warning body",
@@ -812,8 +832,10 @@ proc rgbTo16Color*(r, g, b: int16): uint8 =
   else:
     result = baseColor
 
-const ColorBgOnlyEntries* =
-  {EditorColorPairIndex.currentLineBg, EditorColorPairIndex.currentColumnBg}
+const ColorBgOnlyEntries* = {
+  EditorColorPairIndex.currentLineBg, EditorColorPairIndex.currentColumnBg,
+  EditorColorPairIndex.pickerPreview,
+}
   ## Color pairs that only use their background.
 
 type StatusLineModeColor* = enum

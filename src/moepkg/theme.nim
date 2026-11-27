@@ -58,6 +58,22 @@ proc makeColorPairTermDefaultFg(bg: string): ColorPair =
     background: ThemeColor(rgb: rgb(bg)),
   )
 
+const PickerColorFallbacks* = [
+  # Each picker entry and the entry it takes a color from when a theme leaves
+  # it out, as telescope's highlight groups link to NormalFloat and such.
+  # An entry may name one listed before it.
+  (EditorColorPairIndex.picker, EditorColorPairIndex.popupWindow),
+  (EditorColorPairIndex.pickerBorder, EditorColorPairIndex.popupWindowBorder),
+  (EditorColorPairIndex.pickerTitle, EditorColorPairIndex.pickerBorder),
+  (EditorColorPairIndex.pickerSelection, EditorColorPairIndex.popupWinCurrentLine),
+  (EditorColorPairIndex.pickerMatch, EditorColorPairIndex.popupWindowMatch),
+  (EditorColorPairIndex.pickerMatchSel, EditorColorPairIndex.popupWindowMatchSel),
+  (EditorColorPairIndex.pickerDetail, EditorColorPairIndex.popupWindowDetail),
+  # The preview's bg sits under its syntax colors, as telescope's previewer
+  # links TelescopePreviewNormal to TelescopeNormal.
+  (EditorColorPairIndex.pickerPreview, EditorColorPairIndex.picker),
+]
+
 const DefaultColors*: ThemeColors = [
   # Basic
   EditorColorPairIndex.default: makeColorPair("#dadada", "#000000"),
@@ -323,6 +339,16 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.popupWindowActiveParameter: makeColorPair("#e5c07b", "#000000"),
   EditorColorPairIndex.popupWindowMatch: makeColorPair("#61afef", "#000000"),
   EditorColorPairIndex.popupWindowMatchSel: makeColorPair("#61afef", "#3e4452"),
+
+  # Picker: the same as the popup it falls back to
+  EditorColorPairIndex.picker: makeColorPair("#ffffff", "#000000"),
+  EditorColorPairIndex.pickerBorder: makeColorPair("#636d83", "#000000"),
+  EditorColorPairIndex.pickerTitle: makeColorPair("#636d83", "#000000"),
+  EditorColorPairIndex.pickerSelection: makeColorPair("#ffffff", "#3e4452"),
+  EditorColorPairIndex.pickerMatch: makeColorPair("#61afef", "#000000"),
+  EditorColorPairIndex.pickerMatchSel: makeColorPair("#61afef", "#3e4452"),
+  EditorColorPairIndex.pickerDetail: makeColorPair("#636d83", "#000000"),
+  EditorColorPairIndex.pickerPreview: makeColorPair("#ffffff", "#000000"),
 
   # Notification popup
   EditorColorPairIndex.notificationPopupInfo: makeColorPair("#ffffff", "#323232"),
@@ -708,6 +734,16 @@ const LightColors*: ThemeColors = [
   EditorColorPairIndex.popupWindowActiveParameter: makeColorPair("#ffff00", "#808080"),
   EditorColorPairIndex.popupWindowMatch: makeColorPair("#ffff00", "#808080"),
   EditorColorPairIndex.popupWindowMatchSel: makeColorPair("#ffff00", "#444444"),
+
+  # Picker: the same as the popup it falls back to
+  EditorColorPairIndex.picker: makeColorPair("#000000", "#808080"),
+  EditorColorPairIndex.pickerBorder: makeColorPair("#4d4d4d", "#808080"),
+  EditorColorPairIndex.pickerTitle: makeColorPair("#4d4d4d", "#808080"),
+  EditorColorPairIndex.pickerSelection: makeColorPair("#ffffff", "#444444"),
+  EditorColorPairIndex.pickerMatch: makeColorPair("#ffff00", "#808080"),
+  EditorColorPairIndex.pickerMatchSel: makeColorPair("#ffff00", "#444444"),
+  EditorColorPairIndex.pickerDetail: makeColorPair("#4d4d4d", "#808080"),
+  EditorColorPairIndex.pickerPreview: makeColorPair("#000000", "#ffffff"),
 
   # Notification popup
   EditorColorPairIndex.notificationPopupInfo: makeColorPair("#000000", "#d0d0d0"),

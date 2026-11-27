@@ -2069,6 +2069,33 @@ These keys apply only to the `builtin` syntax backend. With
 `Highlight.backend = "matter"`, Markdown is colored by the generic keys
 instead.
 
+#### Picker colors
+
+The picker (`:picker`) has its own keys. If a theme does not set `fg`, `bg` or
+`italic` for one of them, that comes from the key it falls back to, so a theme
+written before these keys draws the picker as the completion menu:
+
+| Picker key | Falls back to |
+|:---|:---|
+| picker | popupWindow |
+| pickerBorder | popupWindowBorder |
+| pickerTitle | pickerBorder |
+| pickerSelection | popupWinCurrentLine |
+| pickerMatch | popupWindowMatch |
+| pickerMatchSel | popupWindowMatchSel |
+| pickerDetail | popupWindowDetail |
+| pickerPreview | picker |
+
+`pickerBorder`, `pickerTitle` and `pickerDetail` are drawn on the `picker`
+background, and `pickerMatch` and `pickerMatchSel` on the row's: these keys
+give only their foreground and italic. `pickerPreview` gives only its
+background, which the preview's text is drawn on in its syntax colors; a
+background of the line's own, such as a code block's, stays. A VS Code theme colors the picker as its
+Quick Open (`quickInput.*`, `quickInputList.*`, `list.highlightForeground`,
+`descriptionForeground`). Its frame, `widget.border`, is taken only in high
+contrast themes: elsewhere it is too faint without the shadow VS Code draws, so
+the border keeps moe's color, as the pop-up window's border does.
+
 #### Inactive status line colors
 
 If a theme sets `statusLine<Mode>Mode` but not the `fg` or `bg` of
@@ -2267,6 +2294,14 @@ colors, as the active one does.
 | popupWindowActiveParameter | Pop-up window active parameter (signature help) |
 | popupWindowMatch | Pop-up window: characters a query matched |
 | popupWindowMatchSel | Pop-up window: characters a query matched on the current line |
+| picker | Picker: background, query and items |
+| pickerBorder | Picker: border and rules |
+| pickerTitle | Picker: titles on the border |
+| pickerSelection | Picker: selected item |
+| pickerMatch | Picker: characters the query matched |
+| pickerMatchSel | Picker: characters the query matched in the selected item |
+| pickerDetail | Picker: prompt mark, item count and notes |
+| pickerPreview | Picker: preview background |
 | notificationPopupInfo | Notification popup: info body |
 | notificationPopupInfoBorder | Notification popup: info border |
 | notificationPopupWarning | Notification popup: warning body |

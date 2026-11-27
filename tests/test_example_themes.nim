@@ -28,13 +28,15 @@ const ExampleThemesDir = currentSourcePath().parentDir / ".." / "example" / "the
 proc missingColors(colors: TomlTableRef): seq[string] =
   ## Theme keys whose omission leaves a color at the bundled dark default.
   ## Leaving out a `#000000` default bg is fine (it takes `background`), as
-  ## is leaving out the fg of a bg-only or terminal-default-fg entry.
+  ## is leaving out the fg of a bg-only or terminal-default-fg entry, and a
+  ## picker key, which takes the popup's.
   for key in ["foreground", "background"]:
     if not colors.hasKey(key):
       result.add key
 
   for index in EditorColorPairIndex:
-    if index == EditorColorPairIndex.default:
+    if index == EditorColorPairIndex.default or
+        PickerColorFallbacks.anyIt(it[0] == index):
       continue
 
     let
@@ -106,6 +108,27 @@ suite "example/themes inactive status line":
         rgbTo8Color(editorBg.red, editorBg.green, editorBg.blue)
       check rgbTo16Color(bg.red, bg.green, bg.blue) !=
         rgbTo16Color(editorBg.red, editorBg.green, editorBg.blue)
+
+proc previewHides(colors: ThemeColors): seq[EditorColorPairIndex] =
+  ## Syntax entries whose fg is the picker preview's bg, so the preview of a
+  ## file would draw them invisible.
+  let bg = colors[EditorColorPairIndex.pickerPreview].background.rgb
+  for index in EditorColorPairIndex.keyword .. EditorColorPairIndex.property:
+    if index != EditorColorPairIndex.whitespace and
+        colors[index].foreground.rgb == bg:
+      result.add index
+
+suite "picker preview background":
+  test "shows every syntax color of the bundled themes":
+    for path in walkFiles(ExampleThemesDir / "*.toml"):
+      checkpoint path
+      let loaded = loadThemeFromToml(path)
+      require loaded.isOk
+      check loaded.get.previewHides.len == 0
+
+  test "shows every syntax color of the built-in themes":
+    check DefaultColors.previewHides.len == 0
+    check LightColors.previewHides.len == 0
 
 suite "example/themes/light.toml as the bundled light theme":
   test "loads to LightColors":
