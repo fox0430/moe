@@ -3153,3 +3153,122 @@ suite "Editor - :w on text no file stands behind":
   test "A file buffer is not one":
     let e = createTestEditor()
     check not e.isListing(e.activeBuffer)
+
+suite "Editor - :e reuses an empty [No Name] buffer, as Vim":
+  proc tempFile(name, content: string): string =
+    result = getTempDir() / ("moe_test_reuse_empty_" & name & ".txt")
+    writeFile(result, content)
+
+  test "Opening a file replaces the empty buffer":
+    let e = createTestEditor()
+    let path = tempFile("a", "a\n")
+    defer:
+      removeFile(path)
+    let empty = e.activeBuffer
+    check e.editFile(path).isOk
+    check e.buffers.len == 1
+    check e.bufferById(empty.id).isNone
+    check e.activeWindow.bufferIds == @[e.activeBuffer.id]
+    check e.activeWindow.alternateBufferId == BufferId(0)
+
+  test "The file takes the empty buffer's place, and the alternate stays":
+    let e = createTestEditor()
+    let
+      pathA = tempFile("place_a", "a\n")
+      pathB = tempFile("place_b", "b\n")
+    defer:
+      removeFile(pathA)
+      removeFile(pathB)
+    check e.editFile(pathA).isOk
+    let a = e.activeBuffer
+    check e.enew().isOk
+    let empty = e.activeBuffer
+    check e.moveBuffer(empty.id, 0)
+    check e.editFile(pathB).isOk
+    let b = e.activeBuffer
+    check e.bufferById(empty.id).isNone
+    check e.activeWindow.bufferIds == @[b.id, a.id]
+    check e.activeWindow.alternateBufferId == a.id
+
+  test "Going to a file already open drops the empty buffer too":
+    let e = createTestEditor()
+    let path = tempFile("open", "a\n")
+    defer:
+      removeFile(path)
+    check e.editFile(path).isOk
+    let a = e.activeBuffer
+    check e.enew().isOk
+    let empty = e.activeBuffer
+    check e.editFile(path).isOk
+    check e.activeBuffer == a
+    check e.bufferById(empty.id).isNone
+    check e.activeWindow.bufferIds == @[a.id]
+
+  test "A modified empty-named buffer is kept":
+    let e = createTestEditor()
+    let path = tempFile("modified", "a\n")
+    defer:
+      removeFile(path)
+    let scratch = e.activeBuffer
+    discard scratch.insertText(BufferPosition(line: 0, column: 0), "x")
+    check e.editFile(path).isOk
+    check e.bufferById(scratch.id).isSome
+
+  test "Text deleted back to nothing still counts as modified":
+    let e = createTestEditor()
+    let path = tempFile("emptied", "a\n")
+    defer:
+      removeFile(path)
+    let scratch = e.activeBuffer
+    discard scratch.insertText(BufferPosition(line: 0, column: 0), "x")
+    discard scratch.deleteChar(BufferPosition(line: 0, column: 0))
+    check scratch.isModified
+    check e.editFile(path).isOk
+    check e.bufferById(scratch.id).isSome
+
+  test "An empty buffer another window shows is kept":
+    let e = createTestEditor()
+    let path = tempFile("split", "a\n")
+    defer:
+      removeFile(path)
+    let empty = e.activeBuffer
+    check e.vsplit(none(string)).isOk
+    check e.editFile(path).isOk
+    check e.bufferById(empty.id).isSome
+
+  test "A jump from the empty buffer comes back to the file":
+    let e = createTestEditor()
+    let path = tempFile("jump", "a\nb\n")
+    defer:
+      removeFile(path)
+    let empty = e.activeBuffer
+    check e.jumpToFile(path, some(TargetPosition(line: 1, column: 0))).isOk
+    let file = e.activeBuffer
+    check e.bufferById(empty.id).isNone
+    check e.state.jumpList.list.len == 1
+    check e.state.jumpList.list[0].bufferId == file.id
+
+  test "A jump entry made before :e follows the file":
+    let e = createTestEditor()
+    let path = tempFile("jump_ex", "a\n")
+    defer:
+      removeFile(path)
+    let empty = e.activeBuffer
+    e.addToJumpList(e.jumpOrigin())
+    check e.editFile(path).isOk
+    check e.state.jumpList.list[0].bufferId == e.activeBuffer.id
+    check e.bufferById(empty.id).isNone
+
+  test "A jump from a view that is no buffer is not moved to the file":
+    let e = createTestEditor()
+    let path = tempFile("jump_view", "a\nb\n")
+    defer:
+      removeFile(path)
+    # A modified buffer is not reused, so only the view id can be rewritten.
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x")
+    let view = BufferId(high(int32))
+    check e.bufferById(view).isNone
+    e.state.windowDisplay.currentBufferId = view
+    check e.jumpToFile(path, some(TargetPosition(line: 1, column: 0))).isOk
+    check e.state.jumpList.list.len == 1
+    check e.state.jumpList.list[0].bufferId == view

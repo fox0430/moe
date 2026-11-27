@@ -48,13 +48,6 @@ proc focusOutputWindow(editor: Editor, target: EditorWindow) =
       editor.setActiveWindowScreenCursor(editor.activeWindow)
       break
 
-proc moveAlternates(editor: Editor, stale: BufferId, buf: TextBuffer) =
-  ## Let a window that left the replaced output still go to the new one with
-  ## `:b #`.
-  for window in editor.windowManager.windows:
-    if window.alternateBufferId == stale and window.tabBufferId != buf.id:
-      window.alternateBufferId = buf.id
-
 proc showCommandOutput*(
     editor: Editor, output: seq[string], keepFocus: bool
 ): bool {.discardable.} =

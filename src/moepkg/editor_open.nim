@@ -132,11 +132,15 @@ proc shows(e: Editor, subject: JumpSubject): bool =
   else:
     e.activeBuffer().bufferHoldsFile(subject.path)
 
-proc show(e: Editor, subject: JumpSubject): Result[void, string] =
+proc show(
+    e: Editor, subject: JumpSubject, replaced: var BufferId
+): Result[void, string] =
+  ## Show `subject`; `replaced` is the empty buffer a file took the place of.
+  replaced = BufferId(0)
   if subject.isBuffer:
     e.tryActivateBuffer(subject.id)
   else:
-    let opened = e.openFileInActiveWindow(subject.path)
+    let opened = e.openFileInActiveWindow(subject.path, replaced)
     if opened.isErr:
       return err("Failed to open file: " & opened.error)
     ok()
@@ -162,10 +166,11 @@ proc jumpTo*(
 
   # Taken in the window the jump lands in: a jump from the sidebar starts on
   # the file it serves, not the listing.
-  let origin = e.jumpOrigin()
+  var origin = e.jumpOrigin()
   var outcome = ooMoved
   if not e.shows(subject):
-    let shown = e.show(subject)
+    var replaced: BufferId
+    let shown = e.show(subject, replaced)
     if shown.isErr:
       if split.get.opened:
         # Don't leave the window opened for the jump behind
@@ -173,6 +178,9 @@ proc jumpTo*(
       e.restoreSidebarFocus(side, previous)
       return err(shown.error)
     outcome = ooOpened
+    # The file took the place of the empty [No Name] the jump started from.
+    if replaced != BufferId(0) and origin.bufferId == replaced:
+      origin.bufferId = e.activeWindow.tabBufferId
     if asSplitFile and not subject.isBuffer and split.get.splitFrom != nil:
       split.get.splitFrom.splitOntoFile(e.tabBuffer(e.activeWindow))
   elif at.isNone:

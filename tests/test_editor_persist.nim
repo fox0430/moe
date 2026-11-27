@@ -28,7 +28,7 @@ import ../src/moepkg/[editor, config, config_loader, persist]
 import ../src/moepkg/[editor_buffers, editor_file, editor_window]
 import ../src/moepkg/[filer, viewer_mode, window_manager]
 import ../src/moepkg/[editor_persist, search_utils, primitives]
-import ../src/moepkg/buffer/search
+import ../src/moepkg/buffer/[edit, search]
 import ../src/moepkg/command_handlers/result_processor
 
 let cacheHome = getTempDir() / "moe_test_editor_persist"
@@ -745,6 +745,8 @@ suite "per-file records in the order files were last shown":
     check e.editFile(first).isOk
     check e.enew().isOk
     let buf = e.activeBuffer
+    # Text keeps `:e` from reusing the empty buffer.
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "x")
     check e.editFile(last).isOk
 
     check e.saveFile(buf, some(named)).isOk
