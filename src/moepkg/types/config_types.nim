@@ -319,6 +319,7 @@ type
       cfgDocDescription:
         "Use GitHub-style two-color scheme (ours / theirs distinct); false for single red background"
     .}: bool
+    uri* {.cfg, cfgDocDescription: "Underline URIs".}: bool
     maxHighlightLineLength* {.
       cfg,
       cfgMin: 0,

@@ -5441,3 +5441,11 @@ suite "newLineStyleContext - URI underline":
     let e = uriEditor("https://example.com/" & "a".repeat(40))
     e.activeBuffer.maxHighlightLineLength = 25
     check e.uriRangesOf(0) == @[ColumnRange(startCol: 0, endCol: 25)]
+
+  test "[Highlight] uri = false turns it off and back on at once":
+    let e = uriEditor("https://example.com")
+    e.config.highlight.uri = false
+    check e.uriRangesOf(0).len == 0
+    check Underline notin e.styleAt(0, 0).modifiers
+    e.config.highlight.uri = true
+    check Underline in e.styleAt(0, 0).modifiers

@@ -2362,6 +2362,7 @@ suite "CommandModeHandler - executeSet enum coverage":
       ("highlightcolorcode", bsoHighlightColorCode),
       ("highlightgitconflict", bsoHighlightGitConflict),
       ("highlightgitconflicttwocolor", bsoHighlightGitConflictTwoColor),
+      ("highlighturi", bsoHighlightUri),
       ("multistatusline", bsoMultipleStatusLine),
       ("ignorecase", bsoIgnoreCase),
       ("smartcase", bsoSmartCase),

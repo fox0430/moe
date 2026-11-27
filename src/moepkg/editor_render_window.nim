@@ -228,7 +228,8 @@ proc newLineStyleContext*(
   # Found here rather than kept in the highlight, so they need no upkeep
   # through edits and re-parses. Raw buffers would show binary as URIs; a
   # terminal's literal colors carry the program's own underlines.
-  if textBuffer != nil and e.hasSyntaxHighlight(textBuffer, ctx.windowMode) and
+  if e.config.highlight.uri and textBuffer != nil and
+      e.hasSyntaxHighlight(textBuffer, ctx.windowMode) and
       not textBuffer.highlight.literalColors and not textBuffer.isUtilityBuffer and
       textBuffer.allowsTextTransforms:
     for m in findAllUris(fullLine, textBuffer.maxHighlightLineLength):

@@ -155,6 +155,7 @@ suite "Config - newEditorConfig defaults":
     check config.highlight.colorCodeHighlight == true
     check config.highlight.gitConflict == true
     check config.highlight.gitConflictTwoColor == true
+    check config.highlight.uri == true
     # Pin the config default to the buffer fail-safe. config.nim hardcodes the
     # literal 3000 because it must not import the highlight engine; this guards
     # the two from drifting (a drift would make even default-config buffers
