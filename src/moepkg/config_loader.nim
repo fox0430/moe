@@ -295,7 +295,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
       # Colors that came from no theme file are written as a seeded file is
       let source =
         if themeFileColors.isNone:
-          sharedStatusLineSource(themeColors)
+          builtinThemeSource(themeColors)
         else:
           themeSource
       let themeResult = saveThemeToToml(themeColors, config.theme.path, source)

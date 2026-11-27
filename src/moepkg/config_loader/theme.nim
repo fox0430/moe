@@ -278,6 +278,16 @@ proc applyColorFallback(
     if specific in omittedBg:
       colors[specific].background = colors[generic].background
 
+proc withFallbackLinks*(source: ThemeSource, colors: ThemeColors): ThemeSource =
+  ## `source` also leaving out the channels that hold the color they fall back
+  ## to, so that they keep following it. For colors no theme file wrote.
+  result = source
+  for (specific, generic) in FallbackColors:
+    if colors[specific].foreground == colors[generic].foreground:
+      result.omittedFg.incl specific
+    if colors[specific].background == colors[generic].background:
+      result.omittedBg.incl specific
+
 proc noteThemeColorEdited*(
     colors: var ThemeColors,
     source: var ThemeSource,
@@ -562,14 +572,15 @@ proc loadThemeWithSource*(
 ): Result[(ThemeColors, ThemeSource), string] =
   ## Load theme colors and their palette references based on config settings.
   ## Invalid keys/values from user theme files are recorded in `vr`.
-  ## Only `tkConfig` can have a palette; the other kinds return an empty source.
+  ## Only `tkConfig` can have a palette; the other kinds return a source that
+  ## only links the fallback colors.
 
   type Loaded = Result[(ThemeColors, ThemeSource), string]
 
   let loaded =
     case config.theme.kind
     of tkDefault:
-      Loaded.ok((DefaultColors, ThemeSource()))
+      Loaded.ok((DefaultColors, ThemeSource().withFallbackLinks(DefaultColors)))
     of tkConfig:
       loadThemeWithSource(config.theme.path, vr)
     of tkVscode:
@@ -577,7 +588,7 @@ proc loadThemeWithSource*(
       if vscode.isErr:
         Loaded.err(vscode.error)
       else:
-        Loaded.ok((vscode.get, ThemeSource()))
+        Loaded.ok((vscode.get, ThemeSource().withFallbackLinks(vscode.get)))
   if loaded.isErr:
     return loaded
   var colors = loaded.get[0]
@@ -615,8 +626,9 @@ proc themeColorsEdited*(): bool =
   themeFileColors.isSome and themeColors != themeFileColors.get
 
 # What the theme file holds as of the last load or save: the [Palette] table and
-# the channels written by name or left out. Empty when the theme did not come from a theme file, so a
-# save can never carry over another theme's palette.
+# the channels written by name or left out. Without a palette when the theme did
+# not come from a theme file, so a save can never carry over another theme's
+# palette; then it only leaves out the channels linked to their fallback.
 var themeSource*: ThemeSource
 
 # The [Theme] setting `themeColors` was last loaded for; none before the first
@@ -624,6 +636,12 @@ var themeSource*: ThemeSource
 var loadedThemeConfig*: Option[ThemeConfig]
 
 proc sharedStatusLineSource*(colors: ThemeColors): ThemeSource
+proc sourceFor*(source: ThemeSource, colors: ThemeColors): ThemeSource
+
+proc builtinThemeSource*(colors: ThemeColors): ThemeSource =
+  ## How to write `colors`, which came from no theme file: status line colors
+  ## all modes share as one key, and fallback colors linked.
+  sharedStatusLineSource(colors).withFallbackLinks(colors).sourceFor(colors)
 
 # Forward declaration: `initTheme` bootstraps a missing tkConfig file via
 # `saveThemeToToml`, which is defined further down in the Serializers section.
@@ -655,16 +673,16 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
         vr.addError("Theme.path", config.theme.path, "theme file inside moe config dir")
         initDefaultTheme()
         themeFileColors = none(ThemeColors)
-        themeSource = ThemeSource()
+        themeSource = ThemeSource().withFallbackLinks(themeColors)
         return
       let saveResult = saveThemeToToml(
-        DefaultColors, config.theme.path, sharedStatusLineSource(DefaultColors)
+        DefaultColors, config.theme.path, builtinThemeSource(DefaultColors)
       )
       if saveResult.isErr:
         vr.addLoadFailure("Theme.path", config.theme.path, saveResult.error)
         initDefaultTheme()
         themeFileColors = none(ThemeColors)
-        themeSource = ThemeSource()
+        themeSource = ThemeSource().withFallbackLinks(themeColors)
         return
 
   let themeResult = loadThemeWithSource(config, vr)
@@ -686,7 +704,7 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
       discard
     initDefaultTheme()
     themeFileColors = none(ThemeColors)
-    themeSource = ThemeSource()
+    themeSource = ThemeSource().withFallbackLinks(themeColors)
 
 proc initTheme*(config: EditorConfig) =
   ## Backwards-compatible wrapper that discards validation errors.

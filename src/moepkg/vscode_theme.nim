@@ -1007,8 +1007,7 @@ proc makeColorThemeFromVSCodeThemeFile(
 
   # The picker is VS Code's Quick Open, not the suggest widget. What neither
   # the theme nor VS Code colors stays as the popup.
-  for (picker, popup) in PickerColorFallbacks:
-    result[picker] = result[popup]
+  result = result.withPickerLinks
   let pickerBg = vs.color("quickInput.background")
   result.setPair(vs.rgba("quickInput.foreground"), pickerBg, [I.picker])
   # Quick Open has no preview: it takes the picker's, as a TOML theme's does.
