@@ -42,6 +42,12 @@ proc createTestEditor(): Editor =
   let vr = newValidationResult()
   result = newEditor(config, vr)
 
+proc keepStartBuffer(e: Editor) =
+  ## Give the start buffer saved text, so `:e` keeps it instead of reusing it
+  ## as Vim reuses an empty `[No Name]` buffer.
+  discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "start")
+  e.activeBuffer.markSaved
+
 proc windowBufferIndex(e: Editor): int =
   e.activeWindow.bufferIds.find(e.activeWindow.tabBufferId)
 
@@ -169,6 +175,7 @@ suite "Editor - currentBufferIndex":
 suite "Editor - switchToBufferByIndex":
   test "Switch to valid buffer index":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_switch.txt"
 
     writeFile(testFile, "test content")
@@ -217,6 +224,7 @@ suite "Editor - switchToBufferByIndex":
 suite "Editor - switchToNextBuffer and switchToPrevBuffer":
   test "Switch to next buffer":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_next.txt"
 
     writeFile(testFile, "test content")
@@ -231,6 +239,7 @@ suite "Editor - switchToNextBuffer and switchToPrevBuffer":
 
   test "Switch to next buffer wraps around":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_wrap.txt"
 
     writeFile(testFile, "test content")
@@ -245,6 +254,7 @@ suite "Editor - switchToNextBuffer and switchToPrevBuffer":
 
   test "Switch to prev buffer":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_prev.txt"
 
     writeFile(testFile, "test content")
@@ -259,6 +269,7 @@ suite "Editor - switchToNextBuffer and switchToPrevBuffer":
 
   test "Switch to prev buffer wraps around":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_prev_wrap.txt"
 
     writeFile(testFile, "test content")
@@ -283,6 +294,7 @@ suite "Editor - switchToNextBuffer and switchToPrevBuffer":
 suite "Editor - switchToFirstBuffer and switchToLastBuffer":
   test "Switch to first buffer":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile1 = getTempDir() / "moe_test_first1.txt"
     let testFile2 = getTempDir() / "moe_test_first2.txt"
 
@@ -303,6 +315,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer":
 
   test "Switch to last buffer":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile1 = getTempDir() / "moe_test_last1.txt"
     let testFile2 = getTempDir() / "moe_test_last2.txt"
 
@@ -352,6 +365,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer":
 suite "Editor - switchToBuffer":
   test "Switch to buffer by number":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_switch_num.txt"
 
     writeFile(testFile, "content")
@@ -401,6 +415,7 @@ suite "Editor - switchToBuffer":
 
   test "Deleting a buffer leaves the other buffer numbers alone":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let files = @[
       getTempDir() / "moe_test_renumber_a.txt", getTempDir() / "moe_test_renumber_b.txt"
     ]
@@ -524,6 +539,7 @@ suite "Editor - switchToBuffer":
 
   test "Switch to buffer by filename":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_switch_name.txt"
 
     writeFile(testFile, "content")
@@ -539,6 +555,7 @@ suite "Editor - switchToBuffer":
 
   test "Switch to buffer by partial path":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_switch_partial.txt"
 
     writeFile(testFile, "content")
@@ -604,7 +621,7 @@ suite "Editor - editFile":
 
     let result = e.editFile(testFile)
     check result.isOk
-    check e.buffers.len == 2
+    check e.buffers.len == 1
     check e.activeBuffer().filePath.isSome
     check e.activeBuffer().filePath.get == testFile
 
@@ -618,7 +635,7 @@ suite "Editor - editFile":
 
     let result = e.editFile(testFile)
     check result.isOk
-    check e.buffers.len == 2
+    check e.buffers.len == 1
     check e.activeBuffer().filePath.isSome
     check e.activeBuffer().filePath.get == testFile
 
@@ -679,6 +696,7 @@ suite "Editor - editFile":
 
   test "Switch to existing buffer if already loaded":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_edit_switch.txt"
 
     writeFile(testFile, "test content")
@@ -1101,6 +1119,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "editFile adds buffer to window's bufferIds":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_window_edit.txt"
 
     writeFile(testFile, "test content")
@@ -1114,6 +1133,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "switchToWindowBuffer switches within window's bufferIds":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_switch_window.txt"
 
     writeFile(testFile, "test content")
@@ -1127,6 +1147,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "switchToNextBuffer cycles through window's bufferIds":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_next_window.txt"
 
     writeFile(testFile, "test content")
@@ -1144,6 +1165,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "switchToPrevBuffer cycles through window's bufferIds":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_prev_window.txt"
 
     writeFile(testFile, "test content")
@@ -1161,6 +1183,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 suite "Editor - Window bufferIds with splits":
   test "vsplit creates new window with only current buffer":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_vsplit_buflist.txt"
 
     writeFile(testFile, "test content")
@@ -1179,6 +1202,7 @@ suite "Editor - Window bufferIds with splits":
 
   test "hsplit creates new window with only current buffer":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_hsplit_buflist.txt"
 
     writeFile(testFile, "test content")
@@ -1229,6 +1253,7 @@ suite "Editor - enew with window bufferIds":
 suite "Editor - switchToFirstBuffer and switchToLastBuffer with bufferIds":
   test "switchToFirstBuffer uses window's bufferIds":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_first_buflist.txt"
 
     writeFile(testFile, "test content")
@@ -1243,6 +1268,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer with bufferIds":
 
   test "switchToLastBuffer uses window's bufferIds":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_last_buflist.txt"
 
     writeFile(testFile, "test content")
@@ -1273,6 +1299,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer with bufferIds":
 suite "Editor - switchToBufferByIndex adds to window bufferIds":
   test "switchToBufferByIndex adds buffer id to window's bufferIds":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_switch_add.txt"
 
     writeFile(testFile, "test content")
@@ -2478,8 +2505,7 @@ suite "Editor - BufferId":
       removeFile(testFile)
 
     discard e.editFile(testFile)
-    check e.buffers.len == 2
-    check e.buffers[1].id != initialId
+    check e.activeBuffer.id != initialId
 
   test "bufferById returns Some for live buffer":
     let e = createTestEditor()
@@ -2500,6 +2526,7 @@ suite "Editor - BufferId":
 suite "Editor - Per-window :bnext / :bprev wrapping":
   test ":bnext wraps around at end of window tab list":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let f1 = getTempDir() / "moe_test_bnext_wrap1.txt"
     let f2 = getTempDir() / "moe_test_bnext_wrap2.txt"
     writeFile(f1, "1")
@@ -2516,6 +2543,7 @@ suite "Editor - Per-window :bnext / :bprev wrapping":
 
   test ":bprev wraps around at beginning of window tab list":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let f1 = getTempDir() / "moe_test_bprev_wrap1.txt"
     writeFile(f1, "1")
     defer:
@@ -2533,6 +2561,7 @@ suite "Editor - Per-window :bnext / :bprev wrapping":
     # index 1 because the wrap formula did `(max(-1,0)+1) mod len`. The fix
     # now jumps to index 0, mirroring switchToPrevBuffer's wrap-to-last.
     let e = createTestEditor()
+    e.keepStartBuffer()
     let f1 = getTempDir() / "moe_test_bnext_orphan1.txt"
     let f2 = getTempDir() / "moe_test_bnext_orphan2.txt"
     writeFile(f1, "1")
@@ -2554,6 +2583,7 @@ suite "Editor - Per-window :bnext / :bprev wrapping":
 
   test ":bprev wraps to last tab when active buffer isn't in tab list":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let f1 = getTempDir() / "moe_test_bprev_orphan1.txt"
     let f2 = getTempDir() / "moe_test_bprev_orphan2.txt"
     writeFile(f1, "1")
@@ -2617,6 +2647,7 @@ suite "Editor - bufferIdIndex synchronization":
 
   test "bufferIdIndex stays consistent after editFile + delete cycle":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let testFile = getTempDir() / "moe_test_bufferIdIndex_cycle.txt"
     writeFile(testFile, "x")
     defer:
@@ -2673,6 +2704,7 @@ suite "Editor - BufferManager delete keeps state.windowDisplay.currentBufferId f
     # (Ctrl-o/Ctrl-i) compares against currentBufferId, so a stale value
     # silently mis-routes future jumps.
     let e = createTestEditor()
+    e.keepStartBuffer()
     let f1 = getTempDir() / "moe_test_bmgrdel_currentid_1.txt"
     let f2 = getTempDir() / "moe_test_bmgrdel_currentid_2.txt"
     writeFile(f1, "1")
@@ -2696,6 +2728,7 @@ suite "Editor - BufferManager delete keeps state.windowDisplay.currentBufferId f
 
   test "state.windowDisplay.currentBufferId is left alone when a non-current buffer is deleted":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let f1 = getTempDir() / "moe_test_bmgrdel_unrelated_1.txt"
     let f2 = getTempDir() / "moe_test_bmgrdel_unrelated_2.txt"
     writeFile(f1, "1")
@@ -2788,6 +2821,7 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     # Regression: :bd used to call closeWindow, closing the window even when
     # other buffers were still in the buffer list.
     let e = createTestEditor()
+    e.keepStartBuffer()
     let f1 = getTempDir() / "moe_test_bd_multi_1.txt"
     let f2 = getTempDir() / "moe_test_bd_multi_2.txt"
     writeFile(f1, "1")
@@ -4128,6 +4162,7 @@ suite "Editor - processResult(hrSave) actually saves (regression)":
 suite "Editor - processResult(hrSaveAll) actually saves (regression)":
   test "processResult(hrSaveAll) writes every modified buffer to disk":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let f1 = getTempDir() / "moe_test_hSaveAll_regr_a.txt"
     let f2 = getTempDir() / "moe_test_hSaveAll_regr_b.txt"
     writeFile(f1, "A")
@@ -4611,6 +4646,7 @@ suite "Editor - :bnext walks the tabs of every window":
 
   test "a lone window keeps leaving its viewer for the next tab":
     let e = createTestEditor()
+    e.keepStartBuffer()
     let path = getTempDir() / "moe_bnext_lone_viewer.txt"
     writeFile(path, "a\n")
     defer:

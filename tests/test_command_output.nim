@@ -20,7 +20,7 @@
 ## Tests for the window a background command writes its output into, shared by
 ## builds, QuickRun and `showOutput` hooks.
 
-import std/[unittest, options]
+import std/[unittest, options, os]
 
 import pkg/results
 
@@ -119,6 +119,18 @@ suite "Background command output over a Config edit":
     check configState.isEditing()
 
 suite "Background command output":
+  test ":e in an output window that printed nothing keeps the output":
+    let e = testEditor()
+    e.showCommandOutput(@[], keepFocus = false)
+    let output = e.state.commandOutputBufferId
+    check e.activeBuffer.id == output
+    let path = getTempDir() / "moe_test_output_edit.txt"
+    writeFile(path, "a\n")
+    defer:
+      removeFile(path)
+    check e.editFile(path).isOk
+    check e.bufferById(output).isSome
+
   test "A command the user did not start keeps the focus and the mode":
     let e = testEditor()
     let userWindow = e.activeWindow

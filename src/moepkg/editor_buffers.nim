@@ -723,14 +723,73 @@ proc openFileInBackground*(e: Editor, path: string): Result[TextBuffer, string] 
   ## user's behalf.
   e.loadOrCreateBuffer(path, roInternal)
 
-proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string] =
+proc moveAlternates*(editor: Editor, stale: BufferId, buf: TextBuffer) =
+  ## Let a window whose alternate was `stale`, a buffer `buf` replaced, go to
+  ## `buf` with `:b #`.
+  for window in editor.windowManager.windows:
+    if window.alternateBufferId == stale and window.tabBufferId != buf.id:
+      window.alternateBufferId = buf.id
+
+proc isReusableEmptyTab(e: Editor, win: EditorWindow, buf: TextBuffer): bool =
+  ## Vim's `curbuf_reusable`: an unnamed, unchanged, empty buffer that no other
+  ## window holds or lists. Listings and command output are not files to
+  ## replace, as Vim keeps a 'buftype' buffer.
+  if buf.filePath.isSome or buf.isModified or buf.len != 1 or buf[0].len != 0:
+    return false
+  if e.bufferById(buf.id).isNone or buf.isUtilityBuffer or
+      buf.id == e.state.commandOutputBufferId or e.isTerminalBuffer(buf.id):
+    return false
+  # Asked before and after `win` leaves it, so `win` itself is not counted.
+  for other in e.windowManager.windows:
+    if other != win and (e.holds(other, buf) or buf.id in other.bufferIds):
+      return false
+  true
+
+proc openFileInActiveWindow*(
+    e: Editor, path: string, replaced: var BufferId
+): Result[TextBuffer, string] =
   ## Open `path` in the active window, as `:e` does, and return the buffer now
   ## shown there: the one already holding the file, or a freshly loaded one.
-  ## Either way it joins the window's tab list.
-  ?e.activeWindow.checkTabSwitch()
+  ## Either way it joins the window's tab list. An empty `[No Name]` tab left
+  ## behind goes away and the file takes its place, as Vim reuses it; its id
+  ## goes to `replaced`, else `BufferId(0)`.
+  replaced = BufferId(0)
+  let win = e.activeWindow
+  ?win.checkTabSwitch()
+  let
+    oldTab = e.tabBuffer(win)
+    reuse = e.isReusableEmptyTab(win, oldTab)
+    alternate = win.alternateBufferId
   let buffer = ?e.loadOrCreateBuffer(path)
+  let listed = buffer.id in win.bufferIds
   e.switchToBufferByIndex(e.bufferIndexById(buffer.id))
+  if reuse and buffer != oldTab and win.tabBufferId == buffer.id and
+      e.isReusableEmptyTab(win, oldTab):
+    let slot = win.bufferIds.find(oldTab.id)
+    if not listed and slot >= 0:
+      discard e.moveBuffer(buffer.id, slot)
+    if e.deleteBufferById(oldTab.id).isErr:
+      return ok(buffer)
+    replaced = oldTab.id
+    # Where Vim reuses the buffer number, moe keeps the file's own id and moves
+    # what pointed at the empty buffer to it.
+    for jump in e.state.jumpList.list.mitems:
+      if jump.bufferId == oldTab.id:
+        jump.bufferId = buffer.id
+    e.moveAlternates(oldTab.id, buffer)
+    # The empty buffer was never a file to go back to.
+    win.alternateBufferId =
+      if alternate != buffer.id and e.bufferById(alternate).isSome:
+        alternate
+      else:
+        BufferId(0)
   ok(buffer)
+
+proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string] =
+  ## `openFileInActiveWindow` for a caller that keeps no reference to the
+  ## replaced buffer.
+  var replaced: BufferId
+  e.openFileInActiveWindow(path, replaced)
 
 proc editFile*(e: Editor, path: string): Result[(), string] =
   ## Load a file and switch to it (like :e in Vim)

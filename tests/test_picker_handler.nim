@@ -465,7 +465,7 @@ suite "picker: the screen":
       rows.add row
     let top = rows.find(rows.filterIt(" Buffers " in it)[0])
     check "> beta" in rows[top + 1]
-    check "1/4" in rows[top + 1]
+    check "1/3" in rows[top + 1]
     check "├" in rows[top + 2]
     check "beta.txt" in rows[top + 3]
     check ".txt" notin rows[top + 4]
